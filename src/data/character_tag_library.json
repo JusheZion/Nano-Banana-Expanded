@@ -1,0 +1,34 @@
+{
+  "app_metadata": {
+    "app_name": "AI Image Gen Portal",
+    "theme": "Jewel-Tone Glassmorphism",
+    "primary_color": "#893741",
+    "secondary_teal": "#37615D",
+    "secondary_purple": "#5F368E"
+  },
+  "tag_library": {
+    "tier_1_global": {
+      "ethnicity": ["African", "Diaspora", "Afro-Caribbean", "Black", "Multiracial", "Mixed", "Melanin"],
+      "gender": ["Masculine", "Virile", "Androgynous", "Neutral", "Soft", "Feminine", "Delicate"],
+      "height": ["Towering", "Statuesque", "Tall", "Average", "Short", "Diminutive", "Petite"],
+      "body_type": ["Burly", "Stocky", "Athletic", "Toned", "Average", "Slim", "Slender", "Lithe"],
+      "skin_tone": ["Ebony", "Deep-umber", "Obsidion", "Bronze", "Golden", "Honey", "Tawny", "Porcelain"]
+    },
+    "tier_2_architecture": {
+      "face_shape": ["Chiseled", "Sharp", "Defined", "Squared", "Oval", "Symmetric", "Soft", "Rounded"],
+      "jawline": ["Hammered", "Sharp", "Strong", "Firm", "Refined", "Narrow", "Receding", "Soft"],
+      "nose_shape": ["Wide", "Flared", "Button", "Nubian", "Aquiline", "Straight", "Slender", "Pointed"],
+      "chin": ["Jutting", "Cleft", "Squared", "Pointed", "Rounded", "Shallow", "Soft", "Receding"],
+      "cheekbones": ["Prominent", "High", "Sculpted", "Contoured", "Subtle", "Smooth", "Full", "Flat"]
+    },
+    "tier_3_details": {
+      "hair_style": ["Elaborate", "Braided", "Cornrows", "Locs", "Pompadour", "Undercut", "Buzz-cut", "Bald"],
+      "hair_color": ["Midnight", "Jet-black", "Espresso", "Chestnut", "Auburn", "Copper", "Honey-blonde", "Platinum"],
+      "hair_texture": ["Coiled", "Kinky", "Textured", "Wavy", "Flowing", "Silky", "Fine", "Straight"],
+      "lips": ["Bee-stung", "Plush", "Pouty", "Bow-shaped", "Defined", "Average", "Narrow", "Thin"],
+      "eyebrows": ["Overgrown", "Bushy", "Thick", "Feathered", "Arched", "Tapered", "Penciled", "Thin"],
+      "eyelashes": ["Fluttery", "Wispy", "Long", "Thick", "Curled", "Natural", "Short", "Sparse"],
+      "facial_hair": ["Rugged", "Full-beard", "Groomed", "Goatee", "Stubble", "Trimmed", "Shadow", "Clean-shaven"]
+    }
+  }
+}

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Story Sequence Viewer V2</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#5e358d",
+                        "background-light": "#f7f6f8",
+                        "background-dark": "#0F0F12",
+                        "obsidian": "#0F0F12",
+                        "jewel-purple": "#5e358d",
+                    },
+                    fontFamily: {
+                        "display": ["Spline Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        .glass-panel {
+            background: rgba(94, 53, 141, 0.15);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 20px rgba(94, 53, 141, 0.2);
+        }
+        .jewel-glow {
+            box-shadow: 0 0 30px rgba(94, 53, 141, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        .film-strip-mask {
+            mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+        }
+        .crystalline-text {
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-white overflow-hidden h-screen w-screen flex flex-col">
+<!-- Header Section -->
+<header class="p-6 pt-12 flex justify-between items-center z-20">
+<div>
+<h1 class="text-xs font-bold tracking-[0.3em] uppercase text-primary/80 mb-1">Nano Banana Expanded</h1>
+<p class="crystalline-text text-xl font-semibold">Story Sequence Viewer <span class="text-primary/60 font-light ml-2 text-sm">V2.4</span></p>
+</div>
+<button class="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-white/80">
+<span class="material-icons-round">more_vert</span>
+</button>
+</header>
+<!-- Main Experience Area -->
+<main class="flex-1 flex flex-col justify-center relative -mt-10">
+<!-- Film-Strip Container -->
+<div class="relative w-full overflow-hidden">
+<div class="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory px-8 gap-6 items-center">
+<!-- Scene 01 -->
+<div class="snap-center shrink-0 w-[85vw] max-w-[400px]">
+<div class="relative group rounded-xl overflow-hidden border-2 border-primary/40 jewel-glow">
+<img class="w-full aspect-[3/4] object-cover" data-alt="Abstract purple cinematic landscape with floating monoliths" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSZohTTe0oG4PJ5bX6W01NROr1MwnUK1DbNnwKt1CikzYXGW6IZKhLJujl9wogHsUMkLP4eggE5g57LwrW3tBmPYqinE2-dmW2OG0ZawWxJESSeMWc7ZzGWJF-eRPgmhPn0_KmtGouNm3ZonQLswdMZALdWZo2lLRpQrh9bUjIrfdm-1WEC3k18xmAhgiE9If20Wo_BP4To56lxWCWOruWwn25LwPEoJ-MyOGElvz9lGiv5FIssMy5gXhHatndyLJVlJK4kjkf6g"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+<div class="absolute bottom-4 left-4">
+<span class="text-[10px] font-bold tracking-widest text-primary bg-white/90 px-2 py-0.5 rounded-sm mb-2 inline-block uppercase">Scene 01</span>
+<h3 class="crystalline-text text-lg font-medium">The Awakening</h3>
+</div>
+</div>
+</div>
+<!-- Scene 02 (Active/Focused View) -->
+<div class="snap-center shrink-0 w-[85vw] max-w-[400px]">
+<div class="relative group rounded-xl overflow-hidden border-2 border-primary jewel-glow scale-105 transition-transform">
+<img class="w-full aspect-[3/4] object-cover" data-alt="Vibrant ethereal nebula with golden particles and deep purple hues" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwNekp2l1Ys-Hp3Om8PTkn8oIywVALV-w-btxuyJlRePj2Ijwd42apa-Ml9Z5nkbB9K25NFuzobOLhaVKH23Jp3US2zQR1-7EhiXnmG2a1IVtzBG2BbYPuij36qju16XqQcs0wnBzQtOeQ9tWbSqqFQ1fkkhrg_MUX85B1OkNogk6_ddNVCS3CycOWNkuVKW7yWBp9iydrTYG85aypq4u3sc_BwTvxd-WLYeMayUrh9H7UHGF6Go8HqMy1eL0cxsKGr8A-AKsQQA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+<div class="absolute bottom-4 left-4">
+<span class="text-[10px] font-bold tracking-widest text-primary bg-white/90 px-2 py-0.5 rounded-sm mb-2 inline-block uppercase">Scene 02</span>
+<h3 class="crystalline-text text-lg font-medium">Celestial Reach</h3>
+</div>
+<div class="absolute top-4 right-4 glass-panel rounded-full px-3 py-1 flex items-center gap-1">
+<div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Rendering</span>
+</div>
+</div>
+</div>
+<!-- Scene 03 -->
+<div class="snap-center shrink-0 w-[85vw] max-w-[400px]">
+<div class="relative group rounded-xl overflow-hidden border-2 border-primary/20">
+<img class="w-full aspect-[3/4] object-cover opacity-60" data-alt="Cyberpunk futuristic city silhouette in dark violet fog" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQZUCv8onv-wj6GhYhJ-nlaP8RpjlXpmBINQkTIMRjKqXy8PEV5z9VzO0BB6HK4jbBSdKDWERKGLp9NPq3fF9HlW1S_P_Z4NNJykPrrKRDEqay-zDlF7x90-V28Jg-Icd-yWF1rN_a86WFjqtkZdw2ZAA4bg7MBIApq4VzrUKtrLgt04DbU9KDgHrL3MrSnvdcxIO4EDS9-0Tx83o24PWJVEmb3TcTBefjQwLahCH8Z1uxwLcxH3jkXJJcbxQHrIeN5wwYWainnQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+<div class="absolute bottom-4 left-4">
+<span class="text-[10px] font-bold tracking-widest text-white/50 bg-black/40 px-2 py-0.5 rounded-sm mb-2 inline-block uppercase">Scene 03</span>
+<h3 class="text-white/60 text-lg font-medium">Neon Descent</h3>
+</div>
+</div>
+</div>
+<!-- Add Scene Placeholder -->
+<div class="snap-center shrink-0 w-[85vw] max-w-[400px]">
+<button class="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 flex flex-col items-center justify-center gap-4 hover:bg-primary/10 transition-colors">
+<div class="w-16 h-16 rounded-full glass-panel flex items-center justify-center border-primary/30">
+<span class="material-icons-round text-primary text-4xl">add</span>
+</div>
+<div class="text-center">
+<p class="crystalline-text font-semibold uppercase tracking-widest text-sm">Add New Scene</p>
+<p class="text-white/40 text-[10px] mt-1 italic">Extrapolate Story Arc</p>
+</div>
+</button>
+</div>
+<!-- End Spacer -->
+<div class="shrink-0 w-8"></div>
+</div>
+</div>
+<!-- Metadata Sidebar Peek -->
+<div class="absolute right-0 top-1/2 -translate-y-1/2 w-64 glass-panel rounded-l-2xl p-6 border-r-0 transform translate-x-56 hover:translate-x-0 transition-transform duration-500 group z-30">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full glass-panel p-2 rounded-l-xl cursor-pointer">
+<span class="material-icons-round text-white/60 group-hover:rotate-180 transition-transform">chevron_left</span>
+</div>
+<h4 class="text-xs font-bold text-primary/80 uppercase tracking-widest mb-4">Scene Metadata</h4>
+<div class="space-y-6">
+<div>
+<label class="text-[10px] text-white/40 uppercase block mb-1">Prompt Style</label>
+<p class="text-sm crystalline-text font-medium italic">"Cinematic Hyper-realism, 8k, Volumetric Lighting"</p>
+</div>
+<div>
+<label class="text-[10px] text-white/40 uppercase block mb-1">Generation Specs</label>
+<ul class="text-[11px] space-y-2 text-white/80">
+<li class="flex justify-between border-b border-white/5 pb-1"><span>Seed:</span> <span class="text-primary font-mono">#992011</span></li>
+<li class="flex justify-between border-b border-white/5 pb-1"><span>Strength:</span> <span class="text-primary">85%</span></li>
+<li class="flex justify-between border-b border-white/5 pb-1"><span>Aspect:</span> <span class="text-primary">3:4</span></li>
+</ul>
+</div>
+<div class="pt-4">
+<button class="w-full py-2 bg-primary/20 border border-primary/30 rounded-lg text-xs uppercase tracking-widest font-bold hover:bg-primary/30">Edit Variables</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Bottom Dock -->
+<div class="pb-12 px-6">
+<div class="max-w-md mx-auto glass-panel rounded-full h-20 px-4 flex items-center justify-between jewel-glow">
+<!-- Secondary Actions Left -->
+<div class="flex items-center gap-1">
+<button class="w-12 h-12 rounded-full flex items-center justify-center text-white/60 hover:text-primary transition-colors">
+<span class="material-icons-round">layers</span>
+</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center text-white/60 hover:text-primary transition-colors">
+<span class="material-icons-round">swap_horiz</span>
+</button>
+</div>
+<!-- Primary Play Action -->
+<button class="w-16 h-16 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/40 -translate-y-4 border-4 border-obsidian">
+<span class="material-icons-round text-white text-3xl ml-1">play_arrow</span>
+</button>
+<!-- Secondary Actions Right -->
+<div class="flex items-center gap-1">
+<button class="w-12 h-12 rounded-full flex items-center justify-center text-white/60 hover:text-primary transition-colors">
+<span class="material-icons-round">auto_fix_high</span>
+</button>
+<button class="w-12 h-12 rounded-full flex items-center justify-center text-white/60 hover:text-primary transition-colors">
+<span class="material-icons-round">ios_share</span>
+</button>
+</div>
+</div>
+</div>
+<!-- iOS Safe Area Indicator Mock -->
+<div class="fixed bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-white/20 rounded-full"></div>
+</body></html>

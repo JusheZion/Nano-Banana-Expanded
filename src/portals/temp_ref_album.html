@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reference Images Album V1 - Nano Banana</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Outfit:wght@500;600;700&amp;family=Material+Icons&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary": "#5e358d",
+                "background-light": "#f7f6f8",
+                "background-dark": "#0F0F12", // Overriding to Obsidian as per prompt
+                "obsidian": "#0F0F12",
+              },
+              fontFamily: {
+                "display": ["Inter", "sans-serif"],
+                "outfit": ["Outfit", "sans-serif"]
+              },
+              borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        body {
+            background-color: #0F0F12;
+            color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .purple-glow-card {
+            box-shadow: 0 0 15px rgba(94, 53, 141, 0.2);
+        }
+        .masonry {
+            column-count: 2;
+            column-gap: 1rem;
+        }
+        .masonry-item {
+            break-inside: avoid;
+            margin-bottom: 1rem;
+        }
+        /* Custom scrollbar for sidebar */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark min-h-screen">
+<!-- Header Section -->
+<header class="fixed top-0 left-0 right-0 z-50 px-6 pt-12 pb-6 bg-gradient-to-b from-obsidian via-obsidian/90 to-transparent">
+<div class="flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<h1 class="font-outfit text-2xl font-bold tracking-tight text-white">Reference Album</h1>
+<div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40">
+<span class="material-icons text-primary text-xl">person</span>
+</div>
+</div>
+<!-- Search Bar -->
+<div class="relative">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-icons text-primary/60 text-lg">search</span>
+</div>
+<input class="w-full h-12 bg-white/5 border-2 border-primary/40 rounded-full pl-12 pr-4 text-white placeholder-primary/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all backdrop-blur-md" placeholder="Search characters, styles..." type="text"/>
+</div>
+</div>
+</header>
+<main class="pt-44 pb-24 flex px-4 gap-4">
+<!-- Floating Sidebar -->
+<aside class="fixed left-4 top-48 bottom-24 w-16 z-40 flex flex-col items-center py-6 glass-panel rounded-full overflow-hidden">
+<div class="flex flex-col gap-8 h-full overflow-y-auto no-scrollbar items-center">
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+<span class="material-icons text-white text-lg">grid_view</span>
+</div>
+<span class="text-[10px] font-medium text-primary">All</span>
+</button>
+<button class="flex flex-col items-center gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50">
+<span class="material-icons text-white text-lg">face</span>
+</div>
+<span class="text-[10px] font-medium text-white/60">Portraits</span>
+</button>
+<button class="flex flex-col items-center gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50">
+<span class="material-icons text-white text-lg">landscape</span>
+</div>
+<span class="text-[10px] font-medium text-white/60">Nature</span>
+</button>
+<button class="flex flex-col items-center gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50">
+<span class="material-icons text-white text-lg">rocket_launch</span>
+</div>
+<span class="text-[10px] font-medium text-white/60">Sci-Fi</span>
+</button>
+<button class="flex flex-col items-center gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50">
+<span class="material-icons text-white text-lg">psychology</span>
+</div>
+<span class="text-[10px] font-medium text-white/60">Cyber</span>
+</button>
+<button class="flex flex-col items-center gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:border-primary/50">
+<span class="material-icons text-white text-lg">auto_awesome</span>
+</div>
+<span class="text-[10px] font-medium text-white/60">Magic</span>
+</button>
+</div>
+</aside>
+<!-- Masonry Grid Content -->
+<div class="ml-20 w-full">
+<div class="masonry">
+<!-- Item 1 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Portrait of a cybernetically enhanced woman with purple lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSqVDIwCuYAug4JNIATe00Feq5gC4FAFLmZMcU_hbDm-jzGug0e10qet1zN9hINr7_Tb2itD1Bu4_hZPrzhLLgOA64vf7lnsU9ro7_26E1vw--ZNtpdW0bUIrnKH6Rg2zC-_3u9a57usYwRSWEm9ZlXtNpvFcjRacJHn8kGE9JnwFrmv31LQMKbGRB7oVp9gTlfV1w1MVF0m6g5Xt1jUr4Xahp1rbyobKmwlFwKBO854iRLG3hv3gQC5pP4QsKYJMydWA_xXQFMQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">Neon Cyberpunk</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Abstract deep space nebula with violet and obsidian hues" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGgNuxxaxpd5LpRfD1qtTs7nRThmgd7WQcYy1CqQuSV8YvNqXgWzy8mPOsaQ4mIlc3jYPNw3eXgZyDqYuDWbn3UNhAkL3HM6_qDCttoo6F8OYNH2pa9f1COwTIOv5QuNVYn9rvcT5f0xNdQsDnHMXMWvR79p65NkgGuCz3Fuj_7toWjMJ8mpZNUc4UjyvxKnbeV8CLv9f7tdjrI3Mcfe23oFieKvUxQBj3H9D9TRkASgx2jLd83atJDryxtyBv28CFVHsuGFHEaQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">Deep Nebula</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Futuristic silhouette of a person against a glowing portal" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTnSlHonN0RrzqyngADMuV4gb4MMXvwt6O72OzacVxOzj6ANpzEw7OrLiOF2Fo2PBKQQnfiqem-DbIRUEUxedzzjfyuSKUlrREdqtnQkogwoIU1bBiJtTxDfFtWLhwy8bpsmx9e7aYMK4rMDhABdtMnktvDI_T67bBBfLP6DGC_d6Y4yUaixdFUQVqvtXnv1WCqRPyInTVAHn-UgMlWnBm9Rjto26t3JxniMzFj535beMKJl7XW0pgJ8do_25caG_PnNTk8yqfrg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">The Traveler</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Abstract 3D glass sculpture with purple internal lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEyZv7VWoGXP_WUo7xCM8H9eBexwmIRbklLaCsl6D397TCZrfiphSLY2odWEfoBzcFXaV_d4GI-VJyXNLEUTqdXEfZGyiaN26V1RCX6-900k-VAr7lzKkdD4BNwgenKC8u2lQdZSS7Zn3YixyILIoxAMrJ_-qGLhd2WuZ8i-ujyCvRnNXVkUDPJXbE0GrSXvg_ZLn_5t2ZsVbbsvPdwZuZzpLLwh44vw0WJ7D1nivZmwIWaJ940hK2AfYwHB7kiFI6RK1shFkaaQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">Vitreous Forms</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 5 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Misty purple mountains at twilight forest landscape" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNHQ_3qkJ2jsIx-VhTtyIJ9aYYpwbg7Gzqsuvd1C66JnHWDFylsb_eoU9U14Hy24ly5_V8GUXBLp1_qh6-1R5L4ysjoS20wkEWRlcSllJmbEGWstX5aOaR1Oc05FLP8GgxvCTzPUjBb4Ohxgz6gSUIeh1ImN1dP68oLUk2HNS0PVSUmnSh76HJ3RKJ02ghsD4cxG6YO4t3cPbKMFbI5BHwr4_9lP3xYbCw2Er8xaK9loG-3lhE6D5xbVeAUZcuCsE2rj1BUICCJg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">Ether Woods</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Item 6 -->
+<div class="masonry-item relative group">
+<div class="rounded-xl overflow-hidden glass-panel purple-glow-card">
+<img class="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" data-alt="Close up of a robotic eye with violet iris details" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqXrfjHrmTnmoWvrqIVsl5FB4vzZiWBmKFPf2n1EsoqT6VdXFReY_rDM059BbKVlL3v8NcS6VypNq9DugX-wmQ_phDu2TYfCTfuQ30JO3aIzFdAmZJtlmFpzeo4lT_cYs0cPTUtM-12hrTrVFLN6Go4xVIrnmulpg9WI_olCM4j58IwvDjE0iLEvlUlcZyEv6vSxcpwDdMfsjcQPVDTyo-EYT_G2npmK1ZpzX5wAUOaGRjpjiH_lZ1aJkBaTLIQ6Om-2p62k7Svw"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+<div class="flex justify-between items-center">
+<span class="text-xs font-outfit text-white">Synthetix Core</span>
+<span class="material-icons text-white text-sm">favorite_border</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 h-20 glass-panel border-t border-white/5 px-8 flex items-center justify-between z-50">
+<button class="text-primary flex flex-col items-center gap-1">
+<span class="material-icons">photo_library</span>
+<span class="text-[10px] font-medium">Gallery</span>
+</button>
+<button class="text-white/40 flex flex-col items-center gap-1">
+<span class="material-icons">auto_fix_high</span>
+<span class="text-[10px] font-medium">Generate</span>
+</button>
+<div class="relative -top-6">
+<button class="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-xl shadow-primary/40 border-4 border-obsidian">
+<span class="material-icons text-white text-3xl">add</span>
+</button>
+</div>
+<button class="text-white/40 flex flex-col items-center gap-1">
+<span class="material-icons">collections</span>
+<span class="text-[10px] font-medium">Albums</span>
+</button>
+<button class="text-white/40 flex flex-col items-center gap-1">
+<span class="material-icons">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</button>
+</nav>
+<!-- Global Decoration -->
+<div class="fixed top-[-10%] right-[-10%] w-[50%] h-[40%] bg-primary/10 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+<div class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[40%] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+</body></html>

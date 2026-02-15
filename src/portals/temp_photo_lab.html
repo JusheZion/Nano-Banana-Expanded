@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Photo Lab Workspace V1</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#37625e",
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#0F0F12",
+                        "obsidian": "#0F0F12",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .glass {
+            background: rgba(55, 98, 94, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .canvas-glow {
+            box-shadow: inset 0 0 40px rgba(55, 98, 94, 0.2), 0 0 60px rgba(55, 98, 94, 0.1);
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: rgba(55, 98, 94, 0.2);
+            height: 4px;
+            border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #37625e;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(55, 98, 94, 0.5);
+            border: 2px solid white;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-white selection:bg-primary selection:text-white overflow-hidden h-screen w-screen flex flex-col">
+<!-- Top Navigation Glass Bar -->
+<header class="fixed top-0 left-0 right-0 z-50 p-4">
+<div class="glass h-16 rounded-xl flex items-center justify-between px-6">
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
+<span class="material-icons text-primary">chevron_left</span>
+</button>
+<div class="h-6 w-[1px] bg-white/10"></div>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
+<span class="material-icons text-white/70">undo</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
+<span class="material-icons text-white/30 cursor-not-allowed">redo</span>
+</button>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-2 px-4 py-2 glass rounded-full hover:bg-primary/40 transition-all">
+<span class="material-icons text-sm">compare</span>
+<span class="text-xs font-medium uppercase tracking-wider">Compare</span>
+</button>
+<button class="bg-primary hover:bg-primary/80 px-6 py-2 rounded-full font-semibold transition-all shadow-lg shadow-primary/20">
+                    Save
+                </button>
+</div>
+</div>
+</header>
+<!-- Main Workspace Area -->
+<main class="flex-1 relative mt-20 mb-32 flex flex-col md:flex-row p-4 gap-4 overflow-hidden">
+<!-- Central Canvas -->
+<div class="flex-1 relative flex items-center justify-center group">
+<div class="absolute inset-0 flex items-center justify-center p-4">
+<div class="relative w-full max-w-lg aspect-[3/4] rounded-xl overflow-hidden canvas-glow ring-1 ring-primary/30">
+<img alt="Main editing canvas" class="w-full h-full object-cover" data-alt="Modern abstract digital art with teal and obsidian colors" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8cnqDX00mR3ZFYlmt_JtKB9q2cZduHugxMIuWMxK01BVd16Na3gaghsVyyb5y8lKafXClpByvp9Z-s09hoebUa3YzXgJOnsYOZb1P3NEjTZnjOxVHIABkpVANXKNjwWazP0ytA_PYHIGawnb4lrVXgC0a-mQIMeUnhhKt5TQX75CRYjBuO81Uzua8oM_yNXsb_ou3MIr3Vbphc9bg1FvfupVbFYvIiAuOZNpNrOOmcxLUFkOgJK82n0sOOQ4Y9lpJpxoggXoaeQ"/>
+<!-- Metadata Overlay -->
+<div class="absolute bottom-4 left-4 font-mono text-[10px] text-white/50 space-y-1">
+<p>RES: 4096 x 5120</p>
+<p>FORMAT: RAW-TIFF</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Adjustment Sidebar (Floating on Phone) -->
+<aside class="w-full md:w-72 lg:w-80 flex flex-col gap-4">
+<div class="glass flex-1 rounded-xl p-6 flex flex-col">
+<h3 class="text-sm font-semibold text-primary uppercase tracking-[0.2em] mb-8">Adjustments</h3>
+<div class="space-y-8 flex-1">
+<!-- Exposure -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-xs text-white/70 font-medium">EXPOSURE</label>
+<span class="font-mono text-xs text-primary">+0.15</span>
+</div>
+<input class="w-full" max="1" min="-1" step="0.01" type="range" value="0.15"/>
+</div>
+<!-- Contrast -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-xs text-white/70 font-medium">CONTRAST</label>
+<span class="font-mono text-xs text-primary">-0.08</span>
+</div>
+<input class="w-full" max="1" min="-1" step="0.01" type="range" value="-0.08"/>
+</div>
+<!-- Saturation -->
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-xs text-white/70 font-medium">SATURATION</label>
+<span class="font-mono text-xs text-primary">+0.42</span>
+</div>
+<input class="w-full" max="1" min="-1" step="0.01" type="range" value="0.42"/>
+</div>
+<div class="h-[1px] bg-white/5 my-4"></div>
+<!-- Presets -->
+<div class="space-y-4">
+<label class="text-xs text-white/70 font-medium">PRESET FILTERS</label>
+<div class="grid grid-cols-2 gap-3">
+<button class="bg-primary/30 border border-primary/40 p-3 rounded-lg text-xs text-left hover:bg-primary/50 transition-colors relative overflow-hidden group">
+<span class="relative z-10">Emerald Glow</span>
+<div class="absolute top-1 right-1 w-1.5 h-1.5 bg-primary rounded-full"></div>
+</button>
+<button class="glass border-white/5 p-3 rounded-lg text-xs text-left hover:bg-white/5 transition-colors">
+                                Obsidian Dusk
+                            </button>
+<button class="glass border-white/5 p-3 rounded-lg text-xs text-left hover:bg-white/5 transition-colors">
+                                Teal Vapor
+                            </button>
+<button class="glass border-white/5 p-3 rounded-lg text-xs text-left hover:bg-white/5 transition-colors">
+                                Deep Iris
+                            </button>
+</div>
+</div>
+</div>
+<!-- Footer Tools -->
+<div class="pt-6 mt-6 border-t border-white/5 flex justify-between">
+<button class="text-xs text-white/50 hover:text-white transition-colors">Reset All</button>
+<button class="text-xs text-primary font-bold">Auto-Optimize</button>
+</div>
+</div>
+</aside>
+</main>
+<!-- Bottom Filmstrip -->
+<footer class="fixed bottom-0 left-0 right-0 z-50 p-4">
+<div class="glass h-24 rounded-xl flex items-center px-4 gap-4 overflow-hidden">
+<div class="flex-shrink-0 w-12 h-12 glass rounded-lg flex items-center justify-center">
+<span class="material-icons text-primary">auto_awesome</span>
+</div>
+<div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
+<!-- Thumbnail 1 (Active) -->
+<div class="relative flex-shrink-0 w-16 h-16 rounded-lg ring-2 ring-primary p-0.5">
+<img alt="Recent 1" class="w-full h-full object-cover rounded-[7px]" data-alt="Small thumbnail of teal abstract digital art" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDe0DWKanAlA1qyjMqIiQa6ldbS0HKCndejoUqcuxRxuj1xY0cZLOpLjVnxrbJ7dRcpdQLSsGvwcG5hc9YQdZk_7wrfYymLie518TONfbw9zXQpqFUDkloq0DqL3G8GgdHKxnBiGTx30Vu8bK8pKhSCUOxWfsQOY7KVE7HYsS_jLE3HqPCYlna_dTPGff6sIZP-6h7WuYDZ4tAoVTGnXvYqStWX2LgaQhACOh0alQyi0GT9em56ZdF26fHjOjObpMl1Xdtv1yRJjA"/>
+</div>
+<!-- Thumbnail 2 -->
+<div class="flex-shrink-0 w-16 h-16 rounded-lg glass border-white/5 hover:border-primary/50 transition-colors p-0.5 cursor-pointer">
+<img alt="Recent 2" class="w-full h-full object-cover rounded-[7px] opacity-70 hover:opacity-100 transition-opacity" data-alt="Purple and teal wave pattern thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_nmDW_foa5-eID2S4VN-r5Ssn74QwXHDWTTrduOEDJV6_SOuNREDsrzifh_JTzOGd66Dk0TxpGk-fNdoCINEz2R-yWNF4fdCK3kWqDLrc9s8zFOOFFNlRu-GE_Q8RXvdHYYRlZLsjB2GSFecP3Be9bm7jjmjThXQ1VK-_AzOh--hc4W0hKuRPdcWxVcEVSAWs39bmiPr75wzKRmozsMs9IP86jjqy7NxrDZ9P4iQHhjc-7tXHxWKowDN66fTdi3yRzrWd83hRzQ"/>
+</div>
+<!-- Thumbnail 3 -->
+<div class="flex-shrink-0 w-16 h-16 rounded-lg glass border-white/5 hover:border-primary/50 transition-colors p-0.5 cursor-pointer">
+<img alt="Recent 3" class="w-full h-full object-cover rounded-[7px] opacity-70 hover:opacity-100 transition-opacity" data-alt="Green and dark gradient digital thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuSW_b1e3ozmTVVbtbTZK84j9ou5sVLddXRDpxBHB9YQ9Dr7eEWVIl0mCFzaIlvCU33eDRoNu6TcetiiC6IRr6Y3hVXgyFbxBH90AI6HNofV_jQE9PMMe1GxNotmoAWWMvpqyMcNTW17wanoPbgR8e_4xpXNlIVeR8sH2tEAd7JpQmbD0ca3bdabv3PgZbfRiqSZdgqWQ6RXo93v4RmLzbZLfMlJOAWNtXWbtaGfiNoKl1FIXxin72iyCIuSputl9tEPhBzZBtaQ"/>
+</div>
+<!-- Thumbnail 4 -->
+<div class="flex-shrink-0 w-16 h-16 rounded-lg glass border-white/5 hover:border-primary/50 transition-colors p-0.5 cursor-pointer">
+<img alt="Recent 4" class="w-full h-full object-cover rounded-[7px] opacity-70 hover:opacity-100 transition-opacity" data-alt="Abstract obsidian and teal texture thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDR_7qoEwS8iQzM4xIFb-Cl7OPpuiDB_PaWtEAMZxyAzwyiiD-Mo5ikC0dhbBqsTZ9qACeD-Qq1sAVkEZNsbS9MyFaxnIiJFheJL9eoyJQs7JgRIfx9tQkqHnXY4ZIHJgbAVj5tsBnjNmUO2qMwp6ZPKo2-3fpzg4IfJUI2xv8sEv_lGIuSoagKOj-5hWoEQ2FdcxJOqSM7eHhDuIcGU5Lr3o0QnHuag5WZnyCj6o5M0UNyCQQ6Jlul62Jitrb3uNvTHkcu8kizBw"/>
+</div>
+<!-- Thumbnail 5 -->
+<div class="flex-shrink-0 w-16 h-16 rounded-lg glass border-white/5 hover:border-primary/50 transition-colors p-0.5 cursor-pointer">
+<img alt="Recent 5" class="w-full h-full object-cover rounded-[7px] opacity-70 hover:opacity-100 transition-opacity" data-alt="Minimalist dark teal background thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvv8y7BsXtOSLhYU1dxgRuiQWawsbU_VUK-2JGhus_xNLJB1yAAy5sZtz-LZsZkwlj2x28YiZGk2_qI55008b_saPHJIb8BKKbJewHzUHyURBlpYo0hL9TqttVuO6ipjbAisNfLG7grcMSmjS1Hnd7ZbAXkDtp8vSas6Xhwgy9EycQo_dHyNmR56j69L_vIkH8-os-bExoRiWoa1z_Tj1axbMU3BZKwpPOVtH4NxoBc65-ZFNtDDT2SXuJp_SApZDpOdfPxshOyQ"/>
+</div>
+<!-- Thumbnail 6 -->
+<div class="flex-shrink-0 w-16 h-16 rounded-lg glass border-white/5 hover:border-primary/50 transition-colors p-0.5 cursor-pointer">
+<img alt="Recent 6" class="w-full h-full object-cover rounded-[7px] opacity-70 hover:opacity-100 transition-opacity" data-alt="Deep jewel tone light pattern thumbnail" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmcGdo_FB9gnMCpKmhBb2iYmVNOS0Arrt2lQE3jVXXI8rZwgQ5LE-r4efzGqIXoJtQryT_A_hjmAnnsYkb_IkECp4HL_obQ3Pl7D7j99dCWxQS7Hx8yl7Zr2KKVfvflZPw9P9D1cv1w1PkSQy_MCt9g9LWFU-IXOXWHy5n-51dw9egAvYDaPnCNU2AmfdCSNHDb0c8wEQqvSZxijVmeF86L77_AZcshvnozwwDIvGdQJobci46e_0vmDqknkwLieUFCeaoUSyzQQ"/>
+</div>
+</div>
+<div class="flex-shrink-0 ml-auto flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center glass rounded-full hover:bg-primary/20">
+<span class="material-icons text-white/50">grid_view</span>
+</button>
+</div>
+</div>
+</footer>
+<!-- iOS Home Indicator Overlay (Visual purely for form factor) -->
+<div class="fixed bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/20 rounded-full z-[100]"></div>
+
+```</body></html>
