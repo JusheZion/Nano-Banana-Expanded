@@ -40,17 +40,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                 className={`
           w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group
           ${isActive
-                        ? `${activeColorClass} border shadow-lg backdrop-blur-sm`
+                        ? `${activeColorClass} border shadow-[0_0_15px_rgba(212,175,55,0.2)] backdrop-blur-sm`
                         : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'}
         `}
             >
-                <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : 'group-hover:scale-110'} transition-transform`} />
+                <Icon className={`w-5 h-5 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(212,175,55,0.5)]' : 'group-hover:scale-110'} transition-transform`} />
                 <span className="font-medium tracking-wide">{label}</span>
                 {isActive && (
                     <div className={`ml-auto w-1.5 h-1.5 rounded-full ${targetPortal === 'studio' ? 'bg-[#37615D]' :
                         targetPortal === 'reference' ? 'bg-[#5F368E]' :
-                            'bg-[#893741]'
-                        } shadow-glow`} />
+                            'bg-[#893741]' // Keep original color but add gold glow
+                        } shadow-[0_0_10px_#D4AF37]`} />
                 )}
             </button>
         );
@@ -60,33 +60,37 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
         <div className="flex h-screen bg-transparent text-white overflow-hidden text-sm">
             {/* Sidebar - High-Fidelity Glassmorphism */}
             <aside
-                className="w-64 flex-shrink-0 flex flex-col z-50 relative transition-all duration-300"
+                className="w-[230px] flex-shrink-0 flex flex-col z-50 relative transition-all duration-300"
                 style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    borderRight: '1px solid rgba(255, 255, 255, 0.1)'
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    backdropFilter: 'blur(24px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '10px 0 30px rgba(0,0,0,0.1)'
                 }}
             >
                 {/* Brand Area */}
-                <div className="p-8 pb-6">
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#893741] to-[#5F368E] flex items-center justify-center shadow-lg ring-1 ring-white/20">
-                            <span className="text-white font-bold text-lg">N</span>
+                <div className="p-8 pb-6 relative overflow-hidden">
+                    {/* Subtle Gold Glow behind brand */}
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[#D4AF37]/10 to-transparent opacity-30 pointer-events-none" />
+
+                    <div className="flex items-center gap-3 mb-1 relative z-10">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#893741] via-[#D4AF37] to-[#5F368E] flex items-center justify-center shadow-lg ring-1 ring-white/20">
+                            <span className="text-white font-bold text-lg drop-shadow-md">N</span>
                         </div>
                         <h1 className="text-xl font-bold tracking-tight text-white drop-shadow-md">
-                            Nano <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#893741] to-[#5F368E]">Banana</span>
+                            Nano <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#893741] to-[#5F368E]">Banana</span>
                         </h1>
                     </div>
-                    <p className="text-[10px] text-white/30 pl-11 tracking-[0.2em] uppercase font-medium">Expansion v2.0</p>
+                    <p className="text-[10px] text-[#D4AF37]/80 pl-11 tracking-[0.2em] uppercase font-bold relative z-10">Expansion v2.0</p>
                 </div>
 
                 {/* Navigation (Maintains existing logic but cleaner) */}
                 <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    <div className="text-[10px] font-bold text-white/20 px-4 mb-2 mt-4 uppercase tracking-[0.15em]">Main Hub</div>
+                    <div className="text-[10px] font-bold text-white/50 px-4 mb-2 mt-4 uppercase tracking-[0.15em]">Main Hub</div>
                     <NavItem targetPortal="home" icon={Home} label="Overview" />
 
-                    <div className="text-[10px] font-bold text-white/20 px-4 mb-2 mt-6 uppercase tracking-[0.15em]">Creative Suite</div>
+                    <div className="text-[10px] font-bold text-white/50 px-4 mb-2 mt-6 uppercase tracking-[0.15em]">Creative Suite</div>
                     <NavItem targetPortal="studio" icon={Wand2} label="Studio" />
                     <NavItem targetPortal="reference" icon={ImageIcon} label="Reference" />
                     <NavItem targetPortal="related" icon={Sparkles} label="Related" />
@@ -97,15 +101,18 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                 <div className="p-6 mt-auto flex justify-center relative">
                     <div className="group relative">
                         {/* 40px Circular Avatar */}
-                        <button className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#37615D] to-[#0F0F12] border border-white/20 flex items-center justify-center shadow-lg hover:border-white/50 transition-all hover:scale-105 hover:shadow-[0_0_15px_rgba(55,97,93,0.4)]">
+                        <button className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#37615D] to-[#0F0F12] border border-[#D4AF37]/30 flex items-center justify-center shadow-lg hover:border-[#D4AF37] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(212,175,55,0.4)]">
                             <span className="text-xs font-bold text-white tracking-widest">JD</span>
                         </button>
 
                         {/* Glass Tooltip (Pops Right/Up) */}
-                        <div className="absolute left-14 bottom-0 w-max bg-black/40 backdrop-blur-xl border border-white/10 p-3 rounded-xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ease-out shadow-2xl z-[100]">
-                            <p className="text-white font-bold text-sm">John Doe</p>
-                            <div className="h-px w-full bg-white/10 my-1" />
-                            <p className="text-[#00FFC2] text-[10px] uppercase tracking-wider font-bold">Pro Plan</p>
+                        <div className="absolute left-14 bottom-0 w-max bg-black/60 backdrop-blur-2xl border border-[#D4AF37]/20 p-3 rounded-xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ease-out shadow-2xl z-[100] ring-1 ring-white/5">
+                            <p className="text-white font-bold text-sm tracking-wide">John Doe</p>
+                            <div className="h-px w-full bg-gradient-to-r from-transparent via-[#D4AF37]/50 to-transparent my-2" />
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] shadow-[0_0_8px_#D4AF37]" />
+                                <p className="text-[#D4AF37] text-[10px] uppercase tracking-wider font-bold">Pro Plan</p>
+                            </div>
                         </div>
                     </div>
                 </div>

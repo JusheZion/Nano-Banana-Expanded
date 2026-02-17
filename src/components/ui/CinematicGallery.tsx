@@ -26,13 +26,14 @@ export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
         <div className="w-full px-8 py-8 animate-fade-in">
             {/* Header */}
             <div className="relative mb-10 mt-4">
-                <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-white/80 to-white/20 tracking-tighter leading-[0.9]">
+                <h1 className="text-6xl font-extralight tracking-widest text-[#D4AF37] drop-shadow-lg leading-none">
                     REFERENCE
                     <br />
-                    <span className="text-stroke-glass text-transparent text-8xl">ALBUM</span>
+                    <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-[#893741] tracking-[0.2em]">ALBUM</span>
                 </h1>
-                <p className="text-xl text-purple-300/60 mt-4 max-w-xl font-light tracking-wide">
-                    High-fidelity visual library. <span className="text-white font-medium">Constrained for clarity.</span>
+                <p className="text-xl text-[#D4AF37]/60 mt-4 max-w-xl font-light tracking-wide flex items-center gap-2">
+                    <span className="w-8 h-[1px] bg-[#D4AF37]/40"></span>
+                    High-fidelity visual library. <span className="text-white/90 font-medium">Constrained for clarity.</span>
                 </p>
             </div>
 
