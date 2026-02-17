@@ -7,8 +7,10 @@ import { CharacterStudio } from './portals/CharacterStudio';
 import { ReferenceAlbum } from './portals/ReferenceAlbum';
 import { RelatedAlbum } from './portals/RelatedAlbum';
 import { PhotoLab } from './portals/PhotoLab';
+import { ComicLayout } from './modes/comic/layouts/ComicLayout';
+import { ComicEditor } from './modes/comic/pages/ComicEditor';
 
-type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab';
+type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
 
 function App() {
   const [activePortal, setActivePortal] = useState<Portal>('home');
@@ -20,6 +22,7 @@ function App() {
     if (activePortal === 'home' || activePortal === 'studio') setTheme('teal');
     else if (activePortal === 'reference' || activePortal === 'related') setTheme('purple');
     else if (activePortal === 'lab') setTheme('gold');
+    else if (activePortal === 'comic') setTheme('obsidian'); // Updated to match layout
     else setTheme('crimson');
   }, [activePortal, setTheme]);
 
@@ -34,6 +37,11 @@ function App() {
       {activePortal === 'reference' && <ReferenceAlbum />}
       {activePortal === 'related' && <RelatedAlbum />}
       {activePortal === 'lab' && <PhotoLab />}
+      {activePortal === 'comic' && (
+        <ComicLayout>
+          <ComicEditor />
+        </ComicLayout>
+      )}
     </AppShell>
   );
 }

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'crimson' | 'teal' | 'purple' | 'gold';
+type Theme = 'crimson' | 'teal' | 'purple' | 'gold' | 'obsidian';
 
 interface ThemeContextType {
   activeTheme: Theme;

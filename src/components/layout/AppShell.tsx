@@ -1,21 +1,22 @@
 import React from 'react';
-import { Home, Palette, Image as ImageIcon, Sparkles, Wand2, Settings } from 'lucide-react';
+import { Home, Palette, Image as ImageIcon, Sparkles, Wand2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface AppShellProps {
     children: React.ReactNode;
-    activePortal: 'home' | 'studio' | 'reference' | 'related' | 'lab';
-    setActivePortal: (portal: 'home' | 'studio' | 'reference' | 'related' | 'lab') => void;
+    activePortal: 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
+    setActivePortal: (portal: 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic') => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setActivePortal }) => {
     const { setTheme } = useTheme();
 
-    const handleNavClick = (portal: 'home' | 'studio' | 'reference' | 'related' | 'lab') => {
+    const handleNavClick = (portal: 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic') => {
         setActivePortal(portal);
         // Auto-set theme based on portal
         if (portal === 'studio') setTheme('teal');
         else if (portal === 'reference') setTheme('purple');
+        else if (portal === 'comic') setTheme('obsidian');
         else if (portal === 'home') setTheme('crimson'); // Default/Hub theme
     };
 
@@ -24,7 +25,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
         icon: Icon,
         label
     }: {
-        targetPortal: 'home' | 'studio' | 'reference' | 'related' | 'lab',
+        targetPortal: 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic',
         icon: any,
         label: string
     }) => {
@@ -32,7 +33,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
         const activeColorClass =
             targetPortal === 'studio' ? 'text-[#37615D] bg-[#37615D]/10 border-[#37615D]' :
                 targetPortal === 'reference' ? 'text-[#5F368E] bg-[#5F368E]/10 border-[#5F368E]' :
-                    'text-[#893741] bg-[#893741]/10 border-[#893741]';
+                    targetPortal === 'comic' ? 'text-[#D4AF37] bg-[#D4AF37]/10 border-[#D4AF37]' :
+                        'text-[#893741] bg-[#893741]/10 border-[#893741]';
 
         return (
             <button
@@ -49,7 +51,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                 {isActive && (
                     <div className={`ml-auto w-1.5 h-1.5 rounded-full ${targetPortal === 'studio' ? 'bg-[#37615D]' :
                         targetPortal === 'reference' ? 'bg-[#5F368E]' :
-                            'bg-[#893741]' // Keep original color but add gold glow
+                            targetPortal === 'comic' ? 'bg-[#D4AF37]' :
+                                'bg-[#893741]' // Keep original color but add gold glow
                         } shadow-[0_0_10px_#D4AF37]`} />
                 )}
             </button>
@@ -93,6 +96,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     <div className="text-[10px] font-bold text-white/50 px-4 mb-2 mt-6 uppercase tracking-[0.15em]">Creative Suite</div>
                     <NavItem targetPortal="studio" icon={Wand2} label="Studio" />
                     <NavItem targetPortal="reference" icon={ImageIcon} label="Reference" />
+                    <NavItem targetPortal="comic" icon={Sparkles} label="Comic Mode" />
                     <NavItem targetPortal="related" icon={Sparkles} label="Related" />
                     <NavItem targetPortal="lab" icon={Palette} label="Photo Lab" />
                 </nav>
