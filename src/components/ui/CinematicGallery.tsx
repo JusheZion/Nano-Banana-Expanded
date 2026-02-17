@@ -7,7 +7,7 @@ interface CinematicGalleryProps {
 
 export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    const { activeTheme } = useTheme();
+    useTheme();
 
     // Mock Data simulating the Stitch MCP output or Local Assets
     // In a real scenario, this would come from the `images` prop
@@ -42,7 +42,7 @@ export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
                 {items.map((item, index) => {
                     // Logic for visual variety: Every 3rd item is "tall" (380px) or used from data
                     // We use the data-driven height here for precise control if available, or fallback
-                    const isTall = index % 3 === 0;
+
                     const heightClass = item.height;
 
                     return (

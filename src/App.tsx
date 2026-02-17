@@ -7,7 +7,7 @@ import { CharacterStudio } from './portals/CharacterStudio';
 import { ReferenceAlbum } from './portals/ReferenceAlbum';
 import { RelatedAlbum } from './portals/RelatedAlbum';
 import { PhotoLab } from './portals/PhotoLab';
-import { ComicLayout } from './modes/comic/layouts/ComicLayout';
+
 import { ComicEditor } from './modes/comic/pages/ComicEditor';
 
 type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
@@ -38,9 +38,7 @@ function App() {
       {activePortal === 'related' && <RelatedAlbum />}
       {activePortal === 'lab' && <PhotoLab />}
       {activePortal === 'comic' && (
-        <ComicLayout>
-          <ComicEditor />
-        </ComicLayout>
+        <ComicEditor />
       )}
     </AppShell>
   );
