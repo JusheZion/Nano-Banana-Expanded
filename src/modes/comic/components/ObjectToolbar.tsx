@@ -3,18 +3,19 @@ import { useComicStore } from '../../../stores/comicStore';
 
 interface ObjectToolbarProps {
     currentPageId: string;
-    selectedElementId: string;
+    selectedElementIds: string[];
 }
 
-export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, selectedElementId }) => {
+export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, selectedElementIds }) => {
     const {
         bringToFront,
         sendToBack,
         cloneElement,
-        removeElement
+        removeElement,
+        toggleFlip
     } = useComicStore();
 
-    if (!selectedElementId) return null;
+    if (selectedElementIds.length === 0) return null;
 
     return (
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-zinc-900 border border-white/20 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -22,7 +23,30 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
             {/* Z-Index Controls */}
             <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
                 <button
-                    onClick={() => bringToFront(currentPageId, selectedElementId)}
+                    onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'horizontal'))}
+                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    title="Flip Horizontal"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="16 3 21 12 16 21"></polyline>
+                        <line x1="8" y1="3" x2="8" y2="21"></line>
+                        <polyline points="3 7 3 17"></polyline>
+                    </svg>
+                </button>
+                <button
+                    onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'vertical'))}
+                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    title="Flip Vertical"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 16 12 21 21 16"></polyline>
+                        <line x1="3" y1="8" x2="21" y2="8"></line>
+                        <polyline points="7 3 17 3"></polyline>
+                    </svg>
+                </button>
+                <div className="h-4 w-px bg-white/10 mx-1" />
+                <button
+                    onClick={() => selectedElementIds.forEach(id => bringToFront(currentPageId, id))}
                     className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
                     title="Bring to Front"
                 >
@@ -32,7 +56,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     </svg>
                 </button>
                 <button
-                    onClick={() => sendToBack(currentPageId, selectedElementId)}
+                    onClick={() => selectedElementIds.forEach(id => sendToBack(currentPageId, id))}
                     className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
                     title="Send to Back"
                 >
@@ -46,7 +70,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
             {/* Lifecycle Controls */}
             <div className="flex items-center gap-1">
                 <button
-                    onClick={() => cloneElement(currentPageId, selectedElementId)}
+                    onClick={() => selectedElementIds.forEach(id => cloneElement(currentPageId, id))}
                     className="p-2 hover:bg-teal-500/20 hover:text-teal-400 rounded-full text-white/70 transition-colors"
                     title="Clone (Ctrl+D)"
                 >
@@ -56,7 +80,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     </svg>
                 </button>
                 <button
-                    onClick={() => removeElement(currentPageId, selectedElementId)}
+                    onClick={() => selectedElementIds.forEach(id => removeElement(currentPageId, id))}
                     className="p-2 hover:bg-red-500/20 hover:text-red-400 rounded-full text-white/70 transition-colors"
                     title="Delete (Backspace)"
                 >

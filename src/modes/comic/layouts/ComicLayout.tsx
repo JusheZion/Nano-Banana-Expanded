@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { ObjectToolbar } from '../components/ObjectToolbar';
+import { TextToolbar } from '../components/TextToolbar';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -10,34 +11,74 @@ interface ComicLayoutProps {
 export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const triggerExport = useComicStore(state => state.triggerExport);
   const {
+    pages,
     currentPageId,
-    selectedElementId,
-    removeElement,
-    cloneElement
+    selectedElementIds,
+    deleteSelected,
+    copySelected,
+    pasteClipboard
   } = useComicStore();
 
+  const undo = () => useComicStore.temporal.getState().undo();
+  const redo = () => useComicStore.temporal.getState().redo();
+
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  // Determine selected element type
+  const currentPage = pages.find(p => p.id === currentPageId);
+  const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
+  const selectedBalloons = currentPage?.balloons.filter(b => selectedElementIds.includes(b.id)) || [];
+  const isPanelSelected = selectedPanels.length > 0;
+  const selectedTextId = selectedBalloons.length > 0 ? selectedBalloons[0].id : null;
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedElementId || !currentPageId) return;
+      // Avoid firing shortcuts when actively typing in an input
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      // Undo / Redo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      // Copy
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        copySelected();
+      }
+
+      // Paste
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteClipboard();
+      }
+
+      // Cut
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        copySelected();
+        deleteSelected();
+      }
+
+      if (!currentPageId || selectedElementIds.length === 0) return;
 
       // Delete / Backspace
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        removeElement(currentPageId, selectedElementId);
-      }
-
-      // Ctrl+D / Cmd+D (Clone)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
-        cloneElement(currentPageId, selectedElementId);
+        deleteSelected();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElementId, currentPageId, removeElement, cloneElement]);
+  }, [currentPageId, selectedElementIds, deleteSelected, copySelected, pasteClipboard]);
 
 
   return (
@@ -60,6 +101,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
           <button
             onClick={() => setIsLibraryOpen(!isLibraryOpen)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLibraryOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
+            title="Toggle Asset Library"
           >
             {isLibraryOpen ? 'Close Library' : 'Open Library'}
           </button>
@@ -67,17 +109,25 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
           <button
             onClick={triggerExport}
             className="px-4 py-2 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-obsidian font-bold rounded-lg shadow-lg shadow-gold-500/20 transition-all transform hover:scale-105 active:scale-95"
+            title="Export Comic to Image"
           >
             Export
           </button>
         </div>
       </header>
 
-      {/* Object Toolbar (Contextual) - Moved outside header */}
-      {selectedElementId && currentPageId && (
+      {/* Contextual Toolbars - Moved outside header */}
+      {isPanelSelected && currentPageId && selectedElementIds.length > 0 && (
         <ObjectToolbar
           currentPageId={currentPageId}
-          selectedElementId={selectedElementId}
+          selectedElementIds={selectedElementIds}
+        />
+      )}
+
+      {selectedTextId && currentPageId && (
+        <TextToolbar
+          currentPageId={currentPageId}
+          selectedBubbleId={selectedTextId}
         />
       )}
 

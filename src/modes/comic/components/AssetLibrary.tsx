@@ -27,7 +27,7 @@ interface AssetLibraryProps {
 export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) => {
     const {
         currentPageId,
-        selectedElementId,
+        selectedElementIds,
         updatePanel,
         addPanel,
         pages
@@ -54,17 +54,19 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
                 width = height * aspectRatio;
             }
 
-            if (selectedElementId) {
+            if (selectedElementIds.length > 0) {
                 // Check if selected element is a panel
-                const isPanel = currentPage.panels.some(p => p.id === selectedElementId);
-                if (isPanel) {
-                    updatePanel(currentPage.id, selectedElementId, { imageUrl: assetUrl });
+                const selectedPanels = currentPage.panels.filter(p => selectedElementIds.includes(p.id));
+                if (selectedPanels.length > 0) {
+                    selectedPanels.forEach(panel => {
+                        updatePanel(currentPage.id, panel.id, { imageUrl: assetUrl });
+                    });
                 } else {
-                    addPanel(currentPage.id, { x: 50, y: 50, width, height, imageUrl: assetUrl });
+                    addPanel(currentPage.id, { shapeType: 'rect', x: 50, y: 50, width, height, imageUrl: assetUrl });
                 }
             } else {
                 // No selection -> Create new panel
-                addPanel(currentPage.id, { x: 50, y: 50, width, height, imageUrl: assetUrl });
+                addPanel(currentPage.id, { shapeType: 'rect', x: 50, y: 50, width, height, imageUrl: assetUrl });
             }
         };
     };
