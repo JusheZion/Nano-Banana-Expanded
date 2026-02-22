@@ -62,8 +62,27 @@ export interface BalloonInstance {
     overrides?: BalloonOverrides;
 
     text: string;
+    autoSize?: boolean;
+    padding?: number;
 
     flipX?: boolean;
     flipY?: boolean;
     isSelected?: boolean;
+    isLocked?: boolean;
+    isVisible?: boolean;
+
+    // FX
+    shadowBlur?: number;
+    shadowOffsetX?: number;
+    shadowOffsetY?: number;
+    shadowOpacity?: number;
+    shadowColor?: string;
+    glowColor?: string;
+    glowBlur?: number;
+    glowSpread?: number;
+    glowOpacity?: number;
+
+    // Texture
+    textureId?: string;
+    textureOpacity?: number;
 }

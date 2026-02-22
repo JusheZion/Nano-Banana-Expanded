@@ -1,0 +1,30 @@
+{
+  "projectInfo": {
+    "title": "Untitled Sci-Fi Fantasy Series",
+    "author": "Nano Banana Studio",
+    "currentChapter": 1,
+    "currentPage": 1
+  },
+  "chapters": [
+    {
+      "chapterNumber": 1,
+      "chapterTitle": "The Awakening",
+      "pages": [
+        {
+          "pageNumber": 1,
+          "layout": "standard_grid",
+          "data": {} 
+        },
+        {
+          "pageNumber": 2,
+          "layout": "dynamic_splash",
+          "data": {}
+        }
+      ]
+    }
+  ],
+  "globalAssets": {
+    "characterStyles": [],
+    "savedPalettes": []
+  }
+}

@@ -5,13 +5,14 @@ import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { splitConvexPolygon } from '../utils/geometry';
+import { getSnapLines, type SnapLine } from '../utils/snapping';
 import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
 
 // Placeholder for image URL
 const PLACEHOLDER_IMAGE_URL = "https://via.placeholder.com/150";
 
 // --- Drawing View ---
-const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string, strokeWidth: number } }) => {
+const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string, strokeWidth: number, isVisible?: boolean, isLocked?: boolean } }) => {
     return (
         <Line
             points={drawing.points}
@@ -21,6 +22,8 @@ const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string,
             lineCap="round"
             lineJoin="round"
             perfectDrawEnabled={false}
+            visible={drawing.isVisible !== false}
+            listening={drawing.isLocked !== true}
         />
     );
 };
@@ -62,6 +65,9 @@ export const ComicCanvas: React.FC = () => {
     // Multi-Select Marquee
     const [selectionBox, setSelectionBox] = React.useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
 
+    // Snapping Guides
+    const [snapLines, setSnapLines] = React.useState<SnapLine[]>([]);
+
     if (!currentPage) return <div className="text-white p-4">Loading Comic Engine...</div>;
 
     const stageRef = useRef<any>(null);
@@ -92,6 +98,9 @@ export const ComicCanvas: React.FC = () => {
             clearSelection();
             setSelectionBox({ start: pos, end: pos });
         }
+
+        // Always attempt to clear snaplines on interaction end
+        setSnapLines([]);
     };
 
     const handleStageMouseMove = (e: any) => {
@@ -145,6 +154,8 @@ export const ComicCanvas: React.FC = () => {
     };
 
     const handleStageMouseUp = () => {
+        setSnapLines([]); // Ensure they disappear
+
         if (isKnifeMode && knifeStart && knifeCurrent) {
             performKnifeSplit(knifeStart, knifeCurrent);
             setKnifeStart(null);
@@ -362,62 +373,64 @@ export const ComicCanvas: React.FC = () => {
                             strokeWidth={1}
                         />
 
-                        {/* Panels */}
-                        {(currentPage.panels || []).map((panel) => (
-                            <ComicPanel
-                                key={panel.id}
-                                panel={panel}
-                                isSelected={selectedElementIds.includes(panel.id)}
-                                onSelect={(e: any) => {
-                                    if (e?.evt?.shiftKey) {
-                                        toggleSelection(panel.id);
-                                    } else {
-                                        setSelectedElements([panel.id]);
-                                    }
-                                }}
-                                onChange={(newAttrs: Partial<Panel>) => updatePanel(currentPage.id, panel.id, newAttrs)}
-                            />
-                        ))}
+                        {/* Dynamic Layer Rendering */}
+                        {(currentPage.layerOrder || []).map((elementId) => {
+                            const panel = currentPage.panels.find(p => p.id === elementId);
+                            if (panel) {
+                                return (
+                                    <ComicPanel
+                                        key={panel.id}
+                                        panel={panel}
+                                        isSelected={selectedElementIds.includes(panel.id)}
+                                        onSelect={(e: any) => {
+                                            if (e?.evt?.shiftKey) {
+                                                toggleSelection(panel.id);
+                                            } else {
+                                                setSelectedElements([panel.id]);
+                                            }
+                                        }}
+                                        onChange={(newAttrs: Partial<Panel>) => {
+                                            // Update store; snap processing handles visually in Panel's dragBoundFunc
+                                            updatePanel(currentPage.id, panel.id, newAttrs);
 
-                        {/* Drawings (Behind bubbles?) or Above? Usually top. Let's put them below bubbles for now or user choice?
-                            User said "draw 'KABOOM!' next to it".
-                            Lets render Drawings layer.
-                        */}
-                        {currentPage.drawings?.map((drawing) => (
-                            <DrawingView key={drawing.id} drawing={drawing} />
-                        ))}
+                                            // Re-compute snaplines for rendering visual guides if moving
+                                            if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
+                                                const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...currentPage.panels, ...(currentPage.balloons || [])], panel.id);
+                                                setSnapLines(snapLines);
+                                            }
+                                        }}
+                                        onDragEnd={() => setSnapLines([])}
+                                    />
+                                );
+                            }
 
-                        {/* Current Line (Ghost) */}
-                        {isDrawingMode && currentLine.length > 0 && (
-                            <Line
-                                points={currentLine}
-                                stroke={brushColor}
-                                strokeWidth={brushWidth}
-                                tension={0.5}
-                                lineCap="round"
-                                lineJoin="round"
-                            />
-                        )}
+                            const drawing = currentPage.drawings?.find(d => d.id === elementId);
+                            if (drawing) {
+                                return <DrawingView key={drawing.id} drawing={drawing} />;
+                            }
 
-                        {/* Balloons */}
-                        {(currentPage.balloons || []).map((balloon) => {
-                            const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
-                            if (!styleDef) return null;
-                            return (
-                                <BalloonNode
-                                    key={balloon.id}
-                                    balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
-                                    styleDef={styleDef}
-                                    onSelect={(id: string, e: any) => {
-                                        if (e?.evt?.shiftKey) {
-                                            toggleSelection(id);
-                                        } else {
-                                            setSelectedElements([id]);
-                                        }
-                                    }}
-                                    onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(currentPage.id, bubbleId, newAttrs)}
-                                />
-                            );
+                            const balloon = currentPage.balloons?.find(b => b.id === elementId);
+                            if (balloon) {
+                                const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
+                                if (!styleDef) return null;
+                                return (
+                                    <BalloonNode
+                                        key={balloon.id}
+                                        balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
+                                        styleDef={styleDef}
+                                        onSelect={(id: string, e: any) => {
+                                            if (e?.evt?.shiftKey) {
+                                                toggleSelection(id);
+                                            } else {
+                                                setSelectedElements([id]);
+                                            }
+                                        }}
+                                        onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(currentPage.id, bubbleId, newAttrs)}
+                                    />
+                                );
+                            }
+
+                            return null;
                         })}
                         {/* Real-time Knife Slash Visual */}
                         {isKnifeMode && knifeStart && knifeCurrent && (
@@ -443,6 +456,21 @@ export const ComicCanvas: React.FC = () => {
                                 dash={[4, 4]}
                             />
                         )}
+
+                        {/* Rendering the SnapLines on the topmost layer */}
+                        {snapLines.map((line, i) => (
+                            <KonvaLine
+                                key={`snap-${i}`}
+                                points={
+                                    line.axis === 'x'
+                                        ? [line.position, 0, line.position, 1200]
+                                        : [0, line.position, 800, line.position]
+                                }
+                                stroke="#D4AF37"
+                                strokeWidth={1}
+                                dash={[5, 5]}
+                            />
+                        ))}
                     </Layer>
                 </Stage>
             </div>

@@ -1,5 +1,7 @@
 import React, { useRef, useMemo } from 'react';
-import { Group, Rect, Circle, Text, Transformer, Path, Ellipse } from 'react-konva';
+import { Transformer, Group, Rect, Ellipse, Path, Text, Circle } from 'react-konva';
+import useImage from 'use-image';
+import { getTextureUrl } from '../data/TextureRegistry';
 import type { BalloonInstance, BalloonStyle } from '../../../types/balloon';
 
 interface BalloonNodeProps {
@@ -13,6 +15,22 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
     const tipRef = useRef<any>(null);
+    const textRef = useRef<any>(null);
+
+    React.useEffect(() => {
+        if (groupRef.current) {
+            const group = groupRef.current;
+            const origGetClientRect = group.getClientRect.bind(group);
+            group.getClientRect = (config?: any) => {
+                const glowPass = group.findOne('.glow-pass');
+                const wasVisible = glowPass ? glowPass.visible() : false;
+                if (glowPass && wasVisible) glowPass.visible(false);
+                const rect = origGetClientRect(config);
+                if (glowPass && wasVisible) glowPass.visible(true);
+                return rect;
+            };
+        }
+    }, []);
 
     React.useEffect(() => {
         if (balloon.isSelected && trRef.current && groupRef.current) {
@@ -29,10 +47,33 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
     const fontSize = balloon.overrides?.fontSize || styleDef.fontSize;
     const textColor = balloon.overrides?.textColor || styleDef.textColor;
 
+    const autoSize = balloon.autoSize !== false; // Default true
+    const padding = balloon.padding ?? 20;
+
     const w = balloon.width;
     const h = balloon.height;
     const halfW = w / 2;
     const halfH = h / 2;
+
+    // React to text size changes
+    React.useEffect(() => {
+        if (autoSize && textRef.current) {
+            const textNode = textRef.current;
+            const textWidth = textNode.width();
+            const textHeight = textNode.height();
+
+            const newW = Math.max(50, textWidth + padding * 2);
+            const newH = Math.max(50, textHeight + padding * 2);
+
+            // Update store if dimensions drift too much to prevent infinite micro-loops
+            if (Math.abs(w - newW) > 2 || Math.abs(h - newH) > 2) {
+                onChange(balloon.id, { width: newW, height: newH });
+            }
+        }
+    }); // Runs after every render to catch text measurement changes
+
+    const textureUrl = balloon.textureId ? getTextureUrl(balloon.textureId) : '';
+    const [textureImg] = useImage(textureUrl || '');
 
     // Tail geometry
     // We compute the intersection of the line from (0,0) (center of body) to tailTip, 
@@ -71,65 +112,73 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
     }, [localTailTip, halfW, halfH, balloon.hasTail]);
 
 
-    // Determine the shape path to render
-    const renderBody = () => {
-        // Basic body shape depending on kind, fallback to rect/ellipse
-        if (styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box') {
-            const radius = styleDef.cornerRadius || 0;
-            return (
-                <Rect
-                    x={-halfW}
-                    y={-halfH}
-                    width={w}
-                    height={h}
-                    cornerRadius={radius}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth={strokeWidth}
-                    perfectDrawEnabled={false}
-                />
-            );
+    const getRenderProps = (pass: 'shadow' | 'glow' | 'base' | 'texture', isTail: boolean) => {
+        let baseProps: any = {
+            listening: pass === 'base',
+            perfectDrawEnabled: false,
+            opacity: pass === 'texture' ? (balloon.textureOpacity ?? 0.5) : 1,
+            globalCompositeOperation: pass === 'texture' ? "multiply" : "source-over",
+        };
+
+        if (isTail) {
+            baseProps.lineJoin = 'miter';
+            baseProps.lineCap = 'butt';
         }
 
-        if (styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed') {
-            return (
-                <Ellipse
-                    x={0}
-                    y={0}
-                    radiusX={halfW}
-                    radiusY={halfH}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth={strokeWidth}
-                    dash={styleDef.id === 'whisper_dashed' ? [5, 5] : undefined}
-                    perfectDrawEnabled={false}
-                />
-            );
+        if (pass === 'shadow') {
+            baseProps.fill = fill;
+            baseProps.stroke = stroke;
+            baseProps.strokeWidth = strokeWidth;
+
+            baseProps.shadowColor = balloon.shadowColor ?? '#000000';
+            baseProps.shadowBlur = balloon.shadowBlur ?? 0;
+            baseProps.shadowOpacity = balloon.shadowOpacity ?? 0;
+            baseProps.shadowOffset = { x: balloon.shadowOffsetX ?? 0, y: balloon.shadowOffsetY ?? 0 };
+        } else if (pass === 'glow') {
+            const spread = balloon.glowSpread ?? 0;
+            baseProps.fill = balloon.glowColor ?? '#10B981';
+            baseProps.stroke = balloon.glowColor ?? '#10B981';
+
+            const bodyStrokeAmount = isTail ? 0 : Number(strokeWidth || 0);
+            baseProps.strokeWidth = bodyStrokeAmount + (isTail ? 0 : (spread * 2));
+            baseProps.lineCap = 'round';
+            baseProps.lineJoin = 'round';
+
+            baseProps.shadowColor = balloon.glowColor ?? '#10B981';
+            baseProps.shadowBlur = balloon.glowBlur ?? 0;
+            baseProps.shadowOpacity = 1;
+            baseProps.shadowOffset = { x: 9000, y: 9000 };
+
+            baseProps.opacity = 1;
+        } else if (pass === 'base') {
+            baseProps.fill = fill;
+            baseProps.stroke = stroke;
+            baseProps.strokeWidth = strokeWidth;
+            baseProps.dash = (!isTail && styleDef.id === 'whisper_dashed') ? [5, 5] : undefined;
+        } else if (pass === 'texture') {
+            baseProps.fillPatternImage = textureImg;
+            baseProps.fillPatternRepeat = "repeat";
         }
 
-        // Default to Ellipse
-        return (
-            <Ellipse
-                x={0}
-                y={0}
-                radiusX={halfW}
-                radiusY={halfH}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                perfectDrawEnabled={false}
-            />
-        );
+        return baseProps;
     };
 
-    const renderTail = () => {
+    const renderBody = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
+        const props = getRenderProps(pass, false);
+
+        if (styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box') {
+            return <Rect x={-halfW} y={-halfH} width={w} height={h} cornerRadius={styleDef.cornerRadius || 0} {...props} />;
+        }
+        if (styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed') {
+            return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
+        }
+        return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
+    };
+
+    const renderTail = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
         if (!balloon.hasTail) return null;
 
-        // A simple polygon for the tail. Base width depends on the balloon size.
-        // User requested reducing base width by 50% from 0.2 to 0.1.
         const baseWidth = Math.min(w, h) * 0.1;
-
-        // We want the base perpendicular to the vector to the tip.
         const dx = localTailTip.x - tailIntersection.x;
         const dy = localTailTip.y - tailIntersection.y;
         const length = Math.sqrt(dx * dx + dy * dy);
@@ -138,13 +187,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
 
         const nx = dx / length;
         const ny = dy / length;
-
-        // perpendicular vector
         const px = -ny;
         const py = nx;
 
-        // Tuck the intersection inward precisely by half the stroke width
-        // This ensures the tail's butt-cap aligns exactly with the inner edge of the balloon's stroke
         const actualStrokeWidth = Number(strokeWidth) || 2;
         const tuckOffset = Math.max(1, actualStrokeWidth / 2);
         const tuckedIntersection = {
@@ -155,34 +200,18 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
         const p1 = { x: tuckedIntersection.x + px * baseWidth, y: tuckedIntersection.y + py * baseWidth };
         const p2 = { x: tuckedIntersection.x - px * baseWidth, y: tuckedIntersection.y - py * baseWidth };
 
-        // Instead of straight lines, we use a quadratic curve for a "swoop".
-        // Using a single control point guarantees the curves share a tangent at the tip, making it razor sharp!
-        const curveStrength = length * 0.5; // Significant swoop multiplier
-
-        // Check if flipped
+        const curveStrength = length * 0.5;
         const isFlipped = balloon.overrides?.tailFlip ?? false;
         const flipMultiplier = isFlipped ? -1 : 1;
 
-        // Calculate a single control point offset to the side, flipped if necessary
         const cp = {
             x: tuckedIntersection.x + nx * (length * 0.4) - px * (curveStrength * flipMultiplier),
             y: tuckedIntersection.y + ny * (length * 0.4) - py * (curveStrength * flipMultiplier)
         };
 
-        // Open path: Start at p1, curve to tip, curve back to p2. NO line between p2 and p1.
-        const pathData = `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y} ${localTailTip.x} ${localTailTip.y} Q ${cp.x} ${cp.y} ${p2.x} ${p2.y}`;
+        const pathData = `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y} ${localTailTip.x} ${localTailTip.y} Q ${cp.x} ${cp.y} ${p2.x} ${p2.y} `;
 
-        return (
-            <Path
-                data={pathData}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                lineJoin="miter" // Use miter or round, but cap must be butt
-                lineCap="butt"   // Flat cutoff against the balloon body
-                perfectDrawEnabled={false}
-            />
-        );
+        return <Path data={pathData} {...getRenderProps(pass, true)} />;
     };
 
     const hasTextGlow = false; // Could wire to styles if needed
@@ -195,7 +224,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
                 x={balloon.x}
                 y={balloon.y}
                 rotation={balloon.rotation || 0}
-                draggable
+                draggable={balloon.isLocked !== true}
+                visible={balloon.isVisible !== false}
+                listening={balloon.isLocked !== true}
                 onClick={(e) => {
                     onSelect(balloon.id, e);
                     e.cancelBubble = true;
@@ -238,24 +269,40 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
                     });
                 }}
             >
-                {/* Render Body first so the tail overlaps and hides the stroke joint */}
-                {renderBody()}
+                {/* 1. Shadow Pass */}
+                {!!balloon.shadowOpacity && renderTail('shadow')}
+                {!!balloon.shadowOpacity && renderBody('shadow')}
 
-                {/* Render Tail on top to merge perfectly with body fill */}
-                {renderTail()}
+                {/* 2. Glow Pass (Offscreen pure shadow trick) */}
+                {!!balloon.glowOpacity && (
+                    <Group name="glow-pass" x={-9000} y={-9000} opacity={balloon.glowOpacity} listening={false}>
+                        {renderTail('glow')}
+                        {renderBody('glow')}
+                    </Group>
+                )}
+
+                {/* 3. Base Pass */}
+                {/* Render Body first so the tail overlaps and hides the stroke joint */}
+                {renderBody('base')}
+                {renderTail('base')}
+
+                {/* 4. Texture Pass */}
+                {textureImg && renderBody('texture')}
+                {textureImg && renderTail('texture')}
 
                 {/* Text */}
                 <Text
+                    ref={textRef}
                     text={balloon.text}
                     fontFamily={fontFamily}
                     fontSize={fontSize}
                     fill={textColor}
                     align="center"
                     verticalAlign="middle"
-                    width={w * 0.8}
-                    height={h * 0.8}
-                    x={-w * 0.4}
-                    y={-h * 0.4}
+                    width={autoSize ? undefined : w * 0.8}
+                    height={autoSize ? undefined : h * 0.8}
+                    x={autoSize ? -(textRef.current?.width() || 0) / 2 : -w * 0.4}
+                    y={autoSize ? -(textRef.current?.height() || 0) / 2 : -h * 0.4}
                     shadowColor={hasTextGlow ? 'cyan' : undefined}
                     shadowBlur={hasTextGlow ? 10 : 0}
                     shadowOpacity={hasTextGlow ? 1 : 0}
@@ -290,15 +337,18 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({ balloon, styleDef, onC
             </Group>
 
             {/* Transformer for renaming/resizing bound to the Group */}
-            {balloon.isSelected && (
-                <Transformer
-                    ref={trRef}
-                    borderStroke="#D4AF37"
-                    anchorStroke="#D4AF37"
-                    anchorFill="#37615D"
-                    anchorSize={10}
-                />
-            )}
-        </React.Fragment>
+            {
+                balloon.isSelected && (
+                    <Transformer
+                        ref={trRef}
+                        borderStroke="#D4AF37"
+                        anchorStroke="#D4AF37"
+                        anchorFill="#37615D"
+                        anchorSize={10}
+                        resizeEnabled={!autoSize} // Disable resizing handles if auto-size is active
+                    />
+                )
+            }
+        </React.Fragment >
     );
 };

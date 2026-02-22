@@ -1,5 +1,6 @@
 import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
+import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 
 interface ObjectToolbarProps {
     currentPageId: string;
@@ -12,13 +13,43 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
         sendToBack,
         cloneElement,
         removeElement,
-        toggleFlip
+        toggleFlip,
+        pages,
+        updatePanel
     } = useComicStore();
 
     if (selectedElementIds.length === 0) return null;
 
+    const currentPage = pages.find(p => p.id === currentPageId);
+    const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
+    const hasPanels = selectedPanels.length > 0;
+
     return (
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-zinc-900 border border-white/20 rounded-full px-4 py-2 flex items-center gap-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-w-[95vw] overflow-x-auto bg-zinc-900 border border-white/20 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+
+            {/* Shape Controls (Only for Panels) */}
+            {hasPanels && (
+                <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
+                    <button
+                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'rect' }))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                        title="Rectangle Shape"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect width="18" height="18" x="3" y="3" rx="2" />
+                        </svg>
+                    </button>
+                    <button
+                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'ellipse' }))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                        title="Ellipse Shape"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                        </svg>
+                    </button>
+                </div>
+            )}
 
             {/* Z-Index Controls */}
             <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
@@ -66,6 +97,221 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     </svg>
                 </button>
             </div>
+
+            {/* FX Controls (Panels Only) */}
+            {hasPanels && (
+                <div className="flex items-center gap-2 border-r border-white/10 pr-2 mr-2">
+                    <div className="relative group" title="Shadow Color">
+                        <input
+                            type="color"
+                            value={selectedPanels[0]?.shadowColor || '#000000'}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowColor: e.target.value }))}
+                            className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
+                        />
+                    </div>
+
+                    <button
+                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: 10, shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5, shadowColor: '#000000' }))}
+                        className="px-2 py-1 hover:bg-white/10 rounded text-white/70 hover:text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                        title="Drop Shadow Preset"
+                    >
+                        Shdw
+                    </button>
+
+                    <div className="flex flex-col gap-1 ml-1">
+                        <div className="flex items-center gap-1" title="Shadow Blur">
+                            <span className="text-white/50 text-[9px] w-6">Blur</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="50"
+                                step="1"
+                                value={selectedPanels[0]?.shadowBlur ?? 10}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: parseInt(e.target.value) }))}
+                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1" title="Shadow Opacity">
+                            <span className="text-white/50 text-[9px] w-6">Opac</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={selectedPanels[0]?.shadowOpacity ?? 0.3}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOpacity: parseFloat(e.target.value) }))}
+                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-1 ml-1" title="Shadow Offset">
+                        <div className="flex items-center gap-1" title="Shadow X">
+                            <span className="text-white/50 text-[9px] w-4">X</span>
+                            <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={selectedPanels[0]?.shadowOffsetX ?? 5}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOffsetX: parseInt(e.target.value) }))}
+                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1" title="Shadow Y">
+                            <span className="text-white/50 text-[9px] w-4">Y</span>
+                            <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="1"
+                                value={selectedPanels[0]?.shadowOffsetY ?? 5}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOffsetY: parseInt(e.target.value) }))}
+                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Glow Controls */}
+                    <div className="flex items-center gap-2 border-l border-white/10 pl-2 ml-1">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowBlur: 20, glowSpread: 5, glowOpacity: 1, glowColor: '#3B82F6' }))}
+                            className="px-2 py-1 hover:bg-blue-500/20 rounded text-blue-400 font-bold text-[10px] uppercase tracking-wider transition-colors"
+                            title="Blue Glow Preset"
+                        >
+                            Glow
+                        </button>
+                        <div className="relative group" title="Glow Color">
+                            <input
+                                type="color"
+                                value={selectedPanels[0]?.glowColor || '#3B82F6'}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowColor: e.target.value }))}
+                                className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1 ml-1">
+                            <div className="flex items-center gap-1" title="Glow Size">
+                                <span className="text-white/50 text-[9px] w-6">Size</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="50"
+                                    step="1"
+                                    value={selectedPanels[0]?.glowSpread ?? 0}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowSpread: parseInt(e.target.value) }))}
+                                    className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1" title="Glow Blur">
+                                <span className="text-white/50 text-[9px] w-6">Blur</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="50"
+                                    step="1"
+                                    value={selectedPanels[0]?.glowBlur ?? 0}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowBlur: parseInt(e.target.value) }))}
+                                    className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex flex-col gap-1 ml-1" title="Glow Opacity">
+                            <div className="flex items-center gap-1">
+                                <span className="text-white/50 text-[9px] w-6">Opac</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value={selectedPanels[0]?.glowOpacity ?? 0}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowOpacity: parseFloat(e.target.value) }))}
+                                    className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Texture Overlay */}
+                    <div className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1" title="Texture Overlay">
+                        <select
+                            value={selectedPanels[0]?.textureId || ''}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { textureId: e.target.value }))}
+                            className="bg-zinc-800 text-white text-[10px] font-medium border border-white/20 rounded px-1 min-w-[60px] outline-none cursor-pointer"
+                        >
+                            <option value="">No Texture</option>
+                            {TEXTURE_REGISTRY.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+                        {selectedPanels[0]?.textureId && (
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="1"
+                                step="0.1"
+                                value={selectedPanels[0]?.textureOpacity ?? 0.5}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { textureOpacity: parseFloat(e.target.value) }))}
+                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                                title="Texture Opacity"
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Image Fill Controls (Panels with Image Only) */}
+            {hasPanels && selectedPanels[0]?.imageUrl && (
+                <div className="flex items-center gap-2 border-r border-white/10 pr-2 mr-2">
+                    <select
+                        value={selectedPanels[0]?.imageFillMode || 'cover'}
+                        onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageFillMode: e.target.value as any }))}
+                        className="bg-zinc-800 text-white text-[10px] font-medium border border-white/20 rounded px-1 min-w-[60px] outline-none cursor-pointer"
+                        title="Image Fill Mode"
+                    >
+                        <option value="cover">Cover</option>
+                        <option value="stretch">Stretch</option>
+                        <option value="center">Center</option>
+                        <option value="decal">Decal</option>
+                    </select>
+
+                    {selectedPanels[0]?.imageFillMode === 'decal' && (
+                        <div className="flex flex-col gap-1 ml-1">
+                            <div className="flex items-center gap-1" title="Scale">
+                                <span className="text-white/50 text-[9px] w-4">S</span>
+                                <input
+                                    type="range"
+                                    min="0.1"
+                                    max="3"
+                                    step="0.1"
+                                    value={selectedPanels[0]?.imageScale ?? 1}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageScale: parseFloat(e.target.value) }))}
+                                    className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1" title="Offset X / Y">
+                                <span className="text-white/50 text-[9px] w-4">XY</span>
+                                <input
+                                    type="range"
+                                    min="-500"
+                                    max="500"
+                                    step="10"
+                                    value={selectedPanels[0]?.imageOffsetX ?? 0}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageOffsetX: parseInt(e.target.value) }))}
+                                    className="w-5 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                                <input
+                                    type="range"
+                                    min="-500"
+                                    max="500"
+                                    step="10"
+                                    value={selectedPanels[0]?.imageOffsetY ?? 0}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageOffsetY: parseInt(e.target.value) }))}
+                                    className="w-5 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-gold-500 [&::-webkit-slider-thumb]:rounded-full"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Lifecycle Controls */}
             <div className="flex items-center gap-1">
