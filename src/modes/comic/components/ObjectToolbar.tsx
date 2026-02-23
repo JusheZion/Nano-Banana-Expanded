@@ -1,6 +1,7 @@
 import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
+import { Tooltip } from '../../../components/ui/Tooltip';
 
 interface ObjectToolbarProps {
     currentPageId: string;
@@ -15,7 +16,8 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
         removeElement,
         toggleFlip,
         pages,
-        updatePanel
+        updatePanel,
+        splitPanel
     } = useComicStore();
 
     if (selectedElementIds.length === 0) return null;
@@ -25,98 +27,169 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
     const hasPanels = selectedPanels.length > 0;
 
     return (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-w-[95vw] overflow-x-auto bg-zinc-900 border border-white/20 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-w-[95vw] w-max bg-zinc-900 border border-white/20 rounded-2xl p-2 flex flex-wrap justify-center items-center gap-x-2 gap-y-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
 
             {/* Shape Controls (Only for Panels) */}
             {hasPanels && (
                 <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
-                    <button
-                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'rect' }))}
-                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                        title="Rectangle Shape"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect width="18" height="18" x="3" y="3" rx="2" />
-                        </svg>
-                    </button>
-                    <button
-                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'ellipse' }))}
-                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                        title="Ellipse Shape"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                        </svg>
-                    </button>
+                    <Tooltip content="Rectangle Shape">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'rect' }))}
+                            className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect width="18" height="18" x="3" y="3" rx="2" />
+                            </svg>
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Ellipse Shape">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'ellipse' }))}
+                            className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                            </svg>
+                        </button>
+                    </Tooltip>
+
+                    <div className="h-4 w-px bg-white/10 mx-1" />
+
+                    <Tooltip content="Split Horizontally (Row)">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'horizontal', 0))}
+                            className="p-2 hover:bg-gold-500/20 rounded-full text-white/70 hover:text-gold-400 transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <line x1="3" y1="12" x2="21" y2="12" />
+                            </svg>
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Split Vertically (Column)">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'vertical', 0))}
+                            className="p-2 hover:bg-gold-500/20 rounded-full text-white/70 hover:text-gold-400 transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <line x1="12" y1="3" x2="12" y2="21" />
+                            </svg>
+                        </button>
+                    </Tooltip>
+
+                    <div className="h-4 w-px bg-white/10 mx-1" />
+
+                    <Tooltip content="Split Slanted (Row)">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'horizontal', 40))}
+                            className="p-2 hover:bg-gold-500/20 rounded-full text-white/70 hover:text-gold-400 transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <line x1="3" y1="16" x2="21" y2="8" />
+                            </svg>
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Split Slanted (Column)">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'vertical', 40))}
+                            className="p-2 hover:bg-gold-500/20 rounded-full text-white/70 hover:text-gold-400 transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <line x1="16" y1="3" x2="8" y2="21" />
+                            </svg>
+                        </button>
+                    </Tooltip>
                 </div>
             )}
 
-            {/* Z-Index Controls */}
+            {/* Z-Index & Transform Controls */}
             <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
-                <button
-                    onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'horizontal'))}
-                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                    title="Flip Horizontal"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="16 3 21 12 16 21"></polyline>
-                        <line x1="8" y1="3" x2="8" y2="21"></line>
-                        <polyline points="3 7 3 17"></polyline>
-                    </svg>
-                </button>
-                <button
-                    onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'vertical'))}
-                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                    title="Flip Vertical"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 16 12 21 21 16"></polyline>
-                        <line x1="3" y1="8" x2="21" y2="8"></line>
-                        <polyline points="7 3 17 3"></polyline>
-                    </svg>
-                </button>
+                {hasPanels && (
+                    <Tooltip content="Rotate (15°)">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { rotation: ((p.rotation || 0) + 15) % 360 }))}
+                            className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 12c0-5.523 4.477-10 10-10 5.523 0 10 4.477 10 10 0 1.638-.393 3.185-1.093 4.542M22 6V12h-6"></path>
+                            </svg>
+                        </button>
+                    </Tooltip>
+                )}
+                <Tooltip content="Flip Horizontal">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'horizontal'))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="16 3 21 12 16 21"></polyline>
+                            <line x1="8" y1="3" x2="8" y2="21"></line>
+                            <polyline points="3 7 3 17"></polyline>
+                        </svg>
+                    </button>
+                </Tooltip>
+                <Tooltip content="Flip Vertical">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'vertical'))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 16 12 21 21 16"></polyline>
+                            <line x1="3" y1="8" x2="21" y2="8"></line>
+                            <polyline points="7 3 17 3"></polyline>
+                        </svg>
+                    </button>
+                </Tooltip>
                 <div className="h-4 w-px bg-white/10 mx-1" />
-                <button
-                    onClick={() => selectedElementIds.forEach(id => bringToFront(currentPageId, id))}
-                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                    title="Bring to Front"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M8 8h8v8H8z" />
-                        <path d="M4 4h8v8H4z" strokeOpacity="0.5" />
-                    </svg>
-                </button>
-                <button
-                    onClick={() => selectedElementIds.forEach(id => sendToBack(currentPageId, id))}
-                    className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
-                    title="Send to Back"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h8v8H4z" />
-                        <path d="M8 8h8v8H8z" strokeOpacity="0.5" />
-                    </svg>
-                </button>
+                <Tooltip content="Bring to Front">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => bringToFront(currentPageId, id))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M8 8h8v8H8z" />
+                            <path d="M4 4h8v8H4z" strokeOpacity="0.5" />
+                        </svg>
+                    </button>
+                </Tooltip>
+                <Tooltip content="Send to Back">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => sendToBack(currentPageId, id))}
+                        className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 4h8v8H4z" />
+                            <path d="M8 8h8v8H8z" strokeOpacity="0.5" />
+                        </svg>
+                    </button>
+                </Tooltip>
             </div>
 
             {/* FX Controls (Panels Only) */}
             {hasPanels && (
                 <div className="flex items-center gap-2 border-r border-white/10 pr-2 mr-2">
-                    <div className="relative group" title="Shadow Color">
-                        <input
-                            type="color"
-                            value={selectedPanels[0]?.shadowColor || '#000000'}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowColor: e.target.value }))}
-                            className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
-                        />
-                    </div>
+                    <Tooltip content="Shadow Color">
+                        <div className="relative group">
+                            <input
+                                type="color"
+                                value={selectedPanels[0]?.shadowColor || '#000000'}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowColor: e.target.value }))}
+                                className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
+                            />
+                        </div>
+                    </Tooltip>
 
-                    <button
-                        onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: 10, shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5, shadowColor: '#000000' }))}
-                        className="px-2 py-1 hover:bg-white/10 rounded text-white/70 hover:text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
-                        title="Drop Shadow Preset"
-                    >
-                        Shdw
-                    </button>
+                    <Tooltip content="Drop Shadow Preset">
+                        <button
+                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: 10, shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5, shadowColor: '#000000' }))}
+                            className="px-2 py-1 hover:bg-white/10 rounded text-white/70 hover:text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                        >
+                            Shdw
+                        </button>
+                    </Tooltip>
 
                     <div className="flex flex-col gap-1 ml-1">
                         <div className="flex items-center gap-1" title="Shadow Blur">
@@ -315,26 +388,28 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
 
             {/* Lifecycle Controls */}
             <div className="flex items-center gap-1">
-                <button
-                    onClick={() => selectedElementIds.forEach(id => cloneElement(currentPageId, id))}
-                    className="p-2 hover:bg-teal-500/20 hover:text-teal-400 rounded-full text-white/70 transition-colors"
-                    title="Clone (Ctrl+D)"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                </button>
-                <button
-                    onClick={() => selectedElementIds.forEach(id => removeElement(currentPageId, id))}
-                    className="p-2 hover:bg-red-500/20 hover:text-red-400 rounded-full text-white/70 transition-colors"
-                    title="Delete (Backspace)"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                </button>
+                <Tooltip content="Clone (Ctrl+D)">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => cloneElement(currentPageId, id))}
+                        className="p-2 hover:bg-teal-500/20 hover:text-teal-400 rounded-full text-white/70 transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </Tooltip>
+                <Tooltip content="Delete (Backspace)">
+                    <button
+                        onClick={() => selectedElementIds.forEach(id => removeElement(currentPageId, id))}
+                        className="p-2 hover:bg-red-500/20 hover:text-red-400 rounded-full text-white/70 transition-colors"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </Tooltip>
             </div>
         </div>
     );

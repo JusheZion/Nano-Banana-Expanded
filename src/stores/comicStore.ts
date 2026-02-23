@@ -15,6 +15,9 @@ export interface Panel {
     prompt?: string;
     isLocked?: boolean;
     isVisible?: boolean;
+    rotation?: number;
+    flipX?: boolean;
+    flipY?: boolean;
 
     // FX
     shadowBlur?: number;
@@ -60,6 +63,10 @@ export interface ComicPage {
 }
 
 interface ComicState {
+    projectSettings: {
+        inclusiveBiasEnabled: boolean;
+        demographicFocus: string;
+    };
     pages: ComicPage[];
     currentPageId: string | null;
     selectedElementIds: string[];
@@ -106,11 +113,20 @@ interface ComicState {
     toggleLayerLock: (pageId: string, elementId: string) => void;
 
     triggerExport: () => void;
+
+    updateProjectSettings: (settings: Partial<ComicState['projectSettings']>) => void;
+    serializeProject: () => void;
+    loadProject: (jsonString: string) => void;
+    splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant?: number) => void;
 }
 
 export const useComicStore = create<ComicState>()(
     temporal(
         (set) => ({
+            projectSettings: {
+                inclusiveBiasEnabled: false,
+                demographicFocus: ''
+            },
             pages: [
                 {
                     id: 'page-1',
@@ -426,6 +442,37 @@ export const useComicStore = create<ComicState>()(
                             flipX: axis === 'horizontal' ? !b.flipX : b.flipX,
                             flipY: axis === 'vertical' ? !b.flipY : b.flipY
                         };
+                    }),
+                    panels: p.panels.map(panel => {
+                        if (panel.id !== elementId) return panel;
+                        if (panel.shapeType !== 'polygon' || !panel.points) {
+                            return {
+                                ...panel,
+                                flipX: axis === 'horizontal' ? !panel.flipX : panel.flipX,
+                                flipY: axis === 'vertical' ? !panel.flipY : panel.flipY
+                            };
+                        }
+
+                        // For polygons, mirror the points around the center of its bounding box.
+                        const minX = Math.min(...panel.points.map(pt => pt.x));
+                        const maxX = Math.max(...panel.points.map(pt => pt.x));
+                        const minY = Math.min(...panel.points.map(pt => pt.y));
+                        const maxY = Math.max(...panel.points.map(pt => pt.y));
+                        const centerX = (minX + maxX) / 2;
+                        const centerY = (minY + maxY) / 2;
+
+                        const newPoints = panel.points.map(pt => ({
+                            x: axis === 'horizontal' ? centerX - (pt.x - centerX) : pt.x,
+                            y: axis === 'vertical' ? centerY - (pt.y - centerY) : pt.y
+                        }));
+
+                        // We reverse the points array to maintain the original geometric polygon winding order
+                        newPoints.reverse();
+
+                        return {
+                            ...panel,
+                            points: newPoints
+                        };
                     })
                 } : p)
             })),
@@ -475,10 +522,144 @@ export const useComicStore = create<ComicState>()(
                         }
                     })
                 }
+            }),
+
+            updateProjectSettings: (settings) => set((state) => ({
+                projectSettings: { ...state.projectSettings, ...settings }
+            })),
+
+            serializeProject: () => {
+                const { pages, projectSettings } = useComicStore.getState();
+                const data = {
+                    version: "2.0",
+                    type: "comic-project",
+                    projectSettings,
+                    pages
+                };
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `project-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+
+            loadProject: (jsonString) => {
+                try {
+                    const data = JSON.parse(jsonString);
+                    if (data.type === 'comic-project' && data.pages) {
+                        useComicStore.getState().updateProjectSettings(data.projectSettings || {});
+                        useComicStore.getState().pages = data.pages;
+                        // Trigger re-render by mutating state
+                        set({ pages: data.pages });
+                    }
+                } catch (e) {
+                    console.error("Failed to load project", e);
+                }
+            },
+
+            splitPanel: (pageId, panelId, direction, slant = 0) => set((state) => {
+                const page = state.pages.find(p => p.id === pageId);
+                if (!page) return state;
+                const panel = page.panels.find(p => p.id === panelId);
+                if (!panel) return state;
+
+                // 1. Get 4 absolute world points
+                let p0, p1, p2, p3;
+                if (panel.shapeType === 'rect' || !panel.points || panel.points.length !== 4) {
+                    p0 = { x: panel.x, y: panel.y };
+                    p1 = { x: panel.x + panel.width, y: panel.y };
+                    p2 = { x: panel.x + panel.width, y: panel.y + panel.height };
+                    p3 = { x: panel.x, y: panel.y + panel.height };
+                } else {
+                    p0 = { x: panel.x + panel.points[0].x, y: panel.y + panel.points[0].y };
+                    p1 = { x: panel.x + panel.points[1].x, y: panel.y + panel.points[1].y };
+                    p2 = { x: panel.x + panel.points[2].x, y: panel.y + panel.points[2].y };
+                    p3 = { x: panel.x + panel.points[3].x, y: panel.y + panel.points[3].y };
+                }
+
+                const gap = 16;
+                let leftPoints, rightPoints;
+
+                const lerpY = (A: { x: number, y: number }, B: { x: number, y: number }, x: number) => {
+                    if (Math.abs(A.x - B.x) < 0.01) return A.y;
+                    return A.y + (x - A.x) * (B.y - A.y) / (B.x - A.x);
+                };
+                const lerpX = (A: { x: number, y: number }, B: { x: number, y: number }, y: number) => {
+                    if (Math.abs(A.y - B.y) < 0.01) return A.x;
+                    return A.x + (y - A.y) * (B.x - A.x) / (B.y - A.y);
+                };
+
+                if (direction === 'vertical') {
+                    // Vertical cut creates left and right panels
+                    let top_x = (p0.x + p1.x) / 2 + slant;
+                    let bot_x = (p3.x + p2.x) / 2 - slant;
+
+                    const cut_top_left = { x: top_x - gap / 2, y: lerpY(p0, p1, top_x - gap / 2) };
+                    const cut_bot_left = { x: bot_x - gap / 2, y: lerpY(p3, p2, bot_x - gap / 2) };
+                    const cut_top_right = { x: top_x + gap / 2, y: lerpY(p0, p1, top_x + gap / 2) };
+                    const cut_bot_right = { x: bot_x + gap / 2, y: lerpY(p3, p2, bot_x + gap / 2) };
+
+                    leftPoints = [p0, cut_top_left, cut_bot_left, p3];
+                    rightPoints = [cut_top_right, p1, p2, cut_bot_right];
+                } else {
+                    // Horizontal cut creates top and bottom panels
+                    let left_y = (p0.y + p3.y) / 2 + slant;
+                    let right_y = (p1.y + p2.y) / 2 - slant;
+
+                    const cut_left_top = { x: lerpX(p0, p3, left_y - gap / 2), y: left_y - gap / 2 };
+                    const cut_right_top = { x: lerpX(p1, p2, right_y - gap / 2), y: right_y - gap / 2 };
+                    const cut_left_bot = { x: lerpX(p0, p3, left_y + gap / 2), y: left_y + gap / 2 };
+                    const cut_right_bot = { x: lerpX(p1, p2, right_y + gap / 2), y: right_y + gap / 2 };
+
+                    leftPoints = [p0, p1, cut_right_top, cut_left_top];
+                    rightPoints = [cut_left_bot, cut_right_bot, p2, p3];
+                }
+
+                // Convert back to relative bounded panels
+                const makePanel = (pts: { x: number, y: number }[]) => {
+                    const minX = Math.min(...pts.map(p => p.x));
+                    const minY = Math.min(...pts.map(p => p.y));
+                    const maxX = Math.max(...pts.map(p => p.x));
+                    const maxY = Math.max(...pts.map(p => p.y));
+                    return {
+                        ...panel,
+                        id: crypto.randomUUID(),
+                        shapeType: 'polygon' as const,
+                        x: minX,
+                        y: minY,
+                        width: Math.max(1, maxX - minX),
+                        height: Math.max(1, maxY - minY),
+                        points: pts.map(p => ({ x: p.x - minX, y: p.y - minY })),
+                        imageUrl: undefined,
+                        imageFillMode: 'cover' as const,
+                        imageScale: 1,
+                        imageOffsetX: 0,
+                        imageOffsetY: 0
+                    };
+                };
+
+                const panelA = makePanel(leftPoints);
+                const panelB = makePanel(rightPoints);
+
+                const newPanels = page.panels.map(p => p.id === panelId ? panelA : p);
+                newPanels.push(panelB);
+
+                const newLayerOrder = page.layerOrder.flatMap(id => id === panelId ? [panelA.id, panelB.id] : [id]);
+
+                return {
+                    pages: state.pages.map(p =>
+                        p.id === pageId
+                            ? { ...p, panels: newPanels, layerOrder: newLayerOrder }
+                            : p
+                    )
+                };
             })
         }),
         {
-            partialize: (state) => ({ pages: state.pages }),
+            partialize: (state) => ({ pages: state.pages, projectSettings: state.projectSettings }),
             limit: 100
         }
     )

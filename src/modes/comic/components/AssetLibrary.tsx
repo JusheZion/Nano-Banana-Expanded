@@ -1,5 +1,6 @@
 import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
+import { generatePrompt } from '../utils/promptMiddleware';
 
 const ASSETS = [
     '/assets/images/Anunnaki Anubis.png',
@@ -30,7 +31,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
         selectedElementIds,
         updatePanel,
         addPanel,
-        pages
+        pages,
+        projectSettings
     } = useComicStore();
 
     const handleAssetClick = (assetUrl: string) => {
@@ -71,6 +73,35 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
         };
     };
 
+    const handleMockAIGenerate = () => {
+        const currentPage = pages.find(p => p.id === currentPageId);
+        if (!currentPage) return;
+
+        // We look for a prompt in selected panels, or use a default
+        let promptToUse = "A lone starship pilot";
+        if (selectedElementIds.length > 0) {
+            const selectedPanels = currentPage.panels.filter(p => selectedElementIds.includes(p.id));
+            if (selectedPanels.length > 0 && selectedPanels[0].prompt) {
+                promptToUse = selectedPanels[0].prompt;
+            }
+        }
+
+        const finalPrompt = generatePrompt(promptToUse, {
+            inclusiveBiasEnabled: projectSettings?.inclusiveBiasEnabled ?? true,
+            demographicFocus: projectSettings?.demographicFocus ?? ''
+        });
+
+        console.group('[MOCK AI]');
+        console.log(`Original Prompt: "${promptToUse}"`);
+        console.log(`Final Sent to LLM: "${finalPrompt}"`);
+
+        const randomAsset = ASSETS[Math.floor(Math.random() * ASSETS.length)];
+        console.log(`Returned Image: ${randomAsset}`);
+        console.groupEnd();
+
+        handleAssetClick(randomAsset);
+    };
+
     return (
         <div
             className={`absolute top-0 right-0 h-full w-80 bg-obsidian-dark border-l border-white/10 shadow-2xl transition-transform duration-300 transform z-20 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
@@ -80,6 +111,15 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
                 <h2 className="text-white font-bold tracking-wide">ASSET LIBRARY</h2>
                 <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
                     ✕
+                </button>
+            </div>
+
+            <div className="p-4 border-b border-white/5">
+                <button
+                    onClick={handleMockAIGenerate}
+                    className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg shadow-lg shadow-purple-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    <span className="text-xl">✨</span> Mock Generate Image
                 </button>
             </div>
 

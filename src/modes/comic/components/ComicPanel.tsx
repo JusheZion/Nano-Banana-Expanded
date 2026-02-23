@@ -119,6 +119,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 ref={groupRef}
                 x={panel.x}
                 y={panel.y}
+                rotation={panel.rotation || 0}
                 draggable={panel.isLocked !== true}
                 visible={panel.isVisible !== false}
                 listening={panel.isLocked !== true}
@@ -185,6 +186,36 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     }
                 }}
             >
+                {/* -1. Exclusion Halo Pass (Simulates Boolean Cut for Overlays) */}
+                {isEllipse && (() => {
+                    const gapMargin = 16;
+                    const strokeW = isSelected ? 6 : 4;
+
+                    return (
+                        <Group listening={false}>
+                            {/* 1. Draw the border ONLY over existing opaque pixels (other panels) */}
+                            <Ellipse
+                                x={panel.width / 2}
+                                y={panel.height / 2}
+                                radiusX={panel.width / 2 + gapMargin}
+                                radiusY={panel.height / 2 + gapMargin}
+                                stroke="#893741"
+                                strokeWidth={strokeW}
+                                globalCompositeOperation="source-atop"
+                            />
+                            {/* 2. Punch the hole inside the border using destination-out */}
+                            <Ellipse
+                                x={panel.width / 2}
+                                y={panel.height / 2}
+                                radiusX={panel.width / 2 + gapMargin - (strokeW / 2)}
+                                radiusY={panel.height / 2 + gapMargin - (strokeW / 2)}
+                                fill="black"
+                                globalCompositeOperation="destination-out"
+                            />
+                        </Group>
+                    );
+                })()}
+
                 {/* 0. Shadow Pass (Unclipped) */}
                 {!!panel.shadowOpacity && (
                     <Group listening={false}>
@@ -523,8 +554,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     anchorCornerRadius={4}
                     padding={10}
                     rotateEnabled={false}
-                    keepRatio={true}
-                    enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                    keepRatio={isPolygon}
+                    enabledAnchors={isPolygon ? ['top-left', 'top-right', 'bottom-left', 'bottom-right'] : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']}
                 />
             )}
         </React.Fragment>

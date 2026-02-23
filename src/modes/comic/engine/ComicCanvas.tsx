@@ -356,7 +356,7 @@ export const ComicCanvas: React.FC = () => {
                     onTouchEnd={handleStageMouseUp}
                     style={{ background: 'transparent' }}
                 >
-                    <Layer>
+                    <Layer name="layer-background">
                         {/* Page Background */}
                         <Rect
                             name="background-rect"
@@ -372,7 +372,9 @@ export const ComicCanvas: React.FC = () => {
                             stroke="rgba(255, 255, 255, 0.05)"
                             strokeWidth={1}
                         />
+                    </Layer>
 
+                    <Layer name="layer-comic-elements">
                         {/* Dynamic Layer Rendering */}
                         {(currentPage.layerOrder || []).map((elementId) => {
                             const panel = currentPage.panels.find(p => p.id === elementId);

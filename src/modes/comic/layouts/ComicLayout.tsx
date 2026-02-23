@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { ObjectToolbar } from '../components/ObjectToolbar';
 import { TextToolbar } from '../components/TextToolbar';
 import { LayerTree } from '../components/LayerTree';
+import { ProjectSettingsSidebar } from '../components/ProjectSettingsSidebar';
+import { Tooltip } from '../../../components/ui/Tooltip';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -17,7 +19,9 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     selectedElementIds,
     deleteSelected,
     copySelected,
-    pasteClipboard
+    pasteClipboard,
+    serializeProject,
+    loadProject
   } = useComicStore();
 
   const undo = () => useComicStore.temporal.getState().undo();
@@ -25,6 +29,21 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isLayerTreeOpen, setIsLayerTreeOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) loadProject(content);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Determine selected element type
   const currentPage = pages.find(p => p.id === currentPageId);
@@ -100,29 +119,64 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
 
         {/* Toolbar actions */}
         <div className="flex gap-4">
-          <button
-            onClick={() => setIsLibraryOpen(!isLibraryOpen)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLibraryOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
-            title="Toggle Asset Library"
-          >
-            {isLibraryOpen ? 'Close Library' : 'Open Library'}
-          </button>
+          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
+            <Tooltip content="Undo (Cmd+Z)">
+              <button onClick={undo} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition-colors border border-white/5">↶</button>
+            </Tooltip>
+            <Tooltip content="Redo (Cmd+Shift+Z)">
+              <button onClick={redo} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition-colors border border-white/5">↷</button>
+            </Tooltip>
+          </div>
 
-          <button
-            onClick={() => setIsLayerTreeOpen(!isLayerTreeOpen)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLayerTreeOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
-            title="Toggle Layers"
-          >
-            {isLayerTreeOpen ? 'Close Layers' : 'Layers'}
-          </button>
+          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
+            <div className="text-xs text-white/50 mr-2 uppercase tracking-wider font-bold">Project State</div>
+          </div>
 
-          <button
-            onClick={triggerExport}
-            className="px-4 py-2 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-obsidian font-bold rounded-lg shadow-lg shadow-gold-500/20 transition-all transform hover:scale-105 active:scale-95"
-            title="Export Comic to Image"
-          >
-            Export
-          </button>
+          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
+            <Tooltip content="Save Project as JSON">
+              <button onClick={serializeProject} className="px-3 py-1.5 rounded-lg text-sm bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 transition-colors">Save JSON</button>
+            </Tooltip>
+            <Tooltip content="Load Project from JSON">
+              <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 rounded-lg text-sm bg-green-600/30 hover:bg-green-600/50 text-green-300 border border-green-500/30 transition-colors">Load JSON</button>
+            </Tooltip>
+            <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileUpload} />
+          </div>
+
+          <Tooltip content="Toggle Asset Library">
+            <button
+              onClick={() => setIsLibraryOpen(!isLibraryOpen)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLibraryOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
+            >
+              {isLibraryOpen ? 'Close Library' : 'Open Library'}
+            </button>
+          </Tooltip>
+
+          <Tooltip content="Toggle Layers">
+            <button
+              onClick={() => setIsLayerTreeOpen(!isLayerTreeOpen)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLayerTreeOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
+            >
+              {isLayerTreeOpen ? 'Close Layers' : 'Layers'}
+            </button>
+          </Tooltip>
+
+          <Tooltip content="Toggle Project Settings">
+            <button
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSettingsOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
+            >
+              {isSettingsOpen ? 'Close Settings' : 'Settings'}
+            </button>
+          </Tooltip>
+
+          <Tooltip content="Export Comic to Image">
+            <button
+              onClick={triggerExport}
+              className="px-4 py-2 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-obsidian font-bold rounded-lg shadow-lg shadow-gold-500/20 transition-all transform hover:scale-105 active:scale-95"
+            >
+              Export
+            </button>
+          </Tooltip>
         </div>
       </header>
 
@@ -146,6 +200,9 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
 
       {/* Layer Tree Sidebar */}
       <LayerTree isOpen={isLayerTreeOpen} onClose={() => setIsLayerTreeOpen(false)} />
+
+      {/* Project Settings Sidebar */}
+      <ProjectSettingsSidebar isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* Main Content Area */}
       <main className="relative z-10 h-[calc(100vh-64px)]">

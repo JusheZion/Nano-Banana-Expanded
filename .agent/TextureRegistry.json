@@ -1,0 +1,22 @@
+{
+  "textures": [
+    {
+      "id": "halftone_classic",
+      "name": "Classic Halftone",
+      "url": "https://www.transparenttextures.com/patterns/halftone-dots.png",
+      "defaultMode": "tile"
+    },
+    {
+      "id": "newsprint_gritty",
+      "name": "Crumpled Newsprint",
+      "url": "https://www.transparenttextures.com/patterns/paper-fibers.png",
+      "defaultMode": "stretch"
+    },
+    {
+      "id": "sci_fi_hex",
+      "name": "Cybernetic Hex",
+      "url": "https://www.transparenttextures.com/patterns/hexellence.png",
+      "defaultMode": "tile"
+    }
+  ]
+}
