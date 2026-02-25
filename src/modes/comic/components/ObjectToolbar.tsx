@@ -27,11 +27,11 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
     const hasPanels = selectedPanels.length > 0;
 
     return (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-w-[95vw] w-max bg-zinc-900 border border-white/20 rounded-2xl p-2 flex flex-wrap justify-center items-center gap-x-2 gap-y-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
 
             {/* Shape Controls (Only for Panels) */}
             {hasPanels && (
-                <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-2">
+                <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-1">
                     <Tooltip content="Rectangle Shape">
                         <button
                             onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'rect' }))}

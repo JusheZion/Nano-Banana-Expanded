@@ -23,7 +23,7 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({ currentPageId, selecte
     };
 
     return (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-w-[95vw] overflow-x-auto bg-zinc-900 border border-white/20 rounded-2xl px-4 py-2 flex items-center gap-4 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="flex items-center gap-3 pointer-events-auto shrink-0">
 
             {/* Font Family */}
             <select
@@ -98,12 +98,142 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({ currentPageId, selecte
 
             {/* Text Color */}
             <Tooltip content="Text Color">
-                <div className="relative group">
+                <div className="flex items-center gap-1 bg-black/20 rounded-lg p-1 border border-white/10">
                     <input
                         type="color"
                         value={balloon.overrides?.textColor || '#000000'}
                         onChange={(e) => handleOverrides({ textColor: e.target.value })}
-                        className="w-8 h-8 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
+                        className="w-6 h-6 rounded-md overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
+                        title="Text Color"
+                    />
+
+                    <input
+                        type="color"
+                        value={balloon.overrides?.textStroke || '#000000'}
+                        onChange={(e) => handleOverrides({ textStroke: e.target.value, textStrokeWidth: balloon.overrides?.textStrokeWidth || 2 })}
+                        className="w-6 h-6 rounded-md overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
+                        title="Text Stroke Color"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={balloon.overrides?.textStrokeWidth || 0}
+                        onChange={(e) => handleOverrides({ textStrokeWidth: parseInt(e.target.value) || 0 })}
+                        className="w-10 bg-transparent text-white text-xs text-center border-none focus:outline-none"
+                        title="Text Stroke Width"
+                    />
+
+                    <input
+                        type="color"
+                        value={balloon.overrides?.secondaryTextStroke || '#ffffff'}
+                        onChange={(e) => handleOverrides({ secondaryTextStroke: e.target.value, secondaryTextStrokeWidth: balloon.overrides?.secondaryTextStrokeWidth || 2 })}
+                        className="w-6 h-6 rounded-md overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent ml-1"
+                        title="Outer Stroke Color"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={balloon.overrides?.secondaryTextStrokeWidth || 0}
+                        onChange={(e) => handleOverrides({ secondaryTextStrokeWidth: parseInt(e.target.value) || 0 })}
+                        className="w-10 bg-transparent text-white text-xs text-center border-none focus:outline-none"
+                        title="Outer Stroke Width"
+                    />
+                </div>
+            </Tooltip>
+
+            {/* 3D Extrusion */}
+            <Tooltip content="3D Extrusion">
+                <div className="flex items-center gap-1 bg-zinc-800 rounded px-1 border border-white/20">
+                    <span className="text-[10px] text-white/50 px-1 uppercase hidden sm:block font-bold">3D</span>
+                    <input
+                        type="color"
+                        value={balloon.overrides?.text3DExtrusionColor || '#000000'}
+                        onChange={(e) => handleOverrides({ text3DExtrusionColor: e.target.value, text3DExtrusion: Math.max(1, balloon.overrides?.text3DExtrusion || 5) })}
+                        className="w-6 h-6 rounded-md overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
+                        title="Extrusion Color"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={balloon.overrides?.text3DExtrusion || 0}
+                        onChange={(e) => handleOverrides({ text3DExtrusion: parseInt(e.target.value) || 0 })}
+                        className="w-10 bg-transparent text-white text-xs text-center border-none focus:outline-none"
+                        title="Extrusion Depth"
+                    />
+
+                    {!!balloon.overrides?.text3DExtrusion && (
+                        <>
+                            <div className="w-px h-4 bg-white/10 mx-1" />
+                            <span className="text-[10px] text-white/50 font-mono" title="Angle">∠</span>
+                            <input
+                                type="number"
+                                min="-360"
+                                max="360"
+                                value={balloon.overrides?.text3DExtrusionAngle ?? 45}
+                                onChange={(e) => handleOverrides({ text3DExtrusionAngle: parseInt(e.target.value) || 0 })}
+                                className="w-9 bg-transparent text-white text-xs text-center border-none focus:outline-none"
+                                title="Extrusion Angle (degrees)"
+                            />
+                            <span className="text-[10px] text-white/50">°</span>
+                        </>
+                    )}
+                </div>
+            </Tooltip>
+
+            <div className="w-px h-6 bg-white/10" />
+
+            {/* Text Warp */}
+            <Tooltip content="Warp Effect">
+                <select
+                    value={balloon.overrides?.textWarp || 'none'}
+                    onChange={(e) => handleOverrides({ textWarp: e.target.value as any })}
+                    className="bg-zinc-800 text-white text-xs py-1 px-2 rounded border border-white/20 outline-none cursor-pointer hover:border-gold-400 transition-colors"
+                >
+                    <option value="none">No Warp</option>
+                    <option value="arcUp">Arc Up</option>
+                    <option value="arcDown">Arc Down</option>
+                    <option value="wave">Wave</option>
+                    <option value="circle">Circle</option>
+                    <option value="arch">Deep Arch</option>
+                </select>
+            </Tooltip>
+
+            {
+                balloon.overrides?.textWarp && balloon.overrides?.textWarp !== 'none' && (
+                    <Tooltip content="Warp Intensity">
+                        <div className="flex items-center gap-2 bg-zinc-800 rounded px-2 py-1 border border-white/20">
+                            <span className="text-white/50 text-[10px] uppercase">Warp:</span>
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="3"
+                                step="0.1"
+                                value={balloon.overrides?.textWarpIntensity ?? 1}
+                                onChange={(e) => handleOverrides({ textWarpIntensity: parseFloat(e.target.value) })}
+                                className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                                style={{ WebkitAppearance: 'none' }}
+                            />
+                        </div>
+                    </Tooltip>
+                )
+            }
+
+            <div className="w-px h-6 bg-white/10" />
+
+            {/* Letter Spacing */}
+            <Tooltip content="Letter Spacing">
+                <div className="flex items-center bg-zinc-800 rounded pl-2 border border-white/20">
+                    <span className="text-white/50 text-[10px] font-mono mr-1">LV</span>
+                    <input
+                        type="number"
+                        min="-20"
+                        max="100"
+                        value={balloon.overrides?.textLetterSpacing || 0}
+                        onChange={(e) => handleOverrides({ textLetterSpacing: parseInt(e.target.value) || 0 })}
+                        className="w-10 bg-transparent text-white text-xs text-center border-none focus:outline-none"
                     />
                 </div>
             </Tooltip>
@@ -352,7 +482,7 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({ currentPageId, selecte
                 </button>
             </Tooltip>
 
-        </div>
+        </div >
     );
 };
 

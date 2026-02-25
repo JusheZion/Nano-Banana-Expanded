@@ -5,7 +5,9 @@ import { ObjectToolbar } from '../components/ObjectToolbar';
 import { TextToolbar } from '../components/TextToolbar';
 import { LayerTree } from '../components/LayerTree';
 import { ProjectSettingsSidebar } from '../components/ProjectSettingsSidebar';
+import { PageNavigator } from '../components/PageNavigator';
 import { Tooltip } from '../../../components/ui/Tooltip';
+import { ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -21,7 +23,10 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     copySelected,
     pasteClipboard,
     serializeProject,
-    loadProject
+    loadProject,
+    zoomLevel,
+    setZoomLevel,
+    layoutMode
   } = useComicStore();
 
   const undo = () => useComicStore.temporal.getState().undo();
@@ -30,6 +35,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isLayerTreeOpen, setIsLayerTreeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPageNavOpen, setIsPageNavOpen] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +148,47 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
             <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileUpload} />
           </div>
 
+          <div className="flex gap-2.5 mr-2 border-r border-white/10 pr-4 items-center">
+            <Tooltip content="Zoom Out">
+              <button
+                onClick={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition-colors border border-white/5"
+              >
+                <ZoomOut size={16} />
+              </button>
+            </Tooltip>
+
+            <button
+              onClick={() => setZoomLevel(1)}
+              className="px-2 py-1 text-xs font-mono text-gold-400 hover:text-gold-300 hover:bg-white/10 rounded transition-colors w-14 text-center"
+              title="Reset Zoom to 100%"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </button>
+
+            <Tooltip content="Zoom In">
+              <button
+                onClick={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition-colors border border-white/5"
+              >
+                <ZoomIn size={16} />
+              </button>
+            </Tooltip>
+
+            <Tooltip content="Fit Page to Screen">
+              <button
+                onClick={() => {
+                  const viewportWidth = window.innerWidth - 300;
+                  const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
+                  setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
+                }}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 flex items-center justify-center transition-colors border border-white/5 ml-1"
+              >
+                <Maximize size={16} />
+              </button>
+            </Tooltip>
+          </div>
+
           <Tooltip content="Toggle Asset Library">
             <button
               onClick={() => setIsLibraryOpen(!isLibraryOpen)}
@@ -157,6 +204,15 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isLayerTreeOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
             >
               {isLayerTreeOpen ? 'Close Layers' : 'Layers'}
+            </button>
+          </Tooltip>
+
+          <Tooltip content="Toggle Pages">
+            <button
+              onClick={() => setIsPageNavOpen(!isPageNavOpen)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isPageNavOpen ? 'bg-gold-500 text-black' : 'bg-white/5 hover:bg-white/10 text-gold-400 border border-gold-500/30'}`}
+            >
+              {isPageNavOpen ? 'Close Pages' : 'Pages'}
             </button>
           </Tooltip>
 
@@ -180,19 +236,27 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      {/* Contextual Toolbars - Moved outside header */}
-      {isPanelSelected && currentPageId && selectedElementIds.length > 0 && (
-        <ObjectToolbar
-          currentPageId={currentPageId}
-          selectedElementIds={selectedElementIds}
-        />
-      )}
+      {/* Dynamic Contextual Ribbon */}
+      {((isPanelSelected && currentPageId && selectedElementIds.length > 0) || (selectedTextId && currentPageId)) && (
+        <div className="w-full bg-zinc-900 border-b border-white/10 px-4 py-2 z-40 flex flex-wrap items-center gap-x-6 gap-y-2 shadow-sm shrink-0 no-scrollbar">
+          {isPanelSelected && currentPageId && selectedElementIds.length > 0 && (
+            <ObjectToolbar
+              currentPageId={currentPageId}
+              selectedElementIds={selectedElementIds}
+            />
+          )}
 
-      {selectedTextId && currentPageId && (
-        <TextToolbar
-          currentPageId={currentPageId}
-          selectedBubbleId={selectedTextId}
-        />
+          {isPanelSelected && selectedTextId && currentPageId && selectedElementIds.length > 0 && (
+            <div className="w-px h-6 bg-white/10 hidden md:block" />
+          )}
+
+          {selectedTextId && currentPageId && (
+            <TextToolbar
+              currentPageId={currentPageId}
+              selectedBubbleId={selectedTextId}
+            />
+          )}
+        </div>
       )}
 
       {/* Asset Library Sidebar */}
@@ -200,6 +264,9 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
 
       {/* Layer Tree Sidebar */}
       <LayerTree isOpen={isLayerTreeOpen} onClose={() => setIsLayerTreeOpen(false)} />
+
+      {/* Page Navigator Sidebar */}
+      <PageNavigator isOpen={isPageNavOpen} onClose={() => setIsPageNavOpen(false)} />
 
       {/* Project Settings Sidebar */}
       <ProjectSettingsSidebar isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />

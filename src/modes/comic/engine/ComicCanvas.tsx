@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Line as KonvaLine } from 'react-konva';
+import { Stage, Layer, Rect, Line, Line as KonvaLine, Group } from 'react-konva';
 import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
@@ -28,11 +28,22 @@ const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string,
     );
 };
 
+// Coordinate helper for Multi-Page layout
+const getLayoutPosition = (index: number, mode: 'webtoon' | 'spread') => {
+    if (mode === 'spread') {
+        return { x: (index % 2) * 800, y: Math.floor(index / 2) * 1220 }; // slight vertical gap
+    }
+    return { x: 0, y: index * 1220 }; // 1200 + 20px gap for webtoon spacing
+};
+
 export const ComicCanvas: React.FC = () => {
     const {
         pages,
         currentPageId,
         selectedElementIds,
+        layoutMode,
+        zoomLevel,
+        selectPage,
         setSelectedElements,
         toggleSelection,
         clearSelection,
@@ -51,11 +62,12 @@ export const ComicCanvas: React.FC = () => {
         removeElement
     } = useComicStore();
 
-    const currentPage = pages.find(p => p.id === currentPageId);
+    const currentPage = pages.find(p => p.id === currentPageId) || pages[0];
 
     // Local state for drawing
     const isDrawingRef = useRef(false);
     const [currentLine, setCurrentLine] = React.useState<number[]>([]);
+    const targetPageIdRef = useRef<string | null>(null);
 
     // Local state for Knife Tool
     const [isKnifeMode, setIsKnifeMode] = React.useState(false);
@@ -66,15 +78,30 @@ export const ComicCanvas: React.FC = () => {
     const [selectionBox, setSelectionBox] = React.useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
 
     // Snapping Guides
-    const [snapLines, setSnapLines] = React.useState<SnapLine[]>([]);
+    const [snapLines, setSnapLines] = React.useState<{ lines: SnapLine[], offset: { x: number, y: number } }>({ lines: [], offset: { x: 0, y: 0 } });
 
-    if (!currentPage) return <div className="text-white p-4">Loading Comic Engine...</div>;
+    if (!pages || pages.length === 0) return <div className="text-white p-4">Loading Comic Engine...</div>;
 
     const stageRef = useRef<any>(null);
 
     const handleStageMouseDown = (e: any) => {
         const stage = e.target.getStage();
-        const pos = stage.getPointerPosition();
+        const rawPos = stage.getPointerPosition();
+        if (!rawPos) return;
+
+        const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
+
+        // Auto-select page based on pointer click position
+        const targetPage = pages.find((_, i) => {
+            const offset = getLayoutPosition(i, layoutMode);
+            return pos.x >= offset.x && pos.x <= offset.x + 800 && pos.y >= offset.y && pos.y <= offset.y + 1200;
+        });
+
+        if (targetPage) {
+            selectPage(targetPage.id);
+            targetPageIdRef.current = targetPage.id;
+        }
+
         const clickedOnEmpty = e.target === stage || e.target.name() === 'background-rect';
 
         // 1. Knife Mode
@@ -86,9 +113,11 @@ export const ComicCanvas: React.FC = () => {
         }
 
         // 2. Drawing Mode
-        if (isDrawingMode) {
+        if (isDrawingMode && targetPage) {
             isDrawingRef.current = true;
-            setCurrentLine([pos.x, pos.y]);
+            // Draw points relate to the page's local offsets
+            const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
+            setCurrentLine([pos.x - offset.x, pos.y - offset.y]);
             clearSelection();
             return;
         }
@@ -100,20 +129,25 @@ export const ComicCanvas: React.FC = () => {
         }
 
         // Always attempt to clear snaplines on interaction end
-        setSnapLines([]);
+        setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
     };
 
     const handleStageMouseMove = (e: any) => {
         const stage = e.target.getStage();
-        const pos = stage.getPointerPosition();
+        const rawPos = stage.getPointerPosition();
+        if (!rawPos) return;
+
+        const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
 
         if (isKnifeMode && knifeStart) {
             setKnifeCurrent(pos);
             return;
         }
 
-        if (isDrawingMode && isDrawingRef.current) {
-            setCurrentLine(prev => [...prev, pos.x, pos.y]);
+        if (isDrawingMode && isDrawingRef.current && targetPageIdRef.current) {
+            const targetIndex = pages.findIndex(p => p.id === targetPageIdRef.current);
+            const offset = getLayoutPosition(targetIndex, layoutMode);
+            setCurrentLine(prev => [...prev, pos.x - offset.x, pos.y - offset.y]);
             return;
         }
 
@@ -124,37 +158,31 @@ export const ComicCanvas: React.FC = () => {
     };
 
     const performKnifeSplit = (start: { x: number, y: number }, end: { x: number, y: number }) => {
-        currentPage?.panels.forEach(panel => {
-            if (panel.shapeType !== 'polygon' || !panel.points || panel.points.length < 3) return;
+        pages.forEach((page, index) => {
+            const offset = getLayoutPosition(index, layoutMode);
+            const localStart = { x: start.x - offset.x, y: start.y - offset.y };
+            const localEnd = { x: end.x - offset.x, y: end.y - offset.y };
 
-            // Convert absolute knife slice line to local panel coordinates
-            const localStart = { x: start.x - panel.x, y: start.y - panel.y };
-            const localEnd = { x: end.x - panel.x, y: end.y - panel.y };
+            page.panels.forEach(panel => {
+                if (panel.shapeType !== 'polygon' || !panel.points || panel.points.length < 3) return;
 
-            const splitResult = splitConvexPolygon(panel.points, localStart, localEnd);
-            if (splitResult) {
-                const [poly1, poly2] = splitResult;
+                const panelLocalStart = { x: localStart.x - panel.x, y: localStart.y - panel.y };
+                const panelLocalEnd = { x: localEnd.x - panel.x, y: localEnd.y - panel.y };
 
-                // 1. Remove the original panel
-                removeElement(currentPage.id, panel.id);
-
-                const { id, type, ...panelProps } = panel;
-
-                // 2. Insert the two new halved panels exactly where the old one was
-                addPanel(currentPage.id, {
-                    ...panelProps,
-                    points: poly1
-                });
-                addPanel(currentPage.id, {
-                    ...panelProps,
-                    points: poly2
-                });
-            }
+                const splitResult = splitConvexPolygon(panel.points, panelLocalStart, panelLocalEnd);
+                if (splitResult) {
+                    const [poly1, poly2] = splitResult;
+                    removeElement(page.id, panel.id);
+                    const { id, type, ...panelProps } = panel;
+                    addPanel(page.id, { ...panelProps, points: poly1 });
+                    addPanel(page.id, { ...panelProps, points: poly2 });
+                }
+            });
         });
     };
 
     const handleStageMouseUp = () => {
-        setSnapLines([]); // Ensure they disappear
+        setSnapLines({ lines: [], offset: { x: 0, y: 0 } }); // Ensure they disappear
 
         if (isKnifeMode && knifeStart && knifeCurrent) {
             performKnifeSplit(knifeStart, knifeCurrent);
@@ -164,7 +192,7 @@ export const ComicCanvas: React.FC = () => {
         }
 
         if (selectionBox) {
-            // Find intersecting elements
+            // Find intersecting elements across all pages
             const { start, end } = selectionBox;
             const x1 = Math.min(start.x, end.x);
             const x2 = Math.max(start.x, end.x);
@@ -175,28 +203,32 @@ export const ComicCanvas: React.FC = () => {
             if (x2 - x1 > 5 || y2 - y1 > 5) {
                 const selectedIds: string[] = [];
 
-                currentPage?.panels.forEach(p => {
-                    let px = p.x;
-                    let py = p.y;
-                    let pw = p.width;
-                    let ph = p.height;
-                    if (p.shapeType === 'polygon' && p.points) {
-                        const xs = p.points.map(pt => pt.x + p.x);
-                        const ys = p.points.map(pt => pt.y + p.y);
-                        px = Math.min(...xs);
-                        pw = Math.max(...xs) - px;
-                        py = Math.min(...ys);
-                        ph = Math.max(...ys) - py;
-                    }
-                    if (px < x2 && px + pw > x1 && py < y2 && py + ph > y1) {
-                        selectedIds.push(p.id);
-                    }
-                });
+                pages.forEach((page, index) => {
+                    const offset = getLayoutPosition(index, layoutMode);
 
-                currentPage?.balloons.forEach(b => {
-                    if (b.x < x2 && b.x + b.width > x1 && b.y < y2 && b.y + b.height > y1) {
-                        selectedIds.push(b.id);
-                    }
+                    page.panels.forEach(p => {
+                        let px = p.x + offset.x;
+                        let py = p.y + offset.y;
+                        let pw = p.width;
+                        let ph = p.height;
+                        if (p.shapeType === 'polygon' && p.points) {
+                            const xs = p.points.map(pt => pt.x + p.x + offset.x);
+                            const ys = p.points.map(pt => pt.y + p.y + offset.y);
+                            px = Math.min(...xs);
+                            pw = Math.max(...xs) - px;
+                            py = Math.min(...ys);
+                            ph = Math.max(...ys) - py;
+                        }
+                        if (px < x2 && px + pw > x1 && py < y2 && py + ph > y1) {
+                            selectedIds.push(p.id);
+                        }
+                    });
+
+                    page.balloons.forEach(b => {
+                        if (b.x + offset.x < x2 && b.x + offset.x + b.width > x1 && b.y + offset.y < y2 && b.y + offset.y + b.height > y1) {
+                            selectedIds.push(b.id);
+                        }
+                    });
                 });
 
                 if (selectedIds.length > 0) {
@@ -207,17 +239,17 @@ export const ComicCanvas: React.FC = () => {
             return;
         }
 
-        if (isDrawingMode && isDrawingRef.current) {
+        if (isDrawingMode && isDrawingRef.current && targetPageIdRef.current) {
             isDrawingRef.current = false;
             if (currentLine.length > 2) {
-                // Save drawing
-                addDrawing(currentPage.id, {
+                addDrawing(targetPageIdRef.current, {
                     points: currentLine,
                     stroke: brushColor,
                     strokeWidth: brushWidth
                 });
             }
             setCurrentLine([]);
+            targetPageIdRef.current = null;
         }
     };
 
@@ -240,11 +272,13 @@ export const ComicCanvas: React.FC = () => {
 
     const handleInsertImage = () => {
         if (selectedElementIds.length > 0) {
-            const isPanel = currentPage.panels.some(p => selectedElementIds.includes(p.id));
-            if (isPanel) {
-                const selectedPanels = currentPage.panels.filter(p => selectedElementIds.includes(p.id));
-                selectedPanels.forEach(p => updatePanel(currentPage.id, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
-            }
+            pages.forEach(page => {
+                const isPanel = page.panels.some(p => selectedElementIds.includes(p.id));
+                if (isPanel) {
+                    const selectedPanels = page.panels.filter(p => selectedElementIds.includes(p.id));
+                    selectedPanels.forEach(p => updatePanel(page.id, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
+                }
+            });
         } else {
             alert("Select a panel first!");
         }
@@ -255,6 +289,16 @@ export const ComicCanvas: React.FC = () => {
         const style = BALLOON_STYLES.find(s => s.id === styleId);
         if (!style) return;
 
+        // Extract style-specific overrides (like SFX defaults)
+        const overrides: any = {};
+        if (style.textWarp) overrides.textWarp = style.textWarp;
+        if (style.textStroke) overrides.textStroke = style.textStroke;
+        if (style.textStrokeWidth) overrides.textStrokeWidth = style.textStrokeWidth;
+        if (style.secondaryTextStroke) overrides.secondaryTextStroke = style.secondaryTextStroke;
+        if (style.secondaryTextStrokeWidth) overrides.secondaryTextStrokeWidth = style.secondaryTextStrokeWidth;
+        if (style.text3DExtrusion) overrides.text3DExtrusion = style.text3DExtrusion;
+        if (style.text3DExtrusionColor) overrides.text3DExtrusionColor = style.text3DExtrusionColor;
+
         addBalloon(currentPage.id, {
             x: 400,
             y: 600,
@@ -264,9 +308,15 @@ export const ComicCanvas: React.FC = () => {
             tailBasePoint: { x: 0, y: 0 },
             tailTip: { x: -50, y: 100 },
             styleId: styleId,
-            text: "Text..."
+            text: style.kind === 'shout' && styleId.includes('sound_effect') ? "BOOM!" : "Text...",
+            overrides: Object.keys(overrides).length > 0 ? overrides : undefined
         });
     };
+
+    const stageWidth = layoutMode === 'spread' && pages.length > 1 ? 1600 + 40 : 800 + 40; // padding
+    const stageHeight = layoutMode === 'spread'
+        ? Math.ceil(pages.length / 2) * 1220
+        : Math.max(1, pages.length) * 1220;
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent">
@@ -293,7 +343,7 @@ export const ComicCanvas: React.FC = () => {
                             ]
                         });
                     }}
-                    title="Add a new panel to the canvas"
+                    title="Add a new panel to the active page"
                 >
                     <span className="text-lg">+</span> Add Panel
                 </button>
@@ -321,16 +371,25 @@ export const ComicCanvas: React.FC = () => {
                         defaultValue=""
                     >
                         <option value="" disabled>Add Balloon...</option>
-                        {BALLOON_STYLES.map((style) => (
-                            <option key={style.id} value={style.id}>
-                                {style.label}
-                            </option>
-                        ))}
+                        <optgroup label="Speech & Thought">
+                            {BALLOON_STYLES.filter(s => !s.id.startsWith('sound_effect')).map((style) => (
+                                <option key={style.id} value={style.id}>
+                                    {style.label}
+                                </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Word Art & SFX">
+                            {BALLOON_STYLES.filter(s => s.id.startsWith('sound_effect')).map((style) => (
+                                <option key={style.id} value={style.id}>
+                                    {style.label}
+                                </option>
+                            ))}
+                        </optgroup>
                     </select>
                 </div>
 
                 <button
-                    className={`px-3 py-1 text-white text-xs rounded border transition-all flex items-center gap-2 ${selectedElementIds.length > 0 && currentPage.panels.some(p => selectedElementIds.includes(p.id))
+                    className={`px-3 py-1 text-white text-xs rounded border transition-all flex items-center gap-2 ${selectedElementIds.length > 0
                         ? 'bg-purple-700/80 hover:bg-purple-600 border-purple-500/30'
                         : 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed'
                         }`}
@@ -346,8 +405,9 @@ export const ComicCanvas: React.FC = () => {
             <div className={`flex-1 overflow-auto bg-zinc-950 flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}>
                 <Stage
                     ref={stageRef}
-                    width={800}
-                    height={1200}
+                    width={stageWidth * zoomLevel}
+                    height={stageHeight * zoomLevel}
+                    scale={{ x: zoomLevel, y: zoomLevel }}
                     onMouseDown={handleStageMouseDown}
                     onMouseMove={handleStageMouseMove}
                     onMouseUp={handleStageMouseUp}
@@ -357,84 +417,108 @@ export const ComicCanvas: React.FC = () => {
                     style={{ background: 'transparent' }}
                 >
                     <Layer name="layer-background">
-                        {/* Page Background */}
-                        <Rect
-                            name="background-rect"
-                            x={0}
-                            y={0}
-                            width={800}
-                            height={1200}
-                            fill="white"
-                            shadowColor="black"
-                            shadowBlur={50}
-                            shadowOpacity={0.5}
-                            shadowOffset={{ x: 0, y: 0 }}
-                            stroke="rgba(255, 255, 255, 0.05)"
-                            strokeWidth={1}
-                        />
+                        {pages.map((page, i) => {
+                            const offset = getLayoutPosition(i, layoutMode);
+                            return (
+                                <Rect
+                                    key={`bg-${page.id}`}
+                                    name="background-rect"
+                                    x={offset.x}
+                                    y={offset.y}
+                                    width={800}
+                                    height={1200}
+                                    fill={page.background || "white"}
+                                    shadowColor={currentPageId === page.id ? "#3B82F6" : "black"}
+                                    shadowBlur={currentPageId === page.id ? 20 : 50}
+                                    shadowOpacity={currentPageId === page.id ? 1 : 0.5}
+                                    shadowOffset={{ x: 0, y: 0 }}
+                                    stroke={currentPageId === page.id ? "#3B82F6" : "rgba(255, 255, 255, 0.05)"}
+                                    strokeWidth={currentPageId === page.id ? 2 : 1}
+                                />
+                            );
+                        })}
                     </Layer>
 
                     <Layer name="layer-comic-elements">
-                        {/* Dynamic Layer Rendering */}
-                        {(currentPage.layerOrder || []).map((elementId) => {
-                            const panel = currentPage.panels.find(p => p.id === elementId);
-                            if (panel) {
-                                return (
-                                    <ComicPanel
-                                        key={panel.id}
-                                        panel={panel}
-                                        isSelected={selectedElementIds.includes(panel.id)}
-                                        onSelect={(e: any) => {
-                                            if (e?.evt?.shiftKey) {
-                                                toggleSelection(panel.id);
-                                            } else {
-                                                setSelectedElements([panel.id]);
-                                            }
-                                        }}
-                                        onChange={(newAttrs: Partial<Panel>) => {
-                                            // Update store; snap processing handles visually in Panel's dragBoundFunc
-                                            updatePanel(currentPage.id, panel.id, newAttrs);
+                        {pages.map((page, i) => {
+                            const offset = getLayoutPosition(i, layoutMode);
+                            return (
+                                <Group key={`elements-${page.id}`} x={offset.x} y={offset.y}>
+                                    {(page.layerOrder || []).map((elementId) => {
+                                        const panel = page.panels.find(p => p.id === elementId);
+                                        if (panel) {
+                                            return (
+                                                <ComicPanel
+                                                    key={panel.id}
+                                                    panel={panel}
+                                                    isSelected={selectedElementIds.includes(panel.id)}
+                                                    onSelect={(e: any) => {
+                                                        if (e?.evt?.shiftKey) {
+                                                            toggleSelection(panel.id);
+                                                        } else {
+                                                            setSelectedElements([panel.id]);
+                                                        }
+                                                        selectPage(page.id);
+                                                    }}
+                                                    onChange={(newAttrs: Partial<Panel>) => {
+                                                        updatePanel(page.id, panel.id, newAttrs);
+                                                        if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
+                                                            const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id);
+                                                            setSnapLines({ lines: snapLines, offset });
+                                                        }
+                                                    }}
+                                                    onDragEnd={() => setSnapLines({ lines: [], offset: { x: 0, y: 0 } })}
+                                                />
+                                            );
+                                        }
 
-                                            // Re-compute snaplines for rendering visual guides if moving
-                                            if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
-                                                const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...currentPage.panels, ...(currentPage.balloons || [])], panel.id);
-                                                setSnapLines(snapLines);
-                                            }
-                                        }}
-                                        onDragEnd={() => setSnapLines([])}
-                                    />
-                                );
-                            }
+                                        const drawing = page.drawings?.find(d => d.id === elementId);
+                                        if (drawing) {
+                                            return <DrawingView key={drawing.id} drawing={drawing} />;
+                                        }
 
-                            const drawing = currentPage.drawings?.find(d => d.id === elementId);
-                            if (drawing) {
-                                return <DrawingView key={drawing.id} drawing={drawing} />;
-                            }
+                                        const balloon = page.balloons?.find(b => b.id === elementId);
+                                        if (balloon) {
+                                            const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
+                                            if (!styleDef) return null;
+                                            return (
+                                                <BalloonNode
+                                                    key={balloon.id}
+                                                    balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
+                                                    styleDef={styleDef}
+                                                    onSelect={(id: string, e: any) => {
+                                                        if (e?.evt?.shiftKey) {
+                                                            toggleSelection(id);
+                                                        } else {
+                                                            setSelectedElements([id]);
+                                                        }
+                                                        selectPage(page.id);
+                                                    }}
+                                                    onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(page.id, bubbleId, newAttrs)}
+                                                />
+                                            );
+                                        }
 
-                            const balloon = currentPage.balloons?.find(b => b.id === elementId);
-                            if (balloon) {
-                                const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
-                                if (!styleDef) return null;
-                                return (
-                                    <BalloonNode
-                                        key={balloon.id}
-                                        balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
-                                        styleDef={styleDef}
-                                        onSelect={(id: string, e: any) => {
-                                            if (e?.evt?.shiftKey) {
-                                                toggleSelection(id);
-                                            } else {
-                                                setSelectedElements([id]);
-                                            }
-                                        }}
-                                        onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(currentPage.id, bubbleId, newAttrs)}
-                                    />
-                                );
-                            }
+                                        return null;
+                                    })}
 
-                            return null;
+                                    {/* Real-time drawing line preview for this specific page */}
+                                    {isDrawingMode && targetPageIdRef.current === page.id && currentLine.length > 0 && (
+                                        <Line
+                                            points={currentLine}
+                                            stroke={brushColor}
+                                            strokeWidth={brushWidth}
+                                            tension={0.5}
+                                            lineCap="round"
+                                            lineJoin="round"
+                                            perfectDrawEnabled={false}
+                                        />
+                                    )}
+                                </Group>
+                            );
                         })}
-                        {/* Real-time Knife Slash Visual */}
+
+                        {/* Real-time Knife Slash Visual (Absolute Stage Coords) */}
                         {isKnifeMode && knifeStart && knifeCurrent && (
                             <KonvaLine
                                 points={[knifeStart.x, knifeStart.y, knifeCurrent.x, knifeCurrent.y]}
@@ -445,7 +529,7 @@ export const ComicCanvas: React.FC = () => {
                             />
                         )}
 
-                        {/* Marquee Selection Box */}
+                        {/* Marquee Selection Box (Absolute Stage Coords) */}
                         {selectionBox && (
                             <Rect
                                 x={Math.min(selectionBox.start.x, selectionBox.end.x)}
@@ -459,14 +543,14 @@ export const ComicCanvas: React.FC = () => {
                             />
                         )}
 
-                        {/* Rendering the SnapLines on the topmost layer */}
-                        {snapLines.map((line, i) => (
+                        {/* Rendering the SnapLines on the topmost layer relative to their spawning page */}
+                        {snapLines.lines.map((line, i) => (
                             <KonvaLine
                                 key={`snap-${i}`}
                                 points={
                                     line.axis === 'x'
-                                        ? [line.position, 0, line.position, 1200]
-                                        : [0, line.position, 800, line.position]
+                                        ? [line.position + snapLines.offset.x, snapLines.offset.y, line.position + snapLines.offset.x, snapLines.offset.y + 1200]
+                                        : [snapLines.offset.x, line.position + snapLines.offset.y, snapLines.offset.x + 800, line.position + snapLines.offset.y]
                                 }
                                 stroke="#D4AF37"
                                 strokeWidth={1}

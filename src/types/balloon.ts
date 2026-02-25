@@ -7,7 +7,15 @@ export type BalloonStyleId =
     | 'shout_spiky'
     | 'narration_box'
     | 'whisper_dashed'
-    | 'radio_electric';
+    | 'radio_electric'
+    | 'sound_effect_action'
+    | 'sound_effect_impact'
+    | 'cloud_fluffy'
+    | 'cloud_fluffy_no_tail'
+    | 'starburst_action'
+    | 'scream_jagged'
+    | 'box_slanted'
+    | 'double_burst';
 
 export interface BalloonStyle {
     id: BalloonStyleId;
@@ -22,10 +30,19 @@ export interface BalloonStyle {
     textColor: string;
 
     hasTail: boolean;
-    tailStyle: 'straight' | 'curved' | 'spiky';
+    tailStyle: 'straight' | 'curved' | 'spiky' | 'bubbles';
 
     cornerRadius?: number;
     spikiness?: number;
+
+    textWarp?: 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch';
+    textStroke?: string;
+    textStrokeWidth?: number;
+    secondaryTextStroke?: string;
+    secondaryTextStrokeWidth?: number;
+    text3DExtrusion?: number;
+    text3DExtrusionColor?: string;
+    text3DExtrusionAngle?: number;
 }
 
 export interface Point {
@@ -41,6 +58,16 @@ export interface BalloonOverrides {
     fontSize?: number;
     textColor?: string;
     tailFlip?: boolean;
+    textStroke?: string;
+    textStrokeWidth?: number;
+    secondaryTextStroke?: string;
+    secondaryTextStrokeWidth?: number;
+    textWarp?: 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch';
+    textWarpIntensity?: number; // E.g., multiplier for bend/circle spread
+    textLetterSpacing?: number; // Spacing between letters
+    text3DExtrusion?: number;
+    text3DExtrusionColor?: string;
+    text3DExtrusionAngle?: number;
 }
 
 export interface BalloonInstance {
