@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useComicStore } from '../../../stores/comicStore';
+import { useComicStore, type Panel } from '../../../stores/comicStore';
+import { GENRE_REGISTRY, type GenreId } from '../data/GenreRegistry';
+import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
+import { FontSelect } from '../components/FontSelect';
 import { AssetLibrary } from '../components/AssetLibrary';
 import { ObjectToolbar } from '../components/ObjectToolbar';
 import { TextToolbar } from '../components/TextToolbar';
@@ -15,6 +18,11 @@ interface ComicLayoutProps {
 
 export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const triggerExport = useComicStore(state => state.triggerExport);
+  const currentGenreId = useComicStore(state => state.currentGenreId);
+  const setGenre = useComicStore(state => state.setGenre);
+  const applyGenreToAll = useComicStore(state => state.applyGenreToAll);
+  const customGenre = useComicStore(state => state.customGenre);
+  const updateCustomGenre = useComicStore(state => state.updateCustomGenre);
   const {
     pages,
     currentPageId,
@@ -31,6 +39,9 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
 
   const undo = () => useComicStore.temporal.getState().undo();
   const redo = () => useComicStore.temporal.getState().redo();
+
+  const [isGenreOpen, setIsGenreOpen] = useState(false);
+  const currentGenre = GENRE_REGISTRY.find(g => g.id === currentGenreId) || GENRE_REGISTRY[0];
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isLayerTreeOpen, setIsLayerTreeOpen] = useState(false);
@@ -134,11 +145,191 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
             </Tooltip>
           </div>
 
-          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
-            <div className="text-xs text-white/50 mr-2 uppercase tracking-wider font-bold">Project State</div>
-          </div>
+          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center relative">
 
-          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
+            {/* Genre Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setIsGenreOpen(!isGenreOpen)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border ${isGenreOpen
+                  ? 'bg-zinc-800 border-zinc-600 outline outline-1 outline-gold-500/50'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}
+              >
+                <span className="text-white/50 text-xs uppercase tracking-wider font-bold">Theme:</span>
+                <span className={`font-medium tracking-wide bg-clip-text text-transparent bg-gradient-to-r ${currentGenre.uiAccent}`}>
+                  {currentGenre.label}
+                </span>
+                <span className="text-white/40 text-xs ml-1">▼</span>
+              </button>
+
+              {isGenreOpen && (
+                <div className="absolute top-12 left-0 w-80 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-3 bg-zinc-950 border-b border-white/5">
+                    <h3 className="text-sm font-bold text-white/90">Studio Themes</h3>
+                    <p className="text-xs text-white/50 mt-1">Updates default fonts, colors, and AI biases globally.</p>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto p-2 no-scrollbar">
+                    {GENRE_REGISTRY.map(genre => (
+                      <button
+                        key={genre.id}
+                        onClick={() => {
+                          setGenre(genre.id);
+                          setIsGenreOpen(false);
+                        }}
+                        className={`w-full text-left p-3 rounded-lg flex flex-col gap-2 transition-all ${currentGenreId === genre.id
+                          ? 'bg-white/10 outline outline-1 outline-gold-500/30'
+                          : 'hover:bg-white/5 block'
+                          }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold bg-clip-text text-transparent bg-gradient-to-r ${genre.uiAccent}`}>
+                            {genre.label}
+                          </span>
+                          <div className="flex rounded-full overflow-hidden border border-white/20 h-4 w-12">
+                            <div className="h-full w-1/3" style={{ backgroundColor: genre.palette.border }} />
+                            <div className="h-full w-1/3" style={{ backgroundColor: genre.palette.background }} />
+                            <div className="h-full w-1/3" style={{ backgroundColor: genre.palette.glow === '#00000000' ? '#555' : genre.palette.glow }} />
+                          </div>
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed max-w-[90%]">
+                          {genre.description}
+                        </p>
+                        <div className="text-[10px] uppercase text-zinc-500 font-mono tracking-widest mt-1 opacity-70" style={{ fontFamily: genre.fontFamily }}>
+                          Aa Bb Cc - Sample Font
+                        </div>
+                      </button>
+                    ))}
+
+                    {currentGenreId === 'custom' && customGenre && (
+                      <div className="mt-2 p-3 rounded-lg bg-zinc-950/80 border border-white/10 space-y-3">
+                        <h4 className="text-xs font-semibold text-white/70 uppercase tracking-wider">
+                          Custom Theme Controls
+                        </h4>
+                        <p className="text-[11px] text-white/50">
+                          Adjust palette, font, and texture. Use &quot;Apply to Existing Pages&quot; below to propagate.
+                        </p>
+
+                        <div className="grid grid-cols-3 gap-3 mt-2">
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Border
+                            <input
+                              type="color"
+                              value={customGenre.palette.border}
+                              onChange={(e) =>
+                                updateCustomGenre(
+                                  {},
+                                  { border: e.target.value }
+                                )
+                              }
+                              className="h-8 w-full rounded border border-white/20 bg-transparent cursor-pointer"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Background
+                            <input
+                              type="color"
+                              value={customGenre.palette.background}
+                              onChange={(e) =>
+                                updateCustomGenre(
+                                  {},
+                                  { background: e.target.value }
+                                )
+                              }
+                              className="h-8 w-full rounded border border-white/20 bg-transparent cursor-pointer"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Glow
+                            <input
+                              type="color"
+                              value={customGenre.palette.glow}
+                              onChange={(e) =>
+                                updateCustomGenre(
+                                  {},
+                                  { glow: e.target.value }
+                                )
+                              }
+                              className="h-8 w-full rounded border border-white/20 bg-transparent cursor-pointer"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Font family
+                            <FontSelect
+                              value={customGenre.fontFamily}
+                              onChange={(val) => updateCustomGenre({ fontFamily: val })}
+                              allowCustom
+                            />
+                          </label>
+
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Texture overlay
+                            <select
+                              value={customGenre.textureId ?? ''}
+                              onChange={(e) =>
+                                updateCustomGenre({
+                                  textureId: e.target.value || undefined
+                                })
+                              }
+                              className="w-full rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-gold-500/60"
+                            >
+                              <option value="">None</option>
+                              {TEXTURE_REGISTRY.map(texture => (
+                                <option key={texture.id} value={texture.id}>
+                                  {texture.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="flex flex-col gap-1 text-[11px] text-white/60">
+                            Texture strength
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                value={customGenre.textureOpacity ?? 0.5}
+                                onChange={(e) =>
+                                  updateCustomGenre({
+                                    textureOpacity: Number(e.target.value)
+                                  })
+                                }
+                                className="flex-1 accent-gold-500"
+                              />
+                              <span className="w-10 text-right text-[11px] text-white/50">
+                                {Math.round((customGenre.textureOpacity ?? 0.5) * 100)}%
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Global Theme Action */}
+                  <div className="p-3 bg-zinc-950 border-t border-white/5">
+                    <button
+                      onClick={() => {
+                        applyGenreToAll();
+                        setIsGenreOpen(false);
+                      }}
+                      className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold rounded flex items-center justify-center gap-2 transition-colors uppercase tracking-wider"
+                    >
+                      Apply to Existing Pages
+                    </button>
+                  </div>
+
+                </div>
+              )}
+            </div>
+
+            <div className="w-px h-6 bg-white/10 mx-2" />
+
             <Tooltip content="Save Project as JSON">
               <button onClick={serializeProject} className="px-3 py-1.5 rounded-lg text-sm bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 transition-colors">Save JSON</button>
             </Tooltip>
@@ -146,6 +337,15 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
               <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 rounded-lg text-sm bg-green-600/30 hover:bg-green-600/50 text-green-300 border border-green-500/30 transition-colors">Load JSON</button>
             </Tooltip>
             <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileUpload} />
+          </div>
+
+          <div className="flex gap-2 mr-2 border-r border-white/10 pr-4 items-center">
+            <Tooltip content="Export Current Page as PNG (300 DPI)">
+              <button onClick={() => triggerExport('png')} className="px-3 py-1.5 rounded-lg text-sm bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/30 transition-colors">Export PNG</button>
+            </Tooltip>
+            <Tooltip content="Export All Pages as PDF (300 DPI)">
+              <button onClick={() => triggerExport('pdf')} className="px-3 py-1.5 rounded-lg text-sm bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/30 transition-colors">Export PDF</button>
+            </Tooltip>
           </div>
 
           <div className="flex gap-2.5 mr-2 border-r border-white/10 pr-4 items-center">
@@ -225,12 +425,12 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
             </button>
           </Tooltip>
 
-          <Tooltip content="Export Comic to Image">
+          <Tooltip content="Export Full Comic Book as Print PDF">
             <button
-              onClick={triggerExport}
+              onClick={() => triggerExport('pdf')}
               className="px-4 py-2 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-obsidian font-bold rounded-lg shadow-lg shadow-gold-500/20 transition-all transform hover:scale-105 active:scale-95"
             >
-              Export
+              Export PDF
             </button>
           </Tooltip>
         </div>

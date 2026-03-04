@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
+import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
+import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
 
 export interface Panel {
@@ -40,6 +42,8 @@ export interface Panel {
     // Texture
     textureId?: string;
     textureOpacity?: number;
+
+    strokeColor?: string;
 }
 
 
@@ -70,12 +74,14 @@ interface ComicState {
     };
     pages: ComicPage[];
     currentPageId: string | null;
+    currentGenreId: GenreId;
+    customGenre: Genre;
     layoutMode: 'webtoon' | 'spread';
     zoomLevel: number;
     selectedElementIds: string[];
     clipboard: (Panel | BalloonInstance | Drawing)[];
     mode: 'layout' | 'content' | 'lettering';
-    exportTrigger: number;
+    exportFormat: 'png' | 'pdf' | null;
 
     // Drawing Mode State
     isDrawingMode: boolean;
@@ -87,6 +93,7 @@ interface ComicState {
 
     setLayoutMode: (mode: 'webtoon' | 'spread') => void;
     setZoomLevel: (zoom: number | ((prev: number) => number)) => void;
+    setGenre: (genreId: GenreId) => void;
     addPage: () => void;
     removePage: (id: string) => void;
     duplicatePage: (id: string) => void;
@@ -120,8 +127,12 @@ interface ComicState {
     toggleLayerVisibility: (pageId: string, elementId: string) => void;
     toggleLayerLock: (pageId: string, elementId: string) => void;
 
-    triggerExport: () => void;
+    triggerExport: (format: 'png' | 'pdf') => void;
+    clearExport: () => void;
 
+    // Genre Management
+    applyGenreToAll: () => void;
+    updateCustomGenre: (updates: Partial<Genre>, paletteUpdates?: Partial<Genre['palette']>) => void;
     updateProjectSettings: (settings: Partial<ComicState['projectSettings']>) => void;
     serializeProject: () => void;
     loadProject: (jsonString: string) => void;
@@ -147,12 +158,14 @@ export const useComicStore = create<ComicState>()(
                     }
                 ],
                 currentPageId: 'page-1',
+                currentGenreId: 'none' as GenreId,
+                customGenre: GENRE_REGISTRY.find(g => g.id === 'custom') || GENRE_REGISTRY[0],
                 layoutMode: 'webtoon',
                 zoomLevel: 1,
                 selectedElementIds: [],
                 clipboard: [],
                 mode: 'layout',
-                exportTrigger: 0,
+                exportFormat: null,
 
                 isDrawingMode: false,
                 brushColor: '#000000',
@@ -177,12 +190,54 @@ export const useComicStore = create<ComicState>()(
                 }),
 
                 setLayoutMode: (mode) => set({ layoutMode: mode }),
-                setZoomLevel: (zoom) => set((state) => ({ zoomLevel: typeof zoom === 'function' ? zoom(state.zoomLevel) : zoom })),
+                setZoomLevel: (zoom) => set((state) => ({
+                    zoomLevel: typeof zoom === 'function' ? zoom(state.zoomLevel) : zoom
+                })),
+
+                setGenre: (genreId) => set({ currentGenreId: genreId }),
+
+                updateCustomGenre: (updates, paletteUpdates) => set((state) => ({
+                    customGenre: {
+                        ...state.customGenre,
+                        ...updates,
+                        palette: {
+                            ...state.customGenre.palette,
+                            ...(paletteUpdates || {})
+                        }
+                    }
+                })),
+
+                applyGenreToAll: () => set((state) => {
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+                    return {
+                        pages: state.pages.map(p => ({
+                            ...p,
+                            background: genre.palette.background,
+                            panels: p.panels.map(panel => ({
+                                ...panel,
+                                strokeColor: genre.palette.border,
+                                ...(genre.textureId !== undefined && { textureId: genre.textureId }),
+                                ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity })
+                            })),
+                            balloons: p.balloons.map(balloon => ({ ...balloon, fontFamily: genre.fontFamily }))
+                        }))
+                    };
+                }),
 
                 addPage: () => set((state) => {
                     const newId = `page-${crypto.randomUUID()}`;
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
                     return {
-                        pages: [...state.pages, { id: newId, panels: [], balloons: [], drawings: [], background: '#ffffff', layerOrder: [] }],
+                        pages: [...state.pages, {
+                            id: newId,
+                            panels: [],
+                            balloons: [],
+                            drawings: [],
+                            background: genre.palette.background,
+                            layerOrder: []
+                        }],
                         currentPageId: newId
                     };
                 }),
@@ -236,12 +291,24 @@ export const useComicStore = create<ComicState>()(
 
                 addPanel: (pageId, panelData) => set((state) => {
                     const newId = crypto.randomUUID();
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+
                     return {
                         pages: state.pages.map(p =>
                             p.id === pageId
                                 ? {
                                     ...p,
-                                    panels: [...p.panels, { ...panelData, id: newId, type: 'panel', isVisible: true, isLocked: false }],
+                                    panels: [...p.panels, {
+                                        strokeColor: genre.palette.border,
+                                        ...(genre.textureId !== undefined && { textureId: genre.textureId }),
+                                        ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
+                                        ...panelData,
+                                        id: newId,
+                                        type: 'panel',
+                                        isVisible: true,
+                                        isLocked: false
+                                    }],
                                     layerOrder: [...p.layerOrder, newId]
                                 }
                                 : p
@@ -264,12 +331,24 @@ export const useComicStore = create<ComicState>()(
 
                 addBalloon: (pageId, balloonData) => set((state) => {
                     const newId = crypto.randomUUID();
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+
                     return {
                         pages: state.pages.map(p =>
                             p.id === pageId
                                 ? {
                                     ...p,
-                                    balloons: [...p.balloons, { ...balloonData, id: newId, type: 'balloon', isVisible: true, isLocked: false, autoSize: true, padding: 20 }],
+                                    balloons: [...p.balloons, {
+                                        fontFamily: genre.fontFamily,
+                                        ...balloonData,
+                                        id: newId,
+                                        type: 'balloon',
+                                        isVisible: true,
+                                        isLocked: false,
+                                        autoSize: true,
+                                        padding: 20
+                                    }],
                                     layerOrder: [...p.layerOrder, newId]
                                 }
                                 : p
@@ -489,7 +568,8 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                triggerExport: () => set((state) => ({ exportTrigger: state.exportTrigger + 1 })),
+                triggerExport: (format) => set({ exportFormat: format }),
+                clearExport: () => set({ exportFormat: null }),
 
                 toggleFlip: (pageId, elementId, axis) => set((state) => ({
                     pages: state.pages.map(p => p.id === pageId ? {
@@ -719,11 +799,23 @@ export const useComicStore = create<ComicState>()(
             }),
             {
                 name: 'nano-banana-comic',
-                partialize: (state) => ({ pages: state.pages, projectSettings: state.projectSettings, layoutMode: state.layoutMode })
+                partialize: (state) => ({
+                    pages: state.pages,
+                    projectSettings: state.projectSettings,
+                    layoutMode: state.layoutMode,
+                    currentGenreId: state.currentGenreId,
+                    customGenre: state.customGenre
+                })
             }
         ),
         {
-            partialize: (state) => ({ pages: state.pages, projectSettings: state.projectSettings, layoutMode: state.layoutMode }),
+            partialize: (state) => ({
+                pages: state.pages,
+                projectSettings: state.projectSettings,
+                layoutMode: state.layoutMode,
+                currentGenreId: state.currentGenreId,
+                customGenre: state.customGenre
+            }),
             limit: 100
         }
     )

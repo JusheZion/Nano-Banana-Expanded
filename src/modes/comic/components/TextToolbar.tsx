@@ -2,6 +2,7 @@ import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { Tooltip } from '../../../components/ui/Tooltip';
+import { FontSelect } from './FontSelect';
 
 interface TextToolbarProps {
     currentPageId: string;
@@ -26,16 +27,13 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({ currentPageId, selecte
         <div className="flex items-center gap-3 pointer-events-auto shrink-0">
 
             {/* Font Family */}
-            <select
-                value={balloon.overrides?.fontFamily || 'Bangers'}
-                onChange={(e) => handleOverrides({ fontFamily: e.target.value })}
-                className="bg-transparent text-white text-sm font-medium border-none outline-none cursor-pointer hover:text-gold-400 transition-colors"
-                style={{ fontFamily: balloon.overrides?.fontFamily || 'Bangers' }}
-            >
-                <option value="Bangers" className="bg-zinc-800 text-white font-[Bangers]">Bangers</option>
-                <option value="Orbitron" className="bg-zinc-800 text-white font-[Orbitron]">Orbitron</option>
-                <option value="Roboto" className="bg-zinc-800 text-white font-[Roboto]">Roboto</option>
-            </select>
+            <FontSelect
+                value={balloon.overrides?.fontFamily || balloon.fontFamily || 'Bangers'}
+                onChange={(val) => handleOverrides({ fontFamily: val })}
+                allowCustom
+                selectClassName="bg-transparent text-white text-sm font-medium border-none outline-none cursor-pointer hover:text-gold-400 transition-colors"
+                inputClassName="ml-2 w-44 rounded-md border border-white/15 bg-black/30 px-2 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-gold-500/60"
+            />
 
             <div className="w-px h-6 bg-white/10" />
 
