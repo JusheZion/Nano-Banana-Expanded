@@ -2,17 +2,23 @@
 
 ## Phase 10: The "Obsidian Tech" UI Migration
 
-- [ ] **Top Ribbon Architecture**: Consolidate `Library`, `Layers`, `Pages`, `Settings`, and `Export` into a single, collapsible top ribbon.
-- [ ] **Iconification**: Replace text-heavy buttons with high-contrast icons.
-- [ ] **Universal Tooltips**: Implement Radix UI tooltips for every icon, tool, and button.
-- [ ] **Main Hub Update**:
-  - [ ] Add 5th photo link on the main page to the Comic Mode Portal.
-  - [ ] Collapse the main menu into a vertical icon strip (expands on hover).
-- [ ] **Theming**: Apply `#0F0F12` (BG), `#1A1A1E` (Surface), and `#00D1FF` (Cyan Accent) across the app.
+- [x] **Top Ribbon Architecture**: Consolidate `Library`, `Layers`, `Pages`, `Settings`, and `Export` into a single, collapsible top ribbon (`TopRibbon.tsx`).
+- [x] **Iconification**: Replace text-heavy buttons with high-contrast icons (lucide-react) across TopRibbon, TextToolbar, and ObjectToolbar.
+- [x] **Universal Tooltips**: Implement Radix UI tooltips for every icon, tool, and button.
+- [x] **Main Hub Update**:
+  - [x] Add 5th photo link on the main page to the Comic Mode Portal.
+  - [x] Collapse the main menu into a vertical icon strip (expands on hover).
+- [x] **Asset Library Sync**: Added 32 missing images from `public/assets/images/` to the Asset Library. Landing page cards now navigate to their respective portals.
+- [x] **Theming**: Apply `#0F0F12` (BG), `#1A1A1E` (Surface), and `#00D1FF` (Cyan Accent) across the app.
+- [x] **Stacking Side Panels**: Non-overlapping, collapsible right-side panel stack (`ComicPanelStack.tsx`) for Pages, Layers, Settings, and Assets with embedded mode.
+- [x] **Contextual Toolbars**: ObjectToolbar and TextToolbar rendered on full-width rows below ribbon instead of overlapping/clipping. TextToolbar split into compact ribbon variant and expanded options row.
+- [x] **Alphabetized Menus**: All dropdown menus sorted A-Z (fonts, textures, balloon styles, warp effects, fill modes, genres).
 
 ## Phase 11: Advanced Canvas & Geometry Logic
 
-- [ ] **Sub-Selection Logic**: Refactor `ComicPanel.tsx` to allow independent manipulation of the image (Content) vs. the Polygon (Frame).
+- [x] **Sub-Selection Prep**: Refactored `ComicPanel.tsx` with `contentMode` prop. When active, the Transformer attaches to the internal image (cyan handles) instead of the panel group (gold handles), enabling independent image manipulation.
+- [ ] **Sub-Selection UI**: Wire `contentMode` toggle into the ObjectToolbar or a keyboard shortcut so users can switch between Frame and Content modes.
+- [ ] **Sub-Selection Logic (full)**: Complete independent manipulation of the image (Content) vs. the Polygon (Frame) with full drag/scale/rotate persistence.
 - [ ] **Precision Snapping**: Moving vertices or sides must trigger snap alignment and grid guides in Cyber Cyan.
 - [ ] **Global Gutter Slider**: Convert the fixed 16px BSP gutter into a reactive slider in Project Settings.
 - [ ] **Page Styling**: Add options for Page Background Color and Background Image inserts.

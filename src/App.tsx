@@ -28,7 +28,7 @@ function App() {
 
   return (
     <AppShell activePortal={activePortal} setActivePortal={setActivePortal}>
-      {activePortal === 'home' && <LandingPage />}
+      {activePortal === 'home' && <LandingPage onNavigate={setActivePortal} />}
       {activePortal === 'studio' && (
         <div className="space-y-8">
           <CharacterStudio />

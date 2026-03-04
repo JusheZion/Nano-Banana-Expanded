@@ -1,9 +1,20 @@
 import React from 'react';
-import { Sparkles, ArrowRight, Layers, Zap } from 'lucide-react';
+import { Sparkles, ArrowRight, Layers, Zap, BookOpen } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
-export const LandingPage: React.FC = () => {
+type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
+
+interface LandingPageProps {
+    onNavigate?: (portal: Portal) => void;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     const { setTheme } = useTheme();
+
+    const handleCardClick = (portal: Portal, theme: string) => {
+        setTheme(theme);
+        onNavigate?.(portal);
+    };
 
     return (
         <div className="space-y-8 animate-fade-in p-8 pb-20">
@@ -38,10 +49,10 @@ export const LandingPage: React.FC = () => {
             </div>
 
             {/* Quick Access Grid - Jewel Tone Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
 
                 {/* Card 1: Studio (Teal) */}
-                <div onClick={() => setTheme('teal')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(55,97,93,0.5)] border border-white/5 hover:border-[#37615D]/50">
+                <div onClick={() => handleCardClick('studio', 'teal')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(55,97,93,0.5)] border border-white/5 hover:border-[#37615D]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/City%20of%20Aquarius.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#37615D]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
 
@@ -55,7 +66,7 @@ export const LandingPage: React.FC = () => {
                 </div>
 
                 {/* Card 2: Reference (Purple) */}
-                <div onClick={() => setTheme('purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(95,54,142,0.5)] border border-white/5 hover:border-[#5F368E]/50">
+                <div onClick={() => handleCardClick('reference', 'purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(95,54,142,0.5)] border border-white/5 hover:border-[#5F368E]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Aries%20Palace.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#5F368E]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
 
@@ -69,7 +80,7 @@ export const LandingPage: React.FC = () => {
                 </div>
 
                 {/* Card 3: Related (Purple/Crimson Mix) */}
-                <div onClick={() => setTheme('purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(137,55,65,0.5)] border border-white/5 hover:border-[#893741]/50">
+                <div onClick={() => handleCardClick('related', 'purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(137,55,65,0.5)] border border-white/5 hover:border-[#893741]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Anunnaki%20Sphinx.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#893741]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
 
@@ -83,7 +94,7 @@ export const LandingPage: React.FC = () => {
                 </div>
 
                 {/* Card 4: Photo Lab (Gold) */}
-                <div onClick={() => setTheme('gold')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border border-white/5 hover:border-[#D4AF37]/50">
+                <div onClick={() => handleCardClick('lab', 'gold')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border border-white/5 hover:border-[#D4AF37]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Aquarius%20Sphere.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#D4AF37]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
 
@@ -93,6 +104,20 @@ export const LandingPage: React.FC = () => {
                         </div>
                         <h3 className="text-2xl font-bold text-white mb-1 leading-none">Photo Lab</h3>
                         <p className="text-xs text-[#FFE57F] font-medium tracking-wide">EXPERIMENTAL</p>
+                    </div>
+                </div>
+
+                {/* Card 5: Comic Mode (Cyan/Obsidian) */}
+                <div onClick={() => handleCardClick('comic', 'obsidian')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(0,209,255,0.5)] border border-white/5 hover:border-[#00D1FF]/50">
+                    <div className="absolute inset-0 bg-[url('/assets/images/Aries%20In%20the%20Observatory.jpeg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#00D1FF]/30 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
+
+                    <div className="absolute bottom-0 left-0 p-6 w-full">
+                        <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#0F0F12] group-hover:border-[#00D1FF] transition-colors">
+                            <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Comic Mode</h3>
+                        <p className="text-xs text-[#00D1FF] font-medium tracking-wide">VISUAL STORYTELLING</p>
                     </div>
                 </div>
 

@@ -11,12 +11,15 @@ interface ComicPanelProps {
     onSelect: (e?: any) => void;
     onChange: (patch: Partial<Panel>) => void;
     onDragEnd?: (e?: any) => void;
+    /** When true, the Transformer targets the internal image (content mode) instead of the panel group (frame mode). */
+    contentMode?: boolean;
 }
 
-export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd }) => {
+export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd, contentMode }) => {
     const [imageObj] = useImage(panel.imageUrl || '', 'anonymous');
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
+    const imageRef = useRef<any>(null);
 
     useEffect(() => {
         if (groupRef.current) {
@@ -34,11 +37,14 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
     }, []);
 
     useEffect(() => {
-        if (isSelected && groupRef.current && trRef.current) {
-            trRef.current.nodes([groupRef.current]);
-            trRef.current.getLayer().batchDraw();
+        if (isSelected && trRef.current) {
+            const target = contentMode && imageRef.current ? imageRef.current : groupRef.current;
+            if (target) {
+                trRef.current.nodes([target]);
+                trRef.current.getLayer().batchDraw();
+            }
         }
-    }, [isSelected]);
+    }, [isSelected, contentMode]);
 
     const isPolygon = panel.shapeType === 'polygon' && panel.points && panel.points.length >= 3;
     const isEllipse = panel.shapeType === 'ellipse';
@@ -339,10 +345,30 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 <Group clipFunc={renderClipPath}>
                     {imageObj && (
                         <Image
+                            ref={imageRef}
                             image={imageObj}
-                            draggable
+                            draggable={!!contentMode}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
+                                if (contentMode) {
+                                    onChange({
+                                        imageOffsetX: e.target.x() - bboxMinX,
+                                        imageOffsetY: e.target.y() - bboxMinY,
+                                    });
+                                }
+                            }}
+                            onTransformEnd={() => {
+                                if (!contentMode || !imageRef.current) return;
+                                const node = imageRef.current;
+                                const sx = node.scaleX();
+                                const sy = node.scaleY();
+                                onChange({
+                                    imageOffsetX: node.x() - bboxMinX,
+                                    imageOffsetY: node.y() - bboxMinY,
+                                    imageScale: Math.max(sx, sy),
+                                });
+                                node.scaleX(sx);
+                                node.scaleY(sy);
                             }}
                             x={imgX}
                             y={imgY}
@@ -537,7 +563,6 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 })}
             </Group>
 
-            {/* Transformer for resizing the panel */}
             {isSelected && (
                 <Transformer
                     ref={trRef}
@@ -547,15 +572,19 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         }
                         return newBox;
                     }}
-                    borderStroke="#D4AF37"
-                    anchorStroke="#D4AF37"
-                    anchorFill="#37615D"
-                    anchorSize={16}
+                    borderStroke={contentMode ? '#00D1FF' : '#D4AF37'}
+                    anchorStroke={contentMode ? '#00D1FF' : '#D4AF37'}
+                    anchorFill={contentMode ? '#0F0F12' : '#37615D'}
+                    anchorSize={contentMode ? 10 : 16}
                     anchorCornerRadius={4}
-                    padding={10}
-                    rotateEnabled={false}
-                    keepRatio={isPolygon}
-                    enabledAnchors={isPolygon ? ['top-left', 'top-right', 'bottom-left', 'bottom-right'] : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']}
+                    padding={contentMode ? 0 : 10}
+                    rotateEnabled={!!contentMode}
+                    keepRatio={contentMode ? true : isPolygon}
+                    enabledAnchors={contentMode
+                        ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                        : isPolygon
+                            ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                            : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']}
                 />
             )}
         </React.Fragment>
