@@ -1,0 +1,45 @@
+# Implementation Plan - Comic Mode Scaffolding
+
+## Goal Description
+Scaffold the directory structure for the new "Comic Mode" and implement the initial files to support the "Dual-Mode Strategy" (Cinematic + Comic) as defined in the project documentation.
+
+## User Review Required
+> [!NOTE]
+> I will be creating a new top-level `modes` directory in `src` to house `comic` and `cinematic` (existing) logic, or just `comic` if cinematic is the default. Based on standard patterns, I'll place it in `src/modes/comic`.
+
+## Proposed Changes
+
+### Directory Structure
+#### [NEW] `src/modes/comic/engine`
+- Dedicated folder for Canvas logic and interaction handling.
+
+#### [NEW] `src/stores`
+- `comicStore.ts`: State management for Pages, Panels, and Bubbles.
+
+#### [EXISTING] `src/modes/comic/layouts`
+- `ComicLayout.tsx`: Updated to strictly enforce "Dark Jewel-Tone" glassmorphism (UI is dark, canvas paper is light).
+
+### File Implementation
+
+#### [NEW] [ComicCanvas.tsx](file:///Users/apoaaron/.gemini/antigravity/Nano%20Banana%20Expanded/src/modes/comic/engine/ComicCanvas.tsx)
+- Wrapper for the infinite drag-and-drop stage.
+
+#### [NEW] [InteractionLayer.tsx](file:///Users/apoaaron/.gemini/antigravity/Nano%20Banana%20Expanded/src/modes/comic/engine/InteractionLayer.tsx)
+- Handles selection, resizing, and layering of elements.
+
+#### [NEW] [comicStore.ts](file:///Users/apoaaron/.gemini/antigravity/Nano%20Banana%20Expanded/src/stores/comicStore.ts)
+- Zustand store for Comic Mode state.
+
+#### [MODIFY] [ComicLayout.tsx](file:///Users/apoaaron/.gemini/antigravity/Nano%20Banana%20Expanded/src/modes/comic/layouts/ComicLayout.tsx)
+- Ensure background is `bg-neutral-900` or darker.
+- UI elements must use glassmorphic jewel-tones.
+
+## Verification Plan
+
+### Automated Tests
+- None for this initial scaffolding.
+
+### Manual Verification
+- Verify directories are created.
+- Verify files exist.
+- (Future) Import `ComicLayout` into `App.tsx` or a route to verify it renders.

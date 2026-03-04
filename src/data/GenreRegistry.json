@@ -1,0 +1,126 @@
+{
+  "genres": [
+    {
+      "id": "afro-futurism",
+      "name": "Afrofuturism",
+      "typography": { "balloon": "Michroma", "effect": "Orbitron Bold", "size": 14 },
+      "palette": { "border": "#FFD700", "background": "#0A0A0F", "glow": "#00FF94" },
+      "uiAccent": "#FFD700",
+      "aiBias": "vibrant intricate patterns, advanced technology integrated with traditional motifs, golden hour lighting, hyper-detailed futuristic architecture, lush cosmic energy."
+    },
+    {
+      "id": "cyberpunk-neon",
+      "name": "Cyberpunk Neon",
+      "typography": { "balloon": "Exo 2", "effect": "Fascinate", "size": 13 },
+      "palette": { "border": "#00D1FF", "background": "#050505", "glow": "#FF00FF" },
+      "uiAccent": "#00D1FF",
+      "aiBias": "neon-drenched streets, rain-slicked pavement, high-tech low-life, cinematic volumetric lighting, cybernetic enhancements, holographic advertisements."
+    },
+    {
+      "id": "hardboiled-noir",
+      "name": "Hardboiled Noir",
+      "typography": { "balloon": "Courier Prime", "effect": "Special Elite", "size": 12 },
+      "palette": { "border": "#FFFFFF", "background": "#000000", "glow": "#444444" },
+      "uiAccent": "#FFFFFF",
+      "aiBias": "high-contrast monochrome, dramatic chiaroscuro lighting, heavy film grain, 1940s urban atmosphere, smoke-filled rooms, venetian blind shadows."
+    },
+    {
+      "id": "ethereal-fantasy",
+      "name": "Ethereal Fantasy",
+      "typography": { "balloon": "Almendra", "effect": "Cinzel Decorative", "size": 15 },
+      "palette": { "border": "#E0C097", "background": "#1B262C", "glow": "#B9F3FC" },
+      "uiAccent": "#E0C097",
+      "aiBias": "magical forest glades, floating islands, soft bioluminescent flora, ornate ancient architecture, wispy arcane energy, dreamlike atmosphere."
+    },
+    {
+      "id": "vaporwave-retro",
+      "name": "Vaporwave / 80s Retro",
+      "typography": { "balloon": "Varela Round", "effect": "Bungee Shade", "size": 14 },
+      "palette": { "border": "#FF71CE", "background": "#2D1B33", "glow": "#01CDFE" },
+      "uiAccent": "#FF71CE",
+      "aiBias": "pastel sunset gradients, low-poly aesthetics, 1980s retro-futurism, digital glitches, marble statues, palm tree silhouettes."
+    },
+    {
+      "id": "gritty-urban",
+      "name": "Gritty Urban / Street",
+      "typography": { "balloon": "Roboto Condensed", "effect": "Permanent Marker", "size": 13 },
+      "palette": { "border": "#333333", "background": "#121212", "glow": "#FF4500" },
+      "uiAccent": "#FF4500",
+      "aiBias": "modern city streets, graffiti-covered walls, overcast lighting, raw handheld camera feel, hyper-realistic urban textures, cinematic drama."
+    },
+    {
+      "id": "golden-age-heroic",
+      "name": "Golden Age Heroic",
+      "typography": { "balloon": "Bangers", "effect": "Luckiest Guy", "size": 16 },
+      "palette": { "border": "#000000", "background": "#FFFFFF", "glow": "#FFFF00" },
+      "uiAccent": "#E63946",
+      "aiBias": "bright primary colors, classic pop-art style, halftone dots, high-energy action poses, clean bold outlines, 1950s comic book aesthetic."
+    },
+    {
+      "id": "cosmic-horror",
+      "name": "Cosmic Horror",
+      "typography": { "balloon": "Creepster", "effect": "Nosifer", "size": 14 },
+      "palette": { "border": "#2D5A27", "background": "#0D0208", "glow": "#4A249D" },
+      "uiAccent": "#4A249D",
+      "aiBias": "unsettling surreal landscapes, non-euclidean geometry, deep sea depths, void-like darkness, strange tentacles, eldritch glowing runes."
+    }
+  ]{
+  "genres": [
+    {
+      "id": "celestial-romance",
+      "name": "Celestial Romance / Adventure",
+      "typography": { "balloon": "Quicksand", "effect": "Great Vibes", "size": 14 },
+      "palette": { "border": "#F8C8DC", "background": "#1A0B2E", "glow": "#FFD700" },
+      "uiAccent": "#F8C8DC",
+      "aiBias": "tasteful intimate atmosphere, soft starlight diffusion, ethereal nebula backgrounds, romantic cinematic lighting, glowing skin textures, epic scale architecture, warm and inviting color grade."
+    },
+    {
+      "id": "mythic-odyssey",
+      "name": "Mythic Odyssey",
+      "typography": { "balloon": "Cinzel", "effect": "Eagle Lake", "size": 15 },
+      "palette": { "border": "#C5A059", "background": "#0F1626", "glow": "#FF8C00" },
+      "uiAccent": "#C5A059",
+      "aiBias": "ancient deities and champions of color, ornate bronze and gold detailing, sun-drenched marble, Mediterranean horizons, heroic epic proportions, divine aura effects, classical grandeur."
+    },
+    {
+      "id": "solarpunk-optimism",
+      "name": "Solarpunk Optimism",
+      "typography": { "balloon": "Montserrat", "effect": "Comfortaa", "size": 14 },
+      "palette": { "border": "#7DCE13", "background": "#F0F2F0", "glow": "#5BB318" },
+      "uiAccent": "#7DCE13",
+      "aiBias": "verdant green architecture, harmonious technology and nature, bright natural daylight, inclusive communal spaces, utopian atmosphere, vibrant blue skies, lush vertical gardens."
+    },
+    {
+      "id": "psychic-mindscape",
+      "name": "Psychic Thriller / Surreal",
+      "typography": { "balloon": "Spectral", "effect": "Syncopate", "size": 13 },
+      "palette": { "border": "#9D44B5", "background": "#050005", "glow": "#00FFC2" },
+      "uiAccent": "#9D44B5",
+      "aiBias": "abstract geometric distortions, floating fragments of memory, shifting prismatic light, surreal dream logic, cerebral atmosphere, high-saturation color bleeds, ripples in reality."
+    },
+    {
+      "id": "retro-pulp",
+      "name": "Retro-Pulp Adventure",
+      "typography": { "balloon": "Bree Serif", "effect": "Alfa Slab One", "size": 14 },
+      "palette": { "border": "#8B4513", "background": "#F5DEB3", "glow": "#FFD700" },
+      "uiAccent": "#D2691E",
+      "aiBias": "1930s adventure aesthetic, aged parchment textures, deep jungle ruins, warm sepia undertones, dramatic action lighting, vintage film grain, bold globe-trotting heroism."
+    },
+    {
+      "id": "techno-arcane",
+      "name": "Techno-Arcane / Magic Tech",
+      "typography": { "balloon": "Teko", "effect": "Pirata One", "size": 14 },
+      "palette": { "border": "#4CC9F0", "background": "#10002B", "glow": "#7209B7" },
+      "uiAccent": "#4CC9F0",
+      "aiBias": "collision of sorcery and circuitry, glowing mana-pipes, runic holograms, dark mystical technology, deep indigo shadows, sparking magical energy, high-fantasy industrialism."
+    },
+    {
+      "id": "noir-romance",
+      "name": "Noir Romance",
+      "typography": { "balloon": "Playfair Display", "effect": "Sacramento", "size": 13 },
+      "palette": { "border": "#E63946", "background": "#121212", "glow": "#A8DADC" },
+      "uiAccent": "#E63946",
+      "aiBias": "moody low-light intimacy, rain-streaked windows, soft jazz club atmosphere, deep crimson accents, elegant silhouettes, soulful expressions, cinematic melancholy."
+    }
+  ]
+}

@@ -199,7 +199,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 y={panel.height / 2}
                                 radiusX={panel.width / 2 + gapMargin}
                                 radiusY={panel.height / 2 + gapMargin}
-                                stroke="#893741"
+                                stroke={panel.strokeColor || "#893741"}
                                 strokeWidth={strokeW}
                                 globalCompositeOperation="source-atop"
                             />
@@ -374,7 +374,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Line
                         points={panel.points!.flatMap(p => [p.x, p.y])}
                         closed
-                        stroke="#893741"
+                        stroke={panel.strokeColor || "#893741"}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />
@@ -384,7 +384,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         y={panel.height / 2}
                         radiusX={panel.width / 2}
                         radiusY={panel.height / 2}
-                        stroke="#893741"
+                        stroke={panel.strokeColor || "#893741"}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />
@@ -392,7 +392,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Rect
                         width={panel.width}
                         height={panel.height}
-                        stroke="#893741"
+                        stroke={panel.strokeColor || "#893741"}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />

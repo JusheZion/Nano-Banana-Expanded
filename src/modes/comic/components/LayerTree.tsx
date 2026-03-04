@@ -100,7 +100,9 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
 export const LayerTree: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-}> = ({ isOpen, onClose }) => {
+    /** When true, render only inner content for use inside ComicPanelStack (no fixed wrapper, no header). */
+    embedded?: boolean;
+}> = ({ isOpen, onClose, embedded }) => {
     const {
         pages,
         currentPageId,
@@ -143,7 +145,8 @@ export const LayerTree: React.FC<{
         }).filter(item => item !== null) as { id: string, name: string, type: 'panel' | 'balloon' | 'drawing', isLocked: boolean, isVisible: boolean }[];
     }, [currentPage]);
 
-    if (!isOpen || !currentPage) return null;
+    if (!currentPage) return null;
+    if (!isOpen && !embedded) return null;
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -153,19 +156,8 @@ export const LayerTree: React.FC<{
         }
     };
 
-    return (
-        <div className="absolute right-0 top-16 bottom-0 w-80 bg-obsidian/95 border-l border-white/10 backdrop-blur-md shadow-2xl z-40 flex flex-col transform transition-transform duration-300">
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/20">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-gold-400 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-gold-400 shadow-[0_0_8px_rgba(212,175,55,0.8)]" />
-                    Layers
-                </h2>
-                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors text-xl leading-none">
-                    &times;
-                </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+    const content = (
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-h-0">
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -203,7 +195,25 @@ export const LayerTree: React.FC<{
                         )}
                     </SortableContext>
                 </DndContext>
+        </div>
+    );
+
+    if (embedded) {
+        return <div className="flex flex-col flex-1 min-h-0 overflow-hidden">{content}</div>;
+    }
+
+    return (
+        <div className="absolute right-0 top-16 bottom-0 w-80 bg-[#1A1A1E] border-l border-white/[0.08] shadow-2xl z-40 flex flex-col">
+            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#0F0F12]/80">
+                <h2 className="text-sm font-bold uppercase tracking-widest text-[#00D1FF] flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-[#00D1FF]" />
+                    Layers
+                </h2>
+                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors text-xl leading-none">
+                    &times;
+                </button>
             </div>
+            {content}
         </div>
     );
 };

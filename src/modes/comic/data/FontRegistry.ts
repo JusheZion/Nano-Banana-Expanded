@@ -5,24 +5,20 @@ export type FontOption = {
 
 // Keep this list small + high-signal. Add more fonts as you actually load them in `index.html`.
 export const FONT_REGISTRY: FontOption[] = [
-  { label: 'Inter', value: 'Inter' },
   { label: 'Bangers', value: 'Bangers' },
-  { label: 'Orbitron', value: 'Orbitron' },
-  { label: 'Roboto', value: 'Roboto' },
-
-  // Common system fonts used across presets/styles
-  { label: 'Comic Sans MS', value: '"Comic Sans MS"' },
   { label: 'Chalkboard SE', value: '"Chalkboard SE"' },
-  { label: 'Impact', value: 'Impact' },
+  { label: 'Cinzel', value: 'Cinzel' },
+  { label: 'Comic Sans MS', value: '"Comic Sans MS"' },
   { label: 'Courier New', value: '"Courier New"' },
   { label: 'Georgia', value: 'Georgia' },
-  { label: 'Times New Roman', value: '"Times New Roman"' },
-
-  // Genre preset fonts (loaded via Google Fonts in many setups)
-  { label: 'Cinzel', value: 'Cinzel' },
+  { label: 'Impact', value: 'Impact' },
+  { label: 'Inter', value: 'Inter' },
+  { label: 'Orbitron', value: 'Orbitron' },
   { label: 'Playfair Display', value: '"Playfair Display"' },
   { label: 'Rajdhani', value: 'Rajdhani' },
+  { label: 'Roboto', value: 'Roboto' },
   { label: 'Share Tech Mono', value: '"Share Tech Mono"' },
+  { label: 'Times New Roman', value: '"Times New Roman"' },
 ];
 
 export function isKnownFontFamily(fontFamily: string | undefined | null): boolean {

@@ -5,9 +5,11 @@ import { Tooltip } from '../../../components/ui/Tooltip';
 interface PageNavigatorProps {
     isOpen: boolean;
     onClose: () => void;
+    /** When true, render only inner content for use inside ComicPanelStack (no fixed wrapper, no header). */
+    embedded?: boolean;
 }
 
-export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose }) => {
+export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose, embedded }) => {
     const {
         pages,
         currentPageId,
@@ -20,7 +22,7 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose })
         setLayoutMode
     } = useComicStore();
 
-    if (!isOpen) return null;
+    if (!isOpen && !embedded) return null;
 
     const handleMoveUp = (index: number) => {
         if (index === 0) return;
@@ -32,20 +34,8 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose })
         reorderPages(pages[index].id, pages[index + 1].id);
     };
 
-    return (
-        <div className="fixed top-16 right-0 h-[calc(100vh-64px)] w-72 bg-obsidian-dark/90 backdrop-blur-xl border-l border-white/10 flex flex-col z-40 shadow-2xl shadow-black/50 transform transition-transform">
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white tracking-wider flex items-center gap-2">
-                    <span className="text-gold-400">📄</span> PAGES
-                </h2>
-                <button
-                    onClick={onClose}
-                    className="w-8 h-8 rounded shrink-0 hover:bg-white/10 flex items-center justify-center text-white/50 transition-colors"
-                >
-                    ✕
-                </button>
-            </div>
-
+    const content = (
+        <>
             <div className="p-4 border-b border-white/10">
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-xs uppercase font-bold tracking-wider text-white/50">Layout Mode</span>
@@ -146,11 +136,32 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose })
             <div className="p-4 border-t border-white/10">
                 <button
                     onClick={addPage}
-                    className="w-full py-2 bg-gradient-to-r from-teal-700 to-teal-600 hover:from-teal-600 hover:to-teal-500 rounded text-sm text-white font-bold transition-colors shadow-lg shadow-teal-900/50"
+                    className="w-full py-2 bg-[#00D1FF]/20 hover:bg-[#00D1FF]/30 text-[#00D1FF] border border-[#00D1FF]/40 rounded text-sm font-bold transition-colors"
                 >
                     + Add New Page
                 </button>
             </div>
+        </>
+    );
+
+    if (embedded) {
+        return <div className="flex flex-col flex-1 min-h-0 overflow-hidden">{content}</div>;
+    }
+
+    return (
+        <div className="fixed top-16 right-0 h-[calc(100vh-64px)] w-72 bg-[#1A1A1E] border-l border-white/[0.08] flex flex-col z-40 shadow-2xl">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white tracking-wider flex items-center gap-2">
+                    <span className="text-[#00D1FF]">📄</span> PAGES
+                </h2>
+                <button
+                    onClick={onClose}
+                    className="w-8 h-8 rounded shrink-0 hover:bg-white/10 flex items-center justify-center text-white/50 transition-colors"
+                >
+                    ✕
+                </button>
+            </div>
+            {content}
         </div>
     );
 };

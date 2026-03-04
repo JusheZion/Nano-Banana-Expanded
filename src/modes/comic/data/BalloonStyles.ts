@@ -2,18 +2,69 @@ import type { BalloonStyle } from '../../../types/balloon';
 
 export const BALLOON_STYLES: BalloonStyle[] = [
     {
-        id: 'speech_round',
-        label: 'Round Speech',
-        kind: 'speech',
+        id: 'starburst_action',
+        label: 'Action Starburst',
+        kind: 'shout',
         fill: '#ffffff',
         stroke: '#000000',
         strokeWidth: 2,
+        fontFamily: 'Bangers',
+        fontSize: 24,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'straight'
+    },
+    {
+        id: 'double_burst',
+        label: 'Double Burst',
+        kind: 'shout',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontFamily: 'Bangers',
+        fontSize: 24,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'straight'
+    },
+    {
+        id: 'cloud_fluffy',
+        label: 'Fluffy Cloud',
+        kind: 'thought',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 4,
         fontFamily: 'Comic Sans MS',
-        fontSize: 20,
+        fontSize: 18,
         textColor: '#000000',
         hasTail: true,
-        tailStyle: 'straight',
-        cornerRadius: 999
+        tailStyle: 'bubbles'
+    },
+    {
+        id: 'cloud_fluffy_no_tail',
+        label: 'Fluffy Cloud (No Tail)',
+        kind: 'thought',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 4,
+        fontFamily: 'Comic Sans MS',
+        fontSize: 18,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'bubbles'
+    },
+    {
+        id: 'scream_jagged',
+        label: 'Jagged Scream',
+        kind: 'shout',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontFamily: 'Courier New',
+        fontSize: 20,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'spiky'
     },
     {
         id: 'speech_rounded_rectangle',
@@ -30,9 +81,35 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         cornerRadius: 15
     },
     {
-        id: 'thought_cloud',
-        label: 'Thought Cloud',
-        kind: 'thought',
+        id: 'narration_box',
+        label: 'Narration Box',
+        kind: 'narration',
+        fill: '#ffffcc',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontFamily: 'Georgia',
+        fontSize: 18,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'straight'
+    },
+    {
+        id: 'radio_electric',
+        label: 'Radio/Phone',
+        kind: 'speech',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontFamily: 'Courier New',
+        fontSize: 18,
+        textColor: '#000000',
+        hasTail: true,
+        tailStyle: 'spiky'
+    },
+    {
+        id: 'speech_round',
+        label: 'Round Speech',
+        kind: 'speech',
         fill: '#ffffff',
         stroke: '#000000',
         strokeWidth: 2,
@@ -40,7 +117,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         fontSize: 20,
         textColor: '#000000',
         hasTail: true,
-        tailStyle: 'curved'
+        tailStyle: 'straight',
+        cornerRadius: 999
     },
     {
         id: 'shout_spiky',
@@ -57,17 +135,30 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         spikiness: 0.5
     },
     {
-        id: 'narration_box',
-        label: 'Narration Box',
+        id: 'box_slanted',
+        label: 'Slanted Box',
         kind: 'narration',
-        fill: '#ffffcc',
+        fill: '#eeeeee',
         stroke: '#000000',
         strokeWidth: 2,
-        fontFamily: 'Georgia',
-        fontSize: 18,
+        fontFamily: 'Roboto',
+        fontSize: 16,
         textColor: '#000000',
         hasTail: false,
         tailStyle: 'straight'
+    },
+    {
+        id: 'thought_cloud',
+        label: 'Thought Cloud',
+        kind: 'thought',
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontFamily: 'Comic Sans MS',
+        fontSize: 20,
+        textColor: '#000000',
+        hasTail: true,
+        tailStyle: 'curved'
     },
     {
         id: 'whisper_dashed',
@@ -82,19 +173,6 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         hasTail: true,
         tailStyle: 'straight',
         cornerRadius: 999,
-    },
-    {
-        id: 'radio_electric',
-        label: 'Radio/Phone',
-        kind: 'speech',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: 'Courier New',
-        fontSize: 18,
-        textColor: '#000000',
-        hasTail: true,
-        tailStyle: 'spiky'
     },
     {
         id: 'sound_effect_action',
@@ -133,83 +211,5 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         secondaryTextStrokeWidth: 5,
         text3DExtrusion: 12,
         text3DExtrusionColor: '#cc0000'
-    },
-    {
-        id: 'cloud_fluffy',
-        label: 'Fluffy Cloud',
-        kind: 'thought',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 4,
-        fontFamily: 'Comic Sans MS',
-        fontSize: 18,
-        textColor: '#000000',
-        hasTail: true,
-        tailStyle: 'bubbles'
-    },
-    {
-        id: 'starburst_action',
-        label: 'Action Starburst',
-        kind: 'shout',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: 'Bangers',
-        fontSize: 24,
-        textColor: '#000000',
-        hasTail: false,
-        tailStyle: 'straight'
-    },
-    {
-        id: 'scream_jagged',
-        label: 'Jagged Scream',
-        kind: 'shout',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: 'Courier New',
-        fontSize: 20,
-        textColor: '#000000',
-        hasTail: false,
-        tailStyle: 'spiky'
-    },
-    {
-        id: 'box_slanted',
-        label: 'Slanted Box',
-        kind: 'narration',
-        fill: '#eeeeee',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: 'Roboto',
-        fontSize: 16,
-        textColor: '#000000',
-        hasTail: false,
-        tailStyle: 'straight'
-    },
-    {
-        id: 'cloud_fluffy_no_tail',
-        label: 'Fluffy Cloud (No Tail)',
-        kind: 'thought',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 4,
-        fontFamily: 'Comic Sans MS',
-        fontSize: 18,
-        textColor: '#000000',
-        hasTail: false,
-        tailStyle: 'bubbles'
-    },
-    {
-        id: 'double_burst',
-        label: 'Double Burst',
-        kind: 'shout',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: 'Bangers',
-        fontSize: 24,
-        textColor: '#000000',
-        hasTail: false,
-        tailStyle: 'straight'
     }
 ];

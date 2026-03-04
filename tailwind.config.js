@@ -11,7 +11,9 @@ export default {
                     DEFAULT: '#893741',
                     900: '#5A1A23',
                 },
-                obsidian: '#0F0F12', // Added from DESIGN.md
+                obsidian: '#0F0F12',
+                'obsidian-surface': '#1A1A1E',
+                'obsidian-accent': '#00D1FF',
                 teal: {
                     DEFAULT: '#37615D',
                     300: '#5C9E97',

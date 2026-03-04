@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Line, Line as KonvaLine, Group } from 'react-konva';
+import { jsPDF } from 'jspdf';
 import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
@@ -254,21 +255,67 @@ export const ComicCanvas: React.FC = () => {
     };
 
     // Export Logic
-    const exportTrigger = useComicStore(state => state.exportTrigger);
+    const exportFormat = useComicStore(state => state.exportFormat);
+    const clearExport = useComicStore(state => state.clearExport);
+
     useEffect(() => {
-        if (exportTrigger > 0 && stageRef.current) {
+        if (exportFormat && stageRef.current) {
             clearSelection();
-            setTimeout(() => {
-                const uri = stageRef.current.toDataURL({ pixelRatio: 3 });
-                const link = document.createElement('a');
-                link.download = `NanoBanana_Comic_${new Date().toISOString().split('T')[0]}.png`;
-                link.href = uri;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+
+            // Allow React to flush the clearSelection before capturing
+            setTimeout(async () => {
+                if (!stageRef.current) return;
+
+                if (exportFormat === 'png') {
+                    // Export just the current page high-res
+                    const currentPageIndex = pages.findIndex(p => p.id === currentPageId);
+                    const idx = currentPageIndex >= 0 ? currentPageIndex : 0;
+                    const offset = getLayoutPosition(idx, layoutMode);
+
+                    const uri = stageRef.current.toDataURL({
+                        x: offset.x * zoomLevel,
+                        y: offset.y * zoomLevel,
+                        width: 800 * zoomLevel,
+                        height: 1200 * zoomLevel,
+                        pixelRatio: 3.125 / zoomLevel // ensure pixelRatio counters current zoom to always be precisely 3.125 relative to base 800x1200
+                    });
+
+                    const link = document.createElement('a');
+                    link.download = `NanoBanana_Page_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
+                    link.href = uri;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else if (exportFormat === 'pdf') {
+                    // Export all pages into a high-res PDF
+                    // 800x1200 pixels -> 8.33" x 12.5" at 300 DPI
+                    const pdf = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'in',
+                        format: [8.33, 12.5]
+                    });
+
+                    for (let i = 0; i < pages.length; i++) {
+                        if (i > 0) pdf.addPage([8.33, 12.5], 'portrait');
+
+                        const offset = getLayoutPosition(i, layoutMode);
+                        const uri = stageRef.current.toDataURL({
+                            x: offset.x * zoomLevel,
+                            y: offset.y * zoomLevel,
+                            width: 800 * zoomLevel,
+                            height: 1200 * zoomLevel,
+                            pixelRatio: 3.125 / zoomLevel
+                        });
+
+                        pdf.addImage(uri, 'PNG', 0, 0, 8.33, 12.5);
+                    }
+
+                    pdf.save(`NanoBanana_ComicBook_${new Date().toISOString().split('T')[0]}.pdf`);
+                }
+                clearExport();
             }, 100);
         }
-    }, [exportTrigger]);
+    }, [exportFormat, pages, currentPageId, layoutMode, zoomLevel, clearExport, clearSelection]);
 
     const handleInsertImage = () => {
         if (selectedElementIds.length > 0) {

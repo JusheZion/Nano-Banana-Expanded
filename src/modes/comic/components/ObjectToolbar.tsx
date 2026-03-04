@@ -168,9 +168,37 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                 </Tooltip>
             </div>
 
-            {/* FX Controls (Panels Only) */}
+            {/* Border & FX Controls (Panels Only) */}
             {hasPanels && (
                 <div className="flex items-center gap-2 border-r border-white/10 pr-2 mr-2">
+                    {/* Border Color */}
+                    <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-1">
+                        <Tooltip content="Border Color">
+                            <div className="relative group">
+                                <input
+                                    type="color"
+                                    value={selectedPanels[0]?.strokeColor || '#893741'}
+                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { strokeColor: e.target.value }))}
+                                    className="w-6 h-6 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer p-0 bg-transparent"
+                                />
+                            </div>
+                        </Tooltip>
+
+                        <Tooltip content="Apply Border Color to All Panels">
+                            <button
+                                onClick={() => {
+                                    const c = selectedPanels[0]?.strokeColor || '#893741';
+                                    pages.forEach(pg => {
+                                        pg.panels.forEach(p => updatePanel(pg.id, p.id, { strokeColor: c }));
+                                    });
+                                }}
+                                className="px-2 py-1 hover:bg-red-500/20 rounded text-red-400 font-bold text-[10px] uppercase tracking-wider transition-colors"
+                            >
+                                All
+                            </button>
+                        </Tooltip>
+                    </div>
+
                     <Tooltip content="Shadow Color">
                         <div className="relative group">
                             <input
@@ -340,10 +368,10 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                         className="bg-zinc-800 text-white text-[10px] font-medium border border-white/20 rounded px-1 min-w-[60px] outline-none cursor-pointer"
                         title="Image Fill Mode"
                     >
-                        <option value="cover">Cover</option>
-                        <option value="stretch">Stretch</option>
                         <option value="center">Center</option>
+                        <option value="cover">Cover</option>
                         <option value="decal">Decal</option>
+                        <option value="stretch">Stretch</option>
                     </select>
 
                     {selectedPanels[0]?.imageFillMode === 'decal' && (

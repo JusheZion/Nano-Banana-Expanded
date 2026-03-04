@@ -23,16 +23,19 @@ const ASSETS = [
 interface AssetLibraryProps {
     isOpen: boolean;
     onClose: () => void;
+    /** When true, render only inner content for use inside ComicPanelStack (no wrapper, no header). */
+    embedded?: boolean;
 }
 
-export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) => {
+export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, embedded }) => {
     const {
         currentPageId,
         selectedElementIds,
         updatePanel,
         addPanel,
         pages,
-        projectSettings
+        projectSettings,
+        currentGenreId
     } = useComicStore();
 
     const handleAssetClick = (assetUrl: string) => {
@@ -88,7 +91,8 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
 
         const finalPrompt = generatePrompt(promptToUse, {
             inclusiveBiasEnabled: projectSettings?.inclusiveBiasEnabled ?? true,
-            demographicFocus: projectSettings?.demographicFocus ?? ''
+            demographicFocus: projectSettings?.demographicFocus ?? '',
+            currentGenreId
         });
 
         console.group('[MOCK AI]');
@@ -102,28 +106,18 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
         handleAssetClick(randomAsset);
     };
 
-    return (
-        <div
-            className={`absolute top-0 right-0 h-full w-80 bg-obsidian-dark border-l border-white/10 shadow-2xl transition-transform duration-300 transform z-20 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
-                }`}
-        >
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-obsidian/50 backdrop-blur-md">
-                <h2 className="text-white font-bold tracking-wide">ASSET LIBRARY</h2>
-                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
-                    ✕
-                </button>
-            </div>
-
-            <div className="p-4 border-b border-white/5">
+    const content = (
+        <>
+            <div className="p-4 border-b border-white/[0.08] shrink-0">
                 <button
+                    type="button"
                     onClick={handleMockAIGenerate}
-                    className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-lg shadow-lg shadow-purple-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-[#00D1FF]/20 hover:bg-[#00D1FF]/30 text-[#00D1FF] border border-[#00D1FF]/40 font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                     <span className="text-xl">✨</span> Mock Generate Image
                 </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4 pb-20 columns-2 gap-3 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 pb-20 columns-2 gap-3 space-y-3 min-h-0 custom-scrollbar">
                 {ASSETS.map((asset, index) => (
                     <button
                         key={index}
@@ -144,6 +138,25 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose }) =
                     </button>
                 ))}
             </div>
+        </>
+    );
+
+    if (embedded) {
+        return <div className="flex flex-col flex-1 min-h-0 overflow-hidden">{content}</div>;
+    }
+
+    return (
+        <div
+            className={`absolute top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-[#1A1A1E] border-l border-white/[0.08] shadow-2xl transition-transform duration-300 transform z-20 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
+        >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#0F0F12]/80">
+                <h2 className="text-white font-bold tracking-wide">ASSET LIBRARY</h2>
+                <button type="button" onClick={onClose} className="text-white/50 hover:text-white transition-colors">
+                    ✕
+                </button>
+            </div>
+            {content}
         </div>
     );
 };

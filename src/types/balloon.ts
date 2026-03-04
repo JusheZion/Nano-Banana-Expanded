@@ -87,6 +87,7 @@ export interface BalloonInstance {
 
     styleId: BalloonStyleId;
     overrides?: BalloonOverrides;
+    fontFamily?: string;
 
     text: string;
     autoSize?: boolean;

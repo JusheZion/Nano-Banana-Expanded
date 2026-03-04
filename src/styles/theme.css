@@ -9,6 +9,12 @@
   --color-purple: #5F368E;
   --color-gold: #D4AF37;
 
+  /* Obsidian Tech (Phase 10) */
+  --obsidian-bg: #0F0F12;
+  --obsidian-surface: #1A1A1E;
+  --obsidian-accent: #00D1FF;
+  --obsidian-border: rgba(255, 255, 255, 0.08);
+
   /* Glass Effects */
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-bg: rgba(255, 255, 255, 0.05);

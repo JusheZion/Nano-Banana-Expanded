@@ -4,9 +4,11 @@ import { useComicStore } from '../../../stores/comicStore';
 interface ProjectSettingsSidebarProps {
     isOpen: boolean;
     onClose: () => void;
+    /** When true, render only inner content for use inside ComicPanelStack (no wrapper, no header). */
+    embedded?: boolean;
 }
 
-export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ isOpen, onClose }) => {
+export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ isOpen, onClose, embedded }) => {
     // We will just store prompt settings in local state for this mock, 
     // or expand the comicStore to hold "projectSettings".
     // Since Phase 6 focuses on Mock Generation, let's keep it simple.
@@ -19,19 +21,8 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         updateProjectSettings
     } = useComicStore();
 
-    return (
-        <div
-            className={`absolute top-0 right-0 h-full w-80 bg-obsidian-dark border-l border-white/10 shadow-2xl transition-transform duration-300 transform z-30 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
-                }`}
-        >
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-obsidian/50 backdrop-blur-md">
-                <h2 className="text-white font-bold tracking-wide">PROJECT SETTINGS</h2>
-                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
-                    ✕
-                </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+    const content = (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
                 <div>
                     <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">AI Generation Settings</h3>
 
@@ -63,6 +54,24 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                     </div>
                 </div>
             </div>
+    );
+
+    if (embedded) {
+        return <div className="flex flex-col flex-1 min-h-0 overflow-hidden">{content}</div>;
+    }
+
+    return (
+        <div
+            className={`absolute top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-[#1A1A1E] border-l border-white/[0.08] shadow-2xl transition-transform duration-300 transform z-30 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
+        >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#0F0F12]/80">
+                <h2 className="text-white font-bold tracking-wide">PROJECT SETTINGS</h2>
+                <button onClick={onClose} className="text-white/50 hover:text-white transition-colors">
+                    ✕
+                </button>
+            </div>
+            {content}
         </div>
     );
 };

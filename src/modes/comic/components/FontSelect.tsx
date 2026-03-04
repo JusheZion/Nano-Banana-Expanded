@@ -5,19 +5,22 @@ interface FontSelectProps {
   value?: string | null;
   onChange: (value: string) => void;
   allowCustom?: boolean;
+  /** When true, select and custom input are on one row (for ribbon/toolbar). */
+  compact?: boolean;
   selectClassName?: string;
   inputClassName?: string;
 }
 
 /**
  * Shared font picker for the Comic Studio.
- * - Uses FONT_REGISTRY for known fonts.
- * - When allowCustom is true, exposes a "Custom…" option and optional freeform input.
+ * - Uses FONT_REGISTRY for known fonts; type to narrow or pick from list.
+ * - When allowCustom is true, exposes "Custom…" and a freeform input (inline when compact).
  */
 export const FontSelect: React.FC<FontSelectProps> = ({
   value,
   onChange,
   allowCustom = true,
+  compact = false,
   selectClassName,
   inputClassName
 }) => {
@@ -26,7 +29,7 @@ export const FontSelect: React.FC<FontSelectProps> = ({
   const selectValue = known ? current : (allowCustom ? '__custom' : current);
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className={compact ? 'flex items-center gap-1.5 min-w-0' : 'flex flex-col gap-1'}>
       <select
         value={selectValue}
         onChange={(e) => {
@@ -64,7 +67,7 @@ export const FontSelect: React.FC<FontSelectProps> = ({
           onChange={(e) => onChange(e.target.value)}
           className={
             inputClassName ||
-            'mt-1 w-full rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-gold-500/60'
+            'rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-gold-500/60 min-w-0'
           }
           placeholder='e.g. "Cinzel", serif'
           aria-label="Custom font family"
