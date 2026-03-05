@@ -1,8 +1,8 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Group, Rect, Image, Transformer, Line, Circle, Ellipse } from 'react-konva';
 import useImage from 'use-image';
 import { useComicStore, type Panel } from '../../../stores/comicStore';
-import { getSnapLines, getVertexSnapLines } from '../utils/snapping';
+import { getVertexSnapLines, getGutterAwareSnapLines, type DiagonalGuide, type SnapLine } from '../utils/snapping';
 import { getTextureUrl } from '../data/TextureRegistry';
 
 interface ComicPanelProps {
@@ -11,15 +11,18 @@ interface ComicPanelProps {
     onSelect: (e?: any) => void;
     onChange: (patch: Partial<Panel>) => void;
     onDragEnd?: (e?: any) => void;
-    /** When true, the Transformer targets the internal image (content mode) instead of the panel group (frame mode). */
-    contentMode?: boolean;
+    /** Callback to push diagonal guide lines up to the canvas overlay layer. */
+    onDiagonalGuides?: (guides: DiagonalGuide[]) => void;
+    /** Callback for H/V vertex snap lines (rendered separately from diagonals). */
+    onVertexSnap?: (lines: SnapLine[]) => void;
 }
 
-export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd, contentMode }) => {
+export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd, onDiagonalGuides, onVertexSnap }) => {
     const [imageObj] = useImage(panel.imageUrl || '', 'anonymous');
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
     const imageRef = useRef<any>(null);
+    const [isContentMode, setIsContentMode] = useState(false);
 
     useEffect(() => {
         if (groupRef.current) {
@@ -37,14 +40,23 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
     }, []);
 
     useEffect(() => {
-        if (isSelected && trRef.current) {
-            const target = contentMode && imageRef.current ? imageRef.current : groupRef.current;
+        if (!isSelected) {
+            setIsContentMode(false);
+            return;
+        }
+        if (trRef.current) {
+            const target = isContentMode && imageRef.current ? imageRef.current : groupRef.current;
             if (target) {
                 trRef.current.nodes([target]);
                 trRef.current.getLayer().batchDraw();
             }
         }
-    }, [isSelected, contentMode]);
+    }, [isSelected, isContentMode]);
+
+    const handleDoubleClick = useCallback(() => {
+        if (!isSelected || !panel.imageUrl) return;
+        setIsContentMode(prev => !prev);
+    }, [isSelected, panel.imageUrl]);
 
     const isPolygon = panel.shapeType === 'polygon' && panel.points && panel.points.length >= 3;
     const isEllipse = panel.shapeType === 'ellipse';
@@ -131,14 +143,15 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 listening={panel.isLocked !== true}
                 onClick={onSelect}
                 onTap={onSelect}
+                onDblClick={handleDoubleClick}
+                onDblTap={handleDoubleClick}
                 dragBoundFunc={(pos) => {
-                    // Extract siblings from the store for snapping
                     const state = useComicStore.getState();
                     const currentPage = state.pages.find(p => p.id === state.currentPageId);
                     if (!currentPage) return pos;
 
                     const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
-                    const { newX, newY } = getSnapLines(
+                    const { newX, newY } = getGutterAwareSnapLines(
                         pos.x,
                         pos.y,
                         panel.width,
@@ -147,7 +160,6 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         panel.id
                     );
 
-                    // Return the snapped position to strictly lock the element on canvas
                     return { x: newX, y: newY };
                 }}
                 onDragMove={(e) => {
@@ -347,10 +359,10 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         <Image
                             ref={imageRef}
                             image={imageObj}
-                            draggable={!!contentMode}
+                            draggable={isContentMode}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                if (contentMode) {
+                                if (isContentMode) {
                                     onChange({
                                         imageOffsetX: e.target.x() - bboxMinX,
                                         imageOffsetY: e.target.y() - bboxMinY,
@@ -358,7 +370,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 }
                             }}
                             onTransformEnd={() => {
-                                if (!contentMode || !imageRef.current) return;
+                                if (!isContentMode || !imageRef.current) return;
                                 const node = imageRef.current;
                                 const sx = node.scaleX();
                                 const sy = node.scaleY();
@@ -441,32 +453,24 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             const currentPage = state.pages.find(p => p.id === state.currentPageId);
                             if (!currentPage) return pos;
 
-                            // Konva's dragBoundFunc provides 'pos' as the ABSOLUTE stage coordinates.
                             const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
+                            const result = getVertexSnapLines(pos.x, pos.y, siblings, panel.id);
+                            onVertexSnap?.(result.snapLines);
+                            onDiagonalGuides?.(result.diagonalGuides);
 
-                            const { newX, newY } = getVertexSnapLines(
-                                pos.x,
-                                pos.y,
-                                siblings,
-                                panel.id // Don't snap to itself
-                            );
-
-                            // Return absolute snapped position
-                            return { x: newX, y: newY };
+                            return { x: result.newX, y: result.newY };
                         }}
                         onDragMove={(e) => {
                             e.cancelBubble = true;
                             const newPoints = [...panel.points!];
                             newPoints[i] = { x: e.target.x(), y: e.target.y() };
-
-                            // We bypass drawing visual snap lines during point drag because
-                            // passing them up to Canvas requires changing the Panel type to accommodate `isPointDrag`.
-                            // So we just rely on the physical magnet feeling of dragBoundFunc above.
                             onChange({ points: newPoints });
                         }}
                         onDragStart={(e) => { e.cancelBubble = true; }}
                         onDragEnd={(e) => {
                             e.cancelBubble = true;
+                            onVertexSnap?.([]);
+                            onDiagonalGuides?.([]);
                             if (onDragEnd) onDragEnd();
                         }}
                         onMouseDown={(e) => { e.cancelBubble = true; }}
@@ -522,9 +526,11 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                     const currentPage = state.pages.find(p => p.id === state.currentPageId);
                                     if (currentPage) {
                                         const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
-                                        const { newX, newY } = getVertexSnapLines(pos.x, pos.y, siblings, panel.id);
-                                        const snapDx = newX - startPos.x;
-                                        const snapDy = newY - startPos.y;
+                                        const result = getVertexSnapLines(pos.x, pos.y, siblings, panel.id);
+                                        onVertexSnap?.(result.snapLines);
+                                        onDiagonalGuides?.(result.diagonalGuides);
+                                        const snapDx = result.newX - startPos.x;
+                                        const snapDy = result.newY - startPos.y;
                                         newPoints[i] = { x: startPoints[i].x + snapDx, y: startPoints[i].y + snapDy };
                                         newPoints[nextIndex] = { x: startPoints[nextIndex].x + snapDx, y: startPoints[nextIndex].y + snapDy };
                                     } else {
@@ -537,9 +543,10 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             }}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                // Cleanup tracking attributes
                                 (e.target as any).setAttr('startPos', null);
                                 (e.target as any).setAttr('startPoints', null);
+                                onVertexSnap?.([]);
+                                onDiagonalGuides?.([]);
                                 if (onDragEnd) onDragEnd();
                             }}
                             onMouseDown={(e) => {
@@ -572,15 +579,15 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         }
                         return newBox;
                     }}
-                    borderStroke={contentMode ? '#00D1FF' : '#D4AF37'}
-                    anchorStroke={contentMode ? '#00D1FF' : '#D4AF37'}
-                    anchorFill={contentMode ? '#0F0F12' : '#37615D'}
-                    anchorSize={contentMode ? 10 : 16}
+                    borderStroke={isContentMode ? '#00D1FF' : '#D4AF37'}
+                    anchorStroke={isContentMode ? '#00D1FF' : '#D4AF37'}
+                    anchorFill={isContentMode ? '#0F0F12' : '#37615D'}
+                    anchorSize={isContentMode ? 10 : 16}
                     anchorCornerRadius={4}
-                    padding={contentMode ? 0 : 10}
-                    rotateEnabled={!!contentMode}
-                    keepRatio={contentMode ? true : isPolygon}
-                    enabledAnchors={contentMode
+                    padding={isContentMode ? 0 : 10}
+                    rotateEnabled={isContentMode}
+                    keepRatio={isContentMode ? true : isPolygon}
+                    enabledAnchors={isContentMode
                         ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
                         : isPolygon
                             ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']

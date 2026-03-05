@@ -6,7 +6,7 @@ import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { splitConvexPolygon } from '../utils/geometry';
-import { getSnapLines, type SnapLine } from '../utils/snapping';
+import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
 
 // Placeholder for image URL
@@ -78,8 +78,9 @@ export const ComicCanvas: React.FC = () => {
     // Multi-Select Marquee
     const [selectionBox, setSelectionBox] = React.useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
 
-    // Snapping Guides
+    // Snapping Guides — single state for both panel-drag and vertex-drag H/V guides
     const [snapLines, setSnapLines] = React.useState<{ lines: SnapLine[], offset: { x: number, y: number } }>({ lines: [], offset: { x: 0, y: 0 } });
+    const [diagonalGuides, setDiagonalGuides] = React.useState<{ guides: DiagonalGuide[], offset: { x: number, y: number } }>({ guides: [], offset: { x: 0, y: 0 } });
 
     if (!pages || pages.length === 0) return <div className="text-white p-4">Loading Comic Engine...</div>;
 
@@ -183,7 +184,7 @@ export const ComicCanvas: React.FC = () => {
     };
 
     const handleStageMouseUp = () => {
-        setSnapLines({ lines: [], offset: { x: 0, y: 0 } }); // Ensure they disappear
+        setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
 
         if (isKnifeMode && knifeStart && knifeCurrent) {
             performKnifeSplit(knifeStart, knifeCurrent);
@@ -514,7 +515,12 @@ export const ComicCanvas: React.FC = () => {
                                                             setSnapLines({ lines: snapLines, offset });
                                                         }
                                                     }}
-                                                    onDragEnd={() => setSnapLines({ lines: [], offset: { x: 0, y: 0 } })}
+                                                    onDragEnd={() => {
+                                                        setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
+                                                        setDiagonalGuides({ guides: [], offset: { x: 0, y: 0 } });
+                                                    }}
+                                                    onDiagonalGuides={(guides) => setDiagonalGuides({ guides, offset })}
+                                                    onVertexSnap={(lines) => setSnapLines({ lines, offset })}
                                                 />
                                             );
                                         }
@@ -590,18 +596,40 @@ export const ComicCanvas: React.FC = () => {
                             />
                         )}
 
-                        {/* Rendering the SnapLines on the topmost layer relative to their spawning page */}
-                        {snapLines.lines.map((line, i) => (
+                        {/* H/V snap guides — shared by panel drag and vertex/edge drag */}
+                        {snapLines.lines.map((line, i) => {
+                            const isVertical = line.axis === 'x';
+                            const pos = line.position;
+                            return (
+                                <KonvaLine
+                                    key={`snap-${i}`}
+                                    points={
+                                        isVertical
+                                            ? [pos + snapLines.offset.x, 0, pos + snapLines.offset.x, 3000]
+                                            : [0, pos + snapLines.offset.y, 3000, pos + snapLines.offset.y]
+                                    }
+                                    stroke="#00D1FF"
+                                    strokeWidth={1}
+                                    dash={[4, 4]}
+                                    listening={false}
+                                />
+                            );
+                        })}
+
+                        {/* Diagonal guides (angled edge proximity) */}
+                        {diagonalGuides.guides.map((g, i) => (
                             <KonvaLine
-                                key={`snap-${i}`}
-                                points={
-                                    line.axis === 'x'
-                                        ? [line.position + snapLines.offset.x, snapLines.offset.y, line.position + snapLines.offset.x, snapLines.offset.y + 1200]
-                                        : [snapLines.offset.x, line.position + snapLines.offset.y, snapLines.offset.x + 800, line.position + snapLines.offset.y]
-                                }
-                                stroke="#D4AF37"
+                                key={`diag-${i}`}
+                                points={[
+                                    g.x1 + diagonalGuides.offset.x,
+                                    g.y1 + diagonalGuides.offset.y,
+                                    g.x2 + diagonalGuides.offset.x,
+                                    g.y2 + diagonalGuides.offset.y,
+                                ]}
+                                stroke="#00D1FF"
                                 strokeWidth={1}
-                                dash={[5, 5]}
+                                dash={[4, 4]}
+                                listening={false}
                             />
                         ))}
                     </Layer>

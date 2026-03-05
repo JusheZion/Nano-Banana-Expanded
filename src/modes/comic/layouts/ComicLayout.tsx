@@ -287,7 +287,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   ) : null;
 
   return (
-    <div className="comic-layout flex flex-col min-h-screen bg-[#0F0F12] text-white relative overflow-hidden">
+    <div className="comic-layout flex flex-col h-screen bg-[#0F0F12] text-white relative overflow-hidden">
       {/* Subtle Obsidian Tech accent glow */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-[#00D1FF]/5 rounded-full blur-3xl pointer-events-none" />
 

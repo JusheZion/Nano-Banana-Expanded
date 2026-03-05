@@ -16,10 +16,9 @@
 
 ## Phase 11: Advanced Canvas & Geometry Logic
 
-- [x] **Sub-Selection Prep**: Refactored `ComicPanel.tsx` with `contentMode` prop. When active, the Transformer attaches to the internal image (cyan handles) instead of the panel group (gold handles), enabling independent image manipulation.
-- [ ] **Sub-Selection UI**: Wire `contentMode` toggle into the ObjectToolbar or a keyboard shortcut so users can switch between Frame and Content modes.
-- [ ] **Sub-Selection Logic (full)**: Complete independent manipulation of the image (Content) vs. the Polygon (Frame) with full drag/scale/rotate persistence.
-- [ ] **Precision Snapping**: Moving vertices or sides must trigger snap alignment and grid guides in Cyber Cyan.
+- [x] **Sub-Selection (Content Mode)**: `ComicPanel.tsx` now owns internal `isContentMode` state, toggled via **double-click**. When active, the Konva Transformer attaches to the internal image (cyan handles, rotation enabled) instead of the panel group (gold handles). Deselecting the panel auto-resets to frame mode.
+- [x] **Precision Snapping (Gutter-Aware)**: `getGutterAwareSnapLines()` in `snapping.ts` snaps panel edges to siblings AND to positions exactly one gutter-width (16px) away from sibling edges, enabling consistent gutter alignment.
+- [x] **Diagonal Ray-Casting**: When polygon vertices are dragged, `getVertexSnapLines()` computes edge slopes of all siblings via `calculateSlope()` and projects dashed Cyber Cyan (#00D1FF) guide rays along matching angles. Guides render on the canvas overlay layer and clear on drag end.
 - [ ] **Global Gutter Slider**: Convert the fixed 16px BSP gutter into a reactive slider in Project Settings.
 - [ ] **Page Styling**: Add options for Page Background Color and Background Image inserts.
 - [ ] **Asset Expansion**: Allow "Import Image Objects" outside of panels (for custom sound FX and overlays).
@@ -48,5 +47,11 @@
 - [ ] **Layer Checkboxes**: Fix unresponsive visibility/lock toggles in the Layer menu.
 
 ---
+
+## Phase 14: Settings & Performance (Future)
+
+- [ ] **Snap Sensitivity Slider**: Add a slider to Settings to adjust the magnetic "pull" of guides.
+- [ ] **High-Performance Toggle**: Option to disable heavy guidelines for complex multi-page spreads.
+- [ ] **Export Preview**: Add a quick low-res preview modal before triggering the 300DPI export.
 
 *Refer to the current codebase to ensure these plans are accurate for our Konva/React/Zustand setup.*
