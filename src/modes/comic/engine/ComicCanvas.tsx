@@ -1,10 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { Stage, Layer, Rect, Line, Line as KonvaLine, Group } from 'react-konva';
+import { Stage, Layer, Rect, Line, Line as KonvaLine, Group, Image } from 'react-konva';
+import useImage from 'use-image';
 import { jsPDF } from 'jspdf';
 import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
+import { FloatingAsset } from '../components/FloatingAsset';
 import { splitConvexPolygon } from '../utils/geometry';
 import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
@@ -44,6 +46,7 @@ export const ComicCanvas: React.FC = () => {
         selectedElementIds,
         layoutMode,
         zoomLevel,
+        pageSettings,
         selectPage,
         setSelectedElements,
         toggleSelection,
@@ -52,6 +55,7 @@ export const ComicCanvas: React.FC = () => {
         addPanel,
         addBalloon,
         updateBalloon,
+        updateOverlay,
 
         // Drawing Mode
         isDrawingMode,
@@ -63,6 +67,7 @@ export const ComicCanvas: React.FC = () => {
         removeElement
     } = useComicStore();
 
+    const [bgImage] = useImage(pageSettings?.backgroundImage ?? '', 'anonymous');
     const currentPage = pages.find(p => p.id === currentPageId) || pages[0];
 
     // Local state for drawing
@@ -467,22 +472,36 @@ export const ComicCanvas: React.FC = () => {
                     <Layer name="layer-background">
                         {pages.map((page, i) => {
                             const offset = getLayoutPosition(i, layoutMode);
+                            const fill = pageSettings?.backgroundColor ?? page.background ?? 'white';
                             return (
-                                <Rect
-                                    key={`bg-${page.id}`}
-                                    name="background-rect"
-                                    x={offset.x}
-                                    y={offset.y}
-                                    width={800}
-                                    height={1200}
-                                    fill={page.background || "white"}
-                                    shadowColor={currentPageId === page.id ? "#3B82F6" : "black"}
-                                    shadowBlur={currentPageId === page.id ? 20 : 50}
-                                    shadowOpacity={currentPageId === page.id ? 1 : 0.5}
-                                    shadowOffset={{ x: 0, y: 0 }}
-                                    stroke={currentPageId === page.id ? "#3B82F6" : "rgba(255, 255, 255, 0.05)"}
-                                    strokeWidth={currentPageId === page.id ? 2 : 1}
-                                />
+                                <React.Fragment key={`bg-${page.id}`}>
+                                    <Rect
+                                        name="background-rect"
+                                        x={offset.x}
+                                        y={offset.y}
+                                        width={800}
+                                        height={1200}
+                                        fill={fill}
+                                        shadowColor={currentPageId === page.id ? "#3B82F6" : "black"}
+                                        shadowBlur={currentPageId === page.id ? 20 : 50}
+                                        shadowOpacity={currentPageId === page.id ? 1 : 0.5}
+                                        shadowOffset={{ x: 0, y: 0 }}
+                                        stroke={currentPageId === page.id ? "#3B82F6" : "rgba(255, 255, 255, 0.05)"}
+                                        strokeWidth={currentPageId === page.id ? 2 : 1}
+                                    />
+                                    {bgImage && pageSettings?.backgroundImage && (
+                                        <Image
+                                            key={`bgimg-${page.id}`}
+                                            image={bgImage}
+                                            x={offset.x}
+                                            y={offset.y}
+                                            width={800}
+                                            height={1200}
+                                            opacity={pageSettings?.bgOpacity ?? 1}
+                                            listening={false}
+                                        />
+                                    )}
+                                </React.Fragment>
                             );
                         })}
                     </Layer>
@@ -567,6 +586,29 @@ export const ComicCanvas: React.FC = () => {
                                             perfectDrawEnabled={false}
                                         />
                                     )}
+                                </Group>
+                            );
+                        })}
+
+                        {/* Overlay layer: floating assets above panels, no panel clipping */}
+                        {pages.map((page, i) => {
+                            const offset = getLayoutPosition(i, layoutMode);
+                            return (
+                                <Group key={`overlay-${page.id}`} x={offset.x} y={offset.y}>
+                                    {(page.overlays || []).map((overlay) => (
+                                        <FloatingAsset
+                                            key={overlay.id}
+                                            overlay={overlay}
+                                            pageId={page.id}
+                                            isSelected={selectedElementIds.includes(overlay.id)}
+                                            onSelect={(e) => {
+                                                if (e?.cancelBubble !== undefined) e.cancelBubble = true;
+                                                setSelectedElements([overlay.id]);
+                                                selectPage(page.id);
+                                            }}
+                                            onUpdate={(updates) => updateOverlay(page.id, overlay.id, updates)}
+                                        />
+                                    ))}
                                 </Group>
                             );
                         })}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sparkles, ArrowRight, Layers, Zap, BookOpen } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, type Theme } from '../context/ThemeContext';
 
 type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
 
@@ -11,7 +11,7 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     const { setTheme } = useTheme();
 
-    const handleCardClick = (portal: Portal, theme: string) => {
+    const handleCardClick = (portal: Portal, theme: Theme) => {
         setTheme(theme);
         onNavigate?.(portal);
     };

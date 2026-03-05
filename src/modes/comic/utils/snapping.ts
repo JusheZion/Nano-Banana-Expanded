@@ -30,7 +30,7 @@ export interface DiagonalGuide {
 
 const SNAP_THRESHOLD = 8;
 const VERTEX_SNAP_THRESHOLD = 20;
-const GUTTER = 16;
+const DEFAULT_GUTTER = 16;
 const GUIDE_EXTENT = 3000;
 const DIAG_PROXIMITY = 22;
 const DOCSPACE_GUIDE_THRESHOLD = 60;
@@ -38,8 +38,8 @@ const DOCSPACE_GUIDE_THRESHOLD = 60;
 const PAGE_WIDTH = 800;
 const PAGE_HEIGHT = 1200;
 
-const DOCSPACE_XS = [0, PAGE_WIDTH / 2, PAGE_WIDTH, GUTTER, PAGE_WIDTH - GUTTER];
-const DOCSPACE_YS = [0, PAGE_HEIGHT / 2, PAGE_HEIGHT, GUTTER, PAGE_HEIGHT - GUTTER];
+const getDocspaceXs = (gutter: number) => [0, PAGE_WIDTH / 2, PAGE_WIDTH, gutter, PAGE_WIDTH - gutter];
+const getDocspaceYs = (gutter: number) => [0, PAGE_HEIGHT / 2, PAGE_HEIGHT, gutter, PAGE_HEIGHT - gutter];
 
 export const getBoundingBox = (item: Panel | BalloonInstance): BoundingBox => {
     if (item.type === 'panel' && item.shapeType === 'polygon' && item.points) {
@@ -72,15 +72,15 @@ const getAbsoluteVertices = (item: Panel | BalloonInstance): { x: number; y: num
  * including bounding box edges, center, gutter offsets, and
  * individual polygon vertex positions.
  */
-const collectSnapTargets = (sibling: Panel | BalloonInstance) => {
+const collectSnapTargets = (sibling: Panel | BalloonInstance, gutter: number) => {
     const box = getBoundingBox(sibling);
     const xs = new Set<number>([
         box.x, box.x + box.width / 2, box.x + box.width,
-        box.x - GUTTER, box.x + box.width + GUTTER,
+        box.x - gutter, box.x + box.width + gutter,
     ]);
     const ys = new Set<number>([
         box.y, box.y + box.height / 2, box.y + box.height,
-        box.y - GUTTER, box.y + box.height + GUTTER,
+        box.y - gutter, box.y + box.height + gutter,
     ]);
 
     if (sibling.type === 'panel' && sibling.shapeType === 'polygon' && sibling.points) {
@@ -154,7 +154,7 @@ export const getSnapLines = (
 
 /**
  * Gutter-aware variant: snaps to document space boundaries,
- * sibling edges, AND positions one GUTTER width away from sibling edges.
+ * sibling edges, AND positions one gutter width away from sibling edges.
  */
 export const getGutterAwareSnapLines = (
     proposedX: number,
@@ -162,11 +162,14 @@ export const getGutterAwareSnapLines = (
     itemWidth: number,
     itemHeight: number,
     siblings: (Panel | BalloonInstance)[],
-    skipId?: string
+    skipId?: string,
+    gutter: number = DEFAULT_GUTTER
 ): SnapResult => {
     let newX = proposedX;
     let newY = proposedY;
     const snapLines: SnapLine[] = [];
+    const DOCSPACE_XS = getDocspaceXs(gutter);
+    const DOCSPACE_YS = getDocspaceYs(gutter);
 
     const pointsX = [proposedX, proposedX + itemWidth / 2, proposedX + itemWidth];
     const pointsY = [proposedY, proposedY + itemHeight / 2, proposedY + itemHeight];
@@ -212,13 +215,13 @@ export const getGutterAwareSnapLines = (
 
         const targetXs = [
             box.x, box.x + box.width / 2, box.x + box.width,
-            box.x - GUTTER,
-            box.x + box.width + GUTTER,
+            box.x - gutter,
+            box.x + box.width + gutter,
         ];
         const targetYs = [
             box.y, box.y + box.height / 2, box.y + box.height,
-            box.y - GUTTER,
-            box.y + box.height + GUTTER,
+            box.y - gutter,
+            box.y + box.height + gutter,
         ];
 
         if (!snappedX) {
@@ -276,12 +279,15 @@ export const getVertexSnapLines = (
     proposedX: number,
     proposedY: number,
     siblings: (Panel | BalloonInstance)[],
-    skipId?: string
+    skipId?: string,
+    gutter: number = DEFAULT_GUTTER
 ): PointSnapResult => {
     let newX = proposedX;
     let newY = proposedY;
     const snapLines: SnapLine[] = [];
     const diagonalGuides: DiagonalGuide[] = [];
+    const DOCSPACE_XS = getDocspaceXs(gutter);
+    const DOCSPACE_YS = getDocspaceYs(gutter);
 
     let bestDiffX = Infinity;
     let bestDiffY = Infinity;
@@ -307,7 +313,7 @@ export const getVertexSnapLines = (
     for (const sibling of siblings) {
         if (skipId && sibling.id === skipId) continue;
 
-        const { targetXs, targetYs } = collectSnapTargets(sibling);
+        const { targetXs, targetYs } = collectSnapTargets(sibling, gutter);
 
         for (const tx of targetXs) {
             const diff = Math.abs(proposedX - tx);

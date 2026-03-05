@@ -58,11 +58,32 @@ export interface Drawing {
     isVisible?: boolean;
 }
 
+/** Global page styling (canvas background). */
+export interface PageSettings {
+    backgroundColor: string;
+    backgroundImage?: string;
+    bgOpacity: number;
+}
+
+/** Floating asset on the stage (above panels, no panel clipping). */
+export interface OverlayObject {
+    id: string;
+    type: 'image' | 'sfx';
+    src: string;
+    x: number;
+    y: number;
+    rotation: number;
+    scaleX: number;
+    scaleY: number;
+    zIndex: number;
+}
+
 export interface ComicPage {
     id: string;
     panels: Panel[];
     balloons: BalloonInstance[];
     drawings: Drawing[];
+    overlays?: OverlayObject[];
     background: string;
     layerOrder: string[]; // Order of IDs from back to front
 }
@@ -72,6 +93,8 @@ interface ComicState {
         inclusiveBiasEnabled: boolean;
         demographicFocus: string;
     };
+    gutterSize: number;
+    pageSettings: PageSettings;
     pages: ComicPage[];
     currentPageId: string | null;
     currentGenreId: GenreId;
@@ -134,6 +157,11 @@ interface ComicState {
     applyGenreToAll: () => void;
     updateCustomGenre: (updates: Partial<Genre>, paletteUpdates?: Partial<Genre['palette']>) => void;
     updateProjectSettings: (settings: Partial<ComicState['projectSettings']>) => void;
+    setGutterSize: (size: number) => void;
+    setPageSettings: (settings: Partial<PageSettings>) => void;
+    addOverlay: (pageId: string, overlay: Omit<OverlayObject, 'id'>) => void;
+    updateOverlay: (pageId: string, overlayId: string, updates: Partial<OverlayObject>) => void;
+    removeOverlay: (pageId: string, overlayId: string) => void;
     serializeProject: () => void;
     loadProject: (jsonString: string) => void;
     splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant?: number) => void;
@@ -147,12 +175,18 @@ export const useComicStore = create<ComicState>()(
                     inclusiveBiasEnabled: false,
                     demographicFocus: ''
                 },
+                gutterSize: 16,
+                pageSettings: {
+                    backgroundColor: '#1a1a1a',
+                    bgOpacity: 1
+                },
                 pages: [
                     {
                         id: 'page-1',
                         panels: [],
                         balloons: [],
                         drawings: [],
+                        overlays: [],
                         background: '#ffffff',
                         layerOrder: []
                     }
@@ -235,6 +269,7 @@ export const useComicStore = create<ComicState>()(
                             panels: [],
                             balloons: [],
                             drawings: [],
+                            overlays: [],
                             background: genre.palette.background,
                             layerOrder: []
                         }],
@@ -259,6 +294,7 @@ export const useComicStore = create<ComicState>()(
                     const newPanels = pageToDup.panels.map(p => { const newId = crypto.randomUUID(); idMap.set(p.id, newId); return { ...p, id: newId }; });
                     const newBalloons = pageToDup.balloons.map(b => { const newId = crypto.randomUUID(); idMap.set(b.id, newId); return { ...b, id: newId }; });
                     const newDrawings = pageToDup.drawings.map(d => { const newId = crypto.randomUUID(); idMap.set(d.id, newId); return { ...d, id: newId }; });
+                    const newOverlays = (pageToDup.overlays || []).map(o => ({ ...o, id: crypto.randomUUID() }));
 
                     const newPage: ComicPage = {
                         ...pageToDup,
@@ -266,6 +302,7 @@ export const useComicStore = create<ComicState>()(
                         panels: newPanels,
                         balloons: newBalloons,
                         drawings: newDrawings,
+                        overlays: newOverlays,
                         layerOrder: pageToDup.layerOrder.map(oldId => idMap.get(oldId) || oldId)
                     };
 
@@ -433,6 +470,7 @@ export const useComicStore = create<ComicState>()(
                             panels: p.panels.filter(panel => !state.selectedElementIds.includes(panel.id)),
                             balloons: p.balloons.filter(balloon => !state.selectedElementIds.includes(balloon.id)),
                             drawings: p.drawings?.filter(x => !state.selectedElementIds.includes(x.id)) || [],
+                            overlays: (p.overlays || []).filter(o => !state.selectedElementIds.includes(o.id)),
                             layerOrder: p.layerOrder.filter(id => !state.selectedElementIds.includes(id))
                         } : p),
                         selectedElementIds: []
@@ -667,12 +705,55 @@ export const useComicStore = create<ComicState>()(
                     projectSettings: { ...state.projectSettings, ...settings }
                 })),
 
+                setGutterSize: (size) => set({ gutterSize: Math.max(0, Math.min(64, size)) }),
+
+                setPageSettings: (settings) => set((state) => ({
+                    pageSettings: { ...state.pageSettings, ...settings }
+                })),
+
+                addOverlay: (pageId, overlay) => set((state) => {
+                    const newId = crypto.randomUUID();
+                    return {
+                        pages: state.pages.map(p =>
+                            p.id === pageId
+                                ? {
+                                    ...p,
+                                    overlays: [...(p.overlays || []), { ...overlay, id: newId }]
+                                }
+                                : p
+                        )
+                    };
+                }),
+
+                updateOverlay: (pageId, overlayId, updates) => set((state) => ({
+                    pages: state.pages.map(p =>
+                        p.id === pageId
+                            ? {
+                                ...p,
+                                overlays: (p.overlays || []).map(o =>
+                                    o.id === overlayId ? { ...o, ...updates } : o
+                                )
+                            }
+                            : p
+                    )
+                })),
+
+                removeOverlay: (pageId, overlayId) => set((state) => ({
+                    pages: state.pages.map(p =>
+                        p.id === pageId
+                            ? { ...p, overlays: (p.overlays || []).filter(o => o.id !== overlayId) }
+                            : p
+                    )
+                })),
+
                 serializeProject: () => {
-                    const { pages, projectSettings } = useComicStore.getState();
+                    const { pages, projectSettings, gutterSize, pageSettings } = useComicStore.getState();
                     const data = {
                         version: "2.0",
                         type: "comic-project",
                         projectSettings,
+                        gutterSize,
+                        pageSettings,
                         pages
                     };
                     const json = JSON.stringify(data, null, 2);
@@ -690,9 +771,11 @@ export const useComicStore = create<ComicState>()(
                         const data = JSON.parse(jsonString);
                         if (data.type === 'comic-project' && data.pages) {
                             useComicStore.getState().updateProjectSettings(data.projectSettings || {});
-                            useComicStore.getState().pages = data.pages;
-                            // Trigger re-render by mutating state
-                            set({ pages: data.pages });
+                            set({
+                                pages: data.pages,
+                                ...(data.gutterSize != null && { gutterSize: data.gutterSize }),
+                                ...(data.pageSettings != null && { pageSettings: { ...useComicStore.getState().pageSettings, ...data.pageSettings } })
+                            });
                         }
                     } catch (e) {
                         console.error("Failed to load project", e);
@@ -802,6 +885,8 @@ export const useComicStore = create<ComicState>()(
                 partialize: (state) => ({
                     pages: state.pages,
                     projectSettings: state.projectSettings,
+                    gutterSize: state.gutterSize,
+                    pageSettings: state.pageSettings,
                     layoutMode: state.layoutMode,
                     currentGenreId: state.currentGenreId,
                     customGenre: state.customGenre
@@ -812,6 +897,8 @@ export const useComicStore = create<ComicState>()(
             partialize: (state) => ({
                 pages: state.pages,
                 projectSettings: state.projectSettings,
+                gutterSize: state.gutterSize,
+                pageSettings: state.pageSettings,
                 layoutMode: state.layoutMode,
                 currentGenreId: state.currentGenreId,
                 customGenre: state.customGenre

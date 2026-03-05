@@ -14,14 +14,14 @@
 - [x] **Contextual Toolbars**: ObjectToolbar and TextToolbar rendered on full-width rows below ribbon instead of overlapping/clipping. TextToolbar split into compact ribbon variant and expanded options row.
 - [x] **Alphabetized Menus**: All dropdown menus sorted A-Z (fonts, textures, balloon styles, warp effects, fill modes, genres).
 
-## Phase 11: Advanced Canvas & Geometry Logic
+## Phase 11: Advanced Canvas & Geometry Logic — COMPLETE
 
-- [x] **Sub-Selection (Content Mode)**: `ComicPanel.tsx` now owns internal `isContentMode` state, toggled via **double-click**. When active, the Konva Transformer attaches to the internal image (cyan handles, rotation enabled) instead of the panel group (gold handles). Deselecting the panel auto-resets to frame mode.
-- [x] **Precision Snapping (Gutter-Aware)**: `getGutterAwareSnapLines()` in `snapping.ts` snaps panel edges to siblings AND to positions exactly one gutter-width (16px) away from sibling edges, enabling consistent gutter alignment.
-- [x] **Diagonal Ray-Casting**: When polygon vertices are dragged, `getVertexSnapLines()` computes edge slopes of all siblings via `calculateSlope()` and projects dashed Cyber Cyan (#00D1FF) guide rays along matching angles. Guides render on the canvas overlay layer and clear on drag end.
-- [ ] **Global Gutter Slider**: Convert the fixed 16px BSP gutter into a reactive slider in Project Settings.
-- [ ] **Page Styling**: Add options for Page Background Color and Background Image inserts.
-- [ ] **Asset Expansion**: Allow "Import Image Objects" outside of panels (for custom sound FX and overlays).
+- [x] **Sub-Selection (Content Mode)**: `ComicPanel.tsx` owns `isContentMode`, toggled via double-click; Transformer attaches to image (cyan) or frame (gold).
+- [x] **Precision Snapping (Gutter-Aware)**: `getGutterAwareSnapLines()` and `getVertexSnapLines()` take `gutter` from store; snap to sibling edges and one gutter-width away. Store `gutterSize` (0–64px).
+- [x] **Alignment Guides**: H/V and diagonal cyan guides during vertex/edge drag; docspace edge preview; single `snapLines` render path for panel + vertex drag.
+- [x] **Global Gutter Slider**: Settings → Layout → "Global Gutter" slider (0–64px); updates `gutterSize`; snapping uses it everywhere.
+- [x] **Page Styling**: Store `pageSettings` (backgroundColor, backgroundImage, bgOpacity). Settings: color picker, opacity slider, "Upload BG", "Clear background image." Canvas background Rect + optional Image per page.
+- [x] **Asset Expansion (Floating Overlays)**: `OverlayObject` type; `FloatingAsset.tsx` (Image + Transformer, no panel clip); overlay layer in ComicCanvas; add/update/remove overlays; "Add overlay (test image)" in Settings; Delete key removes selected overlay.
 
 ## Phase 12: Professional Typography & Balloon Suite
 

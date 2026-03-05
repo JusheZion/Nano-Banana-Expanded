@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 
 interface ProjectSettingsSidebarProps {
@@ -9,20 +9,128 @@ interface ProjectSettingsSidebarProps {
 }
 
 export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ isOpen, onClose, embedded }) => {
-    // We will just store prompt settings in local state for this mock, 
-    // or expand the comicStore to hold "projectSettings".
-    // Since Phase 6 focuses on Mock Generation, let's keep it simple.
-    // Ideally it belongs in store. Let's assume store has it or we just add it to window globally for the mock, 
-    // but better yet, let's add it to comicStore.
-
-    // For now, let's just use local state and a store update if needed.
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const {
         projectSettings,
-        updateProjectSettings
+        updateProjectSettings,
+        gutterSize,
+        setGutterSize,
+        pageSettings,
+        setPageSettings,
+        currentPageId,
+        addOverlay
     } = useComicStore();
+
+    const handleUploadBg = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setPageSettings({ backgroundImage: reader.result as string });
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
 
     const content = (
             <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
+                {/* Global Gutter */}
+                <div className="settings-group">
+                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Layout</h3>
+                    <label className="block text-sm text-white font-medium mb-2">Global Gutter: {gutterSize}px</label>
+                    <input
+                        type="range"
+                        min={0}
+                        max={64}
+                        value={gutterSize}
+                        onChange={(e) => setGutterSize(Number(e.target.value))}
+                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF]"
+                    />
+                </div>
+
+                {/* Page background */}
+                <div className="settings-group">
+                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Page Background</h3>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs text-white/50 uppercase tracking-widest mb-1">Color</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    value={pageSettings?.backgroundColor ?? '#1a1a1a'}
+                                    onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
+                                    className="w-10 h-10 rounded border border-white/20 cursor-pointer bg-transparent"
+                                />
+                                <input
+                                    type="text"
+                                    value={pageSettings?.backgroundColor ?? '#1a1a1a'}
+                                    onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
+                                    className="flex-1 bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white text-sm font-mono"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-white/50 uppercase tracking-widest mb-1">Background opacity</label>
+                            <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                value={pageSettings?.bgOpacity ?? 1}
+                                onChange={(e) => setPageSettings({ bgOpacity: Number(e.target.value) })}
+                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF]"
+                            />
+                            <span className="text-xs text-white/50">{(pageSettings?.bgOpacity ?? 1) * 100}%</span>
+                        </div>
+                        <div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleUploadBg}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full px-3 py-2 rounded border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors"
+                            >
+                                Upload BG
+                            </button>
+                            {pageSettings?.backgroundImage && (
+                                <button
+                                    type="button"
+                                    onClick={() => setPageSettings({ backgroundImage: undefined })}
+                                    className="mt-2 w-full px-3 py-1.5 rounded border border-red-500/50 text-red-400 text-xs hover:bg-red-500/10"
+                                >
+                                    Clear background image
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Floating overlays (above panels) */}
+                <div className="settings-group">
+                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Overlays</h3>
+                    <p className="text-xs text-white/50 mb-2">Floating images above panels. Select on canvas to move/rotate.</p>
+                    <button
+                        type="button"
+                        disabled={!currentPageId}
+                        onClick={() => currentPageId && addOverlay(currentPageId, {
+                            type: 'image',
+                            src: 'https://via.placeholder.com/120',
+                            x: 200,
+                            y: 200,
+                            rotation: 0,
+                            scaleX: 1,
+                            scaleY: 1,
+                            zIndex: 0
+                        })}
+                        className="w-full px-3 py-2 rounded border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Add overlay (test image)
+                    </button>
+                </div>
+
                 <div>
                     <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">AI Generation Settings</h3>
 

@@ -10,11 +10,11 @@ High-level narrative of where the project is and where it's going. For checklist
 - **Canvas**: Konva + react-konva (Stage, Layer, Group, Rect, Line, Image, Transformer, etc.)
 - **Snapping**: `snapping.ts` (getSnapLines, getGutterAwareSnapLines, getVertexSnapLines with DiagonalGuide), `geometry-utils.ts` (calculateSlope, isParallel, getGutterSnapPoints)
 - **State**: Zustand (`comicStore`) with **zundo** (temporal undo/redo) and **persist** (localStorage)
-- **Comic surface**: Multi-page (Webtoon / 2-page spread), 800x1200 logical canvas, BSP-style panel splitting with 16px gutter
+- **Comic surface**: Multi-page (Webtoon / 2-page spread), 800x1200 logical canvas, BSP-style panel splitting with configurable gutter (0–64px via Settings)
 
 ---
 
-## What's Already Done (Phases 1-10, Phase 11 started)
+## What's Already Done (Phases 1–11)
 
 - **Serialization**: Save/Load JSON; project and custom theme persist in localStorage.
 - **Undo/Redo**: Buttons and Cmd+Z / Cmd+Shift+Z; history includes layout and theme.
@@ -26,17 +26,17 @@ High-level narrative of where the project is and where it's going. For checklist
 - **Export**: High-res PNG/PDF (e.g. 300 DPI) via ComicCanvas.
 - **Genre system**: GenreRegistry, Custom Theme with color/texture/font, Apply to All, persistence.
 - **Obsidian Tech UI (Phase 10 - COMPLETE)**: Collapsible `TopRibbon` with icon buttons (lucide-react) and Radix tooltips. Obsidian theme applied globally. Non-overlapping right-side `ComicPanelStack` for Pages, Layers, Settings, and Assets. `ObjectToolbar` on full-width row below ribbon. `TextToolbar` split into compact ribbon and expanded options row. All dropdown menus alphabetized A-Z. Main hub sidebar collapses to vertical icon strip (60px) and expands on hover (230px). 5th landing page card navigates to Comic Mode. All landing page cards now navigate to their respective portals. Asset Library synced with 47 images from `public/assets/images/`.
-- **Sub-Selection / Content Mode (Phase 11)**: `ComicPanel.tsx` now manages `isContentMode` as internal state, toggled via **double-click** on a selected panel. When active, the Konva Transformer attaches to the internal image (cyan handles, rotation enabled) instead of the panel group (gold handles). Deselecting auto-resets to frame mode.
-- **Precision Snapping (Phase 11)**: `getGutterAwareSnapLines()` adds virtual snap targets one gutter-width (16px) from every sibling edge, so panels snap into consistent gutters during drag. Vertex/edge snapping via `getVertexSnapLines()` also enhanced with **diagonal ray-casting**: edge slopes from all siblings are computed via `calculateSlope()` / `isParallel()` from `geometry-utils.ts`, and matching angles project dashed Cyber Cyan (#00D1FF) guide lines on the canvas overlay layer.
+- **Sub-Selection / Content Mode (Phase 11)**: `ComicPanel.tsx` manages `isContentMode` (double-click toggles). When active, the Transformer attaches to the internal image (cyan handles, rotation) instead of the panel frame (gold handles).
+- **Precision Snapping (Phase 11)**: **Gutter snapping** is the main win: `getGutterAwareSnapLines()` uses a configurable gutter (store `gutterSize`, 0–64px) so panels snap to consistent gaps during drag. A **Global Gutter Slider** in Settings drives this. H/V and diagonal **alignment guides** (cyan lines) appear during vertex/edge drag and when near docspace edges; they share a single `snapLines` render path. *Lesson: implementing the gutter slider and store-driven gutter first would have simplified the guide work—gutter snapping alone greatly improves alignment.*
+- **Page Styling (Phase 11)**: Store `pageSettings` (backgroundColor, backgroundImage, bgOpacity). Settings: color picker, opacity slider, "Upload BG" and "Clear background image." Canvas background layer uses these; optional per-page background image with opacity.
+- **Floating Overlays (Phase 11)**: `OverlayObject` in store; `FloatingAsset.tsx` (Image + Transformer, content-mode style) renders above panels with no clipping. Overlay layer in `ComicCanvas`; add via Settings "Add overlay (test image)" or future asset drop. Delete selected overlays with Delete key.
 
 ---
 
-## What's Next: Phases 11-13 & Critical Bugs
+## What's Next: Phases 12–13 & Critical Bugs
 
-### Phase 11: Canvas & Geometry (in progress)
-- ~~Sub-Selection / Content Mode~~ (done): Double-click toggles frame vs. content transform.
-- ~~Precision Snapping~~ (done): Gutter-aware panel snapping + diagonal ray-casting for vertex alignment.
-- Remaining: Global Gutter Slider, Page Background Color/Image, Import Image Objects outside panels (SFX/overlays).
+### Phase 11: Canvas & Geometry — COMPLETE
+- Sub-Selection / Content Mode, Precision Snapping (gutter-aware + guides), Global Gutter Slider, Page Styling, Floating Overlays.
 
 ### Phase 12: Typography & Balloons
 Shape hot-swap, inner-balloon text control and alignment, tail smart overlap and "Snap Tail to Panel Edge," and Auto-Fit OFF by default.
