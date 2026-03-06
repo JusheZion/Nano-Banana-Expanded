@@ -11,6 +11,15 @@ import { ProjectSettingsSidebar } from '../components/ProjectSettingsSidebar';
 import { PageNavigator } from '../components/PageNavigator';
 import { TopRibbon } from '../components/TopRibbon';
 import { ComicPanelStack, PagesIcon, LayersIcon, SettingsIcon, AssetsIcon } from '../components/ComicPanelStack';
+import { Tooltip } from '../../../components/ui/Tooltip';
+import {
+  PRIMARY_BG,
+  PRIMARY_BG_FLAT,
+  SECONDARY_BG,
+  ACCENT_GOLD_GRADIENT,
+  TEXT_ON_GOLD,
+  TEXT_ON_BLUE,
+} from '../theme/Phase12DesignTokens';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -50,7 +59,6 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const [isPageNavOpen, setIsPageNavOpen] = useState(true);
   const [balloonTextExpanded, setBalloonTextExpanded] = useState(false);
   const [balloonShapeExpanded, setBalloonShapeExpanded] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,10 +295,12 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   ) : null;
 
   return (
-    <div className="comic-layout flex flex-col h-screen bg-[#0F0F12] text-white relative overflow-hidden">
-      {/* Subtle Obsidian Tech accent glow */}
-      <div className="absolute top-0 right-0 w-80 h-80 bg-[#00D1FF]/5 rounded-full blur-3xl pointer-events-none" />
-
+    <div
+      className="comic-layout flex h-screen text-white relative overflow-hidden min-h-0"
+      style={{ background: PRIMARY_BG }}
+    >
+      {/* Main column: ribbon + toolbar + content (left sidebar removed per annotation; original will be modified later) */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
       <TopRibbon
         collapsed={ribbonCollapsed}
         onToggleCollapse={() => setRibbonCollapsed(!ribbonCollapsed)}
@@ -314,14 +324,6 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
           const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
           setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
         }}
-        isLibraryOpen={isLibraryOpen}
-        onToggleLibrary={() => setIsLibraryOpen(!isLibraryOpen)}
-        isLayersOpen={isLayerTreeOpen}
-        onToggleLayers={() => setIsLayerTreeOpen(!isLayerTreeOpen)}
-        isPagesOpen={isPageNavOpen}
-        onTogglePages={() => setIsPageNavOpen(!isPageNavOpen)}
-        isSettingsOpen={isSettingsOpen}
-        onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
         contextualSlot={
           selectedTextId && currentPageId ? (
             <TextToolbar
@@ -346,9 +348,12 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
         onChange={handleFileUpload}
       />
 
-      {/* Second row: panel ObjectToolbar (full-width) when a panel is selected */}
+      {/* Single-row toolbar: Image Properties + Tools (Phase 12 - maximize vertical drawing space) */}
       {isPanelSelected && currentPageId && selectedElementIds.length > 0 && (
-        <div className="w-full bg-[#1A1A1E] border-b border-white/[0.08] px-4 py-1.5 z-40 flex flex-nowrap items-center overflow-x-auto shrink-0">
+        <div
+          className="w-full border-b border-white/10 px-3 py-1 z-40 flex flex-nowrap items-center gap-1 overflow-x-auto shrink-0"
+          style={{ backgroundColor: SECONDARY_BG }}
+        >
           <ObjectToolbar
             currentPageId={currentPageId}
             selectedElementIds={selectedElementIds}
@@ -356,9 +361,12 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
         </div>
       )}
 
-      {/* Third row: full-width balloon Text/Shape options (starts from left when Text or Shape expanded from ribbon) */}
+      {/* Balloon Text/Shape row when expanded */}
       {selectedTextId && currentPageId && (balloonTextExpanded || balloonShapeExpanded) && (
-        <div className="w-full bg-[#1A1A1E] border-b border-white/[0.08] px-4 py-2 z-40 flex flex-nowrap items-center gap-x-4 overflow-x-auto shrink-0">
+        <div
+          className="w-full border-b border-white/10 px-3 py-1.5 z-40 flex flex-nowrap items-center gap-x-3 overflow-x-auto shrink-0"
+          style={{ backgroundColor: SECONDARY_BG }}
+        >
           <TextToolbar
             variant="expanded"
             currentPageId={currentPageId}
@@ -369,10 +377,11 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
         </div>
       )}
 
-      {/* Right-side vertical stack: Pages, Layers, Settings, Assets — below top ribbon only (contextual toolbar is now in ribbon) */}
+      {/* Right-side: stack (when any pane open) + fixed bottom toolbar (always visible, does not scroll) */}
       {(isPageNavOpen || isLayerTreeOpen || isSettingsOpen || isLibraryOpen) && (
         <ComicPanelStack
           topOffsetRem={4}
+          bottomBarRem={3}
           panels={[
             {
               id: 'pages',
@@ -410,10 +419,68 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
         />
       )}
 
+      {/* Fixed right-side bottom toolbar: icons only (labels removed per annotation) */}
+      <div
+        className="fixed right-0 bottom-0 w-72 h-12 border-l border-t border-white/10 flex items-stretch z-30"
+        style={{ background: PRIMARY_BG_FLAT }}
+        role="toolbar"
+        aria-label="Studio panels"
+      >
+        <Tooltip content={isPageNavOpen ? 'Close Pages' : 'Pages'}>
+          <button
+            type="button"
+            onClick={() => setIsPageNavOpen(!isPageNavOpen)}
+            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
+            style={{ color: TEXT_ON_BLUE, ...(isPageNavOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
+            aria-pressed={isPageNavOpen}
+            aria-label="Pages"
+          >
+            <PagesIcon />
+          </button>
+        </Tooltip>
+        <Tooltip content={isLayerTreeOpen ? 'Close Layers' : 'Layers'}>
+          <button
+            type="button"
+            onClick={() => setIsLayerTreeOpen(!isLayerTreeOpen)}
+            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
+            style={{ color: TEXT_ON_BLUE, ...(isLayerTreeOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
+            aria-pressed={isLayerTreeOpen}
+            aria-label="Layers"
+          >
+            <LayersIcon />
+          </button>
+        </Tooltip>
+        <Tooltip content={isSettingsOpen ? 'Close Settings' : 'Settings'}>
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
+            style={{ color: TEXT_ON_BLUE, ...(isSettingsOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
+            aria-pressed={isSettingsOpen}
+            aria-label="Settings"
+          >
+            <SettingsIcon />
+          </button>
+        </Tooltip>
+        <Tooltip content={isLibraryOpen ? 'Close Assets' : 'Assets'}>
+          <button
+            type="button"
+            onClick={() => setIsLibraryOpen(!isLibraryOpen)}
+            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
+            style={{ color: TEXT_ON_BLUE, ...(isLibraryOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
+            aria-pressed={isLibraryOpen}
+            aria-label="Assets"
+          >
+            <AssetsIcon />
+          </button>
+        </Tooltip>
+      </div>
+
       {/* Main Content Area — flex-1 so it shrinks when ribbon grows (e.g. Text/Shape expanded) */}
-      <main className="relative z-10 flex-1 min-h-0">
+      <main className="relative z-10 flex-1 min-h-0 min-w-0" style={{ background: PRIMARY_BG }}>
         {children}
       </main>
+      </div>
     </div>
   );
 };

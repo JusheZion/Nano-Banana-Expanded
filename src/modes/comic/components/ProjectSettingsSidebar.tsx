@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
+import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
 
 interface ProjectSettingsSidebarProps {
     isOpen: boolean;
@@ -30,45 +31,46 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         e.target.value = '';
     };
 
+    const rb = embedded;
     const content = (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
+            <div className={`flex-1 overflow-y-auto p-6 space-y-6 min-h-0 ${rb ? '' : ''}`} style={rb ? { color: PRIMARY_BG_FLAT } : undefined}>
                 {/* Global Gutter */}
                 <div className="settings-group">
-                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Layout</h3>
-                    <label className="block text-sm text-white font-medium mb-2">Global Gutter: {gutterSize}px</label>
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Layout</h3>
+                    <label className={`block text-sm font-medium mb-2 ${rb ? 'text-inherit' : 'text-white'}`}>Global Gutter: {gutterSize}px</label>
                     <input
                         type="range"
                         min={0}
                         max={64}
                         value={gutterSize}
                         onChange={(e) => setGutterSize(Number(e.target.value))}
-                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF]"
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${rb ? 'bg-[#002366]/15 [accent-color:#002366]' : 'bg-white/10 accent-[#00D1FF]'}`}
                     />
                 </div>
 
                 {/* Page background */}
                 <div className="settings-group">
-                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Page Background</h3>
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Page Background</h3>
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-xs text-white/50 uppercase tracking-widest mb-1">Color</label>
+                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Color</label>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="color"
                                     value={pageSettings?.backgroundColor ?? '#1a1a1a'}
                                     onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
-                                    className="w-10 h-10 rounded border border-white/20 cursor-pointer bg-transparent"
+                                    className={`w-10 h-10 rounded border cursor-pointer bg-transparent ${rb ? 'border-[#002366]/30' : 'border-white/20'}`}
                                 />
                                 <input
                                     type="text"
                                     value={pageSettings?.backgroundColor ?? '#1a1a1a'}
                                     onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
-                                    className="flex-1 bg-black/30 border border-white/10 rounded px-2 py-1.5 text-white text-sm font-mono"
+                                    className={`flex-1 border rounded px-2 py-1.5 text-sm font-mono ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit' : 'bg-black/30 border-white/10 text-white'}`}
                                 />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs text-white/50 uppercase tracking-widest mb-1">Background opacity</label>
+                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Background opacity</label>
                             <input
                                 type="range"
                                 min={0}
@@ -76,9 +78,9 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                                 step={0.05}
                                 value={pageSettings?.bgOpacity ?? 1}
                                 onChange={(e) => setPageSettings({ bgOpacity: Number(e.target.value) })}
-                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF]"
+                                className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${rb ? 'bg-[#002366]/15 [accent-color:#002366]' : 'bg-white/10 accent-[#00D1FF]'}`}
                             />
-                            <span className="text-xs text-white/50">{(pageSettings?.bgOpacity ?? 1) * 100}%</span>
+                            <span className={`text-xs ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>{(pageSettings?.bgOpacity ?? 1) * 100}%</span>
                         </div>
                         <div>
                             <input
@@ -91,7 +93,7 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full px-3 py-2 rounded border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors"
+                                className={`w-full px-3 py-2 rounded border text-sm transition-colors ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
                             >
                                 Upload BG
                             </button>
@@ -110,8 +112,8 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
 
                 {/* Floating overlays (above panels) */}
                 <div className="settings-group">
-                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">Overlays</h3>
-                    <p className="text-xs text-white/50 mb-2">Floating images above panels. Select on canvas to move/rotate.</p>
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Overlays</h3>
+                    <p className={`text-xs mb-2 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Floating images above panels. Select on canvas to move/rotate.</p>
                     <button
                         type="button"
                         disabled={!currentPageId}
@@ -125,17 +127,17 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             scaleY: 1,
                             zIndex: 0
                         })}
-                        className="w-full px-3 py-2 rounded border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`w-full px-3 py-2 rounded border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
                     >
                         Add overlay (test image)
                     </button>
                 </div>
 
                 <div>
-                    <h3 className="text-white/70 text-sm font-semibold mb-4 uppercase tracking-wider">AI Generation Settings</h3>
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>AI Generation Settings</h3>
 
                     <div className="flex items-center justify-between mb-4">
-                        <label className="text-sm text-white font-medium cursor-pointer" htmlFor="inclusive-toggle">
+                        <label className={`text-sm font-medium cursor-pointer ${rb ? 'text-inherit' : 'text-white'}`} htmlFor="inclusive-toggle">
                             Inclusive Bias / Smart Defaults
                         </label>
                         <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
@@ -152,11 +154,11 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs text-white/50 uppercase tracking-widest">Demographic Focus (Appended if no specific identity term is found)</label>
+                        <label className={`text-xs uppercase tracking-widest ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Demographic Focus (Appended if no specific identity term is found)</label>
                         <textarea
                             value={projectSettings?.demographicFocus || ''}
                             onChange={(e) => updateProjectSettings({ demographicFocus: e.target.value })}
-                            className="w-full bg-black/30 border border-white/10 rounded p-2 text-white text-sm focus:border-gold-500 outline-none min-h-[80px]"
+                            className={`w-full border rounded p-2 text-sm outline-none min-h-[80px] ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit focus:border-[#002366]' : 'bg-black/30 border-white/10 text-white focus:border-gold-500'}`}
                             placeholder="e.g. African-American or Blatino man"
                         />
                     </div>

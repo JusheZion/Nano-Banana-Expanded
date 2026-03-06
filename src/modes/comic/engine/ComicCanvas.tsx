@@ -10,6 +10,13 @@ import { FloatingAsset } from '../components/FloatingAsset';
 import { splitConvexPolygon } from '../utils/geometry';
 import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
+import {
+  ACCENT_GOLD_SOLID,
+  ACCENT_GOLD_GRADIENT,
+  PRIMARY_BG_FLAT,
+  TEXT_ON_GOLD,
+  TEXT_ON_BLUE,
+} from '../theme/Phase12DesignTokens';
 
 // Placeholder for image URL
 const PLACEHOLDER_IMAGE_URL = "https://via.placeholder.com/150";
@@ -373,13 +380,21 @@ export const ComicCanvas: React.FC = () => {
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent">
-            {/* Toolbar */}
-            <div className="h-12 border-b border-white/5 bg-obsidian-dark/50 backdrop-blur-md flex items-center px-4 gap-4 z-50 relative">
-                <span className="text-white/50 text-xs font-mono uppercase tracking-widest">Comic Engine v0.3</span>
-                <div className="h-4 w-px bg-white/10 mx-2" />
+            <style dangerouslySetInnerHTML={{ __html: `
+              .canvas-toolbar-btn-layers:hover { background: #002366 !important; color: #fcf6ba !important; border-color: rgba(255,255,255,0.2) !important; }
+              .canvas-toolbar-btn-layers:hover select { background: transparent !important; color: #fcf6ba !important; }
+            ` }} />
+            {/* Secondary toolbar — gold bg; hover/selection = Layers style (royal blue + cream) per annotation */}
+            <div
+                className="h-12 border-b border-white/10 flex items-center px-4 gap-4 z-50 relative"
+                style={{ background: ACCENT_GOLD_GRADIENT }}
+            >
+                <span className="text-xs font-mono uppercase tracking-widest shrink-0" style={{ color: TEXT_ON_GOLD }}>Comic Engine v0.3</span>
+                <div className="h-4 w-px bg-black/20 mx-2 shrink-0" />
 
                 <button
-                    className={`px-3 py-1 bg-teal-700/80 hover:bg-teal-600 text-white text-xs rounded border border-teal-500/30 transition-all flex items-center gap-2`}
+                    className="canvas-toolbar-btn-layers px-3 py-1 text-xs rounded border border-black/20 transition-all flex items-center gap-2 shrink-0"
+                    style={{ background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD }}
                     onClick={() => {
                         setIsKnifeMode(false);
                         addPanel(currentPage.id, {
@@ -401,20 +416,22 @@ export const ComicCanvas: React.FC = () => {
                     <span className="text-lg">+</span> Add Panel
                 </button>
 
-                {/* Knife Tool Toggle */}
+                {/* Knife Tool Toggle — royal blue when active (accent per annotation) */}
                 <button
-                    className={`px-3 py-1 text-xs rounded border transition-all flex items-center gap-2 ${isKnifeMode ? 'bg-red-600 border-red-400 text-white' : 'bg-transparent border-white/20 text-white/70 hover:bg-white/10'}`}
+                    className="px-3 py-1 text-xs rounded border transition-all flex items-center gap-2 shrink-0"
+                    style={isKnifeMode ? { background: PRIMARY_BG_FLAT, color: TEXT_ON_BLUE, borderColor: 'rgba(255,255,255,0.3)' } : { background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' }}
                     onClick={() => setIsKnifeMode(!isKnifeMode)}
                     title="Slice panels"
                 >
                     <span className="text-lg">🔪</span> Split
                 </button>
 
-                {/* Callout Selector - Native Select */}
-                <div className="relative flex items-center gap-2" title="Select and add a speech balloon">
-                    <span className="text-xl">💬</span>
+                {/* Callout Selector — lighter gold; hover = Layers style on wrapper */}
+                <div className="relative flex items-center gap-2 shrink-0 canvas-toolbar-btn-layers rounded border px-2 py-1" title="Select and add a speech balloon" style={{ background: 'rgba(252, 246, 186, 0.5)', borderColor: 'rgba(0,0,0,0.2)' }}>
+                    <span className="text-xl" style={{ color: TEXT_ON_GOLD }}>💬</span>
                     <select
-                        className="bg-gray-800 text-white p-2 rounded border border-gray-600 outline-none text-xs w-48"
+                        className="p-2 rounded border outline-none text-xs w-48 bg-transparent border-transparent"
+                        style={{ background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' }}
                         onChange={(e) => {
                             if (e.target.value) {
                                 handleAddCallout(e.target.value);
@@ -442,10 +459,8 @@ export const ComicCanvas: React.FC = () => {
                 </div>
 
                 <button
-                    className={`px-3 py-1 text-white text-xs rounded border transition-all flex items-center gap-2 ${selectedElementIds.length > 0
-                        ? 'bg-purple-700/80 hover:bg-purple-600 border-purple-500/30'
-                        : 'bg-white/5 text-white/30 border-white/5 cursor-not-allowed'
-                        }`}
+                    className="canvas-toolbar-btn-layers px-3 py-1 text-xs rounded border transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={selectedElementIds.length > 0 ? { background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' } : { background: 'rgba(252, 246, 186, 0.3)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.15)' }}
                     onClick={handleInsertImage}
                     disabled={selectedElementIds.length === 0}
                     title="Insert image into selected panel(s)"
@@ -454,8 +469,16 @@ export const ComicCanvas: React.FC = () => {
                 </button>
             </div>
 
-            {/* Canvas Area */}
-            <div className={`flex-1 overflow-auto bg-zinc-950 flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}>
+            {/* Canvas Area — video backdrop for future Infinite Comic Scroll */}
+            <div className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`} style={{ background: '#000814' }}>
+                <video
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-[0.07]"
+                    aria-hidden
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                />
                 <Stage
                     ref={stageRef}
                     width={stageWidth * zoomLevel}
@@ -650,7 +673,7 @@ export const ComicCanvas: React.FC = () => {
                                             ? [pos + snapLines.offset.x, 0, pos + snapLines.offset.x, 3000]
                                             : [0, pos + snapLines.offset.y, 3000, pos + snapLines.offset.y]
                                     }
-                                    stroke="#00D1FF"
+                                    stroke={ACCENT_GOLD_SOLID}
                                     strokeWidth={1}
                                     dash={[4, 4]}
                                     listening={false}
@@ -668,7 +691,7 @@ export const ComicCanvas: React.FC = () => {
                                     g.x2 + diagonalGuides.offset.x,
                                     g.y2 + diagonalGuides.offset.y,
                                 ]}
-                                stroke="#00D1FF"
+                                stroke={ACCENT_GOLD_SOLID}
                                 strokeWidth={1}
                                 dash={[4, 4]}
                                 listening={false}

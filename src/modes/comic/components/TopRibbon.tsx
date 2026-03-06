@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Tooltip } from '../../../components/ui/Tooltip';
 import {
   ChevronDown,
@@ -13,20 +13,14 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Library,
-  Layers,
-  LayoutGrid,
-  Settings,
   FileText,
 } from 'lucide-react';
 
-/** Obsidian Tech design: #0F0F12 bg, #1A1A1E surface, #00D1FF accent */
-const ribbonBg = 'bg-[#0F0F12]';
-const surface = 'bg-[#1A1A1E]';
-const border = 'border-white/[0.08]';
-const accentHover = 'hover:text-[#00D1FF] hover:bg-[#00D1FF]/10';
-const iconButton = `w-9 h-9 rounded-lg ${surface} ${border} border flex items-center justify-center text-white/80 transition-colors ${accentHover}`;
-const iconButtonActive = 'text-[#00D1FF] bg-[#00D1FF]/15 border-[#00D1FF]/40';
+/** Phase 12: Royal Blue primary, Glitter Gold accent. Ribbon icons/outlines/dividers = #80aaff for visibility. */
+import { PRIMARY_BG_FLAT, PRIMARY_BG_LIGHT, ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, SECONDARY_TEXT } from '../theme/Phase12DesignTokens';
+
+const RIBBON_ACCENT = '#80aaff'; // icon color, button outline, vertical dividers
+const iconButton = 'w-9 h-9 rounded-lg border flex items-center justify-center transition-colors top-ribbon-btn-pages';
 
 export interface TopRibbonProps {
   collapsed: boolean;
@@ -53,14 +47,6 @@ export interface TopRibbonProps {
   onZoomReset: () => void;
   onZoomFit: () => void;
 
-  isLibraryOpen: boolean;
-  onToggleLibrary: () => void;
-  isLayersOpen: boolean;
-  onToggleLayers: () => void;
-  isPagesOpen: boolean;
-  onTogglePages: () => void;
-  isSettingsOpen: boolean;
-  onToggleSettings: () => void;
 
   /** When a panel or balloon is selected, render this in the ribbon’s right-side gap (before Export PDF). */
   contextualSlot?: React.ReactNode;
@@ -86,40 +72,61 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
     onZoomOut,
     onZoomReset,
     onZoomFit,
-    isLibraryOpen,
-    onToggleLibrary,
-    isLayersOpen,
-    onToggleLayers,
-    isPagesOpen,
-    onTogglePages,
-    isSettingsOpen,
-    onToggleSettings,
     contextualSlot,
   } = props;
 
+  const themeContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isThemeOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (themeContainerRef.current && !themeContainerRef.current.contains(e.target as Node)) {
+        onToggleTheme();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onToggleTheme();
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isThemeOpen, onToggleTheme]);
+
   return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .top-ribbon-btn-pages { border-color: #80aaff; }
+        .top-ribbon-btn-pages:hover { background: linear-gradient(45deg, #bf953f 0%, #fcf6ba 45%, #b38728 70%, #fbf5b7 85%, #aa771c 100%) !important; color: #000 !important; }
+      ` }} />
     <header
-      className={`${ribbonBg} border-b ${border} flex items-stretch transition-all duration-200 relative z-30 ${
+      className={`border-b flex items-stretch transition-all duration-200 relative z-30 ${
         collapsed ? 'h-12' : 'h-16'
       }`}
+      style={{ background: PRIMARY_BG_FLAT, borderBottomColor: RIBBON_ACCENT }}
     >
-      {/* Left: Brand + Collapse */}
-      <div className="flex items-center gap-2 pl-3 pr-2 border-r border-white/[0.08]">
+      {/* Left: Collapse + Comic — icons/outlines/dividers #80aaff */}
+      <div className="flex items-center gap-2 pl-3 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
         <Tooltip content={collapsed ? 'Expand ribbon' : 'Collapse ribbon'}>
           <button
             type="button"
             onClick={onToggleCollapse}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${accentHover}`}
+            className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors top-ribbon-btn-pages`}
+            style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT, borderColor: RIBBON_ACCENT }}
             aria-label={collapsed ? 'Expand ribbon' : 'Collapse ribbon'}
           >
             {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
           </button>
         </Tooltip>
-        <div className="w-7 h-7 rounded bg-[#00D1FF]/20 border border-[#00D1FF]/40 flex items-center justify-center shrink-0">
-          <FileText size={14} className="text-[#00D1FF]" />
-        </div>
+        <Tooltip content="Comic workspace — current mode">
+          <div className="w-7 h-7 rounded flex items-center justify-center shrink-0 top-ribbon-btn-pages border" style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT, borderColor: RIBBON_ACCENT }}>
+            <FileText size={14} />
+          </div>
+        </Tooltip>
         {!collapsed && (
-          <span className="text-xs font-semibold tracking-wider text-white/90 uppercase hidden sm:inline">
+          <span className="text-xs font-semibold tracking-wider uppercase hidden sm:inline" style={{ color: SECONDARY_TEXT }}>
             Comic
           </span>
         )}
@@ -127,29 +134,28 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
 
       {!collapsed && (
         <>
-          {/* Undo / Redo */}
-          <div className="flex items-center gap-1 pl-2 pr-2 border-r border-white/[0.08]">
+          {/* Undo / Redo — #80aaff icons and outline */}
+          <div className="flex items-center gap-1 pl-2 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Undo (Cmd+Z)">
-              <button type="button" onClick={onUndo} className={iconButton} aria-label="Undo">
+              <button type="button" onClick={onUndo} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Undo">
                 <Undo2 size={16} />
               </button>
             </Tooltip>
             <Tooltip content="Redo (Cmd+Shift+Z)">
-              <button type="button" onClick={onRedo} className={iconButton} aria-label="Redo">
+              <button type="button" onClick={onRedo} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Redo">
                 <Redo2 size={16} />
               </button>
             </Tooltip>
           </div>
 
-          {/* Theme */}
-          <div className="flex items-center pl-2 pr-2 border-r border-white/[0.08] relative">
+          {/* Theme — Gold when active; inactive = lighter blue + #80aaff text/outline */}
+          <div ref={themeContainerRef} className="flex items-center pl-2 pr-2 border-r relative" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Studio theme & custom palette">
               <button
                 type="button"
                 onClick={onToggleTheme}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${surface} ${border} ${
-                  isThemeOpen ? iconButtonActive : `text-white/80 ${accentHover}`
-                }`}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border top-ribbon-btn-pages"
+                style={isThemeOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT, borderColor: RIBBON_ACCENT }}
                 aria-label="Theme"
                 aria-expanded={isThemeOpen}
               >
@@ -160,15 +166,15 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
             {isThemeOpen && themeDropdown}
           </div>
 
-          {/* Save / Load */}
-          <div className="flex items-center gap-1 pl-2 pr-2 border-r border-white/[0.08]">
+          {/* Save / Load — #80aaff icons and outline */}
+          <div className="flex items-center gap-1 pl-2 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Save project as JSON">
-              <button type="button" onClick={onSaveJson} className={iconButton} aria-label="Save JSON">
+              <button type="button" onClick={onSaveJson} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Save JSON">
                 <Save size={16} />
               </button>
             </Tooltip>
             <Tooltip content="Load project from JSON">
-              <button type="button" onClick={onLoadJson} className={iconButton} aria-label="Load JSON">
+              <button type="button" onClick={onLoadJson} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Load JSON">
                 <Upload size={16} />
               </button>
             </Tooltip>
@@ -181,24 +187,24 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
             />
           </div>
 
-          {/* Export */}
-          <div className="flex items-center gap-1 pl-2 pr-2 border-r border-white/[0.08]">
+          {/* Export — #80aaff icons and outline */}
+          <div className="flex items-center gap-1 pl-2 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Export current page as PNG (300 DPI)">
-              <button type="button" onClick={onExportPng} className={iconButton} aria-label="Export PNG">
+              <button type="button" onClick={onExportPng} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Export PNG">
                 <ImageIcon size={16} />
               </button>
             </Tooltip>
             <Tooltip content="Export all pages as PDF (300 DPI)">
-              <button type="button" onClick={onExportPdf} className={iconButton} aria-label="Export PDF">
+              <button type="button" onClick={onExportPdf} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Export PDF">
                 <FileDown size={16} />
               </button>
             </Tooltip>
           </div>
 
-          {/* Zoom */}
-          <div className="flex items-center gap-1 pl-2 pr-2 border-r border-white/[0.08]">
+          {/* Zoom — #80aaff icons and outline */}
+          <div className="flex items-center gap-1 pl-2 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Zoom out">
-              <button type="button" onClick={onZoomOut} className={iconButton} aria-label="Zoom out">
+              <button type="button" onClick={onZoomOut} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Zoom out">
                 <ZoomOut size={16} />
               </button>
             </Tooltip>
@@ -206,86 +212,40 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
               <button
                 type="button"
                 onClick={onZoomReset}
-                className="min-w-[3rem] px-1.5 py-1.5 rounded text-xs font-mono text-[#00D1FF] hover:bg-[#00D1FF]/10 border border-transparent hover:border-[#00D1FF]/30 transition-colors"
+                className="min-w-[3rem] px-1.5 py-1.5 rounded text-xs font-mono border transition-colors top-ribbon-btn-pages"
+                style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }}
                 aria-label="Reset zoom"
               >
                 {Math.round(zoomLevel * 100)}%
               </button>
             </Tooltip>
             <Tooltip content="Zoom in">
-              <button type="button" onClick={onZoomIn} className={iconButton} aria-label="Zoom in">
+              <button type="button" onClick={onZoomIn} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Zoom in">
                 <ZoomIn size={16} />
               </button>
             </Tooltip>
             <Tooltip content="Fit page to screen">
-              <button type="button" onClick={onZoomFit} className={iconButton} aria-label="Fit to screen">
+              <button type="button" onClick={onZoomFit} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Fit to screen">
                 <Maximize2 size={16} />
               </button>
             </Tooltip>
           </div>
 
-          {/* Library, Layers, Pages, Settings */}
-          <div className="flex items-center gap-1 pl-2 pr-2 border-r border-white/[0.08]">
-            <Tooltip content={isLibraryOpen ? 'Close Library' : 'Open Library'}>
-              <button
-                type="button"
-                onClick={onToggleLibrary}
-                className={`${iconButton} ${isLibraryOpen ? iconButtonActive : ''}`}
-                aria-label="Library"
-                aria-pressed={isLibraryOpen}
-              >
-                <Library size={16} />
-              </button>
-            </Tooltip>
-            <Tooltip content={isLayersOpen ? 'Close Layers' : 'Layers'}>
-              <button
-                type="button"
-                onClick={onToggleLayers}
-                className={`${iconButton} ${isLayersOpen ? iconButtonActive : ''}`}
-                aria-label="Layers"
-                aria-pressed={isLayersOpen}
-              >
-                <Layers size={16} />
-              </button>
-            </Tooltip>
-            <Tooltip content={isPagesOpen ? 'Close Pages' : 'Pages'}>
-              <button
-                type="button"
-                onClick={onTogglePages}
-                className={`${iconButton} ${isPagesOpen ? iconButtonActive : ''}`}
-                aria-label="Pages"
-                aria-pressed={isPagesOpen}
-              >
-                <LayoutGrid size={16} />
-              </button>
-            </Tooltip>
-            <Tooltip content={isSettingsOpen ? 'Close Settings' : 'Project Settings'}>
-              <button
-                type="button"
-                onClick={onToggleSettings}
-                className={`${iconButton} ${isSettingsOpen ? iconButtonActive : ''}`}
-                aria-label="Settings"
-                aria-pressed={isSettingsOpen}
-              >
-                <Settings size={16} />
-              </button>
-            </Tooltip>
-          </div>
-
-          {/* Balloon/Object toolbar slot — font, size, auto-fit, Text/Shape icon buttons only */}
+          {/* Balloon/Object toolbar slot */}
           {contextualSlot && (
-            <div className="flex-1 min-w-0 flex items-center justify-end gap-2 pl-2 pr-2 border-r border-white/[0.08] overflow-x-auto overflow-y-hidden">
+            <div className="flex-1 min-w-0 flex items-center justify-end gap-2 pl-2 pr-2 border-r overflow-x-auto overflow-y-hidden" style={{ borderRightColor: RIBBON_ACCENT }}>
               {contextualSlot}
             </div>
           )}
 
-          {/* Primary CTA: Export PDF */}
+          {/* Export PDF — #80aaff text and outline; gold on hover */}
           <div className="flex items-center pl-2 pr-4 shrink-0">
             <Tooltip content="Export full comic as print PDF">
               <button
                 type="button"
                 onClick={onExportPdf}
-                className="px-3 py-2 rounded-lg bg-[#00D1FF]/20 text-[#00D1FF] border border-[#00D1FF]/40 font-semibold text-xs uppercase tracking-wider hover:bg-[#00D1FF]/30 transition-colors flex items-center gap-2"
+                className="px-3 py-2 rounded-lg font-semibold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 border top-ribbon-btn-pages"
+                style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT, borderColor: RIBBON_ACCENT }}
                 aria-label="Export PDF"
               >
                 <FileDown size={14} />
@@ -296,5 +256,6 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
         </>
       )}
     </header>
+    </>
   );
 };

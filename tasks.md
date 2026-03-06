@@ -23,7 +23,16 @@
 - [x] **Page Styling**: Store `pageSettings` (backgroundColor, backgroundImage, bgOpacity). Settings: color picker, opacity slider, "Upload BG", "Clear background image." Canvas background Rect + optional Image per page.
 - [x] **Asset Expansion (Floating Overlays)**: `OverlayObject` type; `FloatingAsset.tsx` (Image + Transformer, no panel clip); overlay layer in ComicCanvas; add/update/remove overlays; "Add overlay (test image)" in Settings; Delete key removes selected overlay.
 
-## Phase 12: Professional Typography & Balloon Suite
+## Phase 12: Design System & Layout (Master Implementation) — COMPLETE
+
+- [x] **Design Tokens**: `Phase12DesignTokens.ts` — Royal Blue Jewel (primary), Warm Cream (secondary), Glitter Gold (accent); TEXT_ON_GOLD, TEXT_ON_BLUE, PRIMARY_BG_LIGHT, etc.
+- [x] **Layout**: Left sidebar (Studio Hub menu) removed; single main column (ribbon + toolbars + content). Right stack + fixed bottom toolbar (Pages, Layers, Settings, Assets) — icons only.
+- [x] **Top Ribbon**: Inactive = lighter blue bg; **#80aaff** for icons, button outlines, vertical dividers; hover/selection = gold (Pages style). Theme dropdown closes on click-outside and Escape. COMIC/collapse tooltips and hover feedback.
+- [x] **Secondary Toolbar (ComicCanvas)**: Gold gradient bg; inactive = lighter gold; hover/selection = Layers style (royal blue + cream). Add Panel, Split, Add Balloon, Insert Image styled; Split = royal blue when active.
+- [x] **Right Sidebar**: Open panel content = Warm Cream bg, royal blue text/icons/checkboxes (PageNavigator, LayerTree, ProjectSettingsSidebar). Bottom toolbar = icons only, gold when active.
+- [x] **Snap Guides**: Glitter Gold (H/V and diagonal). Video backdrop element behind Stage for future Infinite Comic Scroll.
+
+## Phase 12 (remaining): Professional Typography & Balloon Suite
 
 - [ ] **Shape Hot-Swapping**: Selecting a new balloon shape replaces the current selection instead of creating a new one.
 - [ ] **Inner-Balloon Control**:

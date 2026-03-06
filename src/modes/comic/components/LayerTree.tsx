@@ -18,6 +18,7 @@ import {
     useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
 
 interface LayerItemProps {
     id: string;
@@ -29,9 +30,11 @@ interface LayerItemProps {
     onToggleVisibility: () => void;
     onToggleLock: () => void;
     onSelect: (e: React.MouseEvent) => void;
+    /** When true, use royal blue for text/icons (right sidebar theme). */
+    royalBlue?: boolean;
 }
 
-const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked, isVisible, isSelected, onToggleVisibility, onToggleLock, onSelect }) => {
+const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked, isVisible, isSelected, onToggleVisibility, onToggleLock, onSelect, royalBlue }) => {
     const {
         attributes,
         listeners,
@@ -49,9 +52,10 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
     };
 
     const getIcon = () => {
-        if (type === 'panel') return <Square className="w-4 h-4 text-blue-400" />;
-        if (type === 'balloon') return <MessageCircle className="w-4 h-4 text-green-400" />;
-        return <PenTool className="w-4 h-4 text-purple-400" />;
+        const c = royalBlue ? '' : type === 'panel' ? ' text-blue-400' : type === 'balloon' ? ' text-green-400' : ' text-purple-400';
+        if (type === 'panel') return <Square className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
+        if (type === 'balloon') return <MessageCircle className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
+        return <PenTool className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
     };
 
     return (
@@ -61,34 +65,33 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
             {...attributes}
             {...listeners}
             onClick={onSelect}
-            className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${isSelected ? 'bg-white/10 border-gold-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'
-                }`}
+            className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${
+                royalBlue
+                    ? isSelected ? 'bg-[#002366]/15 border-[#002366]/50' : 'bg-[#002366]/5 border-transparent hover:bg-[#002366]/10'
+                    : isSelected ? 'bg-white/10 border-gold-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'
+            }`}
         >
             <div className="flex items-center gap-3 overflow-hidden">
                 <div className="flex-shrink-0">
                     {getIcon()}
                 </div>
-                <span className="text-sm font-medium truncate text-white/90">
+                <span className={`text-sm font-medium truncate ${royalBlue ? 'text-inherit' : 'text-white/90'}`}>
                     {name}
                 </span>
             </div>
 
             <div className="flex items-center gap-1 flex-shrink-0">
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleVisibility();
-                    }}
-                    className={`p-1.5 rounded hover:bg-white/10 transition-colors ${!isVisible ? 'text-white/40' : 'text-white/80'}`}
+                    onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+                    className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (!isVisible ? 'opacity-50' : '') : 'hover:bg-white/10 ' + (!isVisible ? 'text-white/40' : 'text-white/80')}`}
+                    style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
                 >
                     {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleLock();
-                    }}
-                    className={`p-1.5 rounded hover:bg-white/10 transition-colors ${isLocked ? 'text-red-400' : 'text-white/40 hover:text-white/80'}`}
+                    onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+                    className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (isLocked ? 'opacity-80' : 'opacity-50') : 'hover:bg-white/10 ' + (isLocked ? 'text-red-400' : 'text-white/40 hover:text-white/80')}`}
+                    style={royalBlue && !isLocked ? { color: PRIMARY_BG_FLAT } : royalBlue && isLocked ? { color: '#002366' } : undefined}
                 >
                     {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>
@@ -186,10 +189,11 @@ export const LayerTree: React.FC<{
                                         setSelectedElements([item.id]);
                                     }
                                 }}
+                                royalBlue={embedded}
                             />
                         ))}
                         {items.length === 0 && (
-                            <div className="text-center py-8 text-white/40 text-sm">
+                            <div className={`text-center py-8 text-sm ${embedded ? 'text-inherit opacity-60' : 'text-white/40'}`}>
                                 No layers yet.<br />Add a panel or balloon to start.
                             </div>
                         )}
