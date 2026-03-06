@@ -19,7 +19,11 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         pageSettings,
         setPageSettings,
         currentPageId,
-        addOverlay
+        addOverlay,
+        pages,
+        templates,
+        saveBlankPanelTemplate,
+        applyTemplate
     } = useComicStore();
 
     const handleUploadBg = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,6 +115,40 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                 </div>
 
                 {/* Floating overlays (above panels) */}
+                <div className="settings-group">
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Panel templates</h3>
+                    <p className={`text-xs mb-2 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Save current page layout or apply a saved template.</p>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            type="button"
+                            disabled={!currentPageId || !pages.find(p => p.id === currentPageId)?.panels?.length}
+                            onClick={() => currentPageId && saveBlankPanelTemplate(currentPageId)}
+                            className={`w-full px-3 py-2 rounded border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
+                        >
+                            Save blank panel template
+                        </button>
+                        {templates.length > 0 && (
+                            <div>
+                                <label className={`block text-xs mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Apply template</label>
+                                <select
+                                    className={`w-full px-3 py-2 rounded border text-sm bg-transparent ${rb ? 'border-[#002366]/30 text-inherit' : 'border-white/20 text-white/80'}`}
+                                    value=""
+                                    onChange={(e) => {
+                                        const id = e.target.value;
+                                        e.target.value = '';
+                                        if (id && currentPageId) applyTemplate(currentPageId, id);
+                                    }}
+                                >
+                                    <option value="" disabled>Select template...</option>
+                                    {templates.map((t) => (
+                                        <option key={t.id} value={t.id}>{t.name} ({t.panels.length} panels)</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="settings-group">
                     <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Overlays</h3>
                     <p className={`text-xs mb-2 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Floating images above panels. Select on canvas to move/rotate.</p>

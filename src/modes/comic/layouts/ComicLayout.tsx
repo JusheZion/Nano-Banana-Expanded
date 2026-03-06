@@ -27,6 +27,7 @@ interface ComicLayoutProps {
 
 export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const triggerExport = useComicStore(state => state.triggerExport);
+  const flushAutoSave = useComicStore(state => state.flushAutoSave);
   const currentGenreId = useComicStore(state => state.currentGenreId);
   const setGenre = useComicStore(state => state.setGenre);
   const applyGenreToAll = useComicStore(state => state.applyGenreToAll);
@@ -45,6 +46,12 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     setZoomLevel,
     layoutMode
   } = useComicStore();
+
+  // Auto-save project state to localStorage every 30s
+  useEffect(() => {
+    const id = setInterval(() => flushAutoSave(), 30_000);
+    return () => clearInterval(id);
+  }, [flushAutoSave]);
 
   const undo = () => useComicStore.temporal.getState().undo();
   const redo = () => useComicStore.temporal.getState().redo();

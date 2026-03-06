@@ -7,7 +7,7 @@ import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { FloatingAsset } from '../components/FloatingAsset';
-import { splitConvexPolygon } from '../utils/geometry';
+import { splitConvexPolygon, pointInPanel } from '../utils/geometry';
 import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
 import {
@@ -62,6 +62,7 @@ export const ComicCanvas: React.FC = () => {
         addPanel,
         addBalloon,
         updateBalloon,
+        addOverlay,
         updateOverlay,
 
         // Drawing Mode
@@ -467,12 +468,80 @@ export const ComicCanvas: React.FC = () => {
                 >
                     <span>🖼️</span> Insert Image
                 </button>
+
+                {/* SFX stamp: add BOOM / ZAP / CRASH etc. as overlay (gold + black outline) */}
+                <div className="flex items-center gap-1 shrink-0" title="Stamp SFX text on page">
+                    <span className="text-lg text-[#b38728]">✨</span>
+                    <select
+                        className="p-1.5 rounded border text-xs bg-transparent border-[rgba(0,0,0,0.2)]"
+                        style={{ color: TEXT_ON_GOLD, background: 'rgba(252, 246, 186, 0.5)' }}
+                        onChange={(e) => {
+                            const text = e.target.value;
+                            e.target.value = '';
+                            if (!text || !currentPageId) return;
+                            addOverlay(currentPageId, {
+                                type: 'sfx',
+                                text,
+                                src: '',
+                                x: 350,
+                                y: 180,
+                                rotation: 0,
+                                scaleX: 1,
+                                scaleY: 1,
+                                zIndex: 0
+                            });
+                        }}
+                        value=""
+                    >
+                        <option value="" disabled>SFX...</option>
+                        {['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'].map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            {/* Canvas Area — video backdrop for future Infinite Comic Scroll */}
-            <div className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`} style={{ background: '#000814' }}>
+            {/* Canvas Area — video backdrop for future Infinite Comic Scroll; Asset Bridge: drop image not on panel → overlay */}
+            <div
+                className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                style={{ background: '#000814' }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    const url = e.dataTransfer.getData('application/x-asset-url');
+                    if (!url || !currentPageId) return;
+                    const stage = stageRef.current;
+                    if (!stage?.container) return;
+                    const rect = stage.container().getBoundingClientRect();
+                    const logicalX = (e.clientX - rect.left) / zoomLevel;
+                    const logicalY = (e.clientY - rect.top) / zoomLevel;
+                    const pageIndex = pages.findIndex(p => p.id === currentPageId);
+                    if (pageIndex < 0) return;
+                    const offset = getLayoutPosition(pageIndex, layoutMode);
+                    const pageLocalX = logicalX - offset.x;
+                    const pageLocalY = logicalY - offset.y;
+                    const page = pages[pageIndex];
+                    const hitPanel = page.panels.find((p: Panel) =>
+                        pointInPanel(p.shapeType, p.x, p.y, p.width, p.height, p.points, pageLocalX, pageLocalY)
+                    );
+                    if (hitPanel) {
+                        updatePanel(page.id, hitPanel.id, { imageUrl: url });
+                    } else {
+                        addOverlay(page.id, {
+                            type: 'image',
+                            src: url,
+                            x: pageLocalX - 60,
+                            y: pageLocalY - 60,
+                            rotation: 0,
+                            scaleX: 1,
+                            scaleY: 1,
+                            zIndex: 0
+                        });
+                    }
+                }}
+            >
                 <video
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-[0.07]"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-20"
                     aria-hidden
                     muted
                     loop
@@ -534,68 +603,72 @@ export const ComicCanvas: React.FC = () => {
                             const offset = getLayoutPosition(i, layoutMode);
                             return (
                                 <Group key={`elements-${page.id}`} x={offset.x} y={offset.y}>
-                                    {(page.layerOrder || []).map((elementId) => {
-                                        const panel = page.panels.find(p => p.id === elementId);
-                                        if (panel) {
-                                            return (
-                                                <ComicPanel
-                                                    key={panel.id}
-                                                    panel={panel}
-                                                    isSelected={selectedElementIds.includes(panel.id)}
-                                                    onSelect={(e: any) => {
-                                                        if (e?.evt?.shiftKey) {
-                                                            toggleSelection(panel.id);
-                                                        } else {
-                                                            setSelectedElements([panel.id]);
-                                                        }
-                                                        selectPage(page.id);
-                                                    }}
-                                                    onChange={(newAttrs: Partial<Panel>) => {
-                                                        updatePanel(page.id, panel.id, newAttrs);
-                                                        if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
-                                                            const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id);
-                                                            setSnapLines({ lines: snapLines, offset });
-                                                        }
-                                                    }}
-                                                    onDragEnd={() => {
-                                                        setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
-                                                        setDiagonalGuides({ guides: [], offset: { x: 0, y: 0 } });
-                                                    }}
-                                                    onDiagonalGuides={(guides) => setDiagonalGuides({ guides, offset })}
-                                                    onVertexSnap={(lines) => setSnapLines({ lines, offset })}
-                                                />
-                                            );
-                                        }
-
-                                        const drawing = page.drawings?.find(d => d.id === elementId);
-                                        if (drawing) {
-                                            return <DrawingView key={drawing.id} drawing={drawing} />;
-                                        }
-
-                                        const balloon = page.balloons?.find(b => b.id === elementId);
-                                        if (balloon) {
-                                            const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
-                                            if (!styleDef) return null;
-                                            return (
-                                                <BalloonNode
-                                                    key={balloon.id}
-                                                    balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
-                                                    styleDef={styleDef}
-                                                    onSelect={(id: string, e: any) => {
-                                                        if (e?.evt?.shiftKey) {
-                                                            toggleSelection(id);
-                                                        } else {
-                                                            setSelectedElements([id]);
-                                                        }
-                                                        selectPage(page.id);
-                                                    }}
-                                                    onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(page.id, bubbleId, newAttrs)}
-                                                />
-                                            );
-                                        }
-
-                                        return null;
-                                    })}
+                                    {/* Z-order: panels first (bottom), then balloons + drawings (above panels), overlays rendered later */}
+                                    {(() => {
+                                        const order = page.layerOrder || [];
+                                        const panelIds = order.filter(id => page.panels.some(p => p.id === id));
+                                        const nonPanelIds = order.filter(id => !page.panels.some(p => p.id === id));
+                                        const render = (elementId: string) => {
+                                            const panel = page.panels.find(p => p.id === elementId);
+                                            if (panel) {
+                                                return (
+                                                    <ComicPanel
+                                                        key={panel.id}
+                                                        panel={panel}
+                                                        isSelected={selectedElementIds.includes(panel.id)}
+                                                        onSelect={(e: any) => {
+                                                            if (e?.evt?.shiftKey) {
+                                                                toggleSelection(panel.id);
+                                                            } else {
+                                                                setSelectedElements([panel.id]);
+                                                            }
+                                                            selectPage(page.id);
+                                                        }}
+                                                        onChange={(newAttrs: Partial<Panel>) => {
+                                                            updatePanel(page.id, panel.id, newAttrs);
+                                                            if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
+                                                                const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id);
+                                                                setSnapLines({ lines: snapLines, offset });
+                                                            }
+                                                        }}
+                                                        onDragEnd={() => {
+                                                            setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
+                                                            setDiagonalGuides({ guides: [], offset: { x: 0, y: 0 } });
+                                                        }}
+                                                        onDiagonalGuides={(guides) => setDiagonalGuides({ guides, offset })}
+                                                        onVertexSnap={(lines) => setSnapLines({ lines, offset })}
+                                                    />
+                                                );
+                                            }
+                                            const drawing = page.drawings?.find(d => d.id === elementId);
+                                            if (drawing) return <DrawingView key={drawing.id} drawing={drawing} />;
+                                            const balloon = page.balloons?.find(b => b.id === elementId);
+                                            if (balloon) {
+                                                const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
+                                                if (!styleDef) return null;
+                                                return (
+                                                    <BalloonNode
+                                                        key={balloon.id}
+                                                        balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
+                                                        styleDef={styleDef}
+                                                        onSelect={(id: string, e: any) => {
+                                                            if (e?.evt?.shiftKey) toggleSelection(id);
+                                                            else setSelectedElements([id]);
+                                                            selectPage(page.id);
+                                                        }}
+                                                        onChange={(bubbleId: string, newAttrs: Partial<BalloonInstance>) => updateBalloon(page.id, bubbleId, newAttrs)}
+                                                    />
+                                                );
+                                            }
+                                            return null;
+                                        };
+                                        return (
+                                            <>
+                                                {panelIds.map(render)}
+                                                {nonPanelIds.map(render)}
+                                            </>
+                                        );
+                                    })()}
 
                                     {/* Real-time drawing line preview for this specific page */}
                                     {isDrawingMode && targetPageIdRef.current === page.id && currentLine.length > 0 && (

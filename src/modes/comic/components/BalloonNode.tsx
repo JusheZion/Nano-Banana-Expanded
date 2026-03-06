@@ -1,5 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 'react-konva';
+import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
 import type { BalloonInstance, BalloonStyle } from '../../../types/balloon';
@@ -137,6 +138,191 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         return { x: ix, y: iy };
     }, [localTailTip, halfW, halfH, balloon.hasTail]);
 
+    // Unified body+tail path for ellipse styles: one continuous outline so tail and bubble blend with no notch
+    const ellipseOnlyIds = ['cloud_fluffy', 'cloud_fluffy_no_tail', 'speech_rounded_rectangle', 'narration_box', 'box_slanted', 'starburst_action', 'scream_jagged', 'double_burst'];
+    const isEllipseStyle = styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed' || !ellipseOnlyIds.includes(styleDef.id);
+    const unifiedEllipseTailPath = useMemo(() => {
+        if (!balloon.hasTail || !isEllipseStyle) return null;
+        const dx = localTailTip.x - tailIntersection.x;
+        const dy = localTailTip.y - tailIntersection.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length < 2) return null;
+        const tailAngle = Math.atan2(tailIntersection.y / halfH, tailIntersection.x / halfW);
+        const delta = Math.max(0.12, Math.min(0.35, 0.2 * (halfW + halfH) / length)); // angular half-width at base
+        const p1x = halfW * Math.cos(tailAngle - delta);
+        const p1y = halfH * Math.sin(tailAngle - delta);
+        const p2x = halfW * Math.cos(tailAngle + delta);
+        const p2y = halfH * Math.sin(tailAngle + delta);
+        const nx = dx / length;
+        const ny = dy / length;
+        const px = -ny;
+        const py = nx;
+        const curveStrength = length * 0.5;
+        const isFlipped = balloon.overrides?.tailFlip ?? false;
+        const flipMultiplier = isFlipped ? -1 : 1;
+        const cpx = tailIntersection.x + nx * (length * 0.4) - px * (curveStrength * flipMultiplier);
+        const cpy = tailIntersection.y + ny * (length * 0.4) - py * (curveStrength * flipMultiplier);
+        // Single path: tail from p1 to tip to p2, then ellipse arc from p2 back to p1 (long way)
+        const path = `M ${p1x} ${p1y} Q ${cpx} ${cpy} ${localTailTip.x} ${localTailTip.y} Q ${cpx} ${cpy} ${p2x} ${p2y} A ${halfW} ${halfH} 0 1 1 ${p1x} ${p1y} Z`;
+        return path;
+    }, [balloon.hasTail, isEllipseStyle, localTailTip, tailIntersection, halfW, halfH, balloon.overrides?.tailFlip]);
+
+    // Unified body+tail path for rounded-rect (Modern Square / narration): tail base on boundary, one continuous outline
+    const isRoundedRectStyle = styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box';
+    const cornerR = Math.min(styleDef.cornerRadius ?? 0, halfW - 1, halfH - 1);
+    const roundedRectTailIntersection = useMemo(() => {
+        if (!balloon.hasTail || !isRoundedRectStyle || cornerR < 0) return null;
+        const dx = localTailTip.x;
+        const dy = localTailTip.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist === 0) return null;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        let bestT = Infinity;
+        const r = Math.max(0, cornerR);
+        const hw = halfW;
+        const hh = halfH;
+        const testT = (t: number, x: number, y: number) => {
+            if (t > 0 && t < bestT) {
+                if (x >= -hw && x <= hw && y >= -hh && y <= hh) bestT = t;
+            }
+        };
+        if (ny < 0) {
+            const t = -hh / ny;
+            const x = t * nx;
+            if (x >= -hw + r && x <= hw - r) testT(t, x, -hh);
+        }
+        if (ny > 0) {
+            const t = hh / ny;
+            const x = t * nx;
+            if (x >= -hw + r && x <= hw - r) testT(t, x, hh);
+        }
+        if (nx > 0) {
+            const t = hw / nx;
+            const y = t * ny;
+            if (y >= -hh + r && y <= hh - r) testT(t, hw, y);
+        }
+        if (nx < 0) {
+            const t = -hw / nx;
+            const y = t * ny;
+            if (y >= -hh + r && y <= hh - r) testT(t, -hw, y);
+        }
+        for (const [cx, cy, startAngle, endAngle] of [
+            [hw - r, -hh + r, -0.5 * Math.PI, 0],
+            [hw - r, hh - r, 0, 0.5 * Math.PI],
+            [-hw + r, hh - r, 0.5 * Math.PI, Math.PI],
+            [-hw + r, -hh + r, Math.PI, 1.5 * Math.PI],
+        ] as [number, number, number, number][]) {
+            const ox = -cx;
+            const oy = -cy;
+            const a = nx * nx + ny * ny;
+            const b = 2 * (nx * ox + ny * oy);
+            const c = ox * ox + oy * oy - r * r;
+            const disc = b * b - 4 * a * c;
+            if (disc < 0) continue;
+            const sqrtD = Math.sqrt(disc);
+            for (const t of [(-b + sqrtD) / (2 * a), (-b - sqrtD) / (2 * a)]) {
+                if (t <= 0 || t >= bestT) continue;
+                const px = t * nx;
+                const py = t * ny;
+                const angle = Math.atan2(py - cy, px - cx);
+                let ang = angle;
+                if (ang < startAngle) ang += 2 * Math.PI;
+                if (ang >= startAngle && ang <= endAngle) bestT = t;
+            }
+        }
+        if (bestT === Infinity) return null;
+        return { x: bestT * nx, y: bestT * ny };
+    }, [balloon.hasTail, isRoundedRectStyle, cornerR, localTailTip, halfW, halfH]);
+
+    const unifiedRoundedRectTailPath = useMemo(() => {
+        if (!balloon.hasTail || !isRoundedRectStyle || !roundedRectTailIntersection) return null;
+        const inter = roundedRectTailIntersection;
+        const dx = localTailTip.x - inter.x;
+        const dy = localTailTip.y - inter.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length < 2) return null;
+        const r = Math.max(0, cornerR);
+        const hw = halfW;
+        const hh = halfH;
+        const step = Math.max(8, Math.min(25, length * 0.15));
+        const topLen = 2 * (hw - r);
+        const rightLen = 2 * (hh - r);
+        const cornerLen = (Math.PI * r) / 2;
+        const total = 2 * topLen + 2 * rightLen + 4 * cornerLen;
+        const boundaryPoint = (s: number): { x: number; y: number } => {
+            let t = ((s % total) + total) % total;
+            if (t < topLen) return { x: -hw + r + t, y: -hh };
+            t -= topLen;
+            if (t < cornerLen) {
+                const u = t / cornerLen;
+                const ang = -0.5 * Math.PI + u * (0.5 * Math.PI);
+                return { x: hw - r + r * Math.cos(ang), y: -hh + r + r * Math.sin(ang) };
+            }
+            t -= cornerLen;
+            if (t < rightLen) return { x: hw, y: -hh + r + t };
+            t -= rightLen;
+            if (t < cornerLen) {
+                const u = t / cornerLen;
+                const ang = u * (0.5 * Math.PI);
+                return { x: hw - r + r * Math.cos(ang), y: hh - r + r * Math.sin(ang) };
+            }
+            t -= cornerLen;
+            if (t < topLen) return { x: hw - r - t, y: hh };
+            t -= topLen;
+            if (t < cornerLen) {
+                const u = t / cornerLen;
+                const ang = 0.5 * Math.PI + u * (0.5 * Math.PI);
+                return { x: -hw + r + r * Math.cos(ang), y: hh - r + r * Math.sin(ang) };
+            }
+            t -= cornerLen;
+            if (t < rightLen) return { x: -hw, y: hh - r - t };
+            t -= rightLen;
+            if (t < cornerLen) {
+                const u = t / cornerLen;
+                const ang = Math.PI + u * (0.5 * Math.PI);
+                return { x: -hw + r + r * Math.cos(ang), y: -hh + r + r * Math.sin(ang) };
+            }
+            return { x: -hw + r, y: -hh };
+        };
+        let s0 = 0;
+        let bestD = Infinity;
+        for (let i = 0; i < 120; i++) {
+            const s = (i / 120) * total;
+            const p = boundaryPoint(s);
+            const d = (p.x - inter.x) ** 2 + (p.y - inter.y) ** 2;
+            if (d < bestD) {
+                bestD = d;
+                s0 = s;
+            }
+        }
+        const p1 = boundaryPoint(s0 - step);
+        const p2 = boundaryPoint(s0 + step);
+        const nx = dx / length;
+        const ny = dy / length;
+        const px = -ny;
+        const py = nx;
+        const curveStrength = length * 0.5;
+        const isFlipped = balloon.overrides?.tailFlip ?? false;
+        const flipMultiplier = isFlipped ? -1 : 1;
+        const cpx = inter.x + nx * (length * 0.4) - px * (curveStrength * flipMultiplier);
+        const cpy = inter.y + ny * (length * 0.4) - py * (curveStrength * flipMultiplier);
+        const tailPath = `M ${p1.x} ${p1.y} Q ${cpx} ${cpy} ${localTailTip.x} ${localTailTip.y} Q ${cpx} ${cpy} ${p2.x} ${p2.y}`;
+        const s2 = (s0 + step) % total;
+        const s1 = (s0 - step + total) % total;
+        const longWay = (s1 - s2 + total) % total;
+        const nSteps = Math.max(40, Math.min(80, Math.floor(longWay / 4)));
+        const stepSize = longWay / nSteps;
+        const boundaryPart: string[] = [];
+        for (let i = 1; i <= nSteps; i++) {
+            const s = (s2 + i * stepSize) % total;
+            const pt = boundaryPoint(s);
+            boundaryPart.push(`L ${pt.x} ${pt.y}`);
+        }
+        boundaryPart.push(`L ${p1.x} ${p1.y} Z`);
+        return tailPath + ' ' + boundaryPart.join(' ');
+    }, [balloon.hasTail, isRoundedRectStyle, roundedRectTailIntersection, localTailTip, cornerR, halfW, halfH, balloon.overrides?.tailFlip]);
+
     const getRenderProps = (
         pass: 'shadow' | 'glow' | 'base' | 'texture',
         isTail: boolean
@@ -246,6 +432,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
 
 
         if (styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box') {
+            if (unifiedRoundedRectTailPath) {
+                return <Path data={unifiedRoundedRectTailPath} {...props} lineJoin="round" lineCap="round" />;
+            }
             return (
                 <Rect
                     x={-halfW}
@@ -334,14 +523,21 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         }
 
         if (styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed') {
+            if (unifiedEllipseTailPath) {
+                return <Path data={unifiedEllipseTailPath} {...props} lineJoin="round" lineCap="round" />;
+            }
             return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
         }
 
+        if (unifiedEllipseTailPath) {
+            return <Path data={unifiedEllipseTailPath} {...props} lineJoin="round" lineCap="round" />;
+        }
         return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
     };
 
     const renderTail = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
         if (!balloon.hasTail) return null;
+        if (unifiedEllipseTailPath || unifiedRoundedRectTailPath) return null;
 
         const baseWidth = Math.min(w, h) * 0.1;
         const dx = localTailTip.x - tailIntersection.x;
@@ -483,6 +679,35 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
 
                 {renderBody('base')}
                 {renderTail('base')}
+
+                {/* Interactive tail handle: drag toward character's mouth; body stays in place */}
+                {balloon.hasTail && balloon.isSelected && (
+                    <Circle
+                        ref={tipRef}
+                        x={localTailTip.x}
+                        y={localTailTip.y}
+                        radius={10}
+                        fill={ACCENT_GOLD_SOLID}
+                        stroke="#000"
+                        strokeWidth={1}
+                        draggable
+                        listening
+                        onDragMove={() => {
+                            if (tipRef.current) {
+                                tipRef.current.getLayer()?.batchDraw();
+                            }
+                        }}
+                        onDragEnd={() => {
+                            if (tipRef.current) {
+                                const tx = tipRef.current.x();
+                                const ty = tipRef.current.y();
+                                onChange(balloon.id, { tailTip: { x: tx, y: ty } });
+                            }
+                        }}
+                        onClick={(e) => e.cancelBubble = true}
+                        onTap={(e) => e.cancelBubble = true}
+                    />
+                )}
 
                 {textureImg && renderBody('texture')}
                 {textureImg && renderTail('texture')}

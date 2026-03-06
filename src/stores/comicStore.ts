@@ -65,11 +65,13 @@ export interface PageSettings {
     bgOpacity: number;
 }
 
-/** Floating asset on the stage (above panels, no panel clipping). */
+/** Floating asset on the stage (above panels, no panel clipping). type 'sfx' = stamp text (BOOM, ZAP, etc.) with gold fill + black outline. */
 export interface OverlayObject {
     id: string;
     type: 'image' | 'sfx';
     src: string;
+    /** For type 'sfx', display this text (e.g. BOOM, ZAP, CRASH). */
+    text?: string;
     x: number;
     y: number;
     rotation: number;
@@ -86,6 +88,24 @@ export interface ComicPage {
     overlays?: OverlayObject[];
     background: string;
     layerOrder: string[]; // Order of IDs from back to front
+    /** When true, gutter snapping is disabled for this page (full-bleed cover). */
+    isCover?: boolean;
+}
+
+/** Serialized panel shape for templates (no id/image/prompt). */
+export interface PanelTemplateEntry {
+    shapeType: Panel['shapeType'];
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    points?: { x: number; y: number }[];
+}
+
+export interface PanelTemplate {
+    id: string;
+    name: string;
+    panels: PanelTemplateEntry[];
 }
 
 interface ComicState {
@@ -105,6 +125,8 @@ interface ComicState {
     clipboard: (Panel | BalloonInstance | Drawing)[];
     mode: 'layout' | 'content' | 'lettering';
     exportFormat: 'png' | 'pdf' | null;
+    templates: PanelTemplate[];
+    _autoSaveTick: number;
 
     // Drawing Mode State
     isDrawingMode: boolean;
@@ -159,12 +181,21 @@ interface ComicState {
     updateProjectSettings: (settings: Partial<ComicState['projectSettings']>) => void;
     setGutterSize: (size: number) => void;
     setPageSettings: (settings: Partial<PageSettings>) => void;
+    setPageCover: (pageId: string, isCover: boolean) => void;
     addOverlay: (pageId: string, overlay: Omit<OverlayObject, 'id'>) => void;
     updateOverlay: (pageId: string, overlayId: string, updates: Partial<OverlayObject>) => void;
     removeOverlay: (pageId: string, overlayId: string) => void;
     serializeProject: () => void;
     loadProject: (jsonString: string) => void;
     splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant?: number) => void;
+
+    // Panel templates (save/apply blank layout)
+    templates: PanelTemplate[];
+    saveBlankPanelTemplate: (pageId: string, name?: string) => void;
+    applyTemplate: (pageId: string, templateId: string) => void;
+
+    // Auto-save trigger (call every 30s to persist to localStorage)
+    flushAutoSave: () => void;
 }
 
 export const useComicStore = create<ComicState>()(
@@ -200,6 +231,8 @@ export const useComicStore = create<ComicState>()(
                 clipboard: [],
                 mode: 'layout',
                 exportFormat: null,
+                templates: [],
+                _autoSaveTick: 0,
 
                 isDrawingMode: false,
                 brushColor: '#000000',
@@ -711,6 +744,10 @@ export const useComicStore = create<ComicState>()(
                     pageSettings: { ...state.pageSettings, ...settings }
                 })),
 
+                setPageCover: (pageId, isCover) => set((state) => ({
+                    pages: state.pages.map(p => p.id === pageId ? { ...p, isCover } : p)
+                })),
+
                 addOverlay: (pageId, overlay) => set((state) => {
                     const newId = crypto.randomUUID();
                     return {
@@ -781,6 +818,52 @@ export const useComicStore = create<ComicState>()(
                         console.error("Failed to load project", e);
                     }
                 },
+
+                saveBlankPanelTemplate: (pageId, name) => set((state) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page || page.panels.length === 0) return state;
+                    const panels: PanelTemplateEntry[] = page.panels.map(p => ({
+                        shapeType: p.shapeType,
+                        x: p.x,
+                        y: p.y,
+                        width: p.width,
+                        height: p.height,
+                        ...(p.points && { points: p.points.map(pt => ({ ...pt })) })
+                    }));
+                    const template: PanelTemplate = {
+                        id: crypto.randomUUID(),
+                        name: name || `Template ${state.templates.length + 1}`,
+                        panels
+                    };
+                    return { templates: [...state.templates, template] };
+                }),
+
+                applyTemplate: (pageId, templateId) => set((state) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    const template = state.templates.find(t => t.id === templateId);
+                    if (!page || !template) return state;
+                    const newPanels: Panel[] = template.panels.map((entry, i) => ({
+                        id: crypto.randomUUID(),
+                        type: 'panel',
+                        shapeType: entry.shapeType,
+                        x: entry.x,
+                        y: entry.y,
+                        width: entry.width,
+                        height: entry.height,
+                        ...(entry.points && { points: entry.points.map(pt => ({ ...pt })) })
+                    }));
+                    const newPanelIds = newPanels.map(p => p.id);
+                    const otherOrder = (page.layerOrder || []).filter(id => !page.panels.some(p => p.id === id));
+                    return {
+                        pages: state.pages.map(p =>
+                            p.id === pageId
+                                ? { ...p, panels: newPanels, layerOrder: [...newPanelIds, ...otherOrder] }
+                                : p
+                        )
+                    };
+                }),
+
+                flushAutoSave: () => set((state) => ({ ...state, _autoSaveTick: Date.now() })),
 
                 splitPanel: (pageId, panelId, direction, slant = 0) => set((state) => {
                     const page = state.pages.find(p => p.id === pageId);
@@ -889,7 +972,9 @@ export const useComicStore = create<ComicState>()(
                     pageSettings: state.pageSettings,
                     layoutMode: state.layoutMode,
                     currentGenreId: state.currentGenreId,
-                    customGenre: state.customGenre
+                    customGenre: state.customGenre,
+                    templates: state.templates,
+                    _autoSaveTick: state._autoSaveTick
                 })
             }
         ),
@@ -901,7 +986,9 @@ export const useComicStore = create<ComicState>()(
                 pageSettings: state.pageSettings,
                 layoutMode: state.layoutMode,
                 currentGenreId: state.currentGenreId,
-                customGenre: state.customGenre
+                customGenre: state.customGenre,
+                templates: state.templates,
+                _autoSaveTick: state._autoSaveTick
             }),
             limit: 100
         }

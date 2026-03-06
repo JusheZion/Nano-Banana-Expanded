@@ -1,9 +1,11 @@
 import React, { useRef, useEffect } from 'react';
-import { Group, Image, Transformer } from 'react-konva';
+import { Group, Image, Text, Transformer } from 'react-konva';
 import useImage from 'use-image';
 import type { OverlayObject } from '../../../stores/comicStore';
 
 const DEFAULT_SIZE = 120;
+const SFX_FONT_SIZE = 48;
+const SFX_FONT = 'Bangers';
 
 interface FloatingAssetProps {
     overlay: OverlayObject;
@@ -30,6 +32,9 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
             trRef.current.getLayer()?.batchDraw();
         }
     }, [isSelected]);
+
+    const isSfx = overlay.type === 'sfx';
+    const sfxText = overlay.text || 'BOOM';
 
     return (
         <>
@@ -63,13 +68,30 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
                     });
                 }}
             >
-                <Image
-                    image={image}
-                    width={DEFAULT_SIZE}
-                    height={DEFAULT_SIZE}
-                    offset={{ x: DEFAULT_SIZE / 2, y: DEFAULT_SIZE / 2 }}
-                    listening={!isSelected}
-                />
+                {isSfx ? (
+                    <Text
+                        text={sfxText}
+                        fontFamily={SFX_FONT}
+                        fontSize={SFX_FONT_SIZE}
+                        fill="#b38728"
+                        stroke="#000000"
+                        strokeWidth={5}
+                        listening={!isSelected}
+                        x={0}
+                        y={0}
+                        offsetX={60}
+                        offsetY={SFX_FONT_SIZE / 2}
+                        align="center"
+                    />
+                ) : (
+                    <Image
+                        image={image}
+                        width={DEFAULT_SIZE}
+                        height={DEFAULT_SIZE}
+                        offset={{ x: DEFAULT_SIZE / 2, y: DEFAULT_SIZE / 2 }}
+                        listening={!isSelected}
+                    />
+                )}
             </Group>
             {isSelected && (
                 <Transformer

@@ -153,6 +153,12 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
                 {ASSETS.map((asset, index) => (
                     <button
                         key={index}
+                        type="button"
+                        draggable
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData('application/x-asset-url', asset);
+                            e.dataTransfer.effectAllowed = 'copy';
+                        }}
                         className="w-full rounded-lg overflow-hidden border border-white/10 hover:border-gold-500/50 hover:shadow-[0_0_15px_rgba(212,175,55,0.2)] transition-all group relative break-inside-avoid bg-black/20"
                         onClick={() => handleAssetClick(asset)}
                     >
@@ -160,6 +166,7 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
                             src={asset}
                             alt={asset.split('/').pop()}
                             loading="lazy"
+                            draggable={false}
                             className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">

@@ -151,7 +151,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     if (!currentPage) return pos;
 
                     const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
-                    const gutter = state.gutterSize ?? 16;
+                    const gutter = currentPage.isCover ? 0 : (state.gutterSize ?? 16);
                     const { newX, newY } = getGutterAwareSnapLines(
                         pos.x,
                         pos.y,
@@ -456,7 +456,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             if (!currentPage) return pos;
 
                             const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
-                            const gutter = state.gutterSize ?? 16;
+                            const gutter = currentPage.isCover ? 0 : (state.gutterSize ?? 16);
                             const result = getVertexSnapLines(pos.x, pos.y, siblings, panel.id, gutter);
                             onVertexSnap?.(result.snapLines);
                             onDiagonalGuides?.(result.diagonalGuides);
@@ -529,7 +529,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                     const currentPage = state.pages.find(p => p.id === state.currentPageId);
                                     if (currentPage) {
                                         const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
-                                        const gutter = state.gutterSize ?? 16;
+                                        const gutter = currentPage.isCover ? 0 : (state.gutterSize ?? 16);
                                         const result = getVertexSnapLines(pos.x, pos.y, siblings, panel.id, gutter);
                                         onVertexSnap?.(result.snapLines);
                                         onDiagonalGuides?.(result.diagonalGuides);

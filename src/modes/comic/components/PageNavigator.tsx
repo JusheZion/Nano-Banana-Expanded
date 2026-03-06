@@ -19,6 +19,7 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose, e
         duplicatePage,
         removePage,
         reorderPages,
+        setPageCover,
         layoutMode,
         setLayoutMode
     } = useComicStore();
@@ -111,6 +112,15 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose, e
                                     </Tooltip>
                                 </div>
                                 <div className="flex gap-1 justify-end">
+                                    <Tooltip content={page.isCover ? 'Unset as cover (enable gutter snap)' : 'Set as cover (full-bleed, no gutter snap)'}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setPageCover(page.id, !page.isCover); }}
+                                            className={`w-6 h-6 rounded flex items-center justify-center text-xs ${page.isCover ? 'bg-[#b38728] text-black' : 'bg-black/80 hover:bg-black text-white'}`}
+                                            title={page.isCover ? 'Cover' : 'Set as cover'}
+                                        >
+                                            📖
+                                        </button>
+                                    </Tooltip>
                                     <Tooltip content="Duplicate Page">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); duplicatePage(page.id); }}
