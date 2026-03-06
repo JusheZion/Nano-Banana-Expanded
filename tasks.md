@@ -38,16 +38,16 @@
 - [ ] **Inner-Balloon Control**:
   - [ ] Select, scale, and shift text boxes inside balloons independently.
   - [ ] Add Text Alignment (Left, Center, Right, Top, Bottom).
-- [ ] **Tail Intelligence**:
-  - [ ] Implement "Smart Overlap" to hide seams where tails connect to bodies.
-  - [ ] Add "Snap Tail Cleanly" button to auto-align tails to nearest panel edge.
+- [x] **Tail Intelligence (Smart Overlap)**: Unified body+tail path for ellipse and rounded-rect balloons so the border does not show at the tail junction; draggable tail handle when balloon is selected.
+- [ ] **Snap Tail Cleanly**: Add button to auto-align tails to nearest panel edge.
 - [ ] **Defaults**: Set `Auto-Fit` to **OFF** by default for all new text/balloons.
 
-## Phase 13: Project Management & Templates
+## Phase 13: Project Management & Templates — COMPLETE
 
-- [ ] **Template Engine**: Add "Save Blank Panel Template" feature.
-- [ ] **Cover Studio**: Implement a specific workflow for "Save/Design Cover Page."
-- [ ] **Genre Polish**: Finalize the "Smart Bias" prompt stacking for all 10+ genres in the registry.
+- [x] **Template Engine**: "Save Blank Panel Template" and "Apply template" in Settings → Panel templates; `PanelTemplate` / `saveBlankPanelTemplate` / `applyTemplate` in store.
+- [x] **Cover Studio**: "Set as Cover" (📖) per page in PageNavigator; `isCover` on `ComicPage` disables gutter snapping for full-bleed.
+- [x] **Genre Polish**: Smart Bias (`aiBias`) in GenreRegistry; `promptMiddleware.generatePrompt` appends it when genre is selected.
+- [x] **Auto-Save**: Project state (including balloons and overlays) persists to localStorage every 30 seconds via `flushAutoSave()` in ComicLayout.
 
 ## Critical Bug-Squash List (Priority 1)
 
