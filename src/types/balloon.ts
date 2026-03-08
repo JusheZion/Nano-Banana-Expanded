@@ -68,6 +68,10 @@ export interface BalloonOverrides {
     text3DExtrusion?: number;
     text3DExtrusionColor?: string;
     text3DExtrusionAngle?: number;
+    /** Horizontal alignment of text within the balloon */
+    textAlignHorizontal?: 'left' | 'center' | 'right';
+    /** Vertical alignment of text within the balloon */
+    textAlignVertical?: 'top' | 'middle' | 'bottom';
 }
 
 export interface BalloonInstance {

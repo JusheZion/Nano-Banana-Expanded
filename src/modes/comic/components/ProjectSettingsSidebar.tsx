@@ -38,6 +38,24 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
     const rb = embedded;
     const content = (
             <div className={`flex-1 overflow-y-auto p-6 space-y-6 min-h-0 ${rb ? '' : ''}`} style={rb ? { color: PRIMARY_BG_FLAT } : undefined}>
+                {/* Interface */}
+                <div className="settings-group">
+                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Interface</h3>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className={`text-sm font-medium cursor-pointer ${rb ? 'text-inherit' : 'text-white'}`} htmlFor="ribbon-pinned-default">
+                            Ribbon pinned by default
+                        </label>
+                        <input
+                            type="checkbox"
+                            id="ribbon-pinned-default"
+                            checked={projectSettings?.ribbonPinnedDefault ?? false}
+                            onChange={(e) => updateProjectSettings({ ribbonPinnedDefault: e.target.checked })}
+                            className="rounded border-white/20 accent-[#002366]"
+                        />
+                    </div>
+                    <p className={`text-xs ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>When on, the tool ribbon below the menu bar stays visible by default. When off, it shows only when a menu (e.g. Text, Objects) is open or something is selected.</p>
+                </div>
+
                 {/* Global Gutter */}
                 <div className="settings-group">
                     <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Layout</h3>

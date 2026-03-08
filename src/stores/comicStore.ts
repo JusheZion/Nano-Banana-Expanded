@@ -112,6 +112,8 @@ interface ComicState {
     projectSettings: {
         inclusiveBiasEnabled: boolean;
         demographicFocus: string;
+        /** When true, the contextual ribbon starts pinned (visible) by default. */
+        ribbonPinnedDefault: boolean;
     };
     gutterSize: number;
     pageSettings: PageSettings;
@@ -125,6 +127,16 @@ interface ComicState {
     clipboard: (Panel | BalloonInstance | Drawing)[];
     mode: 'layout' | 'content' | 'lettering';
     exportFormat: 'png' | 'pdf' | null;
+    /** Right-click context menu on canvas */
+    contextMenu: {
+        open: boolean;
+        x: number;
+        y: number;
+        context: 'balloon' | 'panel' | 'empty';
+        pageId?: string;
+        balloonId?: string;
+        panelId?: string;
+    };
     templates: PanelTemplate[];
     _autoSaveTick: number;
 
@@ -133,6 +145,9 @@ interface ComicState {
     brushColor: string;
     brushWidth: number;
     toggleDrawingMode: (isActive: boolean) => void;
+    // Knife (split panel) tool — shared so main tool strip and canvas can toggle/read
+    isKnifeMode: boolean;
+    setKnifeMode: (active: boolean) => void;
     setBrushSettings: (color: string, width: number) => void;
     addDrawing: (pageId: string, drawing: Omit<Drawing, 'id' | 'type'>) => void;
 
@@ -174,6 +189,8 @@ interface ComicState {
 
     triggerExport: (format: 'png' | 'pdf') => void;
     clearExport: () => void;
+    openContextMenu: (params: { x: number; y: number; context: 'balloon' | 'panel' | 'empty'; pageId?: string; balloonId?: string; panelId?: string }) => void;
+    closeContextMenu: () => void;
 
     // Genre Management
     applyGenreToAll: () => void;
@@ -188,9 +205,9 @@ interface ComicState {
     serializeProject: () => void;
     loadProject: (jsonString: string) => void;
     splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant?: number) => void;
+    snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => void;
 
     // Panel templates (save/apply blank layout)
-    templates: PanelTemplate[];
     saveBlankPanelTemplate: (pageId: string, name?: string) => void;
     applyTemplate: (pageId: string, templateId: string) => void;
 
@@ -204,7 +221,8 @@ export const useComicStore = create<ComicState>()(
             (set) => ({
                 projectSettings: {
                     inclusiveBiasEnabled: false,
-                    demographicFocus: ''
+                    demographicFocus: '',
+                    ribbonPinnedDefault: false
                 },
                 gutterSize: 16,
                 pageSettings: {
@@ -231,14 +249,17 @@ export const useComicStore = create<ComicState>()(
                 clipboard: [],
                 mode: 'layout',
                 exportFormat: null,
+                contextMenu: { open: false, x: 0, y: 0, context: 'empty' },
                 templates: [],
                 _autoSaveTick: 0,
 
                 isDrawingMode: false,
                 brushColor: '#000000',
                 brushWidth: 3,
+                isKnifeMode: false,
 
                 toggleDrawingMode: (isActive) => set({ isDrawingMode: isActive }),
+                setKnifeMode: (active) => set({ isKnifeMode: active }),
                 setBrushSettings: (color, width) => set({ brushColor: color, brushWidth: width }),
 
                 addDrawing: (pageId, drawing) => set((state) => {
@@ -416,7 +437,7 @@ export const useComicStore = create<ComicState>()(
                                         type: 'balloon',
                                         isVisible: true,
                                         isLocked: false,
-                                        autoSize: true,
+                                        autoSize: false,
                                         padding: 20
                                     }],
                                     layerOrder: [...p.layerOrder, newId]
@@ -438,6 +459,41 @@ export const useComicStore = create<ComicState>()(
                             : p
                     )
                 })),
+
+                /** Snap selected balloon tail tip to nearest panel edge (clamp to panel rect). */
+                snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => set((state) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    const balloon = page?.balloons.find(b => b.id === balloonId);
+                    if (!page || !balloon?.hasTail || !balloon.tailTip || !page.panels.length) return state;
+                    const tipPageX = balloon.x + balloon.tailTip.x;
+                    const tipPageY = balloon.y + balloon.tailTip.y;
+                    const balloonCenterX = balloon.x + balloon.width / 2;
+                    const balloonCenterY = balloon.y + balloon.height / 2;
+                    let best = page.panels[0];
+                    let bestDist = Infinity;
+                    for (const panel of page.panels) {
+                        const px = panel.x + panel.width / 2;
+                        const py = panel.y + panel.height / 2;
+                        const inPanel = balloonCenterX >= panel.x && balloonCenterX <= panel.x + panel.width &&
+                            balloonCenterY >= panel.y && balloonCenterY <= panel.y + panel.height;
+                        if (inPanel) { best = panel; break; }
+                        const d = (balloonCenterX - px) ** 2 + (balloonCenterY - py) ** 2;
+                        if (d < bestDist) { bestDist = d; best = panel; }
+                    }
+                    const nx = Math.max(best.x, Math.min(best.x + best.width, tipPageX));
+                    const ny = Math.max(best.y, Math.min(best.y + best.height, tipPageY));
+                    const newTailTip = { x: nx - balloon.x, y: ny - balloon.y };
+                    return {
+                        pages: state.pages.map(p =>
+                            p.id !== pageId ? p : {
+                                ...p,
+                                balloons: p.balloons.map(b =>
+                                    b.id !== balloonId ? b : { ...b, tailTip: newTailTip }
+                                )
+                            }
+                        )
+                    };
+                }),
 
                 syncBalloonStyle: (balloonId) => set((state) => {
                     let sourceStyleId: string | null = null;
@@ -641,6 +697,8 @@ export const useComicStore = create<ComicState>()(
 
                 triggerExport: (format) => set({ exportFormat: format }),
                 clearExport: () => set({ exportFormat: null }),
+                openContextMenu: (params) => set({ contextMenu: { ...params, open: true } }),
+                closeContextMenu: () => set((s) => ({ contextMenu: { ...s.contextMenu, open: false } })),
 
                 toggleFlip: (pageId, elementId, axis) => set((state) => ({
                     pages: state.pages.map(p => p.id === pageId ? {
@@ -842,7 +900,7 @@ export const useComicStore = create<ComicState>()(
                     const page = state.pages.find(p => p.id === pageId);
                     const template = state.templates.find(t => t.id === templateId);
                     if (!page || !template) return state;
-                    const newPanels: Panel[] = template.panels.map((entry, i) => ({
+                    const newPanels: Panel[] = template.panels.map((entry) => ({
                         id: crypto.randomUUID(),
                         type: 'panel',
                         shapeType: entry.shapeType,

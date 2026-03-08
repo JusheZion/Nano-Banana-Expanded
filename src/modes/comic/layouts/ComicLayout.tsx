@@ -4,22 +4,23 @@ import { GENRE_REGISTRY } from '../data/GenreRegistry';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { FontSelect } from '../components/FontSelect';
 import { AssetLibrary } from '../components/AssetLibrary';
-import { ObjectToolbar } from '../components/ObjectToolbar';
-import { TextToolbar } from '../components/TextToolbar';
 import { LayerTree } from '../components/LayerTree';
 import { ProjectSettingsSidebar } from '../components/ProjectSettingsSidebar';
 import { PageNavigator } from '../components/PageNavigator';
-import { TopRibbon } from '../components/TopRibbon';
-import { ComicPanelStack, PagesIcon, LayersIcon, SettingsIcon, AssetsIcon } from '../components/ComicPanelStack';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { MenuBar, type MenuId } from '../components/MenuBar';
+import { ContextualRibbon } from '../components/ContextualRibbon';
+import { CanvasContextMenu } from '../components/CanvasContextMenu';
+import { FormatDialog, type FormatDialogTabId } from '../components/FormatDialog';
+import { PagesTabIcon, LayersTabIcon, SettingsTabIcon, AssetsTabIcon } from '../components/TabbedDock';
+import type { TabbedDockTabId } from '../components/TabbedDock';
 import {
   PRIMARY_BG,
   PRIMARY_BG_FLAT,
-  SECONDARY_BG,
   ACCENT_GOLD_GRADIENT,
+  ACCENT_BLUE_GRADIENT,
   TEXT_ON_GOLD,
-  TEXT_ON_BLUE,
 } from '../theme/Phase12DesignTokens';
+import { PanelRightOpen } from 'lucide-react';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -44,7 +45,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     loadProject,
     zoomLevel,
     setZoomLevel,
-    layoutMode
+    layoutMode,
+    setLayoutMode,
   } = useComicStore();
 
   // Auto-save project state to localStorage every 30s
@@ -56,17 +58,55 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const undo = () => useComicStore.temporal.getState().undo();
   const redo = () => useComicStore.temporal.getState().redo();
 
-  const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
   const [isGenreOpen, setIsGenreOpen] = useState(false);
   const currentGenre = GENRE_REGISTRY.find(g => g.id === currentGenreId) || GENRE_REGISTRY[0];
 
-  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isLayerTreeOpen, setIsLayerTreeOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isPageNavOpen, setIsPageNavOpen] = useState(true);
+  const [isDockOpen, setIsDockOpen] = useState(true);
+  const [activeDockTab, setActiveDockTab] = useState<TabbedDockTabId>('pages');
+  const [activeMenu, setActiveMenu] = useState<MenuId>(null);
+  /** Last format category chosen (Text vs Objects); drives which format ribbon shows when an object is selected. */
+  const [lastFormatCategory, setLastFormatCategory] = useState<'text' | 'objects' | null>(null);
+  const [ribbonPinned, setRibbonPinned] = useState(() => useComicStore.getState().projectSettings.ribbonPinnedDefault);
   const [balloonTextExpanded, setBalloonTextExpanded] = useState(false);
   const [balloonShapeExpanded, setBalloonShapeExpanded] = useState(false);
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
+  const [formatDialogTab, setFormatDialogTab] = useState<FormatDialogTabId>('text');
+  const [formatDialogTarget, setFormatDialogTarget] = useState<{ pageId?: string | null; balloonId?: string | null; panelId?: string | null }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const themeDropdownRef = useRef<HTMLDivElement>(null);
+
+  const currentPage = pages.find(p => p.id === currentPageId);
+  const hasPanelSelected = Boolean(currentPage?.panels.some(p => selectedElementIds.includes(p.id)));
+  const hasBalloonSelected = Boolean(currentPage?.balloons.some(b => selectedElementIds.includes(b.id)));
+
+  /** When user picks Text or Objects in the menu bar, update active menu and last format category so the correct ribbon shows (and stays when selection changes). */
+  const handleActiveMenuChange = (id: MenuId) => {
+    setActiveMenu(id);
+    if (id === 'text') setLastFormatCategory('text');
+    else if (id === 'objects') setLastFormatCategory('objects');
+  };
+
+  const openFormatDialog = (tab: FormatDialogTabId, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => {
+    setFormatDialogTab(tab);
+    setFormatDialogTarget({ pageId: pageId ?? undefined, balloonId: balloonId ?? undefined, panelId: panelId ?? undefined });
+    setFormatDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isGenreOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (themeDropdownRef.current && !themeDropdownRef.current.contains(e.target as Node)) {
+        setIsGenreOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsGenreOpen(false); };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isGenreOpen]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,13 +119,6 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     reader.readAsText(file);
     e.target.value = '';
   };
-
-  // Determine selected element type
-  const currentPage = pages.find(p => p.id === currentPageId);
-  const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
-  const selectedBalloons = currentPage?.balloons.filter(b => selectedElementIds.includes(b.id)) || [];
-  const isPanelSelected = selectedPanels.length > 0;
-  const selectedTextId = selectedBalloons.length > 0 ? selectedBalloons[0].id : null;
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -301,192 +334,141 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     </div>
   ) : null;
 
+  const dockTabs: { id: TabbedDockTabId; label: string; icon: React.ReactNode; children: React.ReactNode }[] = [
+    { id: 'pages', label: 'Pages', icon: <PagesTabIcon />, children: <PageNavigator embedded isOpen={activeDockTab === 'pages'} onClose={() => setActiveDockTab('pages')} /> },
+    { id: 'layers', label: 'Layers', icon: <LayersTabIcon />, children: <LayerTree embedded isOpen={activeDockTab === 'layers'} onClose={() => setActiveDockTab('layers')} /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsTabIcon />, children: <ProjectSettingsSidebar embedded isOpen={activeDockTab === 'settings'} onClose={() => setActiveDockTab('settings')} /> },
+    { id: 'assets', label: 'Assets', icon: <AssetsTabIcon />, children: <AssetLibrary embedded isOpen={activeDockTab === 'assets'} onClose={() => setActiveDockTab('assets')} /> },
+  ];
+  const activeDockContent = dockTabs.find(t => t.id === activeDockTab)?.children;
+
   return (
     <div
       className="comic-layout flex h-screen text-white relative overflow-hidden min-h-0"
       style={{ background: PRIMARY_BG }}
     >
-      {/* Main column: ribbon + toolbar + content (left sidebar removed per annotation; original will be modified later) */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
-      <TopRibbon
-        collapsed={ribbonCollapsed}
-        onToggleCollapse={() => setRibbonCollapsed(!ribbonCollapsed)}
-        onUndo={undo}
-        onRedo={redo}
-        isThemeOpen={isGenreOpen}
-        onToggleTheme={() => setIsGenreOpen(!isGenreOpen)}
-        themeLabel={currentGenre.id === 'custom' ? 'Theme' : currentGenre.label}
-        themeDropdown={themeDropdownContent}
-        onSaveJson={serializeProject}
-        onLoadJson={() => fileInputRef.current?.click()}
-        loadInputRef={fileInputRef}
-        onExportPng={() => triggerExport('png')}
-        onExportPdf={() => triggerExport('pdf')}
-        zoomLevel={zoomLevel}
-        onZoomIn={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
-        onZoomOut={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
-        onZoomReset={() => setZoomLevel(1)}
-        onZoomFit={() => {
-          const viewportWidth = window.innerWidth - 300;
-          const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
-          setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
-        }}
-        contextualSlot={
-          selectedTextId && currentPageId ? (
-            <TextToolbar
-              variant="ribbon"
-              currentPageId={currentPageId}
-              selectedBubbleId={selectedTextId}
-              textExpanded={balloonTextExpanded}
-              shapeExpanded={balloonShapeExpanded}
-              onTextExpandedChange={setBalloonTextExpanded}
-              onShapeExpandedChange={setBalloonShapeExpanded}
-            />
-          ) : undefined
-        }
-      />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        className="hidden"
-        aria-hidden
-        onChange={handleFileUpload}
-      />
-
-      {/* Single-row toolbar: Image Properties + Tools (Phase 12 - maximize vertical drawing space) */}
-      {isPanelSelected && currentPageId && selectedElementIds.length > 0 && (
-        <div
-          className="w-full border-b border-white/10 px-3 py-1 z-40 flex flex-nowrap items-center gap-1 overflow-x-auto shrink-0"
-          style={{ backgroundColor: SECONDARY_BG }}
-        >
-          <ObjectToolbar
-            currentPageId={currentPageId}
-            selectedElementIds={selectedElementIds}
+        {/* Top row: File, Edit, View, Panel, Balloon menus (level with dock tabs) + Studio + Dock tabs — Golden gradient bar, blue text */}
+        <header className="h-10 border-b border-white/15 flex items-stretch shrink-0 z-50" style={{ background: ACCENT_GOLD_GRADIENT }}>
+          <MenuBar
+            activeMenu={activeMenu}
+            onActiveMenuChange={handleActiveMenuChange}
+            themeLabel={currentGenre.id === 'custom' ? 'Theme' : currentGenre.label}
+            onThemeClick={() => setIsGenreOpen(!isGenreOpen)}
+            onSave={serializeProject}
+            onLoad={() => fileInputRef.current?.click()}
+            onExportPng={() => triggerExport('png')}
+            onExportPdf={() => triggerExport('pdf')}
+            onUndo={undo}
+            onRedo={redo}
+            onCut={() => { copySelected(); deleteSelected(); }}
+            onCopy={copySelected}
+            onPaste={pasteClipboard}
+            zoomLevel={zoomLevel}
+            onZoomIn={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
+            onZoomOut={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
+            onZoomReset={() => setZoomLevel(1)}
+            onZoomFit={() => {
+              const viewportWidth = window.innerWidth - (isDockOpen ? 320 : 0);
+              const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
+              setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
+            }}
+            layoutMode={layoutMode}
+            onLayoutModeChange={setLayoutMode}
+            hasPanelSelected={hasPanelSelected}
+            onOpenFormatDialog={openFormatDialog}
           />
-        </div>
-      )}
+          <div className="flex-1 min-w-0" />
+          <button
+            type="button"
+            onClick={() => setIsDockOpen(!isDockOpen)}
+            className="h-10 px-3 flex items-center gap-1.5 border-l border-white/15 transition-all duration-150 shrink-0 hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.98] active:shadow-inner"
+            style={isDockOpen ? { background: ACCENT_BLUE_GRADIENT, color: TEXT_ON_GOLD } : { color: '#001a4d' }}
+            aria-pressed={isDockOpen}
+            aria-label="Studio panels"
+          >
+            <PanelRightOpen size={16} />
+            <span className="font-semibold text-xs uppercase tracking-wider hidden sm:inline">Studio</span>
+          </button>
+          {isDockOpen && dockTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveDockTab(tab.id)}
+              className="h-10 px-3 flex items-center justify-center gap-1.5 border-l border-white/15 min-w-0 shrink-0 transition-all duration-150 hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.98] active:shadow-inner"
+              style={activeDockTab === tab.id ? { background: ACCENT_BLUE_GRADIENT, color: TEXT_ON_GOLD } : { color: '#001a4d' }}
+              aria-pressed={activeDockTab === tab.id}
+              aria-label={tab.label}
+            >
+              {tab.icon}
+              <span className="text-xs font-semibold uppercase tracking-wider hidden md:inline truncate">{tab.label}</span>
+            </button>
+          ))}
+        </header>
 
-      {/* Balloon Text/Shape row when expanded */}
-      {selectedTextId && currentPageId && (balloonTextExpanded || balloonShapeExpanded) && (
-        <div
-          className="w-full border-b border-white/10 px-3 py-1.5 z-40 flex flex-nowrap items-center gap-x-3 overflow-x-auto shrink-0"
-          style={{ backgroundColor: SECONDARY_BG }}
-        >
-          <TextToolbar
-            variant="expanded"
-            currentPageId={currentPageId}
-            selectedBubbleId={selectedTextId}
-            textExpanded={balloonTextExpanded}
-            shapeExpanded={balloonShapeExpanded}
-          />
-        </div>
-      )}
+        {isGenreOpen && (
+          <div ref={themeDropdownRef} className="fixed left-4 top-10 z-[100]" role="dialog" aria-label="Studio themes">
+            {themeDropdownContent}
+          </div>
+        )}
 
-      {/* Right-side: stack (when any pane open) + fixed bottom toolbar (always visible, does not scroll) */}
-      {(isPageNavOpen || isLayerTreeOpen || isSettingsOpen || isLibraryOpen) && (
-        <ComicPanelStack
-          topOffsetRem={4}
-          bottomBarRem={3}
-          panels={[
-            {
-              id: 'pages',
-              label: 'Pages',
-              icon: <PagesIcon />,
-              isOpen: isPageNavOpen,
-              onToggle: () => setIsPageNavOpen(!isPageNavOpen),
-              children: <PageNavigator embedded isOpen={isPageNavOpen} onClose={() => setIsPageNavOpen(false)} />
-            },
-            {
-              id: 'layers',
-              label: 'Layers',
-              icon: <LayersIcon />,
-              isOpen: isLayerTreeOpen,
-              onToggle: () => setIsLayerTreeOpen(!isLayerTreeOpen),
-              children: <LayerTree embedded isOpen={isLayerTreeOpen} onClose={() => setIsLayerTreeOpen(false)} />
-            },
-            {
-              id: 'settings',
-              label: 'Settings',
-              icon: <SettingsIcon />,
-              isOpen: isSettingsOpen,
-              onToggle: () => setIsSettingsOpen(!isSettingsOpen),
-              children: <ProjectSettingsSidebar embedded isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-            },
-            {
-              id: 'assets',
-              label: 'Assets',
-              icon: <AssetsIcon />,
-              isOpen: isLibraryOpen,
-              onToggle: () => setIsLibraryOpen(!isLibraryOpen),
-              children: <AssetLibrary embedded isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} />
-            }
-          ]}
+        <input ref={fileInputRef} type="file" accept=".json" className="hidden" aria-hidden onChange={handleFileUpload} />
+
+        {/* Right-click context menu (canvas) + Format dialog */}
+        <CanvasContextMenu onOpenFormatDialog={openFormatDialog} />
+        <FormatDialog
+          open={formatDialogOpen}
+          onClose={() => setFormatDialogOpen(false)}
+          initialTab={formatDialogTab}
+          pageId={formatDialogTarget.pageId}
+          balloonId={formatDialogTarget.balloonId}
+          panelId={formatDialogTarget.panelId}
         />
-      )}
 
-      {/* Fixed right-side bottom toolbar: icons only (labels removed per annotation) */}
-      <div
-        className="fixed right-0 bottom-0 w-72 h-12 border-l border-t border-white/10 flex items-stretch z-30"
-        style={{ background: PRIMARY_BG_FLAT }}
-        role="toolbar"
-        aria-label="Studio panels"
-      >
-        <Tooltip content={isPageNavOpen ? 'Close Pages' : 'Pages'}>
-          <button
-            type="button"
-            onClick={() => setIsPageNavOpen(!isPageNavOpen)}
-            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
-            style={{ color: TEXT_ON_BLUE, ...(isPageNavOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
-            aria-pressed={isPageNavOpen}
-            aria-label="Pages"
-          >
-            <PagesIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content={isLayerTreeOpen ? 'Close Layers' : 'Layers'}>
-          <button
-            type="button"
-            onClick={() => setIsLayerTreeOpen(!isLayerTreeOpen)}
-            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
-            style={{ color: TEXT_ON_BLUE, ...(isLayerTreeOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
-            aria-pressed={isLayerTreeOpen}
-            aria-label="Layers"
-          >
-            <LayersIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content={isSettingsOpen ? 'Close Settings' : 'Settings'}>
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
-            style={{ color: TEXT_ON_BLUE, ...(isSettingsOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
-            aria-pressed={isSettingsOpen}
-            aria-label="Settings"
-          >
-            <SettingsIcon />
-          </button>
-        </Tooltip>
-        <Tooltip content={isLibraryOpen ? 'Close Assets' : 'Assets'}>
-          <button
-            type="button"
-            onClick={() => setIsLibraryOpen(!isLibraryOpen)}
-            className="flex-1 flex items-center justify-center transition-colors hover:opacity-90"
-            style={{ color: TEXT_ON_BLUE, ...(isLibraryOpen ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : {}) }}
-            aria-pressed={isLibraryOpen}
-            aria-label="Assets"
-          >
-            <AssetsIcon />
-          </button>
-        </Tooltip>
-      </div>
+        {/* Contextual ribbon (Panel / Balloon / View / File / Edit) — only when that menu is active or relevant object selected */}
+        <ContextualRibbon
+          activeMenu={activeMenu}
+          lastFormatCategory={lastFormatCategory}
+          hasPanelSelected={hasPanelSelected}
+          hasBalloonSelected={hasBalloonSelected}
+          currentPageId={currentPageId}
+          selectedElementIds={selectedElementIds}
+          ribbonPinned={ribbonPinned}
+          onRibbonPinToggle={() => setRibbonPinned(p => !p)}
+          balloonTextExpanded={balloonTextExpanded}
+          balloonShapeExpanded={balloonShapeExpanded}
+          onBalloonTextExpandedChange={setBalloonTextExpanded}
+          onBalloonShapeExpandedChange={setBalloonShapeExpanded}
+          zoomLevel={zoomLevel}
+          onZoomIn={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
+          onZoomOut={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
+          onZoomReset={() => setZoomLevel(1)}
+          onZoomFit={() => {
+            const viewportWidth = window.innerWidth - (isDockOpen ? 320 : 0);
+            const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
+            setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
+          }}
+          layoutMode={layoutMode}
+          onLayoutModeChange={setLayoutMode}
+          onSave={serializeProject}
+          onExportPng={() => triggerExport('png')}
+          onExportPdf={() => triggerExport('pdf')}
+          onUndo={undo}
+          onRedo={redo}
+          onActiveMenuChange={handleActiveMenuChange}
+        />
 
-      {/* Main Content Area — flex-1 so it shrinks when ribbon grows (e.g. Text/Shape expanded) */}
-      <main className="relative z-10 flex-1 min-h-0 min-w-0" style={{ background: PRIMARY_BG }}>
-        {children}
-      </main>
+        {/* Main content + Dock content (dock at top level with menu, content below) */}
+        <div className="flex flex-1 min-h-0 min-w-0">
+          <main className="relative z-10 flex-1 min-h-0 min-w-0" style={{ background: PRIMARY_BG }}>
+            {children}
+          </main>
+          {isDockOpen && activeDockContent && (
+            <aside className="w-[300px] border-l border-white/10 flex flex-col shrink-0 overflow-hidden bg-[#F5F5DC]" style={{ color: PRIMARY_BG_FLAT }}>
+              {activeDockContent}
+            </aside>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -9,17 +9,8 @@ import { ComicPanel } from '../components/ComicPanel';
 import { FloatingAsset } from '../components/FloatingAsset';
 import { splitConvexPolygon, pointInPanel } from '../utils/geometry';
 import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
-import type { BalloonStyleId, BalloonInstance } from '../../../types/balloon';
-import {
-  ACCENT_GOLD_SOLID,
-  ACCENT_GOLD_GRADIENT,
-  PRIMARY_BG_FLAT,
-  TEXT_ON_GOLD,
-  TEXT_ON_BLUE,
-} from '../theme/Phase12DesignTokens';
-
-// Placeholder for image URL
-const PLACEHOLDER_IMAGE_URL = "https://via.placeholder.com/150";
+import type { BalloonInstance } from '../../../types/balloon';
+import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 
 // --- Drawing View ---
 const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string, strokeWidth: number, isVisible?: boolean, isLocked?: boolean } }) => {
@@ -60,7 +51,6 @@ export const ComicCanvas: React.FC = () => {
         clearSelection,
         updatePanel,
         addPanel,
-        addBalloon,
         updateBalloon,
         addOverlay,
         updateOverlay,
@@ -71,20 +61,23 @@ export const ComicCanvas: React.FC = () => {
         brushWidth,
         addDrawing,
 
+        // Knife tool (toggle lives in ContextualRibbon / Panel menu)
+        isKnifeMode,
+
         // Node manipulation
-        removeElement
+        removeElement,
+
+        // Context menu
+        openContextMenu
     } = useComicStore();
 
     const [bgImage] = useImage(pageSettings?.backgroundImage ?? '', 'anonymous');
-    const currentPage = pages.find(p => p.id === currentPageId) || pages[0];
 
     // Local state for drawing
     const isDrawingRef = useRef(false);
     const [currentLine, setCurrentLine] = React.useState<number[]>([]);
     const targetPageIdRef = useRef<string | null>(null);
 
-    // Local state for Knife Tool
-    const [isKnifeMode, setIsKnifeMode] = React.useState(false);
     const [knifeStart, setKnifeStart] = React.useState<{ x: number, y: number } | null>(null);
     const [knifeCurrent, setKnifeCurrent] = React.useState<{ x: number, y: number } | null>(null);
 
@@ -145,6 +138,63 @@ export const ComicCanvas: React.FC = () => {
 
         // Always attempt to clear snaplines on interaction end
         setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
+    };
+
+    const handleStageContextMenu = (e: any) => {
+        e.evt?.preventDefault();
+        const stage = e.target.getStage();
+        const rawPos = stage.getPointerPosition();
+        const clientX = e.evt?.clientX ?? 0;
+        const clientY = e.evt?.clientY ?? 0;
+
+        let context: 'balloon' | 'panel' | 'empty' = 'empty';
+        let pageId: string | undefined;
+        let balloonId: string | undefined;
+        let panelId: string | undefined;
+
+        let node: any = e.target;
+        while (node) {
+            const name = node.name?.() ?? node.attrs?.name;
+            if (typeof name === 'string') {
+                if (name.startsWith('balloon-')) {
+                    context = 'balloon';
+                    balloonId = name.slice(8);
+                    break;
+                }
+                if (name.startsWith('panel-')) {
+                    context = 'panel';
+                    panelId = name.slice(7);
+                    break;
+                }
+                if (name.startsWith('page-')) {
+                    pageId = name.slice(5);
+                    if (context === 'empty') break;
+                }
+            }
+            node = node.getParent?.();
+        }
+
+        if (context === 'empty' && rawPos && pages.length > 0) {
+            const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
+            const targetPage = pages.find((_, i) => {
+                const offset = getLayoutPosition(i, layoutMode);
+                return pos.x >= offset.x && pos.x <= offset.x + 800 && pos.y >= offset.y && pos.y <= offset.y + 1200;
+            });
+            if (targetPage) pageId = targetPage.id;
+        }
+        if ((context === 'balloon' || context === 'panel') && !pageId && node) {
+            let p: any = node.getParent?.();
+            while (p) {
+                const n = p.name?.() ?? p.attrs?.name;
+                if (typeof n === 'string' && n.startsWith('page-')) {
+                    pageId = n.slice(5);
+                    break;
+                }
+                p = p.getParent?.();
+            }
+        }
+
+        openContextMenu({ x: clientX, y: clientY, context, pageId, balloonId, panelId });
     };
 
     const handleStageMouseMove = (e: any) => {
@@ -331,49 +381,6 @@ export const ComicCanvas: React.FC = () => {
         }
     }, [exportFormat, pages, currentPageId, layoutMode, zoomLevel, clearExport, clearSelection]);
 
-    const handleInsertImage = () => {
-        if (selectedElementIds.length > 0) {
-            pages.forEach(page => {
-                const isPanel = page.panels.some(p => selectedElementIds.includes(p.id));
-                if (isPanel) {
-                    const selectedPanels = page.panels.filter(p => selectedElementIds.includes(p.id));
-                    selectedPanels.forEach(p => updatePanel(page.id, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
-                }
-            });
-        } else {
-            alert("Select a panel first!");
-        }
-    };
-
-    const handleAddCallout = (calloutId: string) => {
-        const styleId = calloutId as BalloonStyleId;
-        const style = BALLOON_STYLES.find(s => s.id === styleId);
-        if (!style) return;
-
-        // Extract style-specific overrides (like SFX defaults)
-        const overrides: any = {};
-        if (style.textWarp) overrides.textWarp = style.textWarp;
-        if (style.textStroke) overrides.textStroke = style.textStroke;
-        if (style.textStrokeWidth) overrides.textStrokeWidth = style.textStrokeWidth;
-        if (style.secondaryTextStroke) overrides.secondaryTextStroke = style.secondaryTextStroke;
-        if (style.secondaryTextStrokeWidth) overrides.secondaryTextStrokeWidth = style.secondaryTextStrokeWidth;
-        if (style.text3DExtrusion) overrides.text3DExtrusion = style.text3DExtrusion;
-        if (style.text3DExtrusionColor) overrides.text3DExtrusionColor = style.text3DExtrusionColor;
-
-        addBalloon(currentPage.id, {
-            x: 400,
-            y: 600,
-            width: 250,
-            height: 150,
-            hasTail: style.hasTail,
-            tailBasePoint: { x: 0, y: 0 },
-            tailTip: { x: -50, y: 100 },
-            styleId: styleId,
-            text: style.kind === 'shout' && styleId.includes('sound_effect') ? "BOOM!" : "Text...",
-            overrides: Object.keys(overrides).length > 0 ? overrides : undefined
-        });
-    };
-
     const stageWidth = layoutMode === 'spread' && pages.length > 1 ? 1600 + 40 : 800 + 40; // padding
     const stageHeight = layoutMode === 'spread'
         ? Math.ceil(pages.length / 2) * 1220
@@ -381,129 +388,9 @@ export const ComicCanvas: React.FC = () => {
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent">
-            <style dangerouslySetInnerHTML={{ __html: `
-              .canvas-toolbar-btn-layers:hover { background: #002366 !important; color: #fcf6ba !important; border-color: rgba(255,255,255,0.2) !important; }
-              .canvas-toolbar-btn-layers:hover select { background: transparent !important; color: #fcf6ba !important; }
-            ` }} />
-            {/* Secondary toolbar — gold bg; hover/selection = Layers style (royal blue + cream) per annotation */}
-            <div
-                className="h-12 border-b border-white/10 flex items-center px-4 gap-4 z-50 relative"
-                style={{ background: ACCENT_GOLD_GRADIENT }}
-            >
-                <span className="text-xs font-mono uppercase tracking-widest shrink-0" style={{ color: TEXT_ON_GOLD }}>Comic Engine v0.3</span>
-                <div className="h-4 w-px bg-black/20 mx-2 shrink-0" />
-
-                <button
-                    className="canvas-toolbar-btn-layers px-3 py-1 text-xs rounded border border-black/20 transition-all flex items-center gap-2 shrink-0"
-                    style={{ background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD }}
-                    onClick={() => {
-                        setIsKnifeMode(false);
-                        addPanel(currentPage.id, {
-                            shapeType: 'polygon',
-                            x: 100,
-                            y: 100,
-                            width: 200,
-                            height: 200,
-                            points: [
-                                { x: 0, y: 0 },
-                                { x: 200, y: 0 },
-                                { x: 200, y: 200 },
-                                { x: 0, y: 200 }
-                            ]
-                        });
-                    }}
-                    title="Add a new panel to the active page"
-                >
-                    <span className="text-lg">+</span> Add Panel
-                </button>
-
-                {/* Knife Tool Toggle — royal blue when active (accent per annotation) */}
-                <button
-                    className="px-3 py-1 text-xs rounded border transition-all flex items-center gap-2 shrink-0"
-                    style={isKnifeMode ? { background: PRIMARY_BG_FLAT, color: TEXT_ON_BLUE, borderColor: 'rgba(255,255,255,0.3)' } : { background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' }}
-                    onClick={() => setIsKnifeMode(!isKnifeMode)}
-                    title="Slice panels"
-                >
-                    <span className="text-lg">🔪</span> Split
-                </button>
-
-                {/* Callout Selector — lighter gold; hover = Layers style on wrapper */}
-                <div className="relative flex items-center gap-2 shrink-0 canvas-toolbar-btn-layers rounded border px-2 py-1" title="Select and add a speech balloon" style={{ background: 'rgba(252, 246, 186, 0.5)', borderColor: 'rgba(0,0,0,0.2)' }}>
-                    <span className="text-xl" style={{ color: TEXT_ON_GOLD }}>💬</span>
-                    <select
-                        className="p-2 rounded border outline-none text-xs w-48 bg-transparent border-transparent"
-                        style={{ background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' }}
-                        onChange={(e) => {
-                            if (e.target.value) {
-                                handleAddCallout(e.target.value);
-                                e.target.value = ''; // Reset selection
-                            }
-                        }}
-                        defaultValue=""
-                    >
-                        <option value="" disabled>Add Balloon...</option>
-                        <optgroup label="Speech & Thought">
-                            {BALLOON_STYLES.filter(s => !s.id.startsWith('sound_effect')).map((style) => (
-                                <option key={style.id} value={style.id}>
-                                    {style.label}
-                                </option>
-                            ))}
-                        </optgroup>
-                        <optgroup label="Word Art & SFX">
-                            {BALLOON_STYLES.filter(s => s.id.startsWith('sound_effect')).map((style) => (
-                                <option key={style.id} value={style.id}>
-                                    {style.label}
-                                </option>
-                            ))}
-                        </optgroup>
-                    </select>
-                </div>
-
-                <button
-                    className="canvas-toolbar-btn-layers px-3 py-1 text-xs rounded border transition-all flex items-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={selectedElementIds.length > 0 ? { background: 'rgba(252, 246, 186, 0.5)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.2)' } : { background: 'rgba(252, 246, 186, 0.3)', color: TEXT_ON_GOLD, borderColor: 'rgba(0,0,0,0.15)' }}
-                    onClick={handleInsertImage}
-                    disabled={selectedElementIds.length === 0}
-                    title="Insert image into selected panel(s)"
-                >
-                    <span>🖼️</span> Insert Image
-                </button>
-
-                {/* SFX stamp: add BOOM / ZAP / CRASH etc. as overlay (gold + black outline) */}
-                <div className="flex items-center gap-1 shrink-0" title="Stamp SFX text on page">
-                    <span className="text-lg text-[#b38728]">✨</span>
-                    <select
-                        className="p-1.5 rounded border text-xs bg-transparent border-[rgba(0,0,0,0.2)]"
-                        style={{ color: TEXT_ON_GOLD, background: 'rgba(252, 246, 186, 0.5)' }}
-                        onChange={(e) => {
-                            const text = e.target.value;
-                            e.target.value = '';
-                            if (!text || !currentPageId) return;
-                            addOverlay(currentPageId, {
-                                type: 'sfx',
-                                text,
-                                src: '',
-                                x: 350,
-                                y: 180,
-                                rotation: 0,
-                                scaleX: 1,
-                                scaleY: 1,
-                                zIndex: 0
-                            });
-                        }}
-                        value=""
-                    >
-                        <option value="" disabled>SFX...</option>
-                        {['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'].map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
             {/* Canvas Area — video backdrop for future Infinite Comic Scroll; Asset Bridge: drop image not on panel → overlay */}
             <div
-                className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isKnifeMode ? 'cursor-crosshair' : isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{ background: '#000814' }}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
                 onDrop={(e) => {
@@ -556,6 +443,7 @@ export const ComicCanvas: React.FC = () => {
                     onMouseDown={handleStageMouseDown}
                     onMouseMove={handleStageMouseMove}
                     onMouseUp={handleStageMouseUp}
+                    onContextMenu={handleStageContextMenu}
                     onTouchStart={handleStageMouseDown}
                     onTouchMove={handleStageMouseMove}
                     onTouchEnd={handleStageMouseUp}
@@ -602,7 +490,7 @@ export const ComicCanvas: React.FC = () => {
                         {pages.map((page, i) => {
                             const offset = getLayoutPosition(i, layoutMode);
                             return (
-                                <Group key={`elements-${page.id}`} x={offset.x} y={offset.y}>
+                                <Group key={`elements-${page.id}`} name={`page-${page.id}`} x={offset.x} y={offset.y}>
                                     {/* Z-order: panels first (bottom), then balloons + drawings (above panels), overlays rendered later */}
                                     {(() => {
                                         const order = page.layerOrder || [];

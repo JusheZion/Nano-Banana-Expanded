@@ -134,6 +134,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
     return (
         <React.Fragment>
             <Group
+                name={`panel-${panel.id}`}
                 ref={groupRef}
                 x={panel.x}
                 y={panel.y}

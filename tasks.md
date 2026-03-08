@@ -34,13 +34,13 @@
 
 ## Phase 12 (remaining): Professional Typography & Balloon Suite
 
-- [ ] **Shape Hot-Swapping**: Selecting a new balloon shape replaces the current selection instead of creating a new one.
+- [x] **Shape Hot-Swapping**: Selecting a new balloon shape replaces the current selection instead of creating a new one.
 - [ ] **Inner-Balloon Control**:
   - [ ] Select, scale, and shift text boxes inside balloons independently.
-  - [ ] Add Text Alignment (Left, Center, Right, Top, Bottom).
+  - [x] Add Text Alignment (Left, Center, Right, Top, Bottom).
 - [x] **Tail Intelligence (Smart Overlap)**: Unified body+tail path for ellipse and rounded-rect balloons so the border does not show at the tail junction; draggable tail handle when balloon is selected.
-- [ ] **Snap Tail Cleanly**: Add button to auto-align tails to nearest panel edge.
-- [ ] **Defaults**: Set `Auto-Fit` to **OFF** by default for all new text/balloons.
+- [x] **Snap Tail Cleanly**: Add button to auto-align tails to nearest panel edge.
+- [x] **Defaults**: Set `Auto-Fit` to **OFF** by default for all new text/balloons.
 
 ## Phase 13: Project Management & Templates — COMPLETE
 
@@ -57,10 +57,52 @@
 
 ---
 
-## Phase 14: Settings & Performance (Future)
+## Phase 14: Advanced Geometry & UI Refinement
+*Focus: Precision paneling, UX feedback, and layout mechanics.*
 
-- [ ] **Snap Sensitivity Slider**: Add a slider to Settings to adjust the magnetic "pull" of guides.
-- [ ] **High-Performance Toggle**: Option to disable heavy guidelines for complex multi-page spreads.
-- [ ] **Export Preview**: Add a quick low-res preview modal before triggering the 300DPI export.
+### Panel Geometry & Tools
+- [ ] Implement "Position on Click" logic for spawning new panels at current mouse coordinates.
+- [ ] Add Half-Circle and Quarter-Circle primitive options to the Panel library.
+- [ ] **Vector Control:** Develop a cursor tool for circular panels to adjust sectors via central angles.
+- [ ] Add `+/-` increment buttons to the vertical menu for precise central angle adjustments.
 
-*Refer to the current codebase to ensure these plans are accurate for our Konva/React/Zustand setup.*
+### Core Systems
+- [ ] Debug and restore robust Undo/Redo functionality across all canvas actions.
+- [ ] Implement the "Group Tool" to consolidate layers and synchronized object movement.
+
+### UI/UX Aesthetic Overhaul
+- [x] **Top Bar Slimming:** Remove icons from "File, Edit, View...", reduce font size, and decrease bar height.
+- [x] **Ribbon Labels:** Add micro-text labels beneath each ribbon icon for clarity.
+- [x] **Interaction Design:** Remove static outlines/dividers; implement a "Shadow Effect" (lift animation) on button press.
+- [x] **Hover States:** Add "clickable" animations for all toolbar buttons on mouse-over.
+- [x] **Theming:** Apply Golden Gradient to icons/text on blue backgrounds; apply Blue Gradient to ribbon backgrounds.
+- [x] **Vertical Menus:** Swap backgrounds to Golden Gradient and text/icons to Blue Gradient.
+
+### Format Dialog & Right-Click Context Menu
+- [x] **Right-click context menu on canvas:** Hit-test (panel / balloon / empty); open context menu at pointer with Format…, Paste, Add panel/balloon, Delete as appropriate.
+- [x] **Tabbed Format dialog:** Modal with Text | Object | Panel tabs; Text tab has font, size, text color; Object/Panel tabs placeholder. Opened from context menu or from menu bar (Text → Font & size, etc.; Objects → Fill & border, etc.).
+- [ ] **Format dialog tab content (planned phase):** Plan and implement full feature set per tab (Text: padding, stroke, 3D, warp, alignment; Object: fill, border, shadow, glow, texture; Panel: same object-style controls) in one go to avoid constant churn.
+
+---
+
+## Phase 15: High-Fidelity Color & Typography
+*Focus: Creative expression through advanced gradients and WordArt.*
+
+### Advanced Color System
+- [ ] Build a robust Color Wheel with "Favorites" and "Recently Used" slots.
+- [ ] **Gradient Engine:** Implement Linear (Angle/Directional), Radial, and Rectangular gradients.
+- [ ] **Property Controls:** Add individual sliders for brightness, transparency, and stop-position for each color in a gradient.
+- [ ] **Universal Application:** Map gradients to WordArt, Panels, Balloons, and Objects.
+
+### Input Hardware (Sliders)
+- [ ] Extend slider lengths and add visible tick marks.
+- [ ] Implement "Snap-to-Tick" functionality.
+- [ ] Integrate `+/-` precision controls for all vertical menu sliders.
+
+### WordArt & Warp Engine
+- [ ] **Style Gallery:** Create a preset library (3D, Glowing, Drop Shadow, Multi-color Gradients).
+- [ ] **Objectification:** Treat text blocks as standard objects (allowing text-wrap and free-transform).
+- [ ] **Path Warping:** Implement the following warp profiles:
+    - Arch (Up/Down), Circular, Wavy, Button.
+    - Square/Triangle/Cascade/Slant/Fade (Up/Down).
+- [ ] Create a modular "Placeholder" slot for future custom warp algorithms.

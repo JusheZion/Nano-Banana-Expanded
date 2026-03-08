@@ -25,3 +25,11 @@ export const ACCENT_GOLD_DARK = '#aa771c';
 export const TEXT_ON_GOLD = '#000000';
 export const TEXT_ON_BLUE = '#fcf6ba'; // gold-tint for readability
 export const TEXT_ON_BLUE_ALT = '#F5F5DC'; // cream
+
+/** Golden-Blue system: ribbon and menu theming */
+/** Horizontal ribbon area background */
+export const ACCENT_BLUE_GRADIENT = 'linear-gradient(135deg, #002366 0%, #003580 45%, #0047a0 70%, #002366 100%)';
+/** Text/icons on gold (menu bar, vertical menus) — dark blue for contrast */
+export const TEXT_BLUE_GRADIENT = 'linear-gradient(135deg, #001a4d 0%, #002366 50%, #003580 100%)';
+/** Optional: slightly subtler gold for top menu bar if desired */
+export const MENU_BAR_GOLD_GRADIENT = 'linear-gradient(45deg, #bf953f 0%, #fcf6ba 45%, #b38728 70%, #fbf5b7 85%, #aa771c 100%)';

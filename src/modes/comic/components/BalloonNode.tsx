@@ -63,7 +63,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const secondaryTextStroke = balloon.overrides?.secondaryTextStroke;
     const secondaryTextStrokeWidth = balloon.overrides?.secondaryTextStrokeWidth;
     const textWarp = balloon.overrides?.textWarp || 'none';
-    const autoSize = balloon.autoSize !== false; // Default true
+    const textAlign = balloon.overrides?.textAlignHorizontal ?? 'left';
+    const verticalAlign = balloon.overrides?.textAlignVertical ?? 'middle';
+    const autoSize = balloon.autoSize === true; // Default OFF for new balloons
     const padding = balloon.padding ?? 20;
 
     const w = balloon.width;
@@ -618,6 +620,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     return (
         <React.Fragment>
             <Group
+                name={`balloon-${balloon.id}`}
                 ref={groupRef}
                 x={balloon.x}
                 y={balloon.y}
@@ -658,6 +661,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                         rotation: node.rotation(),
                         width: Math.max(20, w * Math.abs(scaleX)),
                         height: Math.max(20, h * Math.abs(scaleY)),
+                        autoSize: false,
                     });
                 }}
             >
@@ -738,7 +742,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                         stroke={color}
                                         strokeWidth={totalStroke}
                                         lineJoin="round"
-                                        align="center"
+                                        align={textAlign}
                                         data={warpPathData}
                                         x={ox}
                                         y={oy}
@@ -758,7 +762,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 stroke={secondaryTextStroke}
                                 strokeWidth={(textStrokeWidth || 0) + secondaryTextStrokeWidth}
                                 lineJoin="round"
-                                align="center"
+                                align={textAlign}
                                 data={warpPathData}
                                 perfectDrawEnabled={false}
                             />
@@ -773,7 +777,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 stroke={textStroke}
                                 strokeWidth={textStrokeWidth}
                                 lineJoin="round"
-                                align="center"
+                                align={textAlign}
                                 data={warpPathData}
                                 perfectDrawEnabled={false}
                             />
@@ -785,7 +789,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             fontSize={fontSize}
                             letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                             fill={textColor}
-                            align="center"
+                            align={textAlign}
                             data={warpPathData}
                             shadowColor={hasTextGlow ? 'cyan' : undefined}
                             shadowBlur={hasTextGlow ? 10 : 0}
@@ -821,8 +825,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                         stroke={color}
                                         strokeWidth={totalStroke}
                                         lineJoin="round"
-                                        align="center"
-                                        verticalAlign="middle"
+                                        align={textAlign}
+                                        verticalAlign={verticalAlign}
                                         width={autoSize ? undefined : w * 0.8}
                                         height={autoSize ? undefined : h * 0.8}
                                         x={baseX + ox}
@@ -843,8 +847,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 stroke={secondaryTextStroke}
                                 strokeWidth={(textStrokeWidth || 0) + secondaryTextStrokeWidth}
                                 lineJoin="round"
-                                align="center"
-                                verticalAlign="middle"
+                                align={textAlign}
+                                verticalAlign={verticalAlign}
                                 width={autoSize ? undefined : w * 0.8}
                                 height={autoSize ? undefined : h * 0.8}
                                 x={autoSize ? -(textRef.current?.width() || 0) / 2 : -w * 0.4}
@@ -861,8 +865,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 stroke={textStroke}
                                 strokeWidth={textStrokeWidth}
                                 lineJoin="round"
-                                align="center"
-                                verticalAlign="middle"
+                                align={textAlign}
+                                verticalAlign={verticalAlign}
                                 width={autoSize ? undefined : w * 0.8}
                                 height={autoSize ? undefined : h * 0.8}
                                 x={autoSize ? -(textRef.current?.width() || 0) / 2 : -w * 0.4}
@@ -876,8 +880,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             fontFamily={fontFamily}
                             fontSize={fontSize}
                             fill={textColor}
-                            align="center"
-                            verticalAlign="middle"
+                            align={textAlign}
+                            verticalAlign={verticalAlign}
                             width={autoSize ? undefined : w * 0.8}
                             height={autoSize ? undefined : h * 0.8}
                             x={autoSize ? -(textRef.current?.width() || 0) / 2 : -w * 0.4}
@@ -921,7 +925,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                     anchorStroke="#D4AF37"
                     anchorFill="#37615D"
                     anchorSize={10}
-                    resizeEnabled={!autoSize}
+                    resizeEnabled={true}
                     rotateEnabled={true}
                     rotateAnchorOffset={40}
                 />
