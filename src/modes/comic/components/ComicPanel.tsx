@@ -5,6 +5,7 @@ import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { getVertexSnapLines, getGutterAwareSnapLines, type DiagonalGuide, type SnapLine } from '../utils/snapping';
 import { getTextureUrl } from '../data/TextureRegistry';
 import { getHalfCirclePath, getQuarterCirclePath, getSectorPath } from '../utils/circularPanelPaths';
+import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
 
 interface ComicPanelProps {
     panel: Panel;
@@ -138,6 +139,70 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
 
     const textureUrl = panel.textureId ? getTextureUrl(panel.textureId) : '';
     const [textureImg] = useImage(textureUrl || '');
+
+    const panelFillProps = React.useMemo(() => {
+        const g = panel.fillGradient;
+        if (!g || !g.stops?.length) return { fill: '#f0f0f0' };
+        const colorStops = toKonvaColorStops(g.stops);
+        if (g.type === 'linear') {
+            const angle = g.angle ?? 90;
+            const { start, end } = linearGradientPoints(angle, panel.width, panel.height);
+            return {
+                fillLinearGradientStartPoint: start,
+                fillLinearGradientEndPoint: end,
+                fillLinearGradientColorStops: colorStops,
+            };
+        }
+        if (g.type === 'radial') {
+            const cx = (g.center?.x ?? 0.5) * panel.width;
+            const cy = (g.center?.y ?? 0.5) * panel.height;
+            const r = (g.radiusX ?? 0.5) * Math.max(panel.width, panel.height);
+            return {
+                fillRadialGradientStartPoint: { x: cx, y: cy },
+                fillRadialGradientEndPoint: { x: cx + r, y: cy },
+                fillRadialGradientStartRadius: 0,
+                fillRadialGradientEndRadius: r,
+                fillRadialGradientColorStops: colorStops,
+            };
+        }
+        return {
+            fillLinearGradientStartPoint: g.start ?? { x: 0, y: 0 },
+            fillLinearGradientEndPoint: g.end ?? { x: panel.width, y: panel.height },
+            fillLinearGradientColorStops: colorStops,
+        };
+    }, [panel.fillGradient, panel.width, panel.height]);
+
+    const panelStrokeProps = React.useMemo(() => {
+        const g = panel.strokeGradient;
+        if (!g || !g.stops?.length) return { stroke: panel.strokeColor || '#893741' };
+        const colorStops = toKonvaColorStops(g.stops);
+        if (g.type === 'linear') {
+            const angle = g.angle ?? 90;
+            const { start, end } = linearGradientPoints(angle, panel.width, panel.height);
+            return {
+                strokeLinearGradientStartPoint: start,
+                strokeLinearGradientEndPoint: end,
+                strokeLinearGradientColorStops: colorStops,
+            };
+        }
+        if (g.type === 'radial') {
+            const cx = (g.center?.x ?? 0.5) * panel.width;
+            const cy = (g.center?.y ?? 0.5) * panel.height;
+            const r = (g.radiusX ?? 0.5) * Math.max(panel.width, panel.height);
+            return {
+                strokeRadialGradientStartPoint: { x: cx, y: cy },
+                strokeRadialGradientEndPoint: { x: cx + r, y: cy },
+                strokeRadialGradientStartRadius: 0,
+                strokeRadialGradientEndRadius: r,
+                strokeRadialGradientColorStops: colorStops,
+            };
+        }
+        return {
+            strokeLinearGradientStartPoint: g.start ?? { x: 0, y: 0 },
+            strokeLinearGradientEndPoint: g.end ?? { x: panel.width, y: panel.height },
+            strokeLinearGradientColorStops: colorStops,
+        };
+    }, [panel.strokeGradient, panel.strokeColor, panel.width, panel.height]);
 
     const renderClipPath = (ctx: any) => {
         ctx.beginPath();
@@ -440,7 +505,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         <Line
                             points={panel.points!.flatMap(p => [p.x, p.y])}
                             closed
-                            fill="#f0f0f0"
+                            {...panelFillProps}
                             listening={true}
                         />
                     </Group>
@@ -450,14 +515,14 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         y={panel.height / 2}
                         radiusX={panel.width / 2}
                         radiusY={panel.height / 2}
-                        fill="#f0f0f0"
+                        {...panelFillProps}
                         listening={true}
                     />
                 ) : isCircularPath ? (
                     <Group x={isQuarterCircle ? 0 : panel.width / 2} y={isQuarterCircle ? 0 : panel.height / 2}>
                         <Path
                             data={isHalfCircle ? getHalfCirclePath(Math.min(panel.width, panel.height) / 2) : isQuarterCircle ? getQuarterCirclePath(Math.min(panel.width, panel.height)) : getSectorPath(Math.min(panel.width, panel.height) / 2, panel.centralAngle ?? 90)}
-                            fill="#f0f0f0"
+                            {...panelFillProps}
                             listening={true}
                         />
                     </Group>
@@ -465,7 +530,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Rect
                         width={panel.width}
                         height={panel.height}
-                        fill="#f0f0f0"
+                        {...panelFillProps}
                         listening={true}
                     />
                 )}
@@ -529,7 +594,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Line
                         points={panel.points!.flatMap(p => [p.x, p.y])}
                         closed
-                        stroke={panel.strokeColor || "#893741"}
+                        {...panelStrokeProps}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />
@@ -539,7 +604,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         y={panel.height / 2}
                         radiusX={panel.width / 2}
                         radiusY={panel.height / 2}
-                        stroke={panel.strokeColor || "#893741"}
+                        {...panelStrokeProps}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />
@@ -547,7 +612,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Group x={isQuarterCircle ? 0 : panel.width / 2} y={isQuarterCircle ? 0 : panel.height / 2}>
                         <Path
                             data={isHalfCircle ? getHalfCirclePath(Math.min(panel.width, panel.height) / 2) : isQuarterCircle ? getQuarterCirclePath(Math.min(panel.width, panel.height)) : getSectorPath(Math.min(panel.width, panel.height) / 2, panel.centralAngle ?? 90)}
-                            stroke={panel.strokeColor || "#893741"}
+                            {...panelStrokeProps}
                             strokeWidth={isSelected ? 6 : 4}
                             listening={false}
                         />
@@ -556,7 +621,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Rect
                         width={panel.width}
                         height={panel.height}
-                        stroke={panel.strokeColor || "#893741"}
+                        {...panelStrokeProps}
                         strokeWidth={isSelected ? 6 : 4}
                         listening={false}
                     />

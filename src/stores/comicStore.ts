@@ -4,6 +4,7 @@ import { temporal } from 'zundo';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
+import type { GradientSpec } from '../types/gradient';
 
 export interface Panel {
     id: string;
@@ -46,6 +47,9 @@ export interface Panel {
     textureOpacity?: number;
 
     strokeColor?: string;
+    /** Phase 15: gradient fill/stroke (when set, overrides solid fill) */
+    fillGradient?: GradientSpec;
+    strokeGradient?: GradientSpec;
 }
 
 
@@ -150,6 +154,9 @@ interface ComicState {
     lastCanvasPosition: { pageId: string; x: number; y: number } | null;
     templates: PanelTemplate[];
     _autoSaveTick: number;
+    /** Phase 15: color picker favorites (hex, max 12) and recently used (max 16), persisted */
+    colorFavorites: string[];
+    colorRecentlyUsed: string[];
 
     // Drawing Mode State
     isDrawingMode: boolean;
@@ -176,6 +183,9 @@ interface ComicState {
     addBalloon: (pageId: string, balloon: Omit<BalloonInstance, 'id' | 'type'>) => void;
     updateBalloon: (pageId: string, balloonId: string, updates: Partial<BalloonInstance>) => void;
     syncBalloonStyle: (balloonId: string) => void;
+    addColorToFavorites: (hex: string) => void;
+    removeColorFromFavorites: (hex: string) => void;
+    addColorToRecentlyUsed: (hex: string) => void;
 
 
 
@@ -271,6 +281,8 @@ export const useComicStore = create<ComicState>()(
                 lastCanvasPosition: null,
                 templates: [],
                 _autoSaveTick: 0,
+                colorFavorites: [],
+                colorRecentlyUsed: [],
 
                 isDrawingMode: false,
                 brushColor: '#000000',
@@ -539,6 +551,20 @@ export const useComicStore = create<ComicState>()(
                             )
                         }))
                     };
+                }),
+                addColorToFavorites: (hex) => set((state) => {
+                    const normalized = hex.startsWith('#') ? hex : `#${hex}`;
+                    if (state.colorFavorites.includes(normalized)) return state;
+                    const next = [...state.colorFavorites, normalized].slice(-12);
+                    return { colorFavorites: next };
+                }),
+                removeColorFromFavorites: (hex) => set((state) => ({
+                    colorFavorites: state.colorFavorites.filter(c => (c.startsWith('#') ? c : `#${c}`) !== (hex.startsWith('#') ? hex : `#${hex}`))
+                })),
+                addColorToRecentlyUsed: (hex) => set((state) => {
+                    const normalized = hex.startsWith('#') ? hex : `#${hex}`;
+                    const without = state.colorRecentlyUsed.filter(c => c !== normalized);
+                    return { colorRecentlyUsed: [normalized, ...without].slice(0, 16) };
                 }),
 
                 setSelectedElements: (ids) => set({ selectedElementIds: ids }),
@@ -1060,7 +1086,9 @@ export const useComicStore = create<ComicState>()(
                     currentGenreId: state.currentGenreId,
                     customGenre: state.customGenre,
                     templates: state.templates,
-                    _autoSaveTick: state._autoSaveTick
+                    _autoSaveTick: state._autoSaveTick,
+                    colorFavorites: state.colorFavorites,
+                    colorRecentlyUsed: state.colorRecentlyUsed
                 })
             }
         ),
@@ -1074,9 +1102,22 @@ export const useComicStore = create<ComicState>()(
                 currentGenreId: state.currentGenreId,
                 customGenre: state.customGenre,
                 templates: state.templates,
-                _autoSaveTick: state._autoSaveTick
+                _autoSaveTick: state._autoSaveTick,
+                colorFavorites: state.colorFavorites,
+                colorRecentlyUsed: state.colorRecentlyUsed
             }),
             limit: 100
         }
     )
 );
+
+/** Undo/redo: call the temporal API on the same store instance. Use from UI (buttons, menu, shortcuts). */
+export function comicUndo(): void {
+    const store = useComicStore as unknown as { temporal: { getState: () => { undo: () => void } } };
+    store.temporal.getState().undo();
+}
+
+export function comicRedo(): void {
+    const store = useComicStore as unknown as { temporal: { getState: () => { redo: () => void } } };
+    store.temporal.getState().redo();
+}

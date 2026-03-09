@@ -102,8 +102,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     props.onActiveMenuChange(id);
   };
   const handleMenuBlockLeave = (e: React.MouseEvent) => {
-    const related = e.relatedTarget as Node | null;
-    if (related && dropdownRef.current && dropdownRef.current.contains(related)) return;
+    const related = e.relatedTarget;
+    if (related instanceof Node && dropdownRef.current?.contains(related)) return;
     setHoveredMenu(null);
     setOpenMenu(null);
   };

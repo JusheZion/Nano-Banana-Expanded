@@ -110,7 +110,7 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
       )}
       {contextMenu.context === 'panel' && contextMenu.pageId && contextMenu.panelId && (
         <>
-          <button type="button" onClick={() => handleFormat('object')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('panel')} className={itemClass}>
             <Square size={12} /> Format panel…
           </button>
           <button type="button" onClick={() => handleFormat('image')} className={itemClass}>

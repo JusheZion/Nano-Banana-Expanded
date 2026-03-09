@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
+import { PrecisionSlider } from './PrecisionSlider';
 
 interface ProjectSettingsSidebarProps {
     isOpen: boolean;
@@ -59,14 +60,20 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                 {/* Global Gutter */}
                 <div className="settings-group">
                     <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Layout</h3>
-                    <label className={`block text-sm font-medium mb-2 ${rb ? 'text-inherit' : 'text-white'}`}>Global Gutter: {gutterSize}px</label>
-                    <input
-                        type="range"
+                    <PrecisionSlider
                         min={0}
                         max={64}
+                        step={1}
                         value={gutterSize}
-                        onChange={(e) => setGutterSize(Number(e.target.value))}
-                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${rb ? 'bg-[#002366]/15 [accent-color:#002366]' : 'bg-white/10 accent-[#00D1FF]'}`}
+                        onChange={setGutterSize}
+                        label="Global Gutter"
+                        valueLabel={`${gutterSize}px`}
+                        width="100%"
+                        showTicks={true}
+                        tickCount={9}
+                        snapToTick={true}
+                        showPrecisionButtons={true}
+                        aria-label="Global gutter size"
                     />
                 </div>
 
@@ -92,17 +99,21 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             </div>
                         </div>
                         <div>
-                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Background opacity</label>
-                            <input
-                                type="range"
+                            <PrecisionSlider
                                 min={0}
                                 max={1}
                                 step={0.05}
                                 value={pageSettings?.bgOpacity ?? 1}
-                                onChange={(e) => setPageSettings({ bgOpacity: Number(e.target.value) })}
-                                className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${rb ? 'bg-[#002366]/15 [accent-color:#002366]' : 'bg-white/10 accent-[#00D1FF]'}`}
+                                onChange={(v) => setPageSettings({ bgOpacity: v })}
+                                label="Background opacity"
+                                valueLabel={`${Math.round((pageSettings?.bgOpacity ?? 1) * 100)}%`}
+                                width="100%"
+                                showTicks={true}
+                                tickCount={5}
+                                snapToTick={true}
+                                showPrecisionButtons={true}
+                                aria-label="Background opacity"
                             />
-                            <span className={`text-xs ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>{(pageSettings?.bgOpacity ?? 1) * 100}%</span>
                         </div>
                         <div>
                             <input

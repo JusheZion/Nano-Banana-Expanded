@@ -232,4 +232,101 @@ This plan aligns with `tasks.md` and the current stack: **React**, **Konva/react
 3. Add more tabs (Object, Panel) and more menu/context entries that open the dialog with the right tab.
 4. Optionally add a toolbar button (e.g. “Format”) that opens the same dialog.
 
+---
+
+## Phase 15: Advanced Color, Gradient Engine & WordArt Warp
+
+*Objective: Pro color wheel with Favorites/Recently Used, multi-stop gradient builder (linear/radial/rect), application to panels/balloons/text; extended sliders with ticks and +/-; WordArt warp profiles with a pluggable customWarp slot. Undo/redo and requestAnimationFrame for live previews.*
+
+### 1. Advanced Color & Gradient Engine
+
+#### 1.1 Color Wheel
+- **Target**: New component `ColorWheelPicker.tsx` (or use iro.js if preferred; dependency in `package.json`). Alternatively a custom canvas-based wheel: hue ring (angle) + saturation/brightness square or triangle.
+- **Favorites**: Store `colorFavorites: string[]` (hex, max e.g. 12) in comicStore or a dedicated slice; persist via zustand persist. UI: row of swatches; click to select; "Add to Favorites" adds current color.
+- **Recently Used**: Store `colorRecentlyUsed: string[]` (max e.g. 16), push on every color apply, persist. Show as a second row of swatches.
+- **Integration**: Used inside Format dialog (Text / Object / Panel tabs) and wherever fill/stroke/text color is set. On apply, call store action to add to recently used and optionally favorites.
+
+#### 1.2 Gradient Builder UI
+- **Types**: Linear (angle or start/end points), Radial (center + radius), Rectangular (bounding box). Store representation: e.g. `GradientSpec { type: 'linear'|'radial'|'rect', angle?: number, start?: Point, end?: Point, center?: Point, radiusX?, radiusY?, stops: GradientStop[] }`.
+- **GradientStop**: `{ offset: number (0–1), color: string, brightness?: number (0–100), alpha?: number (0–1) }`. Stops sorted by `offset` before rendering (per user guide).
+- **UI**: Gradient type tabs or dropdown; for linear: angle slider or 2D handles; for radial/rect: center + radius/rect controls. A **strip** showing stops with draggable thumbs for position; click strip to add stop; each stop has a small color swatch that opens ColorWheelPicker, and inline sliders for Brightness (0–100%), Transparency (0–1), Position (0–100%). Delete button per stop (minimum 2 stops).
+- **Preview**: Use `requestAnimationFrame` or a throttled `useEffect` to update a small canvas/div preview when stops or type change; no blocking.
+
+#### 1.3 Konva application
+- **Panel**: `ComicPanel.tsx` — if `panel.fillGradient` (or `panel.fill` is gradient spec), set `fillLinearGradientStartPoint`, `fillLinearGradientEndPoint`, `fillLinearGradientColorStops` (or radial equivalents). Konva expects color stops as `[offset, color, offset, color, ...]`; build from `stops` sorted by offset; apply brightness/alpha to each color before passing.
+- **Balloon**: `BalloonNode.tsx` — same for body fill and optionally stroke (Konva stroke gradient support is limited; may need filled duplicate shape for stroke gradient). Balloon overrides: e.g. `fillGradient?: GradientSpec`, `textColorGradient?: GradientSpec`.
+- **Text**: Balloon text and any standalone text: Konva `Text`/`TextPath` support `fillLinearGradient*`; pass gradient color stops for `fill` when `textColorGradient` is set.
+- **Store**: Extend `Panel`, `BalloonOverrides` (and shared types) with optional `fillGradient?: GradientSpec`, `strokeGradient?: GradientSpec`, `textColorGradient?: GradientSpec`. When present, render with gradient; else fall back to existing `fill`/`stroke`/`textColor`.
+
+#### 1.4 Undo/redo
+- All gradient stop add/remove/reorder and property changes (brightness, transparency, position) must go through store actions that are part of the zundo temporal history (e.g. `updatePanel`, `updateBalloon`). No direct setState that bypasses store.
+
+---
+
+### 2. WordArt & Path-Warping Engine
+
+#### 2.1 Warp math (source of truth)
+- **Arch**: Map character index to angle; position and rotation from radius. Example: `angle = (i / len - 0.5) * amount`, `x = centerX + radius * sin(angle)`, `y = radius - radius * cos(angle)`, `rotation = angle`. Use for both arch up and arch down (flip sign or offset).
+- **Other profiles**: Circular (distribute along circle arc), Wavy (sine wave), Button (bulge), Square/Triangle/Cascade/Slant/Fade: define mapping from character index to (x, y, rotation). Centralize in a single module e.g. `src/modes/comic/utils/warpProfiles.ts`.
+
+#### 2.2 Warp profile library
+- **Target**: `warpProfiles.ts` exports: `WARP_PROFILES: Record<string, WarpProfile>` and a function `applyWarp(text, profileId, options): { char, x, y, rotation }[]`. Options include `amount`, `radius`, `width`, `height` (from balloon or WordArt bounds).
+- **Profiles to implement**: Arch Up, Arch Down, Circular, Wavy, Button, Square, Triangle, Cascade, Slant, Fade Up, Fade Down. Each profile implements a single function `(charIndex, totalChars, options) => { x, y, rotation }`.
+- **Placeholder slot**: Export `registerCustomWarp(id: string, fn: WarpFn)`. Internal registry; `applyWarp` checks registry first. Enables future custom warp algorithms without changing core.
+
+#### 2.3 BalloonNode integration
+- **Current**: BalloonNode uses `textWarp` + `warpPathData` (SVG path string) and Konva `TextPath`. Existing: arcUp, arcDown, wave, circle, arch.
+- **Enhancement**: Either (a) keep path-based warping and add more path generators for new profiles, or (b) switch to character-by-character positioning using the warp math output: render each character as a `Text` node with x, y, rotation. (b) is required for true "map each character to (x,y,rotation)" and for custom warps. Option (b): build an array of character nodes from `applyWarp()`; render with `Group` containing multiple `Text` nodes. This matches the user's "map text characters along vector paths" and allows customWarp to return arbitrary positions.
+- **Data model**: Extend `textWarp` to include new profile ids (e.g. `'square'|'triangle'|'cascade'|'slant'|'fadeUp'|'fadeDown'`). Keep `textWarpIntensity` (and optional `textWarpRadius` etc.) for amount/radius.
+
+#### 2.4 Objectification (text as object)
+- **Scope**: "Treat text blocks as standard objects (free-transform)" can mean: balloon text has its own transform (position/scale/rotation) stored on the balloon and editable via Transformer when in "text edit" mode. Already partially there (text alignment, position inside balloon). Full objectification: make the balloon text a separate transformable Group (with Transformer when selected in a "text object" mode). Lower priority if time-boxed; can be Phase 15 follow-up.
+
+---
+
+### 3. Slider Precision (UI)
+
+#### 3.1 Reusable PrecisionSlider component
+- **Target**: New `src/components/ui/PrecisionSlider.tsx` (or under `src/modes/comic/components/`).
+- **Props**: `min`, `max`, `step`, `value`, `onChange`, `label?`, `showTicks?: boolean`, `tickCount?`, `snapToTick?: boolean`, `integerStep?: number` (for +/- buttons). Optional `valueLabel` (e.g. "50%").
+- **Extended length**: Default width e.g. 120px–160px for vertical menu sliders (or full width of parent). Use CSS/Tailwind; ensure all formatting sliders in ObjectToolbar, TextToolbar, ProjectSettingsSidebar, FormatDialog use this component.
+- **Tick marks**: When `showTicks`, render small divs (e.g. 2px×6px, `rgba(255,215,0,0.4)`) at regular intervals along the track. Match styling: `.gradient-slider-track` (deep blue bg, gold border) and `.slider-tick` from user's CSS reference.
+- **Snap-to-tick**: When `snapToTick` is true, on mouse/touch end or when releasing drag, round value to nearest tick (derived from step or tickCount).
+- **+ / - buttons**: Two buttons beside the slider; each click changes value by `step` (or 1 for integer). Clamp to min/max. Ensure undo: value changes go through store so zundo captures them.
+
+#### 3.2 Where to use
+- **ObjectToolbar**: Replace every `input type="range"` with `PrecisionSlider` (stroke, shadow, glow, texture opacity, etc.).
+- **TextToolbar**: Same for padding, warp intensity, stroke width, shadow/glow sliders.
+- **ProjectSettingsSidebar**: Gutter, background opacity.
+- **FormatDialog**: Any new sliders in Text/Object/Panel tabs (font size, brightness, transparency, gradient stop position, etc.).
+- **ComicLayout**: Any range input (e.g. zoom) if present.
+
+---
+
+### 4. Workflow & Styling
+
+- **requestAnimationFrame**: Use for real-time gradient preview and warp preview (e.g. in Format dialog or a small live preview panel). Throttle or rAF-driven state updates so UI stays fluid.
+- **Undo/redo**: Every gradient stop change and warp parameter change must be applied via `updatePanel` / `updateBalloon` (or dedicated gradient/warp actions that go through the same store set), so zundo records history.
+- **Golden-Blue theme**: Gradient slider track: `linear-gradient(to right, #1a2a44, #2a4a7c)`, border `var(--golden-gradient-primary)` or Phase12DesignTokens gold, border-radius 4px. Tick marks: 2px×6px, `rgba(255,215,0,0.4)`. Use design tokens in `PrecisionSlider` and Gradient Builder.
+
+---
+
+### 5. File checklist (Phase 15)
+
+| File / Area | Responsibility |
+|-------------|----------------|
+| `implementation_plan.md` | This section. |
+| `tasks.md` | Phase 15 checklist (color wheel, gradient, sliders, warp). |
+| `src/components/ui/PrecisionSlider.tsx` (or comic/components) | Extended slider, ticks, snap, +/-. |
+| `src/modes/comic/components/ColorWheelPicker.tsx` | Color wheel + Favorites + Recently Used. |
+| `src/modes/comic/components/GradientBuilder.tsx` | Type selector, stop strip, per-stop sliders, preview. |
+| `src/modes/comic/utils/warpProfiles.ts` | All warp algorithms + `registerCustomWarp`. |
+| `src/modes/comic/utils/gradientUtils.ts` | Sort stops, build Konva color stop array, apply brightness/alpha. |
+| `src/stores/comicStore.ts` | `colorFavorites`, `colorRecentlyUsed`, `GradientSpec` on Panel/Balloon; actions. |
+| `src/types/balloon.ts` / Panel type | `fillGradient`, `strokeGradient`, `textColorGradient`; extended `textWarp` ids. |
+| `BalloonNode.tsx` | Apply gradient to fill/stroke/text; use warpProfiles for character layout when not path-based. |
+| `ComicPanel.tsx` | Apply panel fillGradient (and stroke if supported). |
+| `FormatDialog.tsx` | Color wheel + gradient builder in Object/Panel/Text tabs; PrecisionSlider. |
+| `ObjectToolbar.tsx`, `TextToolbar.tsx`, `ProjectSettingsSidebar.tsx` | Replace range inputs with PrecisionSlider. |
+
 *This plan is accurate for the Konva/React/Zustand setup as of the current codebase. Update as implementation evolves.*

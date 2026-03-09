@@ -33,3 +33,7 @@ export const ACCENT_BLUE_GRADIENT = 'linear-gradient(135deg, #002366 0%, #003580
 export const TEXT_BLUE_GRADIENT = 'linear-gradient(135deg, #001a4d 0%, #002366 50%, #003580 100%)';
 /** Optional: slightly subtler gold for top menu bar if desired */
 export const MENU_BAR_GOLD_GRADIENT = 'linear-gradient(45deg, #bf953f 0%, #fcf6ba 45%, #b38728 70%, #fbf5b7 85%, #aa771c 100%)';
+
+/** Phase 15: Slider track (gradient) and tick marks */
+export const SLIDER_TRACK_GRADIENT = 'linear-gradient(to right, #1a2a44, #2a4a7c)';
+export const SLIDER_TICK_COLOR = 'rgba(255, 215, 0, 0.4)';

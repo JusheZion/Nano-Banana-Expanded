@@ -50,6 +50,8 @@ export interface Point {
     y: number;
 }
 
+import type { GradientSpec } from './gradient';
+
 export interface BalloonOverrides {
     fill?: string;
     stroke?: string;
@@ -72,6 +74,10 @@ export interface BalloonOverrides {
     textAlignHorizontal?: 'left' | 'center' | 'right';
     /** Vertical alignment of text within the balloon */
     textAlignVertical?: 'top' | 'middle' | 'bottom';
+    /** Phase 15: gradient fill/stroke/text */
+    fillGradient?: GradientSpec;
+    strokeGradient?: GradientSpec;
+    textColorGradient?: GradientSpec;
 }
 
 export interface BalloonInstance {

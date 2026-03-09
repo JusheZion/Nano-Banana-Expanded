@@ -3,6 +3,7 @@ import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 
 import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
+import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
 import type { BalloonInstance, BalloonStyle } from '../../../types/balloon';
 
 // Hand-tuned cloud speech balloon outline, centered at 0,0
@@ -72,6 +73,35 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const h = balloon.height;
     const halfW = w / 2;
     const halfH = h / 2;
+
+    const bodyFillProps = useMemo(() => {
+        const g = balloon.overrides?.fillGradient;
+        if (!g || !g.stops?.length) return { fill };
+        const colorStops = toKonvaColorStops(g.stops);
+        if (g.type === 'linear') {
+            const angle = g.angle ?? 90;
+            const { start, end } = linearGradientPoints(angle, w, h);
+            return { fillLinearGradientStartPoint: start, fillLinearGradientEndPoint: end, fillLinearGradientColorStops: colorStops };
+        }
+        if (g.type === 'radial') {
+            const cx = (g.center?.x ?? 0.5) * w;
+            const cy = (g.center?.y ?? 0.5) * h;
+            const r = (g.radiusX ?? 0.5) * Math.max(w, h);
+            return { fillRadialGradientStartPoint: { x: cx, y: cy }, fillRadialGradientEndPoint: { x: cx + r, y: cy }, fillRadialGradientStartRadius: 0, fillRadialGradientEndRadius: r, fillRadialGradientColorStops: colorStops };
+        }
+        return { fillLinearGradientStartPoint: g.start ?? { x: 0, y: 0 }, fillLinearGradientEndPoint: g.end ?? { x: w, y: h }, fillLinearGradientColorStops: colorStops };
+    }, [balloon.overrides?.fillGradient, w, h, fill]);
+
+    const textFillProps = useMemo(() => {
+        const g = balloon.overrides?.textColorGradient;
+        if (!g || !g.stops?.length) return { fill: textColor };
+        const colorStops = toKonvaColorStops(g.stops);
+        const angle = g.angle ?? 90;
+        const tw = w * 0.8;
+        const th = h * 0.8;
+        const { start, end } = linearGradientPoints(angle, tw, th);
+        return { fillLinearGradientStartPoint: start, fillLinearGradientEndPoint: end, fillLinearGradientColorStops: colorStops };
+    }, [balloon.overrides?.textColorGradient, w, h, textColor]);
 
     // React to text size changes
     React.useEffect(() => {
@@ -342,7 +372,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         }
 
         if (pass === 'shadow') {
-            baseProps.fill = fill;
+            Object.assign(baseProps, bodyFillProps);
             baseProps.stroke = stroke;
             baseProps.strokeWidth = strokeWidth;
             baseProps.shadowColor = balloon.shadowColor ?? '#000000';
@@ -366,7 +396,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             baseProps.shadowOffset = { x: 9000, y: 9000 };
             baseProps.opacity = 1;
         } else if (pass === 'base') {
-            baseProps.fill = fill;
+            Object.assign(baseProps, bodyFillProps);
             baseProps.stroke = stroke;
             baseProps.strokeWidth = strokeWidth;
             baseProps.dash = (!isTail && styleDef.id === 'whisper_dashed') ? [5, 5] : undefined;
@@ -788,7 +818,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             fontFamily={fontFamily}
                             fontSize={fontSize}
                             letterSpacing={balloon.overrides?.textLetterSpacing || 0}
-                            fill={textColor}
+                            {...textFillProps}
                             align={textAlign}
                             data={warpPathData}
                             shadowColor={hasTextGlow ? 'cyan' : undefined}
@@ -879,7 +909,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             text={balloon.text}
                             fontFamily={fontFamily}
                             fontSize={fontSize}
-                            fill={textColor}
+                            {...textFillProps}
                             align={textAlign}
                             verticalAlign={verticalAlign}
                             width={autoSize ? undefined : w * 0.8}

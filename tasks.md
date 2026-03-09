@@ -52,6 +52,8 @@
 ## Critical Bug-Squash List (Priority 1)
 
 - [x] **Undo/Redo Stability**: State capture fixed: panel/vertex/edge drags now batch into one undo step via zundo pause/resume; first move pushes pre-drag state, subsequent moves skip history; drag end resumes. `captureUndoCheckpoint()` added for future use. Redo stack cleared on new action (zundo default).
+- [x] **Undo/Redo (zundo + persist)**: Undo worked once then stopped; redo never worked. **Patch** in `node_modules/zundo/dist/index.js`: undo/redo use the store’s original setState (bypass temporal wrapper) so history is not corrupted. Centralized `comicUndo()` / `comicRedo()` in `comicStore.ts`; Edit ribbon, Edit menu, and ⌘Z / ⌘⇧Z use them. Re-apply patch after upgrading `zundo`.
+- [x] **MenuBar handleMenuBlockLeave**: Fixed `Uncaught TypeError: Failed to execute 'contains' on 'Node'` — guard with `related instanceof Node` before `dropdownRef.current?.contains(related)`.
 - [x] **Insert Image Fix**: Menu bar and ribbon "Insert Image" now work: use current page and selected panels or add new panel with placeholder image; menu button uses onMouseDown so click fires before dropdown close. Asset Library has explicit "Insert Image" button (inserts first asset).
 - [x] **Layer Checkboxes**: Visibility (eye) and Lock (padlock) toggles fixed: onPointerDown/onClick stopPropagation so DnD sortable does not capture; type="button" and aria-labels added. Store `toggleLayerVisibility` / `toggleLayerLock` already updated panels/balloons/drawings; UI now reflects immediately.
 
@@ -82,30 +84,33 @@
 
 ### Format Dialog & Right-Click Context Menu
 - [x] **Right-click context menu on canvas:** Hit-test (panel / balloon / empty); open context menu at pointer with Format…, Paste, Add panel/balloon, Delete as appropriate.
-- [x] **Tabbed Format dialog:** Modal with Text | Object | Panel | Image tabs; Text tab has font, size, text color; Object/Panel tabs placeholder; Image tab shows asset grid — click to set panel image (when panel context) or page background (when empty). Opened from context menu or from menu bar.
+- [x] **Tabbed Format dialog:** Modal with Text | Object | Panel | Image tabs; Text tab has font, size, text color; Object/Panel tabs have fill, gradient, stroke + ColorWheelPicker; Panel tab has **Fill** and **Line (border)** sections with parity (solid + gradient each), hex input, favorites; Image tab shows asset grid. Opened from context menu or from menu bar.
+- [x] **Panel tab Fill/Line parity:** Clear Fill vs Line (border) sections; both support solid color (ColorWheelPicker + favorites) and gradient (GradientBuilder). Panel stroke gradient applied in ComicPanel (`panelStrokeProps`).
+- [x] **Hex and numeric inputs:** ColorWheelPicker and GradientBuilder stop color accept typed hex (apply on valid/blur/Enter); GradientBuilder angle has number input (0–360°) alongside slider.
 - [x] **Insert image via right-click:** "Insert image…" on context menu for panel and empty; opens Format dialog on Image tab with mini asset library.
-- [ ] **Format dialog tab content (planned phase):** Plan and implement full feature set per tab (Text: padding, stroke, 3D, warp, alignment; Object: fill, border, shadow, glow, texture; Panel: same object-style controls) in one go to avoid constant churn.
+- [ ] **Format dialog tab content (planned phase):** Plan and implement full feature set per tab (Text: padding, stroke, 3D, warp, alignment; Object: shadow, glow, texture; Panel: same) in one go to avoid constant churn.
 
 ---
 
-## Phase 15: High-Fidelity Color & Typography
-*Focus: Creative expression through advanced gradients and WordArt.*
+## Phase 15: Color Systems & Typography Warp
+*Focus: Advanced Gradient Engine, Pro Color Wheel, WordArt Warp System, Slider Precision.*
 
-### Advanced Color System
-- [ ] Build a robust Color Wheel with "Favorites" and "Recently Used" slots.
-- [ ] **Gradient Engine:** Implement Linear (Angle/Directional), Radial, and Rectangular gradients.
-- [ ] **Property Controls:** Add individual sliders for brightness, transparency, and stop-position for each color in a gradient.
-- [ ] **Universal Application:** Map gradients to WordArt, Panels, Balloons, and Objects.
+### 1. Advanced Color & Gradient Engine
+- [x] **Color Wheel:** High-fidelity picker (custom canvas HSV: hue ring + S/V square) with Golden-Blue styling.
+- [x] **Favorites & Recently Used:** Persistent slots (store colorFavorites, colorRecentlyUsed + persist); add/select from UI.
+- [x] **Gradient Builder:** UI for Linear (angle), Radial, and Rectangular gradients; type selector, stop strip (click to add), per-stop color + Position/Brightness/Transparency (PrecisionSlider).
+- [x] **Multi-Stop Control:** Add/remove color stops; sort by offset before render (gradientUtils.sortStops).
+- [x] **Property Sliders (per stop):** Brightness (0–100%), Transparency (0–1), Position (0–100%) via PrecisionSlider.
+- [x] **Application:** Gradients applied to Panel fill (ComicPanel), Balloon fill and text (BalloonNode); Format dialog Text/Object/Panel tabs: ColorWheelPicker + GradientBuilder; undo/redo via store.
 
-### Input Hardware (Sliders)
-- [ ] Extend slider lengths and add visible tick marks.
-- [ ] Implement "Snap-to-Tick" functionality.
-- [ ] Integrate `+/-` precision controls for all vertical menu sliders.
+### 2. WordArt & Path-Warping Engine
+- [ ] **Objectification:** Convert text into WordArt Objects (manipulable like paths; scope as time allows).
+- [ ] **Warp Profiles:** Library mapping text characters along paths: Arch (Up/Down), Circular, Wavy, Button, Square, Triangle, Cascade, Slant, Fade (use warp math source of truth).
+- [ ] **Placeholder Slot:** Architecture for `customWarp` to be plugged in later (`registerCustomWarp`).
+- [ ] **Style Gallery (optional):** Presets for 3D, Glowing, Drop Shadow, Multi-color Gradients.
 
-### WordArt & Warp Engine
-- [ ] **Style Gallery:** Create a preset library (3D, Glowing, Drop Shadow, Multi-color Gradients).
-- [ ] **Objectification:** Treat text blocks as standard objects (allowing text-wrap and free-transform).
-- [ ] **Path Warping:** Implement the following warp profiles:
-    - Arch (Up/Down), Circular, Wavy, Button.
-    - Square/Triangle/Cascade/Slant/Fade (Up/Down).
-- [ ] Create a modular "Placeholder" slot for future custom warp algorithms.
+### 3. Slider Precision (UI)
+- [x] **Extended Sliders:** Increase physical length of all formatting sliders (e.g. 120–160px in menus).
+- [x] **Tick Marks & Snap-to-Tick:** Visible tick marks (Golden-Blue style); snap value to tick when enabled.
+- [x] **Precision Buttons:** Add `+` and `−` to every slider in vertical menus for 1-unit (or step) increments.
+- [x] **Reusable Component:** `PrecisionSlider` used in ObjectToolbar, TextToolbar, ProjectSettingsSidebar, FormatDialog.

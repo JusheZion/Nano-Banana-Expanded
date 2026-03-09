@@ -2,6 +2,7 @@ import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
+import { PrecisionSlider } from './PrecisionSlider';
 
 /** Ribbon: same as TEXT_ON_BLUE for consistency; object toolbar lives in ribbon */
 const RIBBON_MUTED = 'rgba(252,246,186,0.7)';
@@ -223,46 +224,54 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
 
                     <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0" title="Shadow Blur / Opacity">
                         <span className="text-[9px] w-5 shrink-0" style={{ color: RIBBON_MUTED }}>Blur</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="50"
-                            step="1"
+                        <PrecisionSlider
+                            min={0}
+                            max={50}
+                            step={1}
                             value={selectedPanels[0]?.shadowBlur ?? 10}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowBlur: parseInt(e.target.value) }))}
-                            className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
+                            onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowBlur: v }))}
+                            width={90}
+                            showPrecisionButtons={false}
+                            showTicks={false}
+                            aria-label="Shadow blur"
                         />
                         <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Op</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.1"
+                        <PrecisionSlider
+                            min={0}
+                            max={1}
+                            step={0.1}
                             value={selectedPanels[0]?.shadowOpacity ?? 0.3}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOpacity: parseFloat(e.target.value) }))}
-                            className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
+                            onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOpacity: v }))}
+                            width={90}
+                            showPrecisionButtons={false}
+                            showTicks={false}
+                            aria-label="Shadow opacity"
                         />
                     </div>
                     <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0" title="Shadow Offset">
                         <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }}>X</span>
-                        <input
-                            type="range"
-                            min="-50"
-                            max="50"
-                            step="1"
+                        <PrecisionSlider
+                            min={-50}
+                            max={50}
+                            step={1}
                             value={selectedPanels[0]?.shadowOffsetX ?? 5}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetX: parseInt(e.target.value) }))}
-                            className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
+                            onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetX: v }))}
+                            width={70}
+                            showPrecisionButtons={false}
+                            showTicks={false}
+                            aria-label="Shadow offset X"
                         />
                         <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }}>Y</span>
-                        <input
-                            type="range"
-                            min="-50"
-                            max="50"
-                            step="1"
+                        <PrecisionSlider
+                            min={-50}
+                            max={50}
+                            step={1}
                             value={selectedPanels[0]?.shadowOffsetY ?? 5}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetY: parseInt(e.target.value) }))}
-                            className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
+                            onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetY: v }))}
+                            width={70}
+                            showPrecisionButtons={false}
+                            showTicks={false}
+                            aria-label="Shadow offset Y"
                         />
                     </div>
 
@@ -286,35 +295,11 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                         </div>
                         <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0">
                             <span className="text-[9px] w-5 shrink-0" style={{ color: RIBBON_MUTED }}>Size</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="50"
-                                step="1"
-                                value={selectedPanels[0]?.glowSpread ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowSpread: parseInt(e.target.value) }))}
-                                className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
-                            />
+                            <PrecisionSlider min={0} max={50} step={1} value={selectedPanels[0]?.glowSpread ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowSpread: v }))} width={90} showPrecisionButtons={false} showTicks={false} aria-label="Glow size" />
                             <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Blur</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="50"
-                                step="1"
-                                value={selectedPanels[0]?.glowBlur ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowBlur: parseInt(e.target.value) }))}
-                                className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
-                            />
+                            <PrecisionSlider min={0} max={50} step={1} value={selectedPanels[0]?.glowBlur ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowBlur: v }))} width={90} showPrecisionButtons={false} showTicks={false} aria-label="Glow blur" />
                             <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Op</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.1"
-                                value={selectedPanels[0]?.glowOpacity ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowOpacity: parseFloat(e.target.value) }))}
-                                className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
-                            />
+                            <PrecisionSlider min={0} max={1} step={0.1} value={selectedPanels[0]?.glowOpacity ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowOpacity: v }))} width={90} showPrecisionButtons={false} showTicks={false} aria-label="Glow opacity" />
                         </div>
                     </div>
 
@@ -332,16 +317,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             ))}
                         </select>
                         {selectedPanels[0]?.textureId && (
-                            <input
-                                type="range"
-                                min="0.1"
-                                max="1"
-                                step="0.1"
-                                value={selectedPanels[0]?.textureOpacity ?? 0.5}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { textureOpacity: parseFloat(e.target.value) }))}
-                                className="w-10 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
-                                title="Texture Opacity"
-                            />
+                            <PrecisionSlider min={0.1} max={1} step={0.1} value={selectedPanels[0]?.textureOpacity ?? 0.5} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { textureOpacity: v }))} width={90} showPrecisionButtons={false} showTicks={false} aria-label="Texture opacity" />
                         )}
                     </div>
                 </div>
@@ -366,37 +342,10 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     {selectedPanels[0]?.imageFillMode === 'decal' && (
                         <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0">
                             <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }}>S</span>
-                            <input
-                                type="range"
-                                min="0.1"
-                                max="3"
-                                step="0.1"
-                                value={selectedPanels[0]?.imageScale ?? 1}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageScale: parseFloat(e.target.value) }))}
-                                className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
-                                title="Scale"
-                            />
+                            <PrecisionSlider min={0.1} max={3} step={0.1} value={selectedPanels[0]?.imageScale ?? 1} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageScale: v }))} width={90} showPrecisionButtons={false} showTicks={false} aria-label="Image scale" />
                             <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>XY</span>
-                            <input
-                                type="range"
-                                min="-500"
-                                max="500"
-                                step="10"
-                                value={selectedPanels[0]?.imageOffsetX ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetX: parseInt(e.target.value) }))}
-                                className="w-6 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
-                                title="Offset X"
-                            />
-                            <input
-                                type="range"
-                                min="-500"
-                                max="500"
-                                step="10"
-                                value={selectedPanels[0]?.imageOffsetY ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetY: parseInt(e.target.value) }))}
-                                className="w-6 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
-                                title="Offset Y"
-                            />
+                            <PrecisionSlider min={-500} max={500} step={10} value={selectedPanels[0]?.imageOffsetX ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetX: v }))} width={60} showPrecisionButtons={false} showTicks={false} aria-label="Offset X" />
+                            <PrecisionSlider min={-500} max={500} step={10} value={selectedPanels[0]?.imageOffsetY ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetY: v }))} width={60} showPrecisionButtons={false} showTicks={false} aria-label="Offset Y" />
                         </div>
                     )}
                 </div>

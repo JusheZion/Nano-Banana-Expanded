@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useComicStore } from '../../../stores/comicStore';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useComicStore, comicUndo, comicRedo } from '../../../stores/comicStore';
 import { GENRE_REGISTRY } from '../data/GenreRegistry';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { FontSelect } from '../components/FontSelect';
@@ -57,8 +57,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     return () => clearInterval(id);
   }, [flushAutoSave]);
 
-  const undo = () => useComicStore.temporal.getState().undo();
-  const redo = () => useComicStore.temporal.getState().redo();
+  const undo = useCallback(() => comicUndo(), []);
+  const redo = useCallback(() => comicRedo(), []);
 
   const [isGenreOpen, setIsGenreOpen] = useState(false);
   const currentGenre = GENRE_REGISTRY.find(g => g.id === currentGenreId) || GENRE_REGISTRY[0];

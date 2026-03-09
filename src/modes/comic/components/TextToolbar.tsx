@@ -5,6 +5,7 @@ import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { Tooltip } from '../../../components/ui/Tooltip';
 import { FontSelect } from './FontSelect';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_BLUE, TEXT_ON_GOLD } from '../theme/Phase12DesignTokens';
+import { PrecisionSlider } from './PrecisionSlider';
 import {
     Maximize2,
     Type,
@@ -53,8 +54,7 @@ function BalloonTextOptionsRow({ balloon, currentPageId, selectedBubbleId, onOve
             <Tooltip content="Padding – space between text and bubble edge">
                 <div className="flex items-center gap-1.5">
                             <span className="flex items-center justify-center w-8 h-8 rounded-lg border border-white/[0.08] bg-[#1A1A1E] text-white/70 shrink-0" aria-hidden><Box size={14} /></span>
-                            <input type="range" min="0" max="100" step="5" value={balloon.padding ?? 20} onChange={(e) => onUpdate(currentPageId, selectedBubbleId, { padding: parseInt(e.target.value) })} className="w-14 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-[#00D1FF] [&::-webkit-slider-thumb]:rounded-full" />
-                            <span className="text-white/80 text-xs w-5 text-right tabular-nums">{balloon.padding ?? 20}</span>
+                            <PrecisionSlider min={0} max={100} step={5} value={balloon.padding ?? 20} onChange={(v) => onUpdate(currentPageId, selectedBubbleId, { padding: v })} width={100} showPrecisionButtons={false} showTicks={false} valueLabel={`${balloon.padding ?? 20}`} aria-label="Padding" />
                         </div>
                     </Tooltip>
                     <div className="w-px h-6 bg-white/10" />
@@ -101,8 +101,7 @@ function BalloonTextOptionsRow({ balloon, currentPageId, selectedBubbleId, onOve
             {balloon.overrides?.textWarp && balloon.overrides?.textWarp !== 'none' && (
                 <Tooltip content="Warp intensity">
                     <div className="flex items-center gap-1.5">
-                        <input type="range" min="0.1" max="3" step="0.1" value={balloon.overrides?.textWarpIntensity ?? 1} onChange={(e) => onOverrides({ textWarpIntensity: parseFloat(e.target.value) })} className="w-14 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#00D1FF]" />
-                        <span className="text-white/80 text-xs w-6 tabular-nums">{(balloon.overrides?.textWarpIntensity ?? 1).toFixed(1)}</span>
+                        <PrecisionSlider min={0.1} max={3} step={0.1} value={balloon.overrides?.textWarpIntensity ?? 1} onChange={(v) => onOverrides({ textWarpIntensity: v })} width={100} showPrecisionButtons={false} showTicks={false} valueLabel={(balloon.overrides?.textWarpIntensity ?? 1).toFixed(1)} aria-label="Warp intensity" />
                     </div>
                 </Tooltip>
             )}
