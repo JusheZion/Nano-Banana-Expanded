@@ -16,6 +16,7 @@ import {
   LayoutGrid,
   Columns,
   Plus,
+  Circle,
   Scissors,
   Pencil,
   ImagePlus,
@@ -74,6 +75,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     currentPageId,
     selectedElementIds,
     addPanel,
+    lastCanvasPosition,
     updatePanel,
     setKnifeMode,
     isKnifeMode,
@@ -114,12 +116,10 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
   const ribbonBtnStyle = (active?: boolean) =>
     active ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { background: 'transparent', color: TEXT_ON_BLUE };
   const RibbonButton = ({ label, icon, active, onClick, disabled, title }: { label: string; icon: React.ReactNode; active?: boolean; onClick: () => void; disabled?: boolean; title: string }) => (
-    <Tooltip content={title}>
-      <button type="button" onClick={onClick} disabled={disabled} className={ribbonBtnBase} style={ribbonBtnStyle(active)} aria-pressed={active}>
-        {icon}
-        <span className="text-[9px] font-medium uppercase tracking-wide leading-tight">{label}</span>
-      </button>
-    </Tooltip>
+    <button type="button" title={title} onClick={onClick} disabled={disabled} className={ribbonBtnBase} style={ribbonBtnStyle(active)} aria-pressed={active}>
+      {icon}
+      <span className="text-[9px] font-medium uppercase tracking-wide leading-tight">{label}</span>
+    </button>
   );
 
   // When unpinned and no context: show only a slim bar with thumbtack to pin
@@ -147,21 +147,44 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     );
   }
 
-  const handleAddPanel = () => {
-    if (!currentPage) return;
+  type AddPanelShape = 'polygon' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector';
+  const addPanelPayload = (shape: AddPanelShape, x: number, y: number, w: number, h: number) => {
+    const base = { x, y, width: w, height: h };
+    if (shape === 'ellipse') return { ...base, shapeType: 'ellipse' as const };
+    if (shape === 'halfCircle') return { ...base, shapeType: 'halfCircle' as const };
+    if (shape === 'quarterCircle') return { ...base, shapeType: 'quarterCircle' as const };
+    if (shape === 'sector') return { ...base, shapeType: 'sector' as const, centralAngle: 90 };
+    return { ...base, shapeType: 'polygon' as const, points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }] };
+  };
+
+  const handleAddPanel = (shape: AddPanelShape = 'polygon') => {
     setKnifeMode(false);
-    addPanel(currentPage.id, {
-      shapeType: 'polygon',
-      x: 100, y: 100, width: 200, height: 200,
-      points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }],
-    });
+    const pageId = currentPageId ?? pages[0]?.id;
+    const w = 200;
+    const h = 200;
+    const pos = lastCanvasPosition && lastCanvasPosition.pageId === pageId ? lastCanvasPosition : null;
+    if (pageId && pos) {
+      addPanel(pageId, addPanelPayload(shape, pos.x - w / 2, pos.y - h / 2, w, h));
+      return;
+    }
+    if (pageId) {
+      const cx = 400;
+      const cy = 600;
+      addPanel(pageId, addPanelPayload(shape, cx - w / 2, cy - h / 2, w, h));
+    }
   };
 
   const handleInsertImage = () => {
-    pages.forEach(page => {
-      page.panels.filter(p => selectedElementIds.includes(p.id)).forEach(p =>
-        updatePanel(page.id, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
-    });
+    const pageId = currentPageId ?? pages[0]?.id;
+    if (!pageId) return;
+    const page = pages.find(p => p.id === pageId);
+    if (!page) return;
+    const selectedPanelsInPage = page.panels.filter(p => selectedElementIds.includes(p.id));
+    if (selectedPanelsInPage.length > 0) {
+      selectedPanelsInPage.forEach(p => updatePanel(pageId, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
+    } else {
+      addPanel(pageId, { shapeType: 'rect', x: 50, y: 50, width: 300, height: 300, imageUrl: PLACEHOLDER_IMAGE_URL });
+    }
   };
 
   const SplitIconH = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" /></svg>;
@@ -178,14 +201,18 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     >
       {showPanelRibbon && (
         <div className="flex items-center gap-1.5 shrink-0">
-          <RibbonButton label="Add Panel" icon={<Plus size={16} />} onClick={handleAddPanel} title="Add Panel" />
+          <RibbonButton label="Add Panel" icon={<Plus size={16} />} onClick={() => handleAddPanel('polygon')} title="Add rectangle at cursor or center" />
+          <RibbonButton label="Add circle" icon={<Circle size={16} />} onClick={() => handleAddPanel('ellipse')} title="Add circle at cursor or center" />
+          <RibbonButton label="Half" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2 A10 10 0 0 1 22 12 L2 12 A10 10 0 0 1 12 2 Z" /></svg>} onClick={() => handleAddPanel('halfCircle')} title="Add half-circle at cursor or center" />
+          <RibbonButton label="Quarter" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 12 22 Z" /></svg>} onClick={() => handleAddPanel('quarterCircle')} title="Add quarter-circle at cursor or center" />
+          <RibbonButton label="Sector" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 16 20 Z" /></svg>} onClick={() => handleAddPanel('sector')} title="Add sector at cursor or center" />
           <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
           <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
           <RibbonButton label="Slant R" icon={<SplitIconSlantRow />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant row' : 'Select a panel'} />
           <RibbonButton label="Slant C" icon={<SplitIconSlantCol />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant column' : 'Select a panel'} />
           <RibbonButton label="Knife" icon={<Scissors size={16} />} active={isKnifeMode} onClick={() => setKnifeMode(!isKnifeMode)} title={isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'} />
           <RibbonButton label="Draw" icon={<Pencil size={16} />} active={isDrawingMode} onClick={() => toggleDrawingMode(!isDrawingMode)} title={isDrawingMode ? 'Exit Draw' : 'Draw'} />
-          <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} disabled={!selectedElementIds.length} title="Insert image into selected panel(s)" />
+          <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image into selected panel(s) or add new panel with image" />
         </div>
       )}
 

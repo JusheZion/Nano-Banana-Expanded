@@ -47,6 +47,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
     setZoomLevel,
     layoutMode,
     setLayoutMode,
+    placePanelAtNextClick,
+    placePanelShape,
   } = useComicStore();
 
   // Auto-save project state to localStorage every 30s
@@ -458,11 +460,18 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
           onActiveMenuChange={handleActiveMenuChange}
         />
 
-        {/* Main content + Dock content (dock at top level with menu, content below) */}
+        {/* Main content (banner + canvas) | Dock on the right */}
         <div className="flex flex-1 min-h-0 min-w-0">
-          <main className="relative z-10 flex-1 min-h-0 min-w-0" style={{ background: PRIMARY_BG }}>
-            {children}
-          </main>
+          <div className="flex flex-1 min-h-0 min-w-0 flex-col min-w-0">
+            {placePanelAtNextClick && (
+              <div className="shrink-0 px-3 py-2 text-center text-sm font-medium" style={{ background: ACCENT_BLUE_GRADIENT, color: TEXT_ON_GOLD }}>
+                Click on the canvas to place the new panel{placePanelShape === 'ellipse' ? ' (circle)' : ''}.
+              </div>
+            )}
+            <main className="relative z-10 flex-1 min-h-0 min-w-0" style={{ background: PRIMARY_BG }}>
+              {children}
+            </main>
+          </div>
           {isDockOpen && activeDockContent && (
             <aside className="w-[300px] border-l border-white/10 flex flex-col shrink-0 overflow-hidden bg-[#F5F5DC]" style={{ color: PRIMARY_BG_FLAT }}>
               {activeDockContent}

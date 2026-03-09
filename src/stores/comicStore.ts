@@ -8,12 +8,14 @@ import type { BalloonInstance } from '../types/balloon';
 export interface Panel {
     id: string;
     type: 'panel';
-    shapeType: 'rect' | 'polygon' | 'ellipse';
+    shapeType: 'rect' | 'polygon' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector';
     x: number;
     y: number;
     width: number;
     height: number;
     points?: { x: number, y: number }[];
+    /** For shapeType 'sector': central angle in degrees (1–360). */
+    centralAngle?: number;
     imageUrl?: string;
     prompt?: string;
     isLocked?: boolean;
@@ -136,7 +138,16 @@ interface ComicState {
         pageId?: string;
         balloonId?: string;
         panelId?: string;
+        /** Page-local coords when opening on empty (for Add panel at cursor). */
+        pageLocalX?: number;
+        pageLocalY?: number;
     };
+    /** When true, next stage click places a new panel centered at cursor (Position on Click). */
+    placePanelAtNextClick: boolean;
+    /** Shape to use when placing a panel (polygon = rectangle, ellipse = circle). */
+    placePanelShape: 'polygon' | 'ellipse';
+    /** Last pointer position on the canvas (page-local) for instant panel placement. */
+    lastCanvasPosition: { pageId: string; x: number; y: number } | null;
     templates: PanelTemplate[];
     _autoSaveTick: number;
 
@@ -189,8 +200,10 @@ interface ComicState {
 
     triggerExport: (format: 'png' | 'pdf') => void;
     clearExport: () => void;
-    openContextMenu: (params: { x: number; y: number; context: 'balloon' | 'panel' | 'empty'; pageId?: string; balloonId?: string; panelId?: string }) => void;
+    openContextMenu: (params: { x: number; y: number; context: 'balloon' | 'panel' | 'empty'; pageId?: string; balloonId?: string; panelId?: string; pageLocalX?: number; pageLocalY?: number }) => void;
     closeContextMenu: () => void;
+    setPlacePanelAtNextClick: (active: boolean, shape?: 'polygon' | 'ellipse') => void;
+    setLastCanvasPosition: (pos: { pageId: string; x: number; y: number } | null) => void;
 
     // Genre Management
     applyGenreToAll: () => void;
@@ -213,6 +226,9 @@ interface ComicState {
 
     // Auto-save trigger (call every 30s to persist to localStorage)
     flushAutoSave: () => void;
+
+    /** Call after a drag/transform to record one undo step (so undo reverts the whole gesture). No-op state update. */
+    captureUndoCheckpoint: () => void;
 }
 
 export const useComicStore = create<ComicState>()(
@@ -236,7 +252,7 @@ export const useComicStore = create<ComicState>()(
                         balloons: [],
                         drawings: [],
                         overlays: [],
-                        background: '#ffffff',
+                        background: '#1a1a1a',
                         layerOrder: []
                     }
                 ],
@@ -250,6 +266,9 @@ export const useComicStore = create<ComicState>()(
                 mode: 'layout',
                 exportFormat: null,
                 contextMenu: { open: false, x: 0, y: 0, context: 'empty' },
+                placePanelAtNextClick: false,
+                placePanelShape: 'polygon',
+                lastCanvasPosition: null,
                 templates: [],
                 _autoSaveTick: 0,
 
@@ -391,14 +410,14 @@ export const useComicStore = create<ComicState>()(
                                 ? {
                                     ...p,
                                     panels: [...p.panels, {
-                                        strokeColor: genre.palette.border,
                                         ...(genre.textureId !== undefined && { textureId: genre.textureId }),
                                         ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
                                         ...panelData,
                                         id: newId,
                                         type: 'panel',
                                         isVisible: true,
-                                        isLocked: false
+                                        isLocked: false,
+                                        strokeColor: (panelData as Partial<Panel>).strokeColor ?? genre.palette?.border ?? '#000000'
                                     }],
                                     layerOrder: [...p.layerOrder, newId]
                                 }
@@ -698,6 +717,12 @@ export const useComicStore = create<ComicState>()(
                 triggerExport: (format) => set({ exportFormat: format }),
                 clearExport: () => set({ exportFormat: null }),
                 openContextMenu: (params) => set({ contextMenu: { ...params, open: true } }),
+                setPlacePanelAtNextClick: (active, shape) => set((state) => ({
+                    ...state,
+                    placePanelAtNextClick: active,
+                    ...(active && shape != null && { placePanelShape: shape }),
+                })),
+                setLastCanvasPosition: (pos) => set({ lastCanvasPosition: pos }),
                 closeContextMenu: () => set((s) => ({ contextMenu: { ...s.contextMenu, open: false } })),
 
                 toggleFlip: (pageId, elementId, axis) => set((state) => ({
@@ -791,6 +816,9 @@ export const useComicStore = create<ComicState>()(
                         })
                     }
                 }),
+
+                /** No-op set to force temporal to record current state as one undo step (e.g. after drag end). */
+                captureUndoCheckpoint: () => set((state) => state),
 
                 updateProjectSettings: (settings) => set((state) => ({
                     projectSettings: { ...state.projectSettings, ...settings }

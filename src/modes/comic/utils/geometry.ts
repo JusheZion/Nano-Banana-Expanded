@@ -87,7 +87,7 @@ export const splitConvexPolygon = (points: Point[], lineStart: Point, lineEnd: P
 
 /** Returns true if (px, py) is inside the given panel shape (page-local coords). */
 export function pointInPanel(
-    shapeType: 'rect' | 'polygon' | 'ellipse',
+    shapeType: 'rect' | 'polygon' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector',
     x: number,
     y: number,
     width: number,
@@ -99,7 +99,7 @@ export function pointInPanel(
     if (shapeType === 'rect') {
         return px >= x && px <= x + width && py >= y && py <= y + height;
     }
-    if (shapeType === 'ellipse') {
+    if (shapeType === 'ellipse' || shapeType === 'halfCircle' || shapeType === 'quarterCircle' || shapeType === 'sector') {
         const cx = x + width / 2;
         const cy = y + height / 2;
         const rx = width / 2;

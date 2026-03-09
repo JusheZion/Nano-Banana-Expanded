@@ -4,8 +4,9 @@ import { useComicStore } from '../../../stores/comicStore';
 import { FontSelect } from './FontSelect';
 import { X } from 'lucide-react';
 import { ACCENT_BLUE_GRADIENT, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
+import { ASSETS } from './AssetLibrary';
 
-export type FormatDialogTabId = 'text' | 'object' | 'panel';
+export type FormatDialogTabId = 'text' | 'object' | 'panel' | 'image';
 
 export interface FormatDialogProps {
   open: boolean;
@@ -20,6 +21,7 @@ const TABS: { id: FormatDialogTabId; label: string }[] = [
   { id: 'text', label: 'Text' },
   { id: 'object', label: 'Object' },
   { id: 'panel', label: 'Panel' },
+  { id: 'image', label: 'Image' },
 ];
 
 export const FormatDialog: React.FC<FormatDialogProps> = ({
@@ -28,9 +30,9 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
   initialTab = 'text',
   pageId: propPageId,
   balloonId: propBalloonId,
-  panelId: _propPanelId,
+  panelId: propPanelId,
 }) => {
-  const { pages, currentPageId, selectedElementIds, updateBalloon } = useComicStore();
+  const { pages, currentPageId, selectedElementIds, updateBalloon, updatePanel, setPageSettings } = useComicStore();
   const [activeTab, setActiveTab] = React.useState<FormatDialogTabId>(initialTab);
 
   const page = propPageId
@@ -161,6 +163,46 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
           )}
           {activeTab === 'panel' && (
             <p className="text-sm opacity-80">Panel formatting — use the Objects ribbon or coming in a future update.</p>
+          )}
+          {activeTab === 'image' && (
+            <div className="space-y-3">
+              {!page ? (
+                <p className="text-sm opacity-80">No page in context.</p>
+              ) : (
+                <>
+                  <p className="text-xs opacity-80">
+                    {propPanelId
+                      ? 'Click an image to set it as the panel image.'
+                      : 'Click an image to set it as the page background.'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 max-h-[280px] overflow-y-auto">
+                    {ASSETS.map((asset, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          if (propPanelId) {
+                            updatePanel(page.id, propPanelId, { imageUrl: asset });
+                          } else {
+                            setPageSettings({ backgroundImage: asset });
+                          }
+                          onClose();
+                        }}
+                        className="rounded-lg overflow-hidden border border-white/20 hover:border-white/50 hover:shadow-lg transition-all aspect-square"
+                      >
+                        <img
+                          src={asset}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          draggable={false}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -51,9 +51,9 @@
 
 ## Critical Bug-Squash List (Priority 1)
 
-- [ ] **Undo/Redo Stability**: Fix intermittent failures; ensure 100% state capture for all manipulations.
-- [ ] **Insert Image Fix**: Resolve unresponsive "Insert Image" button in the Asset Library.
-- [ ] **Layer Checkboxes**: Fix unresponsive visibility/lock toggles in the Layer menu.
+- [x] **Undo/Redo Stability**: State capture fixed: panel/vertex/edge drags now batch into one undo step via zundo pause/resume; first move pushes pre-drag state, subsequent moves skip history; drag end resumes. `captureUndoCheckpoint()` added for future use. Redo stack cleared on new action (zundo default).
+- [x] **Insert Image Fix**: Menu bar and ribbon "Insert Image" now work: use current page and selected panels or add new panel with placeholder image; menu button uses onMouseDown so click fires before dropdown close. Asset Library has explicit "Insert Image" button (inserts first asset).
+- [x] **Layer Checkboxes**: Visibility (eye) and Lock (padlock) toggles fixed: onPointerDown/onClick stopPropagation so DnD sortable does not capture; type="button" and aria-labels added. Store `toggleLayerVisibility` / `toggleLayerLock` already updated panels/balloons/drawings; UI now reflects immediately.
 
 ---
 
@@ -61,13 +61,15 @@
 *Focus: Precision paneling, UX feedback, and layout mechanics.*
 
 ### Panel Geometry & Tools
-- [ ] Implement "Position on Click" logic for spawning new panels at current mouse coordinates.
-- [ ] Add Half-Circle and Quarter-Circle primitive options to the Panel library.
-- [ ] **Vector Control:** Develop a cursor tool for circular panels to adjust sectors via central angles.
-- [ ] Add `+/-` increment buttons to the vertical menu for precise central angle adjustments.
+- [x] **Position on Click:** New panels spawn centered on cursor. Store `placePanelAtNextClick`; Menu/Ribbon "Add Panel" sets it; next stage click adds panel at page-local coords (zoom-aware). Context menu "Add panel" uses `pageLocalX/pageLocalY` for right-click position.
+- [x] **Half-Circle & Quarter-Circle:** Panel primitives with SVG path specs (half: arches upward; quarter: bottom-right quadrant). ObjectToolbar buttons; Path rendering with shadow/glow/stroke; clip paths for image/texture.
+- [x] **Sector panel:** `shapeType: 'sector'`, `centralAngle` (1–360°). Path from spec: M 0 0 L r 0 A r r 0 [largeArc] 1 [endX] [endY] Z. ObjectToolbar Sector button.
+- [x] **Sector angle UI:** Panel dropdown shows "Sector angle" with −15° / +15° when a sector is selected. Drag handle on canvas (gold circle on arc): drag to wipe angle; undo batching via temporal pause/resume.
+- [x] **Panel shape UX:** Panel menu: "Add panel (rectangle)" / "Add panel (circle)" with "click canvas to place" label; "Add panel at center"; "Panel shape (selected)" section (Rectangle, Circle/Ellipse, Half-circle, Quarter-circle, Sector). Right-click on panel → "Change shape" (same options). Place-panel hint banner when active: "Click on the canvas to place the new panel (circle)." Ribbon: "Add Panel" (rectangle) + "Add circle" with tooltips. Store `placePanelShape` and `setPlacePanelAtNextClick(active, shape?)`.
+- [x] **Rotate handle:** Transformer rotate handle enabled for all panels (rectangle, ellipse, circle, half/quarter/sector, polygon). Rotation persisted in `onTransformEnd` to `panel.rotation`; node rotation reset so layout stays in sync.
 
 ### Core Systems
-- [ ] Debug and restore robust Undo/Redo functionality across all canvas actions.
+- [x] Debug and restore robust Undo/Redo functionality across all canvas actions (see Critical Bug-Squash).
 - [ ] Implement the "Group Tool" to consolidate layers and synchronized object movement.
 
 ### UI/UX Aesthetic Overhaul
@@ -80,7 +82,8 @@
 
 ### Format Dialog & Right-Click Context Menu
 - [x] **Right-click context menu on canvas:** Hit-test (panel / balloon / empty); open context menu at pointer with Format…, Paste, Add panel/balloon, Delete as appropriate.
-- [x] **Tabbed Format dialog:** Modal with Text | Object | Panel tabs; Text tab has font, size, text color; Object/Panel tabs placeholder. Opened from context menu or from menu bar (Text → Font & size, etc.; Objects → Fill & border, etc.).
+- [x] **Tabbed Format dialog:** Modal with Text | Object | Panel | Image tabs; Text tab has font, size, text color; Object/Panel tabs placeholder; Image tab shows asset grid — click to set panel image (when panel context) or page background (when empty). Opened from context menu or from menu bar.
+- [x] **Insert image via right-click:** "Insert image…" on context menu for panel and empty; opens Format dialog on Image tab with mini asset library.
 - [ ] **Format dialog tab content (planned phase):** Plan and implement full feature set per tab (Text: padding, stroke, 3D, warp, alignment; Object: fill, border, shadow, glow, texture; Panel: same object-style controls) in one go to avoid constant churn.
 
 ---

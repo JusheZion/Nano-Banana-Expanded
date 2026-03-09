@@ -51,6 +51,10 @@ export const ComicCanvas: React.FC = () => {
         clearSelection,
         updatePanel,
         addPanel,
+        placePanelAtNextClick,
+        placePanelShape,
+        setPlacePanelAtNextClick,
+        setLastCanvasPosition,
         updateBalloon,
         addOverlay,
         updateOverlay,
@@ -108,9 +112,42 @@ export const ComicCanvas: React.FC = () => {
         if (targetPage) {
             selectPage(targetPage.id);
             targetPageIdRef.current = targetPage.id;
+            const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
+            setLastCanvasPosition({ pageId: targetPage.id, x: pos.x - offset.x, y: pos.y - offset.y });
         }
 
         const clickedOnEmpty = e.target === stage || e.target.name() === 'background-rect';
+
+        // 0. Position-on-Click: place new panel at cursor
+        if (placePanelAtNextClick && targetPage) {
+            setPlacePanelAtNextClick(false);
+            const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
+            const localX = pos.x - offset.x;
+            const localY = pos.y - offset.y;
+            const w = 200;
+            const h = 200;
+            if (placePanelShape === 'ellipse') {
+                addPanel(targetPage.id, {
+                    shapeType: 'ellipse',
+                    x: localX - w / 2,
+                    y: localY - h / 2,
+                    width: w,
+                    height: h,
+                });
+            } else {
+                addPanel(targetPage.id, {
+                    shapeType: 'polygon',
+                    x: localX - w / 2,
+                    y: localY - h / 2,
+                    width: w,
+                    height: h,
+                    points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }],
+                });
+            }
+            setSelectedElements([]);
+            setSelectionBox(null);
+            return;
+        }
 
         // 1. Knife Mode
         if (isKnifeMode) {
@@ -174,13 +211,20 @@ export const ComicCanvas: React.FC = () => {
             node = node.getParent?.();
         }
 
-        if (context === 'empty' && rawPos && pages.length > 0) {
+        let pageLocalX: number | undefined;
+        let pageLocalY: number | undefined;
+        if (rawPos && pages.length > 0) {
             const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
             const targetPage = pages.find((_, i) => {
                 const offset = getLayoutPosition(i, layoutMode);
                 return pos.x >= offset.x && pos.x <= offset.x + 800 && pos.y >= offset.y && pos.y <= offset.y + 1200;
             });
-            if (targetPage) pageId = targetPage.id;
+            if (targetPage) {
+                if (context === 'empty') pageId = targetPage.id;
+                const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
+                pageLocalX = pos.x - offset.x;
+                pageLocalY = pos.y - offset.y;
+            }
         }
         if ((context === 'balloon' || context === 'panel') && !pageId && node) {
             let p: any = node.getParent?.();
@@ -194,7 +238,7 @@ export const ComicCanvas: React.FC = () => {
             }
         }
 
-        openContextMenu({ x: clientX, y: clientY, context, pageId, balloonId, panelId });
+        openContextMenu({ x: clientX, y: clientY, context, pageId, balloonId, panelId, pageLocalX, pageLocalY });
     };
 
     const handleStageMouseMove = (e: any) => {
@@ -203,6 +247,15 @@ export const ComicCanvas: React.FC = () => {
         if (!rawPos) return;
 
         const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
+
+        const targetPage = pages.find((_, i) => {
+            const offset = getLayoutPosition(i, layoutMode);
+            return pos.x >= offset.x && pos.x <= offset.x + 800 && pos.y >= offset.y && pos.y <= offset.y + 1200;
+        });
+        if (targetPage) {
+            const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
+            setLastCanvasPosition({ pageId: targetPage.id, x: pos.x - offset.x, y: pos.y - offset.y });
+        }
 
         if (isKnifeMode && knifeStart) {
             setKnifeCurrent(pos);
@@ -452,7 +505,8 @@ export const ComicCanvas: React.FC = () => {
                     <Layer name="layer-background">
                         {pages.map((page, i) => {
                             const offset = getLayoutPosition(i, layoutMode);
-                            const fill = pageSettings?.backgroundColor ?? page.background ?? 'white';
+                            const rawFill = pageSettings?.backgroundColor ?? page.background ?? '#1a1a1a';
+                            const fill = (rawFill === 'white' || rawFill === '#ffffff') ? '#1a1a1a' : rawFill;
                             return (
                                 <React.Fragment key={`bg-${page.id}`}>
                                     <Rect

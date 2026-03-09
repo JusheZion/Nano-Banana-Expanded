@@ -2,7 +2,7 @@ import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { generatePrompt } from '../utils/promptMiddleware';
 
-const ASSETS = [
+export const ASSETS = [
     '/assets/images/Anunnaki Anubis.png',
     '/assets/images/Anunnaki Sphinx.png',
     '/assets/images/Aquarius Sphere.jpg',

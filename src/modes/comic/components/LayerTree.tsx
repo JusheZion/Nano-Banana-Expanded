@@ -80,18 +80,24 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
                 </span>
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0" onPointerDown={(e) => e.stopPropagation()}>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleVisibility(); }}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (!isVisible ? 'opacity-50' : '') : 'hover:bg-white/10 ' + (!isVisible ? 'text-white/40' : 'text-white/80')}`}
                     style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
+                    aria-label={isVisible ? 'Hide layer' : 'Show layer'}
                 >
                     {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onToggleLock(); }}
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleLock(); }}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (isLocked ? 'opacity-80' : 'opacity-50') : 'hover:bg-white/10 ' + (isLocked ? 'text-red-400' : 'text-white/40 hover:text-white/80')}`}
                     style={royalBlue && !isLocked ? { color: PRIMARY_BG_FLAT } : royalBlue && isLocked ? { color: '#002366' } : undefined}
+                    aria-label={isLocked ? 'Unlock layer' : 'Lock layer'}
                 >
                     {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>

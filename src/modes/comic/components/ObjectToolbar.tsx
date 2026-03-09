@@ -1,7 +1,6 @@
 import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
-import { Tooltip } from '../../../components/ui/Tooltip';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
 
 /** Ribbon: same as TEXT_ON_BLUE for consistency; object toolbar lives in ribbon */
@@ -55,10 +54,12 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
         splitPanel
     } = useComicStore();
 
+    const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
+    const selectedPanels = selectedPanelEntries.map(x => x.panel);
+    const effectivePageId = selectedPanelEntries[0]?.pageId ?? currentPageId;
+
     if (selectedElementIds.length === 0) return <ObjectToolbarPlaceholder />;
 
-    const currentPage = pages.find(p => p.id === currentPageId);
-    const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
     const hasPanels = selectedPanels.length > 0;
 
     const shapeType = selectedPanels[0]?.shapeType ?? 'rect';
@@ -69,94 +70,106 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
             {/* Shape Controls (Only for Panels) */}
             {hasPanels && (
                 <div className="flex flex-nowrap items-center gap-1 border-r border-white/20 pr-2 mr-1 shrink-0">
-                    <Tooltip content="Rectangle Shape">
-                        <button
-                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'rect' }))}
-                            className={ribbonIconBtn}
-                            style={shapeType === 'rect' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
-                            <span className={ribbonIconLabel}>Rect</span>
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Ellipse Shape">
-                        <button
-                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shapeType: 'ellipse' }))}
-                            className={ribbonIconBtn}
-                            style={shapeType === 'ellipse' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>
-                            <span className={ribbonIconLabel}>Ellipse</span>
-                        </button>
-                    </Tooltip>
+                    <button
+                        type="button"
+                        title="Rectangle Shape"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shapeType: 'rect' }))}
+                        className={ribbonIconBtn}
+                        style={shapeType === 'rect' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
+                        <span className={ribbonIconLabel}>Rect</span>
+                    </button>
+                    <button
+                        type="button"
+                        title="Ellipse Shape"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shapeType: 'ellipse' }))}
+                        className={ribbonIconBtn}
+                        style={shapeType === 'ellipse' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>
+                        <span className={ribbonIconLabel}>Ellipse</span>
+                    </button>
+                    <button
+                        type="button"
+                        title="Half-Circle (arches upward)"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shapeType: 'halfCircle' }))}
+                        className={ribbonIconBtn}
+                        style={shapeType === 'halfCircle' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2 A10 10 0 0 1 22 12 L2 12 A10 10 0 0 1 12 2 Z" /></svg>
+                        <span className={ribbonIconLabel}>Half</span>
+                    </button>
+                    <button
+                        type="button"
+                        title="Quarter-Circle (bottom-right)"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shapeType: 'quarterCircle' }))}
+                        className={ribbonIconBtn}
+                        style={shapeType === 'quarterCircle' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 12 22 Z" /></svg>
+                        <span className={ribbonIconLabel}>Quarter</span>
+                    </button>
+                    <button
+                        type="button"
+                        title="Sector (variable angle)"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shapeType: 'sector', centralAngle: p.shapeType === 'sector' ? (p.centralAngle ?? 90) : 90 }))}
+                        className={ribbonIconBtn}
+                        style={shapeType === 'sector' ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { color: TEXT_ON_BLUE }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 12 L22 12 A10 10 0 0 1 16 20 Z" /></svg>
+                        <span className={ribbonIconLabel}>Sector</span>
+                    </button>
 
                     <div className="h-4 w-px mx-1 shrink-0" style={{ backgroundColor: RIBBON_BORDER }} />
 
-                    <Tooltip content="Split Horizontally (Row)">
-                        <button onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'horizontal', 0))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" /></svg>
-                            <span className={ribbonIconLabel}>Split H</span>
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Split Vertically (Column)">
-                        <button onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'vertical', 0))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></svg>
-                            <span className={ribbonIconLabel}>Split V</span>
-                        </button>
-                    </Tooltip>
+                    <button type="button" title="Split Horizontally (Row)" onClick={() => selectedPanels.forEach(p => splitPanel(effectivePageId, p.id, 'horizontal', 0))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" /></svg>
+                        <span className={ribbonIconLabel}>Split H</span>
+                    </button>
+                    <button type="button" title="Split Vertically (Column)" onClick={() => selectedPanels.forEach(p => splitPanel(effectivePageId, p.id, 'vertical', 0))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></svg>
+                        <span className={ribbonIconLabel}>Split V</span>
+                    </button>
 
                     <div className="h-4 w-px mx-1 shrink-0" style={{ backgroundColor: RIBBON_BORDER }} />
 
-                    <Tooltip content="Split Slanted (Row)">
-                        <button onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'horizontal', 40))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="16" x2="21" y2="8" /></svg>
-                            <span className={ribbonIconLabel}>Slant R</span>
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Split Slanted (Column)">
-                        <button onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId, p.id, 'vertical', 40))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="16" y1="3" x2="8" y2="21" /></svg>
-                            <span className={ribbonIconLabel}>Slant C</span>
-                        </button>
-                    </Tooltip>
+                    <button type="button" title="Split Slanted (Row)" onClick={() => selectedPanels.forEach(p => splitPanel(effectivePageId, p.id, 'horizontal', 40))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="16" x2="21" y2="8" /></svg>
+                        <span className={ribbonIconLabel}>Slant R</span>
+                    </button>
+                    <button type="button" title="Split Slanted (Column)" onClick={() => selectedPanels.forEach(p => splitPanel(effectivePageId, p.id, 'vertical', 40))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="16" y1="3" x2="8" y2="21" /></svg>
+                        <span className={ribbonIconLabel}>Slant C</span>
+                    </button>
                 </div>
             )}
 
             {/* Z-Index & Transform Controls */}
             <div className="flex flex-nowrap items-center gap-1 border-r border-white/20 pr-2 mr-2 shrink-0">
                 {hasPanels && (
-                    <Tooltip content="Rotate (15°)">
-                        <button onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { rotation: ((p.rotation || 0) + 15) % 360 }))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c0-5.523 4.477-10 10-10 5.523 0 10 4.477 10 10 0 1.638-.393 3.185-1.093 4.542M22 6V12h-6" /></svg>
-                            <span className={ribbonIconLabel}>Rotate</span>
-                        </button>
-                    </Tooltip>
+                    <button type="button" title="Rotate (15°)" onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { rotation: ((p.rotation || 0) + 15) % 360 }))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c0-5.523 4.477-10 10-10 5.523 0 10 4.477 10 10 0 1.638-.393 3.185-1.093 4.542M22 6V12h-6" /></svg>
+                        <span className={ribbonIconLabel}>Rotate</span>
+                    </button>
                 )}
-                <Tooltip content="Flip Horizontal">
-                    <button onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'horizontal'))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 12 16 21" /><line x1="8" y1="3" x2="8" y2="21" /><polyline points="3 7 3 17" /></svg>
-                        <span className={ribbonIconLabel}>Flip H</span>
-                    </button>
-                </Tooltip>
-                <Tooltip content="Flip Vertical">
-                    <button onClick={() => selectedElementIds.forEach(id => toggleFlip(currentPageId, id, 'vertical'))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 16 12 21 21 16" /><line x1="3" y1="8" x2="21" y2="8" /><polyline points="7 3 17 3" /></svg>
-                        <span className={ribbonIconLabel}>Flip V</span>
-                    </button>
-                </Tooltip>
+                <button type="button" title="Flip Horizontal" onClick={() => selectedElementIds.forEach(id => toggleFlip(effectivePageId, id, 'horizontal'))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 12 16 21" /><line x1="8" y1="3" x2="8" y2="21" /><polyline points="3 7 3 17" /></svg>
+                    <span className={ribbonIconLabel}>Flip H</span>
+                </button>
+                <button type="button" title="Flip Vertical" onClick={() => selectedElementIds.forEach(id => toggleFlip(effectivePageId, id, 'vertical'))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 16 12 21 21 16" /><line x1="3" y1="8" x2="21" y2="8" /><polyline points="7 3 17 3" /></svg>
+                    <span className={ribbonIconLabel}>Flip V</span>
+                </button>
                 <div className="h-4 w-px bg-white/10 mx-1" />
-                <Tooltip content="Bring to Front">
-                    <button onClick={() => selectedElementIds.forEach(id => bringToFront(currentPageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 8h8v8H8z" /><path d="M4 4h8v8H4z" strokeOpacity="0.5" /></svg>
-                        <span className={ribbonIconLabel}>Front</span>
-                    </button>
-                </Tooltip>
-                <Tooltip content="Send to Back">
-                    <button onClick={() => selectedElementIds.forEach(id => sendToBack(currentPageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h8v8H4z" /><path d="M8 8h8v8H8z" strokeOpacity="0.5" /></svg>
-                        <span className={ribbonIconLabel}>Back</span>
-                    </button>
-                </Tooltip>
+                <button type="button" title="Bring to Front" onClick={() => selectedElementIds.forEach(id => bringToFront(effectivePageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 8h8v8H8z" /><path d="M4 4h8v8H4z" strokeOpacity="0.5" /></svg>
+                    <span className={ribbonIconLabel}>Front</span>
+                </button>
+                <button type="button" title="Send to Back" onClick={() => selectedElementIds.forEach(id => sendToBack(effectivePageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h8v8H4z" /><path d="M8 8h8v8H8z" strokeOpacity="0.5" /></svg>
+                    <span className={ribbonIconLabel}>Back</span>
+                </button>
             </div>
 
             {/* Border & FX Controls (Panels Only) — single row */}
@@ -164,53 +177,49 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                 <div className="flex flex-nowrap items-center gap-2 border-r border-white/20 pr-2 mr-2 shrink-0">
                     {/* Border Color */}
                     <div className="flex flex-nowrap items-center gap-1 border-r border-white/20 pr-2 mr-1 shrink-0">
-                        <Tooltip content="Border Color">
-                            <div className="relative group">
-                                <input
-                                    type="color"
-                                    value={selectedPanels[0]?.strokeColor || '#893741'}
-                                    onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { strokeColor: e.target.value }))}
-                                    className="w-5 h-5 rounded-full overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent shrink-0"
-                                />
-                            </div>
-                        </Tooltip>
-
-                        <Tooltip content="Apply Border Color to All Panels">
-                            <button
-                                onClick={() => {
-                                    const c = selectedPanels[0]?.strokeColor || '#893741';
-                                    pages.forEach(pg => {
-                                        pg.panels.forEach(p => updatePanel(pg.id, p.id, { strokeColor: c }));
-                                    });
-                                }}
-                                className="px-2 py-1 rounded font-bold text-[10px] uppercase tracking-wider transition-colors hover:opacity-90"
-                            style={{ color: TEXT_ON_BLUE, background: 'rgba(252,246,186,0.2)' }}
-                            >
-                                All
-                            </button>
-                        </Tooltip>
-                    </div>
-
-                    <Tooltip content="Shadow Color">
-                        <div className="relative group shrink-0">
+                        <div className="relative group" title="Border Color">
                             <input
                                 type="color"
-                                value={selectedPanels[0]?.shadowColor || '#000000'}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowColor: e.target.value }))}
-                                className="w-5 h-5 rounded-full overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
+                                value={selectedPanels[0]?.strokeColor || '#893741'}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { strokeColor: e.target.value }))}
+                                className="w-5 h-5 rounded-full overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent shrink-0"
                             />
                         </div>
-                    </Tooltip>
 
-                    <Tooltip content="Drop Shadow Preset">
                         <button
-                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: 10, shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5, shadowColor: '#000000' }))}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0"
-                            style={{ color: TEXT_ON_BLUE }}
+                            type="button"
+                            title="Apply Border Color to All Panels"
+                            onClick={() => {
+                                const c = selectedPanels[0]?.strokeColor || '#893741';
+                                pages.forEach(pg => {
+                                    pg.panels.forEach(p => updatePanel(pg.id, p.id, { strokeColor: c }));
+                                });
+                            }}
+                            className="px-2 py-1 rounded font-bold text-[10px] uppercase tracking-wider transition-colors hover:opacity-90"
+                            style={{ color: TEXT_ON_BLUE, background: 'rgba(252,246,186,0.2)' }}
                         >
-                            Shdw
+                            All
                         </button>
-                    </Tooltip>
+                    </div>
+
+                    <div className="relative group shrink-0" title="Shadow Color">
+                        <input
+                            type="color"
+                            value={selectedPanels[0]?.shadowColor || '#000000'}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowColor: e.target.value }))}
+                            className="w-5 h-5 rounded-full overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        title="Drop Shadow Preset"
+                        onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowBlur: 10, shadowOffsetX: 5, shadowOffsetY: 5, shadowOpacity: 0.5, shadowColor: '#000000' }))}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0"
+                        style={{ color: TEXT_ON_BLUE }}
+                    >
+                        Shdw
+                    </button>
 
                     <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0" title="Shadow Blur / Opacity">
                         <span className="text-[9px] w-5 shrink-0" style={{ color: RIBBON_MUTED }}>Blur</span>
@@ -220,7 +229,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             max="50"
                             step="1"
                             value={selectedPanels[0]?.shadowBlur ?? 10}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowBlur: parseInt(e.target.value) }))}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowBlur: parseInt(e.target.value) }))}
                             className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                         />
                         <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Op</span>
@@ -230,7 +239,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             max="1"
                             step="0.1"
                             value={selectedPanels[0]?.shadowOpacity ?? 0.3}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOpacity: parseFloat(e.target.value) }))}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOpacity: parseFloat(e.target.value) }))}
                             className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                         />
                     </div>
@@ -242,7 +251,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             max="50"
                             step="1"
                             value={selectedPanels[0]?.shadowOffsetX ?? 5}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOffsetX: parseInt(e.target.value) }))}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetX: parseInt(e.target.value) }))}
                             className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                         />
                         <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }}>Y</span>
@@ -252,7 +261,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             max="50"
                             step="1"
                             value={selectedPanels[0]?.shadowOffsetY ?? 5}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { shadowOffsetY: parseInt(e.target.value) }))}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { shadowOffsetY: parseInt(e.target.value) }))}
                             className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                         />
                     </div>
@@ -260,7 +269,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     {/* Glow Controls — single row */}
                     <div className="flex flex-nowrap items-center gap-2 border-l border-white/20 pl-2 ml-1 shrink-0">
                         <button
-                            onClick={() => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowBlur: 20, glowSpread: 5, glowOpacity: 1, glowColor: '#3B82F6' }))}
+                            onClick={() => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowBlur: 20, glowSpread: 5, glowOpacity: 1, glowColor: '#3B82F6' }))}
                             className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0"
                             style={{ color: TEXT_ON_BLUE }}
                             title="Blue Glow Preset"
@@ -271,7 +280,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             <input
                                 type="color"
                                 value={selectedPanels[0]?.glowColor || '#3B82F6'}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowColor: e.target.value }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowColor: e.target.value }))}
                                 className="w-5 h-5 rounded-full overflow-hidden border border-white/20 cursor-pointer p-0 bg-transparent"
                             />
                         </div>
@@ -283,7 +292,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="50"
                                 step="1"
                                 value={selectedPanels[0]?.glowSpread ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowSpread: parseInt(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowSpread: parseInt(e.target.value) }))}
                                 className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
                             />
                             <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Blur</span>
@@ -293,7 +302,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="50"
                                 step="1"
                                 value={selectedPanels[0]?.glowBlur ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowBlur: parseInt(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowBlur: parseInt(e.target.value) }))}
                                 className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
                             />
                             <span className="text-[9px] w-4 shrink-0" style={{ color: RIBBON_MUTED }}>Op</span>
@@ -303,7 +312,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="1"
                                 step="0.1"
                                 value={selectedPanels[0]?.glowOpacity ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { glowOpacity: parseFloat(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { glowOpacity: parseFloat(e.target.value) }))}
                                 className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
                             />
                         </div>
@@ -313,7 +322,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     <div className="flex flex-nowrap items-center gap-1 border-l border-white/20 pl-2 ml-1 shrink-0" title="Texture Overlay">
                         <select
                             value={selectedPanels[0]?.textureId || ''}
-                            onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { textureId: e.target.value }))}
+                            onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { textureId: e.target.value }))}
                             className="text-[10px] font-medium border border-white/20 rounded px-1 min-w-[56px] outline-none cursor-pointer shrink-0 bg-white/10"
                             style={{ color: TEXT_ON_BLUE }}
                         >
@@ -329,7 +338,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="1"
                                 step="0.1"
                                 value={selectedPanels[0]?.textureOpacity ?? 0.5}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { textureOpacity: parseFloat(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { textureOpacity: parseFloat(e.target.value) }))}
                                 className="w-10 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                                 title="Texture Opacity"
                             />
@@ -343,7 +352,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                 <div className="flex flex-nowrap items-center gap-2 border-r border-white/20 pr-2 mr-2 shrink-0">
                     <select
                         value={selectedPanels[0]?.imageFillMode || 'cover'}
-                        onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageFillMode: e.target.value as any }))}
+                        onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageFillMode: e.target.value as any }))}
                         className="text-[10px] font-medium border border-white/20 rounded px-1 min-w-[56px] outline-none cursor-pointer shrink-0 bg-white/10"
                         style={{ color: TEXT_ON_BLUE }}
                         title="Image Fill Mode"
@@ -363,7 +372,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="3"
                                 step="0.1"
                                 value={selectedPanels[0]?.imageScale ?? 1}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageScale: parseFloat(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageScale: parseFloat(e.target.value) }))}
                                 className="w-10 h-1 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full"
                                 title="Scale"
                             />
@@ -374,7 +383,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="500"
                                 step="10"
                                 value={selectedPanels[0]?.imageOffsetX ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageOffsetX: parseInt(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetX: parseInt(e.target.value) }))}
                                 className="w-6 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                                 title="Offset X"
                             />
@@ -384,7 +393,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                                 max="500"
                                 step="10"
                                 value={selectedPanels[0]?.imageOffsetY ?? 0}
-                                onChange={(e) => selectedPanels.forEach(p => updatePanel(currentPageId, p.id, { imageOffsetY: parseInt(e.target.value) }))}
+                                onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetY: parseInt(e.target.value) }))}
                                 className="w-6 h-1 rounded appearance-none bg-white/20 cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-[#b38728] [&::-webkit-slider-thumb]:rounded-full shrink-0"
                                 title="Offset Y"
                             />
@@ -395,18 +404,14 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
 
             {/* Lifecycle Controls */}
             <div className="flex flex-nowrap items-center gap-1 shrink-0">
-                <Tooltip content="Clone (Ctrl+D)">
-                    <button onClick={() => selectedElementIds.forEach(id => cloneElement(currentPageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                        <span className={ribbonIconLabel}>Clone</span>
-                    </button>
-                </Tooltip>
-                <Tooltip content="Delete (Backspace)">
-                    <button onClick={() => selectedElementIds.forEach(id => removeElement(currentPageId, id))} className={`${ribbonIconBtn} hover:bg-red-500/30`} style={{ color: TEXT_ON_BLUE }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                        <span className={ribbonIconLabel}>Delete</span>
-                    </button>
-                </Tooltip>
+                <button type="button" title="Clone (Ctrl+D)" onClick={() => selectedElementIds.forEach(id => cloneElement(effectivePageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                    <span className={ribbonIconLabel}>Clone</span>
+                </button>
+                <button type="button" title="Delete (Backspace)" onClick={() => selectedElementIds.forEach(id => removeElement(effectivePageId, id))} className={`${ribbonIconBtn} hover:bg-red-500/30`} style={{ color: TEXT_ON_BLUE }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    <span className={ribbonIconLabel}>Delete</span>
+                </button>
             </div>
         </div>
     );

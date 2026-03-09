@@ -1,16 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2 } from 'lucide-react';
+import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2, ImagePlus } from 'lucide-react';
 import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
 
-export type FormatDialogTab = 'text' | 'object' | 'panel';
+export type FormatDialogTab = 'text' | 'object' | 'panel' | 'image';
 
 export interface CanvasContextMenuProps {
   onOpenFormatDialog: (tab: FormatDialogTab, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
 }
 
 export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenFormatDialog }) => {
-  const { contextMenu, closeContextMenu, pasteClipboard, removeElement, addPanel, addBalloon } = useComicStore();
+  const { contextMenu, closeContextMenu, pasteClipboard, removeElement, addPanel, addBalloon, updatePanel } = useComicStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,13 +53,17 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
 
   const handleAddPanel = () => {
     if (contextMenu.pageId) {
+      const w = 200;
+      const h = 200;
+      const cx = contextMenu.pageLocalX ?? 100;
+      const cy = contextMenu.pageLocalY ?? 100;
       addPanel(contextMenu.pageId, {
         shapeType: 'polygon',
-        x: 100,
-        y: 100,
-        width: 200,
-        height: 200,
-        points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }],
+        x: cx - w / 2,
+        y: cy - h / 2,
+        width: w,
+        height: h,
+        points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }],
       });
     }
     closeContextMenu();
@@ -104,11 +108,21 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
           </button>
         </>
       )}
-      {contextMenu.context === 'panel' && (
+      {contextMenu.context === 'panel' && contextMenu.pageId && contextMenu.panelId && (
         <>
           <button type="button" onClick={() => handleFormat('object')} className={itemClass}>
             <Square size={12} /> Format panel…
           </button>
+          <button type="button" onClick={() => handleFormat('image')} className={itemClass}>
+            <ImagePlus size={12} /> Insert image…
+          </button>
+          <div className="my-1 border-t border-white/15" />
+          <div className="px-3 py-1 text-[10px] font-bold uppercase opacity-70 text-[#001a4d]">Change shape</div>
+          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'rect' }); closeContextMenu(); }} className={itemClass}>Rectangle</button>
+          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'ellipse' }); closeContextMenu(); }} className={itemClass}>Circle / Ellipse</button>
+          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'halfCircle' }); closeContextMenu(); }} className={itemClass}>Half-circle</button>
+          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'quarterCircle' }); closeContextMenu(); }} className={itemClass}>Quarter-circle</button>
+          <button type="button" onClick={() => { updatePanel(contextMenu.pageId!, contextMenu.panelId!, { shapeType: 'sector', centralAngle: 90 }); closeContextMenu(); }} className={itemClass}>Sector</button>
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={handleDelete} className={itemClass}>
             <Trash2 size={12} /> Delete
@@ -122,6 +136,9 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
           </button>
           <button type="button" onClick={() => handleFormat('object')} className={itemClass}>
             <Circle size={12} /> Format object…
+          </button>
+          <button type="button" onClick={() => handleFormat('image')} className={itemClass}>
+            <ImagePlus size={12} /> Insert image…
           </button>
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={handlePaste} className={itemClass}>

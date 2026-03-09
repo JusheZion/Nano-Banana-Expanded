@@ -58,11 +58,14 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const [hoveredMenu, setHoveredMenu] = useState<MenuId>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const {
     pages,
     currentPageId,
     selectedElementIds,
     addPanel,
+    setPlacePanelAtNextClick,
+    lastCanvasPosition,
     addBalloon,
     addOverlay,
     updatePanel,
@@ -74,7 +77,9 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   } = useComicStore();
 
   const currentPage = pages.find(p => p.id === currentPageId);
-  const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
+  const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
+  const selectedPanels = selectedPanelEntries.map(x => x.panel);
+  const effectivePageIdForSelection = selectedPanelEntries[0]?.pageId ?? currentPageId;
 
   // Close dropdown and clear active menu when clicking outside (hover already closes on leave)
   useCloseOnOutside(barRef, openMenu !== null, () => {
@@ -96,13 +101,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     setOpenMenu(id);
     props.onActiveMenuChange(id);
   };
-  const handleMenuBlockLeave = () => {
+  const handleMenuBlockLeave = (e: React.MouseEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (related && dropdownRef.current && dropdownRef.current.contains(related)) return;
     setHoveredMenu(null);
     setOpenMenu(null);
-    // Do not clear activeMenu here: when the dropdown closes (e.g. after clicking an item), the
-    // mouse may leave the block and we would otherwise reset the ribbon to Panel. Keep the last
-    // chosen menu (File, Edit, View, Text, Objects, etc.) so the correct ribbon stays visible.
-    // activeMenu is only cleared on outside click (useCloseOnOutside) or when entering another menu.
   };
   const menuBtn = (id: MenuId, label: string, _icon: React.ReactNode) => (
     <Tooltip content={label}>
@@ -135,14 +138,59 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     </button>
   );
 
-  const handleAddPanel = () => {
+  type AddPanelShape = 'polygon' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector';
+  const addPanelPayload = (shape: AddPanelShape, x: number, y: number, w: number, h: number) => {
+    const base = { x, y, width: w, height: h };
+    if (shape === 'ellipse') return { ...base, shapeType: 'ellipse' as const };
+    if (shape === 'halfCircle') return { ...base, shapeType: 'halfCircle' as const };
+    if (shape === 'quarterCircle') return { ...base, shapeType: 'quarterCircle' as const };
+    if (shape === 'sector') return { ...base, shapeType: 'sector' as const, centralAngle: 90 };
+    return { ...base, shapeType: 'polygon' as const, points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }] };
+  };
+
+  const handleAddPanel = (shape: AddPanelShape = 'polygon') => {
+    setKnifeMode(false);
+    const pageId = currentPageId ?? currentPage?.id ?? pages[0]?.id;
+    const w = 200;
+    const h = 200;
+    const pos = lastCanvasPosition && lastCanvasPosition.pageId === pageId ? lastCanvasPosition : null;
+    if (pageId && pos) {
+      addPanel(pageId, addPanelPayload(shape, pos.x - w / 2, pos.y - h / 2, w, h));
+      close();
+      return;
+    }
+    if (pageId) {
+      const cx = 400;
+      const cy = 600;
+      addPanel(pageId, addPanelPayload(shape, cx - w / 2, cy - h / 2, w, h));
+    }
+    close();
+  };
+
+  const handleAddPanelAtCenter = () => {
     if (!currentPage) return;
     setKnifeMode(false);
+    const w = 200;
+    const h = 200;
+    const pageW = 800;
+    const pageH = 1200;
     addPanel(currentPage.id, {
       shapeType: 'polygon',
-      x: 100, y: 100, width: 200, height: 200,
-      points: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }],
+      x: pageW / 2 - w / 2,
+      y: pageH / 2 - h / 2,
+      width: w,
+      height: h,
+      points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }],
     });
+    close();
+  };
+
+  const handleSetPanelShape = (shapeType: 'rect' | 'ellipse' | 'halfCircle' | 'quarterCircle' | 'sector') => {
+    if (!effectivePageIdForSelection || selectedPanels.length === 0) return;
+    selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection, p.id, {
+      shapeType,
+      ...(shapeType === 'sector' && { centralAngle: 90 }),
+    }));
     close();
   };
 
@@ -168,15 +216,22 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   };
 
   const handleInsertImage = () => {
-    pages.forEach(page => {
-      page.panels.filter(p => selectedElementIds.includes(p.id)).forEach(p =>
-        updatePanel(page.id, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
-    });
+    const pageId = currentPageId ?? pages[0]?.id;
+    if (!pageId) return;
+    const page = pages.find(p => p.id === pageId);
+    if (!page) return;
+    const selectedPanelsInPage = page.panels.filter(p => selectedElementIds.includes(p.id));
+    if (selectedPanelsInPage.length > 0) {
+      selectedPanelsInPage.forEach(p => updatePanel(pageId, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
+    } else {
+      addPanel(pageId, { shapeType: 'rect', x: 50, y: 50, width: 300, height: 300, imageUrl: PLACEHOLDER_IMAGE_URL });
+    }
     close();
   };
 
   const handleSplit = (dir: 'horizontal' | 'vertical', slant?: number) => {
-    selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, dir, slant));
+    if (!effectivePageIdForSelection || selectedPanels.length === 0) return;
+    selectedPanels.forEach(p => splitPanel(effectivePageIdForSelection, p.id, dir, slant));
     close();
   };
 
@@ -199,7 +254,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       onMouseLeave={handleMenuBlockLeave}
     >
       {menuBtn(id, label, null)}
-      {openMenu === id && dropdown}
+      {openMenu === id && (
+        <div ref={dropdownRef} onMouseEnter={() => handleMenuBlockEnter(id)} className="absolute top-full left-0 z-[100]">
+          {dropdown}
+        </div>
+      )}
     </div>
   );
 
@@ -248,17 +307,42 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
         </div>
       ))}
       {menuWithDropdown('panel', 'Panel', null, (
-        <div className={`${dropdownPanelClass} min-w-[240px] max-h-[80vh] overflow-y-auto`} style={dropdownPanelStyle}>
-          <button type="button" onClick={handleAddPanel} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add Panel</button>
+        <div className={`${dropdownPanelClass} min-w-[260px] max-h-[80vh] overflow-y-auto`} style={dropdownPanelStyle}>
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Add panel</div>
+          <button type="button" onClick={() => handleAddPanel('polygon')} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel (rectangle)</button>
+          <button type="button" onClick={() => handleAddPanel('ellipse')} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel (circle)</button>
+          <button type="button" onClick={() => handleAddPanel('halfCircle')} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel (half-circle)</button>
+          <button type="button" onClick={() => handleAddPanel('quarterCircle')} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel (quarter-circle)</button>
+          <button type="button" onClick={() => handleAddPanel('sector')} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel (sector)</button>
+          <button type="button" onClick={handleAddPanelAtCenter} className={dropdownItemClass} style={dropdownItemStyle}><Plus size={12} /> Add panel at center</button>
+          <div className="my-1 border-t border-white/15" />
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Panel shape (selected)</div>
+          <button type="button" onClick={() => handleSetPanelShape('rect')} className={dropdownItemClass} style={dropdownItemStyle}>Rectangle</button>
+          <button type="button" onClick={() => handleSetPanelShape('ellipse')} className={dropdownItemClass} style={dropdownItemStyle}>Circle / Ellipse</button>
+          <button type="button" onClick={() => handleSetPanelShape('halfCircle')} className={dropdownItemClass} style={dropdownItemStyle}>Half-circle</button>
+          <button type="button" onClick={() => handleSetPanelShape('quarterCircle')} className={dropdownItemClass} style={dropdownItemStyle}>Quarter-circle</button>
+          <button type="button" onClick={() => handleSetPanelShape('sector')} className={dropdownItemClass} style={dropdownItemStyle}>Sector</button>
+          <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={() => { toggleDrawingMode(!isDrawingMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Pencil size={12} /> {isDrawingMode ? 'Exit Draw' : 'Draw'}</button>
           <button type="button" onClick={() => { setKnifeMode(!isKnifeMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> {isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'}</button>
-          <button type="button" onClick={handleInsertImage} disabled={!props.hasPanelSelected} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Insert Image</button>
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Insert Image</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Split selected panel</div>
-          <button type="button" onClick={() => handleSplit('horizontal', 0)} disabled={selectedPanels.length === 0} className={dropdownItemClass} style={dropdownItemStyle}>Horizontal (row)</button>
-          <button type="button" onClick={() => handleSplit('vertical', 0)} disabled={selectedPanels.length === 0} className={dropdownItemClass} style={dropdownItemStyle}>Vertical (column)</button>
-          <button type="button" onClick={() => handleSplit('horizontal', 40)} disabled={selectedPanels.length === 0} className={dropdownItemClass} style={dropdownItemStyle}>Slant row</button>
-          <button type="button" onClick={() => handleSplit('vertical', 40)} disabled={selectedPanels.length === 0} className={dropdownItemClass} style={dropdownItemStyle}>Slant column</button>
+          <button type="button" onClick={() => handleSplit('horizontal', 0)} className={dropdownItemClass} style={dropdownItemStyle}>Horizontal (row)</button>
+          <button type="button" onClick={() => handleSplit('vertical', 0)} className={dropdownItemClass} style={dropdownItemStyle}>Vertical (column)</button>
+          <button type="button" onClick={() => handleSplit('horizontal', 40)} className={dropdownItemClass} style={dropdownItemStyle}>Slant row</button>
+          <button type="button" onClick={() => handleSplit('vertical', 40)} className={dropdownItemClass} style={dropdownItemStyle}>Slant column</button>
+          {selectedPanels.length > 0 && selectedPanels[0].shapeType === 'sector' && (
+            <>
+              <div className="my-1 border-t border-white/15" />
+              <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Sector angle</div>
+              <div className="flex items-center gap-1 px-3 py-1">
+                <button type="button" onClick={() => { selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection!, p.id, { centralAngle: Math.max(1, (p.centralAngle ?? 90) - 15) })); close(); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>- 15°</button>
+                <span className="text-[10px] opacity-80" style={dropdownHeadingStyle}>{selectedPanels[0].centralAngle ?? 90}°</span>
+                <button type="button" onClick={() => { selectedPanels.forEach(p => updatePanel(effectivePageIdForSelection!, p.id, { centralAngle: Math.min(360, (p.centralAngle ?? 90) + 15) })); close(); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>+ 15°</button>
+              </div>
+            </>
+          )}
         </div>
       ))}
       {menuWithDropdown('balloon', 'Balloon', null, (
