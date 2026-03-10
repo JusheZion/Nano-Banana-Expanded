@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import { Eye, EyeOff, Lock, Unlock, Square, MessageCircle, PenTool } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Square, MessageCircle, PenTool, GripVertical } from 'lucide-react';
 import {
     DndContext,
     closestCenter,
@@ -63,7 +63,6 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
             ref={setNodeRef}
             style={style}
             {...attributes}
-            {...listeners}
             onClick={onSelect}
             className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${
                 royalBlue
@@ -71,7 +70,17 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
                     : isSelected ? 'bg-white/10 border-gold-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'
             }`}
         >
-            <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+                {/* Drag handle only: listeners not on row so eye/lock clicks are not captured by DnD */}
+                <button
+                    type="button"
+                    className="flex-shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing touch-none"
+                    style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
+                    aria-label="Drag to reorder"
+                    {...listeners}
+                >
+                    <GripVertical className={`w-4 h-4 ${royalBlue ? '' : 'text-white/50'}`} />
+                </button>
                 <div className="flex-shrink-0">
                     {getIcon()}
                 </div>

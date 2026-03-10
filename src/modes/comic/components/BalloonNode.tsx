@@ -180,7 +180,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         const length = Math.sqrt(dx * dx + dy * dy);
         if (length < 2) return null;
         const tailAngle = Math.atan2(tailIntersection.y / halfH, tailIntersection.x / halfW);
-        const delta = Math.max(0.12, Math.min(0.35, 0.2 * (halfW + halfH) / length)); // angular half-width at base
+        const delta = Math.max(0.04, Math.min(0.12, 0.08 * (halfW + halfH) / length)); // narrow mouth: angular half-width at base (smaller = thinner tail start)
         const p1x = halfW * Math.cos(tailAngle - delta);
         const p1y = halfH * Math.sin(tailAngle - delta);
         const p2x = halfW * Math.cos(tailAngle + delta);

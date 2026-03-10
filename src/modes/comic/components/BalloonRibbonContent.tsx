@@ -3,7 +3,7 @@ import { useComicStore } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import type { BalloonStyleId, BalloonStyle } from '../../../types/balloon';
 import { Tooltip } from '../../../components/ui/Tooltip';
-import { Cloud, Square, Radio, MessageCircle, Circle, Sparkles, Zap, ArrowRightToLine } from 'lucide-react';
+import { Cloud, Square, Radio, MessageCircle, Circle, Sparkles, Zap, ArrowRightToLine, ArrowLeftRight } from 'lucide-react';
 import {
   ACCENT_GOLD_GRADIENT,
   TEXT_ON_GOLD,
@@ -169,10 +169,21 @@ export const BalloonRibbonContent: React.FC<BalloonRibbonContentProps> = (props)
         ))}
       </RibbonGroup>
 
-      {canSnapTail && (
+      {canSnapTail && selectedBalloon && (
         <>
           <div className="h-8 w-px bg-white/20 shrink-0 self-center" />
           <RibbonGroup title="Tail">
+            <Tooltip content="Flip tail – point speech tail the other direction">
+              <button
+                type="button"
+                onClick={() => props.currentPageId && props.selectedBalloonId && updateBalloon(props.currentPageId, props.selectedBalloonId, { overrides: { ...(selectedBalloon.overrides || {}), tailFlip: !selectedBalloon.overrides?.tailFlip } })}
+                className={iconBtnBase}
+                style={iconBtnStyle(Boolean(selectedBalloon.overrides?.tailFlip))}
+              >
+                <span className="flex items-center justify-center shrink-0"><ArrowLeftRight size={18} /></span>
+                <span className="text-[9px] font-medium leading-tight max-w-[3rem] truncate text-center" style={{ color: TEXT_ON_BLUE }}>Flip tail</span>
+              </button>
+            </Tooltip>
             <Tooltip content="Snap tail to nearest panel edge">
               <button
                 type="button"

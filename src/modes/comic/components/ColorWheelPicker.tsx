@@ -1,12 +1,17 @@
-import React, { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
+import { Pipette } from 'lucide-react';
 import { useComicStore } from '../../../stores/comicStore';
 import { hexToHsv, hsvToHex } from '../utils/colorUtils';
 import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
 
+declare global {
+  interface Window {
+    EyeDropper?: new () => { open: (options?: { signal?: AbortSignal }) => Promise<{ sRGBHex: string }> };
+  }
+}
+
 const PAD = 4;
-const RING_WIDTH = 12;
-const HUE_SIZE = 44;
-const SV_SIZE = 120;
+const PICKER_SIZE = 160;
 
 export interface ColorWheelPickerProps {
   value: string;
@@ -17,17 +22,15 @@ export interface ColorWheelPickerProps {
   className?: string;
 }
 
-function drawHueRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, ringW: number) {
-  const inner = r - ringW;
+function drawHueDisk(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   const step = 2;
   for (let i = 0; i < 360; i += step) {
     const a1 = ((i - 90) * Math.PI) / 180;
     const a2 = ((i + step - 90) * Math.PI) / 180;
     ctx.fillStyle = hsvToHex(i, 1, 1);
     ctx.beginPath();
-    ctx.moveTo(cx + inner * Math.cos(a1), cy + inner * Math.sin(a1));
-    ctx.arc(cx, cy, inner, a1, a2);
-    ctx.arc(cx, cy, r, a2, a1, true);
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, a1, a2);
     ctx.closePath();
     ctx.fill();
   }
@@ -66,10 +69,9 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     setV(next.v);
   }, [value]);
 
-  const cx = HUE_SIZE / 2;
-  const cy = HUE_SIZE / 2;
-  const ringR = HUE_SIZE / 2 - 2;
-  const innerR = ringR - RING_WIDTH;
+  const cx = PICKER_SIZE / 2;
+  const cy = PICKER_SIZE / 2;
+  const hueR = PICKER_SIZE / 2 - 2;
 
   useEffect(() => {
     const canvas = hueRingRef.current;
@@ -77,12 +79,12 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = HUE_SIZE * dpr;
-    canvas.height = HUE_SIZE * dpr;
+    canvas.width = PICKER_SIZE * dpr;
+    canvas.height = PICKER_SIZE * dpr;
     ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, HUE_SIZE, HUE_SIZE);
-    drawHueRing(ctx, cx, cy, ringR, RING_WIDTH);
-  }, [cx, cy, ringR]);
+    ctx.clearRect(0, 0, PICKER_SIZE, PICKER_SIZE);
+    drawHueDisk(ctx, cx, cy, hueR);
+  }, [cx, cy, hueR]);
 
   useEffect(() => {
     const canvas = svRef.current;
@@ -90,7 +92,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const size = SV_SIZE;
+    const size = PICKER_SIZE;
     canvas.width = size * dpr;
     canvas.height = size * dpr;
     ctx.scale(dpr, dpr);
@@ -107,14 +109,14 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
       const px = (e.clientX - rect.left) * scaleX - cx;
       const py = (e.clientY - rect.top) * scaleY - cy;
       const dist = Math.sqrt(px * px + py * py);
-      if (dist < innerR || dist > ringR) return;
+      if (dist > hueR) return;
       const angle = Math.atan2(py, px);
       let deg = (angle * 180) / Math.PI + 90;
       if (deg < 0) deg += 360;
       setH(deg);
       onChange(hsvToHex(deg, s, v));
     },
-    [cx, innerR, ringR, s, v, onChange]
+    [cx, hueR, s, v, onChange]
   );
 
   const handleSVClick = useCallback(
@@ -125,8 +127,8 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
       const scale = canvas.width / rect.width;
       const px = (e.clientX - rect.left) * scale;
       const py = (e.clientY - rect.top) * scale;
-      const ns = Math.max(0, Math.min(1, px / SV_SIZE));
-      const nv = Math.max(0, Math.min(1, 1 - py / SV_SIZE));
+      const ns = Math.max(0, Math.min(1, px / PICKER_SIZE));
+      const nv = Math.max(0, Math.min(1, 1 - py / PICKER_SIZE));
       setS(ns);
       setV(nv);
       onChange(hsvToHex(h, ns, nv));
@@ -136,10 +138,13 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
 
   const currentHex = useMemo(() => hsvToHex(h, s, v), [h, s, v]);
   const isFavorite = colorFavorites.includes(currentHex);
+  const [eyedropperActive, setEyedropperActive] = useState(false);
+  const supportsEyedropper = typeof window !== 'undefined' && !!window.EyeDropper;
 
   const [hexInput, setHexInput] = React.useState(currentHex);
+  const hexInputRef = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => {
-    setHexInput(currentHex);
+    if (document.activeElement !== hexInputRef.current) setHexInput(currentHex);
   }, [currentHex]);
 
   const normalizeHex = (raw: string): string | null => {
@@ -167,25 +172,41 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     [onChange]
   );
 
+  const handleEyedropper = useCallback(async () => {
+    if (!supportsEyedropper || eyedropperActive) return;
+    setEyedropperActive(true);
+    try {
+      const dropper = new window.EyeDropper!();
+      const { sRGBHex } = await dropper.open();
+      const hex = sRGBHex.toLowerCase();
+      applyHexInput(hex);
+      addColorToRecentlyUsed(hex);
+    } catch {
+      // User cancelled or API failed
+    } finally {
+      setEyedropperActive(false);
+    }
+  }, [supportsEyedropper, eyedropperActive, applyHexInput, addColorToRecentlyUsed]);
+
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <div className="flex items-start gap-3">
         <canvas
           ref={hueRingRef}
-          width={HUE_SIZE}
-          height={HUE_SIZE}
+          width={PICKER_SIZE}
+          height={PICKER_SIZE}
           className="shrink-0 cursor-crosshair rounded-full border"
-          style={{ borderColor: ACCENT_GOLD_SOLID, width: HUE_SIZE, height: HUE_SIZE }}
+          style={{ borderColor: ACCENT_GOLD_SOLID, width: PICKER_SIZE, height: PICKER_SIZE }}
           onClick={handleHueClick}
           aria-label="Hue ring"
         />
         <div className="flex flex-col gap-1.5 flex-1 min-w-0">
           <canvas
             ref={svRef}
-            width={SV_SIZE}
-            height={SV_SIZE}
+            width={PICKER_SIZE}
+            height={PICKER_SIZE}
             className="cursor-crosshair rounded border shrink-0"
-            style={{ width: SV_SIZE, height: SV_SIZE, borderColor: ACCENT_GOLD_SOLID }}
+            style={{ width: PICKER_SIZE, height: PICKER_SIZE, borderColor: ACCENT_GOLD_SOLID }}
             onClick={handleSVClick}
             aria-label="Saturation and value"
           />
@@ -196,33 +217,25 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               aria-hidden
             />
             <input
+              ref={hexInputRef}
               type="text"
               value={hexInput}
               onChange={(e) => {
                 const val = e.target.value;
                 setHexInput(val.startsWith('#') ? val : '#' + val);
-                const hex = normalizeHex(val.startsWith('#') ? val : '#' + val);
-                if (hex) {
-                  const { h: nh, s: ns, v: nv } = hexToHsv(hex);
-                  setH(nh);
-                  setS(ns);
-                  setV(nv);
-                  onChange(hex);
-                }
               }}
               onBlur={(e) => {
-                const hex = normalizeHex(e.target.value);
-                if (hex) {
-                  setHexInput(hex);
-                } else {
-                  setHexInput(currentHex);
-                }
+                const raw = e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value;
+                const hex = normalizeHex(raw);
+                if (hex) applyHexInput(raw);
+                else setHexInput(currentHex);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const hex = normalizeHex(hexInput);
                   if (hex) applyHexInput(hexInput);
                   else setHexInput(currentHex);
+                  hexInputRef.current?.blur();
                 }
               }}
               placeholder="#000000"
@@ -238,6 +251,19 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                 style={{ borderColor: ACCENT_GOLD_SOLID, color: TEXT_ON_BLUE }}
               >
                 Apply
+              </button>
+            )}
+            {supportsEyedropper && (
+              <button
+                type="button"
+                onClick={handleEyedropper}
+                disabled={eyedropperActive}
+                className="p-1.5 rounded border inline-flex items-center justify-center"
+                style={{ borderColor: ACCENT_GOLD_SOLID, color: TEXT_ON_BLUE }}
+                title="Pick color from screen"
+                aria-label="Pick color from screen"
+              >
+                <Pipette size={18} />
               </button>
             )}
             <button

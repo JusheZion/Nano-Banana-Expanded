@@ -1,10 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Group, Rect, Image, Transformer, Line, Circle, Ellipse, Path } from 'react-konva';
+import { Group, Rect, Image, Transformer, Line, Circle, Ellipse, Path, Shape } from 'react-konva';
 import useImage from 'use-image';
-import { useComicStore, type Panel } from '../../../stores/comicStore';
+import { useComicStore, undoPause, undoResume, type Panel } from '../../../stores/comicStore';
 import { getVertexSnapLines, getGutterAwareSnapLines, type DiagonalGuide, type SnapLine } from '../utils/snapping';
 import { getTextureUrl } from '../data/TextureRegistry';
-import { getHalfCirclePath, getQuarterCirclePath, getSectorPath } from '../utils/circularPanelPaths';
+import {
+    getHalfCirclePath,
+    getQuarterCirclePath,
+    getSectorPath,
+} from '../utils/circularPanelPaths';
 import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
 
 interface ComicPanelProps {
@@ -277,23 +281,23 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     return { x: newX, y: newY };
                 }}
                 onDragStart={() => {
-                    useComicStore.temporal.getState().pause();
+                    undoPause();
                     isFirstPanelDragMove.current = true;
                 }}
                 onDragMove={(e) => {
                     if (e.target !== groupRef.current) return;
                     if (isFirstPanelDragMove.current) {
-                        useComicStore.temporal.getState().resume();
+                        undoResume();
                         isFirstPanelDragMove.current = false;
                     }
                     onChange({
                         x: e.target.x(),
                         y: e.target.y(),
                     });
-                    useComicStore.temporal.getState().pause();
+                    undoPause();
                 }}
                 onDragEnd={(e) => {
-                    useComicStore.temporal.getState().resume();
+                    undoResume();
                     if (onDragEnd) onDragEnd(e);
                 }}
                 onTransformEnd={() => {
@@ -363,22 +367,104 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     }
 
                     const outerR = isHalfCircle ? rHalf + gapMargin : isQuarterCircle ? rQuarter + gapMargin : rSector + gapMargin;
-                    const innerR = Math.max(1, outerR - strokeW);
-                    const outerPath = isHalfCircle ? getHalfCirclePath(outerR) : isQuarterCircle ? getQuarterCirclePath(outerR) : getSectorPath(outerR, panel.centralAngle ?? 90);
-                    const innerPath = isHalfCircle ? getHalfCirclePath(innerR) : isQuarterCircle ? getQuarterCirclePath(innerR) : getSectorPath(innerR, panel.centralAngle ?? 90);
+                    // Match ellipse branch: stroke centered on outer boundary, punch at outerR - strokeW/2.
+                    const innerPunchR = Math.max(1, outerR - strokeW / 2);
+                    const haloColor = panel.strokeColor || '#893741';
 
+                    // Half-circle / quarter-circle: same composite as ellipse — stroke offset boundary then destination-out filled interior.
+                    // Path fill+compound subpaths was inconsistent; canvas stroke+fill punch matches ellipse behavior.
+                    if (isHalfCircle) {
+                        return (
+                            <Group listening={false} x={panel.width / 2} y={panel.height / 2}>
+                                <Shape
+                                    listening={false}
+                                    sceneFunc={(ctx) => {
+                                        ctx.save();
+                                        ctx.strokeStyle = haloColor;
+                                        ctx.lineWidth = strokeW;
+                                        ctx.lineJoin = 'round';
+                                        ctx.lineCap = 'round';
+                                        ctx.globalCompositeOperation = 'source-atop';
+                                        ctx.beginPath();
+                                        // Panel path uses SVG sweep 0 = top semicircle (arc at top); canvas equivalent is anticlockwise PI→0.
+                                        ctx.arc(0, 0, outerR, Math.PI, 0, true);
+                                        ctx.closePath();
+                                        ctx.stroke();
+                                        ctx.beginPath();
+                                        ctx.arc(0, 0, innerPunchR, Math.PI, 0, true);
+                                        ctx.closePath();
+                                        ctx.fillStyle = 'black';
+                                        ctx.globalCompositeOperation = 'destination-out';
+                                        ctx.fill();
+                                        ctx.restore();
+                                    }}
+                                />
+                            </Group>
+                        );
+                    }
+                    if (isQuarterCircle) {
+                        return (
+                            <Group listening={false} x={0} y={0}>
+                                <Shape
+                                    listening={false}
+                                    sceneFunc={(ctx) => {
+                                        ctx.save();
+                                        ctx.strokeStyle = haloColor;
+                                        ctx.lineWidth = strokeW;
+                                        ctx.lineJoin = 'round';
+                                        ctx.lineCap = 'round';
+                                        ctx.globalCompositeOperation = 'source-atop';
+                                        ctx.beginPath();
+                                        ctx.moveTo(0, 0);
+                                        ctx.lineTo(outerR, 0);
+                                        ctx.arc(0, 0, outerR, 0, Math.PI / 2, false);
+                                        ctx.closePath();
+                                        ctx.stroke();
+                                        ctx.beginPath();
+                                        ctx.moveTo(0, 0);
+                                        ctx.lineTo(innerPunchR, 0);
+                                        ctx.arc(0, 0, innerPunchR, 0, Math.PI / 2, false);
+                                        ctx.closePath();
+                                        ctx.fillStyle = 'black';
+                                        ctx.globalCompositeOperation = 'destination-out';
+                                        ctx.fill();
+                                        ctx.restore();
+                                    }}
+                                />
+                            </Group>
+                        );
+                    }
+
+                    // Sector: stroke offset boundary then destination-out inner wedge (gap on arc only; straight edges left as-is per design).
+                    const sectorAngleDeg = Math.max(1, Math.min(360, panel.centralAngle ?? 90));
+                    const sectorAngleRad = (sectorAngleDeg * Math.PI) / 180;
                     return (
-                        <Group listening={false} x={isQuarterCircle ? 0 : panel.width / 2} y={isQuarterCircle ? 0 : panel.height / 2}>
-                            <Path
-                                data={outerPath}
-                                stroke={panel.strokeColor || "#893741"}
-                                strokeWidth={strokeW}
-                                globalCompositeOperation="source-atop"
-                            />
-                            <Path
-                                data={innerPath}
-                                fill="black"
-                                globalCompositeOperation="destination-out"
+                        <Group listening={false} x={panel.width / 2} y={panel.height / 2}>
+                            <Shape
+                                listening={false}
+                                sceneFunc={(ctx) => {
+                                    ctx.save();
+                                    ctx.strokeStyle = haloColor;
+                                    ctx.lineWidth = strokeW;
+                                    ctx.lineJoin = 'round';
+                                    ctx.lineCap = 'round';
+                                    ctx.globalCompositeOperation = 'source-atop';
+                                    ctx.beginPath();
+                                    ctx.moveTo(0, 0);
+                                    ctx.lineTo(outerR, 0);
+                                    ctx.arc(0, 0, outerR, 0, sectorAngleRad, false);
+                                    ctx.closePath();
+                                    ctx.stroke();
+                                    ctx.beginPath();
+                                    ctx.moveTo(0, 0);
+                                    ctx.lineTo(innerPunchR, 0);
+                                    ctx.arc(0, 0, innerPunchR, 0, sectorAngleRad, false);
+                                    ctx.closePath();
+                                    ctx.fillStyle = 'black';
+                                    ctx.globalCompositeOperation = 'destination-out';
+                                    ctx.fill();
+                                    ctx.restore();
+                                }}
                             />
                         </Group>
                     );
@@ -614,6 +700,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             data={isHalfCircle ? getHalfCirclePath(Math.min(panel.width, panel.height) / 2) : isQuarterCircle ? getQuarterCirclePath(Math.min(panel.width, panel.height)) : getSectorPath(Math.min(panel.width, panel.height) / 2, panel.centralAngle ?? 90)}
                             {...panelStrokeProps}
                             strokeWidth={isSelected ? 6 : 4}
+                            lineJoin="round"
+                            lineCap="round"
                             listening={false}
                         />
                     </Group>
@@ -655,22 +743,22 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         onDragMove={(e) => {
                             e.cancelBubble = true;
                             if (isFirstVertexOrEdgeDrag.current) {
-                                useComicStore.temporal.getState().resume();
+                                undoResume();
                                 isFirstVertexOrEdgeDrag.current = false;
                             }
                             const newPoints = [...panel.points!];
                             newPoints[i] = { x: e.target.x(), y: e.target.y() };
                             onChange({ points: newPoints });
-                            useComicStore.temporal.getState().pause();
+                            undoPause();
                         }}
                         onDragStart={(e) => {
                             e.cancelBubble = true;
-                            useComicStore.temporal.getState().pause();
+                            undoPause();
                             isFirstVertexOrEdgeDrag.current = true;
                         }}
                         onDragEnd={(e) => {
                             e.cancelBubble = true;
-                            useComicStore.temporal.getState().resume();
+                            undoResume();
                             onVertexSnap?.([]);
                             onDiagonalGuides?.([]);
                             if (onDragEnd) onDragEnd();
@@ -700,7 +788,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             draggable
                             onDragStart={(e) => {
                                 e.cancelBubble = true;
-                                useComicStore.temporal.getState().pause();
+                                undoPause();
                                 isFirstVertexOrEdgeDrag.current = true;
                                 const pos = e.target.getStage()?.getPointerPosition();
                                 (e.target as any).setAttr('startPos', pos);
@@ -713,7 +801,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             onDragMove={(e) => {
                                 e.cancelBubble = true;
                                 if (isFirstVertexOrEdgeDrag.current) {
-                                    useComicStore.temporal.getState().resume();
+                                    undoResume();
                                     isFirstVertexOrEdgeDrag.current = false;
                                 }
                                 const pos = e.target.getStage()?.getPointerPosition();
@@ -749,11 +837,11 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
 
                                     onChange({ points: newPoints });
                                 }
-                                useComicStore.temporal.getState().pause();
+                                undoPause();
                             }}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                useComicStore.temporal.getState().resume();
+                                undoResume();
                                 (e.target as any).setAttr('startPos', null);
                                 (e.target as any).setAttr('startPoints', null);
                                 onVertexSnap?.([]);
@@ -801,7 +889,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 onMouseDown={(e) => e.cancelBubble = true}
                                 onDragStart={(e) => {
                                     e.cancelBubble = true;
-                                    useComicStore.temporal.getState().pause();
+                                    undoPause();
                                     isFirstSectorAngleDrag.current = true;
                                 }}
                                 dragBoundFunc={(pos) => {
@@ -812,7 +900,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 onDragMove={(e) => {
                                     e.cancelBubble = true;
                                     if (isFirstSectorAngleDrag.current) {
-                                        useComicStore.temporal.getState().resume();
+                                        undoResume();
                                         isFirstSectorAngleDrag.current = false;
                                     }
                                     const node = e.target;
@@ -824,10 +912,10 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                     if (angleDeg < 1) angleDeg = 1;
                                     if (angleDeg > 360) angleDeg = 360;
                                     onChange({ centralAngle: Math.round(angleDeg) });
-                                    useComicStore.temporal.getState().pause();
+                                    undoPause();
                                 }}
                                 onDragEnd={() => {
-                                    useComicStore.temporal.getState().resume();
+                                    undoResume();
                                 }}
                             />
                         </Group>

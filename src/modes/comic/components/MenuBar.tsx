@@ -281,8 +281,23 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       ))}
       {menuWithDropdown('edit', 'Edit', null, (
         <div className={dropdownPanelClass} style={dropdownPanelStyle}>
-          {item('Undo', '⌘Z', props.onUndo)}
-          {item('Redo', '⌘⇧Z', props.onRedo)}
+          {/* onMouseDown so action runs before mousedown-outside closes dropdown (same as Insert Image) */}
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); close(); }}
+            className="w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-4 rounded transition-all duration-150 text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.99]"
+          >
+            <span>Undo</span>
+            <span className="text-[10px] opacity-70 font-mono">⌘Z</span>
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); close(); }}
+            className="w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-4 rounded transition-all duration-150 text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.99]"
+          >
+            <span>Redo</span>
+            <span className="text-[10px] opacity-70 font-mono">⌘⇧Z</span>
+          </button>
           <div className="my-1 border-t border-white/15" />
           {item('Cut', '⌘X', props.onCut)}
           {item('Copy', '⌘C', props.onCopy)}

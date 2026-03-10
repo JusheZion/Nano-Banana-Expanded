@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { temporal } from 'zundo';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
@@ -237,12 +236,91 @@ interface ComicState {
     // Auto-save trigger (call every 30s to persist to localStorage)
     flushAutoSave: () => void;
 
-    /** Call after a drag/transform to record one undo step (so undo reverts the whole gesture). No-op state update. */
+    /** No-op; drag batching uses undoPause/undoResume. */
     captureUndoCheckpoint: () => void;
 }
 
+// --- Explicit undo/redo (replaces zundo/temporal) ---
+const UNDO_MAX = 80;
+let past: string[] = [];
+let future: string[] = [];
+let undoPaused = false;
+
+function undoSnapshotSlice(state: ComicState): string {
+    return JSON.stringify({
+        pages: state.pages,
+        projectSettings: state.projectSettings,
+        gutterSize: state.gutterSize,
+        pageSettings: state.pageSettings,
+        layoutMode: state.layoutMode,
+        currentGenreId: state.currentGenreId,
+        customGenre: state.customGenre,
+        templates: state.templates,
+        colorFavorites: state.colorFavorites,
+        colorRecentlyUsed: state.colorRecentlyUsed,
+        selectedElementIds: state.selectedElementIds,
+    });
+}
+
+function undoMiddleware(config: any) {
+    return (set: any, get: () => ComicState, store: any) => {
+        const wrappedSet = (partial: any) => {
+            // Push only when undo slice actually changes (avoids flushAutoSave filling stack with identical snaps).
+            const snapBefore = undoPaused ? '' : undoSnapshotSlice(get());
+            const ret = set(partial);
+            if (!undoPaused) {
+                const snapAfter = undoSnapshotSlice(get());
+                if (snapBefore !== snapAfter) {
+                    past.push(snapBefore);
+                    if (past.length > UNDO_MAX) past.shift();
+                    future = [];
+                }
+            }
+            return ret;
+        };
+        return config(wrappedSet, get, store);
+    };
+}
+
+export function undoPause(): void {
+    undoPaused = true;
+}
+export function undoResume(): void {
+    undoPaused = false;
+}
+export function undoClear(): void {
+    past = [];
+    future = [];
+}
+
+export function comicUndo(): void {
+    if (past.length === 0) return;
+    const current = undoSnapshotSlice(useComicStore.getState());
+    const json = past.pop()!;
+    future.push(current);
+    undoPaused = true;
+    try {
+        useComicStore.setState(JSON.parse(json) as Partial<ComicState>);
+    } finally {
+        undoPaused = false;
+    }
+}
+
+export function comicRedo(): void {
+    if (future.length === 0) return;
+    const current = undoSnapshotSlice(useComicStore.getState());
+    const json = future.pop()!;
+    past.push(current);
+    undoPaused = true;
+    try {
+        useComicStore.setState(JSON.parse(json) as Partial<ComicState>);
+    } finally {
+        undoPaused = false;
+    }
+}
+
 export const useComicStore = create<ComicState>()(
-    temporal(
+    undoMiddleware(
         persist(
             (set) => ({
                 projectSettings: {
@@ -843,8 +921,7 @@ export const useComicStore = create<ComicState>()(
                     }
                 }),
 
-                /** No-op set to force temporal to record current state as one undo step (e.g. after drag end). */
-                captureUndoCheckpoint: () => set((state) => state),
+                captureUndoCheckpoint: () => {},
 
                 updateProjectSettings: (settings) => set((state) => ({
                     projectSettings: { ...state.projectSettings, ...settings }
@@ -925,6 +1002,8 @@ export const useComicStore = create<ComicState>()(
                                 ...(data.gutterSize != null && { gutterSize: data.gutterSize }),
                                 ...(data.pageSettings != null && { pageSettings: { ...useComicStore.getState().pageSettings, ...data.pageSettings } })
                             });
+                            // New project load must not share undo/redo with previous session
+                            undoClear();
                         }
                     } catch (e) {
                         console.error("Failed to load project", e);
@@ -1091,33 +1170,6 @@ export const useComicStore = create<ComicState>()(
                     colorRecentlyUsed: state.colorRecentlyUsed
                 })
             }
-        ),
-        {
-            partialize: (state) => ({
-                pages: state.pages,
-                projectSettings: state.projectSettings,
-                gutterSize: state.gutterSize,
-                pageSettings: state.pageSettings,
-                layoutMode: state.layoutMode,
-                currentGenreId: state.currentGenreId,
-                customGenre: state.customGenre,
-                templates: state.templates,
-                _autoSaveTick: state._autoSaveTick,
-                colorFavorites: state.colorFavorites,
-                colorRecentlyUsed: state.colorRecentlyUsed
-            }),
-            limit: 100
-        }
+        )
     )
 );
-
-/** Undo/redo: call the temporal API on the same store instance. Use from UI (buttons, menu, shortcuts). */
-export function comicUndo(): void {
-    const store = useComicStore as unknown as { temporal: { getState: () => { undo: () => void } } };
-    store.temporal.getState().undo();
-}
-
-export function comicRedo(): void {
-    const store = useComicStore as unknown as { temporal: { getState: () => { redo: () => void } } };
-    store.temporal.getState().redo();
-}

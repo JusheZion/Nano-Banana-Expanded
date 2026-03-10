@@ -128,13 +128,14 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
       // Avoid firing shortcuts when actively typing in an input
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
-      // Undo / Redo
+      // Undo / Redo — call comicUndo/comicRedo directly so this effect deps stay constant
+      // (adding undo/redo callbacks to the deps array changed its length across HMR/renders and broke React).
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
-          redo();
+          comicRedo();
         } else {
-          undo();
+          comicUndo();
         }
         return;
       }
@@ -167,8 +168,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [currentPageId, selectedElementIds, deleteSelected, copySelected, pasteClipboard]);
 
 

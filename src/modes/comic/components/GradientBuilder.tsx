@@ -19,28 +19,27 @@ function normalizeHex(raw: string): string | null {
 
 const StopHexInput: React.FC<{ value: string; onChange: (hex: string) => void; className?: string; style?: React.CSSProperties }> = ({ value, onChange, className, style }) => {
   const [local, setLocal] = React.useState(value);
-  React.useEffect(() => setLocal(value), [value]);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (document.activeElement !== inputRef.current) setLocal(value);
+  }, [value]);
+  const commit = React.useCallback(() => {
+    const hex = normalizeHex(local);
+    if (hex) onChange(hex);
+    else setLocal(value);
+  }, [local, value, onChange]);
   return (
     <input
+      ref={inputRef}
       type="text"
       value={local}
       onChange={(e) => {
         const val = e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value;
         setLocal(val);
-        const hex = normalizeHex(val);
-        if (hex) onChange(hex);
       }}
-      onBlur={() => {
-        const hex = normalizeHex(local);
-        if (hex) onChange(hex);
-        else setLocal(value);
-      }}
+      onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          const hex = normalizeHex(local);
-          if (hex) onChange(hex);
-          else setLocal(value);
-        }
+        if (e.key === 'Enter') commit();
       }}
       placeholder="#000000"
       className={className}

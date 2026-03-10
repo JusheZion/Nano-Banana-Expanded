@@ -39,7 +39,9 @@
   - [ ] Select, scale, and shift text boxes inside balloons independently.
   - [x] Add Text Alignment (Left, Center, Right, Top, Bottom).
 - [x] **Tail Intelligence (Smart Overlap)**: Unified body+tail path for ellipse and rounded-rect balloons so the border does not show at the tail junction; draggable tail handle when balloon is selected.
+- [x] **Oval tail mouth:** Narrowed tail base (angular half-width `delta`) on ellipse/whisper balloons so the tail starts thinner, matching rounded-rect style.
 - [x] **Snap Tail Cleanly**: Add button to auto-align tails to nearest panel edge.
+- [x] **Flip tail on Balloon ribbon:** Flip tail button (icon + label) in Balloon ribbon Tail group (next to Snap to edge) when a balloon with a tail is selected; also remains in Objects ribbon shape row.
 - [x] **Defaults**: Set `Auto-Fit` to **OFF** by default for all new text/balloons.
 
 ## Phase 13: Project Management & Templates — COMPLETE
@@ -52,10 +54,10 @@
 ## Critical Bug-Squash List (Priority 1)
 
 - [x] **Undo/Redo Stability**: State capture fixed: panel/vertex/edge drags now batch into one undo step via zundo pause/resume; first move pushes pre-drag state, subsequent moves skip history; drag end resumes. `captureUndoCheckpoint()` added for future use. Redo stack cleared on new action (zundo default).
-- [x] **Undo/Redo (zundo + persist)**: Undo worked once then stopped; redo never worked. **Patch** in `node_modules/zundo/dist/index.js`: undo/redo use the store’s original setState (bypass temporal wrapper) so history is not corrupted. Centralized `comicUndo()` / `comicRedo()` in `comicStore.ts`; Edit ribbon, Edit menu, and ⌘Z / ⌘⇧Z use them. Re-apply patch after upgrading `zundo`.
+- [x] **Undo/Redo — REBUILT (no zundo)**: Removed zundo/temporal entirely. **undoMiddleware** wraps persist’s `set`: before each mutation, pushes a JSON snapshot of `pages`, settings, `selectedElementIds`, etc. `comicUndo`/`comicRedo` pop stacks and `setState` the slice. **undoPause/undoResume** batch panel drags (same places ComicPanel used temporal pause). `loadProject` calls `undoClear()`. Dependency **zundo** removed; patch-package postinstall removed.
 - [x] **MenuBar handleMenuBlockLeave**: Fixed `Uncaught TypeError: Failed to execute 'contains' on 'Node'` — guard with `related instanceof Node` before `dropdownRef.current?.contains(related)`.
-- [x] **Insert Image Fix**: Menu bar and ribbon "Insert Image" now work: use current page and selected panels or add new panel with placeholder image; menu button uses onMouseDown so click fires before dropdown close. Asset Library has explicit "Insert Image" button (inserts first asset).
-- [x] **Layer Checkboxes**: Visibility (eye) and Lock (padlock) toggles fixed: onPointerDown/onClick stopPropagation so DnD sortable does not capture; type="button" and aria-labels added. Store `toggleLayerVisibility` / `toggleLayerLock` already updated panels/balloons/drawings; UI now reflects immediately.
+- [x] **Insert Image Fix**: Menu bar and ribbon "Insert Image" use onMouseDown so action fires before dropdown/blur closes UI. Asset Library has dedicated "Insert Image" button (onMouseDown + `handleAssetClick(ASSETS[0])`). Ribbon `RibbonButton` supports optional `onMouseDown` for the same pattern.
+- [x] **Layer Checkboxes**: Visibility/Lock fixed by moving `@dnd-kit` `listeners` off the row onto a grip handle only (`GripVertical`), so eye/padlock clicks are not captured as drag starts. Store toggles unchanged.
 
 ---
 
@@ -87,6 +89,7 @@
 - [x] **Tabbed Format dialog:** Modal with Text | Object | Panel | Image tabs; Text tab has font, size, text color; Object/Panel tabs have fill, gradient, stroke + ColorWheelPicker; Panel tab has **Fill** and **Line (border)** sections with parity (solid + gradient each), hex input, favorites; Image tab shows asset grid. Opened from context menu or from menu bar.
 - [x] **Panel tab Fill/Line parity:** Clear Fill vs Line (border) sections; both support solid color (ColorWheelPicker + favorites) and gradient (GradientBuilder). Panel stroke gradient applied in ComicPanel (`panelStrokeProps`).
 - [x] **Hex and numeric inputs:** ColorWheelPicker and GradientBuilder stop color accept typed hex (apply on valid/blur/Enter); GradientBuilder angle has number input (0–360°) alongside slider.
+- [x] **Format dialog color UX:** Hex fields no longer duplicate characters (commit on blur/Enter only; sync from value only when input not focused). Eyedropper uses Pipette icon (lucide-react); color wheel same size as S/V square (160×160), full disk (no hole). Min-height on color sections so picker is visible. Eyedropper (Pipette) when supported (e.g. Chrome).
 - [x] **Insert image via right-click:** "Insert image…" on context menu for panel and empty; opens Format dialog on Image tab with mini asset library.
 - [ ] **Format dialog tab content (planned phase):** Plan and implement full feature set per tab (Text: padding, stroke, 3D, warp, alignment; Object: shadow, glow, texture; Panel: same) in one go to avoid constant churn.
 

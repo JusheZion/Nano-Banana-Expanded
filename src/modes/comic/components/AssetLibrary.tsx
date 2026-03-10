@@ -138,9 +138,22 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
         handleAssetClick(randomAsset);
     };
 
+    const handleInsertImage = () => {
+        if (ASSETS.length === 0) return;
+        handleAssetClick(ASSETS[0]);
+    };
+
     const content = (
         <>
-            <div className="p-4 border-b border-white/[0.08] shrink-0">
+            <div className="p-4 border-b border-white/[0.08] shrink-0 space-y-2">
+                <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }}
+                    className="w-full py-2.5 bg-[#00D1FF]/20 hover:bg-[#00D1FF]/30 text-[#00D1FF] border border-[#00D1FF]/40 font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                    aria-label="Insert first asset into selected panel or new panel"
+                >
+                    Insert Image
+                </button>
                 <button
                     type="button"
                     onClick={handleMockAIGenerate}

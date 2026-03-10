@@ -115,8 +115,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
   const ribbonBtnBase = 'rounded-lg border border-white/20 flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 min-w-[2.5rem] transition-all duration-150 shrink-0 hover:bg-[linear-gradient(45deg,#bf953f_0%,#fcf6ba_45%,#b38728_70%,#fbf5b7_85%,#aa771c_100%)] hover:text-[#000000] hover:border-white/30 active:scale-[0.98] active:shadow-inner';
   const ribbonBtnStyle = (active?: boolean) =>
     active ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { background: 'transparent', color: TEXT_ON_BLUE };
-  const RibbonButton = ({ label, icon, active, onClick, disabled, title }: { label: string; icon: React.ReactNode; active?: boolean; onClick: () => void; disabled?: boolean; title: string }) => (
-    <button type="button" title={title} onClick={onClick} disabled={disabled} className={ribbonBtnBase} style={ribbonBtnStyle(active)} aria-pressed={active}>
+  const RibbonButton = ({ label, icon, active, onClick, onMouseDown, disabled, title }: { label: string; icon: React.ReactNode; active?: boolean; onClick: () => void; onMouseDown?: (e: React.MouseEvent) => void; disabled?: boolean; title: string }) => (
+    <button type="button" title={title} onClick={onClick} onMouseDown={onMouseDown} disabled={disabled} className={ribbonBtnBase} style={ribbonBtnStyle(active)} aria-pressed={active}>
       {icon}
       <span className="text-[9px] font-medium uppercase tracking-wide leading-tight">{label}</span>
     </button>
@@ -212,7 +212,13 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <RibbonButton label="Slant C" icon={<SplitIconSlantCol />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant column' : 'Select a panel'} />
           <RibbonButton label="Knife" icon={<Scissors size={16} />} active={isKnifeMode} onClick={() => setKnifeMode(!isKnifeMode)} title={isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'} />
           <RibbonButton label="Draw" icon={<Pencil size={16} />} active={isDrawingMode} onClick={() => toggleDrawingMode(!isDrawingMode)} title={isDrawingMode ? 'Exit Draw' : 'Draw'} />
-          <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image into selected panel(s) or add new panel with image" />
+          <RibbonButton
+            label="Insert Image"
+            icon={<ImagePlus size={16} />}
+            onClick={handleInsertImage}
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }}
+            title="Insert image into selected panel(s) or add new panel with image"
+          />
         </div>
       )}
 
@@ -282,8 +288,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
 
       {showEditRibbon && (
         <div className="flex items-center gap-2 shrink-0">
-          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
-          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
+          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); }} title="Undo" />
+          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); }} title="Redo" />
         </div>
       )}
 

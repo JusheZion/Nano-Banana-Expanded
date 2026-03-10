@@ -124,8 +124,24 @@ export const ApplicationMenu: React.FC<ApplicationMenuProps> = (props) => {
             {/* Edit */}
             <div className="px-2 pt-2 pb-1">
               <div className="text-[10px] font-bold uppercase tracking-widest px-2 mb-1 opacity-70" style={{ color: TEXT_ON_BLUE }}>Edit</div>
-              {menuItem('Undo', '⌘Z', props.onUndo)}
-              {menuItem('Redo', '⌘⇧Z', props.onRedo)}
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); setOpen(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-4 rounded hover:bg-white/10"
+                style={{ color: TEXT_ON_BLUE }}
+              >
+                <span>Undo</span>
+                <span className="text-xs opacity-70 font-mono">⌘Z</span>
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); setOpen(false); }}
+                className="w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-4 rounded hover:bg-white/10"
+                style={{ color: TEXT_ON_BLUE }}
+              >
+                <span>Redo</span>
+                <span className="text-xs opacity-70 font-mono">⌘⇧Z</span>
+              </button>
               <div className="my-1 border-t border-white/10" />
               {menuItem('Cut', '⌘X', props.onCut)}
               {menuItem('Copy', '⌘C', props.onCopy)}

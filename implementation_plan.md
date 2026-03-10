@@ -329,4 +329,21 @@ This plan aligns with `tasks.md` and the current stack: **React**, **Konva/react
 | `FormatDialog.tsx` | Color wheel + gradient builder in Object/Panel/Text tabs; PrecisionSlider. |
 | `ObjectToolbar.tsx`, `TextToolbar.tsx`, `ProjectSettingsSidebar.tsx` | Replace range inputs with PrecisionSlider. |
 
+---
+
+## Integrity & stability sprint (non-functional)
+
+### Undo/redo (zundo + persist)
+- **Cause:** `temporal({ partialize })` stores partial state; `applyState(nextState)` without merge drops keys → redo/multi-undo break.
+- **Fix:** Patch `node_modules/zundo/dist/index.js` so `undo`/`redo` call `applyState({ ...userGet(), ...nextState })` (plus existing `rawSetState` wiring). **Persistence:** `patch-package` + `"postinstall": "patch-package"`; patch at `patches/zundo+2.3.0.patch` (regenerate with `npx patch-package zundo` if zundo is upgraded).
+- **loadProject:** Call `useComicStore.temporal.getState().clear()` after successful load.
+
+### Layer tree toggles
+- **Cause:** `useSortable` `listeners` on the whole row capture pointer → eye/lock clicks start drag instead of toggling.
+- **Fix:** `LayerTree.tsx` — `setNodeRef` + `attributes` on row only; `{...listeners}` on a grip `<button>` (e.g. `GripVertical`) so only the handle initiates drag.
+
+### Insert Image (Asset Library + ribbon)
+- **Cause:** `onClick` lost when parent closes/blurs (dropdown/stack).
+- **Fix:** `onMouseDown` + `preventDefault`/`stopPropagation` on MenuBar already; add same for Asset Library button and ContextualRibbon `RibbonButton` (optional `onMouseDown` prop).
+
 *This plan is accurate for the Konva/React/Zustand setup as of the current codebase. Update as implementation evolves.*

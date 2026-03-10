@@ -165,7 +165,7 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                       className="w-full rounded-lg border border-white/20 bg-[#1A1A1E] px-3 py-2 text-sm text-white"
                     />
                   </div>
-                  <div>
+                  <div className="min-h-[260px]">
                     <label className="block text-xs font-semibold uppercase tracking-wider opacity-90 mb-1.5">
                       Text color
                     </label>
@@ -195,7 +195,7 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                 <p className="text-sm opacity-80">Select a balloon to format (fill, stroke, gradient).</p>
               ) : (
                 <>
-                  <div>
+                  <div className="min-h-[260px]">
                     <label className="block text-xs font-semibold uppercase tracking-wider opacity-90 mb-1.5">Fill color</label>
                     <ColorWheelPicker
                       value={balloon.overrides?.fill ?? '#ffffff'}
@@ -211,7 +211,7 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                       onChange={(g) => handleOverrides({ fillGradient: g })}
                     />
                   </div>
-                  <div>
+                  <div className="min-h-[260px]">
                     <label className="block text-xs font-semibold uppercase tracking-wider opacity-90 mb-1.5">Stroke color</label>
                     <ColorWheelPicker
                       value={balloon.overrides?.stroke ?? '#000000'}
@@ -229,11 +229,11 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                 <p className="text-sm opacity-80">Select a panel to format (fill and border).</p>
               ) : (
                 <>
-                  {/* Fill section: solid + gradient, same options as Line */}
-                  <section className="rounded-lg border border-white/25 p-3" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                  {/* Fill section: solid + gradient; color wheel and swatches always shown */}
+                  <section className="rounded-lg border border-white/25 p-3 min-h-0" style={{ background: 'rgba(0,0,0,0.15)' }}>
                     <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: TEXT_ON_BLUE }}>Fill</h3>
                     <div className="space-y-3">
-                      <div>
+                      <div className="min-h-[260px]">
                         <label className="block text-[10px] font-semibold uppercase tracking-wider opacity-90 mb-1">Solid fill</label>
                         <ColorWheelPicker
                           value={panel.fillGradient?.stops?.length ? (panel.fillGradient.stops[0]?.color ?? '#f0f0f0') : '#f0f0f0'}
@@ -251,11 +251,11 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
                       </div>
                     </div>
                   </section>
-                  {/* Line (border) section: solid + gradient, same options as Fill */}
-                  <section className="rounded-lg border border-white/25 p-3" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                  {/* Line (border) section: solid + gradient; color wheel and swatches always shown */}
+                  <section className="rounded-lg border border-white/25 p-3 min-h-0" style={{ background: 'rgba(0,0,0,0.15)' }}>
                     <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: TEXT_ON_BLUE }}>Line (border)</h3>
                     <div className="space-y-3">
-                      <div>
+                      <div className="min-h-[260px]">
                         <label className="block text-[10px] font-semibold uppercase tracking-wider opacity-90 mb-1">Solid line</label>
                         <ColorWheelPicker
                           value={panel.strokeColor ?? '#000000'}

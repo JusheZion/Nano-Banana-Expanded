@@ -137,12 +137,26 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
           {/* Undo / Redo — #80aaff icons and outline */}
           <div className="flex items-center gap-1 pl-2 pr-2 border-r" style={{ borderRightColor: RIBBON_ACCENT }}>
             <Tooltip content="Undo (Cmd+Z)">
-              <button type="button" onClick={onUndo} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Undo">
+              <button
+                type="button"
+                onClick={onUndo}
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onUndo(); }}
+                className={iconButton}
+                style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }}
+                aria-label="Undo"
+              >
                 <Undo2 size={16} />
               </button>
             </Tooltip>
             <Tooltip content="Redo (Cmd+Shift+Z)">
-              <button type="button" onClick={onRedo} className={iconButton} style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }} aria-label="Redo">
+              <button
+                type="button"
+                onClick={onRedo}
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onRedo(); }}
+                className={iconButton}
+                style={{ background: PRIMARY_BG_LIGHT, color: RIBBON_ACCENT }}
+                aria-label="Redo"
+              >
                 <Redo2 size={16} />
               </button>
             </Tooltip>
