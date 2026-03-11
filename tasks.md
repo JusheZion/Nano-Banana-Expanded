@@ -1,5 +1,7 @@
 # Nano Banana: Production Roadmap & UX Overhaul
 
+**ARCS migration:** Work is done on branch `arcs-migration` in worktree `.worktrees/arcs-migration` (synced to `main`). See walkthrough.md.
+
 ## Phase 10: The "Obsidian Tech" UI Migration
 
 - [x] **Top Ribbon Architecture**: Consolidate `Library`, `Layers`, `Pages`, `Settings`, and `Export` into a single, collapsible top ribbon (`TopRibbon.tsx`).
