@@ -2,7 +2,7 @@
 
 High-level narrative of where the project is and where it's going. For checklists and technical steps, see **tasks.md** and **implementation_plan.md**.
 
-**ARCS migration:** Isolated work is done on branch `arcs-migration` in the worktree at `.worktrees/arcs-migration`. That worktree is synced to `main` so it builds from the same baseline; do ARCS rebrand and portal restructure there, then merge when ready.
+**ARCS migration:** Isolated work is done on branch `arcs-migration` in the worktree at `.worktrees/arcs-migration`. That worktree is synced to `main` so it builds from the same baseline; do ARCS rebrand and portal restructure there, then merge when ready. **Baseline (2025-03-11):** `arcs-migration` was rebased onto `main`; both at commit `d864e2b` (fix: TypeScript strict + Phase 16 Home ribbon; .worktrees in gitignore). Build verified in both main workspace and worktree.
 
 ---
 
