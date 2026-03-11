@@ -10,7 +10,6 @@ declare global {
   }
 }
 
-const PAD = 4;
 const PICKER_SIZE = 160;
 
 export interface ColorWheelPickerProps {

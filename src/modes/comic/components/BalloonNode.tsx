@@ -66,6 +66,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const textWarp = balloon.overrides?.textWarp || 'none';
     const textAlign = balloon.overrides?.textAlignHorizontal ?? 'left';
     const verticalAlign = balloon.overrides?.textAlignVertical ?? 'middle';
+    const fontWeight = balloon.overrides?.fontWeight ?? 'normal';
+    const fontStyle = balloon.overrides?.fontStyle ?? 'normal';
+    const textDecoration = balloon.overrides?.textDecoration ?? 'none';
     const autoSize = balloon.autoSize === true; // Default OFF for new balloons
     const padding = balloon.padding ?? 20;
 
@@ -144,6 +147,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 return '';
         }
     }, [textWarp, w, h, autoSize, balloon.text, fontSize, fontFamily, balloon.overrides?.textWarpIntensity]);
+
+    const textFontProps = { fontWeight, fontStyle, textDecoration } as const;
 
     const textureUrl = balloon.textureId ? getTextureUrl(balloon.textureId) : '';
     const [textureImg] = useImage(textureUrl || '');
@@ -767,6 +772,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                         text={balloon.text}
                                         fontFamily={fontFamily}
                                         fontSize={fontSize}
+                                        {...textFontProps}
                                         letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                                         fill={color}
                                         stroke={color}
@@ -787,6 +793,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 text={balloon.text}
                                 fontFamily={fontFamily}
                                 fontSize={fontSize}
+                                {...textFontProps}
                                 letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                                 fill="transparent"
                                 stroke={secondaryTextStroke}
@@ -802,6 +809,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 text={balloon.text}
                                 fontFamily={fontFamily}
                                 fontSize={fontSize}
+                                {...textFontProps}
                                 letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                                 fill="transparent"
                                 stroke={textStroke}
@@ -817,6 +825,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             text={balloon.text}
                             fontFamily={fontFamily}
                             fontSize={fontSize}
+                            {...textFontProps}
                             letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                             {...textFillProps}
                             align={textAlign}
@@ -850,6 +859,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                         text={balloon.text}
                                         fontFamily={fontFamily}
                                         fontSize={fontSize}
+                                        {...textFontProps}
                                         letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                                         fill={color}
                                         stroke={color}
@@ -872,6 +882,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 text={balloon.text}
                                 fontFamily={fontFamily}
                                 fontSize={fontSize}
+                                {...textFontProps}
                                 letterSpacing={balloon.overrides?.textLetterSpacing || 0}
                                 fill="transparent"
                                 stroke={secondaryTextStroke}
@@ -891,6 +902,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                                 text={balloon.text}
                                 fontFamily={fontFamily}
                                 fontSize={fontSize}
+                                {...textFontProps}
                                 fill="transparent"
                                 stroke={textStroke}
                                 strokeWidth={textStrokeWidth}
@@ -909,6 +921,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             text={balloon.text}
                             fontFamily={fontFamily}
                             fontSize={fontSize}
+                            {...textFontProps}
                             {...textFillProps}
                             align={textAlign}
                             verticalAlign={verticalAlign}

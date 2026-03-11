@@ -79,13 +79,6 @@ export const GradientBuilder: React.FC<GradientBuilderProps> = ({ value, onChang
   const spec = useMemo(() => ({ ...DEFAULT_GRADIENT_SPEC, ...value }), [value]);
   const [editingStopIndex, setEditingStopIndex] = React.useState<number | null>(null);
 
-  const updateStops = useCallback(
-    (updater: (stops: GradientStop[]) => GradientStop[]) => {
-      onChange({ ...spec, stops: updater(spec.stops) });
-    },
-    [spec, onChange]
-  );
-
   const addStop = useCallback(
     (atOffset: number) => {
       if (spec.stops.length >= MAX_STOPS) return;
@@ -194,7 +187,7 @@ export const GradientBuilder: React.FC<GradientBuilderProps> = ({ value, onChang
             addStop(x);
           }}
         >
-          {sortStops(spec.stops).map((stop, i) => {
+          {sortStops(spec.stops).map((stop) => {
             const idx = spec.stops.findIndex(s => s === stop);
             if (idx < 0) return null;
             return (

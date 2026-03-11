@@ -117,3 +117,28 @@
 - [x] **Tick Marks & Snap-to-Tick:** Visible tick marks (Golden-Blue style); snap value to tick when enabled.
 - [x] **Precision Buttons:** Add `+` and `−` to every slider in vertical menus for 1-unit (or step) increments.
 - [x] **Reusable Component:** `PrecisionSlider` used in ObjectToolbar, TextToolbar, ProjectSettingsSidebar, FormatDialog.
+
+---
+
+## Phase 16: Home Ribbon, Office-Style Formatting & WordArt (Agent Onboarding)
+*Focus: Home ribbon with high-frequency tools; Word/PPT-style context menus and Format dialog; MS Office–inspired WordArt.*
+
+### 1. Home Ribbon Transformation
+- [x] **Rename File → Home:** Menu bar first menu "File" → "Home"; ribbon and layout use `activeMenu === 'home'`.
+- [x] **Revise:** Undo / Redo in Home ribbon (reuse existing handlers).
+- [x] **Clipboard:** Copy / Cut / Paste in Home ribbon; wire from ComicLayout to ContextualRibbon.
+- [x] **Font:** Font selection, Font size, Bold, Italic, Underline in Home ribbon (balloon overrides; apply in BalloonNode).
+- [x] **Color:** Color Wheel shortcut button (context-aware: opens Format dialog on Text/Panel/Object tab by selection).
+- [x] **Panels:** Add Square Panel, Split H, Split V in Home ribbon.
+- [x] **Images:** Insert Image in Home ribbon.
+- [x] **Balloons:** Quick-insert Round Speech, Modern Square, Thought Balloon (with tail) from Home ribbon.
+- [x] **Layout:** Layer Front/Back, Group (disabled), Clone in Home ribbon.
+
+### 2. Office-Style Formatting & Menus
+- [ ] **Right-click context menu (deep):** Submenus (Format, Add, Order, Change shape); options change by selection (Panel vs Text vs Image vs Empty); Order (Bring to front / Send to back), Clone.
+- [ ] **Format dialog tabs:** Reorganize/rename to Fill & Line, Effects, Text Box, Size & Properties; professional borders, subtle shadows, ARCS Golden-Blue theme throughout.
+
+### 3. Microsoft-Inspired WordArt
+- [ ] **Transform paths:** Office-style profiles (Arch Up/Down, Circle, Button, Wave, Square, Triangle, Cascade, Slant, Fade) in warpProfiles; expose in Transform dropdown.
+- [ ] **Presets:** Reflection, Glow, 3D; preset chips or gallery in Format dialog and TextToolbar.
+- [ ] **WordArt UI:** Transform dropdown (full list), Reflection/Glow/3D controls; optional WordArt preset gallery.

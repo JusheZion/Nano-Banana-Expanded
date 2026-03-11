@@ -25,10 +25,6 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   return { r, g, b };
 }
 
-function rgbToHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b].map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
-}
-
 /** Apply brightness (0–100) and alpha (0–1) to a hex color; return rgba string for Konva. */
 export function applyBrightnessAndAlpha(
   hex: string,

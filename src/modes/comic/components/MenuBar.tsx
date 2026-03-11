@@ -13,7 +13,7 @@ const HOVER_TEXT_GOLD = ACCENT_GOLD_LIGHT;
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
 const SFX_OPTIONS = ['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'];
 
-export type MenuId = 'file' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | null;
+export type MenuId = 'home' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | null;
 
 export interface MenuBarProps {
   /** Which menu is open; used to drive contextual ribbon */
@@ -64,7 +64,6 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     currentPageId,
     selectedElementIds,
     addPanel,
-    setPlacePanelAtNextClick,
     lastCanvasPosition,
     addBalloon,
     addOverlay,
@@ -264,7 +263,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
 
   return (
     <div ref={barRef} className="flex items-stretch h-full">
-      {menuWithDropdown('file', 'File', null, (
+      {menuWithDropdown('home', 'Home', null, (
         <div className={dropdownPanelClass} style={dropdownPanelStyle}>
           {item('Open…', '⌘O', props.onLoad)}
           {item('Save', '⌘S', props.onSave)}

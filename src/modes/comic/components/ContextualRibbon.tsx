@@ -22,8 +22,22 @@ import {
   ImagePlus,
   Pin,
   PinOff,
+  Copy,
+  Clipboard,
+  Bold,
+  Italic,
+  Underline,
+  Palette,
+  Square,
+  MessageCircle,
+  Layers,
+  CopyPlus,
+  BoxSelect,
 } from 'lucide-react';
 import type { MenuId } from './MenuBar';
+import type { FormatDialogTabId } from './FormatDialog';
+import { FontSelect } from './FontSelect';
+import { BALLOON_STYLES } from '../data/BalloonStyles';
 import {
   ACCENT_BLUE_GRADIENT,
   ACCENT_GOLD_GRADIENT,
@@ -32,6 +46,8 @@ import {
 } from '../theme/Phase12DesignTokens';
 
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
+
+const RIBBON_DIVIDER = <div className="h-5 w-px bg-white/20 shrink-0" aria-hidden />;
 
 /** Last format category (Text vs Objects) chosen in the menu bar; drives which format ribbon shows when an object is selected. */
 export type LastFormatCategory = 'text' | 'objects' | null;
@@ -65,6 +81,11 @@ export interface ContextualRibbonProps {
   onExportPdf: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  onCut: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  /** Open Format dialog with optional tab and target (context-aware for Color button) */
+  onOpenFormatDialog?: (tab: FormatDialogTabId, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
   /** Optional: switch active menu from ribbon (e.g. Format → Text/Objects) */
   onActiveMenuChange?: (id: MenuId) => void;
 }
@@ -75,13 +96,18 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     currentPageId,
     selectedElementIds,
     addPanel,
+    addBalloon,
     lastCanvasPosition,
     updatePanel,
+    updateBalloon,
     setKnifeMode,
     isKnifeMode,
     toggleDrawingMode,
     isDrawingMode,
     splitPanel,
+    bringToFront,
+    sendToBack,
+    cloneElement,
   } = useComicStore();
 
   const currentPage = pages.find(p => p.id === currentPageId);
@@ -100,7 +126,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     (lastFormat === 'objects' && (props.hasPanelSelected || props.hasBalloonSelected) && props.activeMenu !== 'text');
 
   const showViewRibbon = props.activeMenu === 'view';
-  const showFileRibbon = props.activeMenu === 'file';
+  const showHomeRibbon = props.activeMenu === 'home';
   const showEditRibbon = props.activeMenu === 'edit';
   const hasContext = props.activeMenu != null || props.hasPanelSelected || props.hasBalloonSelected;
   const showPanelRibbon = (props.activeMenu === 'panel') || (props.activeMenu === null && (props.hasPanelSelected || (props.ribbonPinned && !hasContext)));
@@ -110,7 +136,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     props.ribbonPinned ||
     hasContext ||
     showTextRibbon ||
-    showObjectsRibbon;
+    showObjectsRibbon ||
+    showHomeRibbon;
 
   const ribbonBtnBase = 'rounded-lg border border-white/20 flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 min-w-[2.5rem] transition-all duration-150 shrink-0 hover:bg-[linear-gradient(45deg,#bf953f_0%,#fcf6ba_45%,#b38728_70%,#fbf5b7_85%,#aa771c_100%)] hover:text-[#000000] hover:border-white/30 active:scale-[0.98] active:shadow-inner';
   const ribbonBtnStyle = (active?: boolean) =>
@@ -278,12 +305,122 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
         </div>
       )}
 
-      {showFileRibbon && (
-        <div className="flex items-center gap-2 shrink-0">
-          <RibbonButton label="Save" icon={<Save size={16} />} onClick={props.onSave} title="Save" />
-          <RibbonButton label="PNG" icon={<ImageIcon size={16} />} onClick={props.onExportPng} title="Export PNG" />
-          <RibbonButton label="PDF" icon={<FileDown size={16} />} onClick={props.onExportPdf} title="Export PDF" />
-        </div>
+      {showHomeRibbon && (
+        <>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Revise</span>
+            <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); }} title="Undo" />
+            <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); }} title="Redo" />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Clipboard</span>
+            <RibbonButton label="Copy" icon={<Copy size={16} />} onClick={props.onCopy} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onCopy(); }} title="Copy" />
+            <RibbonButton label="Cut" icon={<Scissors size={16} />} onClick={props.onCut} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onCut(); }} title="Cut" />
+            <RibbonButton label="Paste" icon={<Clipboard size={16} />} onClick={props.onPaste} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onPaste(); }} title="Paste" />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0" style={{ color: TEXT_ON_BLUE }}>
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1">Font</span>
+            {props.hasBalloonSelected && selectedBalloons[0] && currentPageId ? (
+              <>
+                <div className="min-w-[90px]">
+                  <FontSelect
+                    value={selectedBalloons[0].overrides?.fontFamily ?? selectedBalloons[0].fontFamily}
+                    onChange={(v) => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontFamily: v } })}
+                    compact
+                    selectClassName="rounded border border-white/20 bg-black/30 px-1.5 py-1 text-[10px] text-white min-h-0"
+                  />
+                </div>
+                <select
+                  value={selectedBalloons[0].overrides?.fontSize ?? BALLOON_STYLES.find(s => s.id === selectedBalloons[0].styleId)?.fontSize ?? 16}
+                  onChange={(e) => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontSize: Number(e.target.value) } })}
+                  className="w-12 rounded border border-white/20 bg-black/30 px-1 py-1 text-[10px] text-center"
+                  style={{ color: TEXT_ON_BLUE }}
+                  title="Font size"
+                >
+                  {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <Tooltip content="Bold">
+                  <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontWeight: (selectedBalloons[0].overrides?.fontWeight === 'bold' ? 'normal' : 'bold') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontWeight === 'bold')}><Bold size={16} /></button>
+                </Tooltip>
+                <Tooltip content="Italic">
+                  <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontStyle: (selectedBalloons[0].overrides?.fontStyle === 'italic' ? 'normal' : 'italic') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontStyle === 'italic')}><Italic size={16} /></button>
+                </Tooltip>
+                <Tooltip content="Underline">
+                  <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), textDecoration: (selectedBalloons[0].overrides?.textDecoration === 'underline' ? 'none' : 'underline') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.textDecoration === 'underline')}><Underline size={16} /></button>
+                </Tooltip>
+              </>
+            ) : (
+              <span className="text-[9px] opacity-70 px-1">Select text</span>
+            )}
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Color</span>
+            <RibbonButton
+              label="Format"
+              icon={<Palette size={16} />}
+              onClick={() => props.onOpenFormatDialog?.(props.hasBalloonSelected ? 'text' : props.hasPanelSelected ? 'panel' : 'object', currentPageId ?? undefined, selectedTextId ?? undefined, selectedPanels[0]?.id)}
+              title="Color / Format (opens dialog by selection)"
+            />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Panels</span>
+            <RibbonButton label="Add Square" icon={<Square size={16} />} onClick={() => handleAddPanel('polygon')} title="Add rectangle panel" />
+            <RibbonButton label="Split H" icon={<SplitIconH />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'horizontal', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split horizontal' : 'Select a panel'} />
+            <RibbonButton label="Split V" icon={<SplitIconV />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 0))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split vertical' : 'Select a panel'} />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Images</span>
+            <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} title="Insert image" />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Balloons</span>
+            {(['speech_round', 'speech_rounded_rectangle', 'thought_cloud'] as const).map((styleId) => {
+              const style = BALLOON_STYLES.find(s => s.id === styleId);
+              const label = style?.label ?? styleId;
+              return (
+                <RibbonButton
+                  key={styleId}
+                  label={label.replace(/ .*/, '')}
+                  icon={<MessageCircle size={16} />}
+                  onClick={() => {
+                    const pageId = currentPageId ?? pages[0]?.id;
+                    if (!pageId) return;
+                    const pos = lastCanvasPosition?.pageId === pageId ? lastCanvasPosition : null;
+                    const x = pos ? pos.x - 125 : 400; const y = pos ? pos.y - 75 : 600;
+                    addBalloon(pageId, {
+                      x, y, width: 250, height: 150,
+                      hasTail: true, tailBasePoint: { x: 0, y: 0 }, tailTip: { x: -50, y: 100 },
+                      styleId, text: '...',
+                    });
+                  }}
+                  title={`Add ${label}`}
+                />
+              );
+            })}
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Layout</span>
+            <RibbonButton label="Front" icon={<Layers size={16} />} onClick={() => currentPageId && selectedElementIds.forEach(id => bringToFront(currentPageId, id))} disabled={!selectedElementIds.length} title="Bring to front" />
+            <RibbonButton label="Back" icon={<Layers size={16} />} onClick={() => currentPageId && selectedElementIds.forEach(id => sendToBack(currentPageId, id))} disabled={!selectedElementIds.length} title="Send to back" />
+            <Tooltip content="Group (coming soon)">
+              <button type="button" disabled className={ribbonBtnBase} style={{ ...ribbonBtnStyle(), opacity: 0.6 }}><BoxSelect size={16} /><span className="text-[9px]">Group</span></button>
+            </Tooltip>
+            <RibbonButton label="Clone" icon={<CopyPlus size={16} />} onClick={() => currentPageId && selectedElementIds.forEach(id => cloneElement(currentPageId, id))} disabled={!selectedElementIds.length} title="Clone" />
+          </div>
+          {RIBBON_DIVIDER}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <RibbonButton label="Save" icon={<Save size={16} />} onClick={props.onSave} title="Save" />
+            <RibbonButton label="PNG" icon={<ImageIcon size={16} />} onClick={props.onExportPng} title="Export PNG" />
+            <RibbonButton label="PDF" icon={<FileDown size={16} />} onClick={props.onExportPdf} title="Export PDF" />
+          </div>
+        </>
       )}
 
       {showEditRibbon && (

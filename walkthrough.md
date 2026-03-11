@@ -51,6 +51,16 @@ High-level narrative of where the project is and where it's going. For checklist
   - **Cover Studio**: `ComicPage.isCover`; `setPageCover(pageId, isCover)`; when true, gutter snapping disabled (full-bleed). "Set as Cover" (📖) in PageNavigator per page.
   - **Genre Smart Bias**: `promptMiddleware.generatePrompt` appends `genre.aiBias` when a genre is selected; registry entries have `aiBias` strings.
   - **Auto-save**: `flushAutoSave()` updates `_autoSaveTick`; `ComicLayout` runs `setInterval(30_000)` to persist project state to localStorage every 30 seconds.
+- **Phase 16 — Home Ribbon (partial):** **File → Home:** First menu renamed to "Home"; `MenuId` is now `'home' | 'edit' | ...`. **Home ribbon** (when Home menu is active) includes: **Revise** (Undo, Redo), **Clipboard** (Copy, Cut, Paste), **Font** (FontSelect, font size 10–36, Bold, Italic, Underline — balloon overrides; applied in BalloonNode via `fontWeight`, `fontStyle`, `textDecoration`), **Color** (one button opens Format dialog on Text/Panel/Object tab by selection), **Panels** (Add Square, Split H, Split V), **Images** (Insert Image), **Balloons** (quick-insert Round Speech, Modern Square, Thought Balloon with tail at last canvas position or center), **Layout** (Bring to front, Send to back, Group disabled, Clone). Save/PNG/PDF remain at the end of the Home ribbon. Balloon overrides: `fontWeight`, `fontStyle`, `textDecoration` in `BalloonOverrides`; Konva Text/TextPath receive these in BalloonNode.
+
+---
+
+## QoL / Additions not in initial task list
+
+- **Home ribbon group labels:** Section labels (Revise, Clipboard, Font, Color, Panels, Images, Balloons, Layout) added above each button group for clarity.
+- **Font size dropdown in Home ribbon:** Preset sizes 10–36 when a balloon is selected (replaces typing in a bare number).
+- **“Select text” placeholder:** When no balloon is selected, Font group shows “Select text” instead of empty controls.
+- **Clone icon:** Using `CopyPlus` (lucide-react) for Clone in Home ribbon (Clone not available in lucide).
 
 ---
 

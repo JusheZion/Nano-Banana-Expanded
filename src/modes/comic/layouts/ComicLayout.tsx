@@ -458,6 +458,10 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
           onExportPdf={() => triggerExport('pdf')}
           onUndo={undo}
           onRedo={redo}
+          onCut={() => { copySelected(); deleteSelected(); }}
+          onCopy={copySelected}
+          onPaste={pasteClipboard}
+          onOpenFormatDialog={openFormatDialog}
           onActiveMenuChange={handleActiveMenuChange}
         />
 

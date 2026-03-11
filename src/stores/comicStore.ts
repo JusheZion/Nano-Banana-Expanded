@@ -347,15 +347,15 @@ export const useComicStore = create<ComicState>()(
                 currentPageId: 'page-1',
                 currentGenreId: 'none' as GenreId,
                 customGenre: GENRE_REGISTRY.find(g => g.id === 'custom') || GENRE_REGISTRY[0],
-                layoutMode: 'webtoon',
+                layoutMode: 'webtoon' as const,
                 zoomLevel: 1,
                 selectedElementIds: [],
                 clipboard: [],
-                mode: 'layout',
+                mode: 'layout' as const,
                 exportFormat: null,
-                contextMenu: { open: false, x: 0, y: 0, context: 'empty' },
+                contextMenu: { open: false, x: 0, y: 0, context: 'empty' as const },
                 placePanelAtNextClick: false,
-                placePanelShape: 'polygon',
+                placePanelShape: 'polygon' as const,
                 lastCanvasPosition: null,
                 templates: [],
                 _autoSaveTick: 0,
@@ -367,14 +367,14 @@ export const useComicStore = create<ComicState>()(
                 brushWidth: 3,
                 isKnifeMode: false,
 
-                toggleDrawingMode: (isActive) => set({ isDrawingMode: isActive }),
-                setKnifeMode: (active) => set({ isKnifeMode: active }),
-                setBrushSettings: (color, width) => set({ brushColor: color, brushWidth: width }),
+                toggleDrawingMode: (isActive: boolean) => set({ isDrawingMode: isActive }),
+                setKnifeMode: (active: boolean) => set({ isKnifeMode: active }),
+                setBrushSettings: (color: string, width: number) => set({ brushColor: color, brushWidth: width }),
 
-                addDrawing: (pageId, drawing) => set((state) => {
+                addDrawing: (pageId: string, drawing: Omit<Drawing, 'id' | 'type'>) => set((state: ComicState) => {
                     const newId = crypto.randomUUID();
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? {
                                     ...p,
@@ -386,14 +386,14 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                setLayoutMode: (mode) => set({ layoutMode: mode }),
-                setZoomLevel: (zoom) => set((state) => ({
+                setLayoutMode: (mode: 'webtoon' | 'spread') => set({ layoutMode: mode }),
+                setZoomLevel: (zoom: number | ((prev: number) => number)) => set((state: ComicState) => ({
                     zoomLevel: typeof zoom === 'function' ? zoom(state.zoomLevel) : zoom
                 })),
 
-                setGenre: (genreId) => set({ currentGenreId: genreId }),
+                setGenre: (genreId: GenreId) => set({ currentGenreId: genreId }),
 
-                updateCustomGenre: (updates, paletteUpdates) => set((state) => ({
+                updateCustomGenre: (updates: Partial<Genre>, paletteUpdates?: Partial<Genre['palette']>) => set((state: ComicState) => ({
                     customGenre: {
                         ...state.customGenre,
                         ...updates,
@@ -404,11 +404,11 @@ export const useComicStore = create<ComicState>()(
                     }
                 })),
 
-                applyGenreToAll: () => set((state) => {
+                applyGenreToAll: () => set((state: ComicState) => {
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
                     return {
-                        pages: state.pages.map(p => ({
+                        pages: state.pages.map((p: ComicPage) => ({
                             ...p,
                             background: genre.palette.background,
                             panels: p.panels.map(panel => ({
@@ -422,7 +422,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                addPage: () => set((state) => {
+                addPage: () => set((state: ComicState) => {
                     const newId = `page-${crypto.randomUUID()}`;
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
@@ -440,7 +440,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                removePage: (id) => set((state) => {
+                removePage: (id: string) => set((state: ComicState) => {
                     if (state.pages.length <= 1) return state; // Prevent removing last page
                     const filtered = state.pages.filter(p => p.id !== id);
                     return {
@@ -449,7 +449,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                duplicatePage: (id) => set((state) => {
+                duplicatePage: (id: string) => set((state: ComicState) => {
                     const pageToDup = state.pages.find(p => p.id === id);
                     if (!pageToDup) return state;
 
@@ -475,7 +475,7 @@ export const useComicStore = create<ComicState>()(
                     return { pages: newPages, currentPageId: newPage.id };
                 }),
 
-                reorderPages: (activeId, overId) => set((state) => {
+                reorderPages: (activeId: string, overId: string) => set((state: ComicState) => {
                     const oldIndex = state.pages.findIndex(p => p.id === activeId);
                     const newIndex = state.pages.findIndex(p => p.id === overId);
                     if (oldIndex === -1 || newIndex === -1) return state;
@@ -487,15 +487,15 @@ export const useComicStore = create<ComicState>()(
 
 
 
-                selectPage: (id) => set({ currentPageId: id }),
+                selectPage: (id: string) => set({ currentPageId: id }),
 
-                addPanel: (pageId, panelData) => set((state) => {
+                addPanel: (pageId: string, panelData: Omit<Panel, 'id' | 'type'>) => set((state: ComicState) => {
                     const newId = crypto.randomUUID();
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
 
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? {
                                     ...p,
@@ -516,7 +516,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                updatePanel: (pageId, panelId, updates) => set((state) => ({
+                updatePanel: (pageId: string, panelId: string, updates: Partial<Panel>) => set((state: ComicState) => ({
                     pages: state.pages.map(p =>
                         p.id === pageId
                             ? {
@@ -529,13 +529,13 @@ export const useComicStore = create<ComicState>()(
                     )
                 })),
 
-                addBalloon: (pageId, balloonData) => set((state) => {
+                addBalloon: (pageId: string, balloonData: Omit<BalloonInstance, 'id' | 'type'>) => set((state: ComicState) => {
                     const newId = crypto.randomUUID();
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
 
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? {
                                     ...p,
@@ -556,7 +556,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                updateBalloon: (pageId, balloonId, updates) => set((state) => ({
+                updateBalloon: (pageId: string, balloonId: string, updates: Partial<BalloonInstance>) => set((state: ComicState) => ({
                     pages: state.pages.map(p =>
                         p.id === pageId
                             ? {
@@ -570,7 +570,7 @@ export const useComicStore = create<ComicState>()(
                 })),
 
                 /** Snap selected balloon tail tip to nearest panel edge (clamp to panel rect). */
-                snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => set((state) => {
+                snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     const balloon = page?.balloons.find(b => b.id === balloonId);
                     if (!page || !balloon?.hasTail || !balloon.tailTip || !page.panels.length) return state;
@@ -593,7 +593,7 @@ export const useComicStore = create<ComicState>()(
                     const ny = Math.max(best.y, Math.min(best.y + best.height, tipPageY));
                     const newTailTip = { x: nx - balloon.x, y: ny - balloon.y };
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id !== pageId ? p : {
                                 ...p,
                                 balloons: p.balloons.map(b =>
@@ -604,7 +604,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                syncBalloonStyle: (balloonId) => set((state) => {
+                syncBalloonStyle: (balloonId: string) => set((state: ComicState) => {
                     let sourceStyleId: string | null = null;
                     let sourceOverrides: any = null;
 
@@ -620,7 +620,7 @@ export const useComicStore = create<ComicState>()(
                     if (!sourceStyleId) return state;
 
                     return {
-                        pages: state.pages.map(p => ({
+                        pages: state.pages.map((p: ComicPage) => ({
                             ...p,
                             balloons: p.balloons.map(b =>
                                 b.styleId === sourceStyleId
@@ -630,24 +630,24 @@ export const useComicStore = create<ComicState>()(
                         }))
                     };
                 }),
-                addColorToFavorites: (hex) => set((state) => {
+                addColorToFavorites: (hex: string) => set((state: ComicState) => {
                     const normalized = hex.startsWith('#') ? hex : `#${hex}`;
                     if (state.colorFavorites.includes(normalized)) return state;
                     const next = [...state.colorFavorites, normalized].slice(-12);
                     return { colorFavorites: next };
                 }),
-                removeColorFromFavorites: (hex) => set((state) => ({
+                removeColorFromFavorites: (hex: string) => set((state: ComicState) => ({
                     colorFavorites: state.colorFavorites.filter(c => (c.startsWith('#') ? c : `#${c}`) !== (hex.startsWith('#') ? hex : `#${hex}`))
                 })),
-                addColorToRecentlyUsed: (hex) => set((state) => {
+                addColorToRecentlyUsed: (hex: string) => set((state: ComicState) => {
                     const normalized = hex.startsWith('#') ? hex : `#${hex}`;
                     const without = state.colorRecentlyUsed.filter(c => c !== normalized);
                     return { colorRecentlyUsed: [normalized, ...without].slice(0, 16) };
                 }),
 
-                setSelectedElements: (ids) => set({ selectedElementIds: ids }),
+                setSelectedElements: (ids: string[]) => set({ selectedElementIds: ids }),
 
-                toggleSelection: (id) => set((state) => ({
+                toggleSelection: (id: string) => set((state: ComicState) => ({
                     selectedElementIds: state.selectedElementIds.includes(id)
                         ? state.selectedElementIds.filter(x => x !== id)
                         : [...state.selectedElementIds, id]
@@ -655,7 +655,7 @@ export const useComicStore = create<ComicState>()(
 
                 clearSelection: () => set({ selectedElementIds: [] }),
 
-                copySelected: () => set((state) => {
+                copySelected: () => set((state: ComicState) => {
                     if (!state.currentPageId || state.selectedElementIds.length === 0) return state;
                     const page = state.pages.find(p => p.id === state.currentPageId);
                     if (!page) return state;
@@ -674,10 +674,10 @@ export const useComicStore = create<ComicState>()(
                     return { clipboard: copied };
                 }),
 
-                deleteSelected: () => set((state) => {
+                deleteSelected: () => set((state: ComicState) => {
                     if (!state.currentPageId || state.selectedElementIds.length === 0) return state;
                     return {
-                        pages: state.pages.map(p => p.id === state.currentPageId ? {
+                        pages: state.pages.map((p: ComicPage) => p.id === state.currentPageId ? {
                             ...p,
                             panels: p.panels.filter(panel => !state.selectedElementIds.includes(panel.id)),
                             balloons: p.balloons.filter(balloon => !state.selectedElementIds.includes(balloon.id)),
@@ -689,7 +689,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                pasteClipboard: () => set((state) => {
+                pasteClipboard: () => set((state: ComicState) => {
                     if (!state.currentPageId || state.clipboard.length === 0) return state;
 
                     const newIds: string[] = [];
@@ -724,7 +724,7 @@ export const useComicStore = create<ComicState>()(
                     return { pages: newPages, selectedElementIds: newIds };
                 }),
 
-                bringToFront: (pageId, elementId) => set((state) => {
+                bringToFront: (pageId: string, elementId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
@@ -740,7 +740,7 @@ export const useComicStore = create<ComicState>()(
                     return state;
                 }),
 
-                sendToBack: (pageId, elementId) => set((state) => {
+                sendToBack: (pageId: string, elementId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
@@ -756,7 +756,7 @@ export const useComicStore = create<ComicState>()(
                     return state;
                 }),
 
-                cloneElement: (pageId, elementId) => set((state) => {
+                cloneElement: (pageId: string, elementId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
@@ -802,12 +802,12 @@ export const useComicStore = create<ComicState>()(
                     return state;
                 }),
 
-                removeElement: (pageId, elementId) => set((state) => {
+                removeElement: (pageId: string, elementId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
                     return {
-                        pages: state.pages.map(p => p.id === pageId ? {
+                        pages: state.pages.map((p: ComicPage) => p.id === pageId ? {
                             ...p,
                             panels: p.panels.filter(panel => panel.id !== elementId),
                             balloons: p.balloons.filter(balloon => balloon.id !== elementId),
@@ -818,18 +818,18 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                triggerExport: (format) => set({ exportFormat: format }),
+                triggerExport: (format: 'png' | 'pdf') => set({ exportFormat: format }),
                 clearExport: () => set({ exportFormat: null }),
-                openContextMenu: (params) => set({ contextMenu: { ...params, open: true } }),
-                setPlacePanelAtNextClick: (active, shape) => set((state) => ({
+                openContextMenu: (params: { x: number; y: number; context: 'balloon' | 'panel' | 'empty'; pageId?: string; balloonId?: string; panelId?: string; pageLocalX?: number; pageLocalY?: number }) => set({ contextMenu: { ...params, open: true } }),
+                setPlacePanelAtNextClick: (active: boolean, shape?: 'polygon' | 'ellipse') => set((state: ComicState) => ({
                     ...state,
                     placePanelAtNextClick: active,
                     ...(active && shape != null && { placePanelShape: shape }),
                 })),
-                setLastCanvasPosition: (pos) => set({ lastCanvasPosition: pos }),
-                closeContextMenu: () => set((s) => ({ contextMenu: { ...s.contextMenu, open: false } })),
+                setLastCanvasPosition: (pos: { pageId: string; x: number; y: number } | null) => set({ lastCanvasPosition: pos }),
+                closeContextMenu: () => set((s: ComicState) => ({ contextMenu: { ...s.contextMenu, open: false } })),
 
-                toggleFlip: (pageId, elementId, axis) => set((state) => ({
+                toggleFlip: (pageId: string, elementId: string, axis: 'horizontal' | 'vertical') => set((state: ComicState) => ({
                     pages: state.pages.map(p => p.id === pageId ? {
                         ...p,
                         balloons: p.balloons.map(b => {
@@ -874,7 +874,7 @@ export const useComicStore = create<ComicState>()(
                     } : p)
                 })),
 
-                reorderLayer: (pageId, activeId, overId) => set((state) => {
+                reorderLayer: (pageId: string, activeId: string, overId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
@@ -889,13 +889,13 @@ export const useComicStore = create<ComicState>()(
                     newOrder.splice(newIndex, 0, activeId);
 
                     return {
-                        pages: state.pages.map(p => p.id === pageId ? { ...p, layerOrder: newOrder } : p)
+                        pages: state.pages.map((p: ComicPage) => p.id === pageId ? { ...p, layerOrder: newOrder } : p)
                     }
                 }),
 
-                toggleLayerVisibility: (pageId, elementId) => set((state) => {
+                toggleLayerVisibility: (pageId: string, elementId: string) => set((state: ComicState) => {
                     return {
-                        pages: state.pages.map(p => {
+                        pages: state.pages.map((p: ComicPage) => {
                             if (p.id !== pageId) return p;
                             return {
                                 ...p,
@@ -907,9 +907,9 @@ export const useComicStore = create<ComicState>()(
                     }
                 }),
 
-                toggleLayerLock: (pageId, elementId) => set((state) => {
+                toggleLayerLock: (pageId: string, elementId: string) => set((state: ComicState) => {
                     return {
-                        pages: state.pages.map(p => {
+                        pages: state.pages.map((p: ComicPage) => {
                             if (p.id !== pageId) return p;
                             return {
                                 ...p,
@@ -923,24 +923,24 @@ export const useComicStore = create<ComicState>()(
 
                 captureUndoCheckpoint: () => {},
 
-                updateProjectSettings: (settings) => set((state) => ({
+                updateProjectSettings: (settings: Partial<ComicState['projectSettings']>) => set((state: ComicState) => ({
                     projectSettings: { ...state.projectSettings, ...settings }
                 })),
 
-                setGutterSize: (size) => set({ gutterSize: Math.max(0, Math.min(64, size)) }),
+                setGutterSize: (size: number) => set({ gutterSize: Math.max(0, Math.min(64, size)) }),
 
-                setPageSettings: (settings) => set((state) => ({
+                setPageSettings: (settings: Partial<PageSettings>) => set((state: ComicState) => ({
                     pageSettings: { ...state.pageSettings, ...settings }
                 })),
 
-                setPageCover: (pageId, isCover) => set((state) => ({
+                setPageCover: (pageId: string, isCover: boolean) => set((state: ComicState) => ({
                     pages: state.pages.map(p => p.id === pageId ? { ...p, isCover } : p)
                 })),
 
-                addOverlay: (pageId, overlay) => set((state) => {
+                addOverlay: (pageId: string, overlay: Omit<OverlayObject, 'id'>) => set((state: ComicState) => {
                     const newId = crypto.randomUUID();
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? {
                                     ...p,
@@ -951,7 +951,7 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                updateOverlay: (pageId, overlayId, updates) => set((state) => ({
+                updateOverlay: (pageId: string, overlayId: string, updates: Partial<OverlayObject>) => set((state: ComicState) => ({
                     pages: state.pages.map(p =>
                         p.id === pageId
                             ? {
@@ -964,7 +964,7 @@ export const useComicStore = create<ComicState>()(
                     )
                 })),
 
-                removeOverlay: (pageId, overlayId) => set((state) => ({
+                removeOverlay: (pageId: string, overlayId: string) => set((state: ComicState) => ({
                     pages: state.pages.map(p =>
                         p.id === pageId
                             ? { ...p, overlays: (p.overlays || []).filter(o => o.id !== overlayId) }
@@ -1010,7 +1010,7 @@ export const useComicStore = create<ComicState>()(
                     }
                 },
 
-                saveBlankPanelTemplate: (pageId, name) => set((state) => {
+                saveBlankPanelTemplate: (pageId: string, name?: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page || page.panels.length === 0) return state;
                     const panels: PanelTemplateEntry[] = page.panels.map(p => ({
@@ -1029,7 +1029,7 @@ export const useComicStore = create<ComicState>()(
                     return { templates: [...state.templates, template] };
                 }),
 
-                applyTemplate: (pageId, templateId) => set((state) => {
+                applyTemplate: (pageId: string, templateId: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     const template = state.templates.find(t => t.id === templateId);
                     if (!page || !template) return state;
@@ -1046,7 +1046,7 @@ export const useComicStore = create<ComicState>()(
                     const newPanelIds = newPanels.map(p => p.id);
                     const otherOrder = (page.layerOrder || []).filter(id => !page.panels.some(p => p.id === id));
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? { ...p, panels: newPanels, layerOrder: [...newPanelIds, ...otherOrder] }
                                 : p
@@ -1054,9 +1054,9 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                flushAutoSave: () => set((state) => ({ ...state, _autoSaveTick: Date.now() })),
+                flushAutoSave: () => set((state: ComicState) => ({ ...state, _autoSaveTick: Date.now() })),
 
-                splitPanel: (pageId, panelId, direction, slant = 0) => set((state) => {
+                splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant = 0) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
                     const panel = page.panels.find(p => p.id === panelId);
@@ -1146,7 +1146,7 @@ export const useComicStore = create<ComicState>()(
                     const newLayerOrder = page.layerOrder.flatMap(id => id === panelId ? [panelA.id, panelB.id] : [id]);
 
                     return {
-                        pages: state.pages.map(p =>
+                        pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
                                 ? { ...p, panels: newPanels, layerOrder: newLayerOrder }
                                 : p
@@ -1156,7 +1156,7 @@ export const useComicStore = create<ComicState>()(
             }),
             {
                 name: 'nano-banana-comic',
-                partialize: (state) => ({
+                partialize: (state: ComicState) => ({
                     pages: state.pages,
                     projectSettings: state.projectSettings,
                     gutterSize: state.gutterSize,

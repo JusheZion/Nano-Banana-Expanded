@@ -48,7 +48,6 @@ export const PrecisionSlider: React.FC<PrecisionSliderProps> = ({
 }) => {
   const tickCount = tickCountProp ?? Math.max(2, Math.round((max - min) / step) + 1);
   const displayValue = snapToTick ? roundToStep(value, step, min, max) : value;
-  const normalized = (displayValue - min) / (max - min || 1);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -346,4 +346,108 @@ This plan aligns with `tasks.md` and the current stack: **React**, **Konva/react
 - **Cause:** `onClick` lost when parent closes/blurs (dropdown/stack).
 - **Fix:** `onMouseDown` + `preventDefault`/`stopPropagation` on MenuBar already; add same for Asset Library button and ContextualRibbon `RibbonButton` (optional `onMouseDown` prop).
 
+---
+
+## Phase 16: Home Ribbon, Office-Style Formatting & WordArt (Agent Onboarding)
+
+*Objective: Rename File → Home and populate with high-frequency tools; deepen right-click and Format dialog to Word/PowerPoint-style; expand WordArt with MS Office–inspired presets and Transform paths.*
+
+**Source of truth:** `tasks.md` Phase 16 (to be added), this section. Review `walkthrough.md` for canvas architecture (ComicLayout, ContextualRibbon, FormatDialog, CanvasContextMenu, BalloonNode, warp).
+
+---
+
+### Task 1: The "Home" Ribbon Transformation
+
+#### 1.1 Rename File → Home
+- **Target**: `src/modes/comic/components/MenuBar.tsx`
+- **Change**: Replace the first menu: `menuWithDropdown('file', 'File', ...)` → `menuWithDropdown('home', 'Home', ...)`.
+- **Target**: `src/modes/comic/components/ContextualRibbon.tsx`
+- **Change**: `MenuId` is imported from MenuBar; add `'home'` to the type in `MenuBar.tsx` (`MenuId = 'home' | 'file' | 'edit' | ...` → make it `'home'` and remove `'file'`). In ContextualRibbon, replace `showFileRibbon = props.activeMenu === 'file'` with `showHomeRibbon = props.activeMenu === 'home'`.
+- **Target**: `src/modes/comic/layouts/ComicLayout.tsx`
+- **Change**: Any `activeMenu === 'file'` or initial/default that referred to File → use `'home'` so the Home ribbon shows when Home menu is active.
+
+#### 1.2 Populate Home Ribbon (high-frequency tools)
+- **Target**: `ContextualRibbon.tsx` — the block that currently renders `showFileRibbon` (Save, PNG, PDF) becomes the **Home** ribbon with the following **groups** (separated by vertical dividers):
+
+| Group | Contents | Notes |
+|-------|----------|--------|
+| **History** | Undo, Redo | Reuse existing `onUndo`/`onRedo`; same onMouseDown pattern as Edit ribbon. |
+| **Clipboard** | Copy, Cut, Paste | Add props `onCopy`, `onCut`, `onPaste` from ComicLayout (already passed to MenuBar). |
+| **Typography** | Font dropdown, Font size, Bold, Italic, Underline | Font/size: reuse `FontSelect` + number or dropdown; B/I/U: new toggles that call `updateBalloon(..., overrides: { fontWeight, fontStyle, textDecoration })`. Show when balloon selected or when `activeMenu === 'home'` with “Select text…” placeholder. |
+| **Dynamic Formatting** | Color Wheel shortcut | One button that opens Format dialog on the tab appropriate to selection: if balloon selected → Text tab (focus color); if panel selected → Panel tab (fill/line); else Object tab. Reuse `onOpenFormatDialog` and optionally new callback e.g. `onOpenFormatDialogWithContext()`. |
+| **Layout** | Add Square Panel, Split Horizontal, Split Vertical | “Add Square” = existing Add Panel (rectangle); Split H/V = existing split buttons (disable when no panel selected). |
+| **Assets** | Insert Image | Existing Insert Image button (onMouseDown). |
+| **Balloons** | Round Speech, Modern Square, Thought Balloon | Quick-insert: three buttons that call `addBalloon(pageId, { ...defaults, styleId: 'speech_round' | 'speech_rounded_rectangle' | 'thought_cloud', hasTail: true, tailBasePoint, tailTip })` at last canvas position or center. Use BALLOON_STYLES to get default dimensions; tail logic already in BalloonNode. |
+| **Organization** | Layer Front, Layer Back, Group, Clone | Layer: reuse store `bringToFront`/`sendToBack` (already in ObjectToolbar). Group: wire to “Group Tool” (tasks.md Phase 14 — if not implemented, show disabled with tooltip “Group coming soon”). Clone: reuse `cloneElement` from store (ObjectToolbar already has Clone). |
+
+- **ComicLayout**: Ensure `onCopy`, `onCut`, `onPaste` are passed to `ContextualRibbon` (they are already on MenuBar; add to ContextualRibbon props and wire to same store actions).
+- **Typography (B/I/U)**: Extend balloon overrides in `src/types/balloon.ts` if needed: `fontWeight?: 'bold' | 'normal'`, `fontStyle?: 'italic' | 'normal'`, `textDecoration?: 'underline' | 'none'`. Apply in `BalloonNode` when rendering text (Konva Text supports these).
+
+#### 1.3 File checklist (Task 1)
+- `MenuBar.tsx`: Rename File → Home (`'home'`), keep dropdown content (Open, Save, Export, Theme) under Home.
+- `ContextualRibbon.tsx`: `showHomeRibbon`; implement Home ribbon groups (History, Clipboard, Typography, Color shortcut, Layout, Assets, Balloons, Organization). Add props for copy/cut/paste and format-dialog context-open.
+- `ComicLayout.tsx`: Pass copy/cut/paste to ContextualRibbon; ensure `activeMenu === 'home'` used everywhere `'file'` was.
+- `balloon.ts` (types): Optional `fontWeight`, `fontStyle`, `textDecoration` in overrides.
+- `BalloonNode.tsx`: Apply fontWeight, fontStyle, textDecoration to Text/TextPath nodes.
+
+---
+
+### Task 2: Office-Style Formatting Dialogs & Menus
+
+#### 2.1 Right-click context menu (deep, Word/PPT-style)
+- **Target**: `src/modes/comic/components/CanvasContextMenu.tsx`
+- **Current**: Flat list: Format text…, Format balloon…, Delete (balloon); Format panel…, Insert image…, Change shape…, Delete (panel); Format…, Paste, Add panel, Add balloon (empty).
+- **Change**: Structure as **submenus** where appropriate (e.g. “Format” → “Format text…”, “Format balloon…”; “Add” → “Add panel”, “Add balloon”). Options must **change by selection**:
+  - **Panel**: Format panel…, Insert image…, Change shape (submenu: Rectangle, Circle, …), Order → Bring to front / Send to back, Group (disabled if not implemented), Clone, Delete.
+  - **Balloon**: Format text…, Format balloon…, Order → …, Clone, Delete.
+  - **Image** (e.g. overlay or panel content): Format image… (opens Format dialog Image tab), Order, Clone, Delete.
+  - **Empty**: Format… (opens dialog on last-used or Object tab), Paste, Add panel, Add balloon (optionally submenu).
+- **Implementation**: Use nested `<div>` or a small submenu component (e.g. hover or click to expand). Position submenus to the right of parent item; same Golden-Blue styling. Reuse `closeContextMenu`, `handleFormat`, `handlePaste`, `handleDelete`, `handleAddPanel`, `handleAddBalloon`; add handlers for Order (bringToFront/sendToBack), Clone (cloneElement).
+
+#### 2.2 Format dialog: tabbed navigation (Fill & Line, Effects, Text Box, Size & Properties)
+- **Target**: `src/modes/comic/components/FormatDialog.tsx`
+- **Current**: Tabs are “Text | Object | Panel | Image”.
+- **Change (option A — rename/organize existing tabs):** Keep four top-level tabs but **rename and group content** to match Office:
+  - **Fill & Line**: Merge current Panel fill/line + Object fill/stroke into one tab (or keep Panel/Object but label sections “Fill & Line” inside). Content: fill (solid + gradient), line/border (solid + gradient), ColorWheelPicker, GradientBuilder. For Text tab, “Fill & Line” can mean text color + stroke/outline.
+  - **Effects**: Shadow, glow, texture, reflection (placeholder if needed). Reuse ObjectToolbar/TextToolbar logic (shadowBlur, shadowColor, etc.).
+  - **Text Box**: Font, size, Bold/Italic/Underline, alignment, padding, warp. Current Text tab content lives here.
+  - **Size & Properties**: Position (x, y), size (width, height), rotation, lock aspect ratio. Useful for panel/balloon/overlay. Read from selected panel/balloon; write via `updatePanel`/`updateBalloon`.
+- **Change (option B — keep Text/Object/Panel/Image, add sub-tabs):** Each tab can have inner tabs (e.g. Panel → Fill & Line | Effects | Size & Properties). More complex; recommend Option A with four top-level tabs renamed as above and content reorganized.
+- **UI/UX**: Professional borders, subtle shadows (e.g. `shadow-2xl`, `border border-white/15`), ARCS Golden-Blue theme (already using ACCENT_BLUE_GRADIENT, TEXT_ON_BLUE). Ensure all sections use Phase12DesignTokens; add subtle inner shadow or border on content areas if desired.
+
+#### 2.3 File checklist (Task 2)
+- `CanvasContextMenu.tsx`: Deep menu with submenus (Format, Add, Order, Change shape); context-specific items for panel/balloon/image/empty; Order and Clone actions.
+- `FormatDialog.tsx`: Reorganize tabs to Fill & Line, Effects, Text Box, Size & Properties (or equivalent); apply Golden-Blue borders/shadows; ensure ColorWheelPicker/GradientBuilder and PrecisionSlider used throughout.
+
+---
+
+### Task 3: Microsoft-Inspired WordArt System
+
+#### 3.1 Reference and scope
+- **Reference**: Microsoft Office WordArt: Transform (Arch Up/Down, Circle, Button, Wave, etc.), Reflection, Glow, 3D rotation/bevel, and standard Transform paths.
+- **Current codebase**: `BalloonNode.tsx` uses `textWarp` + path-based `warpPathData` (arcUp, arcDown, wave, circle, arch). Types: `textWarp?: 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch'`; `textWarpIntensity`. Phase 15 plan has `warpProfiles.ts` and character-by-character positioning.
+
+#### 3.2 WordArt expansion
+- **Transform paths (Office-like)**: Extend `src/modes/comic/utils/warpProfiles.ts` (create if missing) with profiles: **Arch Up**, **Arch Down**, **Circle**, **Button** (bulge), **Wave**, **Square**, **Triangle**, **Cascade**, **Slant**, **Fade**. Map to existing path-based warps where possible (arcUp, arcDown, wave, circle, arch); add new math for Button, Square, Triangle, Cascade, Slant, Fade per Phase 15 warp math. Expose in UI as “Transform” dropdown in TextToolbar and Format dialog Text Box section.
+- **Presets**: **Reflection** (mirror below text, optional opacity/offset), **Glow** (shadowBlur + shadowColor, already partially in balloon overrides), **3D** (extrusion/depth — already mentioned in walkthrough for balloons). Add preset chips or dropdown in Format dialog “Effects” and/or Text Box: “Reflection”, “Glow”, “3D”, “Transform: Arch/Circle/Button/…”.
+- **Interface**: WordArt “gallery” optional: a row of preset cards (e.g. “Arch Up”, “Circle”, “Wave”, “3D”, “Glow”) that apply the corresponding overrides to selected balloon text. Main interface: Transform dropdown (all path types) + Reflection toggle/slider + Glow (blur/color) + 3D (depth/angle) in Format dialog and TextToolbar.
+- **Types**: Extend `balloon.ts` overrides: `textWarp` (add new ids: `'button'|'square'|'triangle'|'cascade'|'slant'|'fade'`), `textReflection?: boolean | { opacity, offset }`, `textGlow?: { blur, color }`, `text3D?: { depth, angle }` (or reuse existing 3D fields). BalloonNode and warpProfiles must apply these when rendering.
+
+#### 3.3 File checklist (Task 3)
+- `src/modes/comic/utils/warpProfiles.ts`: Implement or extend with all Office-style transform paths; `applyWarp(text, profileId, options)`; `registerCustomWarp` placeholder.
+- `src/types/balloon.ts`: New `textWarp` ids; optional `textReflection`, `textGlow`, `text3D` in overrides.
+- `BalloonNode.tsx`: Use warpProfiles for character or path layout; apply reflection (duplicate text + flip/opacity), glow (shadow), 3D (extrusion).
+- `TextToolbar.tsx` & `FormatDialog.tsx`: Transform dropdown (full list), Reflection/Glow/3D controls; WordArt preset gallery (optional).
+- `implementation_plan.md` Phase 15 §2 (WordArt): Align with this Phase 16 Task 3 so warp engine and UI are consistent.
+
+---
+
+### Implementation order (Phase 16)
+
+1. **Task 1 (Home Ribbon)** — Rename File→Home, then add History/Clipboard to Home ribbon, then Typography (Font/size/B/I/U), then Color shortcut, Layout, Assets, Balloons, Organization. Test after each group.
+2. **Task 2 (Format & context menu)** — Deep context menu first (submenus, context-aware); then Format dialog tab rename/reorg (Fill & Line, Effects, Text Box, Size & Properties) and visual polish.
+3. **Task 3 (WordArt)** — warpProfiles + new transform paths, then Reflection/Glow/3D presets, then UI (Transform dropdown + presets in Format dialog and TextToolbar).
+
+---
+
 *This plan is accurate for the Konva/React/Zustand setup as of the current codebase. Update as implementation evolves.*

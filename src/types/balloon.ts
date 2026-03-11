@@ -78,6 +78,10 @@ export interface BalloonOverrides {
     fillGradient?: GradientSpec;
     strokeGradient?: GradientSpec;
     textColorGradient?: GradientSpec;
+    /** Phase 16: Home ribbon typography */
+    fontWeight?: 'normal' | 'bold';
+    fontStyle?: 'normal' | 'italic';
+    textDecoration?: 'none' | 'underline';
 }
 
 export interface BalloonInstance {
