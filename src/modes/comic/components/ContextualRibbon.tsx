@@ -239,13 +239,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <RibbonButton label="Slant C" icon={<SplitIconSlantCol />} onClick={() => selectedPanels.forEach(p => splitPanel(currentPageId!, p.id, 'vertical', 40))} disabled={!selectedPanels.length} title={selectedPanels.length ? 'Split slant column' : 'Select a panel'} />
           <RibbonButton label="Knife" icon={<Scissors size={16} />} active={isKnifeMode} onClick={() => setKnifeMode(!isKnifeMode)} title={isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'} />
           <RibbonButton label="Draw" icon={<Pencil size={16} />} active={isDrawingMode} onClick={() => toggleDrawingMode(!isDrawingMode)} title={isDrawingMode ? 'Exit Draw' : 'Draw'} />
-          <RibbonButton
-            label="Insert Image"
-            icon={<ImagePlus size={16} />}
-            onClick={handleInsertImage}
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }}
-            title="Insert image into selected panel(s) or add new panel with image"
-          />
+          <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image into selected panel(s) or add new panel with image" />
         </div>
       )}
 
@@ -309,15 +303,15 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
         <>
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Revise</span>
-            <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); }} title="Undo" />
-            <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); }} title="Redo" />
+            <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
+            <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
           </div>
           {RIBBON_DIVIDER}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Clipboard</span>
-            <RibbonButton label="Copy" icon={<Copy size={16} />} onClick={props.onCopy} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onCopy(); }} title="Copy" />
-            <RibbonButton label="Cut" icon={<Scissors size={16} />} onClick={props.onCut} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onCut(); }} title="Cut" />
-            <RibbonButton label="Paste" icon={<Clipboard size={16} />} onClick={props.onPaste} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onPaste(); }} title="Paste" />
+            <RibbonButton label="Copy" icon={<Copy size={16} />} onClick={props.onCopy} title="Copy" />
+            <RibbonButton label="Cut" icon={<Scissors size={16} />} onClick={props.onCut} title="Cut" />
+            <RibbonButton label="Paste" icon={<Clipboard size={16} />} onClick={props.onPaste} title="Paste" />
           </div>
           {RIBBON_DIVIDER}
           <div className="flex items-center gap-1.5 shrink-0" style={{ color: TEXT_ON_BLUE }}>
@@ -375,7 +369,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           {RIBBON_DIVIDER}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 px-1" style={{ color: TEXT_ON_BLUE }}>Images</span>
-            <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} title="Insert image" />
+            <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image" />
           </div>
           {RIBBON_DIVIDER}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -425,8 +419,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
 
       {showEditRibbon && (
         <div className="flex items-center gap-2 shrink-0">
-          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); }} title="Undo" />
-          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); }} title="Redo" />
+          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
+          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
         </div>
       )}
 
