@@ -1,6 +1,17 @@
 # Nano Banana: Production Roadmap & UX Overhaul
 
+**Cursor workflow:** Build plans live in `.cursor/plans/` (e.g. sync, ARCS rebrand); use Plan Mode (Shift+Tab in chat) for complex tasks. After agent work, use Review → Find Issues and Source Control → Agent Review to check changed files. See [Cursor Docs: Planning](https://docs.cursor.com/agent/planning) and [Reviewing and Testing Code](https://cursor.com/docs/agent/review).
+
 **ARCS migration:** Work is done on branch `arcs-migration` in worktree `.worktrees/arcs-migration` (synced to `main`). See walkthrough.md.
+
+## ARCS Rebrand & Portal Restructure — COMPLETE
+
+- [x] **Shared design tokens:** `src/shared/theme/Phase12DesignTokens.ts` as single source of truth; comic theme re-exports from shared.
+- [x] **ARCS branding:** AppShell sidebar and landing hero use ARCS label and Golden-Blue; DESIGN.md documents ARCS + Jewel-Tone.
+- [x] **Directory restructure:** `src/shared/` (context, components, utils); `src/shared/portals.ts` for `Portal` type; `src/portals/ComicPortal.tsx`; path alias `@/`.
+- [x] **Lazy-load & prefetch:** Portals loaded via `React.lazy`; `prefetchPortal()` on nav hover.
+- [ ] **Future: Dual-studio:** TBD — e.g. two studio modes (Character vs. Narrative) or split view; define in a later spec.
+- [ ] **WordArt expansion:** Phase 16 — Transform dropdown, Reflection/Glow/3D, preset gallery (see Phase 16 below).
 
 ## Phase 10: The "Obsidian Tech" UI Migration
 
