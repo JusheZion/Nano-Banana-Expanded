@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '@/shared/context/ThemeContext';
 
 interface CopyButtonProps {
     text: string;
@@ -20,7 +20,6 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ text }) => {
         }
     };
 
-    // Determine flash color based on theme
     const flashColor = activeTheme === 'crimson' ? '#893741' : activeTheme === 'teal' ? '#37615D' : '#5F368E';
 
     return (

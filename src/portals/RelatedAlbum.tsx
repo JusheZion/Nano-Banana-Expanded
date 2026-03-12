@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '@/shared/context/ThemeContext';
 
 export const RelatedAlbum: React.FC = () => {
     const { setTheme } = useTheme();

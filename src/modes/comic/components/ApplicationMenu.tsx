@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FileText, ChevronDown, Palette, LayoutGrid, Columns } from 'lucide-react';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import {
   PRIMARY_BG_FLAT,
   PRIMARY_BG_LIGHT,

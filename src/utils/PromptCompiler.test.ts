@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PromptCompiler, type ChipTag } from './PromptCompiler';
+import { PromptCompiler, type ChipTag } from '@/shared/utils/PromptCompiler';
 
 describe('PromptCompiler', () => {
     it('hyphenates text correctly', () => {

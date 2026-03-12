@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '@/shared/context/ThemeContext';
 import { CinematicGallery } from '../components/ui/CinematicGallery';
 
 export const ReferenceAlbum: React.FC = () => {

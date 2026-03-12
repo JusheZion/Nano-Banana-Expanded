@@ -10,12 +10,10 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTheme, setActiveTheme] = useState<Theme>('crimson'); // Default to Hub
+  const [activeTheme, setActiveTheme] = useState<Theme>('crimson');
 
   useEffect(() => {
-    // Remove old theme classes
     document.body.classList.remove('theme-crimson', 'theme-teal', 'theme-purple', 'theme-gold');
-    // Add new theme class
     document.body.classList.add(`theme-${activeTheme}`);
   }, [activeTheme]);
 

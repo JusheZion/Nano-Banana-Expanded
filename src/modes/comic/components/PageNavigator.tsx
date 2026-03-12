@@ -1,6 +1,6 @@
 import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD } from '../theme/Phase12DesignTokens';
 
 interface PageNavigatorProps {

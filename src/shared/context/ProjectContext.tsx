@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
-import type { ChipTag } from '../utils/PromptCompiler';
-
-import TagLibrary from '../data/character_tag_library.json';
+import type { ChipTag } from '@/shared/utils/PromptCompiler';
+import TagLibrary from '@/data/character_tag_library.json';
 
 interface ProjectContextType {
     tags: ChipTag[];

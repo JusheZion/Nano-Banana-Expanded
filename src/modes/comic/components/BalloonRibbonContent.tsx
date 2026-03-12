@@ -2,7 +2,7 @@ import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import type { BalloonStyleId, BalloonStyle } from '../../../types/balloon';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import { Cloud, Square, Radio, MessageCircle, Circle, Sparkles, Zap, ArrowRightToLine, ArrowLeftRight } from 'lucide-react';
 import {
   ACCENT_GOLD_GRADIENT,

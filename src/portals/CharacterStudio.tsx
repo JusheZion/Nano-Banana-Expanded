@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { useTheme } from '../context/ThemeContext';
-import { useProject } from '../context/ProjectContext';
-import { HybridTagBar } from '../components/HybridTagBar';
-import { CopyButton } from '../components/CopyButton';
-import { PromptCompiler } from '../utils/PromptCompiler';
+import { useTheme } from '@/shared/context/ThemeContext';
+import { useProject } from '@/shared/context/ProjectContext';
+import { HybridTagBar } from '@/components/HybridTagBar';
+import { CopyButton } from '@/shared/components/CopyButton';
+import { PromptCompiler } from '@/shared/utils/PromptCompiler';
 
 export const CharacterStudio: React.FC = () => {
     const { setTheme } = useTheme();

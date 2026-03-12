@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import type { BalloonInstance } from '../../../types/balloon';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import { FontSelect } from './FontSelect';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_BLUE, TEXT_ON_GOLD } from '../theme/Phase12DesignTokens';
 import { PrecisionSlider } from './PrecisionSlider';

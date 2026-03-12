@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import {
   ChevronDown,
   ChevronUp,

@@ -3,7 +3,7 @@ import { useComicStore } from '../../../stores/comicStore';
 import { ObjectToolbar } from './ObjectToolbar';
 import { TextToolbar } from './TextToolbar';
 import { BalloonRibbonContent } from './BalloonRibbonContent';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import {
   Save,
   Image as ImageIcon,

@@ -1,6 +1,6 @@
 import React, { useState, type KeyboardEvent } from 'react';
-import type { ChipTag } from '../utils/PromptCompiler';
-import { PromptCompiler } from '../utils/PromptCompiler';
+import type { ChipTag } from '@/shared/utils/PromptCompiler';
+import { PromptCompiler } from '@/shared/utils/PromptCompiler';
 // import { useTheme } from '../context/ThemeContext';
 
 interface HybridTagBarProps {

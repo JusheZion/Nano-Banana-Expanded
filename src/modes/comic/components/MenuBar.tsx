@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Palette, LayoutGrid as LayoutIcon, Columns, Plus, Scissors, Pencil, ImagePlus, Sparkles, Type, Circle, Box, Waves, Moon, Image as ImageIcon, RefreshCw, ArrowLeftRight, AlignLeft, BoxSelect } from 'lucide-react';
-import { Tooltip } from '../../../components/ui/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import type { BalloonStyleId } from '../../../types/balloon';
 import { useComicStore } from '../../../stores/comicStore';

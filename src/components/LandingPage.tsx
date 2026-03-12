@@ -1,8 +1,8 @@
 import React from 'react';
 import { Sparkles, ArrowRight, Layers, Zap, BookOpen } from 'lucide-react';
-import { useTheme, type Theme } from '../context/ThemeContext';
-
-type Portal = 'home' | 'studio' | 'reference' | 'related' | 'lab' | 'comic';
+import { useTheme, type Theme } from '@/shared/context/ThemeContext';
+import type { Portal } from '@/shared/portals';
+import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE, PRIMARY_BG_FLAT } from '@/shared/theme/Phase12DesignTokens';
 
 interface LandingPageProps {
     onNavigate?: (portal: Portal) => void;
@@ -29,8 +29,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
                 <div className="relative z-20 h-full flex flex-col justify-end p-12 max-w-4xl">
                     <div className="inline-flex items-center space-x-3 mb-6">
-                        <div className="px-3 py-1 bg-teal-500/10 border border-teal-500/30 rounded-full backdrop-blur-md shadow-[0_0_10px_rgba(55,97,93,0.3)]">
-                            <span className="text-[#00FFC2] text-[10px] font-bold tracking-widest uppercase">Project Alpha</span>
+                        <div
+                            className="px-3 py-1 rounded-full backdrop-blur-md border"
+                            style={{ backgroundColor: `${PRIMARY_BG_FLAT}99`, borderColor: ACCENT_GOLD_SOLID }}
+                        >
+                            <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: TEXT_ON_BLUE }}>ARCS</span>
                         </div>
                         <div className="px-3 py-1 bg-white/5 border border-white/10 rounded-full backdrop-blur-md">
                             <span className="text-white/60 text-[10px] font-bold tracking-widest uppercase">v2.4.0</span>
@@ -43,7 +46,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     </h1>
 
                     <p className="text-xl text-white/60 max-w-2xl leading-relaxed font-light tracking-wide mb-8">
-                        Manage your characters, reference libraries, and generated sequences in a unified, <span className="text-white font-medium">jewel-tone glass environment</span>.
+                        Manage your characters, reference libraries, and generated sequences in a unified <span className="text-white font-medium">ARCS Golden-Blue</span> environment.
                     </p>
                 </div>
             </div>

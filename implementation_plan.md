@@ -1,5 +1,7 @@
 # Nano Banana: Implementation Plan (Phases 10–13 & Critical Bugs)
 
+**Future: Dual-studio** — TBD. E.g. two studio modes (Character vs. Narrative) or split view; define in a later spec.
+
 This plan aligns with `tasks.md` and the current stack: **React**, **Konva/react-konva**, **Zustand** (with zundo + persist), **Radix UI**, **Tailwind**. Key entry points: `ComicLayout.tsx`, `comicStore.ts`, `ComicPanel.tsx`, `ComicCanvas.tsx`, `LayerTree.tsx`, `AssetLibrary.tsx`, `LandingPage.tsx`, `AppShell.tsx`.
 
 ---

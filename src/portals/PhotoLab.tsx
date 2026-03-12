@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme } from '@/shared/context/ThemeContext';
 
 export const PhotoLab: React.FC = () => {
     const { setTheme } = useTheme();

@@ -1,5 +1,8 @@
-# Design System: Nano Banana Expanded
+# Design System: Nano Banana Expanded (ARCS)
 **Project ID:** 954412538784398355
+
+## 0. ARCS Golden-Blue (Primary System)
+The **ARCS** product identity uses the **Golden-Blue** design system (60/30/10: Royal Blue Jewel, Warm Cream, Glitter Gold). Tokens live in `src/shared/theme/Phase12DesignTokens.ts` and are the single source of truth for hub and portals. **Hub** (AppShell, Landing hero) and **Comic Mode** use ARCS Golden-Blue; landing cards and portal-specific accents may still use Jewel-Tone palette for variety. See implementation plan Phase 12.
 
 ## 1. Visual Theme & Atmosphere
 The design language is **"Jewel-Tone Glassmorphism"**. It evokes a premium, crystalline, and immersive feeling. Imagine looking through polished gemstones (ruby, emerald, amethyst) with soft, inner light. The interface is deep, not flat. Depth is achieved through layering glass panels with varying blur and opacity over rich, dark, saturated backgrounds. It feels responsive, fluid, and "alive".
