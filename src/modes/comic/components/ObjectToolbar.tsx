@@ -1,4 +1,5 @@
 import React from 'react';
+import { BoxSelect } from 'lucide-react';
 import { useComicStore } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
@@ -52,12 +53,18 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
         toggleFlip,
         pages,
         updatePanel,
-        splitPanel
+        splitPanel,
+        createGroup,
+        ungroup,
+        getGroupMembers
     } = useComicStore();
 
     const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
     const selectedPanels = selectedPanelEntries.map(x => x.panel);
     const effectivePageId = selectedPanelEntries[0]?.pageId ?? currentPageId;
+
+    const groupOfFirst = currentPageId && selectedElementIds[0] ? getGroupMembers(currentPageId, selectedElementIds[0]) : null;
+    const isSelectionOneGroup = !!(groupOfFirst && groupOfFirst.length >= 2 && selectedElementIds.length === 1);
 
     if (selectedElementIds.length === 0) return <ObjectToolbarPlaceholder />;
 
@@ -170,6 +177,15 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                 <button type="button" title="Send to Back" onClick={() => selectedElementIds.forEach(id => sendToBack(effectivePageId, id))} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h8v8H4z" /><path d="M8 8h8v8H8z" strokeOpacity="0.5" /></svg>
                     <span className={ribbonIconLabel}>Back</span>
+                </button>
+                <div className="h-4 w-px bg-white/10 mx-1" />
+                <button type="button" title="Group selected (2+ elements)" onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <BoxSelect className="w-3.5 h-3.5" />
+                    <span className={ribbonIconLabel}>Group</span>
+                </button>
+                <button type="button" title="Ungroup selection" onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} className={ribbonIconBtn} style={{ color: TEXT_ON_BLUE }}>
+                    <BoxSelect className="w-3.5 h-3.5" />
+                    <span className={ribbonIconLabel}>Ungroup</span>
                 </button>
             </div>
 

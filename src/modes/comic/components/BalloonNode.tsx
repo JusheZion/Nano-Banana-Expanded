@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 'react-konva';
-import { useComicStore } from '../../../stores/comicStore';
+import { useComicStore, undoPause, undoResume } from '../../../stores/comicStore';
 import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
@@ -32,6 +32,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const textBoxTrRef = useRef<any>(null);
     const tipRef = useRef<any>(null);
     const textRef = useRef<any>(null);
+    const isFirstBalloonDragMove = useRef(true);
 
     const textBoxEditBalloonId = useComicStore((s) => s.textBoxEditBalloonId);
     const setTextBoxEditBalloonId = useComicStore((s) => s.setTextBoxEditBalloonId);
@@ -702,14 +703,30 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                     const newText = window.prompt('Edit Bubble Text:', balloon.text);
                     if (newText !== null) onChange(balloon.id, { text: newText });
                 }}
-                onDragMove={() => {
-                    // tailTip is local to the group; no update needed during drag
+                onDragStart={() => {
+                    undoPause();
+                    isFirstBalloonDragMove.current = true;
                 }}
-                onDragEnd={() => {
+                onDragMove={() => {
+                    if (!groupRef.current) return;
+                    if (isFirstBalloonDragMove.current) {
+                        undoResume();
+                        isFirstBalloonDragMove.current = false;
+                    }
                     onChange(balloon.id, {
                         x: groupRef.current.x(),
                         y: groupRef.current.y(),
                     });
+                    undoPause();
+                }}
+                onDragEnd={() => {
+                    undoResume();
+                    if (groupRef.current) {
+                        onChange(balloon.id, {
+                            x: groupRef.current.x(),
+                            y: groupRef.current.y(),
+                        });
+                    }
                 }}
                 onTransformEnd={() => {
                     const node = groupRef.current;

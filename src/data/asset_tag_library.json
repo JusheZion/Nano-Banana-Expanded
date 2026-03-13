@@ -1,0 +1,26 @@
+{
+  "app_metadata": {
+    "context": "Assets Studio",
+    "description": "Tag library for environment and prop generation (world-building, concept art)"
+  },
+  "tag_library": {
+    "environment_architecture": {
+      "Architecture": ["Brutalist", "Gothic", "Cyberpunk", "Neo-Classical", "Solarpunk", "Industrial", "Victorian"]
+    },
+    "environment_lighting": {
+      "Lighting": ["Golden Hour", "High Contrast", "Volumetric", "Bio-luminescent", "Noir", "Neon", "Cinematic"]
+    },
+    "environment_setting": {
+      "Setting": ["Deep Space", "Urban Slum", "Fantasy Forest", "Underwater", "Desert Outpost", "Astral Plane"]
+    },
+    "props_materials": {
+      "Materials": ["Weathered Wood", "Brushed Chrome", "Obsidian", "Liquid Metal", "Rough Stone", "Holographic"]
+    },
+    "props_state": {
+      "State": ["Pristine", "Battle-Damaged", "Ancient", "High-Tech", "Organic", "Overgrown", "Cursed"]
+    },
+    "props_category": {
+      "Category": ["Weaponry", "Tactical Gear", "Relics", "Furniture", "Tech-Decks", "Transport", "Artifacts"]
+    }
+  }
+}

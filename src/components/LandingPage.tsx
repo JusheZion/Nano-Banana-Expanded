@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ArrowRight, Layers, Zap, BookOpen } from 'lucide-react';
+import { Sparkles, ArrowRight, Layers, Zap, BookOpen, Box } from 'lucide-react';
 import { useTheme, type Theme } from '@/shared/context/ThemeContext';
 import type { Portal } from '@/shared/portals';
 import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE, PRIMARY_BG_FLAT } from '@/shared/theme/Phase12DesignTokens';
@@ -82,7 +82,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Card 3: Related (Purple/Crimson Mix) */}
+                {/* Card 3: Assets Studio (Purple) */}
+                <div onClick={() => handleCardClick('assets', 'purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(95,54,142,0.5)] border border-white/5 hover:border-[#5F368E]/50">
+                    <div className="absolute inset-0 bg-[url('/assets/images/Anunnaki%20Sphinx.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#5F368E]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
+
+                    <div className="absolute bottom-0 left-0 p-6 w-full">
+                        <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#5F368E] group-hover:border-[#BF5AF2] transition-colors">
+                            <Box className="w-5 h-5 text-white" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Assets Studio</h3>
+                        <p className="text-xs text-[#BF5AF2] font-medium tracking-wide">PROPS & ENVIRONMENTS</p>
+                    </div>
+                </div>
+
+                {/* Card 4: Related (Purple/Crimson Mix) */}
                 <div onClick={() => handleCardClick('related', 'purple')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(137,55,65,0.5)] border border-white/5 hover:border-[#893741]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Anunnaki%20Sphinx.png')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#893741]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
@@ -96,7 +110,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Card 4: Photo Lab (Gold) */}
+                {/* Card 5: Photo Lab (Gold) */}
                 <div onClick={() => handleCardClick('lab', 'gold')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border border-white/5 hover:border-[#D4AF37]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Aquarius%20Sphere.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#D4AF37]/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />
@@ -110,7 +124,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Card 5: Comic Mode (Cyan/Obsidian) */}
+                {/* Card 6: Comic Mode (Cyan/Obsidian) */}
                 <div onClick={() => handleCardClick('comic', 'obsidian')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(0,209,255,0.5)] border border-white/5 hover:border-[#00D1FF]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Aries%20In%20the%20Observatory.jpeg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-[#00D1FF]/30 to-transparent opacity-90 group-hover:opacity-70 transition-opacity" />

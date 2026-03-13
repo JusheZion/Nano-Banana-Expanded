@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import { Eye, EyeOff, Lock, Unlock, Square, MessageCircle, PenTool, GripVertical } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Square, MessageCircle, PenTool, GripVertical, BoxSelect, ChevronDown, ChevronRight } from 'lucide-react';
+import { elementsOverlapOrNear } from '../utils/snapping';
+import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
 import {
     DndContext,
     closestCenter,
@@ -23,18 +25,22 @@ import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
 interface LayerItemProps {
     id: string;
     name: string;
-    type: 'panel' | 'balloon' | 'drawing';
+    type: 'panel' | 'balloon' | 'drawing' | 'group';
     isLocked: boolean;
     isVisible: boolean;
     isSelected: boolean;
     onToggleVisibility: () => void;
     onToggleLock: () => void;
     onSelect: (e: React.MouseEvent) => void;
+    onContextMenu: (e: React.MouseEvent) => void;
     /** When true, use royal blue for text/icons (right sidebar theme). */
     royalBlue?: boolean;
+    /** For type 'group': expand/collapse */
+    isExpanded?: boolean;
+    onToggleExpand?: () => void;
 }
 
-const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked, isVisible, isSelected, onToggleVisibility, onToggleLock, onSelect, royalBlue }) => {
+const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked, isVisible, isSelected, onToggleVisibility, onToggleLock, onSelect, onContextMenu, royalBlue, isExpanded, onToggleExpand }) => {
     const {
         attributes,
         listeners,
@@ -52,9 +58,10 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
     };
 
     const getIcon = () => {
-        const c = royalBlue ? '' : type === 'panel' ? ' text-blue-400' : type === 'balloon' ? ' text-green-400' : ' text-purple-400';
+        const c = royalBlue ? '' : type === 'panel' ? ' text-blue-400' : type === 'balloon' ? ' text-green-400' : type === 'group' ? ' text-amber-400' : ' text-purple-400';
         if (type === 'panel') return <Square className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
         if (type === 'balloon') return <MessageCircle className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
+        if (type === 'group') return <BoxSelect className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
         return <PenTool className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
     };
 
@@ -64,6 +71,7 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
             style={style}
             {...attributes}
             onClick={onSelect}
+            onContextMenu={onContextMenu}
             className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${
                 royalBlue
                     ? isSelected ? 'bg-[#002366]/15 border-[#002366]/50' : 'bg-[#002366]/5 border-transparent hover:bg-[#002366]/10'
@@ -81,6 +89,11 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
                 >
                     <GripVertical className={`w-4 h-4 ${royalBlue ? '' : 'text-white/50'}`} />
                 </button>
+                {type === 'group' && onToggleExpand && (
+                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleExpand(); }} className="flex-shrink-0 p-0.5 rounded hover:bg-white/10" aria-label={isExpanded ? 'Collapse group' : 'Expand group'}>
+                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+                )}
                 <div className="flex-shrink-0">
                     {getIcon()}
                 </div>
@@ -89,6 +102,7 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
                 </span>
             </div>
 
+            {type !== 'group' && (
             <div className="flex items-center gap-1 flex-shrink-0" onPointerDown={(e) => e.stopPropagation()}>
                 <button
                     type="button"
@@ -111,6 +125,7 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
                     {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                 </button>
             </div>
+            )}
         </div>
     );
 };
@@ -128,11 +143,46 @@ export const LayerTree: React.FC<{
         setSelectedElements,
         toggleSelection,
         reorderLayer,
+        reorderGroup,
         toggleLayerVisibility,
-        toggleLayerLock
+        toggleLayerLock,
+        createGroup,
+        ungroup,
+        getGroupMembers
     } = useComicStore();
 
+    const [layerMenu, setLayerMenu] = useState<{ x: number; y: number } | null>(null);
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const layerMenuRef = useRef<HTMLDivElement>(null);
+
     const currentPage = pages.find(p => p.id === currentPageId);
+
+    const toggleGroupExpanded = (groupId: string) => {
+        setExpandedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    };
+
+    const canShowGroup = currentPage && selectedElementIds.length >= 2 && elementsOverlapOrNear(currentPage, selectedElementIds);
+    const groupOfFirst = currentPageId && selectedElementIds[0] ? getGroupMembers(currentPageId, selectedElementIds[0]) : null;
+    const canShowUngroup = !!(currentPageId && selectedElementIds.length === 1 && groupOfFirst && groupOfFirst.length >= 2);
+
+    useEffect(() => {
+        if (!layerMenu) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (layerMenuRef.current && !layerMenuRef.current.contains(e.target as Node)) setLayerMenu(null);
+        };
+        const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setLayerMenu(null); };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [layerMenu]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Requires 5px movement to start drag, allowing clicks to pass through
@@ -141,36 +191,71 @@ export const LayerTree: React.FC<{
         })
     );
 
-    // Build the items list. Top of list should be frontmost (end of array)
-    // We must pass exactly the ids required to SortableContext
-    const items = useMemo(() => {
-        if (!currentPage) return [];
+    // Build tree: top-level = ungrouped elements + one row per group (frontmost member id = row id)
+    type LayerItem = { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' | 'group'; isLocked: boolean; isVisible: boolean; memberIds?: string[]; childrenDetails?: { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' }[] };
+    const resolveDetails = (page: typeof currentPage, mid: string): { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' } | null => {
+        if (!page) return null;
+        const panel = page.panels.find(p => p.id === mid);
+        if (panel) return { id: mid, name: `Panel ${panel.shapeType}`, type: 'panel' };
+        const balloon = page.balloons.find(b => b.id === mid);
+        if (balloon) return { id: mid, name: balloon.text ? `"${balloon.text.substring(0, 10)}${balloon.text.length > 10 ? '...' : ''}"` : 'Balloon', type: 'balloon' };
+        const drawing = page.drawings?.find(d => d.id === mid);
+        if (drawing) return { id: mid, name: 'Drawing Path', type: 'drawing' };
+        return null;
+    };
 
-        // Reverse the array to show frontmost at top
+    const items = useMemo((): LayerItem[] => {
+        if (!currentPage || !currentPageId) return [];
+
         const reversedOrder = [...currentPage.layerOrder].reverse();
+        const seenInGroup = new Set<string>();
+        const result: LayerItem[] = [];
 
-        return reversedOrder.map(id => {
-            const panel = currentPage.panels.find(p => p.id === id);
-            if (panel) return { id, name: `Panel ${panel.shapeType}`, type: 'panel' as const, isLocked: panel.isLocked ?? false, isVisible: panel.isVisible ?? true };
+        for (const id of reversedOrder) {
+            if (seenInGroup.has(id)) continue;
 
-            const balloon = currentPage.balloons.find(b => b.id === id);
-            if (balloon) return { id, name: balloon.text ? `"${balloon.text.substring(0, 10)}${balloon.text.length > 10 ? '...' : ''}"` : 'Balloon', type: 'balloon' as const, isLocked: balloon.isLocked ?? false, isVisible: balloon.isVisible ?? true };
-
-            const drawing = currentPage.drawings?.find(d => d.id === id);
-            if (drawing) return { id, name: 'Drawing Path', type: 'drawing' as const, isLocked: drawing.isLocked ?? false, isVisible: drawing.isVisible ?? true };
-
-            return null;
-        }).filter(item => item !== null) as { id: string, name: string, type: 'panel' | 'balloon' | 'drawing', isLocked: boolean, isVisible: boolean }[];
-    }, [currentPage]);
+            const group = getGroupMembers(currentPageId, id);
+            if (group && group.length >= 2) {
+                group.forEach(m => seenInGroup.add(m));
+                const childrenDetails = group.map(mid => resolveDetails(currentPage, mid)).filter((c): c is { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' } => c !== null);
+                result.push({
+                    id,
+                    name: `Group (${group.length})`,
+                    type: 'group',
+                    isLocked: false,
+                    isVisible: true,
+                    memberIds: group,
+                    childrenDetails,
+                });
+            } else {
+                const details = resolveDetails(currentPage, id);
+                if (details) {
+                    const panel = currentPage.panels.find(p => p.id === id);
+                    const balloon = currentPage.balloons.find(b => b.id === id);
+                    const drawing = currentPage.drawings?.find(d => d.id === id);
+                    const isLocked = panel?.isLocked ?? balloon?.isLocked ?? drawing?.isLocked ?? false;
+                    const isVisible = panel?.isVisible ?? balloon?.isVisible ?? drawing?.isVisible ?? true;
+                    result.push({ ...details, isLocked, isVisible });
+                }
+            }
+        }
+        return result;
+    }, [currentPage, currentPageId, getGroupMembers]);
 
     if (!currentPage) return null;
     if (!isOpen && !embedded) return null;
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
+        if (!over || active.id === over.id || !currentPage) return;
 
-        if (over && active.id !== over.id) {
-            reorderLayer(currentPage.id, active.id as string, over.id as string);
+        const activeId = active.id as string;
+        const overId = over.id as string;
+        const group = getGroupMembers(currentPage.id, activeId);
+        if (group && group.length >= 2) {
+            reorderGroup(currentPage.id, activeId, overId);
+        } else {
+            reorderLayer(currentPage.id, activeId, overId);
         }
     };
 
@@ -187,25 +272,57 @@ export const LayerTree: React.FC<{
                         strategy={verticalListSortingStrategy}
                     >
                         {items.map(item => (
-                            <SortableLayerItem
-                                key={item.id}
-                                id={item.id}
-                                name={item.name}
-                                type={item.type}
-                                isLocked={item.isLocked}
-                                isVisible={item.isVisible}
-                                isSelected={selectedElementIds.includes(item.id)}
-                                onToggleVisibility={() => toggleLayerVisibility(currentPage.id, item.id)}
-                                onToggleLock={() => toggleLayerLock(currentPage.id, item.id)}
-                                onSelect={(e) => {
-                                    if (e.shiftKey) {
-                                        toggleSelection(item.id);
-                                    } else {
-                                        setSelectedElements([item.id]);
-                                    }
-                                }}
-                                royalBlue={embedded}
-                            />
+                            <React.Fragment key={item.id}>
+                                <SortableLayerItem
+                                    id={item.id}
+                                    name={item.name}
+                                    type={item.type}
+                                    isLocked={item.isLocked}
+                                    isVisible={item.isVisible}
+                                    isSelected={item.type === 'group' && item.memberIds
+                                        ? item.memberIds.length === selectedElementIds.length && item.memberIds.every(m => selectedElementIds.includes(m))
+                                        : selectedElementIds.includes(item.id)}
+                                    onToggleVisibility={() => toggleLayerVisibility(currentPage.id, item.id)}
+                                    onToggleLock={() => toggleLayerLock(currentPage.id, item.id)}
+                                    onSelect={(e) => {
+                                        if (e.shiftKey) {
+                                            toggleSelection(item.id);
+                                        } else if (item.type === 'group' && item.memberIds) {
+                                            setSelectedElements(item.memberIds);
+                                        } else {
+                                            setSelectedElements([item.id]);
+                                        }
+                                    }}
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        if (item.type === 'group' && item.memberIds && !item.memberIds.every(m => selectedElementIds.includes(m))) {
+                                            setSelectedElements(item.memberIds);
+                                        } else if (item.type !== 'group' && !selectedElementIds.includes(item.id)) {
+                                            setSelectedElements([item.id]);
+                                        }
+                                        setLayerMenu({ x: e.clientX, y: e.clientY });
+                                    }}
+                                    royalBlue={embedded}
+                                    isExpanded={item.type === 'group' ? expandedGroups.has(item.id) : undefined}
+                                    onToggleExpand={item.type === 'group' ? () => toggleGroupExpanded(item.id) : undefined}
+                                />
+                                {item.type === 'group' && expandedGroups.has(item.id) && item.childrenDetails && (
+                                    <div className="ml-6 mt-0 mb-1 space-y-0 border-l-2 border-white/10 pl-2">
+                                        {item.childrenDetails.map(child => (
+                                            <div
+                                                key={child.id}
+                                                onClick={(e) => { e.stopPropagation(); if (e.shiftKey) toggleSelection(child.id); else setSelectedElements([child.id]); }}
+                                                className={`flex items-center gap-2 py-1.5 px-2 rounded cursor-pointer text-sm ${selectedElementIds.includes(child.id) ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                            >
+                                                {child.type === 'panel' && <Square className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                                {child.type === 'balloon' && <MessageCircle className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                                                {child.type === 'drawing' && <PenTool className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />}
+                                                <span className="truncate">{child.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </React.Fragment>
                         ))}
                         {items.length === 0 && (
                             <div className={`text-center py-8 text-sm ${embedded ? 'text-inherit opacity-60' : 'text-white/40'}`}>
@@ -214,6 +331,33 @@ export const LayerTree: React.FC<{
                         )}
                     </SortableContext>
                 </DndContext>
+                {layerMenu && (canShowGroup || canShowUngroup) && (
+                    <div
+                        ref={layerMenuRef}
+                        className="fixed z-[200] min-w-[160px] rounded-lg shadow-2xl border border-white/15 overflow-hidden py-1"
+                        style={{ left: layerMenu.x, top: layerMenu.y, background: ACCENT_GOLD_GRADIENT }}
+                        role="menu"
+                    >
+                        {canShowGroup && (
+                            <button
+                                type="button"
+                                onClick={() => { currentPageId && createGroup(currentPageId, selectedElementIds); setLayerMenu(null); }}
+                                className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 rounded transition-colors text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba]"
+                            >
+                                <BoxSelect size={12} /> Group
+                            </button>
+                        )}
+                        {canShowUngroup && (
+                            <button
+                                type="button"
+                                onClick={() => { currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0]); setLayerMenu(null); }}
+                                className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 rounded transition-colors text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba]"
+                            >
+                                <BoxSelect size={12} /> Ungroup
+                            </button>
+                        )}
+                    </div>
+                )}
         </div>
     );
 

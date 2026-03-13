@@ -34,19 +34,30 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
     const isFirstSectorAngleDrag = useRef(true);
 
     useEffect(() => {
-        if (groupRef.current) {
-            const group = groupRef.current;
-            const origGetClientRect = group.getClientRect.bind(group);
-            group.getClientRect = (config?: any) => {
-                const glowPass = group.findOne('.glow-pass');
-                const wasVisible = glowPass ? glowPass.visible() : false;
-                if (glowPass && wasVisible) glowPass.visible(false);
-                const rect = origGetClientRect(config);
-                if (glowPass && wasVisible) glowPass.visible(true);
-                return rect;
-            };
-        }
-    }, []);
+        if (!groupRef.current) return;
+        const group = groupRef.current;
+        const origGetClientRect = group.getClientRect.bind(group);
+        group.getClientRect = (config?: any) => {
+            const glowPass = group.findOne('.glow-pass');
+            const wasVisible = glowPass ? glowPass.visible() : false;
+            if (glowPass && wasVisible) glowPass.visible(false);
+            let rect = origGetClientRect(config);
+            if (glowPass && wasVisible) glowPass.visible(true);
+            // For half-circle (and quarter/sector), use visible bounding box so Transformer and drag use correct bounds and don't jump off-page.
+            const st = panel.shapeType;
+            if (st === 'halfCircle') {
+                const r = Math.min(panel.width, panel.height) / 2;
+                rect = { x: group.x(), y: group.y(), width: 2 * r, height: r };
+            } else if (st === 'quarterCircle') {
+                const r = Math.min(panel.width, panel.height);
+                rect = { x: group.x(), y: group.y(), width: r, height: r };
+            } else if (st === 'sector') {
+                const r = Math.min(panel.width, panel.height) / 2;
+                rect = { x: group.x(), y: group.y(), width: 2 * r, height: 2 * r };
+            }
+            return rect;
+        };
+    }, [panel.shapeType, panel.width, panel.height]);
 
     useEffect(() => {
         if (!isSelected) {
@@ -266,19 +277,36 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     const currentPage = state.pages.find(p => p.id === state.currentPageId);
                     if (!currentPage) return pos;
 
+                    const PAGE_W = 800;
+                    const PAGE_H = 1200;
+                    let boundW = panel.width;
+                    let boundH = panel.height;
+                    if (isHalfCircle) {
+                        boundW = 2 * (Math.min(panel.width, panel.height) / 2);
+                        boundH = Math.min(panel.width, panel.height) / 2;
+                    } else if (isQuarterCircle) {
+                        boundW = Math.min(panel.width, panel.height);
+                        boundH = boundW;
+                    } else if (isSector) {
+                        boundW = 2 * (Math.min(panel.width, panel.height) / 2);
+                        boundH = boundW;
+                    }
+
                     const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
                     const gutter = currentPage.isCover ? 0 : (state.gutterSize ?? 16);
                     const { newX, newY } = getGutterAwareSnapLines(
                         pos.x,
                         pos.y,
-                        panel.width,
-                        panel.height,
+                        boundW,
+                        boundH,
                         siblings,
                         panel.id,
                         gutter
                     );
 
-                    return { x: newX, y: newY };
+                    const clampedX = Math.max(0, Math.min(PAGE_W - boundW, newX));
+                    const clampedY = Math.max(0, Math.min(PAGE_H - boundH, newY));
+                    return { x: clampedX, y: clampedY };
                 }}
                 onDragStart={() => {
                     undoPause();
@@ -312,24 +340,53 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     node.scaleY(1);
                     node.rotation(0);
 
+                    const PAGE_W = 800;
+                    const PAGE_H = 1200;
+
                     if (isPolygon && panel.points) {
                         const newPoints = panel.points.map(p => ({
                             x: p.x * scaleX,
                             y: p.y * scaleY
                         }));
+                        let nx = node.x();
+                        let ny = node.y();
+                        const xs = newPoints.map(p => p.x);
+                        const ys = newPoints.map(p => p.y);
+                        const w = Math.max(1, Math.max(...xs) - Math.min(...xs));
+                        const h = Math.max(1, Math.max(...ys) - Math.min(...ys));
+                        nx = Math.max(0, Math.min(PAGE_W - w, nx));
+                        ny = Math.max(0, Math.min(PAGE_H - h, ny));
                         onChange({
-                            x: node.x(),
-                            y: node.y(),
+                            x: nx,
+                            y: ny,
                             rotation: rotation,
                             points: newPoints
                         });
                     } else {
+                        let nx = node.x();
+                        let ny = node.y();
+                        let nw = Math.max(20, panel.width * Math.abs(scaleX));
+                        let nh = Math.max(20, panel.height * Math.abs(scaleY));
+                        if (isHalfCircle) {
+                            const visibleH = nh / 2;
+                            nx = Math.max(0, Math.min(PAGE_W - nw, nx));
+                            ny = Math.max(0, Math.min(PAGE_H - visibleH, ny));
+                        } else if (isQuarterCircle) {
+                            nx = Math.max(0, Math.min(PAGE_W - nw, nx));
+                            ny = Math.max(0, Math.min(PAGE_H - nh, ny));
+                        } else if (isSector) {
+                            nx = Math.max(0, Math.min(PAGE_W - nw, nx));
+                            ny = Math.max(0, Math.min(PAGE_H - nh, ny));
+                        } else {
+                            nx = Math.max(0, Math.min(PAGE_W - nw, nx));
+                            ny = Math.max(0, Math.min(PAGE_H - nh, ny));
+                        }
                         onChange({
-                            x: node.x(),
-                            y: node.y(),
+                            x: nx,
+                            y: ny,
                             rotation: rotation,
-                            width: Math.max(20, panel.width * Math.abs(scaleX)),
-                            height: Math.max(20, panel.height * Math.abs(scaleY))
+                            width: nw,
+                            height: nh
                         });
                     }
                 }}

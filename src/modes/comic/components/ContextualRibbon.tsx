@@ -254,11 +254,19 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <RibbonButton label="Knife" icon={<Scissors size={16} />} active={isKnifeMode} onClick={() => setKnifeMode(!isKnifeMode)} title={isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'} />
           <RibbonButton label="Draw" icon={<Pencil size={16} />} active={isDrawingMode} onClick={() => toggleDrawingMode(!isDrawingMode)} title={isDrawingMode ? 'Exit Draw' : 'Draw'} />
           <RibbonButton label="Insert Image" icon={<ImagePlus size={16} />} onClick={handleInsertImage} title="Insert image into selected panel(s) or add new panel with image" />
+          <div className="h-5 w-px bg-white/20 shrink-0" />
+          <RibbonButton label="Group" icon={<BoxSelect size={16} />} onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} title="Group selected (2+ elements)" />
+          <RibbonButton label="Ungroup" icon={<BoxSelect size={16} />} onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} title="Ungroup selection" />
         </div>
       )}
 
       {showBalloonRibbon && !showPanelRibbon && currentPageId && (
-        <div className="flex-1 min-w-0 overflow-x-auto flex items-center">
+        <div className="flex-1 min-w-0 overflow-x-auto flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            <RibbonButton label="Group" icon={<BoxSelect size={16} />} onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} title="Group selected (2+ elements)" />
+            <RibbonButton label="Ungroup" icon={<BoxSelect size={16} />} onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} title="Ungroup selection" />
+          </div>
+          <div className="h-5 w-px bg-white/20 shrink-0" />
           <BalloonRibbonContent
             currentPageId={currentPageId}
             selectedBalloonId={selectedTextId}
@@ -269,6 +277,11 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
       {/* Text ribbon: one horizontal row, same height as File/Edit/View */}
       {showTextRibbon && (
         <div className="flex items-center flex-nowrap gap-2 min-w-0 flex-1 overflow-x-auto" style={{ color: TEXT_ON_BLUE }} data-ribbon="text" role="region" aria-label="Text ribbon">
+          <div className="flex items-center gap-1 shrink-0">
+            <RibbonButton label="Group" icon={<BoxSelect size={16} />} onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} title="Group selected (2+ elements)" />
+            <RibbonButton label="Ungroup" icon={<BoxSelect size={16} />} onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} title="Ungroup selection" />
+          </div>
+          <div className="h-5 w-px bg-white/20 shrink-0" aria-hidden />
           <RibbonButton
             label="Insert Text Box"
             icon={<Type size={16} />}
@@ -483,6 +496,9 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
         <div className="flex items-center gap-2 shrink-0">
           <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
           <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
+          <div className="h-5 w-px bg-white/20 shrink-0" />
+          <RibbonButton label="Group" icon={<BoxSelect size={16} />} onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} title="Group selected (2+ elements)" />
+          <RibbonButton label="Ungroup" icon={<BoxSelect size={16} />} onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} title="Ungroup selection" />
         </div>
       )}
 

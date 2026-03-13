@@ -6,6 +6,7 @@ import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
 
 const CharacterStudio = lazy(() => import('./portals/CharacterStudio').then(m => ({ default: m.CharacterStudio })));
+const AssetsStudio = lazy(() => import('./portals/AssetsStudio').then(m => ({ default: m.AssetsStudio })));
 const ReferenceAlbum = lazy(() => import('./portals/ReferenceAlbum').then(m => ({ default: m.ReferenceAlbum })));
 const RelatedAlbum = lazy(() => import('./portals/RelatedAlbum').then(m => ({ default: m.RelatedAlbum })));
 const PhotoLab = lazy(() => import('./portals/PhotoLab').then(m => ({ default: m.PhotoLab })));
@@ -25,7 +26,7 @@ function App() {
 
   useEffect(() => {
     if (activePortal === 'home' || activePortal === 'studio') setTheme('teal');
-    else if (activePortal === 'reference' || activePortal === 'related') setTheme('purple');
+    else if (activePortal === 'reference' || activePortal === 'related' || activePortal === 'assets') setTheme('purple');
     else if (activePortal === 'lab') setTheme('gold');
     else if (activePortal === 'comic') setTheme('obsidian');
     else setTheme('crimson');
@@ -39,6 +40,11 @@ function App() {
           <div className="space-y-8">
             <CharacterStudio />
           </div>
+        </Suspense>
+      )}
+      {activePortal === 'assets' && (
+        <Suspense fallback={<PortalFallback />}>
+          <AssetsStudio />
         </Suspense>
       )}
       {activePortal === 'reference' && (

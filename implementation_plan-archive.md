@@ -452,4 +452,72 @@ This plan aligns with `tasks.md` and the current stack: **React**, **Konva/react
 
 ---
 
+## Twin Studio & Object Logic Sprint
+
+*Objective: Twin Studio (shared engine + Assets Studio portal), Asset Tag Library, system prompts, grouping UX, layer tree for groups, semi-circle bug fix. Rebrand: all UI labels ARCS.*
+
+### Twin Studio Architecture
+
+**Step 1: Universal Generation Engine**
+- **Target**: Extract shared logic from Character Studio into a reusable hook/component.
+- **Context type**: `'character' | 'asset'` — determines which tag library and system prompt to load, and where outputs are saved.
+- **Files**: New `src/shared/hooks/useGenerationEngine.ts` (or `useGenerationPortal.ts`) accepting `contextType`; optionally shared `GenerationPortal.tsx` that renders left panel (tag library), center (preview + prompt bar), right (output/settings). Character Studio and Assets Studio become thin wrappers that pass `contextType='character'` or `'asset'`.
+- **Tag library**: Hook reads tag library from config/URL or a getter: character → `character_tag_library.json`; asset → new `asset_tag_library.json` (see Data Layer below).
+
+**Step 2: Assets Studio Initialization**
+- **Target**: `src/portals/AssetsStudio.tsx` — clone Reference Character Studio layout; use shared engine with `contextType='asset'`.
+- **Routing**: Add portal `'assets'` to `src/shared/portals.ts`; in `App.tsx` lazy-load `AssetsStudio`, render when `activePortal === 'assets'`. Add nav item in `AppShell.tsx` (e.g. "Assets Studio") and landing card in `LandingPage.tsx`. Prefetch in `portals-prefetch.ts`.
+
+**Step 3: Output Routing**
+- **Character Studio generations** → Save to Character Profiles (existing Reference Album / Character Archive flow).
+- **Assets Studio generations** → Save to Comics & Story Archive (Related Album flow or a dedicated asset archive used by Comic Studio).
+- **Implementation**: Engine or portal component receives `onGenerateComplete(urlOrBlob, contextType)`; router checks `contextType` and calls the appropriate store/API (character profile vs. story archive). If no backend yet, persist to appropriate in-memory or localStorage key per context.
+
+### Data Layer: Asset Tag Library
+
+- **File**: `src/data/asset_tag_library.json` (or `src/data/asset_tag_library.ts` exporting const).
+- **Structure**: Categories as specified:
+
+| Category    | Sub-Category  | Tags |
+|------------|---------------|------|
+| Environment | Architecture  | Brutalist, Gothic, Cyberpunk, Neo-Classical, Solarpunk, Industrial, Victorian |
+| Environment | Lighting      | Golden Hour, High Contrast, Volumetric, Bio-luminescent, Noir, Neon, Cinematic |
+| Environment | Setting       | Deep Space, Urban Slum, Fantasy Forest, Underwater, Desert Outpost, Astral Plane |
+| Props       | Materials     | Weathered Wood, Brushed Chrome, Obsidian, Liquid Metal, Rough Stone, Holographic |
+| Props       | State         | Pristine, Battle-Damaged, Ancient, High-Tech, Organic, Overgrown, Cursed |
+| Props       | Category      | Weaponry, Tactical Gear, Relics, Furniture, Tech-Decks, Transport, Artifacts |
+
+- **Usage**: Assets Studio (and shared prompt builder) load this library; tags are selectable and injected into the prompt builder the same way Character Studio uses `tier_1_global` / `tier_2_architecture`.
+
+### Backend: System Prompts (AI Personas)
+
+- **Reference Character Studio system prompt**: *"You are an expert Character Designer specializing in visual consistency. Your goal is to maintain the 'DNA' of characters across generations. Focus on: Anatomy, facial symmetry, specific wardrobe details, ethnicity (prioritizing African-American/Blatino representation as per user settings), and emotional expression. Avoid background fluff; focus on the man."*
+- **Assets Studio system prompt**: *"You are a Master Concept Artist specializing in world-building and environment design. Your goal is to create high-fidelity props and settings. Focus on: Architectural scale, material textures (how light hits metal vs. stone), environmental atmospheric effects, and historical/futuristic accuracy. Ignore character details; focus on the world."*
+- **Where**: Store in config (e.g. `src/data/systemPrompts.ts` or JSON) keyed by `contextType`; when calling mock or real AI, pass the appropriate system prompt.
+
+### Grouping Objects (Bugs & QoL)
+
+- **Layers**: Groups show as **one item** in the layer list. Expandable row or tree: one row per group with children (panels/balloons/drawings) nested underneath. Use `groupsByPage` and `layerOrder` to build a tree: top-level = ungrouped elements + group nodes; each group node has children = member ids. Reorder at group level (moving group moves all members in `layerOrder`).
+- **Movement**: Grouped object **cannot move independently**. Already implemented in `updatePanel` / `updateBalloon` (position delta applied to all group members). Ensure drag/transform in ComicPanel/ComicCanvas does not allow position change for a single grouped item without moving the group (current store logic already does this when we call `updatePanel` with x,y).
+- **Group/Ungroup access**:
+  - **Ribbons**: Add Group/Ungroup button to Edit, Panel, Balloon, and Text ribbons (ContextualRibbon). Reuse store `createGroup(pageId, elementIds)` and `ungroup(pageId, elementId)`; enable Group when 2+ selected, Ungroup when selection is exactly one group (use `getGroupMembers`).
+  - **Vertical menu**: Add "Group" / "Ungroup" to the Vertical Object Menu (and equivalent in Text menu if applicable) with same enable logic.
+  - **Right-click**: When multiple selected and (overlap or within 20px), show "Group" in context menu; when one selected and it’s in a group, show "Ungroup". Helper: `elementsOverlapOrNear(a, b, page, 20)` using panel/balloon bounds.
+  - **Layer menu**: In LayerTree, allow multi-select (e.g. Shift+click) and right-click → "Group" when 2+ selected and overlap/near; right-click on a group row → "Ungroup".
+- **Layer tree logic**: Build tree from `currentPage.layerOrder` and `groupsByPage`: for each id in layerOrder, if it belongs to a group, don’t show it as top-level; show the group once with children. Avoid recursive render: flatten group membership into a list of { type: 'group', id: firstIdInGroup, children: ids } and { type: 'item', id } for ungrouped. Render with stable keys (group key = first member id or a synthetic groupId) to prevent loops.
+
+### Semi-Circle Bug
+
+- **Symptom**: When scaling or translating a semi-circle panel that overlaps another panel, the semi-circle jumps to the edge of the page (partially visible).
+- **Likely cause**: (1) `getClientRect` override on the Group in ComicPanel returns a rect that includes the full bounding box of the half-circle (e.g. full 2r×2r) but the visible shape is only the top half; during transform or drag, something (Transformer or dragBoundFunc) uses wrong bounds. (2) Or: position/size clamp to page bounds uses wrong geometry for half-circle (e.g. clamping center instead of visible bounds). (3) Or: Konva Transformer with half-circle produces incorrect newBox.
+- **Fix**: In `ComicPanel.tsx`, for half-circle (and quarter/sector) ensure the Group’s `getClientRect` returns the **visible** bounding box (e.g. for half-circle: width = 2r, height = r, and origin at top-left of that visible rect in group space). If the group position (x, y) is the center of the full circle, then the visible half might be from (x - r, y - r) to (x + r, y); so getClientRect should return that. Also ensure any dragBoundFunc or post-drag clamp keeps the panel’s **visible** area inside the page (0–800, 0–1200). Check Transformer `boundBoxFunc` and post-`onTransformEnd` position/size so half-circle stays on canvas.
+
+### Testing Data & Development
+
+- **Unit test (GenerationHook / tag library by path)**: In a test file (e.g. `src/shared/hooks/__tests__/useGenerationEngine.test.ts` or `useGenerationEngine.spec.ts`), mock or set URL path (e.g. `/studio` vs `/assets-studio`) and assert that the hook returns character tag library vs asset tag library. If context is determined by a prop rather than URL, test with `contextType='character'` and `contextType='asset'` and assert correct library.
+- **Integration (Asset gens not in Character Profiles)**: After implementing output routing, test that a generation triggered from Assets Studio does not appear in Character Archive / Reference Album; and that Character Studio generations do not appear in Comics & Story Archive (or asset archive).
+- **Layer tree recursion**: When rendering the layer tree with groups, ensure no infinite loop: use a finite list of nodes (ungrouped items + group nodes with children); do not derive children from a circular reference.
+
+---
+
 *This plan is accurate for the Konva/React/Zustand setup as of the current codebase. Update as implementation evolves.*

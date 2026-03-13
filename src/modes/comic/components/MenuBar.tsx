@@ -73,9 +73,14 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     toggleDrawingMode,
     isDrawingMode,
     splitPanel,
+    createGroup,
+    ungroup,
+    getGroupMembers,
   } = useComicStore();
 
   const currentPage = pages.find(p => p.id === currentPageId);
+  const groupOfFirst = currentPageId && selectedElementIds[0] ? getGroupMembers(currentPageId, selectedElementIds[0]) : null;
+  const isSelectionOneGroup = !!(groupOfFirst && groupOfFirst.length >= 2 && selectedElementIds.length === 1);
   const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
   const selectedPanels = selectedPanelEntries.map(x => x.panel);
   const effectivePageIdForSelection = selectedPanelEntries[0]?.pageId ?? currentPageId;
@@ -408,6 +413,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H / Flip V</button>
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}>Bring to front / Send to back</button>
+          <button type="button" onClick={() => { currentPageId && createGroup(currentPageId, selectedElementIds); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || selectedElementIds.length < 2} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Group</button>
+          <button type="button" onClick={() => { currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0]); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Ungroup</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Formatting objects</div>
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Circle size={12} /> Fill & border</button>

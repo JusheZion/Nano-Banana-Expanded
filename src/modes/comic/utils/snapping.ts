@@ -67,6 +67,34 @@ const getAbsoluteVertices = (item: Panel | BalloonInstance): { x: number; y: num
     ];
 };
 
+const ELEMENTS_NEAR_PX = 20;
+
+/** Returns true if the given element ids on the page overlap or are within ELEMENTS_NEAR_PX. Used for Group context menu. */
+export function elementsOverlapOrNear(
+    page: { panels: Panel[]; balloons: BalloonInstance[] },
+    ids: string[]
+): boolean {
+    if (ids.length < 2) return false;
+    const items = ids.map(id => {
+        const panel = page.panels.find(p => p.id === id);
+        if (panel) return getBoundingBox(panel);
+        const balloon = page.balloons.find(b => b.id === id);
+        if (balloon) return getBoundingBox(balloon);
+        return null;
+    }).filter((b): b is BoundingBox => b !== null);
+    if (items.length < 2) return false;
+    for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+            const a = items[i];
+            const b = items[j];
+            const overlapX = a.x < b.x + b.width + ELEMENTS_NEAR_PX && a.x + a.width + ELEMENTS_NEAR_PX > b.x;
+            const overlapY = a.y < b.y + b.height + ELEMENTS_NEAR_PX && a.y + a.height + ELEMENTS_NEAR_PX > b.y;
+            if (overlapX && overlapY) return true;
+        }
+    }
+    return false;
+}
+
 /**
  * Collects all meaningful snap target positions for a sibling,
  * including bounding box edges, center, gutter offsets, and

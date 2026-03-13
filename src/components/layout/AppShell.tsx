@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Palette, Image as ImageIcon, Sparkles, Wand2, BookOpen } from 'lucide-react';
+import { Home, Palette, Image as ImageIcon, Sparkles, Wand2, BookOpen, Box } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { Portal } from '@/shared/portals';
 import { prefetchPortal } from '@/portals-prefetch';
@@ -23,7 +23,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
     const handleNavClick = (portal: Portal) => {
         setActivePortal(portal);
         if (portal === 'studio') setTheme('teal');
-        else if (portal === 'reference') setTheme('purple');
+        else if (portal === 'reference' || portal === 'assets') setTheme('purple');
         else if (portal === 'comic') setTheme('obsidian');
         else if (portal === 'home') setTheme('crimson');
     };
@@ -32,6 +32,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
     const accentFor = (p: Portal) =>
         p === 'studio' ? '#37615D' :
         p === 'reference' ? '#5F368E' :
+        p === 'assets' ? '#5F368E' :
         p === 'comic' ? ACCENT_GOLD_SOLID :
         p === 'lab' ? ACCENT_GOLD_SOLID :
         p === 'home' ? ACCENT_GOLD_SOLID :
@@ -102,6 +103,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     {sidebarExpanded && <div className="text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-[0.15em] opacity-80">Creative Suite</div>}
                     {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
                     <NavItem targetPortal="studio" icon={Wand2} label="Reference Character Studio" />
+                    <NavItem targetPortal="assets" icon={Box} label="Assets Studio" />
                     <NavItem targetPortal="reference" icon={ImageIcon} label="Character Archive" />
                     <NavItem targetPortal="comic" icon={BookOpen} label="Comic Studio" />
                     <NavItem targetPortal="related" icon={Sparkles} label="Comics & Story Archive" />

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2, ImagePlus } from 'lucide-react';
+import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2, ImagePlus, BoxSelect } from 'lucide-react';
+import { elementsOverlapOrNear } from '../utils/snapping';
 import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
 import type { FormatDialogTabId } from './FormatDialog';
 
@@ -9,7 +10,7 @@ export interface CanvasContextMenuProps {
 }
 
 export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenFormatDialog }) => {
-  const { contextMenu, closeContextMenu, pasteClipboard, removeElement, addPanel, addBalloon, updatePanel } = useComicStore();
+  const { contextMenu, closeContextMenu, pasteClipboard, removeElement, addPanel, addBalloon, updatePanel, pages, currentPageId, selectedElementIds, createGroup, ungroup, getGroupMembers } = useComicStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -108,6 +109,11 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
     closeContextMenu();
   };
 
+  const currentPage = pages.find(p => p.id === currentPageId);
+  const canShowGroup = currentPage && selectedElementIds.length >= 2 && elementsOverlapOrNear(currentPage, selectedElementIds);
+  const groupOfFirst = currentPageId && selectedElementIds[0] ? getGroupMembers(currentPageId, selectedElementIds[0]) : null;
+  const canShowUngroup = !!(currentPageId && selectedElementIds.length === 1 && groupOfFirst && groupOfFirst.length >= 2);
+
   return (
     <div
       ref={menuRef}
@@ -116,6 +122,21 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
       role="menu"
       aria-label="Canvas context menu"
     >
+      {(canShowGroup || canShowUngroup) && (
+        <>
+          {canShowGroup && (
+            <button type="button" onClick={() => { currentPageId && createGroup(currentPageId, selectedElementIds); closeContextMenu(); }} className={itemClass}>
+              <BoxSelect size={12} /> Group
+            </button>
+          )}
+          {canShowUngroup && (
+            <button type="button" onClick={() => { currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0]); closeContextMenu(); }} className={itemClass}>
+              <BoxSelect size={12} /> Ungroup
+            </button>
+          )}
+          <div className="my-1 border-t border-white/15" />
+        </>
+      )}
       {contextMenu.context === 'balloon' && (
         <>
           <button type="button" onClick={() => handleFormat('textBox')} className={itemClass}>

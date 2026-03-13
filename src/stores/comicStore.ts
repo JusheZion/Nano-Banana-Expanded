@@ -211,6 +211,7 @@ interface ComicState {
 
     // Layer System specific
     reorderLayer: (pageId: string, activeId: string, overId: string) => void;
+    reorderGroup: (pageId: string, groupMemberId: string, overId: string) => void;
     toggleLayerVisibility: (pageId: string, elementId: string) => void;
     toggleLayerLock: (pageId: string, elementId: string) => void;
 
@@ -956,6 +957,35 @@ export const useComicStore = create<ComicState>()(
                     return {
                         pages: state.pages.map((p: ComicPage) => p.id === pageId ? { ...p, layerOrder: newOrder } : p)
                     }
+                }),
+
+                reorderGroup: (pageId: string, groupMemberId: string, overId: string) => set((state: ComicState) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page) return state;
+
+                    const groups = state.groupsByPage[pageId] || [];
+                    const group = groups.find(g => g.includes(groupMemberId));
+                    if (!group || group.length < 2) {
+                        // Single element: same as reorderLayer
+                        const oldIndex = page.layerOrder.indexOf(groupMemberId);
+                        const newIndex = page.layerOrder.indexOf(overId);
+                        if (oldIndex === -1 || newIndex === -1) return state;
+                        const newOrder = [...page.layerOrder];
+                        newOrder.splice(oldIndex, 1);
+                        newOrder.splice(newIndex, 0, groupMemberId);
+                        return { pages: state.pages.map((p: ComicPage) => p.id === pageId ? { ...p, layerOrder: newOrder } : p) };
+                    }
+
+                    const groupSet = new Set(group);
+                    const newOrder = page.layerOrder.filter(id => !groupSet.has(id));
+                    let insertIndex = newOrder.indexOf(overId);
+                    if (insertIndex === -1) insertIndex = newOrder.length;
+                    const groupOrder = [...group].sort((a, b) => page.layerOrder.indexOf(a) - page.layerOrder.indexOf(b));
+                    newOrder.splice(insertIndex, 0, ...groupOrder);
+
+                    return {
+                        pages: state.pages.map((p: ComicPage) => p.id === pageId ? { ...p, layerOrder: newOrder } : p)
+                    };
                 }),
 
                 toggleLayerVisibility: (pageId: string, elementId: string) => set((state: ComicState) => {

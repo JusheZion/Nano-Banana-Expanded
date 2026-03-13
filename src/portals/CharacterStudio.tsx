@@ -4,12 +4,13 @@ import { useProject } from '@/shared/context/ProjectContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { PromptCompiler } from '@/shared/utils/PromptCompiler';
+import { useGenerationEngine } from '@/shared/hooks/useGenerationEngine';
 
 export const CharacterStudio: React.FC = () => {
     const { setTheme } = useTheme();
-    const { tags, setTags, dnaLock, setDnaLock, library } = useProject();
+    const { tags, setTags, dnaLock, setDnaLock } = useProject();
+    const { tagLibraryCategories } = useGenerationEngine('character');
 
-    // Derived state for compiled prompt
     const compiledPrompt = PromptCompiler.compile(tags, '');
 
     useEffect(() => {
@@ -36,17 +37,16 @@ export const CharacterStudio: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-12 gap-8 h-[calc(100vh-200px)]">
-                {/* Left Panel: DNA / Structure (Glassmorphic) */}
+                {/* Left Panel: DNA / Structure (shared engine tag library) */}
                 <div className="col-span-3 glass-panel p-6 rounded-3xl overflow-y-auto custom-scrollbar border border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
                     <h2 className="text-sm font-bold mb-6 text-white/40 uppercase tracking-[0.2em] sticky top-0 bg-[#0F0F12]/80 backdrop-blur-xl py-2 z-10">Structure DNA</h2>
 
                     <div className="space-y-8">
-                        {/* Dynamic Render of Tier 1 Categories */}
-                        {Object.entries(library.tag_library.tier_1_global).map(([category, options]) => (
-                            <div key={category} className="space-y-3">
-                                <h3 className="text-[10px] font-bold uppercase opacity-60 tracking-wider text-teal-300 border-b border-teal-500/20 pb-1 w-max">{category.replace('_', ' ')}</h3>
+                        {tagLibraryCategories.map(({ categoryName, options }) => (
+                            <div key={categoryName} className="space-y-3">
+                                <h3 className="text-[10px] font-bold uppercase opacity-60 tracking-wider text-teal-300 border-b border-teal-500/20 pb-1 w-max">{categoryName}</h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {(options as string[]).map(option => (
+                                    {options.map(option => (
                                         <button
                                             key={option}
                                             onClick={() => setTags([...tags, { id: crypto.randomUUID(), text: option, polarity: 'positive' }])}
@@ -54,30 +54,6 @@ export const CharacterStudio: React.FC = () => {
                                                 px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide
                                                 bg-white/5 border border-white/10 text-white/70
                                                 hover:bg-teal-500/20 hover:border-teal-400/50 hover:text-white hover:scale-105 hover:shadow-[0_0_10px_rgba(55,97,93,0.3)]
-                                                active:scale-95 transition-all duration-200
-                                                backdrop-blur-md
-                                            "
-                                        >
-                                            {option}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-
-                        {/* Dynamic Render of Tier 2 Categories */}
-                        {Object.entries(library.tag_library.tier_2_architecture).map(([category, options]) => (
-                            <div key={category} className="space-y-3">
-                                <h3 className="text-[10px] font-bold uppercase opacity-60 tracking-wider text-purple-300 border-b border-purple-500/20 pb-1 w-max">{category.replace('_', ' ')}</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {(options as string[]).map(option => (
-                                        <button
-                                            key={option}
-                                            onClick={() => setTags([...tags, { id: crypto.randomUUID(), text: option, polarity: 'positive' }])}
-                                            className="
-                                                px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide
-                                                bg-white/5 border border-white/10 text-white/70
-                                                hover:bg-purple-500/20 hover:border-purple-400/50 hover:text-white hover:scale-105 hover:shadow-[0_0_10px_rgba(95,54,142,0.3)]
                                                 active:scale-95 transition-all duration-200
                                                 backdrop-blur-md
                                             "

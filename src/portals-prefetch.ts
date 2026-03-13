@@ -11,6 +11,9 @@ export function prefetchPortal(portal: Portal): void {
     case 'studio':
       void import('./portals/CharacterStudio');
       return;
+    case 'assets':
+      void import('./portals/AssetsStudio');
+      return;
     case 'reference':
       void import('./portals/ReferenceAlbum');
       return;
