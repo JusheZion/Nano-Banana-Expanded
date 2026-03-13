@@ -103,7 +103,7 @@ export const TopRibbon: React.FC<TopRibbonProps> = (props) => {
       ` }} />
     <header
       className={`border-b flex items-stretch transition-all duration-200 relative z-30 ${
-        collapsed ? 'h-12' : 'h-16'
+        collapsed ? 'h-9' : 'h-12'
       }`}
       style={{ background: PRIMARY_BG_FLAT, borderBottomColor: RIBBON_ACCENT }}
     >

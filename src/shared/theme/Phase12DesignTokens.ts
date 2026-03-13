@@ -35,6 +35,9 @@ export const TEXT_BLUE_GRADIENT = 'linear-gradient(135deg, #001a4d 0%, #002366 5
 /** Optional: slightly subtler gold for top menu bar if desired */
 export const MENU_BAR_GOLD_GRADIENT = 'linear-gradient(45deg, #bf953f 0%, #fcf6ba 45%, #b38728 70%, #fbf5b7 85%, #aa771c 100%)';
 
+/** ARCS jewel-tone sidebar: golden at top → deep indigo/purple at bottom */
+export const SIDEBAR_JEWEL_GRADIENT = 'linear-gradient(180deg, #f6c453 0%, #f08a5d 15%, #e45da2 40%, #7b5bd5 70%, #24124d 100%)';
+
 /** Phase 15: Slider track (gradient) and tick marks */
 export const SLIDER_TRACK_GRADIENT = 'linear-gradient(to right, #1a2a44, #2a4a7c)';
 export const SLIDER_TICK_COLOR = 'rgba(255, 215, 0, 0.4)';

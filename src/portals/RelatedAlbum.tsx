@@ -13,8 +13,8 @@ export const RelatedAlbum: React.FC = () => {
             {/* Header Section */}
             <header className="p-6 flex justify-between items-center z-20">
                 <div>
-                    <h1 className="text-xs font-bold tracking-[0.3em] uppercase text-[#5F368E]/80 mb-1">Nano Banana Expanded</h1>
-                    <p className="glow-text text-xl font-semibold">Story Sequence Viewer <span className="text-[#5F368E]/60 font-light ml-2 text-sm">V2.4</span></p>
+                    <h1 className="text-xs font-bold tracking-[0.3em] uppercase text-[#5F368E]/80 mb-1">ARCS Expanded</h1>
+                    <p className="glow-text text-xl font-semibold">Comics & Story Archive <span className="text-[#5F368E]/60 font-light ml-2 text-sm">V2.4</span></p>
                 </div>
                 <button className="w-10 h-10 rounded-full glass-panel flex items-center justify-center text-white/80">
                     <span className="material-icons-round">more_vert</span>

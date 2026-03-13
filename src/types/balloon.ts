@@ -1,5 +1,8 @@
 export type BalloonKind = 'speech' | 'thought' | 'shout' | 'narration';
 
+/** Office-style text warp / WordArt transform profiles */
+export type TextWarpId = 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch' | 'button' | 'square' | 'triangle' | 'cascade' | 'slant' | 'fade';
+
 export type BalloonStyleId =
     | 'speech_round'
     | 'speech_rounded_rectangle'
@@ -15,7 +18,8 @@ export type BalloonStyleId =
     | 'starburst_action'
     | 'scream_jagged'
     | 'box_slanted'
-    | 'double_burst';
+    | 'double_burst'
+    | 'floating_text';
 
 export interface BalloonStyle {
     id: BalloonStyleId;
@@ -35,7 +39,7 @@ export interface BalloonStyle {
     cornerRadius?: number;
     spikiness?: number;
 
-    textWarp?: 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch';
+    textWarp?: TextWarpId;
     textStroke?: string;
     textStrokeWidth?: number;
     secondaryTextStroke?: string;
@@ -52,6 +56,14 @@ export interface Point {
 
 import type { GradientSpec } from './gradient';
 
+/** Optional transform for the text box relative to the balloon body (offset and scale). */
+export interface TextBoxTransform {
+    offsetX?: number;
+    offsetY?: number;
+    scaleX?: number;
+    scaleY?: number;
+}
+
 export interface BalloonOverrides {
     fill?: string;
     stroke?: string;
@@ -60,11 +72,13 @@ export interface BalloonOverrides {
     fontSize?: number;
     textColor?: string;
     tailFlip?: boolean;
+    /** Phase 16: independent text box position/scale relative to balloon body */
+    textBox?: TextBoxTransform;
     textStroke?: string;
     textStrokeWidth?: number;
     secondaryTextStroke?: string;
     secondaryTextStrokeWidth?: number;
-    textWarp?: 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch';
+    textWarp?: TextWarpId;
     textWarpIntensity?: number; // E.g., multiplier for bend/circle spread
     textLetterSpacing?: number; // Spacing between letters
     text3DExtrusion?: number;
@@ -127,4 +141,7 @@ export interface BalloonInstance {
     // Texture
     textureId?: string;
     textureOpacity?: number;
+
+    /** Phase 16: text box transform (offset/scale) relative to balloon body; when undefined, treated as 0,0,1,1 */
+    textBox?: TextBoxTransform;
 }

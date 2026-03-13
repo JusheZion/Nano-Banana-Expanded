@@ -211,5 +211,18 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         secondaryTextStrokeWidth: 5,
         text3DExtrusion: 12,
         text3DExtrusionColor: '#cc0000'
+    },
+    {
+        id: 'floating_text',
+        label: 'Text Box',
+        kind: 'narration',
+        fill: 'transparent',
+        stroke: 'transparent',
+        strokeWidth: 0,
+        fontFamily: 'Comic Sans MS',
+        fontSize: 20,
+        textColor: '#000000',
+        hasTail: false,
+        tailStyle: 'straight'
     }
 ];

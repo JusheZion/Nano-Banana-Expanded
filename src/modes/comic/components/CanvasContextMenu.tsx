@@ -2,11 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2, ImagePlus } from 'lucide-react';
 import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
-
-export type FormatDialogTab = 'text' | 'object' | 'panel' | 'image';
+import type { FormatDialogTabId } from './FormatDialog';
 
 export interface CanvasContextMenuProps {
-  onOpenFormatDialog: (tab: FormatDialogTab, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
+  onOpenFormatDialog: (tab: FormatDialogTabId, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
 }
 
 export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenFormatDialog }) => {
@@ -34,7 +33,7 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
   const itemClass =
     'w-full text-left px-3 py-2 text-xs flex items-center gap-2 rounded transition-colors text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba] disabled:opacity-50 active:scale-[0.99]';
 
-  const handleFormat = (tab: FormatDialogTab) => {
+  const handleFormat = (tab: FormatDialogTabId) => {
     onOpenFormatDialog(tab, contextMenu.pageId, contextMenu.balloonId, contextMenu.panelId);
     closeContextMenu();
   };
@@ -86,6 +85,29 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
     closeContextMenu();
   };
 
+  const handleInsertTextBox = () => {
+    if (contextMenu.pageId) {
+      const pageW = 800, pageH = 1200, bw = 250, bh = 150;
+      const raw = contextMenu.pageLocalX != null && contextMenu.pageLocalY != null
+        ? { x: contextMenu.pageLocalX - bw / 2, y: contextMenu.pageLocalY - bh / 2 }
+        : { x: 400, y: 600 };
+      const x = Math.max(0, Math.min(pageW - bw, raw.x));
+      const y = Math.max(0, Math.min(pageH - bh, raw.y));
+      addBalloon(contextMenu.pageId, {
+        x,
+        y,
+        width: bw,
+        height: bh,
+        hasTail: false,
+        tailBasePoint: { x: 0, y: 0 },
+        tailTip: { x: 0, y: 0 },
+        styleId: 'floating_text',
+        text: 'Text...',
+      });
+    }
+    closeContextMenu();
+  };
+
   return (
     <div
       ref={menuRef}
@@ -96,10 +118,10 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
     >
       {contextMenu.context === 'balloon' && (
         <>
-          <button type="button" onClick={() => handleFormat('text')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('textBox')} className={itemClass}>
             <Type size={12} /> Format text…
           </button>
-          <button type="button" onClick={() => handleFormat('object')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('fillLine')} className={itemClass}>
             <Circle size={12} /> Format balloon…
           </button>
           <div className="my-1 border-t border-white/15" />
@@ -110,10 +132,10 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
       )}
       {contextMenu.context === 'panel' && contextMenu.pageId && contextMenu.panelId && (
         <>
-          <button type="button" onClick={() => handleFormat('panel')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('fillLine')} className={itemClass}>
             <Square size={12} /> Format panel…
           </button>
-          <button type="button" onClick={() => handleFormat('image')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('sizeProperties')} className={itemClass}>
             <ImagePlus size={12} /> Insert image…
           </button>
           <div className="my-1 border-t border-white/15" />
@@ -131,13 +153,13 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
       )}
       {contextMenu.context === 'empty' && (
         <>
-          <button type="button" onClick={() => handleFormat('text')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('textBox')} className={itemClass}>
             <Type size={12} /> Format text…
           </button>
-          <button type="button" onClick={() => handleFormat('object')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('fillLine')} className={itemClass}>
             <Circle size={12} /> Format object…
           </button>
-          <button type="button" onClick={() => handleFormat('image')} className={itemClass}>
+          <button type="button" onClick={() => handleFormat('sizeProperties')} className={itemClass}>
             <ImagePlus size={12} /> Insert image…
           </button>
           <div className="my-1 border-t border-white/15" />
@@ -152,6 +174,9 @@ export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenForm
               </button>
               <button type="button" onClick={handleAddBalloon} className={itemClass}>
                 <MessageCircle size={12} /> Add balloon
+              </button>
+              <button type="button" onClick={handleInsertTextBox} className={itemClass}>
+                <Type size={12} /> Insert Text Box
               </button>
             </>
           )}

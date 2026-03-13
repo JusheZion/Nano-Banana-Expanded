@@ -1,4 +1,4 @@
-# Design System: Nano Banana Expanded (ARCS)
+# Design System: ARCS Expanded
 **Project ID:** 954412538784398355
 
 ## 0. ARCS Golden-Blue (Primary System)

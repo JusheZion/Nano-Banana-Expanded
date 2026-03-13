@@ -1,10 +1,11 @@
 import React, { useRef, useMemo } from 'react';
 import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 'react-konva';
+import { useComicStore } from '../../../stores/comicStore';
 import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
 import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
-import type { BalloonInstance, BalloonStyle } from '../../../types/balloon';
+import type { BalloonInstance, BalloonStyle, TextBoxTransform } from '../../../types/balloon';
 
 // Hand-tuned cloud speech balloon outline, centered at 0,0
 const CLOUD_BALLOON_PATH = "M384.986 894.426C353.731 658.567 514.663 441.357 744.437 409.274 837.544 396.274 932.208 415.708 1013.28 464.466 1099.19 298.239 1299.94 235.064 1461.67 323.361 1489.95 338.801 1515.9 358.37 1538.72 381.458 1605.63 243.668 1768.6 187.688 1902.73 256.422 1939.85 275.446 1972.23 302.959 1997.39 336.848 2105.23 206.543 2295.79 190.447 2423.02 300.897 2476.49 347.319 2512.53 411.347 2524.96 482.004 2701.66 531.495 2805.9 718.963 2757.78 900.724 2753.74 916.005 2748.66 930.977 2742.6 945.532 2884.31 1134.92 2849.62 1406.38 2665.11 1551.84 2607.68 1597.13 2539.84 1626.44 2468.15 1636.97 2466.56 1840.72 2304.23 2004.58 2105.59 2002.94 2039.22 2002.4 1974.3 1983.03 1918 1946.97 1850.81 2175.41 1616.45 2304.53 1394.54 2235.36 1301.54 2206.38 1221.19 2145.08 1167.19 2061.92 939.983 2202.61 645.079 2126.93 508.501 1892.88 506.78 1889.93 505.089 1886.96 503.428 1883.98 354.731 1901.85 220.041 1792.92 202.588 1640.68 193.286 1559.53 219.378 1478.31 273.912 1418.67 145.162 1340.85 101.913 1170.05 177.311 1037.18 220.81 960.524 297.101 909.848 382.724 900.736Z";
@@ -27,8 +28,15 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
 }) => {
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
+    const textGroupRef = useRef<any>(null);
+    const textBoxTrRef = useRef<any>(null);
     const tipRef = useRef<any>(null);
     const textRef = useRef<any>(null);
+
+    const textBoxEditBalloonId = useComicStore((s) => s.textBoxEditBalloonId);
+    const setTextBoxEditBalloonId = useComicStore((s) => s.setTextBoxEditBalloonId);
+    const textBoxEditMode = textBoxEditBalloonId === balloon.id && balloon.isSelected;
+    const effectiveTextBox: TextBoxTransform = balloon.overrides?.textBox ?? balloon.textBox ?? { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 };
 
     React.useEffect(() => {
         if (groupRef.current) {
@@ -51,6 +59,13 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             trRef.current.getLayer().batchDraw();
         }
     }, [balloon.isSelected]);
+
+    React.useEffect(() => {
+        if (textBoxEditMode && textBoxTrRef.current && textGroupRef.current) {
+            textBoxTrRef.current.nodes([textGroupRef.current]);
+            textBoxTrRef.current.getLayer().batchDraw();
+        }
+    }, [textBoxEditMode]);
 
     // Merge overrides
     const fill = balloon.overrides?.fill || styleDef.fill;
@@ -143,6 +158,18 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             }
             case 'arch':
                 return `M ${-halfW},${pathH / 2} C ${-halfW * 0.5},${-pathH * 2.5 * intensity} ${halfW * 0.5},${-pathH * 2.5 * intensity} ${halfW},${pathH / 2}`;
+            case 'button':
+                return `M ${-halfW},${pathH / 2} Q 0,${-pathH * 1.2 * intensity} ${halfW},${pathH / 2}`;
+            case 'square':
+                return `M ${-halfW},${pathH / 2} L ${-halfW / 2},${pathH / 2} L ${-halfW / 2},${-pathH / 2} L ${halfW / 2},${-pathH / 2} L ${halfW / 2},${pathH / 2} L ${halfW},${pathH / 2}`;
+            case 'triangle':
+                return `M ${-halfW},${pathH / 2} L 0,${-pathH / 2 * intensity} L ${halfW},${pathH / 2}`;
+            case 'cascade':
+                return `M ${-halfW},0 L ${-halfW / 2},0 L ${-halfW / 2},${pathH / 2} L ${halfW / 2},${pathH / 2} L ${halfW / 2},${pathH} L ${halfW},${pathH}`;
+            case 'slant':
+                return `M ${-halfW},${pathH / 2} L ${halfW},${-pathH / 2 * intensity}`;
+            case 'fade':
+                return `M ${-halfW},${pathH * 0.4} Q 0,${pathH * 0.7 * intensity} ${halfW},${pathH * 0.4}`;
             default:
                 return '';
         }
@@ -751,6 +778,56 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 {textureImg && renderBody('texture')}
                 {textureImg && renderTail('texture')}
 
+                <Group
+                    ref={textGroupRef}
+                    name="text-box"
+                    x={effectiveTextBox.offsetX ?? 0}
+                    y={effectiveTextBox.offsetY ?? 0}
+                    scaleX={effectiveTextBox.scaleX ?? 1}
+                    scaleY={effectiveTextBox.scaleY ?? 1}
+                    draggable={textBoxEditMode}
+                    listening={textBoxEditMode}
+                    onDragEnd={() => {
+                        if (!textGroupRef.current) return;
+                        const g = textGroupRef.current;
+                        const ox = g.x();
+                        const oy = g.y();
+                        onChange(balloon.id, {
+                            overrides: {
+                                ...balloon.overrides,
+                                textBox: {
+                                    ...effectiveTextBox,
+                                    offsetX: ox,
+                                    offsetY: oy,
+                                    scaleX: effectiveTextBox.scaleX ?? 1,
+                                    scaleY: effectiveTextBox.scaleY ?? 1,
+                                },
+                            },
+                        });
+                    }}
+                    onTransformEnd={() => {
+                        if (!textGroupRef.current || !textBoxTrRef.current) return;
+                        const g = textGroupRef.current;
+                        const ox = g.x();
+                        const oy = g.y();
+                        const sx = g.scaleX();
+                        const sy = g.scaleY();
+                        g.scaleX(1);
+                        g.scaleY(1);
+                        onChange(balloon.id, {
+                            overrides: {
+                                ...balloon.overrides,
+                                textBox: {
+                                    offsetX: ox,
+                                    offsetY: oy,
+                                    scaleX: sx,
+                                    scaleY: sy,
+                                },
+                            },
+                        });
+                        setTextBoxEditBalloonId(null);
+                    }}
+                >
                 {warpPathData ? (
                     <React.Fragment>
                         {(() => {
@@ -936,6 +1013,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                         />
                     </React.Fragment>
                 )}
+                </Group>
 
                 {balloon.isSelected && balloon.hasTail && (
                     <Circle
@@ -961,7 +1039,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 )}
             </Group>
 
-            {balloon.isSelected && (
+            {balloon.isSelected && !textBoxEditMode && (
                 <Transformer
                     ref={trRef}
                     borderStroke="#D4AF37"
@@ -971,6 +1049,17 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                     resizeEnabled={true}
                     rotateEnabled={true}
                     rotateAnchorOffset={40}
+                />
+            )}
+            {textBoxEditMode && (
+                <Transformer
+                    ref={textBoxTrRef}
+                    borderStroke="#00D1FF"
+                    anchorStroke="#00D1FF"
+                    anchorFill="#00D1FF"
+                    anchorSize={8}
+                    resizeEnabled={true}
+                    rotateEnabled={false}
                 />
             )}
         </React.Fragment>

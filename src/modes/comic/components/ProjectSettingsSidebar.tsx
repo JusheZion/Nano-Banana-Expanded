@@ -82,17 +82,35 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                     <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Page Background</h3>
                     <div className="space-y-3">
                         <div>
-                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Color</label>
+                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Default for new pages</label>
+                            <p className={`text-[11px] mb-2 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Used when creating new pages and as fallback. New users get white (#ffffff).</p>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="color"
-                                    value={pageSettings?.backgroundColor ?? '#1a1a1a'}
+                                    value={projectSettings?.defaultPageBackgroundColor ?? '#ffffff'}
+                                    onChange={(e) => updateProjectSettings({ defaultPageBackgroundColor: e.target.value })}
+                                    className={`w-10 h-10 rounded border cursor-pointer bg-transparent ${rb ? 'border-[#002366]/30' : 'border-white/20'}`}
+                                />
+                                <input
+                                    type="text"
+                                    value={projectSettings?.defaultPageBackgroundColor ?? '#ffffff'}
+                                    onChange={(e) => updateProjectSettings({ defaultPageBackgroundColor: e.target.value })}
+                                    className={`flex-1 border rounded px-2 py-1.5 text-sm font-mono ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit' : 'bg-black/30 border-white/10 text-white'}`}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className={`block text-xs uppercase tracking-widest mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Current canvas color</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    value={pageSettings?.backgroundColor ?? (projectSettings?.defaultPageBackgroundColor ?? '#ffffff')}
                                     onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
                                     className={`w-10 h-10 rounded border cursor-pointer bg-transparent ${rb ? 'border-[#002366]/30' : 'border-white/20'}`}
                                 />
                                 <input
                                     type="text"
-                                    value={pageSettings?.backgroundColor ?? '#1a1a1a'}
+                                    value={pageSettings?.backgroundColor ?? (projectSettings?.defaultPageBackgroundColor ?? '#ffffff')}
                                     onChange={(e) => setPageSettings({ backgroundColor: e.target.value })}
                                     className={`flex-1 border rounded px-2 py-1.5 text-sm font-mono ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit' : 'bg-black/30 border-white/10 text-white'}`}
                                 />

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
@@ -119,6 +119,8 @@ interface ComicState {
         demographicFocus: string;
         /** When true, the contextual ribbon starts pinned (visible) by default. */
         ribbonPinnedDefault: boolean;
+        /** Default page background color for new pages and initial canvas (e.g. #ffffff). */
+        defaultPageBackgroundColor: string;
     };
     gutterSize: number;
     pageSettings: PageSettings;
@@ -156,6 +158,11 @@ interface ComicState {
     /** Phase 15: color picker favorites (hex, max 12) and recently used (max 16), persisted */
     colorFavorites: string[];
     colorRecentlyUsed: string[];
+
+    /** Phase 16: groups per page. Each group is an array of element ids (panels/balloons) that move together. */
+    groupsByPage: Record<string, string[][]>;
+    /** When set, the balloon with this id is in "text-box edit" mode (Transformer on text group only). UI-only, not persisted. */
+    textBoxEditBalloonId: string | null;
 
     // Drawing Mode State
     isDrawingMode: boolean;
@@ -206,6 +213,12 @@ interface ComicState {
     reorderLayer: (pageId: string, activeId: string, overId: string) => void;
     toggleLayerVisibility: (pageId: string, elementId: string) => void;
     toggleLayerLock: (pageId: string, elementId: string) => void;
+
+    // Groups (Phase 16)
+    createGroup: (pageId: string, elementIds: string[]) => void;
+    ungroup: (pageId: string, elementId: string) => void;
+    getGroupMembers: (pageId: string, elementId: string) => string[] | null;
+    setTextBoxEditBalloonId: (id: string | null) => void;
 
     triggerExport: (format: 'png' | 'pdf') => void;
     clearExport: () => void;
@@ -258,6 +271,7 @@ function undoSnapshotSlice(state: ComicState): string {
         templates: state.templates,
         colorFavorites: state.colorFavorites,
         colorRecentlyUsed: state.colorRecentlyUsed,
+        groupsByPage: state.groupsByPage,
         selectedElementIds: state.selectedElementIds,
     });
 }
@@ -322,15 +336,16 @@ export function comicRedo(): void {
 export const useComicStore = create<ComicState>()(
     undoMiddleware(
         persist(
-            (set) => ({
+            (set, get) => ({
                 projectSettings: {
                     inclusiveBiasEnabled: false,
                     demographicFocus: '',
-                    ribbonPinnedDefault: false
+                    ribbonPinnedDefault: false,
+                    defaultPageBackgroundColor: '#ffffff'
                 },
                 gutterSize: 16,
                 pageSettings: {
-                    backgroundColor: '#1a1a1a',
+                    backgroundColor: '#ffffff',
                     bgOpacity: 1
                 },
                 pages: [
@@ -340,7 +355,7 @@ export const useComicStore = create<ComicState>()(
                         balloons: [],
                         drawings: [],
                         overlays: [],
-                        background: '#1a1a1a',
+                        background: '#ffffff',
                         layerOrder: []
                     }
                 ],
@@ -361,6 +376,8 @@ export const useComicStore = create<ComicState>()(
                 _autoSaveTick: 0,
                 colorFavorites: [],
                 colorRecentlyUsed: [],
+                groupsByPage: {},
+                textBoxEditBalloonId: null,
 
                 isDrawingMode: false,
                 brushColor: '#000000',
@@ -424,8 +441,7 @@ export const useComicStore = create<ComicState>()(
 
                 addPage: () => set((state: ComicState) => {
                     const newId = `page-${crypto.randomUUID()}`;
-                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
-                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+                    const defaultBg = state.projectSettings?.defaultPageBackgroundColor ?? '#ffffff';
                     return {
                         pages: [...state.pages, {
                             id: newId,
@@ -433,7 +449,7 @@ export const useComicStore = create<ComicState>()(
                             balloons: [],
                             drawings: [],
                             overlays: [],
-                            background: genre.palette.background,
+                            background: defaultBg,
                             layerOrder: []
                         }],
                         currentPageId: newId
@@ -472,7 +488,10 @@ export const useComicStore = create<ComicState>()(
                     const index = state.pages.findIndex(p => p.id === id);
                     const newPages = [...state.pages];
                     newPages.splice(index + 1, 0, newPage);
-                    return { pages: newPages, currentPageId: newPage.id };
+                    const oldGroups = state.groupsByPage[id] || [];
+                    const newGroups = oldGroups.map(g => g.map(eid => idMap.get(eid)).filter((id): id is string => id !== undefined)).filter(g => g.length >= 2);
+                    const nextGroupsByPage = { ...state.groupsByPage, [newPage.id]: newGroups };
+                    return { pages: newPages, currentPageId: newPage.id, groupsByPage: nextGroupsByPage };
                 }),
 
                 reorderPages: (activeId: string, overId: string) => set((state: ComicState) => {
@@ -516,18 +535,39 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                updatePanel: (pageId: string, panelId: string, updates: Partial<Panel>) => set((state: ComicState) => ({
-                    pages: state.pages.map(p =>
-                        p.id === pageId
-                            ? {
+                updatePanel: (pageId: string, panelId: string, updates: Partial<Panel>) => set((state: ComicState) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page) return state;
+                    const groups = state.groupsByPage[pageId] || [];
+                    const group = groups.find(g => g.includes(panelId));
+                    const hasPosition = updates.x !== undefined || updates.y !== undefined;
+                    const panel = page.panels.find(p => p.id === panelId);
+                    if (!panel) return state;
+
+                    let dx = 0, dy = 0;
+                    if (hasPosition && group && group.length > 1) {
+                        dx = (updates.x ?? panel.x) - panel.x;
+                        dy = (updates.y ?? panel.y) - panel.y;
+                    }
+
+                    return {
+                        pages: state.pages.map(p => {
+                            if (p.id !== pageId) return p;
+                            return {
                                 ...p,
-                                panels: p.panels.map(panel =>
-                                    panel.id === panelId ? { ...panel, ...updates } : panel
-                                )
-                            }
-                            : p
-                    )
-                })),
+                                panels: p.panels.map(pan => {
+                                    if (pan.id === panelId) return { ...pan, ...updates };
+                                    if (group && group.includes(pan.id) && (dx !== 0 || dy !== 0))
+                                        return { ...pan, x: pan.x + dx, y: pan.y + dy };
+                                    return pan;
+                                }),
+                                balloons: (group && (dx !== 0 || dy !== 0)) ? p.balloons.map(b =>
+                                    group.includes(b.id) ? { ...b, x: b.x + dx, y: b.y + dy } : b
+                                ) : p.balloons
+                            };
+                        })
+                    };
+                }),
 
                 addBalloon: (pageId: string, balloonData: Omit<BalloonInstance, 'id' | 'type'>) => set((state: ComicState) => {
                     const newId = crypto.randomUUID();
@@ -556,18 +596,39 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                updateBalloon: (pageId: string, balloonId: string, updates: Partial<BalloonInstance>) => set((state: ComicState) => ({
-                    pages: state.pages.map(p =>
-                        p.id === pageId
-                            ? {
+                updateBalloon: (pageId: string, balloonId: string, updates: Partial<BalloonInstance>) => set((state: ComicState) => {
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page) return state;
+                    const groups = state.groupsByPage[pageId] || [];
+                    const group = groups.find(g => g.includes(balloonId));
+                    const hasPosition = updates.x !== undefined || updates.y !== undefined;
+                    const balloon = page.balloons.find(b => b.id === balloonId);
+                    if (!balloon) return state;
+
+                    let dx = 0, dy = 0;
+                    if (hasPosition && group && group.length > 1) {
+                        dx = (updates.x ?? balloon.x) - balloon.x;
+                        dy = (updates.y ?? balloon.y) - balloon.y;
+                    }
+
+                    return {
+                        pages: state.pages.map(p => {
+                            if (p.id !== pageId) return p;
+                            return {
                                 ...p,
-                                balloons: p.balloons.map(balloon =>
-                                    balloon.id === balloonId ? { ...balloon, ...updates } : balloon
-                                )
-                            }
-                            : p
-                    )
-                })),
+                                panels: (group && (dx !== 0 || dy !== 0)) ? p.panels.map(pan =>
+                                    group.includes(pan.id) ? { ...pan, x: pan.x + dx, y: pan.y + dy } : pan
+                                ) : p.panels,
+                                balloons: p.balloons.map(b => {
+                                    if (b.id === balloonId) return { ...b, ...updates };
+                                    if (group && group.includes(b.id) && (dx !== 0 || dy !== 0))
+                                        return { ...b, x: b.x + dx, y: b.y + dy };
+                                    return b;
+                                })
+                            };
+                        })
+                    };
+                }),
 
                 /** Snap selected balloon tail tip to nearest panel edge (clamp to panel rect). */
                 snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => set((state: ComicState) => {
@@ -806,6 +867,9 @@ export const useComicStore = create<ComicState>()(
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
+                    const pageGroups = (state.groupsByPage[pageId] || []).map(g => g.filter(id => id !== elementId)).filter(g => g.length >= 2);
+                    const nextGroupsByPage = { ...state.groupsByPage, [pageId]: pageGroups };
+
                     return {
                         pages: state.pages.map((p: ComicPage) => p.id === pageId ? {
                             ...p,
@@ -814,6 +878,7 @@ export const useComicStore = create<ComicState>()(
                             drawings: p.drawings?.filter(x => x.id !== elementId) || [],
                             layerOrder: p.layerOrder.filter(id => id !== elementId)
                         } : p),
+                        groupsByPage: nextGroupsByPage,
                         selectedElementIds: state.selectedElementIds.filter(id => id !== elementId)
                     };
                 }),
@@ -920,6 +985,33 @@ export const useComicStore = create<ComicState>()(
                         })
                     }
                 }),
+
+                createGroup: (pageId: string, elementIds: string[]) => set((state: ComicState) => {
+                    if (elementIds.length < 2) return state;
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page) return state;
+                    const groups = (state.groupsByPage[pageId] || []).map(g => g.filter(id => !elementIds.includes(id)));
+                    const kept = groups.filter(g => g.length >= 2);
+                    const next = { ...state.groupsByPage, [pageId]: [...kept, [...elementIds]] };
+                    return { groupsByPage: next };
+                }),
+
+                ungroup: (pageId: string, elementId: string) => set((state: ComicState) => {
+                    const groups = state.groupsByPage[pageId] || [];
+                    const nextGroups = groups.filter(g => !g.includes(elementId));
+                    if (nextGroups.length === groups.length) return state;
+                    return { groupsByPage: { ...state.groupsByPage, [pageId]: nextGroups } };
+                }),
+
+                getGroupMembers: (pageId: string, elementId: string) => {
+                    const state = get();
+                    const groups = state.groupsByPage[pageId];
+                    if (!groups) return null;
+                    const group = groups.find(g => g.includes(elementId));
+                    return group ? [...group] : null;
+                },
+
+                setTextBoxEditBalloonId: (id: string | null) => set({ textBoxEditBalloonId: id }),
 
                 captureUndoCheckpoint: () => {},
 
@@ -1155,7 +1247,32 @@ export const useComicStore = create<ComicState>()(
                 })
             }),
             {
-                name: 'nano-banana-comic',
+                name: 'arcs-comic',
+                storage: createJSONStorage(() => ({
+                    getItem: (name: string): string | null => {
+                        if (name !== 'arcs-comic') return localStorage.getItem(name);
+                        const current = localStorage.getItem('arcs-comic');
+                        if (current != null && current !== '') return current;
+                        const legacy = localStorage.getItem('nano-banana-comic');
+                        if (legacy != null && legacy !== '') {
+                            localStorage.setItem('arcs-comic', legacy);
+                            return legacy;
+                        }
+                        return null;
+                    },
+                    setItem: (name: string, value: string) => { localStorage.setItem(name, value); },
+                    removeItem: (name: string) => { localStorage.removeItem(name); },
+                })),
+                merge: (persisted, current) => {
+                    const p = persisted as Partial<ComicState>;
+                    const mergedProject = { ...current.projectSettings, ...p.projectSettings };
+                    if (mergedProject.defaultPageBackgroundColor == null) mergedProject.defaultPageBackgroundColor = '#ffffff';
+                    return {
+                        ...current,
+                        ...p,
+                        projectSettings: mergedProject,
+                    } as ComicState;
+                },
                 partialize: (state: ComicState) => ({
                     pages: state.pages,
                     projectSettings: state.projectSettings,
@@ -1167,7 +1284,8 @@ export const useComicStore = create<ComicState>()(
                     templates: state.templates,
                     _autoSaveTick: state._autoSaveTick,
                     colorFavorites: state.colorFavorites,
-                    colorRecentlyUsed: state.colorRecentlyUsed
+                    colorRecentlyUsed: state.colorRecentlyUsed,
+                    groupsByPage: state.groupsByPage
                 })
             }
         )

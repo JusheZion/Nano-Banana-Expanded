@@ -17,6 +17,8 @@ export const PhotoLab: React.FC = () => {
             <header className="p-4 z-50">
                 <div className="glass-panel h-16 rounded-xl flex items-center justify-between px-6">
                     <div className="flex items-center gap-4">
+                        <h1 className="text-lg font-bold tracking-wide text-white/90">Storyline Studio</h1>
+                        <div className="h-6 w-[1px] bg-white/10" />
                         <button className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors">
                             <span className="material-icons text-[#37615D]">chevron_left</span>
                         </button>

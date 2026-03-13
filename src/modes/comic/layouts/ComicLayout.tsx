@@ -72,7 +72,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
   const [balloonTextExpanded, setBalloonTextExpanded] = useState(false);
   const [balloonShapeExpanded, setBalloonShapeExpanded] = useState(false);
   const [formatDialogOpen, setFormatDialogOpen] = useState(false);
-  const [formatDialogTab, setFormatDialogTab] = useState<FormatDialogTabId>('text');
+  const [formatDialogTab, setFormatDialogTab] = useState<FormatDialogTabId>('fillLine');
   const [formatDialogTarget, setFormatDialogTarget] = useState<{ pageId?: string | null; balloonId?: string | null; panelId?: string | null }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);

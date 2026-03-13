@@ -40,7 +40,7 @@ export interface MenuBarProps {
   /** Panel selected: enable Insert Image, Split submenu */
   hasPanelSelected: boolean;
   /** Open the Format dialog with the given tab (from Text / Objects menu items) */
-  onOpenFormatDialog?: (tab: 'text' | 'object') => void;
+  onOpenFormatDialog?: (tab: import('./FormatDialog').FormatDialogTabId) => void;
 }
 
 function useCloseOnOutside(ref: React.RefObject<HTMLDivElement | null>, open: boolean, onClose: () => void) {
@@ -204,8 +204,15 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     if (style.secondaryTextStrokeWidth) overrides.secondaryTextStrokeWidth = style.secondaryTextStrokeWidth;
     if (style.text3DExtrusion) overrides.text3DExtrusion = style.text3DExtrusion;
     if (style.text3DExtrusionColor) overrides.text3DExtrusionColor = style.text3DExtrusionColor;
+    const isFloatingText = styleId === 'floating_text';
+    const pos = isFloatingText && lastCanvasPosition?.pageId === currentPage.id ? lastCanvasPosition : null;
+    const pageW = 800, pageH = 1200, bw = 250, bh = 150;
+    const rawX = pos ? pos.x - bw / 2 : 400;
+    const rawY = pos ? pos.y - bh / 2 : 600;
+    const x = isFloatingText ? Math.max(0, Math.min(pageW - bw, rawX)) : rawX;
+    const y = isFloatingText ? Math.max(0, Math.min(pageH - bh, rawY)) : rawY;
     addBalloon(currentPage.id, {
-      x: 400, y: 600, width: 250, height: 150,
+      x, y, width: 250, height: 150,
       hasTail: style.hasTail, tailBasePoint: { x: 0, y: 0 }, tailTip: { x: -50, y: 100 },
       styleId: styleId as BalloonStyleId,
       text: style.kind === 'shout' && styleId.includes('sound_effect') ? 'BOOM!' : 'Text...',
@@ -379,13 +386,17 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       ))}
       {menuWithDropdown('text', 'Text', null, (
         <div className={`${dropdownPanelClass} min-w-[240px]`} style={dropdownPanelStyle}>
+          <button type="button" onClick={() => handleAddCallout('floating_text')} className={dropdownItemClass} style={dropdownItemStyle}>
+            <Type size={12} /> Insert Text Box
+          </button>
+          <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Formatting text</div>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Type size={12} /> Font & size</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Palette size={12} /> Color, stroke, outline</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Box size={12} /> 3D extrusion</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Waves size={12} /> Warp (arc, wave)</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Padding</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('text'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><AlignLeft size={12} /> Alignment</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Type size={12} /> Font & size</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Palette size={12} /> Color, stroke, outline</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('effects'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Box size={12} /> 3D extrusion</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Waves size={12} /> Warp (arc, wave)</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Padding</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><AlignLeft size={12} /> Alignment</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1 text-[10px] opacity-70" style={dropdownHeadingStyle}>Ribbon below shows font, color, alignment. Select a balloon to edit.</div>
         </div>
@@ -393,17 +404,17 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       {menuWithDropdown('objects', 'Objects', null, (
         <div className={`${dropdownPanelClass} min-w-[260px] max-h-[80vh] overflow-y-auto`} style={dropdownPanelStyle}>
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Shape & transform</div>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Shape (Rect / Ellipse)</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Shape (Rect / Ellipse)</button>
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H / Flip V</button>
           <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}>Bring to front / Send to back</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Formatting objects</div>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Circle size={12} /> Fill & border</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Moon size={12} /> Shadow</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Sparkles size={12} /> Glow</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImageIcon size={12} /> Texture</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('object'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><RefreshCw size={12} /> Sync style · Flip tail</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Circle size={12} /> Fill & border</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('effects'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Moon size={12} /> Shadow</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('effects'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Sparkles size={12} /> Glow</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImageIcon size={12} /> Texture</button>
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><RefreshCw size={12} /> Sync style · Flip tail</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1 text-[10px] opacity-70" style={dropdownHeadingStyle}>Ribbon below shows fill, border, shadow, texture. Select a balloon or panel.</div>
         </div>

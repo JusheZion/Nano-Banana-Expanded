@@ -172,7 +172,7 @@ export const GradientBuilder: React.FC<GradientBuilderProps> = ({ value, onChang
         aria-hidden
       />
 
-      {/* Stop strip: click to add */}
+      {/* Stop strip: click bar to add stop; click near existing stop to select it (don't add) */}
       <div>
         <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: TEXT_ON_BLUE }}>Stops (click bar to add)</p>
         <div
@@ -184,6 +184,14 @@ export const GradientBuilder: React.FC<GradientBuilderProps> = ({ value, onChang
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const x = (e.clientX - rect.left) / rect.width;
+            const sorted = sortStops(spec.stops);
+            const hitThreshold = 0.06;
+            const hitIndex = sorted.findIndex((s) => Math.abs((s.offset ?? 0) - x) <= hitThreshold);
+            if (hitIndex >= 0) {
+              const idx = spec.stops.findIndex((s) => s === sorted[hitIndex]);
+              if (idx >= 0) setEditingStopIndex(idx);
+              return;
+            }
             addStop(x);
           }}
         >

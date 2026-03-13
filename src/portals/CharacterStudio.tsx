@@ -20,7 +20,7 @@ export const CharacterStudio: React.FC = () => {
         <div className="p-8 pb-32 animate-fade-in">
             <div className="flex justify-between items-center mb-8">
                 <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-teal-500 tracking-tighter filter drop-shadow-[0_0_10px_rgba(55,97,93,0.5)]">
-                    CHARACTER<br />STUDIO
+                    REFERENCE CHARACTER<br />STUDIO
                 </h1>
                 <div className="flex items-center gap-4">
                     <label className="flex items-center gap-3 cursor-pointer glass-card px-5 py-3 rounded-full hover:border-teal-500/50 transition-all group">

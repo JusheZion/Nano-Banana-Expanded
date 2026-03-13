@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import type { BalloonInstance } from '../../../types/balloon';
+import type { BalloonInstance, TextWarpId } from '../../../types/balloon';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { FontSelect } from './FontSelect';
@@ -85,16 +85,22 @@ function BalloonTextOptionsRow({ balloon, currentPageId, selectedBubbleId, onOve
                 </div>
             </Tooltip>
             <div className="w-px h-6 bg-white/10" />
-            <Tooltip content="Warp effect – arc, wave, circle">
+            <Tooltip content="Transform – WordArt-style path warp">
                 <div className="flex items-center gap-1.5">
                     <span className="flex items-center justify-center w-8 h-8 rounded-lg border border-white/[0.08] bg-[#1A1A1E] text-white/70 shrink-0" aria-hidden><Waves size={14} /></span>
-                    <select value={balloon.overrides?.textWarp || 'none'} onChange={(e) => onOverrides({ textWarp: e.target.value as 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arch' })} className="bg-[#1A1A1E] text-white text-xs py-1.5 pl-2 pr-6 rounded-lg border border-white/[0.08] outline-none cursor-pointer hover:border-[#00D1FF]/40 transition-colors">
+                    <select value={balloon.overrides?.textWarp || 'none'} onChange={(e) => onOverrides({ textWarp: e.target.value as TextWarpId })} className="bg-[#1A1A1E] text-white text-xs py-1.5 pl-2 pr-6 rounded-lg border border-white/[0.08] outline-none cursor-pointer hover:border-[#00D1FF]/40 transition-colors">
                         <option value="none">None</option>
-                        <option value="arcDown">Arc Down</option>
-                        <option value="arcUp">Arc Up</option>
+                        <option value="arcUp">Arch Up</option>
+                        <option value="arcDown">Arch Down</option>
                         <option value="circle">Circle</option>
                         <option value="arch">Deep Arch</option>
                         <option value="wave">Wave</option>
+                        <option value="button">Button</option>
+                        <option value="square">Square</option>
+                        <option value="triangle">Triangle</option>
+                        <option value="cascade">Cascade</option>
+                        <option value="slant">Slant</option>
+                        <option value="fade">Fade</option>
                     </select>
                 </div>
             </Tooltip>

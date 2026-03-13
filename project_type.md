@@ -1,4 +1,4 @@
-# Project Type: Nano Banana Expanded
+# Project Type: ARCS Expanded
 
 ## 1. Active Genre
 **Sci-Fantasy / Drama**

@@ -63,7 +63,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#37615D] group-hover:border-[#00FFC2] transition-colors">
                             <Layers className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Character Studio</h3>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Reference Character Studio</h3>
                         <p className="text-xs text-[#00FFC2] font-medium tracking-wide">CREATE & EDIT</p>
                     </div>
                 </div>
@@ -77,7 +77,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#5F368E] group-hover:border-[#BF5AF2] transition-colors">
                             <Sparkles className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Reference Album</h3>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Character Archive</h3>
                         <p className="text-xs text-[#BF5AF2] font-medium tracking-wide">VISUAL LIBRARY</p>
                     </div>
                 </div>
@@ -91,7 +91,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#893741] group-hover:border-[#FF5A5A] transition-colors">
                             <Zap className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Related Album</h3>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Comics & Story Archive</h3>
                         <p className="text-xs text-[#FF5A5A] font-medium tracking-wide">CONNECTED MEDIA</p>
                     </div>
                 </div>
@@ -105,7 +105,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#D4AF37] group-hover:border-[#FFE57F] transition-colors">
                             <ArrowRight className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Photo Lab</h3>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Storyline Studio</h3>
                         <p className="text-xs text-[#FFE57F] font-medium tracking-wide">EXPERIMENTAL</p>
                     </div>
                 </div>
@@ -119,7 +119,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <div className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-4 group-hover:bg-[#0F0F12] group-hover:border-[#00D1FF] transition-colors">
                             <BookOpen className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Comic Mode</h3>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Comic Studio</h3>
                         <p className="text-xs text-[#00D1FF] font-medium tracking-wide">VISUAL STORYTELLING</p>
                     </div>
                 </div>

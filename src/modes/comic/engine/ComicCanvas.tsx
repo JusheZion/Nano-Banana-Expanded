@@ -38,6 +38,7 @@ const getLayoutPosition = (index: number, mode: 'webtoon' | 'spread') => {
 };
 
 export const ComicCanvas: React.FC = () => {
+    const defaultPageBg = useComicStore((s) => s.projectSettings?.defaultPageBackgroundColor ?? '#ffffff');
     const {
         pages,
         currentPageId,
@@ -398,7 +399,7 @@ export const ComicCanvas: React.FC = () => {
                     });
 
                     const link = document.createElement('a');
-                    link.download = `NanoBanana_Page_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
+                    link.download = `ARCS_Page_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
                     link.href = uri;
                     document.body.appendChild(link);
                     link.click();
@@ -427,7 +428,7 @@ export const ComicCanvas: React.FC = () => {
                         pdf.addImage(uri, 'PNG', 0, 0, 8.33, 12.5);
                     }
 
-                    pdf.save(`NanoBanana_ComicBook_${new Date().toISOString().split('T')[0]}.pdf`);
+                    pdf.save(`ARCS_ComicBook_${new Date().toISOString().split('T')[0]}.pdf`);
                 }
                 clearExport();
             }, 100);
@@ -505,8 +506,8 @@ export const ComicCanvas: React.FC = () => {
                     <Layer name="layer-background">
                         {pages.map((page, i) => {
                             const offset = getLayoutPosition(i, layoutMode);
-                            const rawFill = pageSettings?.backgroundColor ?? page.background ?? '#1a1a1a';
-                            const fill = (rawFill === 'white' || rawFill === '#ffffff') ? '#1a1a1a' : rawFill;
+                            const rawFill = pageSettings?.backgroundColor ?? page.background ?? defaultPageBg;
+                            const fill = rawFill;
                             return (
                                 <React.Fragment key={`bg-${page.id}`}>
                                     <Rect

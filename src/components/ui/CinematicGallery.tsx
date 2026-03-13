@@ -27,9 +27,9 @@ export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
             {/* Header */}
             <div className="relative mb-10 mt-4">
                 <h1 className="text-6xl font-extralight tracking-widest text-[#D4AF37] drop-shadow-lg leading-none">
-                    REFERENCE
+                    CHARACTER
                     <br />
-                    <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-[#893741] tracking-[0.2em]">ALBUM</span>
+                    <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-[#893741] tracking-[0.2em]">ARCHIVE</span>
                 </h1>
                 <p className="text-xl text-[#D4AF37]/60 mt-4 max-w-xl font-light tracking-wide flex items-center gap-2">
                     <span className="w-8 h-[1px] bg-[#D4AF37]/40"></span>
