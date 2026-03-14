@@ -3,13 +3,17 @@ import type { ChipTag } from '@/shared/utils/PromptCompiler';
 import { PromptCompiler } from '@/shared/utils/PromptCompiler';
 // import { useTheme } from '../context/ThemeContext';
 
+type TagBarVariant = 'emerald' | 'amethyst';
+
 interface HybridTagBarProps {
     tags: ChipTag[];
     setTags: (tags: ChipTag[]) => void;
     onManualInput?: (text: string) => void;
+    /** Theme for chip colors: emerald (default, Character/Comic) or amethyst (Asset Studio) */
+    variant?: TagBarVariant;
 }
 
-export const HybridTagBar: React.FC<HybridTagBarProps> = ({ tags, setTags, onManualInput }) => {
+export const HybridTagBar: React.FC<HybridTagBarProps> = ({ tags, setTags, onManualInput, variant = 'emerald' }) => {
     const [inputValue, setInputValue] = useState('');
     // const { activeTheme } = useTheme(); // activeTheme was unused in fixed version
 
@@ -57,11 +61,16 @@ export const HybridTagBar: React.FC<HybridTagBarProps> = ({ tags, setTags, onMan
     };
 
     const getChipStyle = (polarity: ChipTag['polarity']) => {
+        const isAmethyst = variant === 'amethyst';
         switch (polarity) {
             case 'positive':
-                return 'bg-emerald-600 border-emerald-600 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)] hover:bg-emerald-500';
+                return isAmethyst
+                    ? 'bg-violet-600 border-violet-600 text-white shadow-[0_0_10px_rgba(139,92,246,0.4)] hover:bg-violet-500'
+                    : 'bg-emerald-600 border-emerald-600 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)] hover:bg-emerald-500';
             case 'negative':
-                return 'bg-red-600 border-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)] hover:bg-red-500';
+                return isAmethyst
+                    ? 'bg-red-600/90 border-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.35)] hover:bg-red-500'
+                    : 'bg-red-600 border-red-600 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)] hover:bg-red-500';
             case 'neutral':
             default:
                 return 'bg-transparent border-white/20 text-white/50 hover:border-white/50 hover:text-white';

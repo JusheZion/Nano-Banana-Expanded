@@ -13,13 +13,18 @@ export interface StoredGeneration {
   id: string;
   url: string; // data URL or blob URL
   createdAt: number;
+  seed?: number; // optional, for expansion/gallery consistency
 }
 
 function getStorageKey(contextType: GenerationContextType): string {
   return contextType === 'character' ? STORAGE_KEY_CHARACTER : STORAGE_KEY_ASSET;
 }
 
-export function saveGeneration(contextType: GenerationContextType, urlOrBlob: string): void {
+export function saveGeneration(
+  contextType: GenerationContextType,
+  urlOrBlob: string,
+  seed?: number
+): void {
   const key = getStorageKey(contextType);
   const raw = localStorage.getItem(key);
   const list: StoredGeneration[] = raw ? JSON.parse(raw) : [];
@@ -27,6 +32,7 @@ export function saveGeneration(contextType: GenerationContextType, urlOrBlob: st
     id: crypto.randomUUID(),
     url: urlOrBlob,
     createdAt: Date.now(),
+    ...(seed != null && { seed }),
   });
   localStorage.setItem(key, JSON.stringify(list));
 }

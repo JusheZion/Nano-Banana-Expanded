@@ -87,7 +87,7 @@ function MultiChip({
   );
 }
 
-/** One dropdown (category) + input + Save to Library per section */
+/** One dropdown (category) + input + Save as Tag per section */
 function SectionAddToLibrary({
   categories,
   onSave,
@@ -124,9 +124,10 @@ function SectionAddToLibrary({
       <button
         type="button"
         onClick={handleSave}
-        className="px-2 py-1.5 rounded text-xs font-medium bg-amber-500/20 border border-amber-500/40"
+        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+        style={{ background: ACCENT_GOLD_GRADIENT }}
       >
-        <span className="inline-block" style={goldTextStyle}>Save to Library</span>
+        Save as Tag
       </button>
     </div>
   );
@@ -167,12 +168,17 @@ export const CharacterStudio: React.FC = () => {
       : buildCharacterStudioPrompt(store.tags, '', dna, extraParts, {
           appendOfficialRules: true,
         });
+  const displayPrompt =
+    store.currentGenerationSeed != null
+      ? `${compiledPrompt}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`
+      : compiledPrompt;
 
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
   const handleGenerateCharacter = () => {
-    // Mock: use a placeholder data URL for "generated" image until real API
+    const seed = Math.floor(Math.random() * 1e9);
+    store.setCurrentGenerationSeed(seed);
     const placeholder =
       'data:image/svg+xml,' +
       encodeURIComponent(
@@ -184,7 +190,7 @@ export const CharacterStudio: React.FC = () => {
   const handleSaveNewCharacter = () => {
     const url = store.currentLiveImageUrl;
     if (url) {
-      saveGeneration('character', url);
+      saveGeneration('character', url, store.currentGenerationSeed ?? undefined);
     }
   };
 
@@ -431,14 +437,7 @@ export const CharacterStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Wardrobe Engine
               </h2>
-              <SectionAddToLibrary
-                categories={(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map((c) => ({
-                  id: c,
-                  label: c.replace(/([A-Z])/g, ' $1').trim(),
-                }))}
-                onSave={(cat, v) => store.addWardrobeOption(cat as WardrobeCategory, v)}
-              />
-              <div className="space-y-4 mt-4">
+              <div className="space-y-4">
                 {(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map(
                   (cat) => (
                     <WardrobeRow
@@ -452,6 +451,13 @@ export const CharacterStudio: React.FC = () => {
                   )
                 )}
               </div>
+              <SectionAddToLibrary
+                categories={(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map((c) => ({
+                  id: c,
+                  label: c.replace(/([A-Z])/g, ' $1').trim(),
+                }))}
+                onSave={(cat, v) => store.addWardrobeOption(cat as WardrobeCategory, v)}
+              />
             </section>
 
             {/* Cinematic Suite (no Shot tags per v4) */}
@@ -542,10 +548,10 @@ export const CharacterStudio: React.FC = () => {
               Live Prompt
             </h2>
             <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-emerald-100/80 break-words flex-1 min-h-[420px] overflow-y-auto custom-scrollbar">
-              {compiledPrompt || '// Prompt is empty...'}
+              {displayPrompt || '// Prompt is empty...'}
             </div>
             <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-              <CopyButton text={compiledPrompt} labelStyle={goldTextStyle} />
+              <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
               <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
                 <span className="text-xs font-bold tracking-widest inline-block" style={goldTextStyle}>
                   DNA LOCK

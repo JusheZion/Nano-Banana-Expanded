@@ -82,6 +82,7 @@ export interface CharacterStudioState {
   heritageSelection: string[];
   genderSelection: string[];
   currentLiveImageUrl: string | null;
+  currentGenerationSeed: number | null;
   heritageLibrary: string[];
   genderLibrary: string[];
   physicalLibraries: Record<string, string[]>;
@@ -107,6 +108,7 @@ export interface CharacterStudioState {
   setGenderSelection: (values: string[]) => void;
   setWardrobeSelection: (category: WardrobeCategory, values: string[]) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
+  setCurrentGenerationSeed: (seed: number | null) => void;
   addHeritageOption: (value: string) => void;
   addGenderOption: (value: string) => void;
   addPhysicalOption: (category: string, value: string) => void;
@@ -143,6 +145,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       heritageSelection: [],
       genderSelection: [],
       currentLiveImageUrl: null,
+      currentGenerationSeed: null,
       heritageLibrary: [],
       genderLibrary: [],
       physicalLibraries: emptyPhysicalLibraries(),
@@ -216,6 +219,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
           },
         })),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
+      setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
       addHeritageOption: (value) =>
         set((s) => {
           const t = value.trim();
@@ -279,6 +283,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         physicalSelections: state.physicalSelections,
         heritageSelection: state.heritageSelection,
         genderSelection: state.genderSelection,
+        currentGenerationSeed: state.currentGenerationSeed,
         heritageLibrary: state.heritageLibrary,
         genderLibrary: state.genderLibrary,
         physicalLibraries: state.physicalLibraries,

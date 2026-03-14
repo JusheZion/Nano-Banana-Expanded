@@ -43,8 +43,28 @@ export const ARCHITECTURAL_DETAIL_TAGS = [
   'Bio-organic',
 ] as const;
 
-/** Set Dressing & Props (replaces Character Wardrobe for assets) */
+/** Room Type tags for Scene Setting & Props (alphabetized) */
+export const ROOM_TYPE_TAGS = [
+  'Attic',
+  'Balcony',
+  'Basement',
+  'Bathroom',
+  'Bedroom',
+  'Dining Room',
+  'Foyer',
+  'Garage',
+  'Hallway',
+  'Kitchen',
+  'Living Room',
+  'Nursery',
+  'Office',
+  'Patio',
+  'Studio',
+] as const;
+
+/** Set Dressing & Props (Scene Setting & Props section) */
 export const SET_DRESSING_PRESETS = {
+  roomType: ROOM_TYPE_TAGS,
   furniture: [
     'Minimalist Sofa',
     'Vintage Armchair',
@@ -81,33 +101,55 @@ export const SET_DRESSING_PRESETS = {
 
 export type SetDressingCategory = keyof typeof SET_DRESSING_PRESETS;
 
-/** Cinematic: Angle + Tone only (per spec) */
+/** Cinematic: Angle + Tone only (per spec). Angle includes Reference Gallery options (Bird's Eye, Dutch). */
 export const CINEMATIC_OPTIONS = {
-  angle: ['Low', 'High', 'Wide-angle', 'Macro'] as const,
+  angle: ['Low', 'High', 'Wide-angle', 'Macro', "Bird's Eye", 'Dutch'] as const,
   tone: ['Melancholic', 'Heroic', 'Suspenseful', 'Gritty'] as const,
 } as const;
 
 export type AssetCinematicKey = keyof typeof CINEMATIC_OPTIONS;
 
-/** Spatial Expansion: Room */
+/** Spatial Expansion: Room (alphabetized) */
 export const SPATIAL_ROOM_OPTIONS = [
-  'Interior from Exterior',
   'Adjacent Room',
+  'Continuation',
+  'Corner View',
+  'Cross-Section',
+  'Interior from Exterior',
+  'Same Space Different Angle',
 ] as const;
 
-/** Spatial Expansion: Urban */
+/** Spatial Expansion: Urban (alphabetized) */
 export const SPATIAL_URBAN_OPTIONS = [
-  'Adjacent City Block',
   'Aerial View',
+  'Adjacent City Block',
+  'Rooftop View',
+  'Street Extension',
 ] as const;
 
-/** Time/Season quick toggles */
+/** Time/Season quick toggles (alphabetized) */
 export const TIME_SEASON_OPTIONS = [
+  'Autumn',
+  'Dawn',
+  'Dusk',
+  'Golden Hour',
   'Night',
   'Noon',
-  'Golden Hour',
+  'Overcast',
+  'Spring',
+  'Summer',
   'Winter (Snow)',
-  'Autumn',
 ] as const;
 
 export type TimeSeasonId = (typeof TIME_SEASON_OPTIONS)[number];
+
+/** Aspect Ratio for Spatial Expansion Gallery (parity with Reference Character Studio) */
+export type AspectRatioId = '9:16' | '1:1' | '21:9';
+
+/** Camera Angle options for Spatial Expansion Gallery right panel (same as Reference Character Studio Reference Gallery) */
+export const SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS = [
+  'Low',
+  'High',
+  "Bird's Eye",
+  'Dutch',
+] as const;

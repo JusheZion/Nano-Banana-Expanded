@@ -21,8 +21,10 @@ import {
   SPATIAL_ROOM_OPTIONS,
   SPATIAL_URBAN_OPTIONS,
   TIME_SEASON_OPTIONS,
+  SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS,
   type SetDressingCategory,
   type AssetCinematicKey,
+  type AspectRatioId,
 } from '@/data/asset_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
@@ -87,6 +89,50 @@ function MultiChip({
   );
 }
 
+/** Single category dropdown (Era/Style, Location Type, Architectural Detail) + input + Save as Tag */
+function SceneSettingCategoryAdd({
+  onSave,
+}: {
+  onSave: (categoryId: string, value: string) => void;
+}) {
+  const [categoryId, setCategoryId] = useState<'eraStyle' | 'locationType' | 'architecturalDetail'>('architecturalDetail');
+  const [input, setInput] = useState('');
+  const handleSave = () => {
+    if (input.trim()) {
+      onSave(categoryId, input.trim());
+      setInput('');
+    }
+  };
+  return (
+    <div className="flex gap-2 mt-2 flex-wrap items-center">
+      <select
+        value={categoryId}
+        onChange={(e) => setCategoryId(e.target.value as 'eraStyle' | 'locationType' | 'architecturalDetail')}
+        className="bg-black/40 text-white border border-white/20 rounded px-2 py-1.5 text-xs min-w-0 flex-1 basis-24"
+      >
+        <option value="eraStyle">Era / Style</option>
+        <option value="locationType">Location Type</option>
+        <option value="architecturalDetail">Architectural Detail</option>
+      </select>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Custom tag..."
+        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
+      />
+      <button
+        type="button"
+        onClick={handleSave}
+        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+        style={{ background: ACCENT_GOLD_GRADIENT }}
+      >
+        Save as Tag
+      </button>
+    </div>
+  );
+}
+
 function SectionAddToLibrary({
   categories,
   onSave,
@@ -123,9 +169,10 @@ function SectionAddToLibrary({
       <button
         type="button"
         onClick={handleSave}
-        className="px-2 py-1.5 rounded text-xs font-medium bg-amber-500/20 border border-amber-500/40"
+        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+        style={{ background: ACCENT_GOLD_GRADIENT }}
       >
-        <span className="inline-block" style={goldTextStyle}>Save to Library</span>
+        Save as Tag
       </button>
     </div>
   );
@@ -174,7 +221,8 @@ export const AssetsStudio: React.FC = () => {
   }, [setTheme]);
 
   const hasReferenceImage = !!store.currentLiveImageUrl;
-  const settingAndLocationDisabled = hasReferenceImage && !store.diversifyStyle;
+  const settingAndLocationDisabled =
+    (hasReferenceImage && !store.diversifyStyle) || store.architecturalLock;
 
   const extraParts: string[] = [
     store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId,
@@ -186,17 +234,24 @@ export const AssetsStudio: React.FC = () => {
     ...(store.spatialRoomOption ? [store.spatialRoomOption] : []),
     ...(store.spatialUrbanOption ? [store.spatialUrbanOption] : []),
     ...(store.timeSeason ? [store.timeSeason] : []),
+    ...(store.aspectRatio ? [`aspect ratio ${store.aspectRatio}`] : []),
   ].filter(Boolean);
 
   const compiledPrompt =
     store.vaultUnlocked && store.vaultPromptOverride.trim()
       ? store.vaultPromptOverride
       : buildAssetStudioPrompt(store.tags, '', extraParts);
+  const displayPrompt =
+    store.currentGenerationSeed != null
+      ? `${compiledPrompt}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`
+      : compiledPrompt;
 
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
   const handleGenerateAsset = () => {
+    const seed = Math.floor(Math.random() * 1e9);
+    store.setCurrentGenerationSeed(seed);
     const placeholder =
       'data:image/svg+xml,' +
       encodeURIComponent(
@@ -207,7 +262,7 @@ export const AssetsStudio: React.FC = () => {
 
   const handleSaveNewAsset = () => {
     const url = store.currentLiveImageUrl;
-    if (url) saveGeneration('asset', url);
+    if (url) saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
   };
 
   const handleExpandSetting = () => {
@@ -221,7 +276,7 @@ export const AssetsStudio: React.FC = () => {
 
   const handleAddToLibrary = () => {
     const url = store.currentLiveImageUrl;
-    if (url) saveGeneration('asset', url);
+    if (url) saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
   };
 
   const handleCastInStory = (storyId: string) => {
@@ -380,10 +435,14 @@ export const AssetsStudio: React.FC = () => {
                 Era / Style
               </h2>
               {settingAndLocationDisabled && (
-                <p className="text-xs text-white/60 mb-2">Uploaded image is absolute reference. Enable &quot;Diversify Style&quot; to use tags.</p>
+                <p className="text-xs text-white/60 mb-2">
+                  {store.architecturalLock
+                    ? 'Architectural Lock is on. Turn off to edit setting/location tags.'
+                    : 'Uploaded image is absolute reference. Enable "Diversify Style" to use tags.'}
+                </p>
               )}
               <MultiChip
-                options={[...ERA_STYLE_TAGS]}
+                options={[...ERA_STYLE_TAGS, ...store.eraStyleLibrary]}
                 selected={store.eraStyleSelection}
                 onToggle={toggleEra}
               />
@@ -398,7 +457,7 @@ export const AssetsStudio: React.FC = () => {
                 Location Type
               </h2>
               <MultiChip
-                options={[...LOCATION_TYPE_TAGS]}
+                options={[...LOCATION_TYPE_TAGS, ...store.locationTypeLibrary]}
                 selected={store.locationTypeSelection}
                 onToggle={toggleLocation}
               />
@@ -413,28 +472,42 @@ export const AssetsStudio: React.FC = () => {
                 Architectural Detail
               </h2>
               <MultiChip
-                options={[...ARCHITECTURAL_DETAIL_TAGS]}
+                options={[...ARCHITECTURAL_DETAIL_TAGS, ...store.architecturalDetailLibrary]}
                 selected={store.architecturalDetailSelection}
                 onToggle={toggleArchitectural}
               />
+              <SceneSettingCategoryAdd
+                onSave={(categoryId, value) => {
+                  const trimmed = value.trim();
+                  if (!trimmed) return;
+                  const slug = trimmed.replace(/\s+/g, '-').toLowerCase();
+                  store.setTags([
+                    ...store.tags,
+                    { id: crypto.randomUUID(), text: slug, polarity: 'positive' },
+                  ]);
+                  if (categoryId === 'eraStyle') {
+                    store.addEraStyleOption(trimmed);
+                    store.setEraStyleSelection([...store.eraStyleSelection, trimmed]);
+                  } else if (categoryId === 'locationType') {
+                    store.addLocationTypeOption(trimmed);
+                    store.setLocationTypeSelection([...store.locationTypeSelection, trimmed]);
+                  } else {
+                    store.addArchitecturalDetailOption(trimmed);
+                    store.setArchitecturalDetailSelection([...store.architecturalDetailSelection, trimmed]);
+                  }
+                }}
+              />
             </section>
 
-            {/* Set Dressing & Props */}
+            {/* Scene Setting & Props */}
             <section
               className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
               aria-disabled={settingAndLocationDisabled}
             >
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-                Set Dressing & Props
+                Scene Setting & Props
               </h2>
-              <SectionAddToLibrary
-                categories={(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((c) => ({
-                  id: c,
-                  label: c.replace(/([A-Z])/g, ' $1').trim(),
-                }))}
-                onSave={(cat, v) => store.addSetDressingOption(cat as SetDressingCategory, v)}
-              />
-              <div className="space-y-4 mt-4">
+              <div className="space-y-4">
                 {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => (
                   <SetDressingRow
                     key={cat}
@@ -446,6 +519,13 @@ export const AssetsStudio: React.FC = () => {
                   />
                 ))}
               </div>
+              <SectionAddToLibrary
+                categories={(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((c) => ({
+                  id: c,
+                  label: c.replace(/([A-Z])/g, ' $1').trim(),
+                }))}
+                onSave={(cat, v) => store.addSetDressingOption(cat as SetDressingCategory, v)}
+              />
             </section>
 
             {/* Cinematic Suite */}
@@ -515,7 +595,7 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Prompt Tags
               </h2>
-              <HybridTagBar tags={store.tags} setTags={store.setTags} />
+              <HybridTagBar tags={store.tags} setTags={store.setTags} variant="amethyst" />
             </section>
           </div>
         </div>
@@ -528,10 +608,29 @@ export const AssetsStudio: React.FC = () => {
                 Live Prompt
               </h2>
               <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-violet-100/80 break-words flex-1 min-h-[420px] overflow-y-auto custom-scrollbar">
-                {compiledPrompt || '// Prompt is empty...'}
+                {displayPrompt || '// Prompt is empty...'}
               </div>
-              <div className="flex items-center justify-end gap-3 mt-2 flex-wrap">
-                <CopyButton text={compiledPrompt} labelStyle={goldTextStyle} />
+              <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
+                <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
+                <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
+                  <span className="text-xs font-bold tracking-widest inline-block" style={goldTextStyle}>
+                    Architectural Lock
+                  </span>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => store.setArchitecturalLock(!store.architecturalLock)}
+                    onKeyDown={(e) => e.key === 'Enter' && store.setArchitecturalLock(!store.architecturalLock)}
+                    className="w-10 h-5 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
+                    style={store.architecturalLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                        store.architecturalLock ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -552,7 +651,7 @@ export const AssetsStudio: React.FC = () => {
                       <span className="text-2xl">🌍</span>
                     </div>
                     <p className="font-mono text-sm inline-block" style={goldTextStyle}>
-                      Live Asset
+                      {store.architecturalLock ? 'ARCH LOCKED' : 'Live Asset'}
                     </p>
                   </div>
                 )}
@@ -652,6 +751,34 @@ export const AssetsStudio: React.FC = () => {
                       label={opt}
                       active={store.timeSeason === opt}
                       onClick={() => store.setTimeSeason(store.timeSeason === opt ? null : opt)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Aspect Ratio</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
+                    <Chip
+                      key={ratio}
+                      label={ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'}
+                      active={store.aspectRatio === ratio}
+                      onClick={() => store.setAspectRatio(ratio)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Camera Angle</label>
+                <div className="flex flex-wrap gap-2">
+                  {SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={(store.cinematic.angle || '') === opt}
+                      onClick={() => store.setCinematic('angle', opt)}
                     />
                   ))}
                 </div>

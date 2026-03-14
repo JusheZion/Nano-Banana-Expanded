@@ -8,6 +8,7 @@ import {
   type SetDressingCategory,
   type AssetCinematicKey,
   type TimeSeasonId,
+  type AspectRatioId,
   SET_DRESSING_PRESETS,
   CINEMATIC_OPTIONS,
 } from '@/data/asset_studio_spec';
@@ -58,39 +59,51 @@ function emptyCinematicLibraries(): Record<AssetCinematicKey, string[]> {
 export interface AssetStudioState {
   tags: ChipTag[];
   currentLiveImageUrl: string | null;
+  currentGenerationSeed: number | null;
   diversifyStyle: boolean;
   artStyleId: string;
   customStyles: string[];
   eraStyleSelection: string[];
   locationTypeSelection: string[];
   architecturalDetailSelection: string[];
+  eraStyleLibrary: string[];
+  locationTypeLibrary: string[];
+  architecturalDetailLibrary: string[];
   setDressingLibraries: Record<SetDressingCategory, string[]>;
   setDressingSelections: Record<SetDressingCategory, string[]>;
   cinematic: Record<AssetCinematicKey, string>;
   cinematicLibraries: Record<AssetCinematicKey, string[]>;
   vaultUnlocked: boolean;
   vaultPromptOverride: string;
+  architecturalLock: boolean;
   spatialRoomOption: string | null;
   spatialUrbanOption: string | null;
   timeSeason: TimeSeasonId | null;
+  aspectRatio: AspectRatioId;
 
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
+  setCurrentGenerationSeed: (seed: number | null) => void;
   setDiversifyStyle: (value: boolean) => void;
   setArtStyle: (id: string) => void;
   addCustomStyle: (style: string) => void;
   setEraStyleSelection: (values: string[]) => void;
   setLocationTypeSelection: (values: string[]) => void;
   setArchitecturalDetailSelection: (values: string[]) => void;
+  addEraStyleOption: (value: string) => void;
+  addLocationTypeOption: (value: string) => void;
+  addArchitecturalDetailOption: (value: string) => void;
   addSetDressingOption: (category: SetDressingCategory, value: string) => void;
   setSetDressingSelection: (category: SetDressingCategory, values: string[]) => void;
   setCinematic: (key: AssetCinematicKey, value: string) => void;
   addCinematicOption: (key: AssetCinematicKey, value: string) => void;
   unlockVault: (password: string) => boolean;
   setVaultPromptOverride: (value: string) => void;
+  setArchitecturalLock: (value: boolean) => void;
   setSpatialRoomOption: (value: string | null) => void;
   setSpatialUrbanOption: (value: string | null) => void;
   setTimeSeason: (value: TimeSeasonId | null) => void;
+  setAspectRatio: (value: AspectRatioId) => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -101,27 +114,34 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         { id: '2', text: 'cinematic-lighting', polarity: 'positive' },
       ],
       currentLiveImageUrl: null,
+      currentGenerationSeed: null,
       diversifyStyle: false,
       artStyleId: 'flagship',
       customStyles: [],
       eraStyleSelection: [],
       locationTypeSelection: [],
       architecturalDetailSelection: [],
+      eraStyleLibrary: [],
+      locationTypeLibrary: [],
+      architecturalDetailLibrary: [],
       setDressingLibraries: emptySetDressingLibraries(),
       setDressingSelections: emptySetDressingSelections(),
       cinematic: emptyCinematic(),
       cinematicLibraries: emptyCinematicLibraries(),
       vaultUnlocked: false,
       vaultPromptOverride: '',
+      architecturalLock: false,
       spatialRoomOption: null,
       spatialUrbanOption: null,
       timeSeason: null,
+      aspectRatio: '9:16',
 
       setTags: (payload) =>
         set((s) => ({
           tags: typeof payload === 'function' ? payload(s.tags) : payload,
         })),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
+      setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
       setDiversifyStyle: (value) => set({ diversifyStyle: value }),
       setArtStyle: (id) => set({ artStyleId: id }),
       addCustomStyle: (style) =>
@@ -134,6 +154,24 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       setLocationTypeSelection: (values) => set({ locationTypeSelection: values }),
       setArchitecturalDetailSelection: (values) =>
         set({ architecturalDetailSelection: values }),
+      addEraStyleOption: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t || s.eraStyleLibrary.includes(t)) return s;
+          return { eraStyleLibrary: [...s.eraStyleLibrary, t] };
+        }),
+      addLocationTypeOption: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t || s.locationTypeLibrary.includes(t)) return s;
+          return { locationTypeLibrary: [...s.locationTypeLibrary, t] };
+        }),
+      addArchitecturalDetailOption: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t || s.architecturalDetailLibrary.includes(t)) return s;
+          return { architecturalDetailLibrary: [...s.architecturalDetailLibrary, t] };
+        }),
       addSetDressingOption: (category, value) =>
         set((s) => {
           const trimmed = value.trim();
@@ -177,9 +215,11 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         return true;
       },
       setVaultPromptOverride: (value) => set({ vaultPromptOverride: value }),
+      setArchitecturalLock: (value) => set({ architecturalLock: value }),
       setSpatialRoomOption: (value) => set({ spatialRoomOption: value }),
       setSpatialUrbanOption: (value) => set({ spatialUrbanOption: value }),
       setTimeSeason: (value) => set({ timeSeason: value }),
+      setAspectRatio: (value) => set({ aspectRatio: value }),
     }),
     {
       name: STORAGE_KEY,
@@ -191,19 +231,25 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       })),
       partialize: (state) => ({
         tags: state.tags,
+        currentGenerationSeed: state.currentGenerationSeed,
         artStyleId: state.artStyleId,
         customStyles: state.customStyles,
         eraStyleSelection: state.eraStyleSelection,
         locationTypeSelection: state.locationTypeSelection,
         architecturalDetailSelection: state.architecturalDetailSelection,
+        eraStyleLibrary: state.eraStyleLibrary,
+        locationTypeLibrary: state.locationTypeLibrary,
+        architecturalDetailLibrary: state.architecturalDetailLibrary,
         setDressingLibraries: state.setDressingLibraries,
         setDressingSelections: state.setDressingSelections,
         cinematic: state.cinematic,
         cinematicLibraries: state.cinematicLibraries,
         vaultPromptOverride: state.vaultPromptOverride,
+        architecturalLock: state.architecturalLock,
         spatialRoomOption: state.spatialRoomOption,
         spatialUrbanOption: state.spatialUrbanOption,
         timeSeason: state.timeSeason,
+        aspectRatio: state.aspectRatio,
       }),
     }
   )

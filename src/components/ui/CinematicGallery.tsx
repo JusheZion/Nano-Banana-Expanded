@@ -11,6 +11,7 @@ export const CinematicGallery: React.FC = () => {
         return gens.map((g, i) => ({
             id: g.id,
             src: g.url,
+            seed: g.seed,
             height: i % 3 === 0 ? 'h-[380px]' : 'h-[280px]' as const,
         }));
     }, []);
@@ -80,6 +81,9 @@ export const CinematicGallery: React.FC = () => {
                             `}>
                                 <div className="text-xs font-bold text-[#BF5AF2] tracking-widest mb-1">CHARACTER {index + 1}</div>
                                 <div className="text-white font-bold text-lg leading-none">Visual Reference</div>
+                                {item.seed != null && (
+                                    <div className="text-[10px] text-white/70 font-mono mt-1">Seed: #{item.seed}</div>
+                                )}
                             </div>
                         </div>
                     );
