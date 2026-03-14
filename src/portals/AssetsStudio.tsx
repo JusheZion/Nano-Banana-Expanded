@@ -1,99 +1,721 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
-import { PromptCompiler } from '@/shared/utils/PromptCompiler';
-import { useGenerationEngine } from '@/shared/hooks/useGenerationEngine';
+import { Tooltip } from '@/shared/components/Tooltip';
+import { useAssetStudioStore } from '@/stores/assetStudioStore';
+import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
+import {
+  ASSET_STUDIO_BG,
+  ACCENT_GOLD_GRADIENT,
+  ASSET_STUDIO_AMETHYST_TEXT,
+} from '@/shared/theme/Phase12DesignTokens';
+import {
+  ART_STYLE_FLAGSHIP,
+  ART_STYLE_LIBRARY,
+  ERA_STYLE_TAGS,
+  LOCATION_TYPE_TAGS,
+  ARCHITECTURAL_DETAIL_TAGS,
+  SET_DRESSING_PRESETS,
+  CINEMATIC_OPTIONS,
+  SPATIAL_ROOM_OPTIONS,
+  SPATIAL_URBAN_OPTIONS,
+  TIME_SEASON_OPTIONS,
+  type SetDressingCategory,
+  type AssetCinematicKey,
+} from '@/data/asset_studio_spec';
+import { saveGeneration } from '@/shared/utils/generationOutputRouter';
+import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
+
+const goldTextStyle: React.CSSProperties = {
+  background: ACCENT_GOLD_GRADIENT,
+  WebkitBackgroundClip: 'text',
+  backgroundClip: 'text',
+  color: 'transparent',
+};
+
+const chipInactive =
+  'bg-white/5 border border-white/20 hover:border-amber-500/50';
+
+function Chip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group px-3 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 border ${active ? 'text-black hover:text-violet-300 border-amber-600/80 shadow-[0_0_10px_rgba(191,149,63,0.4)]' : chipInactive}`}
+      style={active ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+    >
+      {active ? (
+        label
+      ) : (
+        <span className="inline-block" style={goldTextStyle}>
+          {label}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function MultiChip({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: readonly string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((opt) => (
+        <Chip
+          key={opt}
+          label={opt}
+          active={selected.includes(opt)}
+          onClick={() => onToggle(opt)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SectionAddToLibrary({
+  categories,
+  onSave,
+}: {
+  categories: { id: string; label: string }[];
+  onSave: (categoryId: string, value: string) => void;
+}) {
+  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
+  const [input, setInput] = useState('');
+  const handleSave = () => {
+    if (input.trim() && categoryId) {
+      onSave(categoryId, input.trim());
+      setInput('');
+    }
+  };
+  return (
+    <div className="flex gap-2 mt-2 flex-wrap items-center">
+      <select
+        value={categoryId}
+        onChange={(e) => setCategoryId(e.target.value)}
+        className="bg-black/40 text-white border border-white/20 rounded px-2 py-1.5 text-xs min-w-0 flex-1 basis-24"
+      >
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>{c.label}</option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Add custom..."
+        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
+      />
+      <button
+        type="button"
+        onClick={handleSave}
+        className="px-2 py-1.5 rounded text-xs font-medium bg-amber-500/20 border border-amber-500/40"
+      >
+        <span className="inline-block" style={goldTextStyle}>Save to Library</span>
+      </button>
+    </div>
+  );
+}
+
+function SetDressingRow({
+  category,
+  presets,
+  selected,
+  library,
+  onToggle,
+}: {
+  category: SetDressingCategory;
+  presets: readonly string[];
+  selected: string[];
+  library: string[];
+  onToggle: (v: string) => void;
+}) {
+  const allOptions = [...presets, ...library];
+  const label = category.replace(/([A-Z])/g, ' $1').trim();
+  return (
+    <div>
+      <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{label}</h3>
+      <div className="flex flex-wrap gap-2">
+        {allOptions.map((opt) => (
+          <Chip
+            key={opt}
+            label={opt}
+            active={selected.includes(opt)}
+            onClick={() => onToggle(opt)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const AssetsStudio: React.FC = () => {
   const { setTheme } = useTheme();
-  const { tagLibraryCategories, systemPrompt } = useGenerationEngine('asset');
-  const [tags, setTags] = useState<{ id: string; text: string; polarity: 'positive' | 'negative' | 'neutral' }[]>([]);
-
-  const compiledPrompt = PromptCompiler.compile(tags, '');
+  const store = useAssetStudioStore();
+  const [vaultPassword, setVaultPassword] = useState('');
+  const [customStyleInput, setCustomStyleInput] = useState('');
 
   useEffect(() => {
     setTheme('purple');
   }, [setTheme]);
 
-  return (
-    <div className="p-8 pb-32 animate-fade-in">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-purple-500 tracking-tighter filter drop-shadow-[0_0_10px_rgba(95,54,142,0.5)]">
-          ASSETS STUDIO
-        </h1>
-      </div>
+  const hasReferenceImage = !!store.currentLiveImageUrl;
+  const settingAndLocationDisabled = hasReferenceImage && !store.diversifyStyle;
 
-      <div className="grid grid-cols-12 gap-8 h-[calc(100vh-200px)]">
-        {/* Left Panel: Tag library (Environment & Props) */}
-        <div className="col-span-3 glass-panel p-6 rounded-3xl overflow-y-auto custom-scrollbar border border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
-          <h2 className="text-sm font-bold mb-6 text-white/40 uppercase tracking-[0.2em] sticky top-0 bg-[#0F0F12]/80 backdrop-blur-xl py-2 z-10">
-            Environment & Props
-          </h2>
-          <div className="space-y-8">
-            {tagLibraryCategories.map(({ categoryName, options }) => (
-              <div key={categoryName} className="space-y-3">
-                <h3 className="text-[10px] font-bold uppercase opacity-60 tracking-wider text-purple-300 border-b border-purple-500/20 pb-1 w-max">
-                  {categoryName}
-                </h3>
+  const extraParts: string[] = [
+    store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId,
+    ...(settingAndLocationDisabled ? [] : store.eraStyleSelection),
+    ...(settingAndLocationDisabled ? [] : store.locationTypeSelection),
+    ...(settingAndLocationDisabled ? [] : store.architecturalDetailSelection),
+    ...(settingAndLocationDisabled ? [] : Object.values(store.setDressingSelections).flat()),
+    ...Object.values(store.cinematic).filter(Boolean),
+    ...(store.spatialRoomOption ? [store.spatialRoomOption] : []),
+    ...(store.spatialUrbanOption ? [store.spatialUrbanOption] : []),
+    ...(store.timeSeason ? [store.timeSeason] : []),
+  ].filter(Boolean);
+
+  const compiledPrompt =
+    store.vaultUnlocked && store.vaultPromptOverride.trim()
+      ? store.vaultPromptOverride
+      : buildAssetStudioPrompt(store.tags, '', extraParts);
+
+  const stories = getStoryPhotoCollections();
+  const hasStories = stories.length > 0;
+
+  const handleGenerateAsset = () => {
+    const placeholder =
+      'data:image/svg+xml,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect fill="%232e1065" width="400" height="400"/><text x="200" y="200" fill="%23fcf6ba" font-size="14" text-anchor="middle" font-family="sans-serif">Generated asset</text></svg>'
+      );
+    store.setCurrentLiveImageUrl(placeholder);
+  };
+
+  const handleSaveNewAsset = () => {
+    const url = store.currentLiveImageUrl;
+    if (url) saveGeneration('asset', url);
+  };
+
+  const handleExpandSetting = () => {
+    const placeholder =
+      'data:image/svg+xml,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect fill="%235b21b6" width="400" height="400"/><text x="200" y="200" fill="%23ede9fe" font-size="12" text-anchor="middle" font-family="sans-serif">Expanded setting</text></svg>'
+      );
+    store.setCurrentLiveImageUrl(placeholder);
+  };
+
+  const handleAddToLibrary = () => {
+    const url = store.currentLiveImageUrl;
+    if (url) saveGeneration('asset', url);
+  };
+
+  const handleCastInStory = (storyId: string) => {
+    const url = store.currentLiveImageUrl;
+    if (url) addCharacterRefToStory(storyId, url);
+  };
+
+  const toggleEra = (value: string) => {
+    const next = store.eraStyleSelection.includes(value)
+      ? store.eraStyleSelection.filter((v) => v !== value)
+      : [...store.eraStyleSelection, value];
+    store.setEraStyleSelection(next);
+  };
+
+  const toggleLocation = (value: string) => {
+    const next = store.locationTypeSelection.includes(value)
+      ? store.locationTypeSelection.filter((v) => v !== value)
+      : [...store.locationTypeSelection, value];
+    store.setLocationTypeSelection(next);
+  };
+
+  const toggleArchitectural = (value: string) => {
+    const next = store.architecturalDetailSelection.includes(value)
+      ? store.architecturalDetailSelection.filter((v) => v !== value)
+      : [...store.architecturalDetailSelection, value];
+    store.setArchitecturalDetailSelection(next);
+  };
+
+  const toggleSetDressing = (category: SetDressingCategory, value: string) => {
+    const current = store.setDressingSelections[category] ?? [];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    store.setSetDressingSelection(category, next);
+  };
+
+  return (
+    <div
+      className="flex flex-col min-h-screen p-4 animate-fade-in"
+      style={{ background: ASSET_STUDIO_BG }}
+    >
+      <header
+        className="flex-shrink-0 flex items-center justify-center w-full mb-3 rounded-lg px-4 py-2"
+        style={{ background: ACCENT_GOLD_GRADIENT }}
+      >
+        <h1
+          className="text-center text-2xl font-black text-transparent bg-clip-text tracking-tight truncate min-w-0"
+          style={{ background: ASSET_STUDIO_AMETHYST_TEXT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+        >
+          ASSET REFERENCE STUDIO
+        </h1>
+      </header>
+
+      <div className="flex gap-3 w-full flex-1 min-h-0">
+        {/* Left Panel: Import at top, then scroll */}
+        <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden flex-shrink-0">
+          <div className="flex-shrink-0 p-2 border-b border-white/10">
+            <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2" style={goldTextStyle}>
+              Import Asset / Setting
+            </h2>
+            <Tooltip
+              content="Upload a reference image. By default the AI treats it as the absolute architectural reference; enable Diversify Style to use tags for era and materials."
+              side="bottom"
+            >
+              <label className="flex rounded-xl border border-dashed border-amber-500/40 bg-black/30 px-3 py-2.5 cursor-pointer hover:border-amber-500/60 transition-colors">
+                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Import Asset / Setting</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const url = URL.createObjectURL(file);
+                      store.setCurrentLiveImageUrl(url);
+                    }
+                  }}
+                />
+              </label>
+            </Tooltip>
+            {hasReferenceImage && (
+              <label className="flex items-center gap-2 cursor-pointer mt-2">
+                <input
+                  type="checkbox"
+                  checked={store.diversifyStyle}
+                  onChange={(e) => store.setDiversifyStyle(e.target.checked)}
+                  className="rounded border-amber-500/50"
+                />
+                <span className="text-xs inline-block" style={goldTextStyle}>Diversify Style</span>
+              </label>
+            )}
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
+            {/* Art Style Engine */}
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Art Style
+              </h2>
+              <div className="space-y-2">
+                <Chip
+                  label={ART_STYLE_FLAGSHIP}
+                  active={store.artStyleId === 'flagship'}
+                  onClick={() => store.setArtStyle('flagship')}
+                />
                 <div className="flex flex-wrap gap-2">
-                  {options.map((option) => (
-                    <button
-                      key={option}
+                  {ART_STYLE_LIBRARY.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
                       onClick={() =>
-                        setTags((prev) => [
-                          ...prev,
-                          { id: crypto.randomUUID(), text: option, polarity: 'positive' as const },
-                        ])
+                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
                       }
-                      className="
-                        px-3 py-1.5 rounded-full text-[11px] font-medium tracking-wide
-                        bg-white/5 border border-white/10 text-white/70
-                        hover:bg-purple-500/20 hover:border-purple-400/50 hover:text-white hover:scale-105 hover:shadow-[0_0_10px_rgba(95,54,142,0.3)]
-                        active:scale-95 transition-all duration-200
-                        backdrop-blur-md
-                      "
-                    >
-                      {option}
-                    </button>
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={customStyleInput}
+                    onChange={(e) => setCustomStyleInput(e.target.value)}
+                    placeholder="Custom style..."
+                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customStyleInput.trim()) {
+                        store.addCustomStyle(customStyleInput.trim());
+                        store.setTags([
+                          ...store.tags,
+                          {
+                            id: crypto.randomUUID(),
+                            text: customStyleInput.trim().replace(/\s+/g, '-').toLowerCase(),
+                            polarity: 'positive',
+                          },
+                        ]);
+                        setCustomStyleInput('');
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    Save as Tag
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Era / Style */}
+            <section
+              className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
+              aria-disabled={settingAndLocationDisabled}
+            >
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Era / Style
+              </h2>
+              {settingAndLocationDisabled && (
+                <p className="text-xs text-white/60 mb-2">Uploaded image is absolute reference. Enable &quot;Diversify Style&quot; to use tags.</p>
+              )}
+              <MultiChip
+                options={[...ERA_STYLE_TAGS]}
+                selected={store.eraStyleSelection}
+                onToggle={toggleEra}
+              />
+            </section>
+
+            {/* Location Type */}
+            <section
+              className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
+              aria-disabled={settingAndLocationDisabled}
+            >
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Location Type
+              </h2>
+              <MultiChip
+                options={[...LOCATION_TYPE_TAGS]}
+                selected={store.locationTypeSelection}
+                onToggle={toggleLocation}
+              />
+            </section>
+
+            {/* Architectural Detail */}
+            <section
+              className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
+              aria-disabled={settingAndLocationDisabled}
+            >
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Architectural Detail
+              </h2>
+              <MultiChip
+                options={[...ARCHITECTURAL_DETAIL_TAGS]}
+                selected={store.architecturalDetailSelection}
+                onToggle={toggleArchitectural}
+              />
+            </section>
+
+            {/* Set Dressing & Props */}
+            <section
+              className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
+              aria-disabled={settingAndLocationDisabled}
+            >
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Set Dressing & Props
+              </h2>
+              <SectionAddToLibrary
+                categories={(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((c) => ({
+                  id: c,
+                  label: c.replace(/([A-Z])/g, ' $1').trim(),
+                }))}
+                onSave={(cat, v) => store.addSetDressingOption(cat as SetDressingCategory, v)}
+              />
+              <div className="space-y-4 mt-4">
+                {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => (
+                  <SetDressingRow
+                    key={cat}
+                    category={cat}
+                    presets={SET_DRESSING_PRESETS[cat]}
+                    selected={store.setDressingSelections[cat] ?? []}
+                    library={store.setDressingLibraries[cat] ?? []}
+                    onToggle={(v) => toggleSetDressing(cat, v)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {/* Cinematic Suite */}
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Cinematic Suite
+              </h2>
+              <div className="space-y-4">
+                {(Object.keys(CINEMATIC_OPTIONS) as AssetCinematicKey[]).map((key) => (
+                  <div key={key}>
+                    <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{key}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {[...CINEMATIC_OPTIONS[key], ...(store.cinematicLibraries[key] ?? [])].map((opt) => (
+                        <Chip
+                          key={opt}
+                          label={opt}
+                          active={(store.cinematic[key] || '') === opt}
+                          onClick={() => store.setCinematic(key, opt)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <SectionAddToLibrary
+                  categories={(Object.keys(CINEMATIC_OPTIONS) as AssetCinematicKey[]).map((k) => ({ id: k, label: k }))}
+                  onSave={(cat, v) => store.addCinematicOption(cat as AssetCinematicKey, v)}
+                />
+              </div>
+            </section>
+
+            {/* Onyx Vault */}
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                The Onyx Vault
+              </h2>
+              {!store.vaultUnlocked ? (
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={vaultPassword}
+                    onChange={(e) => setVaultPassword(e.target.value)}
+                    placeholder="Password"
+                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => store.unlockVault(vaultPassword)}
+                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50 min-w-[72px]"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    Unlock
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <textarea
+                    value={store.vaultPromptOverride}
+                    onChange={(e) => store.setVaultPromptOverride(e.target.value)}
+                    placeholder="Edit prompt..."
+                    className="w-full h-28 bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-xs font-mono resize-y"
+                  />
+                </div>
+              )}
+            </section>
+
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Prompt Tags
+              </h2>
+              <HybridTagBar tags={store.tags} setTags={store.setTags} />
+            </section>
+          </div>
+        </div>
+
+        {/* Center: Live Prompt + Live Generation + footer pills */}
+        <div className="flex-1 flex gap-3 min-w-0 min-h-0 max-h-[calc(85vh+100px)] overflow-hidden">
+          <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
+            <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[480px] flex flex-col">
+              <h2 className="text-base font-bold mb-1.5 uppercase tracking-widest" style={goldTextStyle}>
+                Live Prompt
+              </h2>
+              <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-violet-100/80 break-words flex-1 min-h-[420px] overflow-y-auto custom-scrollbar">
+                {compiledPrompt || '// Prompt is empty...'}
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-2 flex-wrap">
+                <CopyButton text={compiledPrompt} labelStyle={goldTextStyle} />
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-[280px] rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0">
+              <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
+                Live Generation / Vault
+              </h2>
+              <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
+                {store.currentLiveImageUrl ? (
+                  <img
+                    src={store.currentLiveImageUrl}
+                    alt="Live asset"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                ) : (
+                  <div className="text-center space-y-2">
+                    <div className="w-16 h-16 rounded-full border border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
+                      <span className="text-2xl">🌍</span>
+                    </div>
+                    <p className="font-mono text-sm inline-block" style={goldTextStyle}>
+                      Live Asset
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleGenerateAsset}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors"
+                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                >
+                  Generate Asset
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveNewAsset}
+                  disabled={!store.currentLiveImageUrl}
+                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Save New Asset</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExpandSetting}
+                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Expand Setting</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddToLibrary}
+                  disabled={!store.currentLiveImageUrl}
+                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Add to Library</span>
+                </button>
+                {hasStories ? (
+                  <CastInStoryButton
+                    stories={stories}
+                    onSelect={handleCastInStory}
+                    disabled={!store.currentLiveImageUrl}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-3 py-1.5 rounded-full border border-white/20 font-medium text-xs cursor-not-allowed opacity-60"
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Spatial Expansion Gallery */}
+          <div className="flex-[0_0_28%] min-w-0 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-2" style={goldTextStyle}>
+                Spatial Expansion Gallery
+              </h2>
+
+              <div>
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Room Expansion</label>
+                <div className="flex flex-wrap gap-2">
+                  {SPATIAL_ROOM_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.spatialRoomOption === opt}
+                      onClick={() => store.setSpatialRoomOption(store.spatialRoomOption === opt ? null : opt)}
+                    />
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Center: Preview + prompt bar */}
-        <div className="col-span-6 glass-panel rounded-3xl relative overflow-hidden group border border-white/10 shadow-2xl flex flex-col">
-          <div className="flex-1 bg-black/40 flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-black/0 to-black/0 animate-pulse-slow" />
-            <div className="text-center space-y-2 z-10">
-              <div className="w-16 h-16 rounded-full border border-white/10 mx-auto flex items-center justify-center bg-white/5 backdrop-blur-md">
-                <span className="text-2xl">🌍</span>
+              <div>
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Urban Expansion</label>
+                <div className="flex flex-wrap gap-2">
+                  {SPATIAL_URBAN_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.spatialUrbanOption === opt}
+                      onClick={() => store.setSpatialUrbanOption(store.spatialUrbanOption === opt ? null : opt)}
+                    />
+                  ))}
+                </div>
               </div>
-              <p className="text-white/30 font-mono text-sm tracking-widest">WAITING FOR INPUT</p>
-            </div>
-          </div>
-          <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent">
-            <HybridTagBar tags={tags} setTags={setTags} />
-          </div>
-        </div>
 
-        {/* Right: Live prompt (system prompt used when calling AI) */}
-        <div className="col-span-3 space-y-6">
-          <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-white/[0.02]">
-            <h2 className="text-xs font-bold mb-4 text-white/40 uppercase tracking-[0.2em]">Live Prompt</h2>
-            <div className="bg-black/60 p-4 rounded-xl font-mono text-[10px] text-purple-100/80 mb-4 break-words leading-relaxed border border-purple-500/20 shadow-inner h-40 overflow-y-auto custom-scrollbar">
-              {compiledPrompt || '// Prompt is empty...'}
+              <div>
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Time / Season</label>
+                <div className="flex flex-wrap gap-2">
+                  {TIME_SEASON_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.timeSeason === opt}
+                      onClick={() => store.setTimeSeason(store.timeSeason === opt ? null : opt)}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-            <CopyButton text={compiledPrompt} />
-          </div>
-          <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-white/[0.02]">
-            <h2 className="text-xs font-bold mb-4 text-white/40 uppercase tracking-[0.2em]">AI Persona</h2>
-            <p className="text-[10px] text-white/60 leading-relaxed">{systemPrompt}</p>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+function CastInStoryButton({
+  stories,
+  onSelect,
+  disabled,
+}: {
+  stories: { id: string; name?: string }[];
+  onSelect: (storyId: string) => void;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-violet-900/95 border border-amber-500/30 rounded-xl p-4 max-w-sm w-full mx-4">
+            <h3 className="text-sm font-bold text-violet-100 mb-3">
+              Add asset to story
+            </h3>
+            <ul className="space-y-2 mb-4">
+              {stories.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect(s.id);
+                      setOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg border border-white/10 hover:bg-amber-500/20 text-white"
+                  >
+                    {s.name || s.id}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="w-full py-2 rounded-lg border border-white/20 text-white/80"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

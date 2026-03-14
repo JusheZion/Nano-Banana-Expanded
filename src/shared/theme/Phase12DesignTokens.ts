@@ -41,3 +41,23 @@ export const SIDEBAR_JEWEL_GRADIENT = 'linear-gradient(180deg, #f6c453 0%, #f08a
 /** Phase 15: Slider track (gradient) and tick marks */
 export const SLIDER_TRACK_GRADIENT = 'linear-gradient(to right, #1a2a44, #2a4a7c)';
 export const SLIDER_TICK_COLOR = 'rgba(255, 215, 0, 0.4)';
+
+/** Reference Character Studio (Master Build v4): Emerald highlight + True Gold metallic */
+export const CHARACTER_STUDIO_BG_V4 =
+  'linear-gradient(to bottom right, #022c22 0%, #064e3b 40%, #10b981 85%, #d1fae5 100%)';
+export const CHARACTER_STUDIO_GOLD_METALLIC =
+  'linear-gradient(to bottom, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c)';
+export const CHARACTER_STUDIO_BG = 'linear-gradient(to bottom, #064e3b 0%, #000000 100%)';
+export const CHARACTER_STUDIO_BG_TAILWIND = 'from-emerald-900 to-black';
+export const CHARACTER_STUDIO_ACCENT = 'linear-gradient(to bottom, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c)';
+export const CHARACTER_STUDIO_CHIP_ACTIVE = 'linear-gradient(to bottom, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c)';
+/** Emerald gradient for header title text (on gold strip) */
+export const CHARACTER_STUDIO_EMERALD_TEXT =
+  'linear-gradient(135deg, #064e3b 0%, #059669 40%, #10b981 70%, #6ee7b7 100%)';
+
+/** Asset Reference Studio: Amethyst highlight + same True Gold metallic */
+export const ASSET_STUDIO_BG =
+  'linear-gradient(to bottom right, #2e1065 0%, #5b21b6 40%, #8b5cf6 85%, #ede9fe 100%)';
+/** Amethyst gradient for header title text (on gold strip) */
+export const ASSET_STUDIO_AMETHYST_TEXT =
+  'linear-gradient(135deg, #2e1065 0%, #5b21b6 40%, #7c3aed 70%, #a78bfa 100%)';

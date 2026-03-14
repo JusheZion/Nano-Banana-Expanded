@@ -1,26 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { getGenerations } from '@/shared/utils/generationOutputRouter';
 
-interface CinematicGalleryProps {
-    images?: string[];
-}
-
-export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
+export const CinematicGallery: React.FC = () => {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     useTheme();
 
-    // Mock Data simulating the Stitch MCP output or Local Assets
-    // In a real scenario, this would come from the `images` prop
-    const items = [
-        { src: "/assets/images/Aries Palace.jpg", height: "h-[380px]" }, // Tall
-        { src: "/assets/images/City of Aquarius.jpg", height: "h-[280px]" },
-        { src: "/assets/images/Anunnaki Sphinx.png", height: "h-[280px]" },
-        { src: "/assets/images/Aries Approaches the Observatory.png", height: "h-[280px]" },
-        { src: "/assets/images/Flow's CEO Photo.png", height: "h-[380px]" }, // Tall
-        { src: "/assets/images/Aries Palace.jpg", height: "h-[280px]" },
-        { src: "/assets/images/Anunnaki Sphinx.png", height: "h-[280px]" },
-        { src: "/assets/images/City of Aquarius.jpg", height: "h-[380px]" }, // Tall
-    ];
+    const items = useMemo(() => {
+        const gens = getGenerations('character');
+        return gens.map((g, i) => ({
+            id: g.id,
+            src: g.url,
+            height: i % 3 === 0 ? 'h-[380px]' : 'h-[280px]' as const,
+        }));
+    }, []);
 
     return (
         <div className="w-full px-8 py-8 animate-fade-in">
@@ -39,15 +32,15 @@ export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
 
             {/* Constrained Masonry Grid */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-6 pb-20">
-                {items.map((item, index) => {
-                    // Logic for visual variety: Every 3rd item is "tall" (380px) or used from data
-                    // We use the data-driven height here for precise control if available, or fallback
-
+                {items.length === 0 ? (
+                    <p className="col-span-full text-white/50 text-center py-12">No character references yet. Save from Reference Character Studio.</p>
+                ) : (
+                items.map((item, index) => {
                     const heightClass = item.height;
 
                     return (
                         <div
-                            key={index}
+                            key={item.id}
                             className={`
                                 relative overflow-hidden rounded-[16px]
                                 border border-[rgba(255,255,255,0.08)]
@@ -85,12 +78,13 @@ export const CinematicGallery: React.FC<CinematicGalleryProps> = () => {
                                 absolute bottom-0 left-0 p-6 w-full transform transition-all duration-300
                                 ${hoveredIndex === index ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
                             `}>
-                                <div className="text-xs font-bold text-[#BF5AF2] tracking-widest mb-1">ASSET {index + 1}</div>
+                                <div className="text-xs font-bold text-[#BF5AF2] tracking-widest mb-1">CHARACTER {index + 1}</div>
                                 <div className="text-white font-bold text-lg leading-none">Visual Reference</div>
                             </div>
                         </div>
                     );
-                })}
+                })
+                )}
             </div>
         </div>
     );

@@ -3,9 +3,11 @@ import { useTheme } from '@/shared/context/ThemeContext';
 
 interface CopyButtonProps {
     text: string;
+    /** Optional style for the label (e.g. gradient gold text in Character Studio) */
+    labelStyle?: React.CSSProperties;
 }
 
-export const CopyButton: React.FC<CopyButtonProps> = ({ text }) => {
+export const CopyButton: React.FC<CopyButtonProps> = ({ text, labelStyle }) => {
     const [copied, setCopied] = useState(false);
     const { activeTheme } = useTheme();
 
@@ -45,7 +47,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ text }) => {
                 ) : (
                     <>
                         <CopyIcon />
-                        <span>Copy Prompt</span>
+                        <span className={labelStyle ? 'inline-block' : undefined} style={labelStyle}>Copy Prompt</span>
                     </>
                 )}
             </span>
