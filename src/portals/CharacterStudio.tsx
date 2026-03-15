@@ -9,6 +9,7 @@ import {
   CHARACTER_STUDIO_BG_V4,
   ACCENT_GOLD_GRADIENT,
   CHARACTER_STUDIO_EMERALD_TEXT,
+  GEM_EMERALD,
 } from '@/shared/theme/Phase12DesignTokens';
 import {
   ART_STYLE_FLAGSHIP,
@@ -25,6 +26,9 @@ import {
 } from '@/data/character_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
+import { generateImage } from '@/shared/api/geminiImageApi';
+import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
+import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -138,10 +142,25 @@ export const CharacterStudio: React.FC = () => {
   const store = useCharacterStudioStore();
   const [vaultPassword, setVaultPassword] = useState('');
   const [customStyleInput, setCustomStyleInput] = useState('');
+  const [statusStep, setStatusStep] = useState(0);
+
+  const STATUS_BREADCRUMBS = [
+    'Scanning DNA/Architecture...',
+    'Contacting Onyx Vault...',
+    'Crystallizing Render...',
+  ];
 
   useEffect(() => {
     setTheme('teal');
   }, [setTheme]);
+
+  useEffect(() => {
+    if (store.generationStatus !== 'pending') return;
+    const id = setInterval(() => {
+      setStatusStep((s) => (s + 1) % STATUS_BREADCRUMBS.length);
+    }, 2500);
+    return () => clearInterval(id);
+  }, [store.generationStatus]);
 
   const dna = {
     heritage: store.heritageSelection,
@@ -176,21 +195,42 @@ export const CharacterStudio: React.FC = () => {
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
-  const handleGenerateCharacter = () => {
-    const seed = Math.floor(Math.random() * 1e9);
+  const handleGenerateCharacter = async () => {
+    store.setGenerationStatus('pending');
+    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
     store.setCurrentGenerationSeed(seed);
-    const placeholder =
-      'data:image/svg+xml,' +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><rect fill="%231a1a1a" width="400" height="600"/><text x="200" y="300" fill="%23facc15" font-size="14" text-anchor="middle" font-family="sans-serif">Generated character</text></svg>'
-      );
-    store.setCurrentLiveImageUrl(placeholder);
+    const refUrls = store.referenceImageUrls.length > 0
+      ? store.referenceImageUrls
+      : store.currentLiveImageUrl
+        ? [store.currentLiveImageUrl]
+        : [];
+    const result = await generateImage({
+      prompt: compiledPrompt,
+      referenceImageUrls: refUrls,
+      seed,
+      aspectRatio: '9:16',
+      modelId: store.selectedOnyxModelId,
+    });
+    if (result.ok) {
+      store.setCurrentLiveImageUrl(result.imageDataUrl);
+      store.setCurrentGenerationSeed(seed);
+      store.setGenerationStatus('idle');
+      addCachedGeneration('character', { url: result.imageDataUrl, seed });
+    } else if ('blocked' in result && result.blocked) {
+      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+    } else if ('error' in result) {
+      store.setGenerationStatus('error', result.error);
+    }
   };
 
-  const handleSaveNewCharacter = () => {
+  const handleSaveNewCharacter = async () => {
     const url = store.currentLiveImageUrl;
-    if (url) {
-      saveGeneration('character', url, store.currentGenerationSeed ?? undefined);
+    if (!url) return;
+    saveGeneration('character', url, store.currentGenerationSeed ?? undefined);
+    addCachedGeneration('character', { url, seed: store.currentGenerationSeed ?? undefined });
+    const result = await saveCharacterToDb(store);
+    if (!result.ok && result.error && result.error !== 'Supabase not configured') {
+      store.setGenerationStatus('error', result.error);
     }
   };
 
@@ -258,31 +298,55 @@ export const CharacterStudio: React.FC = () => {
       <div className="flex gap-3 w-full flex-1 min-h-0">
         {/* Left Panel (TAGS): 34% width, same height as Reference Gallery (center+right cap), Import at top then scroll */}
         <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden flex-shrink-0">
-          {/* Import Image at top of left panel (does not scroll) */}
+          {/* Import Image: up to 14 reference slots for API */}
           <div className="flex-shrink-0 p-2 border-b border-white/10">
             <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2" style={goldTextStyle}>
               Import Image
             </h2>
             <Tooltip
-              content="For best results, upload images with a single subject. AI will edit out secondary figures."
+              content="For best results, upload images with a single subject. Up to 14 reference images for the API."
               side="bottom"
             >
               <label className="flex rounded-xl border border-dashed border-amber-500/40 bg-black/30 px-3 py-2.5 cursor-pointer hover:border-amber-500/60 transition-colors">
-                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Import Image</span>
+                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Add reference image ({store.referenceImageUrls.length}/14)</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
+                    if (file && store.referenceImageUrls.length < 14) {
                       const url = URL.createObjectURL(file);
+                      store.addReferenceImage(url);
                       store.setCurrentLiveImageUrl(url);
                     }
+                    e.target.value = '';
                   }}
                 />
               </label>
             </Tooltip>
+            {store.referenceImageUrls.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {store.referenceImageUrls.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img src={url} alt="" className="w-10 h-10 rounded object-cover border border-amber-500/30" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        store.removeReferenceImage(i);
+                        if (store.currentLiveImageUrl === url) {
+                          const next = store.referenceImageUrls.filter((_, j) => j !== i);
+                          store.setCurrentLiveImageUrl(next[0] ?? null);
+                        }
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {hasReferenceImage && (
               <label className="flex items-center gap-2 cursor-pointer mt-2">
                 <input
@@ -514,7 +578,18 @@ export const CharacterStudio: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs font-medium inline-block mb-1.5" style={goldTextStyle}>Model</span>
+                    <select
+                      value={store.selectedOnyxModelId}
+                      onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                      className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-xs"
+                    >
+                      <option value="flash">Nano Banana 2 (Speed)</option>
+                      <option value="pro">Nano Banana Pro (Detail)</option>
+                    </select>
+                  </div>
                   <textarea
                     value={store.vaultPromptOverride}
                     onChange={(e) => store.setVaultPromptOverride(e.target.value)}
@@ -574,11 +649,45 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
 
+          {/* Status breadcrumb: cycle during generation; safety message when blocked */}
+          <div
+            className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
+            data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
+          >
+            <span className="text-xs font-mono" style={goldTextStyle}>
+              {store.generationStatus === 'safety_blocked'
+                ? 'Prompt restricted by safety filters. Please adjust and try again'
+                : store.generationStatus === 'error' && store.generationStatusMessage
+                  ? store.generationStatusMessage
+                  : store.generationStatus === 'pending'
+                    ? STATUS_BREADCRUMBS[statusStep]
+                    : '\u00A0'}
+            </span>
+          </div>
+
           {/* Reference Image Generation: same gap as gold bar to panels (gap-3); min height so it keeps space */}
           <div className="flex-1 min-h-[280px] rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0">
             <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
               Reference Image Generation
             </h2>
+            {getCachedGenerations('character').length > 0 && (
+              <div className="flex-shrink-0 px-2 pb-2 flex items-center gap-2 overflow-x-auto">
+                <span className="text-[10px] uppercase tracking-wider text-white/60">Recent</span>
+                {getCachedGenerations('character').map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      store.setCurrentLiveImageUrl(item.url);
+                      if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                    }}
+                    className="flex-shrink-0 w-12 h-12 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60"
+                  >
+                    <img src={item.url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
               {store.currentLiveImageUrl ? (
                 <img
@@ -609,10 +718,23 @@ export const CharacterStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={handleGenerateCharacter}
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors"
-                style={{ background: ACCENT_GOLD_GRADIENT }}
+                disabled={store.generationStatus === 'pending'}
+                className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                style={
+                  store.generationStatus === 'pending'
+                    ? { background: GEM_EMERALD, boxShadow: `0 0 16px ${GEM_EMERALD}` }
+                    : { background: ACCENT_GOLD_GRADIENT }
+                }
               >
-                Generate Character
+                {store.generationStatus === 'pending' ? (
+                  <span
+                    className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                    style={{ background: GEM_EMERALD, boxShadow: `0 0 10px ${GEM_EMERALD}` }}
+                    aria-label="Generating..."
+                  />
+                ) : (
+                  'Generate Character'
+                )}
               </button>
               <button
                 type="button"

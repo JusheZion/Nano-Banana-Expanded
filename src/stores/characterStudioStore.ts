@@ -63,6 +63,11 @@ function emptyCinematicLibraries(): Record<CinematicKey, string[]> {
   );
 }
 
+export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
+export type OnyxModelId = 'flash' | 'pro';
+
+const REFERENCE_IMAGE_SLOTS = 14;
+
 export interface CharacterStudioState {
   tags: ChipTag[];
   dnaLock: boolean;
@@ -87,6 +92,11 @@ export interface CharacterStudioState {
   genderLibrary: string[];
   physicalLibraries: Record<string, string[]>;
   cinematicLibraries: Record<CinematicKey, string[]>;
+  /** Reference images for API (max 14 slots). */
+  referenceImageUrls: string[];
+  selectedOnyxModelId: OnyxModelId;
+  generationStatus: GenerationStatus;
+  generationStatusMessage: string | null;
 
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setDnaLock: (locked: boolean) => void;
@@ -113,6 +123,12 @@ export interface CharacterStudioState {
   addGenderOption: (value: string) => void;
   addPhysicalOption: (category: string, value: string) => void;
   addCinematicOption: (key: CinematicKey, value: string) => void;
+  setReferenceImageUrls: (urls: string[]) => void;
+  addReferenceImage: (url: string) => void;
+  removeReferenceImage: (index: number) => void;
+  setReferenceImageAt: (index: number, url: string | null) => void;
+  setSelectedOnyxModelId: (id: OnyxModelId) => void;
+  setGenerationStatus: (status: GenerationStatus, message?: string | null) => void;
 }
 
 export const useCharacterStudioStore = create<CharacterStudioState>()(
@@ -150,6 +166,10 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       genderLibrary: [],
       physicalLibraries: emptyPhysicalLibraries(),
       cinematicLibraries: emptyCinematicLibraries(),
+      referenceImageUrls: [],
+      selectedOnyxModelId: 'flash',
+      generationStatus: 'idle',
+      generationStatusMessage: null,
 
       setTags: (payload) =>
         set((s) => ({
@@ -258,6 +278,39 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
             },
           };
         }),
+      setReferenceImageUrls: (urls) =>
+        set({ referenceImageUrls: urls.slice(0, REFERENCE_IMAGE_SLOTS) }),
+      addReferenceImage: (url) =>
+        set((s) => {
+          if (s.referenceImageUrls.length >= REFERENCE_IMAGE_SLOTS) return s;
+          return {
+            referenceImageUrls: [...s.referenceImageUrls, url].slice(
+              0,
+              REFERENCE_IMAGE_SLOTS
+            ),
+          };
+        }),
+      removeReferenceImage: (index) =>
+        set((s) => ({
+          referenceImageUrls: s.referenceImageUrls.filter((_, i) => i !== index),
+        })),
+      setReferenceImageAt: (index, url) =>
+        set((s) => {
+          const next = [...s.referenceImageUrls];
+          if (url === null) {
+            next.splice(index, 1);
+          } else {
+            next[index] = url;
+            if (next.length > REFERENCE_IMAGE_SLOTS) next.length = REFERENCE_IMAGE_SLOTS;
+          }
+          return { referenceImageUrls: next };
+        }),
+      setSelectedOnyxModelId: (id) => set({ selectedOnyxModelId: id }),
+      setGenerationStatus: (status, message) =>
+        set({
+          generationStatus: status,
+          generationStatusMessage: message ?? null,
+        }),
     }),
     {
       name: STORAGE_KEY,
@@ -288,6 +341,8 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         genderLibrary: state.genderLibrary,
         physicalLibraries: state.physicalLibraries,
         cinematicLibraries: state.cinematicLibraries,
+        referenceImageUrls: state.referenceImageUrls,
+        selectedOnyxModelId: state.selectedOnyxModelId,
       }),
     }
   )

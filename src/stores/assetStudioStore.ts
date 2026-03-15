@@ -15,6 +15,10 @@ import {
 
 const ONYX_PASSWORD = 'onyx';
 const STORAGE_KEY = 'arcs-asset-studio';
+const REFERENCE_IMAGE_SLOTS = 14;
+
+export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
+export type OnyxModelId = 'flash' | 'pro';
 
 function emptySetDressingLibraries(): Record<SetDressingCategory, string[]> {
   return (Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).reduce(
@@ -80,6 +84,10 @@ export interface AssetStudioState {
   spatialUrbanOption: string | null;
   timeSeason: TimeSeasonId | null;
   aspectRatio: AspectRatioId;
+  referenceImageUrls: string[];
+  selectedOnyxModelId: OnyxModelId;
+  generationStatus: GenerationStatus;
+  generationStatusMessage: string | null;
 
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
@@ -104,6 +112,12 @@ export interface AssetStudioState {
   setSpatialUrbanOption: (value: string | null) => void;
   setTimeSeason: (value: TimeSeasonId | null) => void;
   setAspectRatio: (value: AspectRatioId) => void;
+  setReferenceImageUrls: (urls: string[]) => void;
+  addReferenceImage: (url: string) => void;
+  removeReferenceImage: (index: number) => void;
+  setReferenceImageAt: (index: number, url: string | null) => void;
+  setSelectedOnyxModelId: (id: OnyxModelId) => void;
+  setGenerationStatus: (status: GenerationStatus, message?: string | null) => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -135,6 +149,10 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       spatialUrbanOption: null,
       timeSeason: null,
       aspectRatio: '9:16',
+      referenceImageUrls: [],
+      selectedOnyxModelId: 'flash',
+      generationStatus: 'idle',
+      generationStatusMessage: null,
 
       setTags: (payload) =>
         set((s) => ({
@@ -220,6 +238,39 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       setSpatialUrbanOption: (value) => set({ spatialUrbanOption: value }),
       setTimeSeason: (value) => set({ timeSeason: value }),
       setAspectRatio: (value) => set({ aspectRatio: value }),
+      setReferenceImageUrls: (urls) =>
+        set({ referenceImageUrls: urls.slice(0, REFERENCE_IMAGE_SLOTS) }),
+      addReferenceImage: (url) =>
+        set((s) => {
+          if (s.referenceImageUrls.length >= REFERENCE_IMAGE_SLOTS) return s;
+          return {
+            referenceImageUrls: [...s.referenceImageUrls, url].slice(
+              0,
+              REFERENCE_IMAGE_SLOTS
+            ),
+          };
+        }),
+      removeReferenceImage: (index) =>
+        set((s) => ({
+          referenceImageUrls: s.referenceImageUrls.filter((_, i) => i !== index),
+        })),
+      setReferenceImageAt: (index, url) =>
+        set((s) => {
+          const next = [...s.referenceImageUrls];
+          if (url === null) {
+            next.splice(index, 1);
+          } else {
+            next[index] = url;
+            if (next.length > REFERENCE_IMAGE_SLOTS) next.length = REFERENCE_IMAGE_SLOTS;
+          }
+          return { referenceImageUrls: next };
+        }),
+      setSelectedOnyxModelId: (id) => set({ selectedOnyxModelId: id }),
+      setGenerationStatus: (status, message) =>
+        set({
+          generationStatus: status,
+          generationStatusMessage: message ?? null,
+        }),
     }),
     {
       name: STORAGE_KEY,
@@ -250,6 +301,8 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         spatialUrbanOption: state.spatialUrbanOption,
         timeSeason: state.timeSeason,
         aspectRatio: state.aspectRatio,
+        referenceImageUrls: state.referenceImageUrls,
+        selectedOnyxModelId: state.selectedOnyxModelId,
       }),
     }
   )

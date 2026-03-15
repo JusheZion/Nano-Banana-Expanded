@@ -9,6 +9,7 @@ import {
   ASSET_STUDIO_BG,
   ACCENT_GOLD_GRADIENT,
   ASSET_STUDIO_AMETHYST_TEXT,
+  GEM_AMETHYST,
 } from '@/shared/theme/Phase12DesignTokens';
 import {
   ART_STYLE_FLAGSHIP,
@@ -28,6 +29,9 @@ import {
 } from '@/data/asset_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
+import { generateImage } from '@/shared/api/geminiImageApi';
+import { saveAssetToDb } from '@/shared/api/arcsPersistence';
+import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
 
 const goldTextStyle: React.CSSProperties = {
   background: ACCENT_GOLD_GRADIENT,
@@ -215,10 +219,25 @@ export const AssetsStudio: React.FC = () => {
   const store = useAssetStudioStore();
   const [vaultPassword, setVaultPassword] = useState('');
   const [customStyleInput, setCustomStyleInput] = useState('');
+  const [statusStep, setStatusStep] = useState(0);
+
+  const STATUS_BREADCRUMBS = [
+    'Scanning DNA/Architecture...',
+    'Contacting Onyx Vault...',
+    'Crystallizing Render...',
+  ];
 
   useEffect(() => {
     setTheme('purple');
   }, [setTheme]);
+
+  useEffect(() => {
+    if (store.generationStatus !== 'pending') return;
+    const id = setInterval(() => {
+      setStatusStep((s) => (s + 1) % STATUS_BREADCRUMBS.length);
+    }, 2500);
+    return () => clearInterval(id);
+  }, [store.generationStatus]);
 
   const hasReferenceImage = !!store.currentLiveImageUrl;
   const settingAndLocationDisabled =
@@ -249,29 +268,79 @@ export const AssetsStudio: React.FC = () => {
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
-  const handleGenerateAsset = () => {
-    const seed = Math.floor(Math.random() * 1e9);
+  const handleGenerateAsset = async () => {
+    store.setGenerationStatus('pending');
+    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
     store.setCurrentGenerationSeed(seed);
-    const placeholder =
-      'data:image/svg+xml,' +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect fill="%232e1065" width="400" height="400"/><text x="200" y="200" fill="%23fcf6ba" font-size="14" text-anchor="middle" font-family="sans-serif">Generated asset</text></svg>'
-      );
-    store.setCurrentLiveImageUrl(placeholder);
+    const refUrls = store.referenceImageUrls.length > 0
+      ? store.referenceImageUrls
+      : store.currentLiveImageUrl
+        ? [store.currentLiveImageUrl]
+        : [];
+    const result = await generateImage({
+      prompt: compiledPrompt,
+      referenceImageUrls: refUrls,
+      seed,
+      aspectRatio: store.aspectRatio,
+      modelId: store.selectedOnyxModelId,
+    });
+    if (result.ok) {
+      store.setCurrentLiveImageUrl(result.imageDataUrl);
+      store.setCurrentGenerationSeed(seed);
+      store.setGenerationStatus('idle');
+      addCachedGeneration('asset', { url: result.imageDataUrl, seed });
+    } else if ('blocked' in result && result.blocked) {
+      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+    } else if ('error' in result) {
+      store.setGenerationStatus('error', result.error);
+    }
   };
 
-  const handleSaveNewAsset = () => {
+  const handleSaveNewAsset = async () => {
     const url = store.currentLiveImageUrl;
-    if (url) saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
+    if (!url) return;
+    saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
+    addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
+    const result = await saveAssetToDb(store);
+    if (!result.ok && result.error && result.error !== 'Supabase not configured') {
+      store.setGenerationStatus('error', result.error);
+    }
   };
 
-  const handleExpandSetting = () => {
-    const placeholder =
-      'data:image/svg+xml,' +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect fill="%235b21b6" width="400" height="400"/><text x="200" y="200" fill="%23ede9fe" font-size="12" text-anchor="middle" font-family="sans-serif">Expanded setting</text></svg>'
-      );
-    store.setCurrentLiveImageUrl(placeholder);
+  const handleExpandSetting = async () => {
+    const primarySeed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    const expansionSeed = primarySeed + 1;
+    store.setGenerationStatus('pending');
+    const refUrls = store.referenceImageUrls.length > 0
+      ? store.referenceImageUrls
+      : store.currentLiveImageUrl
+        ? [store.currentLiveImageUrl]
+        : [];
+    const expansionParts = [
+      store.spatialRoomOption,
+      store.spatialUrbanOption,
+      store.timeSeason,
+    ].filter(Boolean);
+    const expansionPrompt = expansionParts.length > 0
+      ? `${compiledPrompt}, spatial expansion: ${expansionParts.join(', ')}`
+      : compiledPrompt;
+    const result = await generateImage({
+      prompt: expansionPrompt,
+      referenceImageUrls: refUrls,
+      seed: expansionSeed,
+      aspectRatio: store.aspectRatio,
+      modelId: store.selectedOnyxModelId,
+    });
+    if (result.ok) {
+      store.setCurrentLiveImageUrl(result.imageDataUrl);
+      store.setCurrentGenerationSeed(expansionSeed);
+      store.setGenerationStatus('idle');
+      addCachedGeneration('asset', { url: result.imageDataUrl, seed: expansionSeed });
+    } else if ('blocked' in result && result.blocked) {
+      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+    } else if ('error' in result) {
+      store.setGenerationStatus('error', result.error);
+    }
   };
 
   const handleAddToLibrary = () => {
@@ -338,25 +407,49 @@ export const AssetsStudio: React.FC = () => {
               Import Asset / Setting
             </h2>
             <Tooltip
-              content="Upload a reference image. By default the AI treats it as the absolute architectural reference; enable Diversify Style to use tags for era and materials."
+              content="Upload reference images. Up to 14 for the API. By default the AI treats them as absolute architectural reference; enable Diversify Style to use tags for era and materials."
               side="bottom"
             >
               <label className="flex rounded-xl border border-dashed border-amber-500/40 bg-black/30 px-3 py-2.5 cursor-pointer hover:border-amber-500/60 transition-colors">
-                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Import Asset / Setting</span>
+                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Add reference ({store.referenceImageUrls.length}/14)</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
+                    if (file && store.referenceImageUrls.length < 14) {
                       const url = URL.createObjectURL(file);
+                      store.addReferenceImage(url);
                       store.setCurrentLiveImageUrl(url);
                     }
+                    e.target.value = '';
                   }}
                 />
               </label>
             </Tooltip>
+            {store.referenceImageUrls.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {store.referenceImageUrls.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img src={url} alt="" className="w-10 h-10 rounded object-cover border border-amber-500/30" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        store.removeReferenceImage(i);
+                        if (store.currentLiveImageUrl === url) {
+                          const next = store.referenceImageUrls.filter((_, j) => j !== i);
+                          store.setCurrentLiveImageUrl(next[0] ?? null);
+                        }
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {hasReferenceImage && (
               <label className="flex items-center gap-2 cursor-pointer mt-2">
                 <input
@@ -580,7 +673,18 @@ export const AssetsStudio: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-xs font-medium inline-block mb-1.5" style={goldTextStyle}>Model</span>
+                    <select
+                      value={store.selectedOnyxModelId}
+                      onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                      className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-xs"
+                    >
+                      <option value="flash">Nano Banana 2 (Speed)</option>
+                      <option value="pro">Nano Banana Pro (Detail)</option>
+                    </select>
+                  </div>
                   <textarea
                     value={store.vaultPromptOverride}
                     onChange={(e) => store.setVaultPromptOverride(e.target.value)}
@@ -634,10 +738,43 @@ export const AssetsStudio: React.FC = () => {
               </div>
             </div>
 
+            <div
+              className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
+              data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
+            >
+              <span className="text-xs font-mono" style={goldTextStyle}>
+                {store.generationStatus === 'safety_blocked'
+                  ? 'Prompt restricted by safety filters. Please adjust and try again'
+                  : store.generationStatus === 'error' && store.generationStatusMessage
+                    ? store.generationStatusMessage
+                    : store.generationStatus === 'pending'
+                      ? STATUS_BREADCRUMBS[statusStep]
+                      : '\u00A0'}
+              </span>
+            </div>
+
             <div className="flex-1 min-h-[280px] rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0">
               <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
                 Live Generation / Vault
               </h2>
+              {getCachedGenerations('asset').length > 0 && (
+                <div className="flex-shrink-0 px-2 pb-2 flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[10px] uppercase tracking-wider text-white/60">Recent</span>
+                  {getCachedGenerations('asset').map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        store.setCurrentLiveImageUrl(item.url);
+                        if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                      }}
+                      className="flex-shrink-0 w-12 h-12 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60"
+                    >
+                      <img src={item.url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
                 {store.currentLiveImageUrl ? (
                   <img
@@ -660,10 +797,23 @@ export const AssetsStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleGenerateAsset}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors"
-                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                  disabled={store.generationStatus === 'pending'}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                  style={
+                    store.generationStatus === 'pending'
+                      ? { background: GEM_AMETHYST, boxShadow: `0 0 16px ${GEM_AMETHYST}` }
+                      : { background: ACCENT_GOLD_GRADIENT }
+                  }
                 >
-                  Generate Asset
+                  {store.generationStatus === 'pending' ? (
+                    <span
+                      className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                      style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
+                      aria-label="Generating..."
+                    />
+                  ) : (
+                    'Generate Asset'
+                  )}
                 </button>
                 <button
                   type="button"

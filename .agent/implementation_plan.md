@@ -197,3 +197,13 @@ To maintain simplicity and leverage existing systems, we will extend the `Balloo
 *   #### [NEW] Custom Theme & Texture Support
     *   **Store modifications:** We will extend the `GenreRegistry` by adding an option for the user to select and configure a totally custom palette and explicitly inject a `Texture Overlay` using the existing `TextureRegistry`.
     *   **UI Controls:** We'll upgrade the `Genre Selector` under the Theme menu. When "Custom" is active, it will unveil color pickers and sliders right within the dropdown menu, so the user can easily swap backgrounds, glowing panels, borders, fonts, and choose a pattern fill (e.g. halftone dots, manga screentones) that propagates across all objects globally when the generic "Apply to All" button is clicked.
+
+### ARCS Universal API Bridge & Data Persistence (Mar 2026) — Implemented
+
+*   **Semantic IDs:** `src/shared/utils/semanticId.ts` — `generateSemanticId(prefix, baseName, existingIds)`.
+*   **Supabase:** `src/shared/lib/supabase.ts`; migration in `supabase/migrations/` for `characters` and `assets` (id, created_at, metadata_tags JSONB, seed bigint, image_url, name).
+*   **Stores:** `referenceImageUrls` (max 14), `selectedOnyxModelId`, `generationStatus`/`generationStatusMessage` in both character and asset stores.
+*   **API:** `src/shared/api/geminiImageApi.ts` — Gemini image API with 429 backoff, safety handling, reference_images (max 14).
+*   **Persistence:** `src/shared/api/arcsPersistence.ts` — saveCharacterToDb, saveAssetToDb with metadata_tags and optional Storage upload.
+*   **Session cache:** `src/shared/utils/generationSessionCache.ts` — last 10 per studio; Recent strip in UI.
+*   **UI:** Onyx model selector (vault-unlocked), status breadcrumb, Gemstone Pulse button, multi-slot Import Image, Expansion with seed+1.

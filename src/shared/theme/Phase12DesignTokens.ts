@@ -61,3 +61,7 @@ export const ASSET_STUDIO_BG =
 /** Amethyst gradient for header title text (on gold strip) */
 export const ASSET_STUDIO_AMETHYST_TEXT =
   'linear-gradient(135deg, #2e1065 0%, #5b21b6 40%, #7c3aed 70%, #a78bfa 100%)';
+
+/** Gemstone Pulse (Generate button loading): CSS variable hooks for theming */
+export const GEM_EMERALD = '#10b981';
+export const GEM_AMETHYST = '#8b5cf6';
