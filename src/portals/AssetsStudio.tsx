@@ -263,7 +263,10 @@ export const AssetsStudio: React.FC = () => {
   const compiledPrompt =
     store.vaultUnlocked && store.vaultPromptOverride.trim()
       ? store.vaultPromptOverride
-      : buildAssetStudioPrompt(store.tags, '', extraParts);
+      : buildAssetStudioPrompt(store.tags, '', extraParts, {
+          assetModifiers: store.assetModifiers,
+          setDressingSelections: store.setDressingSelections,
+        });
   const displayPrompt =
     store.currentGenerationSeed != null
       ? `${compiledPrompt}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`

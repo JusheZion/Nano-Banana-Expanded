@@ -4,6 +4,10 @@
 import type { ChipTag } from '@/shared/utils/PromptCompiler';
 import { PromptCompiler } from '@/shared/utils/PromptCompiler';
 import { DNA_WEIGHTED_HERITAGE } from '@/data/character_studio_spec';
+import {
+  fuseWardrobeModifiers,
+  type WardrobeModifierCategory,
+} from '@/shared/utils/buildPrompt';
 
 export interface DnaSelections {
   heritage: string[];
@@ -57,18 +61,32 @@ export function appendOfficialReferenceRules(prompt: string): string {
 /**
  * Build final Character Studio prompt: compile chips + manual input, then apply DNA weights.
  * Optionally append official reference rules (full body, one person solo).
+ * When wardrobeModifiers and wardrobeSelections are provided, fuse [Color] [Material] [Tag]
+ * segments and append them to extra parts.
  */
 export function buildCharacterStudioPrompt(
   tags: ChipTag[],
   manualInput: string,
   dna: DnaSelections,
   extraParts?: string[],
-  options?: { appendOfficialRules?: boolean }
+  options?: {
+    appendOfficialRules?: boolean;
+    wardrobeModifiers?: Record<
+      WardrobeModifierCategory,
+      { color: string; material: 'matte' | 'gloss' | 'glow' }
+    >;
+    wardrobeSelections?: Record<string, string[]>;
+  }
 ): string {
   const compiled = PromptCompiler.compile(tags, manualInput);
+  const modifierSegments =
+    options?.wardrobeModifiers != null && options?.wardrobeSelections != null
+      ? fuseWardrobeModifiers(options.wardrobeModifiers, options.wardrobeSelections)
+      : [];
+  const allParts = [...(extraParts ?? []), ...modifierSegments].filter(Boolean);
   const withExtra =
-    extraParts && extraParts.length > 0
-      ? [compiled, ...extraParts].filter(Boolean).join(', ')
+    allParts.length > 0
+      ? [compiled, ...allParts].filter(Boolean).join(', ')
       : compiled;
   const withDna = applyDnaWeights(
     withExtra,

@@ -193,6 +193,8 @@ export const CharacterStudio: React.FC = () => {
       ? store.vaultPromptOverride
       : buildCharacterStudioPrompt(store.tags, '', dna, extraParts, {
           appendOfficialRules: true,
+          wardrobeModifiers: store.wardrobeModifiers,
+          wardrobeSelections: store.wardrobeSelections,
         });
   const displayPrompt =
     store.currentGenerationSeed != null
