@@ -124,10 +124,6 @@ export async function generateImage(
 
   const body = {
     contents: [{ role: 'user', parts }],
-    generationConfig: {
-      responseModalities: ['image', 'text'],
-      responseMimeType: 'image/png',
-    },
   };
 
   let lastError: string | null = null;

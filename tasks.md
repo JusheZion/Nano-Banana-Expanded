@@ -15,6 +15,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Session cache (last 10) + Recent UI
 - [x] Asset Expansion seed+1; portal switch state
 - [x] Update walkthrough.md
+- [x] Archive recall modal: browse albums (profile/collection), inject chosen image into reference slot (Character + Asset Studio)
 
 ## Future / Backlog
 

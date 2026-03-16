@@ -174,7 +174,7 @@ High-level narrative of where the project is and where it's going. For checklist
 - **Asset Expansion:** Expand Setting uses `seed + 1` (primary reference seed + 1) for architectural consistency; spatial/room/urban/time options appended to prompt; result shown as live image and cached with expansion seed.
 - **Portal switch:** No re-fetch or clear on Character ↔ Asset switch; each store persists independently; generation window and state preserved.
 
-### ARCS v11.0 — Archive-Driven Generation & Multi-Category Modifiers (Complete)
+### ARCS v11.0 — Archive-Driven Generation & Multi-Category Modifiers (Complete, Mar 2026)
 
 - **Design:** `docs/plans/2026-03-15-archive-driven-generation-modifiers-design.md` (approved).
 - **Implementation plan:** `docs/plans/2026-03-15-archive-driven-generation-modifiers.md` (11 tasks).
