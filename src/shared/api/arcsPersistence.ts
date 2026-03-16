@@ -74,7 +74,9 @@ export interface SaveCharacterResult {
 
 export async function saveCharacterToDb(
   store: CharacterStudioState,
-  baseName: string = 'character'
+  baseName: string = 'character',
+  profileName?: string,
+  castName?: string
 ): Promise<SaveCharacterResult> {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
@@ -95,7 +97,9 @@ export async function saveCharacterToDb(
     metadata_tags: metadataTags,
     seed,
     image_url: finalImageUrl,
-    name: baseName !== 'character' ? baseName : null,
+    name: castName ?? profileName ?? (baseName !== 'character' ? baseName : null),
+    profile_name: profileName ?? null,
+    cast_name: castName ?? null,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -110,7 +114,9 @@ export interface SaveAssetResult {
 
 export async function saveAssetToDb(
   store: AssetStudioState,
-  baseName: string = 'asset'
+  baseName: string = 'asset',
+  collectionName?: string,
+  assetName?: string
 ): Promise<SaveAssetResult> {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
@@ -131,7 +137,9 @@ export async function saveAssetToDb(
     metadata_tags: metadataTags,
     seed,
     image_url: finalImageUrl,
-    name: baseName !== 'asset' ? baseName : null,
+    name: assetName ?? collectionName ?? (baseName !== 'asset' ? baseName : null),
+    collection_name: collectionName ?? null,
+    asset_name: assetName ?? null,
   });
 
   if (error) return { ok: false, error: error.message };

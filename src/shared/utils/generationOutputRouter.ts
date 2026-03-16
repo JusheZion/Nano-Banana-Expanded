@@ -14,6 +14,8 @@ export interface StoredGeneration {
   url: string; // data URL or blob URL
   createdAt: number;
   seed?: number; // optional, for expansion/gallery consistency
+  profileName?: string; // character: album grouping when Supabase not used
+  collectionName?: string; // asset: album grouping when Supabase not used
 }
 
 function getStorageKey(contextType: GenerationContextType): string {
@@ -23,7 +25,8 @@ function getStorageKey(contextType: GenerationContextType): string {
 export function saveGeneration(
   contextType: GenerationContextType,
   urlOrBlob: string,
-  seed?: number
+  seed?: number,
+  options?: { profileName?: string; collectionName?: string }
 ): void {
   const key = getStorageKey(contextType);
   const raw = localStorage.getItem(key);
@@ -33,6 +36,10 @@ export function saveGeneration(
     url: urlOrBlob,
     createdAt: Date.now(),
     ...(seed != null && { seed }),
+    ...(contextType === 'character' &&
+      options?.profileName != null && { profileName: options.profileName }),
+    ...(contextType === 'asset' &&
+      options?.collectionName != null && { collectionName: options.collectionName }),
   });
   localStorage.setItem(key, JSON.stringify(list));
 }
