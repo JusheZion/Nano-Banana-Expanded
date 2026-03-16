@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Tooltip } from '@/shared/components/Tooltip';
-import { useAssetStudioStore } from '@/stores/assetStudioStore';
+import { useAssetStudioStore, type AssetModifierCategory } from '@/stores/assetStudioStore';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
 import {
   ASSET_STUDIO_BG,
@@ -32,6 +33,7 @@ import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils
 import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveAssetToDb } from '@/shared/api/arcsPersistence';
 import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
+import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 
 const goldTextStyle: React.CSSProperties = {
   background: ACCENT_GOLD_GRADIENT,
@@ -220,6 +222,8 @@ export const AssetsStudio: React.FC = () => {
   const [vaultPassword, setVaultPassword] = useState('');
   const [customStyleInput, setCustomStyleInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
+  const [showZoomModal, setShowZoomModal] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -268,6 +272,9 @@ export const AssetsStudio: React.FC = () => {
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
+  const artStyleLabel =
+    store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId;
+
   const handleGenerateAsset = async () => {
     store.setGenerationStatus('pending');
     const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
@@ -277,8 +284,12 @@ export const AssetsStudio: React.FC = () => {
       : store.currentLiveImageUrl
         ? [store.currentLiveImageUrl]
         : [];
+    const promptForApi =
+      refUrls.length > 0
+        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        : compiledPrompt;
     const result = await generateImage({
-      prompt: compiledPrompt,
+      prompt: promptForApi,
       referenceImageUrls: refUrls,
       seed,
       aspectRatio: store.aspectRatio,
@@ -321,9 +332,13 @@ export const AssetsStudio: React.FC = () => {
       store.spatialUrbanOption,
       store.timeSeason,
     ].filter(Boolean);
+    const expansionBase =
+      refUrls.length > 0
+        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        : compiledPrompt;
     const expansionPrompt = expansionParts.length > 0
-      ? `${compiledPrompt}, spatial expansion: ${expansionParts.join(', ')}`
-      : compiledPrompt;
+      ? `${expansionBase}, spatial expansion: ${expansionParts.join(', ')}`
+      : expansionBase;
     const result = await generateImage({
       prompt: expansionPrompt,
       referenceImageUrls: refUrls,
@@ -600,6 +615,31 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Scene Setting & Props
               </h2>
+              <div className="space-y-2 mb-4">
+                {(['structure', 'furniture', 'atmospherics'] as AssetModifierCategory[]).map((category) => {
+                  const tagLabel =
+                    category === 'structure'
+                      ? (store.setDressingSelections.roomType ?? []).join(', ') || undefined
+                      : category === 'furniture'
+                        ? (store.setDressingSelections.furniture ?? []).join(', ') || undefined
+                        : [
+                            ...(store.setDressingSelections.lightingFixtures ?? []),
+                            ...(store.setDressingSelections.surfaceTextures ?? []),
+                          ].join(', ') || undefined;
+                  return (
+                    <ModifierRibbon
+                      key={category}
+                      categoryLabel={category.charAt(0).toUpperCase() + category.slice(1)}
+                      selectedColor={store.assetModifiers[category].color}
+                      material={store.assetModifiers[category].material}
+                      tagLabel={tagLabel}
+                      onColorChange={(hex) => store.setAssetModifierColor(category, hex)}
+                      onMaterialChange={(m) => store.setAssetModifierMaterial(category, m)}
+                      variant="amethyst"
+                    />
+                  );
+                })}
+              </div>
               <div className="space-y-4">
                 {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => (
                   <SetDressingRow
@@ -777,11 +817,37 @@ export const AssetsStudio: React.FC = () => {
               )}
               <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
                 {store.currentLiveImageUrl ? (
-                  <img
-                    src={store.currentLiveImageUrl}
-                    alt="Live asset"
-                    className="max-w-full max-h-full object-contain"
-                  />
+                  <>
+                    <img
+                      src={store.currentLiveImageUrl}
+                      alt="Live asset"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                      <Tooltip content="View full size with zoom" side="left">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setZoomLevel(1);
+                            setShowZoomModal(true);
+                          }}
+                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                        >
+                          <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Delete this image" side="left">
+                        <button
+                          type="button"
+                          onClick={() => store.setCurrentLiveImageUrl(null)}
+                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                          aria-label="Delete image"
+                        >
+                          <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                        </button>
+                      </Tooltip>
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center space-y-2">
                     <div className="w-16 h-16 rounded-full border border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
@@ -937,6 +1003,79 @@ export const AssetsStudio: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Full-size image modal with zoom */}
+      {showZoomModal && store.currentLiveImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/95"
+          role="dialog"
+          aria-modal="true"
+          aria-label="View image full size"
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Zoom out"
+              >
+                <ZoomOut className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+              <span className="text-sm tabular-nums min-w-[4rem]" style={goldTextStyle}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.min(4, z + 0.25))}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Zoom in"
+              >
+                <ZoomIn className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomLevel(1)}
+                className="px-2 py-1 text-xs rounded border border-white/20 hover:bg-white/10"
+              >
+                <span className="inline-block" style={goldTextStyle}>Reset</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip content="Delete this image" side="bottom">
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.setCurrentLiveImageUrl(null);
+                    setShowZoomModal(false);
+                  }}
+                  className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                  aria-label="Delete image"
+                >
+                  <Trash2 className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                </button>
+              </Tooltip>
+              <button
+                type="button"
+                onClick={() => setShowZoomModal(false)}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
+            <img
+              src={store.currentLiveImageUrl}
+              alt="Full size asset"
+              className="max-w-none transition-transform origin-center"
+              style={{ transform: `scale(${zoomLevel})` }}
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

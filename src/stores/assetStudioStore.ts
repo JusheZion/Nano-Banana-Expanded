@@ -19,6 +19,7 @@ const REFERENCE_IMAGE_SLOTS = 14;
 
 export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
 export type OnyxModelId = 'flash' | 'pro';
+export type AssetModifierCategory = 'structure' | 'furniture' | 'atmospherics';
 
 function emptySetDressingLibraries(): Record<SetDressingCategory, string[]> {
   return (Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).reduce(
@@ -60,6 +61,28 @@ function emptyCinematicLibraries(): Record<AssetCinematicKey, string[]> {
   );
 }
 
+const ASSET_MODIFIER_CATEGORIES: AssetModifierCategory[] = [
+  'structure',
+  'furniture',
+  'atmospherics',
+];
+
+function defaultAssetModifiers(): Record<
+  AssetModifierCategory,
+  { color: string; material: 'matte' | 'gloss' | 'glow' }
+> {
+  return ASSET_MODIFIER_CATEGORIES.reduce(
+    (acc, k) => {
+      acc[k] = { color: '#888888', material: 'matte' };
+      return acc;
+    },
+    {} as Record<
+      AssetModifierCategory,
+      { color: string; material: 'matte' | 'gloss' | 'glow' }
+    >
+  );
+}
+
 export interface AssetStudioState {
   tags: ChipTag[];
   currentLiveImageUrl: string | null;
@@ -88,6 +111,10 @@ export interface AssetStudioState {
   selectedOnyxModelId: OnyxModelId;
   generationStatus: GenerationStatus;
   generationStatusMessage: string | null;
+  assetModifiers: Record<
+    AssetModifierCategory,
+    { color: string; material: 'matte' | 'gloss' | 'glow' }
+  >;
 
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
@@ -118,6 +145,11 @@ export interface AssetStudioState {
   setReferenceImageAt: (index: number, url: string | null) => void;
   setSelectedOnyxModelId: (id: OnyxModelId) => void;
   setGenerationStatus: (status: GenerationStatus, message?: string | null) => void;
+  setAssetModifierColor: (category: AssetModifierCategory, hex: string) => void;
+  setAssetModifierMaterial: (
+    category: AssetModifierCategory,
+    material: 'matte' | 'gloss' | 'glow'
+  ) => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -153,6 +185,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       selectedOnyxModelId: 'flash',
       generationStatus: 'idle',
       generationStatusMessage: null,
+      assetModifiers: defaultAssetModifiers(),
 
       setTags: (payload) =>
         set((s) => ({
@@ -271,6 +304,20 @@ export const useAssetStudioStore = create<AssetStudioState>()(
           generationStatus: status,
           generationStatusMessage: message ?? null,
         }),
+      setAssetModifierColor: (category, hex) =>
+        set((s) => ({
+          assetModifiers: {
+            ...s.assetModifiers,
+            [category]: { ...s.assetModifiers[category], color: hex },
+          },
+        })),
+      setAssetModifierMaterial: (category, material) =>
+        set((s) => ({
+          assetModifiers: {
+            ...s.assetModifiers,
+            [category]: { ...s.assetModifiers[category], material },
+          },
+        })),
     }),
     {
       name: STORAGE_KEY,
@@ -303,6 +350,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         aspectRatio: state.aspectRatio,
         referenceImageUrls: state.referenceImageUrls,
         selectedOnyxModelId: state.selectedOnyxModelId,
+        assetModifiers: state.assetModifiers,
       }),
     }
   )
