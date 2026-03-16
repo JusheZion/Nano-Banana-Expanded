@@ -153,6 +153,10 @@ export const CharacterStudio: React.FC = () => {
   const [showZoomModal, setShowZoomModal] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
+  const [showSaveCharacterModal, setShowSaveCharacterModal] = useState(false);
+  const [saveCharacterProfileName, setSaveCharacterProfileName] = useState('');
+  const [saveCharacterCastName, setSaveCharacterCastName] = useState('');
+  const [saveCharacterIsEditProfile, setSaveCharacterIsEditProfile] = useState(false);
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -272,12 +276,26 @@ export const CharacterStudio: React.FC = () => {
     }
   };
 
-  const handleSaveNewCharacter = async () => {
+  const openSaveCharacterModal = (isEditProfile: boolean) => {
+    setSaveCharacterProfileName('');
+    setSaveCharacterCastName('');
+    setSaveCharacterIsEditProfile(isEditProfile);
+    setShowSaveCharacterModal(true);
+  };
+
+  const handleSaveCharacterModalConfirm = async () => {
+    const profileName = saveCharacterProfileName.trim();
+    if (!profileName) return;
     const url = store.currentLiveImageUrl;
     if (!url) return;
-    saveGeneration('character', url, store.currentGenerationSeed ?? undefined);
+    const castName = saveCharacterCastName.trim() || undefined;
+    if (saveCharacterIsEditProfile && store.selectedPoseId) {
+      store.updatePose(store.selectedPoseId, { imageUrl: url });
+    }
+    saveGeneration('character', url, store.currentGenerationSeed ?? undefined, { profileName });
     addCachedGeneration('character', { url, seed: store.currentGenerationSeed ?? undefined });
-    const result = await saveCharacterToDb(store);
+    const result = await saveCharacterToDb(store, profileName, profileName, castName);
+    setShowSaveCharacterModal(false);
     if (!result.ok && result.error && result.error !== 'Supabase not configured') {
       store.setGenerationStatus('error', result.error);
     }
@@ -849,7 +867,7 @@ export const CharacterStudio: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={handleSaveNewCharacter}
+                onClick={() => openSaveCharacterModal(false)}
                 disabled={!store.currentLiveImageUrl}
                 className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -865,13 +883,7 @@ export const CharacterStudio: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const sel = store.selectedPoseId;
-                  const url = store.currentLiveImageUrl;
-                  if (sel && url) {
-                    store.updatePose(sel, { imageUrl: url });
-                  }
-                }}
+                onClick={() => openSaveCharacterModal(true)}
                 disabled={!store.selectedPoseId || !store.currentLiveImageUrl}
                 className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1019,6 +1031,57 @@ export const CharacterStudio: React.FC = () => {
           }
         }}
       />
+
+      {/* Save character: profile name (required) + optional cast name */}
+      {showSaveCharacterModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Save character — profile and cast name"
+        >
+          <div className="rounded-xl border border-amber-500/40 bg-black/90 backdrop-blur-md p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-bold mb-4" style={goldTextStyle}>
+              {saveCharacterIsEditProfile ? 'Save edited profile' : 'Save new character'}
+            </h3>
+            <label className="block text-sm font-medium text-white/80 mb-1">Profile name (required)</label>
+            <input
+              type="text"
+              value={saveCharacterProfileName}
+              onChange={(e) => setSaveCharacterProfileName(e.target.value)}
+              placeholder="e.g. Detective Mara"
+              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
+              autoFocus
+            />
+            <label className="block text-sm font-medium text-white/80 mb-1">Cast name (optional)</label>
+            <input
+              type="text"
+              value={saveCharacterCastName}
+              onChange={(e) => setSaveCharacterCastName(e.target.value)}
+              placeholder="e.g. Mara in ch. 3"
+              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-4 text-sm placeholder-white/40"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveCharacterModal(false)}
+                className="px-3 py-2 rounded-lg text-sm border border-white/20 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCharacterModalConfirm}
+                disabled={!saveCharacterProfileName.trim()}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-black border border-amber-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: ACCENT_GOLD_GRADIENT }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-size image modal with zoom */}
       {showZoomModal && store.currentLiveImageUrl && (

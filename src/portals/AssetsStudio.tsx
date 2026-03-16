@@ -227,6 +227,10 @@ export const AssetsStudio: React.FC = () => {
   const [showZoomModal, setShowZoomModal] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
+  const [showSaveAssetModal, setShowSaveAssetModal] = useState(false);
+  const [saveAssetCollectionName, setSaveAssetCollectionName] = useState('');
+  const [saveAssetAssetName, setSaveAssetAssetName] = useState('');
+  const [saveAssetMode, setSaveAssetMode] = useState<'new' | 'library'>('new');
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -313,12 +317,23 @@ export const AssetsStudio: React.FC = () => {
     }
   };
 
-  const handleSaveNewAsset = async () => {
+  const openSaveAssetModal = (mode: 'new' | 'library') => {
+    setSaveAssetCollectionName('');
+    setSaveAssetAssetName('');
+    setSaveAssetMode(mode);
+    setShowSaveAssetModal(true);
+  };
+
+  const handleSaveAssetModalConfirm = async () => {
+    const collectionName = saveAssetCollectionName.trim();
+    if (!collectionName) return;
     const url = store.currentLiveImageUrl;
     if (!url) return;
-    saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
+    const assetName = saveAssetAssetName.trim() || undefined;
+    saveGeneration('asset', url, store.currentGenerationSeed ?? undefined, { collectionName });
     addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
-    const result = await saveAssetToDb(store);
+    const result = await saveAssetToDb(store, collectionName, collectionName, assetName);
+    setShowSaveAssetModal(false);
     if (!result.ok && result.error && result.error !== 'Supabase not configured') {
       store.setGenerationStatus('error', result.error);
     }
@@ -362,11 +377,6 @@ export const AssetsStudio: React.FC = () => {
     } else if ('error' in result) {
       store.setGenerationStatus('error', result.error);
     }
-  };
-
-  const handleAddToLibrary = () => {
-    const url = store.currentLiveImageUrl;
-    if (url) saveGeneration('asset', url, store.currentGenerationSeed ?? undefined);
   };
 
   const handleCastInStory = (storyId: string) => {
@@ -899,7 +909,7 @@ export const AssetsStudio: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleSaveNewAsset}
+                  onClick={() => openSaveAssetModal('new')}
                   disabled={!store.currentLiveImageUrl}
                   className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -914,7 +924,7 @@ export const AssetsStudio: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleAddToLibrary}
+                  onClick={() => openSaveAssetModal('library')}
                   disabled={!store.currentLiveImageUrl}
                   className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1032,6 +1042,57 @@ export const AssetsStudio: React.FC = () => {
           }
         }}
       />
+
+      {/* Save asset: collection name (required) + optional asset name */}
+      {showSaveAssetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Save asset — collection and asset name"
+        >
+          <div className="rounded-xl border border-violet-500/40 bg-black/90 backdrop-blur-md p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-bold mb-4" style={goldTextStyle}>
+              {saveAssetMode === 'new' ? 'Save new asset' : 'Add to library'}
+            </h3>
+            <label className="block text-sm font-medium text-white/80 mb-1">Collection name (required)</label>
+            <input
+              type="text"
+              value={saveAssetCollectionName}
+              onChange={(e) => setSaveAssetCollectionName(e.target.value)}
+              placeholder="e.g. City exteriors"
+              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
+              autoFocus
+            />
+            <label className="block text-sm font-medium text-white/80 mb-1">Asset name (optional)</label>
+            <input
+              type="text"
+              value={saveAssetAssetName}
+              onChange={(e) => setSaveAssetAssetName(e.target.value)}
+              placeholder="e.g. Rooftop at dusk"
+              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-4 text-sm placeholder-white/40"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveAssetModal(false)}
+                className="px-3 py-2 rounded-lg text-sm border border-white/20 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAssetModalConfirm}
+                disabled={!saveAssetCollectionName.trim()}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-black border border-amber-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: ACCENT_GOLD_GRADIENT }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-size image modal with zoom */}
       {showZoomModal && store.currentLiveImageUrl && (
