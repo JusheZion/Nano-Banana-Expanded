@@ -17,13 +17,15 @@ import {
 const ONYX_PASSWORD = 'onyx';
 const STORAGE_KEY = 'arcs-character-studio';
 
-export type WardrobeModifierCategory = 'tops' | 'bottoms' | 'outerwear' | 'accessories';
+export type WardrobeModifierCategory = 'tops' | 'bottoms' | 'outerwear' | 'accessories' | 'hats' | 'glasses';
 
 const WARDROBE_MODIFIER_CATEGORIES: WardrobeModifierCategory[] = [
   'tops',
   'bottoms',
   'outerwear',
   'accessories',
+  'hats',
+  'glasses',
 ];
 
 function defaultWardrobeModifiers(): Record<

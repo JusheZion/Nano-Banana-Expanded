@@ -641,28 +641,64 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Scene Setting & Props
               </h2>
-              <div className="space-y-2 mb-4">
-                {(['structure', 'furniture', 'atmospherics'] as AssetModifierCategory[]).map((category) => {
-                  const tagLabel =
-                    category === 'structure'
-                      ? (store.setDressingSelections.roomType ?? []).join(', ') || undefined
-                      : category === 'furniture'
-                        ? (store.setDressingSelections.furniture ?? []).join(', ') || undefined
-                        : [
-                            ...(store.setDressingSelections.lightingFixtures ?? []),
-                            ...(store.setDressingSelections.surfaceTextures ?? []),
-                          ].join(', ') || undefined;
+              <div className="space-y-4">
+                {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => {
+                  const isStructure = cat === 'roomType';
+                  const isFurniture = cat === 'furniture';
+                  const isAtmospherics = cat === 'surfaceTextures';
                   return (
-                    <ModifierRibbon
-                      key={category}
-                      categoryLabel={category.charAt(0).toUpperCase() + category.slice(1)}
-                      selectedColor={store.assetModifiers[category].color}
-                      material={store.assetModifiers[category].material}
-                      tagLabel={tagLabel}
-                      onColorChange={(hex) => store.setAssetModifierColor(category, hex)}
-                      onMaterialChange={(m) => store.setAssetModifierMaterial(category, m)}
-                      variant="amethyst"
-                    />
+                    <div key={cat}>
+                      <SetDressingRow
+                        category={cat}
+                        presets={SET_DRESSING_PRESETS[cat]}
+                        selected={store.setDressingSelections[cat] ?? []}
+                        library={store.setDressingLibraries[cat] ?? []}
+                        onToggle={(v) => toggleSetDressing(cat, v)}
+                      />
+                      {/* Modifier ribbon directly under this category's tags */}
+                      {isStructure && (
+                        <div className="mt-2">
+                          <ModifierRibbon
+                            categoryLabel="Structure"
+                            selectedColor={store.assetModifiers.structure.color}
+                            material={store.assetModifiers.structure.material}
+                            tagLabel={(store.setDressingSelections.roomType ?? []).join(', ') || undefined}
+                            onColorChange={(hex) => store.setAssetModifierColor('structure', hex)}
+                            onMaterialChange={(m) => store.setAssetModifierMaterial('structure', m)}
+                            variant="amethyst"
+                          />
+                        </div>
+                      )}
+                      {isFurniture && (
+                        <div className="mt-2">
+                          <ModifierRibbon
+                            categoryLabel="Furniture"
+                            selectedColor={store.assetModifiers.furniture.color}
+                            material={store.assetModifiers.furniture.material}
+                            tagLabel={(store.setDressingSelections.furniture ?? []).join(', ') || undefined}
+                            onColorChange={(hex) => store.setAssetModifierColor('furniture', hex)}
+                            onMaterialChange={(m) => store.setAssetModifierMaterial('furniture', m)}
+                            variant="amethyst"
+                          />
+                        </div>
+                      )}
+                      {isAtmospherics && (
+                        <div className="mt-2">
+                          <ModifierRibbon
+                            categoryLabel="Atmospherics"
+                            selectedColor={store.assetModifiers.atmospherics.color}
+                            material={store.assetModifiers.atmospherics.material}
+                            tagLabel={[
+                              ...(store.setDressingSelections.lightingFixtures ?? []),
+                              ...(store.setDressingSelections.surfaceTextures ?? []),
+                            ].join(', ') || undefined}
+                            onColorChange={(hex) => store.setAssetModifierColor('atmospherics', hex)}
+                            onMaterialChange={(m) => store.setAssetModifierMaterial('atmospherics', m)}
+                            variant="amethyst"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 <button
@@ -672,18 +708,6 @@ export const AssetsStudio: React.FC = () => {
                 >
                   <span className="inline-block" style={goldTextStyle}>Clear colors & materials</span>
                 </button>
-              </div>
-              <div className="space-y-4">
-                {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => (
-                  <SetDressingRow
-                    key={cat}
-                    category={cat}
-                    presets={SET_DRESSING_PRESETS[cat]}
-                    selected={store.setDressingSelections[cat] ?? []}
-                    library={store.setDressingLibraries[cat] ?? []}
-                    onToggle={(v) => toggleSetDressing(cat, v)}
-                  />
-                ))}
               </div>
               <SectionAddToLibrary
                 categories={(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((c) => ({

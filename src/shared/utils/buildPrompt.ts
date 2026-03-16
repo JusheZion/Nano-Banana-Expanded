@@ -6,7 +6,9 @@ export type WardrobeModifierCategory =
   | 'tops'
   | 'bottoms'
   | 'outerwear'
-  | 'accessories';
+  | 'accessories'
+  | 'hats'
+  | 'glasses';
 
 export type AssetModifierCategory =
   | 'structure'
@@ -43,10 +45,12 @@ export function fuseWardrobeModifiers(
     'bottoms',
     'outerwear',
     'accessories',
+    'hats',
+    'glasses',
   ];
   const segments: string[] = [];
   for (const cat of categories) {
-    const mod = wardrobeModifiers[cat];
+    const mod = wardrobeModifiers[cat] ?? { color: DEFAULT_COLOR, material: DEFAULT_MATERIAL as 'matte' };
     const selected = wardrobeSelections[cat] ?? [];
     const hasSelection = selected.length > 0;
     const tagPart =

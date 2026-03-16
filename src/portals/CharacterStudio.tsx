@@ -578,21 +578,34 @@ export const CharacterStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Wardrobe Engine
               </h2>
-              <div className="space-y-2 mb-4">
-                {(['tops', 'bottoms', 'outerwear', 'accessories'] as WardrobeModifierCategory[]).map(
+              <div className="space-y-4">
+                {(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map(
                   (cat) => (
-                    <ModifierRibbon
-                      key={cat}
-                      categoryLabel={cat.charAt(0).toUpperCase() + cat.slice(1)}
-                      selectedColor={store.wardrobeModifiers[cat].color}
-                      material={store.wardrobeModifiers[cat].material}
-                      tagLabel={(store.wardrobeSelections[cat] ?? []).join(', ') || undefined}
-                      onColorChange={(hex) => store.setWardrobeModifierColor(cat, hex)}
-                      onMaterialChange={(material) =>
-                        store.setWardrobeModifierMaterial(cat, material)
-                      }
-                      variant="emerald"
-                    />
+                    <div key={cat}>
+                      <WardrobeRow
+                        category={cat}
+                        presets={WARDROBE_PRESETS[cat]}
+                        selected={store.wardrobeSelections[cat] ?? []}
+                        library={store.wardrobeLibraries[cat] ?? []}
+                        onToggle={(v) => toggleWardrobe(cat, v)}
+                      />
+                      {/* Modifier ribbon directly under this category's tags (except style and material) */}
+                      {(['tops', 'bottoms', 'outerwear', 'accessories', 'hats', 'glasses'] as WardrobeModifierCategory[]).includes(cat as WardrobeModifierCategory) && (
+                        <div className="mt-2">
+                          <ModifierRibbon
+                            categoryLabel={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                            selectedColor={store.wardrobeModifiers[cat as WardrobeModifierCategory]?.color ?? '#888888'}
+                            material={store.wardrobeModifiers[cat as WardrobeModifierCategory]?.material ?? 'matte'}
+                            tagLabel={(store.wardrobeSelections[cat] ?? []).join(', ') || undefined}
+                            onColorChange={(hex) => store.setWardrobeModifierColor(cat as WardrobeModifierCategory, hex)}
+                            onMaterialChange={(material) =>
+                              store.setWardrobeModifierMaterial(cat as WardrobeModifierCategory, material)
+                            }
+                            variant="emerald"
+                          />
+                        </div>
+                      )}
+                    </div>
                   )
                 )}
                 <button
@@ -602,20 +615,6 @@ export const CharacterStudio: React.FC = () => {
                 >
                   <span className="inline-block" style={goldTextStyle}>Clear colors & materials</span>
                 </button>
-              </div>
-              <div className="space-y-4">
-                {(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map(
-                  (cat) => (
-                    <WardrobeRow
-                      key={cat}
-                      category={cat}
-                      presets={WARDROBE_PRESETS[cat]}
-                      selected={store.wardrobeSelections[cat] ?? []}
-                      library={store.wardrobeLibraries[cat] ?? []}
-                      onToggle={(v) => toggleWardrobe(cat, v)}
-                    />
-                  )
-                )}
               </div>
               <SectionAddToLibrary
                 categories={(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map((c) => ({
