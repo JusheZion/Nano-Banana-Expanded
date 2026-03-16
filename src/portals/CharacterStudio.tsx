@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Tooltip } from '@/shared/components/Tooltip';
-import { useCharacterStudioStore } from '@/stores/characterStudioStore';
+import {
+  useCharacterStudioStore,
+  type WardrobeModifierCategory,
+} from '@/stores/characterStudioStore';
 import { buildCharacterStudioPrompt } from '@/shared/utils/characterStudioPrompt';
 import {
   CHARACTER_STUDIO_BG_V4,
@@ -29,6 +33,7 @@ import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils
 import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
 import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
+import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -143,6 +148,8 @@ export const CharacterStudio: React.FC = () => {
   const [vaultPassword, setVaultPassword] = useState('');
   const [customStyleInput, setCustomStyleInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
+  const [showZoomModal, setShowZoomModal] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -204,8 +211,45 @@ export const CharacterStudio: React.FC = () => {
       : store.currentLiveImageUrl
         ? [store.currentLiveImageUrl]
         : [];
+    const promptForApi =
+      refUrls.length > 0
+        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        : compiledPrompt;
     const result = await generateImage({
-      prompt: compiledPrompt,
+      prompt: promptForApi,
+      referenceImageUrls: refUrls,
+      seed,
+      aspectRatio: '9:16',
+      modelId: store.selectedOnyxModelId,
+    });
+    if (result.ok) {
+      store.setCurrentLiveImageUrl(result.imageDataUrl);
+      store.setCurrentGenerationSeed(seed);
+      store.setGenerationStatus('idle');
+      addCachedGeneration('character', { url: result.imageDataUrl, seed });
+    } else if ('blocked' in result && result.blocked) {
+      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+    } else if ('error' in result) {
+      store.setGenerationStatus('error', result.error);
+    }
+  };
+
+  const handleGenerateAlternate = async () => {
+    store.setGenerationStatus('pending');
+    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    store.setCurrentGenerationSeed(seed);
+    const refUrls = store.referenceImageUrls.length > 0
+      ? store.referenceImageUrls
+      : store.currentLiveImageUrl
+        ? [store.currentLiveImageUrl]
+        : [];
+    const basePrompt =
+      refUrls.length > 0
+        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        : compiledPrompt;
+    const promptForApi = `${basePrompt} Alternate pose, same character.`;
+    const result = await generateImage({
+      prompt: promptForApi,
       referenceImageUrls: refUrls,
       seed,
       aspectRatio: '9:16',
@@ -501,6 +545,24 @@ export const CharacterStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Wardrobe Engine
               </h2>
+              <div className="space-y-2 mb-4">
+                {(['tops', 'bottoms', 'outerwear', 'accessories'] as WardrobeModifierCategory[]).map(
+                  (cat) => (
+                    <ModifierRibbon
+                      key={cat}
+                      categoryLabel={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      selectedColor={store.wardrobeModifiers[cat].color}
+                      material={store.wardrobeModifiers[cat].material}
+                      tagLabel={(store.wardrobeSelections[cat] ?? []).join(', ') || undefined}
+                      onColorChange={(hex) => store.setWardrobeModifierColor(cat, hex)}
+                      onMaterialChange={(material) =>
+                        store.setWardrobeModifierMaterial(cat, material)
+                      }
+                      variant="emerald"
+                    />
+                  )
+                )}
+              </div>
               <div className="space-y-4">
                 {(Object.keys(WARDROBE_PRESETS) as WardrobeCategory[]).map(
                   (cat) => (
@@ -690,11 +752,37 @@ export const CharacterStudio: React.FC = () => {
             )}
             <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
               {store.currentLiveImageUrl ? (
-                <img
-                  src={store.currentLiveImageUrl}
-                  alt="Live character"
-                  className="max-w-full max-h-full object-contain"
-                />
+                <>
+                  <img
+                    src={store.currentLiveImageUrl}
+                    alt="Live character"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                  <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                    <Tooltip content="View full size with zoom" side="left">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setZoomLevel(1);
+                          setShowZoomModal(true);
+                        }}
+                        className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                      >
+                        <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Delete this image" side="left">
+                      <button
+                        type="button"
+                        onClick={() => store.setCurrentLiveImageUrl(null)}
+                        className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                        aria-label="Delete image"
+                      >
+                        <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                </>
               ) : (
                 <div className="text-center space-y-2">
                   <div className="w-16 h-16 rounded-full border border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
@@ -735,6 +823,14 @@ export const CharacterStudio: React.FC = () => {
                 ) : (
                   'Generate Character'
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateAlternate}
+                disabled={store.generationStatus === 'pending' || (!store.currentLiveImageUrl && store.referenceImageUrls.length === 0)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="inline-block" style={goldTextStyle}>Generate Alternate</span>
               </button>
               <button
                 type="button"
@@ -794,6 +890,60 @@ export const CharacterStudio: React.FC = () => {
             <p className="text-xs inline-block" style={goldTextStyle}>
               New generations here are derived from the official Full Body Reference.
             </p>
+            {/* Pose gallery: click to set as live, trash to delete */}
+            {store.poses.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 inline-block" style={goldTextStyle}>
+                  Poses ({store.poses.length})
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {store.poses.map((pose) => (
+                    <div
+                      key={pose.id}
+                      className={`relative rounded-lg border overflow-hidden aspect-[9/16] max-h-28 ${
+                        store.selectedPoseId === pose.id ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-white/20'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          store.setSelectedPoseId(pose.id);
+                          if (pose.imageUrl) {
+                            store.setCurrentLiveImageUrl(pose.imageUrl);
+                          }
+                        }}
+                        className="absolute inset-0 w-full h-full block"
+                      >
+                        {pose.imageUrl ? (
+                          <img src={pose.imageUrl} alt={pose.name ?? 'Pose'} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-black/50 text-white/50 text-xs">
+                            Empty
+                          </div>
+                        )}
+                      </button>
+                      <Tooltip content="Delete this pose" side="left">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            store.removePose(pose.id);
+                            if (store.selectedPoseId === pose.id) {
+                              store.setSelectedPoseId(null);
+                              store.setCurrentLiveImageUrl(null);
+                            }
+                          }}
+                          className="absolute bottom-1 right-1 p-1.5 rounded bg-black/70 border border-amber-500/40 hover:bg-amber-500/20"
+                          aria-label="Delete pose"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                        </button>
+                      </Tooltip>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Age Modifier 0-100 */}
             <div>
               <label className="text-xs block mb-1 inline-block" style={goldTextStyle}>Age Modifier</label>
@@ -841,6 +991,79 @@ export const CharacterStudio: React.FC = () => {
         </div>
         </div>
       </div>
+
+      {/* Full-size image modal with zoom */}
+      {showZoomModal && store.currentLiveImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/95"
+          role="dialog"
+          aria-modal="true"
+          aria-label="View image full size"
+        >
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Zoom out"
+              >
+                <ZoomOut className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+              <span className="text-sm tabular-nums min-w-[4rem]" style={goldTextStyle}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.min(4, z + 0.25))}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Zoom in"
+              >
+                <ZoomIn className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomLevel(1)}
+                className="px-2 py-1 text-xs rounded border border-white/20 hover:bg-white/10"
+              >
+                <span className="inline-block" style={goldTextStyle}>Reset</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip content="Delete this image" side="bottom">
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.setCurrentLiveImageUrl(null);
+                    setShowZoomModal(false);
+                  }}
+                  className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                  aria-label="Delete image"
+                >
+                  <Trash2 className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                </button>
+              </Tooltip>
+              <button
+                type="button"
+                onClick={() => setShowZoomModal(false)}
+                className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
+            <img
+              src={store.currentLiveImageUrl}
+              alt="Full size character reference"
+              className="max-w-none transition-transform origin-center"
+              style={{ transform: `scale(${zoomLevel})` }}
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

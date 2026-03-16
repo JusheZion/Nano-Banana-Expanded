@@ -17,6 +17,28 @@ import {
 const ONYX_PASSWORD = 'onyx';
 const STORAGE_KEY = 'arcs-character-studio';
 
+export type WardrobeModifierCategory = 'tops' | 'bottoms' | 'outerwear' | 'accessories';
+
+const WARDROBE_MODIFIER_CATEGORIES: WardrobeModifierCategory[] = [
+  'tops',
+  'bottoms',
+  'outerwear',
+  'accessories',
+];
+
+function defaultWardrobeModifiers(): Record<
+  WardrobeModifierCategory,
+  { color: string; material: 'matte' | 'gloss' | 'glow' }
+> {
+  return WARDROBE_MODIFIER_CATEGORIES.reduce(
+    (acc, cat) => {
+      acc[cat] = { color: '#888888', material: 'matte' };
+      return acc;
+    },
+    {} as Record<WardrobeModifierCategory, { color: string; material: 'matte' | 'gloss' | 'glow' }>
+  );
+}
+
 export interface CharacterPose {
   id: string;
   name?: string;
@@ -75,6 +97,10 @@ export interface CharacterStudioState {
   customStyles: string[];
   wardrobeLibraries: Record<WardrobeCategory, string[]>;
   wardrobeSelections: Record<WardrobeCategory, string[]>;
+  wardrobeModifiers: Record<
+    WardrobeModifierCategory,
+    { color: string; material: 'matte' | 'gloss' | 'glow' }
+  >;
   cinematic: Record<CinematicKey, string>;
   vaultUnlocked: boolean;
   vaultPromptOverride: string;
@@ -117,6 +143,11 @@ export interface CharacterStudioState {
   setHeritageSelection: (values: string[]) => void;
   setGenderSelection: (values: string[]) => void;
   setWardrobeSelection: (category: WardrobeCategory, values: string[]) => void;
+  setWardrobeModifierColor: (category: WardrobeModifierCategory, hex: string) => void;
+  setWardrobeModifierMaterial: (
+    category: WardrobeModifierCategory,
+    material: 'matte' | 'gloss' | 'glow'
+  ) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
   setCurrentGenerationSeed: (seed: number | null) => void;
   addHeritageOption: (value: string) => void;
@@ -149,6 +180,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         },
         {} as Record<WardrobeCategory, string[]>
       ),
+      wardrobeModifiers: defaultWardrobeModifiers(),
       cinematic: emptyCinematic(),
       vaultUnlocked: false,
       vaultPromptOverride: '',
@@ -236,6 +268,20 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
           wardrobeSelections: {
             ...s.wardrobeSelections,
             [category]: values,
+          },
+        })),
+      setWardrobeModifierColor: (category, hex) =>
+        set((s) => ({
+          wardrobeModifiers: {
+            ...s.wardrobeModifiers,
+            [category]: { ...s.wardrobeModifiers[category], color: hex },
+          },
+        })),
+      setWardrobeModifierMaterial: (category, material) =>
+        set((s) => ({
+          wardrobeModifiers: {
+            ...s.wardrobeModifiers,
+            [category]: { ...s.wardrobeModifiers[category], material },
           },
         })),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
@@ -327,6 +373,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         customStyles: state.customStyles,
         wardrobeLibraries: state.wardrobeLibraries,
         wardrobeSelections: state.wardrobeSelections,
+        wardrobeModifiers: state.wardrobeModifiers,
         cinematic: state.cinematic,
         vaultPromptOverride: state.vaultPromptOverride,
         ageModifier: state.ageModifier,
