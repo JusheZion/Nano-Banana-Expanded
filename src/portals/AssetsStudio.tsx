@@ -12,6 +12,7 @@ import {
   ASSET_STUDIO_AMETHYST_TEXT,
   GEM_AMETHYST,
 } from '@/shared/theme/Phase12DesignTokens';
+import { getSlotLabel } from '@/shared/constants/referenceSlots';
 import {
   ART_STYLE_FLAGSHIP,
   ART_STYLE_LIBRARY,
@@ -449,20 +450,30 @@ export const AssetsStudio: React.FC = () => {
             {store.referenceImageUrls.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {store.referenceImageUrls.map((url, i) => (
-                  <div key={i} className="relative group">
-                    <img src={url} alt="" className="w-10 h-10 rounded object-cover border border-amber-500/30" />
+                  <div key={i} className="relative group flex flex-col items-center gap-0.5">
+                    <div className="relative">
+                      <img src={url} alt="" className="w-10 h-10 rounded object-cover border border-amber-500/30" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          store.removeReferenceImage(i);
+                          if (store.currentLiveImageUrl === url) {
+                            const next = store.referenceImageUrls.filter((_, j) => j !== i);
+                            store.setCurrentLiveImageUrl(next[0] ?? null);
+                          }
+                        }}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-white/70">{i} · {getSlotLabel(i)}</span>
                     <button
                       type="button"
-                      onClick={() => {
-                        store.removeReferenceImage(i);
-                        if (store.currentLiveImageUrl === url) {
-                          const next = store.referenceImageUrls.filter((_, j) => j !== i);
-                          store.setCurrentLiveImageUrl(next[0] ?? null);
-                        }
-                      }}
-                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      onClick={() => { /* Task 8: open recall modal */ }}
+                      className="text-[10px] text-amber-400/90 hover:text-amber-300"
                     >
-                      ×
+                      Archive
                     </button>
                   </div>
                 ))}
