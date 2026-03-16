@@ -62,6 +62,10 @@ High-level narrative of where the project is and where it's going. For checklist
 
 ## QoL / Additions not in initial task list
 
+- **Full-size image modal with zoom:** Character Studio and Asset Studio show a "View full size" (Expand) button on the live result; clicking opens a full-screen modal with zoom in/out (25%–400%), reset, and close. Same UX in both studios. **Delete (trash):** Live image panel and zoom modal have a trash icon (lower right of panel; in zoom toolbar) to clear the current image. Asset Studio has the same.
+- **Generate Alternate (Character Studio):** Button "Generate Alternate" next to "Generate Character" runs generation with prompt suffix "Alternate pose, same character" so you can get alternate poses/variants; requires at least one reference or current live image. Result appears in the live area; use "Save New Pose" to add to the Reference Gallery.
+- **Reference Gallery poses:** Right panel lists saved poses in a grid; click a pose to set it as the live image and select it for "Save Edited Profile". Each pose card has a trash icon (lower right) to delete. "Add Character Pose" adds an empty pose slot; generate or paste an image then "Save New Pose" or "Save Edited Profile" to fill it.
+- **Art style with reference images:** When reference images are present, the generation prompt is prefixed with "Render in this art style: &lt;artStyleLabel&gt;." so the model applies the selected style (e.g. 3D/CGI animated) to the output.
 - **Home ribbon group labels:** Section labels (Revise, Clipboard, Font, Color, Panels, Images, Balloons, Layout) added above each button group for clarity.
 - **Font size dropdown in Home ribbon:** Preset sizes 10–36 when a balloon is selected (replaces typing in a bare number).
 - **“Select text” placeholder:** When no balloon is selected, Font group shows “Select text” instead of empty controls.
@@ -169,6 +173,13 @@ High-level narrative of where the project is and where it's going. For checklist
 - **Session cache:** `src/shared/utils/generationSessionCache.ts` — last 10 generations per context; `addCachedGeneration` on generate success and save; "Recent" strip in both studios (thumbnails, click to set live image and seed).
 - **Asset Expansion:** Expand Setting uses `seed + 1` (primary reference seed + 1) for architectural consistency; spatial/room/urban/time options appended to prompt; result shown as live image and cached with expansion seed.
 - **Portal switch:** No re-fetch or clear on Character ↔ Asset switch; each store persists independently; generation window and state preserved.
+
+### ARCS v11.0 — Archive-Driven Generation & Multi-Category Modifiers (Complete)
+
+- **Design:** `docs/plans/2026-03-15-archive-driven-generation-modifiers-design.md` (approved).
+- **Implementation plan:** `docs/plans/2026-03-15-archive-driven-generation-modifiers.md` (11 tasks).
+- **Summary:** Dual-layer naming and album grouping (Supabase migration, persistence, Archive UI by profile_name/collection_name) done. ModifierRibbon (color + Matte/Gloss/Glow) for Character and Asset studios with prompt fusion [Color] [Material] [Tag] done. 14 labeled reference slots (Physicality, Hairstyle, Clothing, Aesthetic) and Archive recall modal to inject saved image into slot done. Global reset modifiers, Gemstone pulse (Emerald/Amethyst during pending), and tab/portal state preservation verified.
+- **Archive recall modal (Task 8 — done):** `src/shared/api/arcsArchive.ts`: `getCharactersGroupedByProfile()` and `getAssetsGroupedByCollection()` (Supabase when configured, else `getGenerations` grouped by profileName/collectionName). `ArchiveRecallModal.tsx`: browse albums (section = profile/collection name), grid of image cards; on image click injects URL into reference slot and closes. Character Studio and Asset Studio "Archive" buttons open modal for that slot; `onSelect` calls `store.setReferenceImageAt(slotIndex, url)` and closes.
 
 ### Priority 1 Bugs (Fixed)
 - **Undo/Redo**: Panel, vertex, and edge drags now record one undo step per gesture (zundo pause on drag start, resume on first move to push pre-drag state, pause for remaining moves, resume on drag end). Redo stack clears on new action (zundo default). Store has `captureUndoCheckpoint()` for optional batch commits. **Mar 2025:** Undo/redo buttons and Cmd+Z / Cmd+Shift+Z again invoke temporal API directly via stable callbacks in `ComicLayout` (no optional guard so clicks always call `undo()`/`redo()`).
