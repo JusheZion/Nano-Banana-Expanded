@@ -35,6 +35,7 @@ import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
 import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
+import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -151,6 +152,7 @@ export const CharacterStudio: React.FC = () => {
   const [statusStep, setStatusStep] = useState(0);
   const [showZoomModal, setShowZoomModal] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -395,7 +397,7 @@ export const CharacterStudio: React.FC = () => {
                     <span className="text-[10px] text-white/70">{i} · {getSlotLabel(i)}</span>
                     <button
                       type="button"
-                      onClick={() => { /* Task 8: open recall modal */ }}
+                      onClick={() => setRecallSlotIndex(i)}
                       className="text-[10px] text-amber-400/90 hover:text-amber-300"
                     >
                       Archive
@@ -1004,6 +1006,19 @@ export const CharacterStudio: React.FC = () => {
         </div>
         </div>
       </div>
+
+      <ArchiveRecallModal
+        open={recallSlotIndex !== null}
+        onClose={() => setRecallSlotIndex(null)}
+        context="character"
+        slotIndex={recallSlotIndex ?? 0}
+        onSelect={(url) => {
+          if (recallSlotIndex != null) {
+            store.setReferenceImageAt(recallSlotIndex, url);
+            setRecallSlotIndex(null);
+          }
+        }}
+      />
 
       {/* Full-size image modal with zoom */}
       {showZoomModal && store.currentLiveImageUrl && (
