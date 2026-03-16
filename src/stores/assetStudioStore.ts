@@ -150,6 +150,7 @@ export interface AssetStudioState {
     category: AssetModifierCategory,
     material: 'matte' | 'gloss' | 'glow'
   ) => void;
+  resetAssetModifiers: () => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -318,6 +319,8 @@ export const useAssetStudioStore = create<AssetStudioState>()(
             [category]: { ...s.assetModifiers[category], material },
           },
         })),
+      resetAssetModifiers: () =>
+        set({ assetModifiers: defaultAssetModifiers() }),
     }),
     {
       name: STORAGE_KEY,

@@ -665,6 +665,13 @@ export const AssetsStudio: React.FC = () => {
                     />
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => store.resetAssetModifiers()}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Clear colors & materials</span>
+                </button>
               </div>
               <div className="space-y-4">
                 {(Object.keys(SET_DRESSING_PRESETS) as SetDressingCategory[]).map((cat) => (

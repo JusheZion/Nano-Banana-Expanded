@@ -148,6 +148,7 @@ export interface CharacterStudioState {
     category: WardrobeModifierCategory,
     material: 'matte' | 'gloss' | 'glow'
   ) => void;
+  resetWardrobeModifiers: () => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
   setCurrentGenerationSeed: (seed: number | null) => void;
   addHeritageOption: (value: string) => void;
@@ -284,6 +285,8 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
             [category]: { ...s.wardrobeModifiers[category], material },
           },
         })),
+      resetWardrobeModifiers: () =>
+        set({ wardrobeModifiers: defaultWardrobeModifiers() }),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
       setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
       addHeritageOption: (value) =>
