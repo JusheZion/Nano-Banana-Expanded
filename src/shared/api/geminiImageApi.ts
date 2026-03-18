@@ -1,7 +1,10 @@
 /**
  * Universal API bridge for Gemini Image (Nano Banana 2 / Pro).
  * Handles reference_images (max 14), seed, aspect ratio, 429 backoff, and safety blocks.
+ * Reference slots 0–3: identity, 4–9: style, 10–13: composition; role labels are sent as text before each group.
  */
+
+import { getSlotRole } from '@/shared/constants/referenceSlots';
 
 const MODELS = {
   flash: 'gemini-3.1-flash-image-preview',
@@ -55,10 +58,15 @@ export async function urlToBase64(url: string): Promise<string> {
 
 export interface GenerateImageOptions {
   prompt: string;
+  /** Up to 14 slots; index = slot (0–3 identity, 4–9 style, 10–13 composition). Pad to 14 with '' for unused. */
   referenceImageUrls: string[];
   seed: number | null;
   aspectRatio: '9:16' | '1:1' | '21:9';
   modelId: OnyxModelId;
+  /** When true, user prompt came from vault override (not tag-built); add stronger anti-background instruction. */
+  isVaultOverride?: boolean;
+  /** For vault-override suffix wording. */
+  context?: 'character' | 'asset';
 }
 
 export type GenerateImageResult =
@@ -94,14 +102,29 @@ export async function generateImage(
   const model = getGeminiModelId(options.modelId);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  let referenceParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+  const padded = Array.from({ length: 14 }, (_, i) => options.referenceImageUrls[i] ?? '');
+  const roleLabels: Record<string, string> = {
+    identity:
+      '[Character DNA – face, skin, body type, hair, tattoos, likeness. Use this person as the subject.]',
+    style:
+      '[Wardrobe DNA – reproduce the complete visible outfit from these images: every garment, color, pattern, and accessory. Put this exact clothing on the character from Character DNA. Do not invent a different outfit or fantasy costume unless the text prompt explicitly demands it.]',
+    composition:
+      '[Atmospheric DNA – lighting, mood, and environment only; do not replace the outfit from Wardrobe DNA.]',
+  };
+
+  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
   try {
-    const refs = options.referenceImageUrls.slice(0, 14).filter(Boolean);
-    for (const refUrl of refs) {
+    let lastRole: string | null = null;
+    for (let i = 0; i < padded.length; i++) {
+      const refUrl = padded[i];
+      if (!refUrl) continue;
+      const role = getSlotRole(i);
+      if (role !== lastRole) {
+        parts.push({ text: roleLabels[role] + '\n' });
+        lastRole = role;
+      }
       const b64 = await urlToBase64(refUrl);
-      referenceParts.push({
-        inlineData: { mimeType: 'image/png', data: b64 },
-      });
+      parts.push({ inlineData: { mimeType: 'image/png', data: b64 } });
     }
   } catch (e) {
     return {
@@ -110,17 +133,24 @@ export async function generateImage(
     };
   }
 
+  const hasAnyRef = padded.some((u) => u);
+  const subjectOnly =
+    hasAnyRef
+      ? 'Reference workflow: Character DNA images define WHO (face, body, hair). Wardrobe DNA images define WHAT THEY WEAR—match that clothing faithfully, not a stylized hybrid. Atmospheric DNA affects lighting/setting only. Ignore backgrounds behind people in refs unless the prompt asks for that setting.\n\n'
+      : '';
+  const vaultExtra =
+    options.isVaultOverride && hasAnyRef
+      ? options.context === 'asset'
+        ? '\n\nIgnore any background or setting in the reference images; generate only the environment or subject as described in the prompt.'
+        : '\n\nIgnore any background or setting in the reference images; generate only the character as described in the prompt.'
+      : '';
   const seedPart =
     options.seed != null
       ? `\nUse seed: ${options.seed} for consistency.`
       : '';
   const aspectPart = `Aspect ratio: ${options.aspectRatio}.`;
-  const fullPrompt = `${options.prompt}\n${aspectPart}${seedPart}`;
-
-  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
-    ...referenceParts.map((p) => ({ inlineData: p.inlineData })),
-    { text: fullPrompt },
-  ];
+  const fullPrompt = `${subjectOnly}${options.prompt}${vaultExtra}\n${aspectPart}${seedPart}`;
+  parts.push({ text: fullPrompt });
 
   const body = {
     contents: [{ role: 'user', parts }],

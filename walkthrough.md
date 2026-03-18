@@ -4,6 +4,10 @@ High-level narrative of where the project is and where it's going. For checklist
 
 **Cursor:** Implementation plans and to-dos are in `.cursor/plans/`; agents can use them via Plan Mode. Use Review → Find Issues and Source Control → Agent Review to validate changes. Docs: [Planning](https://docs.cursor.com/agent/planning), [Review](https://cursor.com/docs/agent/review).
 
+**Studio UX refinement (2026-03-15):** See `docs/plans/2026-03-15-studio-ux-refinement-and-polish.md`. **Verify:** `npm run build`; in Character Studio and Asset Studio test Reference panel (per-slot only, Clear all, Paste), Live Prompt tabs (Prompt / Edit / Refine), Refine with live image, ⌘+Enter generate, Undo last gen, gallery density. **Files:** `geminiImageApi.ts`, `characterStudioStore.ts`, `assetStudioStore.ts`, `Tooltip.tsx` (`PinnedHelpTooltip`), `CharacterStudio.tsx`, `AssetsStudio.tsx`.
+
+**Character Archive thumbnail framing (2026-03-16):** Per-card **Framing** opens a modal: **click-drag to pan** focal (no snap-to-cursor); scale slider; Save writes **`metadata_tags.archive_thumbnail`** `{x,y,scale}` on Supabase (no extra columns / schema-cache issues). **localStorage** archive still uses `thumbnailFocus` on `StoredGeneration`. Optional migration `20260316000000_character_thumbnail_focus.sql` unused by app. **Files:** `ArchiveThumbnailFocusModal.tsx`, `CinematicGallery.tsx`, `arcsArchive.ts`, `arcsPersistence.ts`.
+
 **ARCS migration:** Work is done on branch `arcs-migration` in the worktree at `.worktrees/arcs-migration` (or in main after merge). **ARCS rebrand and portal restructure (complete):** (1) **Rebrand:** Product label "ARCS" in AppShell and landing hero; ARCS Golden-Blue design tokens live in `src/shared/theme/Phase12DesignTokens.ts` (single source of truth); AppShell and LandingPage use them; DESIGN.md documents ARCS alongside Jewel-Tone. (2) **Restructure:** `src/shared/` holds theme, context (ThemeContext, ProjectContext), shared components (Tooltip, CopyButton, HeroHeader), and shared utils (PromptCompiler, geometry-utils); path alias `@/` points at `src/`. All portal entries live under `src/portals/` including `ComicPortal.tsx` (wraps ComicEditor); `Portal` type is centralized in `src/shared/portals.ts`. (3) **Code-splitting:** Portals are lazy-loaded via `React.lazy`; nav hover triggers prefetch (`portals-prefetch.ts`) so first click is fast. **Future:** Dual-studio (TBD — e.g. two studio modes or split view; define in a later spec). **Next phase:** WordArt expansion per Phase 16 (Transform dropdown, Reflection/Glow/3D, preset gallery).
 
 ---
@@ -70,6 +74,7 @@ High-level narrative of where the project is and where it's going. For checklist
 - **Font size dropdown in Home ribbon:** Preset sizes 10–36 when a balloon is selected (replaces typing in a bare number).
 - **“Select text” placeholder:** When no balloon is selected, Font group shows “Select text” instead of empty controls.
 - **Clone icon:** Using `CopyPlus` (lucide-react) for Clone in Home ribbon (Clone not available in lucide).
+- **Custom tag deletion:** Character Studio and Asset Studio support deleting custom (library) tags. Each custom tag chip shows a small “×” control; clicking it removes the tag from that category’s library and from the current selection. Stores: `removeWardrobeOption`, `removeHeritageOption`, `removeGenderOption`, `removePhysicalOption`, `removeCinematicOption`, `removeCustomStyle` (Character); `removeEraStyleOption`, `removeLocationTypeOption`, `removeArchitecturalDetailOption`, `removeSetDressingOption`, `removeCinematicOption`, `removeCustomStyle` (Asset). Preset options from spec are not deletable.
 
 ---
 

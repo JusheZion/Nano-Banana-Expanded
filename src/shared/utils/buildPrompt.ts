@@ -111,3 +111,46 @@ export function fuseAssetModifiers(
   }
   return segments;
 }
+
+/**
+ * Slot ranges for reference DNA: identity (0–3), style (4–9), composition (10–13).
+ */
+const IDENTITY_SLOTS = { start: 0, end: 3 };
+const STYLE_SLOTS = { start: 4, end: 9 };
+const COMPOSITION_SLOTS = { start: 10, end: 13 };
+
+function hasSlotInRange(
+  referenceImageUrls: string[],
+  range: { start: number; end: number }
+): boolean {
+  for (let i = range.start; i <= range.end && i < referenceImageUrls.length; i++) {
+    if (referenceImageUrls[i]) return true;
+  }
+  return false;
+}
+
+/**
+ * Returns "Surgical Instructions" to append to the prompt based on which reference
+ * slot groups are used. Call this when building the final API prompt.
+ */
+export function getSurgicalInstructionsFromReferenceSlots(
+  referenceImageUrls: string[]
+): string[] {
+  const instructions: string[] = [];
+  if (hasSlotInRange(referenceImageUrls, IDENTITY_SLOTS)) {
+    instructions.push(
+      'Preserve face, body, skin tone, hair, and tattoos from Character DNA (identity) references—the same person.'
+    );
+  }
+  if (hasSlotInRange(referenceImageUrls, STYLE_SLOTS)) {
+    instructions.push(
+      'Wardrobe DNA references: copy the full real-world outfit (shirt, pants, shoes, hat, bag, jewelry) onto that person. Same colors and pieces as in the refs—not an alternate fantasy or “inspired by” look unless the written prompt says otherwise.'
+    );
+  }
+  if (hasSlotInRange(referenceImageUrls, COMPOSITION_SLOTS)) {
+    instructions.push(
+      'Match the lighting and atmospheric mood from the composition references.'
+    );
+  }
+  return instructions;
+}

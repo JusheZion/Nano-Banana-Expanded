@@ -15,3 +15,11 @@ export const supabase =
 export function isSupabaseConfigured(): boolean {
   return Boolean(url && anonKey);
 }
+
+/** Safe diagnostic for debugging (never logs the key itself). */
+export function getSupabaseDiagnostic(): { urlPresent: boolean; anonKeyLength: number } {
+  return {
+    urlPresent: Boolean(url),
+    anonKeyLength: typeof anonKey === 'string' ? anonKey.length : 0,
+  };
+}

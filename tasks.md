@@ -17,6 +17,22 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Update walkthrough.md
 - [x] Archive recall modal: browse albums (profile/collection), inject chosen image into reference slot (Character + Asset Studio)
 
+## Studio UX refinement & polish (Mar 15, 2026) — IN PROGRESS / MOSTLY DONE
+
+- [x] Prompt: subject-only prefix + `isVaultOverride` + context (character/asset) in `geminiImageApi.ts`
+- [x] Stores: `refinementPromptOverride`, `previousLiveImageUrl`/`Seed`, `lastUsedPrompt`, `promptSnippets`, `galleryDensity`, `clearAllReferenceSlots`
+- [x] Character + Asset: split Reference vs Tags panels; remove top bulk upload; Clear all / Paste first empty
+- [x] 3-tab Live Prompt (Auto / Edit / Refine), pin-help `?`, refinement flow + suggest chips, NEW disabled
+- [x] Shortcuts ⌘/Ctrl+Enter (Generate), Escape; Last prompt chip; snippets; Generate again; Undo last gen
+- [x] Gallery density toggle; hover zoom refs + live image; loading “Working…”; empty states
+- [ ] Image-describe API for Refine tab “NEW” (follow-up per plan §8)
+
+## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
+
+- [x] DB columns + migration; localStorage `thumbnailFocus` on character generations
+- [x] Gallery cards use focal + scale; **Framing** modal + save
+- [x] Fallback Supabase select if thumbnail columns missing
+
 ## Future / Backlog
 
 - Character Archive & Comics & Story Archive: read from Supabase when configured (fallback to localStorage).

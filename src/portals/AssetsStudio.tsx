@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
-import { Tooltip } from '@/shared/components/Tooltip';
-import { useAssetStudioStore, type AssetModifierCategory } from '@/stores/assetStudioStore';
+import { Tooltip, PinnedHelpTooltip } from '@/shared/components/Tooltip';
+import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
 import {
   ASSET_STUDIO_BG,
@@ -12,7 +13,8 @@ import {
   ASSET_STUDIO_AMETHYST_TEXT,
   GEM_AMETHYST,
 } from '@/shared/theme/Phase12DesignTokens';
-import { getSlotLabel } from '@/shared/constants/referenceSlots';
+import { getSlotLabel, REFERENCE_SLOT_DNA_GROUPS } from '@/shared/constants/referenceSlots';
+import { getSurgicalInstructionsFromReferenceSlots } from '@/shared/utils/buildPrompt';
 import {
   ART_STYLE_FLAGSHIP,
   ART_STYLE_LIBRARY,
@@ -34,6 +36,11 @@ import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils
 import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveAssetToDb } from '@/shared/api/arcsPersistence';
 import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
+import {
+  addRecentFromAsset,
+  getRecentAssets,
+  type RecentGeneration,
+} from '@/shared/utils/recentGenerations';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
 
@@ -74,23 +81,63 @@ function Chip({
   );
 }
 
+/** Chip with optional remove button for custom (library) tags only */
+function ChipWithOptionalRemove({
+  label,
+  active,
+  onClick,
+  isCustom,
+  onRemove,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  isCustom: boolean;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className={isCustom ? 'inline-flex items-center gap-0.5' : undefined}>
+      <Chip label={label} active={active} onClick={onClick} />
+      {isCustom && onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="p-0.5 rounded text-white/70 hover:text-white hover:bg-white/20 text-xs leading-none"
+          aria-label="Remove custom tag"
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
 function MultiChip({
   options,
   selected,
   onToggle,
+  libraryOptions,
+  onRemoveLibrary,
 }: {
   options: readonly string[];
   selected: string[];
   onToggle: (value: string) => void;
+  libraryOptions?: readonly string[];
+  onRemoveLibrary?: (value: string) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((opt) => (
-        <Chip
+        <ChipWithOptionalRemove
           key={opt}
           label={opt}
           active={selected.includes(opt)}
           onClick={() => onToggle(opt)}
+          isCustom={!!libraryOptions?.includes(opt)}
+          onRemove={libraryOptions?.includes(opt) ? () => onRemoveLibrary?.(opt) : undefined}
         />
       ))}
     </div>
@@ -192,12 +239,14 @@ function SetDressingRow({
   selected,
   library,
   onToggle,
+  onRemoveLibrary,
 }: {
   category: SetDressingCategory;
   presets: readonly string[];
   selected: string[];
   library: string[];
   onToggle: (v: string) => void;
+  onRemoveLibrary?: (value: string) => void;
 }) {
   const allOptions = [...presets, ...library];
   const label = category.replace(/([A-Z])/g, ' $1').trim();
@@ -206,11 +255,13 @@ function SetDressingRow({
       <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{label}</h3>
       <div className="flex flex-wrap gap-2">
         {allOptions.map((opt) => (
-          <Chip
+          <ChipWithOptionalRemove
             key={opt}
             label={opt}
             active={selected.includes(opt)}
             onClick={() => onToggle(opt)}
+            isCustom={library.includes(opt)}
+            onRemove={library.includes(opt) ? () => onRemoveLibrary?.(opt) : undefined}
           />
         ))}
       </div>
@@ -231,6 +282,24 @@ export const AssetsStudio: React.FC = () => {
   const [saveAssetCollectionName, setSaveAssetCollectionName] = useState('');
   const [saveAssetAssetName, setSaveAssetAssetName] = useState('');
   const [saveAssetMode, setSaveAssetMode] = useState<'new' | 'library'>('new');
+  const [recentAssets, setRecentAssets] = useState<RecentGeneration[]>([]);
+  const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'edit' | 'refine'>('auto');
+  const [snippetNameInput, setSnippetNameInput] = useState('');
+  const [snippetTextInput, setSnippetTextInput] = useState('');
+  const generateAssetRef = useRef<() => Promise<void>>(async () => {});
+  const [refHoverPreview, setRefHoverPreview] = useState<{
+    url: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const REFINE_SUGGEST_CHIPS = [
+    'Softer ambient light',
+    'Wider establishing shot',
+    'More detail in foreground',
+    'Different time of day',
+    'Richer materials',
+  ];
 
   const STATUS_BREADCRUMBS = [
     'Scanning DNA/Architecture...',
@@ -241,6 +310,10 @@ export const AssetsStudio: React.FC = () => {
   useEffect(() => {
     setTheme('purple');
   }, [setTheme]);
+
+  useEffect(() => {
+    setRecentAssets(getRecentAssets());
+  }, []);
 
   useEffect(() => {
     if (store.generationStatus !== 'pending') return;
@@ -294,18 +367,34 @@ export const AssetsStudio: React.FC = () => {
       : store.currentLiveImageUrl
         ? [store.currentLiveImageUrl]
         : [];
-    const promptForApi =
+    const refUrlsForApi = Array.from(
+      { length: 14 },
+      (_, i) => (refUrls[i] ?? '')
+    );
+    const basePrompt =
       refUrls.length > 0
         ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
         : compiledPrompt;
+    const surgical = getSurgicalInstructionsFromReferenceSlots(
+      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
+    );
+    const promptForApi =
+      surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
+    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
     const result = await generateImage({
       prompt: promptForApi,
-      referenceImageUrls: refUrls,
+      referenceImageUrls: refUrlsForApi,
       seed,
       aspectRatio: store.aspectRatio,
       modelId: store.selectedOnyxModelId,
+      isVaultOverride,
+      context: 'asset',
     });
     if (result.ok) {
+      if (store.currentLiveImageUrl) {
+        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+      }
+      store.setLastUsedPrompt(promptForApi);
       store.setCurrentLiveImageUrl(result.imageDataUrl);
       store.setCurrentGenerationSeed(seed);
       store.setGenerationStatus('idle');
@@ -316,6 +405,60 @@ export const AssetsStudio: React.FC = () => {
       store.setGenerationStatus('error', result.error);
     }
   };
+
+  generateAssetRef.current = handleGenerateAsset;
+
+  const handleRefineAsset = async () => {
+    const live = store.currentLiveImageUrl;
+    const refinement = store.refinementPromptOverride.trim();
+    if (!live || !refinement) return;
+    store.setGenerationStatus('pending');
+    const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+    const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
+    const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this environment or asset image according to these instructions while preserving style and readable composition: ${refinement}`;
+    const result = await generateImage({
+      prompt: promptForApi,
+      referenceImageUrls: refUrlsForApi,
+      seed,
+      aspectRatio: store.aspectRatio,
+      modelId: store.selectedOnyxModelId,
+      isVaultOverride: false,
+      context: 'asset',
+    });
+    if (result.ok) {
+      if (store.currentLiveImageUrl) {
+        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+      }
+      store.setLastUsedPrompt(promptForApi);
+      store.setCurrentLiveImageUrl(result.imageDataUrl);
+      store.setCurrentGenerationSeed(seed);
+      store.setGenerationStatus('idle');
+      addCachedGeneration('asset', { url: result.imageDataUrl, seed });
+    } else if ('blocked' in result && result.blocked) {
+      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+    } else if ('error' in result) {
+      store.setGenerationStatus('error', result.error);
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && store.generationStatus !== 'pending') {
+        e.preventDefault();
+        void generateAssetRef.current();
+      }
+      if (e.key === 'Escape') {
+        setShowZoomModal(false);
+        setShowSaveAssetModal(false);
+        setRecallSlotIndex(null);
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [store.generationStatus]);
 
   const openSaveAssetModal = (mode: 'new' | 'library') => {
     setSaveAssetCollectionName('');
@@ -333,6 +476,16 @@ export const AssetsStudio: React.FC = () => {
     saveGeneration('asset', url, store.currentGenerationSeed ?? undefined, { collectionName });
     addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
     const result = await saveAssetToDb(store, collectionName, collectionName, assetName);
+    if (result.ok && result.id != null && result.imageUrl != null) {
+      addRecentFromAsset({
+        id: result.id,
+        image_url: result.imageUrl,
+        collection_name: collectionName,
+        asset_name: assetName ?? null,
+        seed: store.currentGenerationSeed ?? null,
+      });
+      setRecentAssets(getRecentAssets());
+    }
     setShowSaveAssetModal(false);
     if (!result.ok && result.error && result.error !== 'Supabase not configured') {
       store.setGenerationStatus('error', result.error);
@@ -348,6 +501,10 @@ export const AssetsStudio: React.FC = () => {
       : store.currentLiveImageUrl
         ? [store.currentLiveImageUrl]
         : [];
+    const refUrlsForApi = Array.from(
+      { length: 14 },
+      (_, i) => (refUrls[i] ?? '')
+    );
     const expansionParts = [
       store.spatialRoomOption,
       store.spatialUrbanOption,
@@ -357,17 +514,29 @@ export const AssetsStudio: React.FC = () => {
       refUrls.length > 0
         ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
         : compiledPrompt;
+    const surgical = getSurgicalInstructionsFromReferenceSlots(
+      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
+    );
+    const baseWithSurgical =
+      surgical.length > 0 ? `${expansionBase}\n\n${surgical.join(' ')}` : expansionBase;
     const expansionPrompt = expansionParts.length > 0
-      ? `${expansionBase}, spatial expansion: ${expansionParts.join(', ')}`
-      : expansionBase;
+      ? `${baseWithSurgical}, spatial expansion: ${expansionParts.join(', ')}`
+      : baseWithSurgical;
+    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
     const result = await generateImage({
       prompt: expansionPrompt,
-      referenceImageUrls: refUrls,
+      referenceImageUrls: refUrlsForApi,
       seed: expansionSeed,
       aspectRatio: store.aspectRatio,
       modelId: store.selectedOnyxModelId,
+      isVaultOverride,
+      context: 'asset',
     });
     if (result.ok) {
+      if (store.currentLiveImageUrl) {
+        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+      }
+      store.setLastUsedPrompt(expansionPrompt);
       store.setCurrentLiveImageUrl(result.imageDataUrl);
       store.setCurrentGenerationSeed(expansionSeed);
       store.setGenerationStatus('idle');
@@ -413,7 +582,13 @@ export const AssetsStudio: React.FC = () => {
     store.setSetDressingSelection(category, next);
   };
 
+  const previewAspect =
+    store.aspectRatio === '21:9' ? '21 / 9' : store.aspectRatio === '1:1' ? '1 / 1' : '9 / 16';
+  const previewMaxH =
+    store.aspectRatio === '21:9' ? 'min(36vh, calc(100vh - 24rem))' : 'min(76vh, calc(100vh - 22rem))';
+
   return (
+    <>
     <div
       className="flex flex-col min-h-screen p-4 animate-fade-in"
       style={{ background: ASSET_STUDIO_BG }}
@@ -431,68 +606,185 @@ export const AssetsStudio: React.FC = () => {
       </header>
 
       <div className="flex gap-3 w-full flex-1 min-h-0">
-        {/* Left Panel: Import at top, then scroll */}
-        <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden flex-shrink-0">
-          <div className="flex-shrink-0 p-2 border-b border-white/10">
-            <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2" style={goldTextStyle}>
-              Import Asset / Setting
+        <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col gap-3 flex-shrink-0">
+          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-col min-h-[200px] max-h-[min(46vh,440px)] flex-shrink-0 overflow-hidden shadow-lg shadow-black/20">
+            <div className="p-2 flex flex-col min-h-0 flex-1 overflow-hidden">
+            <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
+              Reference images
             </h2>
             <Tooltip
-              content="Upload reference images. Up to 14 for the API. By default the AI treats them as absolute architectural reference; enable Diversify Style to use tags for era and materials."
+              variant="asset"
+              content="Bulk add fills empty slots in order (1–4 Identity, 5–10 Wardrobe, 11–14 Atmospheric). Per-slot Upload targets one slot."
               side="bottom"
             >
-              <label className="flex rounded-xl border border-dashed border-amber-500/40 bg-black/30 px-3 py-2.5 cursor-pointer hover:border-amber-500/60 transition-colors">
-                <span className="text-xs font-medium inline-block" style={goldTextStyle}>Add reference ({store.referenceImageUrls.length}/14)</span>
+              <label className="flex rounded-lg border border-dashed border-amber-500/50 bg-black/25 px-2 py-2 mb-2 cursor-pointer hover:border-amber-400/70 shrink-0">
+                <span className="text-[10px] font-medium text-violet-200/90">
+                  Add image(s) to next empty slots ({Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).filter(Boolean).length}/14)
+                </span>
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file && store.referenceImageUrls.length < 14) {
+                    const files = e.target.files;
+                    if (!files?.length) return;
+                    const next = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i] ?? '');
+                    let slot = 0;
+                    let lastUrl: string | null = null;
+                    for (const file of Array.from(files)) {
+                      if (!file.type.startsWith('image/')) continue;
+                      while (slot < 14 && next[slot]) slot++;
+                      if (slot >= 14) break;
                       const url = URL.createObjectURL(file);
-                      store.addReferenceImage(url);
-                      store.setCurrentLiveImageUrl(url);
+                      next[slot] = url;
+                      lastUrl = url;
+                      slot++;
                     }
+                    store.setReferenceImageUrls(next);
+                    if (lastUrl) store.setCurrentLiveImageUrl(lastUrl);
                     e.target.value = '';
                   }}
                 />
               </label>
             </Tooltip>
-            {store.referenceImageUrls.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {store.referenceImageUrls.map((url, i) => (
-                  <div key={i} className="relative group flex flex-col items-center gap-0.5">
-                    <div className="relative">
-                      <img src={url} alt="" className="w-10 h-10 rounded object-cover border border-amber-500/30" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          store.removeReferenceImage(i);
-                          if (store.currentLiveImageUrl === url) {
-                            const next = store.referenceImageUrls.filter((_, j) => j !== i);
-                            store.setCurrentLiveImageUrl(next[0] ?? null);
+            <div className="flex flex-wrap gap-2 mb-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  store.clearAllReferenceSlots();
+                  store.setCurrentLiveImageUrl(null);
+                }}
+                className="px-2 py-1 rounded-lg text-[10px] border border-white/20 hover:bg-white/10"
+              >
+                Clear all slots
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const clipItems = await navigator.clipboard.read();
+                    for (const item of clipItems) {
+                      for (const type of item.types) {
+                        if (type.startsWith('image/')) {
+                          const blob = await item.getType(type);
+                          const url = URL.createObjectURL(blob);
+                          const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
+                          const firstEmpty = slots.findIndex((u) => !u);
+                          if (firstEmpty >= 0) {
+                            store.setReferenceImageAt(firstEmpty, url);
+                            store.setCurrentLiveImageUrl(url);
                           }
-                        }}
-                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-white/70">{i} · {getSlotLabel(i)}</span>
-                    <button
-                      type="button"
-                      onClick={() => setRecallSlotIndex(i)}
-                      className="text-[10px] text-amber-400/90 hover:text-amber-300"
-                    >
-                      Archive
-                    </button>
+                          return;
+                        }
+                      }
+                    }
+                  } catch {
+                    store.setGenerationStatus('error', 'Could not paste image from clipboard.');
+                  }
+                }}
+                className="px-2 py-1 rounded-lg text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
+              >
+                Paste in first empty
+              </button>
+            </div>
+            <div className="mt-1 space-y-2 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+              {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
+                <p className="text-xs text-amber-200/70 mb-2">No references yet. Upload per slot or paste.</p>
+              )}
+              {REFERENCE_SLOT_DNA_GROUPS.map((group) => (
+                <div key={group.id}>
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1">
+                    {group.label} <span className="font-normal opacity-80">({group.subtitle})</span>
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from({ length: group.end - group.start + 1 }, (_, j) => {
+                      const i = group.start + j;
+                      const url = store.referenceImageUrls[i];
+                      return (
+                        <div key={i} className="relative group flex flex-col items-center gap-0.5">
+                          <div
+                            className={`relative w-10 h-10 rounded bg-black/40 flex items-center justify-center overflow-hidden ${
+                              url ? 'border-2 border-amber-500/60' : 'border-2 border-dashed border-white/25'
+                            }`}
+                            onMouseEnter={
+                              url
+                                ? (e) =>
+                                    setRefHoverPreview({
+                                      url,
+                                      x: e.clientX + 12,
+                                      y: e.clientY + 12,
+                                    })
+                                : undefined
+                            }
+                            onMouseMove={
+                              url
+                                ? (e) =>
+                                    setRefHoverPreview({
+                                      url,
+                                      x: e.clientX + 12,
+                                      y: e.clientY + 12,
+                                    })
+                                : undefined
+                            }
+                            onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
+                          >
+                            {url ? (
+                              <>
+                                <img src={url} alt="" className="w-full h-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    store.removeReferenceImage(i);
+                                    if (store.currentLiveImageUrl === url) {
+                                      const next = (store.referenceImageUrls as string[]).filter(Boolean);
+                                      store.setCurrentLiveImageUrl(next[0] ?? null);
+                                    }
+                                  }}
+                                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                >
+                                  ×
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[8px] text-white/40">{i + 1}</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-white/70">{getSlotLabel(i)}</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setRecallSlotIndex(i)}
+                              className="text-[10px] text-amber-400/90 hover:text-amber-300"
+                            >
+                              Archive
+                            </button>
+                            <label className="text-[10px] text-amber-400/90 hover:text-amber-300 cursor-pointer">
+                              Upload
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const url = URL.createObjectURL(file);
+                                  store.setReferenceImageAt(i, url);
+                                  store.setCurrentLiveImageUrl(url);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
             {hasReferenceImage && (
-              <label className="flex items-center gap-2 cursor-pointer mt-2">
+              <label className="flex items-center gap-2 cursor-pointer mt-2 shrink-0">
                 <input
                   type="checkbox"
                   checked={store.diversifyStyle}
@@ -502,9 +794,14 @@ export const AssetsStudio: React.FC = () => {
                 <span className="text-xs inline-block" style={goldTextStyle}>Diversify Style</span>
               </label>
             )}
+            </div>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
-            {/* Art Style Engine */}
+
+          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
+            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2 pb-1 shrink-0 border-b border-white/10" style={goldTextStyle}>
+              Tags & style
+            </h2>
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
             <section>
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 Art Style
@@ -524,6 +821,18 @@ export const AssetsStudio: React.FC = () => {
                       onClick={() =>
                         store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
                       }
+                    />
+                  ))}
+                  {store.customStyles.map((opt) => (
+                    <ChipWithOptionalRemove
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
+                      onClick={() =>
+                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
+                      }
+                      isCustom
+                      onRemove={() => store.removeCustomStyle(opt)}
                     />
                   ))}
                 </div>
@@ -579,6 +888,8 @@ export const AssetsStudio: React.FC = () => {
                 options={[...ERA_STYLE_TAGS, ...store.eraStyleLibrary]}
                 selected={store.eraStyleSelection}
                 onToggle={toggleEra}
+                libraryOptions={store.eraStyleLibrary}
+                onRemoveLibrary={(v) => store.removeEraStyleOption(v)}
               />
             </section>
 
@@ -594,6 +905,8 @@ export const AssetsStudio: React.FC = () => {
                 options={[...LOCATION_TYPE_TAGS, ...store.locationTypeLibrary]}
                 selected={store.locationTypeSelection}
                 onToggle={toggleLocation}
+                libraryOptions={store.locationTypeLibrary}
+                onRemoveLibrary={(v) => store.removeLocationTypeOption(v)}
               />
             </section>
 
@@ -609,6 +922,8 @@ export const AssetsStudio: React.FC = () => {
                 options={[...ARCHITECTURAL_DETAIL_TAGS, ...store.architecturalDetailLibrary]}
                 selected={store.architecturalDetailSelection}
                 onToggle={toggleArchitectural}
+                libraryOptions={store.architecturalDetailLibrary}
+                onRemoveLibrary={(v) => store.removeArchitecturalDetailOption(v)}
               />
               <SceneSettingCategoryAdd
                 onSave={(categoryId, value) => {
@@ -654,6 +969,7 @@ export const AssetsStudio: React.FC = () => {
                         selected={store.setDressingSelections[cat] ?? []}
                         library={store.setDressingLibraries[cat] ?? []}
                         onToggle={(v) => toggleSetDressing(cat, v)}
+                        onRemoveLibrary={(v) => store.removeSetDressingOption(cat, v)}
                       />
                       {/* Modifier ribbon directly under this category's tags */}
                       {isStructure && (
@@ -729,11 +1045,13 @@ export const AssetsStudio: React.FC = () => {
                     <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{key}</h3>
                     <div className="flex flex-wrap gap-2">
                       {[...CINEMATIC_OPTIONS[key], ...(store.cinematicLibraries[key] ?? [])].map((opt) => (
-                        <Chip
+                        <ChipWithOptionalRemove
                           key={opt}
                           label={opt}
                           active={(store.cinematic[key] || '') === opt}
                           onClick={() => store.setCinematic(key, opt)}
+                          isCustom={(store.cinematicLibraries[key] ?? []).includes(opt)}
+                          onRemove={(store.cinematicLibraries[key] ?? []).includes(opt) ? () => store.removeCinematicOption(key, opt) : undefined}
                         />
                       ))}
                     </div>
@@ -746,7 +1064,6 @@ export const AssetsStudio: React.FC = () => {
               </div>
             </section>
 
-            {/* Onyx Vault */}
             <section>
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 The Onyx Vault
@@ -770,25 +1087,9 @@ export const AssetsStudio: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-xs font-medium inline-block mb-1.5" style={goldTextStyle}>Model</span>
-                    <select
-                      value={store.selectedOnyxModelId}
-                      onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                      className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-xs"
-                    >
-                      <option value="flash">Nano Banana 2 (Speed)</option>
-                      <option value="pro">Nano Banana Pro (Detail)</option>
-                    </select>
-                  </div>
-                  <textarea
-                    value={store.vaultPromptOverride}
-                    onChange={(e) => store.setVaultPromptOverride(e.target.value)}
-                    placeholder="Edit prompt..."
-                    className="w-full h-28 bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-xs font-mono resize-y"
-                  />
-                </div>
+                <p className="text-xs text-white/70">
+                  Unlocked. Edit prompt in <strong className="text-amber-300/90">Live Prompt → Edit</strong>.
+                </p>
               )}
             </section>
 
@@ -798,6 +1099,7 @@ export const AssetsStudio: React.FC = () => {
               </h2>
               <HybridTagBar tags={store.tags} setTags={store.setTags} variant="amethyst" />
             </section>
+            </div>
           </div>
         </div>
 
@@ -805,12 +1107,245 @@ export const AssetsStudio: React.FC = () => {
         <div className="flex-1 flex gap-3 min-w-0 min-h-0 max-h-[calc(85vh+100px)] overflow-hidden">
           <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
             <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[480px] flex flex-col">
-              <h2 className="text-base font-bold mb-1.5 uppercase tracking-widest" style={goldTextStyle}>
-                Live Prompt
-              </h2>
-              <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-violet-100/80 break-words flex-1 min-h-[420px] overflow-y-auto custom-scrollbar">
-                {displayPrompt || '// Prompt is empty...'}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
+                  Live Prompt
+                </h2>
+                {store.lastUsedPrompt ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(store.lastUsedPrompt);
+                      store.setRefinementPromptOverride(
+                        store.refinementPromptOverride
+                          ? `${store.refinementPromptOverride}\n${store.lastUsedPrompt.slice(0, 200)}…`
+                          : store.lastUsedPrompt.slice(0, 500)
+                      );
+                      setPromptPanelTab('refine');
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200/90 hover:bg-violet-500/10 truncate max-w-[140px]"
+                  >
+                    Last prompt
+                  </button>
+                ) : null}
               </div>
+              <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2">
+                {(
+                  [
+                    { id: 'auto' as const, label: 'Prompt' },
+                    { id: 'edit' as const, label: 'Edit' },
+                    { id: 'refine' as const, label: 'Refine' },
+                  ]
+                ).map(({ id, label }) => (
+                  <span key={id} className="inline-flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setPromptPanelTab(id)}
+                      className={`px-3 py-1.5 rounded-t-lg text-sm font-medium border-b-2 transition-colors ${
+                        promptPanelTab === id
+                          ? 'border-amber-500 text-amber-200 bg-black/40'
+                          : 'border-transparent text-white/60 hover:text-white/90'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                    <PinnedHelpTooltip variant="asset" title={label}>
+                      {id === 'auto' && 'Compiled prompt from tags. ⌘/Ctrl+Enter generates.'}
+                      {id === 'edit' && 'Vault password unlocks raw prompt override.'}
+                      {id === 'refine' && 'Refine the current live image with your instructions.'}
+                    </PinnedHelpTooltip>
+                  </span>
+                ))}
+              </div>
+              {promptPanelTab === 'auto' && (
+                <div className="bg-black/60 p-3 rounded-lg font-mono text-sm text-violet-100/85 break-words flex-1 min-h-[360px] overflow-y-auto custom-scrollbar">
+                  {displayPrompt || '// Prompt is empty...'}
+                </div>
+              )}
+              {promptPanelTab === 'edit' && (
+                <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
+                  {!store.vaultUnlocked ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={vaultPassword}
+                        onChange={(e) => setVaultPassword(e.target.value)}
+                        placeholder="Vault password"
+                        className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => store.unlockVault(vaultPassword)}
+                        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                      >
+                        Unlock
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={store.selectedOnyxModelId}
+                        onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                        className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="flash">Nano Banana 2 (Speed)</option>
+                        <option value="pro">Nano Banana Pro (Detail)</option>
+                      </select>
+                      <textarea
+                        value={store.vaultPromptOverride}
+                        onChange={(e) => store.setVaultPromptOverride(e.target.value)}
+                        placeholder="Override prompt…"
+                        className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
+                      />
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                          type="button"
+                          onClick={() => store.setVaultPromptOverride('')}
+                          className="px-2 py-1 text-xs rounded border border-amber-500/40"
+                        >
+                          Reset to tags
+                        </button>
+                        <select
+                          className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
+                          defaultValue=""
+                          onChange={(e) => {
+                            const s = store.promptSnippets.find((x) => x.id === e.target.value);
+                            if (s) {
+                              store.setVaultPromptOverride(
+                                `${store.vaultPromptOverride}${store.vaultPromptOverride && !store.vaultPromptOverride.endsWith('\n') ? '\n' : ''}${s.text}`
+                              );
+                            }
+                            e.target.value = '';
+                          }}
+                        >
+                          <option value="">Insert snippet…</option>
+                          {store.promptSnippets.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={snippetNameInput}
+                          onChange={(e) => setSnippetNameInput(e.target.value)}
+                          placeholder="Snippet name"
+                          className="w-24 bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                        />
+                        <input
+                          type="text"
+                          value={snippetTextInput}
+                          onChange={(e) => setSnippetTextInput(e.target.value)}
+                          placeholder="Snippet text"
+                          className="flex-1 min-w-[100px] bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            store.addPromptSnippet(snippetNameInput, snippetTextInput);
+                            setSnippetNameInput('');
+                            setSnippetTextInput('');
+                          }}
+                          className="text-xs px-2 py-1 rounded border border-amber-500/40"
+                        >
+                          Save snippet
+                        </button>
+                      </div>
+                      {store.promptSnippets.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {store.promptSnippets.map((s) => (
+                            <span
+                              key={s.id}
+                              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
+                            >
+                              {s.name}
+                              <button
+                                type="button"
+                                className="text-red-300"
+                                onClick={() => store.removePromptSnippet(s.id)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              {promptPanelTab === 'refine' && (
+                <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
+                  {!store.currentLiveImageUrl ? (
+                    <p className="text-sm text-violet-200/80">Generate or load an image first.</p>
+                  ) : (
+                    <>
+                      <textarea
+                        value={store.refinementPromptOverride}
+                        onChange={(e) => store.setRefinementPromptOverride(e.target.value)}
+                        placeholder="Type a refinement or use Suggest chips."
+                        className="w-full flex-1 min-h-[160px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm resize-y"
+                      />
+                      <div className="flex flex-wrap gap-1">
+                        {REFINE_SUGGEST_CHIPS.map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() =>
+                              store.setRefinementPromptOverride(
+                                store.refinementPromptOverride
+                                  ? `${store.refinementPromptOverride}, ${chip}`
+                                  : chip
+                              )
+                            }
+                            className="text-xs px-2 py-1 rounded-full border border-white/20 hover:border-amber-500/50"
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs border border-white/20 opacity-50">
+                          NEW
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRefineAsset()}
+                          disabled={
+                            store.generationStatus === 'pending' ||
+                            !store.refinementPromptOverride.trim()
+                          }
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold text-black border border-amber-600/50 disabled:opacity-50"
+                          style={{ background: ACCENT_GOLD_GRADIENT }}
+                        >
+                          Refine
+                        </button>
+                        <select
+                          className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1"
+                          defaultValue=""
+                          onChange={(e) => {
+                            const s = store.promptSnippets.find((x) => x.id === e.target.value);
+                            if (s) {
+                              store.setRefinementPromptOverride(
+                                `${store.refinementPromptOverride}${store.refinementPromptOverride ? ', ' : ''}${s.text}`
+                              );
+                            }
+                            e.target.value = '';
+                          }}
+                        >
+                          <option value="">Insert snippet</option>
+                          {store.promptSnippets.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
                 <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
                 <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
@@ -854,65 +1389,146 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
                 Live Generation / Vault
               </h2>
-              {getCachedGenerations('asset').length > 0 && (
-                <div className="flex-shrink-0 px-2 pb-2 flex items-center gap-2 overflow-x-auto">
-                  <span className="text-[10px] uppercase tracking-wider text-white/60">Recent</span>
-                  {getCachedGenerations('asset').map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        store.setCurrentLiveImageUrl(item.url);
-                        if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                      }}
-                      className="flex-shrink-0 w-12 h-12 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60"
-                    >
-                      <img src={item.url} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-[100px]">
-                {store.currentLiveImageUrl ? (
-                  <>
-                    <img
-                      src={store.currentLiveImageUrl}
-                      alt="Live asset"
-                      className="max-w-full max-h-full object-contain"
-                    />
-                    <div className="absolute bottom-2 right-2 flex items-center gap-1">
-                      <Tooltip content="View full size with zoom" side="left">
+              <div className="flex-shrink-0 px-2 pb-2 flex flex-wrap items-center justify-end gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">
+                  Thumbnail size
+                </span>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'compact'}
+                  onClick={() => store.setGalleryDensity('compact')}
+                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'compact'
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'compact'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'comfortable'}
+                  onClick={() => store.setGalleryDensity('comfortable')}
+                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'comfortable'
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'comfortable'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Comfortable
+                </button>
+              </div>
+              {((recentAssets.length > 0) || (getCachedGenerations('asset').length > 0)) && (
+                <div className="flex-shrink-0 px-2 pb-2 flex flex-col gap-1.5">
+                  {recentAssets.length > 0 && (
+                    <div className="flex items-center gap-2 overflow-x-auto">
+                      <span className="text-[10px] uppercase tracking-wider text-white/60">Recent (saved)</span>
+                      {recentAssets.map((item) => (
+                        <Tooltip variant="asset" key={item.id} content={item.displayName ?? item.collectionName ?? 'Asset'}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              store.setCurrentLiveImageUrl(item.imageUrl);
+                              if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                            }}
+                            className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
+                              store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
+                            }`}
+                          >
+                            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  )}
+                  {getCachedGenerations('asset').length > 0 && (
+                    <div className="flex items-center gap-2 overflow-x-auto">
+                      <span className="text-[10px] uppercase tracking-wider text-white/60">This session</span>
+                      {getCachedGenerations('asset').map((item) => (
                         <button
+                          key={item.id}
                           type="button"
                           onClick={() => {
-                            setZoomLevel(1);
-                            setShowZoomModal(true);
+                            store.setCurrentLiveImageUrl(item.url);
+                            if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
                           }}
-                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                          className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
+                            store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
+                          }`}
                         >
-                          <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          <img src={item.url} alt="" className="w-full h-full object-cover" />
                         </button>
-                      </Tooltip>
-                      <Tooltip content="Delete this image" side="left">
-                        <button
-                          type="button"
-                          onClick={() => store.setCurrentLiveImageUrl(null)}
-                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                          aria-label="Delete image"
-                        >
-                          <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                        </button>
-                      </Tooltip>
+                      ))}
                     </div>
+                  )}
+                </div>
+              )}
+              <div className="flex-1 min-h-[220px] min-w-0 flex flex-col items-center justify-center p-2">
+                {store.currentLiveImageUrl ? (
+                  <>
+                    <div
+                      className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                      style={{
+                        aspectRatio: previewAspect,
+                        height: previewMaxH,
+                        maxHeight: 'min(76vh, 100%)',
+                        width: 'auto',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <img
+                        src={store.currentLiveImageUrl}
+                        alt="Live asset"
+                        className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
+                      />
+                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                        <Tooltip variant="asset" content="View full size with zoom" side="left">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setZoomLevel(1);
+                              setShowZoomModal(true);
+                            }}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                          >
+                            <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip variant="asset" content="Delete this image" side="left">
+                          <button
+                            type="button"
+                            onClick={() => store.setCurrentLiveImageUrl(null)}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                            aria-label="Delete image"
+                          >
+                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-center text-[10px] text-violet-200/50">
+                      {store.aspectRatio} preview — full image fits; expand for zoom
+                    </p>
                   </>
                 ) : (
-                  <div className="text-center space-y-2">
-                    <div className="w-16 h-16 rounded-full border border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
+                  <div className="text-center space-y-2 px-4">
+                    <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
                       <span className="text-2xl">🌍</span>
                     </div>
                     <p className="font-mono text-sm inline-block" style={goldTextStyle}>
-                      {store.architecturalLock ? 'ARCH LOCKED' : 'Live Asset'}
+                      {store.architecturalLock ? 'ARCH LOCKED' : 'No live asset'}
                     </p>
+                    <p className="text-xs text-white/50">Generate your first image or load from Recent.</p>
                   </div>
                 )}
               </div>
@@ -929,14 +1545,38 @@ export const AssetsStudio: React.FC = () => {
                   }
                 >
                   {store.generationStatus === 'pending' ? (
-                    <span
-                      className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
-                      style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
-                      aria-label="Generating..."
-                    />
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                        style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
+                        aria-label="Generating..."
+                      />
+                      <span className="animate-pulse">Working…</span>
+                    </span>
                   ) : (
                     'Generate Asset'
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateAsset()}
+                  disabled={store.generationStatus === 'pending'}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
+                >
+                  <span className="text-violet-200/90">Generate again</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!store.previousLiveImageUrl}
+                  onClick={() => {
+                    if (!store.previousLiveImageUrl) return;
+                    store.setCurrentLiveImageUrl(store.previousLiveImageUrl);
+                    store.setCurrentGenerationSeed(store.previousGenerationSeed);
+                    store.setPreviousLiveSnapshot(null, null);
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
+                >
+                  Undo last gen
                 </button>
                 <button
                   type="button"
@@ -1163,7 +1803,7 @@ export const AssetsStudio: React.FC = () => {
               </button>
             </div>
             <div className="flex items-center gap-1">
-              <Tooltip content="Delete this image" side="bottom">
+              <Tooltip variant="asset" content="Delete this image" side="bottom">
                 <button
                   type="button"
                   onClick={() => {
@@ -1198,6 +1838,26 @@ export const AssetsStudio: React.FC = () => {
       )}
 
     </div>
+    {refHoverPreview &&
+      typeof document !== 'undefined' &&
+      createPortal(
+        <div
+          className="pointer-events-none fixed z-[9999] w-48 overflow-hidden rounded-xl border-2 border-amber-400 bg-neutral-950 shadow-2xl ring-2 ring-black/50"
+          style={{
+            left: Math.min(refHoverPreview.x, window.innerWidth - 200),
+            top: Math.min(refHoverPreview.y, window.innerHeight - 320),
+            maxHeight: 'min(70vh, 360px)',
+          }}
+        >
+          <img
+            src={refHoverPreview.url}
+            alt=""
+            className="h-full max-h-[min(70vh,360px)] w-full object-contain"
+          />
+        </div>,
+        document.body
+      )}
+    </>
   );
 };
 

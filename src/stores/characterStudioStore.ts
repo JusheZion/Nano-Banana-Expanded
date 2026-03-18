@@ -89,6 +89,13 @@ function emptyCinematicLibraries(): Record<CinematicKey, string[]> {
 
 export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
 export type OnyxModelId = 'flash' | 'pro';
+export type GalleryDensity = 'compact' | 'comfortable';
+
+export interface PromptSnippet {
+  id: string;
+  name: string;
+  text: string;
+}
 
 const REFERENCE_IMAGE_SLOTS = 14;
 
@@ -125,6 +132,12 @@ export interface CharacterStudioState {
   selectedOnyxModelId: OnyxModelId;
   generationStatus: GenerationStatus;
   generationStatusMessage: string | null;
+  refinementPromptOverride: string;
+  previousLiveImageUrl: string | null;
+  previousGenerationSeed: number | null;
+  lastUsedPrompt: string;
+  promptSnippets: PromptSnippet[];
+  galleryDensity: GalleryDensity;
 
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setDnaLock: (locked: boolean) => void;
@@ -157,12 +170,25 @@ export interface CharacterStudioState {
   addGenderOption: (value: string) => void;
   addPhysicalOption: (category: string, value: string) => void;
   addCinematicOption: (key: CinematicKey, value: string) => void;
+  removeWardrobeOption: (category: WardrobeCategory, value: string) => void;
+  removeHeritageOption: (value: string) => void;
+  removeGenderOption: (value: string) => void;
+  removePhysicalOption: (category: string, value: string) => void;
+  removeCinematicOption: (key: CinematicKey, value: string) => void;
+  removeCustomStyle: (value: string) => void;
   setReferenceImageUrls: (urls: string[]) => void;
   addReferenceImage: (url: string) => void;
   removeReferenceImage: (index: number) => void;
   setReferenceImageAt: (index: number, url: string | null) => void;
   setSelectedOnyxModelId: (id: OnyxModelId) => void;
   setGenerationStatus: (status: GenerationStatus, message?: string | null) => void;
+  setRefinementPromptOverride: (value: string) => void;
+  setPreviousLiveSnapshot: (url: string | null, seed: number | null) => void;
+  setLastUsedPrompt: (value: string) => void;
+  addPromptSnippet: (name: string, text: string) => void;
+  removePromptSnippet: (id: string) => void;
+  setGalleryDensity: (d: GalleryDensity) => void;
+  clearAllReferenceSlots: () => void;
 }
 
 export const useCharacterStudioStore = create<CharacterStudioState>()(
@@ -205,6 +231,12 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       selectedOnyxModelId: 'flash',
       generationStatus: 'idle',
       generationStatusMessage: null,
+      refinementPromptOverride: '',
+      previousLiveImageUrl: null,
+      previousGenerationSeed: null,
+      lastUsedPrompt: '',
+      promptSnippets: [],
+      galleryDensity: 'comfortable',
 
       setTags: (payload) =>
         set((s) => ({
@@ -329,30 +361,96 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
             },
           };
         }),
+      removeWardrobeOption: (category, value) =>
+        set((s) => {
+          const list = s.wardrobeLibraries[category] ?? [];
+          if (!list.includes(value)) return s;
+          const nextList = list.filter((v) => v !== value);
+          const sel = s.wardrobeSelections[category] ?? [];
+          const nextSel = sel.filter((v) => v !== value);
+          return {
+            wardrobeLibraries: { ...s.wardrobeLibraries, [category]: nextList },
+            wardrobeSelections: { ...s.wardrobeSelections, [category]: nextSel },
+          };
+        }),
+      removeHeritageOption: (value) =>
+        set((s) => {
+          if (!s.heritageLibrary.includes(value)) return s;
+          return {
+            heritageLibrary: s.heritageLibrary.filter((v) => v !== value),
+            heritageSelection: s.heritageSelection.filter((v) => v !== value),
+          };
+        }),
+      removeGenderOption: (value) =>
+        set((s) => {
+          if (!s.genderLibrary.includes(value)) return s;
+          return {
+            genderLibrary: s.genderLibrary.filter((v) => v !== value),
+            genderSelection: s.genderSelection.filter((v) => v !== value),
+          };
+        }),
+      removePhysicalOption: (category, value) =>
+        set((s) => {
+          const list = s.physicalLibraries[category] ?? [];
+          if (!list.includes(value)) return s;
+          const nextList = list.filter((v) => v !== value);
+          const sel = s.physicalSelections[category] ?? [];
+          const nextSel = sel.filter((v) => v !== value);
+          return {
+            physicalLibraries: { ...s.physicalLibraries, [category]: nextList },
+            physicalSelections: { ...s.physicalSelections, [category]: nextSel },
+          };
+        }),
+      removeCinematicOption: (key, value) =>
+        set((s) => {
+          const list = s.cinematicLibraries[key] ?? [];
+          if (!list.includes(value)) return s;
+          const nextList = list.filter((v) => v !== value);
+          const current = s.cinematic[key] === value ? '' : s.cinematic[key];
+          return {
+            cinematicLibraries: { ...s.cinematicLibraries, [key]: nextList },
+            cinematic: { ...s.cinematic, [key]: current },
+          };
+        }),
+      removeCustomStyle: (value) =>
+        set((s) => {
+          if (!s.customStyles.includes(value)) return s;
+          const next = s.customStyles.filter((v) => v !== value);
+          const artStyleId = s.artStyleId === value ? 'flagship' : s.artStyleId;
+          return { customStyles: next, artStyleId };
+        }),
       setReferenceImageUrls: (urls) =>
         set({ referenceImageUrls: urls.slice(0, REFERENCE_IMAGE_SLOTS) }),
       addReferenceImage: (url) =>
         set((s) => {
-          if (s.referenceImageUrls.length >= REFERENCE_IMAGE_SLOTS) return s;
-          return {
-            referenceImageUrls: [...s.referenceImageUrls, url].slice(
-              0,
-              REFERENCE_IMAGE_SLOTS
-            ),
-          };
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          const firstEmpty = next.findIndex((u) => !u);
+          if (firstEmpty < 0) return s;
+          next[firstEmpty] = url;
+          return { referenceImageUrls: next };
         }),
       removeReferenceImage: (index) =>
-        set((s) => ({
-          referenceImageUrls: s.referenceImageUrls.filter((_, i) => i !== index),
-        })),
+        set((s) => {
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          next[index] = '';
+          return { referenceImageUrls: next };
+        }),
       setReferenceImageAt: (index, url) =>
         set((s) => {
-          const next = [...s.referenceImageUrls];
-          if (url === null) {
-            next.splice(index, 1);
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          if (url === null || url === '') {
+            next[index] = '';
           } else {
             next[index] = url;
-            if (next.length > REFERENCE_IMAGE_SLOTS) next.length = REFERENCE_IMAGE_SLOTS;
           }
           return { referenceImageUrls: next };
         }),
@@ -362,6 +460,29 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
           generationStatus: status,
           generationStatusMessage: message ?? null,
         }),
+      setRefinementPromptOverride: (value) => set({ refinementPromptOverride: value }),
+      setPreviousLiveSnapshot: (url, seed) =>
+        set({ previousLiveImageUrl: url, previousGenerationSeed: seed }),
+      setLastUsedPrompt: (value) => set({ lastUsedPrompt: value }),
+      addPromptSnippet: (name, text) =>
+        set((s) => {
+          const t = text.trim();
+          const n = name.trim();
+          if (!t || !n) return s;
+          return {
+            promptSnippets: [
+              ...s.promptSnippets,
+              { id: crypto.randomUUID(), name: n, text: t },
+            ],
+          };
+        }),
+      removePromptSnippet: (id) =>
+        set((s) => ({
+          promptSnippets: s.promptSnippets.filter((x) => x.id !== id),
+        })),
+      setGalleryDensity: (d) => set({ galleryDensity: d }),
+      clearAllReferenceSlots: () =>
+        set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
     }),
     {
       name: STORAGE_KEY,
@@ -395,6 +516,10 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         cinematicLibraries: state.cinematicLibraries,
         referenceImageUrls: state.referenceImageUrls,
         selectedOnyxModelId: state.selectedOnyxModelId,
+        refinementPromptOverride: state.refinementPromptOverride,
+        lastUsedPrompt: state.lastUsedPrompt,
+        promptSnippets: state.promptSnippets,
+        galleryDensity: state.galleryDensity,
       }),
     }
   )

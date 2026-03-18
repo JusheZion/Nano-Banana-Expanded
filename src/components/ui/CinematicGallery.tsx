@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { getCharactersGroupedByProfile } from '@/shared/api/arcsArchive';
 import type { CharacterArchiveItem } from '@/shared/api/arcsArchive';
+import { ArchiveThumbnailFocusModal } from '@/components/ui/ArchiveThumbnailFocusModal';
 
 export const CinematicGallery: React.FC = () => {
     const [hoveredKey, setHoveredKey] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [grouped, setGrouped] = useState<Record<string, CharacterArchiveItem[]>>({});
+    const [focusEditItem, setFocusEditItem] = useState<CharacterArchiveItem | null>(null);
     useTheme();
+
+    const refreshArchive = useCallback(() => {
+        void getCharactersGroupedByProfile().then(setGrouped);
+    }, []);
 
     useEffect(() => {
         setLoading(true);
@@ -20,7 +26,14 @@ export const CinematicGallery: React.FC = () => {
     const totalItems = profileNames.reduce((acc, k) => acc + grouped[k].length, 0);
 
     return (
-        <div className="w-full px-8 py-8 animate-fade-in">
+        <div className="w-full px-8 py-8 animate-fade-in relative">
+            {focusEditItem && (
+                <ArchiveThumbnailFocusModal
+                    item={focusEditItem}
+                    onClose={() => setFocusEditItem(null)}
+                    onSaved={refreshArchive}
+                />
+            )}
             {/* Header */}
             <div className="relative mb-10 mt-4">
                 <h1 className="text-6xl font-extralight tracking-widest text-[#D4AF37] drop-shadow-lg leading-none">
@@ -54,6 +67,10 @@ export const CinematicGallery: React.FC = () => {
                                         const heightClass = index % 3 === 0 ? 'h-[380px]' : 'h-[280px]';
                                         const isHovered = hoveredKey === cardKey;
                                         const displayName = item.name ?? item.cast_name ?? 'Visual Reference';
+                                        const fx = item.thumbnail_focus_x ?? 50;
+                                        const fy = item.thumbnail_focus_y ?? 50;
+                                        const fsc = item.thumbnail_scale ?? 1;
+                                        const hoverMul = isHovered ? 1.1 : 1;
                                         return (
                                             <div
                                                 key={cardKey}
@@ -70,6 +87,16 @@ export const CinematicGallery: React.FC = () => {
                                                 onMouseEnter={() => setHoveredKey(cardKey)}
                                                 onMouseLeave={() => setHoveredKey(null)}
                                             >
+                                                <button
+                                                    type="button"
+                                                    className="absolute top-3 right-3 z-20 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase bg-black/60 border border-[#D4AF37]/50 text-[#D4AF37] opacity-0 group-hover:opacity-100 hover:bg-[#D4AF37]/20 transition-opacity"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setFocusEditItem(item);
+                                                    }}
+                                                >
+                                                    Framing
+                                                </button>
                                                 <img
                                                     src={item.image_url}
                                                     alt={displayName}
@@ -77,8 +104,12 @@ export const CinematicGallery: React.FC = () => {
                                                         w-full h-full object-cover
                                                         transition-transform duration-700 ease-out
                                                         opacity-90 group-hover:opacity-100
-                                                        ${isHovered ? 'scale-110' : 'scale-100'}
                                                     `}
+                                                    style={{
+                                                        objectPosition: `${fx}% ${fy}%`,
+                                                        transform: `scale(${fsc * hoverMul})`,
+                                                        transformOrigin: `${fx}% ${fy}%`,
+                                                    }}
                                                 />
                                                 <div className={`
                                                     absolute inset-0 bg-gradient-to-t from-[#5F368E]/80 via-transparent to-transparent

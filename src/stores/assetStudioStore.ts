@@ -19,6 +19,13 @@ const REFERENCE_IMAGE_SLOTS = 14;
 
 export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
 export type OnyxModelId = 'flash' | 'pro';
+export type GalleryDensity = 'compact' | 'comfortable';
+
+export interface PromptSnippet {
+  id: string;
+  name: string;
+  text: string;
+}
 export type AssetModifierCategory = 'structure' | 'furniture' | 'atmospherics';
 
 function emptySetDressingLibraries(): Record<SetDressingCategory, string[]> {
@@ -111,6 +118,12 @@ export interface AssetStudioState {
   selectedOnyxModelId: OnyxModelId;
   generationStatus: GenerationStatus;
   generationStatusMessage: string | null;
+  refinementPromptOverride: string;
+  previousLiveImageUrl: string | null;
+  previousGenerationSeed: number | null;
+  lastUsedPrompt: string;
+  promptSnippets: PromptSnippet[];
+  galleryDensity: GalleryDensity;
   assetModifiers: Record<
     AssetModifierCategory,
     { color: string; material: 'matte' | 'gloss' | 'glow' }
@@ -132,6 +145,12 @@ export interface AssetStudioState {
   setSetDressingSelection: (category: SetDressingCategory, values: string[]) => void;
   setCinematic: (key: AssetCinematicKey, value: string) => void;
   addCinematicOption: (key: AssetCinematicKey, value: string) => void;
+  removeEraStyleOption: (value: string) => void;
+  removeLocationTypeOption: (value: string) => void;
+  removeArchitecturalDetailOption: (value: string) => void;
+  removeSetDressingOption: (category: SetDressingCategory, value: string) => void;
+  removeCinematicOption: (key: AssetCinematicKey, value: string) => void;
+  removeCustomStyle: (value: string) => void;
   unlockVault: (password: string) => boolean;
   setVaultPromptOverride: (value: string) => void;
   setArchitecturalLock: (value: boolean) => void;
@@ -151,6 +170,13 @@ export interface AssetStudioState {
     material: 'matte' | 'gloss' | 'glow'
   ) => void;
   resetAssetModifiers: () => void;
+  setRefinementPromptOverride: (value: string) => void;
+  setPreviousLiveSnapshot: (url: string | null, seed: number | null) => void;
+  setLastUsedPrompt: (value: string) => void;
+  addPromptSnippet: (name: string, text: string) => void;
+  removePromptSnippet: (id: string) => void;
+  setGalleryDensity: (d: GalleryDensity) => void;
+  clearAllReferenceSlots: () => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -186,6 +212,12 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       selectedOnyxModelId: 'flash',
       generationStatus: 'idle',
       generationStatusMessage: null,
+      refinementPromptOverride: '',
+      previousLiveImageUrl: null,
+      previousGenerationSeed: null,
+      lastUsedPrompt: '',
+      promptSnippets: [],
+      galleryDensity: 'comfortable',
       assetModifiers: defaultAssetModifiers(),
 
       setTags: (payload) =>
@@ -261,6 +293,60 @@ export const useAssetStudioStore = create<AssetStudioState>()(
             },
           };
         }),
+      removeEraStyleOption: (value) =>
+        set((s) => {
+          if (!s.eraStyleLibrary.includes(value)) return s;
+          return {
+            eraStyleLibrary: s.eraStyleLibrary.filter((v) => v !== value),
+            eraStyleSelection: s.eraStyleSelection.filter((v) => v !== value),
+          };
+        }),
+      removeLocationTypeOption: (value) =>
+        set((s) => {
+          if (!s.locationTypeLibrary.includes(value)) return s;
+          return {
+            locationTypeLibrary: s.locationTypeLibrary.filter((v) => v !== value),
+            locationTypeSelection: s.locationTypeSelection.filter((v) => v !== value),
+          };
+        }),
+      removeArchitecturalDetailOption: (value) =>
+        set((s) => {
+          if (!s.architecturalDetailLibrary.includes(value)) return s;
+          return {
+            architecturalDetailLibrary: s.architecturalDetailLibrary.filter((v) => v !== value),
+            architecturalDetailSelection: s.architecturalDetailSelection.filter((v) => v !== value),
+          };
+        }),
+      removeSetDressingOption: (category, value) =>
+        set((s) => {
+          const list = s.setDressingLibraries[category] ?? [];
+          if (!list.includes(value)) return s;
+          const nextList = list.filter((v) => v !== value);
+          const sel = s.setDressingSelections[category] ?? [];
+          const nextSel = sel.filter((v) => v !== value);
+          return {
+            setDressingLibraries: { ...s.setDressingLibraries, [category]: nextList },
+            setDressingSelections: { ...s.setDressingSelections, [category]: nextSel },
+          };
+        }),
+      removeCinematicOption: (key, value) =>
+        set((s) => {
+          const list = s.cinematicLibraries[key] ?? [];
+          if (!list.includes(value)) return s;
+          const nextList = list.filter((v) => v !== value);
+          const current = s.cinematic[key] === value ? '' : s.cinematic[key];
+          return {
+            cinematicLibraries: { ...s.cinematicLibraries, [key]: nextList },
+            cinematic: { ...s.cinematic, [key]: current },
+          };
+        }),
+      removeCustomStyle: (value) =>
+        set((s) => {
+          if (!s.customStyles.includes(value)) return s;
+          const next = s.customStyles.filter((v) => v !== value);
+          const artStyleId = s.artStyleId === value ? 'flagship' : s.artStyleId;
+          return { customStyles: next, artStyleId };
+        }),
       unlockVault: (password) => {
         if (password.trim().toLowerCase() !== ONYX_PASSWORD) return false;
         set({ vaultUnlocked: true });
@@ -276,26 +362,34 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         set({ referenceImageUrls: urls.slice(0, REFERENCE_IMAGE_SLOTS) }),
       addReferenceImage: (url) =>
         set((s) => {
-          if (s.referenceImageUrls.length >= REFERENCE_IMAGE_SLOTS) return s;
-          return {
-            referenceImageUrls: [...s.referenceImageUrls, url].slice(
-              0,
-              REFERENCE_IMAGE_SLOTS
-            ),
-          };
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          const firstEmpty = next.findIndex((u) => !u);
+          if (firstEmpty < 0) return s;
+          next[firstEmpty] = url;
+          return { referenceImageUrls: next };
         }),
       removeReferenceImage: (index) =>
-        set((s) => ({
-          referenceImageUrls: s.referenceImageUrls.filter((_, i) => i !== index),
-        })),
+        set((s) => {
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          next[index] = '';
+          return { referenceImageUrls: next };
+        }),
       setReferenceImageAt: (index, url) =>
         set((s) => {
-          const next = [...s.referenceImageUrls];
-          if (url === null) {
-            next.splice(index, 1);
+          const next = Array.from(
+            { length: REFERENCE_IMAGE_SLOTS },
+            (_, i) => s.referenceImageUrls[i] ?? ''
+          );
+          if (url === null || url === '') {
+            next[index] = '';
           } else {
             next[index] = url;
-            if (next.length > REFERENCE_IMAGE_SLOTS) next.length = REFERENCE_IMAGE_SLOTS;
           }
           return { referenceImageUrls: next };
         }),
@@ -321,6 +415,29 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         })),
       resetAssetModifiers: () =>
         set({ assetModifiers: defaultAssetModifiers() }),
+      setRefinementPromptOverride: (value) => set({ refinementPromptOverride: value }),
+      setPreviousLiveSnapshot: (url, seed) =>
+        set({ previousLiveImageUrl: url, previousGenerationSeed: seed }),
+      setLastUsedPrompt: (value) => set({ lastUsedPrompt: value }),
+      addPromptSnippet: (name, text) =>
+        set((s) => {
+          const t = text.trim();
+          const n = name.trim();
+          if (!t || !n) return s;
+          return {
+            promptSnippets: [
+              ...s.promptSnippets,
+              { id: crypto.randomUUID(), name: n, text: t },
+            ],
+          };
+        }),
+      removePromptSnippet: (id) =>
+        set((s) => ({
+          promptSnippets: s.promptSnippets.filter((x) => x.id !== id),
+        })),
+      setGalleryDensity: (d) => set({ galleryDensity: d }),
+      clearAllReferenceSlots: () =>
+        set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
     }),
     {
       name: STORAGE_KEY,
@@ -354,6 +471,10 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         referenceImageUrls: state.referenceImageUrls,
         selectedOnyxModelId: state.selectedOnyxModelId,
         assetModifiers: state.assetModifiers,
+        refinementPromptOverride: state.refinementPromptOverride,
+        lastUsedPrompt: state.lastUsedPrompt,
+        promptSnippets: state.promptSnippets,
+        galleryDensity: state.galleryDensity,
       }),
     }
   )

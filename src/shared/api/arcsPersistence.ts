@@ -2,8 +2,9 @@
  * ARCS persistence: save characters and assets to Supabase with semantic IDs and metadata_tags.
  * Falls back to no-op when Supabase is not configured (generationOutputRouter still handles localStorage).
  */
-import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { supabase, isSupabaseConfigured, getSupabaseDiagnostic } from '@/shared/lib/supabase';
 import { generateSemanticId } from '@/shared/utils/semanticId';
+import type { ThumbnailFocus } from '@/shared/utils/generationOutputRouter';
 import type { CharacterStudioState } from '@/stores/characterStudioStore';
 import type { AssetStudioState } from '@/stores/assetStudioStore';
 
@@ -31,7 +32,12 @@ async function uploadImageIfDataUrl(url: string): Promise<string> {
     contentType: blob.type,
     upsert: false,
   });
-  if (error) return url;
+  if (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:uploadImageIfDataUrl:storageError',message:'Storage upload failed, storing data URL',data:{error:error.message},timestamp:Date.now(),hypothesisId:'img1'})}).catch(()=>{});
+    // #endregion
+    return url;
+  }
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return pub.publicUrl;
 }
@@ -69,6 +75,7 @@ function buildAssetMetadataTags(store: AssetStudioState): Record<string, unknown
 export interface SaveCharacterResult {
   ok: boolean;
   id?: string;
+  imageUrl?: string;
   error?: string;
 }
 
@@ -89,6 +96,9 @@ export async function saveCharacterToDb(
   const id = generateSemanticId('CHAR', baseName, existingIds);
 
   const finalImageUrl = await uploadImageIfDataUrl(imageUrl);
+  // #region agent log
+  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:finalUrl',message:'Image URL to store',data:{isDataUrl:finalImageUrl.startsWith('data:'),len:finalImageUrl.length,prefix:finalImageUrl.slice(0,50)},timestamp:Date.now(),hypothesisId:'img2'})}).catch(()=>{});
+  // #endregion
   const metadataTags = buildCharacterMetadataTags(store);
   const seed = store.currentGenerationSeed != null ? Number(store.currentGenerationSeed) : null;
 
@@ -102,13 +112,54 @@ export async function saveCharacterToDb(
     cast_name: castName ?? null,
   });
 
+  if (error) {
+    if (error.message?.includes('Invalid API key')) {
+      const diag = getSupabaseDiagnostic();
+      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:invalidKey',message:'Invalid API key diagnostic',data:{urlPresent:diag.urlPresent,anonKeyLength:diag.anonKeyLength},timestamp:Date.now(),hypothesisId:'apikey'})}).catch(()=>{});
+    }
+    return { ok: false, error: error.message };
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:insertOk',message:'Character insert success',data:{id,imageUrlLen:finalImageUrl.length},timestamp:Date.now(),hypothesisId:'img3'})}).catch(()=>{});
+  // #endregion
+  return { ok: true, id, imageUrl: finalImageUrl };
+}
+
+/**
+ * Persists archive-card framing inside metadata_tags.archive_thumbnail so it works
+ * without extra DB columns (avoids PostgREST schema cache / migration issues).
+ */
+export async function updateCharacterThumbnailFocusDb(
+  id: string,
+  focus: ThumbnailFocus
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const { data: row, error: fetchErr } = await supabase
+    .from('characters')
+    .select('metadata_tags')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr) return { ok: false, error: fetchErr.message };
+  if (!row) return { ok: false, error: 'Character not found' };
+  const prev =
+    row.metadata_tags && typeof row.metadata_tags === 'object' && !Array.isArray(row.metadata_tags)
+      ? { ...(row.metadata_tags as Record<string, unknown>) }
+      : {};
+  prev.archive_thumbnail = { x: focus.x, y: focus.y, scale: focus.scale };
+  const { error } = await supabase
+    .from('characters')
+    .update({ metadata_tags: prev })
+    .eq('id', id);
   if (error) return { ok: false, error: error.message };
-  return { ok: true, id };
+  return { ok: true };
 }
 
 export interface SaveAssetResult {
   ok: boolean;
   id?: string;
+  imageUrl?: string;
   error?: string;
 }
 
@@ -143,5 +194,5 @@ export async function saveAssetToDb(
   });
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, id };
+  return { ok: true, id, imageUrl: finalImageUrl };
 }
