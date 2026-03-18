@@ -29,3 +29,10 @@ dist-ssr
 
 # Git worktrees (local)
 .worktrees/
+
+# Cursor workspace (local)
+.cursor/settings.json
+
+# Stray empty files sometimes created by tooling
+nano-banana-expanded@0.0.0
+vite
