@@ -96,3 +96,11 @@ export function getRecentCharacters(): RecentGeneration[] {
 export function getRecentAssets(): RecentGeneration[] {
   return getRecentGenerations().filter((g) => g.kind === 'asset');
 }
+
+/** Remove recent entries whose image URL matches (e.g. after user deletes live image). */
+export function removeRecentByImageUrl(imageUrl: string, kind: RecentKind): void {
+  const list = loadRecentList().filter(
+    (g) => !(g.imageUrl === imageUrl && g.kind === kind)
+  );
+  saveRecentList(list);
+}

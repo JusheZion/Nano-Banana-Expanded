@@ -33,7 +33,41 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Gallery cards use focal + scale; **Framing** modal + save
 - [x] Fallback Supabase select if thumbnail columns missing
 
+## Character Vault Foundation (Ruby & Gold Edition) (Mar 18, 2026) — PLANNED
+
+- [x] Add Supabase migration: `characters.is_profile_cover boolean default false` + partial index by `profile_name`
+- [x] Add Vault repository helper (`src/shared/api/arcsVault.ts`) for albums + cover selection (Supabase + local fallback)
+- [x] Build Ruby/Gold `CharacterVault` album grid (one card per `profile_name`)
+- [x] Build `ProfileVaultModal` drill-down with per-image Ruby-encrusted star toggle
+- [x] Wire cover swap update (set all false, set clicked true) + inline “Saving…” UX
+- [x] Vault framing: cover cards + modal cards use `metadata_tags.archive_thumbnail` (characters + assets); **Framing** action in both modals
+- [x] Browser test: cover selection persists + framing saves + no console errors
+- [x] Update `walkthrough.md` with changes, files touched, and verification steps
+
+## Studio seed + trash cleanup (Mar 18, 2026) — COMPLETE
+
+- [x] **Seed mode** (default **Randomized**): `seedMode` on Character + Asset stores; UI toggle; `pickGenerationSeed` for Generate / Alternate / Refine / Expand Setting
+- [x] **Zoom + live trash**: deleting live image removes matching **Recent** + **This session** cache entries; revokes `blob:` URLs
+
+## Supabase: persist imported images (blob → Storage) (Mar 18, 2026) — COMPLETE
+
+- [x] `ensurePersistentImageUrl` in `arcsPersistence.ts` (upload `blob:` + `data:` before insert)
+- [x] `VaultImageWithFallback` for vault/modal thumbnails when URL fails
+- [x] **2026-03-19:** Refuse DB insert if URL is still `blob:` after upload; save local archive only after successful Supabase save (persistent URL); migration `20260319000000_arcs_generations_storage_bucket.sql`
+
+## Navigation: Image Vault + remove Comics & Story Archive (Mar 18, 2026) — COMPLETE
+
+- [x] Remove `related` portal, `RelatedAlbum.tsx`, `temp_related_album.html`; update `portals.ts`, `App.tsx`, `AppShell`, `portals-prefetch`, `LandingPage` grid
+- [x] Rename sidebar + landing card **Character Archive** → **Image Vault**; `ReferenceAlbum` tabs **Characters** / **Assets**
+
+## Vault toolbars (Mar 18, 2026) — COMPLETE
+
+- [x] Character Vault: search + refresh; modal toolbar — rename profile, delete album, move image (merge + last-item warns), cast name, delete image, cover star; `arcsVault` mutations + local `generationOutputRouter` helpers
+- [x] Asset Vault (`AssetVault` + `CollectionVaultModal`): collection grid, search/refresh, rename/move/delete + asset name edit; `arcsAssetVault.ts`
+- [x] Studios: Character save-as-existing combobox (`profile_name`)
+- [x] Studios: Asset save-as-existing combobox (`collection_name`)
+
 ## Future / Backlog
 
-- Character Archive & Comics & Story Archive: read from Supabase when configured (fallback to localStorage).
+- Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).
 - Optional: Supabase Storage bucket `arcs-generations` creation and RLS if not already present.

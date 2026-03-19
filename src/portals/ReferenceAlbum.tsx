@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
-import { CinematicGallery } from '../components/ui/CinematicGallery';
-import { AssetArchiveGallery } from '../components/ui/AssetArchiveGallery';
+import { AssetVault } from '@/components/ui/AssetVault';
+import { CharacterVault } from '@/components/ui/CharacterVault';
 
 type ArchiveTab = 'character' | 'asset';
 
@@ -15,7 +15,7 @@ export const ReferenceAlbum: React.FC = () => {
 
     return (
         <div className="min-h-screen text-white pt-20 pb-12">
-            {/* Character | Asset Archive toggle */}
+            {/* Characters | Assets (Image Vault) */}
             <div className="flex justify-center gap-2 mb-4 px-8">
                 <button
                     type="button"
@@ -26,7 +26,7 @@ export const ReferenceAlbum: React.FC = () => {
                             : 'border-white/20 text-white/70 hover:border-white/40 hover:text-white/90'
                     }`}
                 >
-                    Character Archive
+                    Characters
                 </button>
                 <button
                     type="button"
@@ -37,10 +37,10 @@ export const ReferenceAlbum: React.FC = () => {
                             : 'border-white/20 text-white/70 hover:border-white/40 hover:text-white/90'
                     }`}
                 >
-                    Asset Archive
+                    Assets
                 </button>
             </div>
-            {tab === 'character' ? <CinematicGallery /> : <AssetArchiveGallery />}
+            {tab === 'character' ? <CharacterVault /> : <AssetVault />}
         </div>
     );
 };

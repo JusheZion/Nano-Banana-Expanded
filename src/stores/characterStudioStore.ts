@@ -4,6 +4,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ChipTag } from '@/shared/utils/PromptCompiler';
+import type { SeedMode } from '@/shared/utils/generationSeed';
+
+export type { SeedMode };
 import {
   type WardrobeCategory,
   type CinematicKey,
@@ -123,6 +126,7 @@ export interface CharacterStudioState {
   genderSelection: string[];
   currentLiveImageUrl: string | null;
   currentGenerationSeed: number | null;
+  seedMode: SeedMode; // persisted; default randomized
   heritageLibrary: string[];
   genderLibrary: string[];
   physicalLibraries: Record<string, string[]>;
@@ -166,6 +170,7 @@ export interface CharacterStudioState {
   resetWardrobeModifiers: () => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
   setCurrentGenerationSeed: (seed: number | null) => void;
+  setSeedMode: (mode: SeedMode) => void;
   addHeritageOption: (value: string) => void;
   addGenderOption: (value: string) => void;
   addPhysicalOption: (category: string, value: string) => void;
@@ -223,6 +228,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       genderSelection: [],
       currentLiveImageUrl: null,
       currentGenerationSeed: null,
+      seedMode: 'randomized',
       heritageLibrary: [],
       genderLibrary: [],
       physicalLibraries: emptyPhysicalLibraries(),
@@ -323,6 +329,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         set({ wardrobeModifiers: defaultWardrobeModifiers() }),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
       setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
+      setSeedMode: (mode) => set({ seedMode: mode }),
       addHeritageOption: (value) =>
         set((s) => {
           const t = value.trim();
@@ -510,6 +517,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         heritageSelection: state.heritageSelection,
         genderSelection: state.genderSelection,
         currentGenerationSeed: state.currentGenerationSeed,
+        seedMode: state.seedMode,
         heritageLibrary: state.heritageLibrary,
         genderLibrary: state.genderLibrary,
         physicalLibraries: state.physicalLibraries,

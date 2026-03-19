@@ -35,3 +35,13 @@ export function addCachedGeneration(
   list.unshift(entry);
   if (list.length > MAX_PER_CONTEXT) list.length = MAX_PER_CONTEXT;
 }
+
+export function removeCachedGenerationByUrl(
+  contextType: GenerationContextType,
+  url: string
+): void {
+  const list = cache[contextType];
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].url === url) list.splice(i, 1);
+  }
+}

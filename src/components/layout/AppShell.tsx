@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Palette, Image as ImageIcon, Sparkles, Wand2, BookOpen, Box } from 'lucide-react';
+import { Home, Palette, Image as ImageIcon, Wand2, BookOpen, Box } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { Portal } from '@/shared/portals';
 import { prefetchPortal } from '@/portals-prefetch';
@@ -16,6 +16,56 @@ interface AppShellProps {
     setActivePortal: (portal: Portal) => void;
 }
 
+function accentForPortal(p: Portal): string {
+    return p === 'studio' ? '#37615D' :
+        p === 'reference' ? '#5F368E' :
+        p === 'assets' ? '#5F368E' :
+        p === 'comic' ? ACCENT_GOLD_SOLID :
+        p === 'lab' ? ACCENT_GOLD_SOLID :
+        p === 'home' ? ACCENT_GOLD_SOLID :
+        '#893741';
+}
+
+type NavItemProps = {
+    targetPortal: Portal;
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    sidebarExpanded: boolean;
+    isActive: boolean;
+    onSelect: (portal: Portal) => void;
+};
+
+const NavItem: React.FC<NavItemProps> = ({
+    targetPortal,
+    icon: Icon,
+    label,
+    sidebarExpanded,
+    isActive,
+    onSelect,
+}) => {
+    const accent = accentForPortal(targetPortal);
+
+    return (
+        <button
+            onClick={() => onSelect(targetPortal)}
+            onMouseEnter={() => prefetchPortal(targetPortal)}
+            title={!sidebarExpanded ? label : undefined}
+            className={`
+                    w-full flex items-center gap-3 rounded-xl transition-all duration-300 group
+                    ${sidebarExpanded ? 'px-4 py-3' : 'px-0 py-3 justify-center'}
+                    ${isActive ? 'border backdrop-blur-sm' : 'border border-transparent hover:bg-white/10'}
+                `}
+            style={isActive ? { color: accent, backgroundColor: `${accent}22`, borderColor: accent } : { color: '#FFFFFF', opacity: 0.9 }}
+        >
+            <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'} transition-transform`} />
+            {sidebarExpanded && <span className="font-medium tracking-wide whitespace-nowrap">{label}</span>}
+            {isActive && sidebarExpanded && (
+                <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+            )}
+        </button>
+    );
+};
+
 export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setActivePortal }) => {
     const { setTheme } = useTheme();
     const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -26,41 +76,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
         else if (portal === 'reference' || portal === 'assets') setTheme('purple');
         else if (portal === 'comic') setTheme('obsidian');
         else if (portal === 'home') setTheme('crimson');
-    };
-
-    // ARCS Golden-Blue: use gold for comic/lab, blue tint for studio/reference, gold for home/related
-    const accentFor = (p: Portal) =>
-        p === 'studio' ? '#37615D' :
-        p === 'reference' ? '#5F368E' :
-        p === 'assets' ? '#5F368E' :
-        p === 'comic' ? ACCENT_GOLD_SOLID :
-        p === 'lab' ? ACCENT_GOLD_SOLID :
-        p === 'home' ? ACCENT_GOLD_SOLID :
-        '#893741';
-
-    const NavItem = ({ targetPortal, icon: Icon, label }: { targetPortal: Portal; icon: React.ComponentType<{ className?: string }>; label: string }) => {
-        const isActive = activePortal === targetPortal;
-        const accent = accentFor(targetPortal);
-
-        return (
-            <button
-                onClick={() => handleNavClick(targetPortal)}
-                onMouseEnter={() => prefetchPortal(targetPortal)}
-                title={!sidebarExpanded ? label : undefined}
-                className={`
-                    w-full flex items-center gap-3 rounded-xl transition-all duration-300 group
-                    ${sidebarExpanded ? 'px-4 py-3' : 'px-0 py-3 justify-center'}
-                    ${isActive ? 'border backdrop-blur-sm' : 'border border-transparent hover:bg-white/10'}
-                `}
-                style={isActive ? { color: accent, backgroundColor: `${accent}22`, borderColor: accent } : { color: '#FFFFFF', opacity: 0.9 }}
-            >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'scale-110' : 'group-hover:scale-110'} transition-transform`} />
-                {sidebarExpanded && <span className="font-medium tracking-wide whitespace-nowrap">{label}</span>}
-                {isActive && sidebarExpanded && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
-                )}
-            </button>
-        );
     };
 
     return (
@@ -98,16 +113,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                 <nav className={`flex-1 ${sidebarExpanded ? 'px-4' : 'px-2'} space-y-1 overflow-y-auto custom-scrollbar transition-all duration-300 text-white/80`}>
                     {sidebarExpanded && <div className="text-[10px] font-bold px-4 mb-2 mt-4 uppercase tracking-[0.15em] opacity-80">Main Hub</div>}
                     {!sidebarExpanded && <div className="h-4 mt-2" />}
-                    <NavItem targetPortal="home" icon={Home} label="Overview" />
+                    <NavItem targetPortal="home" icon={Home} label="Overview" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'home'} onSelect={handleNavClick} />
 
                     {sidebarExpanded && <div className="text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-[0.15em] opacity-80">Creative Suite</div>}
                     {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
-                    <NavItem targetPortal="studio" icon={Wand2} label="Reference Character Studio" />
-                    <NavItem targetPortal="assets" icon={Box} label="Assets Studio" />
-                    <NavItem targetPortal="reference" icon={ImageIcon} label="Character Archive" />
-                    <NavItem targetPortal="comic" icon={BookOpen} label="Comic Studio" />
-                    <NavItem targetPortal="related" icon={Sparkles} label="Comics & Story Archive" />
-                    <NavItem targetPortal="lab" icon={Palette} label="Storyline Studio" />
+                    <NavItem targetPortal="studio" icon={Wand2} label="Reference Character Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'studio'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="assets" icon={Box} label="Assets Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'assets'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="reference" icon={ImageIcon} label="Image Vault" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'reference'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="comic" icon={BookOpen} label="Comic Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'comic'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="lab" icon={Palette} label="Storyline Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'lab'} onSelect={handleNavClick} />
                 </nav>
 
                 <div className={`${sidebarExpanded ? 'p-6' : 'p-3'} mt-auto flex justify-center relative transition-all duration-300`}>

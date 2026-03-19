@@ -35,12 +35,19 @@ import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
 import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
-import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
+import { getCharacterAlbums } from '@/shared/api/arcsVault';
+import {
+  addCachedGeneration,
+  getCachedGenerations,
+  removeCachedGenerationByUrl,
+} from '@/shared/utils/generationSessionCache';
 import {
   addRecentFromCharacter,
   getRecentCharacters,
+  removeRecentByImageUrl,
   type RecentGeneration,
 } from '@/shared/utils/recentGenerations';
+import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
 
@@ -205,6 +212,8 @@ export const CharacterStudio: React.FC = () => {
   const [saveCharacterCastName, setSaveCharacterCastName] = useState('');
   const [saveCharacterIsEditProfile, setSaveCharacterIsEditProfile] = useState(false);
   const [saveCharacterError, setSaveCharacterError] = useState<string | null>(null);
+  const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
+  const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
   const [recentCharacters, setRecentCharacters] = useState<RecentGeneration[]>([]);
   const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'edit' | 'refine'>('auto');
   const [snippetNameInput, setSnippetNameInput] = useState('');
@@ -282,9 +291,33 @@ export const CharacterStudio: React.FC = () => {
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
 
+  const discardLiveCharacterImage = () => {
+    const url = store.currentLiveImageUrl;
+    if (url) {
+      removeRecentByImageUrl(url, 'character');
+      removeCachedGenerationByUrl('character', url);
+      if (url.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          /* ignore */
+        }
+      }
+      setRecentCharacters(getRecentCharacters());
+    }
+    store.setCurrentLiveImageUrl(null);
+  };
+
+  const getMatchedExistingProfile = (typed: string): string | null => {
+    const q = typed.trim();
+    if (!q) return null;
+    const lower = q.toLowerCase();
+    return vaultProfileOptions.find((p) => p.toLowerCase() === lower) ?? null;
+  };
+
   const handleGenerateCharacter = async () => {
     store.setGenerationStatus('pending');
-    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
     store.setCurrentGenerationSeed(seed);
     const refUrls = store.referenceImageUrls.length > 0
       ? store.referenceImageUrls
@@ -337,7 +370,7 @@ export const CharacterStudio: React.FC = () => {
 
   const handleGenerateAlternate = async () => {
     store.setGenerationStatus('pending');
-    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
     store.setCurrentGenerationSeed(seed);
     const refUrls = store.referenceImageUrls.length > 0
       ? store.referenceImageUrls
@@ -393,7 +426,8 @@ export const CharacterStudio: React.FC = () => {
     const refinement = store.refinementPromptOverride.trim();
     if (!live || !refinement) return;
     store.setGenerationStatus('pending');
-    const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
+    store.setCurrentGenerationSeed(seed);
     const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
     const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this character image according to these instructions while preserving identity and overall style: ${refinement}`;
     const result = await generateImage({
@@ -447,6 +481,14 @@ export const CharacterStudio: React.FC = () => {
     setSaveCharacterIsEditProfile(isEditProfile);
     setSaveCharacterError(null);
     setShowSaveCharacterModal(true);
+
+    if (isEditProfile) {
+      setVaultProfileLoading(true);
+      getCharacterAlbums()
+        .then((albums) => setVaultProfileOptions(albums.map((a) => a.profileName)))
+        .catch(() => setVaultProfileOptions([]))
+        .finally(() => setVaultProfileLoading(false));
+    }
   };
 
   const handleSaveCharacterModalConfirm = async () => {
@@ -455,13 +497,29 @@ export const CharacterStudio: React.FC = () => {
     const _url = store.currentLiveImageUrl;
     fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:entry',message:'Save character handler invoked',data:{profileNameRawLength:_profileRaw?.length,profileNameTrimmed:_profileRaw?.trim?.()?.length,hasUrl:!!_url,urlPrefix:_url?.slice?.(0,30)},timestamp:Date.now(),hypothesisId:'A_B_E'})}).catch(()=>{});
     // #endregion
-    const profileName = saveCharacterProfileName.trim();
-    if (!profileName) {
+    const typedProfileDisplay = saveCharacterProfileName.trim();
+    if (!typedProfileDisplay) {
       // #region agent log
       fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:earlyReturn',message:'Early return: no profile name',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
       // #endregion
       return;
     }
+
+    if (saveCharacterIsEditProfile) {
+      const matched = getMatchedExistingProfile(typedProfileDisplay);
+      if (!matched) {
+        setSaveCharacterError('Select an existing profile from the dropdown. Use “Save New Character” to create a new one.');
+        return;
+      }
+    }
+
+    const matchedExistingProfile = saveCharacterIsEditProfile
+      ? getMatchedExistingProfile(typedProfileDisplay)!
+      : typedProfileDisplay;
+
+    const isUnnamed = matchedExistingProfile.toLowerCase() === 'unnamed';
+    const baseNameForId = isUnnamed ? 'Unnamed' : matchedExistingProfile;
+    const profileNameForDb = isUnnamed ? undefined : matchedExistingProfile;
     const url = store.currentLiveImageUrl;
     if (!url) {
       // #region agent log
@@ -471,28 +529,43 @@ export const CharacterStudio: React.FC = () => {
     }
     const castName = saveCharacterCastName.trim() || undefined;
     try {
-      if (saveCharacterIsEditProfile && store.selectedPoseId) {
-        store.updatePose(store.selectedPoseId, { imageUrl: url });
-      }
-      saveGeneration('character', url, store.currentGenerationSeed ?? undefined, { profileName });
-      addCachedGeneration('character', { url, seed: store.currentGenerationSeed ?? undefined });
       // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:beforeDb',message:'Calling saveCharacterToDb',data:{profileName,castName:castName??null},timestamp:Date.now(),hypothesisId:'C_D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:beforeDb',message:'Calling saveCharacterToDb',data:{profileNameForDb,castName:castName??null},timestamp:Date.now(),hypothesisId:'C_D'})}).catch(()=>{});
       // #endregion
-      const result = await saveCharacterToDb(store, profileName, profileName, castName);
+      const result = await saveCharacterToDb(store, baseNameForId, profileNameForDb, castName);
       // #region agent log
       fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:afterDb',message:'saveCharacterToDb result',data:{ok:result.ok,id:result.id,error:result.error},timestamp:Date.now(),hypothesisId:'C_D'})}).catch(()=>{});
       // #endregion
       if (result.ok && result.id != null && result.imageUrl != null) {
+        if (saveCharacterIsEditProfile && store.selectedPoseId) {
+          store.updatePose(store.selectedPoseId, { imageUrl: result.imageUrl });
+        }
+        saveGeneration('character', result.imageUrl, store.currentGenerationSeed ?? undefined, {
+          profileName: profileNameForDb,
+        });
+        addCachedGeneration('character', {
+          url: result.imageUrl,
+          seed: store.currentGenerationSeed ?? undefined,
+        });
         addRecentFromCharacter({
           id: result.id,
           image_url: result.imageUrl,
-          profile_name: profileName,
+          profile_name: matchedExistingProfile,
           cast_name: castName ?? null,
           seed: store.currentGenerationSeed ?? null,
         });
         setRecentCharacters(getRecentCharacters());
         setSaveCharacterError(null);
+        setShowSaveCharacterModal(false);
+      } else if (!result.ok && result.error === 'Supabase not configured') {
+        if (saveCharacterIsEditProfile && store.selectedPoseId) {
+          store.updatePose(store.selectedPoseId, { imageUrl: url });
+        }
+        saveGeneration('character', url, store.currentGenerationSeed ?? undefined, {
+          profileName: profileNameForDb,
+        });
+        addCachedGeneration('character', { url, seed: store.currentGenerationSeed ?? undefined });
+        setSaveCharacterError('Supabase not configured — saved in this browser only (will not sync).');
         setShowSaveCharacterModal(false);
       } else if (result.ok) {
         setSaveCharacterError(null);
@@ -1481,7 +1554,7 @@ export const CharacterStudio: React.FC = () => {
                       <Tooltip variant="character" content="Delete this image" side="left">
                         <button
                           type="button"
-                          onClick={() => store.setCurrentLiveImageUrl(null)}
+                          onClick={() => discardLiveCharacterImage()}
                           className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
                           aria-label="Delete image"
                         >
@@ -1541,6 +1614,31 @@ export const CharacterStudio: React.FC = () => {
                   'Generate Character'
                 )}
               </button>
+              <div className="flex items-center gap-1.5 flex-wrap w-full">
+                <span className="text-[10px] uppercase tracking-wider text-emerald-200/60">Seed</span>
+                <button
+                  type="button"
+                  onClick={() => store.setSeedMode('randomized')}
+                  className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                    (store.seedMode ?? 'randomized') === 'randomized'
+                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                      : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
+                  }`}
+                >
+                  Randomized
+                </button>
+                <button
+                  type="button"
+                  onClick={() => store.setSeedMode('locked')}
+                  className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                    store.seedMode === 'locked'
+                      ? 'border-amber-500/60 bg-amber-500/15'
+                      : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="inline-block" style={goldTextStyle}>Locked</span>
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleGenerateAlternate}
@@ -1753,11 +1851,34 @@ export const CharacterStudio: React.FC = () => {
             <input
               type="text"
               value={saveCharacterProfileName}
-              onChange={(e) => setSaveCharacterProfileName(e.target.value)}
+              onChange={(e) => {
+                setSaveCharacterProfileName(e.target.value);
+                if (saveCharacterError) setSaveCharacterError(null);
+              }}
               placeholder="e.g. Detective Mara"
+              list={saveCharacterIsEditProfile ? 'vault-profile-options' : undefined}
               className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
               autoFocus
             />
+            {saveCharacterIsEditProfile && (
+              <datalist id="vault-profile-options">
+                {vaultProfileOptions.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            )}
+            {saveCharacterIsEditProfile && (
+              <p className="text-[11px] text-white/55 -mt-2 mb-3">
+                {vaultProfileLoading
+                  ? 'Loading profiles…'
+                  : vaultProfileOptions.length === 0
+                    ? 'No existing profiles found. Use “Save New Character”.'
+                    : saveCharacterProfileName.trim() &&
+                        !getMatchedExistingProfile(saveCharacterProfileName)
+                      ? 'Type to search, but Save only enables on an exact existing profile.'
+                      : '\u00A0'}
+              </p>
+            )}
             <label className="block text-sm font-medium text-white/80 mb-1">Cast name (optional)</label>
             <input
               type="text"
@@ -1782,7 +1903,11 @@ export const CharacterStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveCharacterModalConfirm}
-                disabled={!saveCharacterProfileName.trim()}
+                disabled={
+                  saveCharacterIsEditProfile
+                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
+                    : !saveCharacterProfileName.trim()
+                }
                 className="px-3 py-2 rounded-lg text-sm font-medium text-black border border-amber-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
@@ -1835,7 +1960,7 @@ export const CharacterStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    store.setCurrentLiveImageUrl(null);
+                    discardLiveCharacterImage();
                     setShowZoomModal(false);
                   }}
                   className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"

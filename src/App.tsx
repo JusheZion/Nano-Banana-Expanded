@@ -8,7 +8,6 @@ import { LandingPage } from './components/LandingPage';
 const CharacterStudio = lazy(() => import('./portals/CharacterStudio').then(m => ({ default: m.CharacterStudio })));
 const AssetsStudio = lazy(() => import('./portals/AssetsStudio').then(m => ({ default: m.AssetsStudio })));
 const ReferenceAlbum = lazy(() => import('./portals/ReferenceAlbum').then(m => ({ default: m.ReferenceAlbum })));
-const RelatedAlbum = lazy(() => import('./portals/RelatedAlbum').then(m => ({ default: m.RelatedAlbum })));
 const PhotoLab = lazy(() => import('./portals/PhotoLab').then(m => ({ default: m.PhotoLab })));
 const ComicPortal = lazy(() => import('./portals/ComicPortal').then(m => ({ default: m.ComicPortal })));
 
@@ -21,12 +20,11 @@ const PortalFallback = () => (
 function App() {
   const [activePortal, setActivePortal] = useState<Portal>('home');
   const { setTheme } = useTheme();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { } = useProject();
+  useProject();
 
   useEffect(() => {
     if (activePortal === 'home' || activePortal === 'studio') setTheme('teal');
-    else if (activePortal === 'reference' || activePortal === 'related' || activePortal === 'assets') setTheme('purple');
+    else if (activePortal === 'reference' || activePortal === 'assets') setTheme('purple');
     else if (activePortal === 'lab') setTheme('gold');
     else if (activePortal === 'comic') setTheme('obsidian');
     else setTheme('crimson');
@@ -50,11 +48,6 @@ function App() {
       {activePortal === 'reference' && (
         <Suspense fallback={<PortalFallback />}>
           <ReferenceAlbum />
-        </Suspense>
-      )}
-      {activePortal === 'related' && (
-        <Suspense fallback={<PortalFallback />}>
-          <RelatedAlbum />
         </Suspense>
       )}
       {activePortal === 'lab' && (

@@ -29,6 +29,7 @@ export const CinematicGallery: React.FC = () => {
         <div className="w-full px-8 py-8 animate-fade-in relative">
             {focusEditItem && (
                 <ArchiveThumbnailFocusModal
+                    context="character"
                     item={focusEditItem}
                     onClose={() => setFocusEditItem(null)}
                     onSaved={refreshArchive}

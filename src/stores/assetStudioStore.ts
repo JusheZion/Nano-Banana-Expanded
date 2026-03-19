@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ChipTag } from '@/shared/utils/PromptCompiler';
+import type { SeedMode } from '@/shared/utils/generationSeed';
 import {
   type SetDressingCategory,
   type AssetCinematicKey,
@@ -94,6 +95,7 @@ export interface AssetStudioState {
   tags: ChipTag[];
   currentLiveImageUrl: string | null;
   currentGenerationSeed: number | null;
+  seedMode: SeedMode;
   diversifyStyle: boolean;
   artStyleId: string;
   customStyles: string[];
@@ -132,6 +134,7 @@ export interface AssetStudioState {
   setTags: (tags: ChipTag[] | ((prev: ChipTag[]) => ChipTag[])) => void;
   setCurrentLiveImageUrl: (url: string | null) => void;
   setCurrentGenerationSeed: (seed: number | null) => void;
+  setSeedMode: (mode: SeedMode) => void;
   setDiversifyStyle: (value: boolean) => void;
   setArtStyle: (id: string) => void;
   addCustomStyle: (style: string) => void;
@@ -188,6 +191,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       ],
       currentLiveImageUrl: null,
       currentGenerationSeed: null,
+      seedMode: 'randomized',
       diversifyStyle: false,
       artStyleId: 'flagship',
       customStyles: [],
@@ -226,6 +230,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         })),
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
       setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
+      setSeedMode: (mode) => set({ seedMode: mode }),
       setDiversifyStyle: (value) => set({ diversifyStyle: value }),
       setArtStyle: (id) => set({ artStyleId: id }),
       addCustomStyle: (style) =>
@@ -450,6 +455,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       partialize: (state) => ({
         tags: state.tags,
         currentGenerationSeed: state.currentGenerationSeed,
+        seedMode: state.seedMode,
         artStyleId: state.artStyleId,
         customStyles: state.customStyles,
         eraStyleSelection: state.eraStyleSelection,

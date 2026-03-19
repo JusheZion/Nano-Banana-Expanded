@@ -8,6 +8,52 @@ High-level narrative of where the project is and where it's going. For checklist
 
 **Character Archive thumbnail framing (2026-03-16):** Per-card **Framing** opens a modal: **click-drag to pan** focal (no snap-to-cursor); scale slider; Save writes **`metadata_tags.archive_thumbnail`** `{x,y,scale}` on Supabase (no extra columns / schema-cache issues). **localStorage** archive still uses `thumbnailFocus` on `StoredGeneration`. Optional migration `20260316000000_character_thumbnail_focus.sql` unused by app. **Files:** `ArchiveThumbnailFocusModal.tsx`, `CinematicGallery.tsx`, `arcsArchive.ts`, `arcsPersistence.ts`.
 
+**Imported image → Supabase (2026-03-18):** `saveCharacterToDb` / `saveAssetToDb` only uploaded **`data:`** URLs to Storage; **imported** live images use **`blob:`** URLs (`URL.createObjectURL`), which were written to `image_url` and broke after refresh. **`arcsPersistence.ts`** now runs **`ensurePersistentImageUrl`**: uploads both **`data:`** and **`blob:`** to `arcs-generations`, stores the public URL. **`VaultImageWithFallback`** (`VaultImageWithFallback.tsx`) used in Character/Asset vault grids + modals shows an **Image unavailable** placeholder when a URL fails (e.g. legacy `blob:` rows).
+
+**Storage upload hardening (2026-03-19):** If Storage upload still fails, the app **no longer inserts** a `blob:` URL into Postgres (that always breaks after refresh). Save returns a clear error pointing at bucket **`arcs-generations`** and policies. **Studios** only call `saveGeneration` / session cache **after** a successful DB save so the local archive gets the **public** URL, not the ephemeral `blob:`. New migration: `supabase/migrations/20260319000000_arcs_generations_storage_bucket.sql` (creates bucket + read/insert policies). **Repair:** delete or re-save rows whose `image_url` still starts with `blob:`.
+
+**Image Vault framing (2026-03-19):** Brought back per-image thumbnail **Framing** (focus + zoom) inside the **Image Vault** for both **Characters** and **Assets**. Vault cover cards and modal grids now render `metadata_tags.archive_thumbnail` as `object-position` + `scale`, and both modals expose a **Framing…** action that reuses `ArchiveThumbnailFocusModal` (now supports `context: 'character' | 'asset'`). Asset vault loader now maps `assets.metadata_tags.archive_thumbnail` into `thumbnail_focus_*` fields (and local asset generations support `thumbnailFocus`). **Files:** `ArchiveThumbnailFocusModal.tsx`, `ProfileVaultModal.tsx`, `CollectionVaultModal.tsx`, `CharacterVault.tsx`, `AssetVault.tsx`, `arcsAssetVault.ts`, `generationOutputRouter.ts`. **Verify:** open Image Vault → Characters → open a profile → Framing… → Save → refresh vault (or hard reload) and confirm the same framing persists; repeat for Assets.
+
+**Navigation (2026-03-18):** Removed redundant **Comics & Story Archive** portal (`related`): deleted `RelatedAlbum.tsx` and `temp_related_album.html`; dropped `related` from `Portal` type, `App.tsx`, `AppShell` nav, `portals-prefetch.ts`, and Overview grid card. Main menu + landing **Character Archive** label renamed to **Image Vault**. `ReferenceAlbum` tabs relabeled **Characters** / **Assets**.
+
+**Character Vault Foundation — Ruby & Gold Edition (2026-03-18):** Character Archive is being refactored into an album-based **Vault**.
+
+- **UI**: New Ruby/Gold Vault chrome (deep ruby diagonal gradient, gold gradient dividers, gold icon/button logic) with album cover cards per `profile_name`.
+- **Album logic**: `profile_name` groups all images; Vault grid shows one **Profile Cover** card per group. Clicking opens a modal that displays all images for that profile.
+- **Cover selection**: Each image in the modal has a Ruby-encrusted star toggle. When selected, it becomes the profile cover (single source of truth).
+- **Persistence**:
+  - **Supabase**: `public.characters.is_profile_cover boolean default false` with a partial index by `profile_name` where cover is true; cover selection uses “swap” semantics (clear all covers for the profile, then set the clicked row true).
+  - **Offline**: localStorage fallback key `arcs_cover_${profileName}` stores the chosen id; if none exists, fall back to newest item.
+
+**Files added/updated:**
+
+- **Migration**: `supabase/migrations/20260318000000_arcs_profile_covers.sql`
+- **Repository helper**: `src/shared/api/arcsVault.ts` (+ unit tests `src/shared/api/__tests__/arcsVault.test.ts`)
+- **Vault UI**: `src/components/ui/CharacterVault.tsx`, `src/components/ui/ProfileVaultModal.tsx`
+- **Portal wiring**: `src/portals/ReferenceAlbum.tsx` now uses `CharacterVault` for the character tab (Asset Archive unchanged)
+
+**Verification (automated):**
+
+- `npm run test -- src/shared/api/__tests__/arcsVault.test.ts` (cover selection fallback tests)
+- `npm run build` (TypeScript + Vite production build)
+- `npm run lint` (now advisory; warnings only)
+
+**Manual smoke test (pending):**
+
+- Open **Character Archive** → confirm Ruby/Gold Vault renders and shows one card per profile.
+- Click a profile → modal opens; click star on an image → “Saving to Vault…” appears and cover updates.
+- Refresh page → cover persists (Supabase when configured, local fallback otherwise).
+
+**Regression fix (2026-03-18):** If Supabase env vars are present but the `characters` table returns **zero rows** (or query fails), Vault now **falls back to localStorage** so previously saved local archives don’t appear “deleted.” File: `src/shared/api/arcsVault.ts`.
+
+**Vault toolbars (2026-03-18):** Character **Profile Vault** modal adds **Rename profile**, **Delete album**, **Refresh**, per-image **Move to profile** (merge confirmation + “Don’t ask again” in `arcs_vault_merge_confirm_skip`), **last image** warning, **Edit cast name**, **Delete image**. Grid: **Search profiles**, **Refresh vault**. Asset tab uses **Asset Vault** (amethyst grid) + **Collection Vault** modal with the same patterns (merge skip key `arcs_asset_vault_merge_confirm_skip`). **API:** `arcsVault.ts` (rename/move/delete/cast), `arcsAssetVault.ts`, local mutations in `generationOutputRouter.ts`. **Verify:** rename/move/delete on Supabase and local-only archives; merge dialog when moving into an existing album.
+
+**Character studio save-as-existing (2026-03-19):** `CharacterStudio` “Save Edited Profile” modal now loads existing `profile_name` options from `arcsVault.getCharacterAlbums()`, provides a type-to-search dropdown, and enables **Save** only when the typed value matches an existing option (case-insensitive exact match). Selecting `"Unnamed"` maps to `NULL` `profile_name` for Supabase inserts (and enables the same vault fallback behavior offline). **File:** `src/portals/CharacterStudio.tsx`. **Verify:** open modal, type an existing name to enable Save; type a non-existing name keeps Save disabled; confirm `"Unnamed"` works.
+
+**Asset studio save-as-existing (2026-03-19):** `AssetsStudio` “Add to Library” modal now loads existing `collection_name` options from `arcsAssetVault.getAssetAlbums()`, provides a type-to-search dropdown, and enables **Save** only when the typed value matches an existing option (case-insensitive exact match). Selecting `"Unnamed"` maps to `NULL` `collection_name` for Supabase inserts. **File:** `src/portals/AssetsStudio.tsx`. **Verify:** open Add to Library, type an existing collection to enable Save; type a non-existing value keeps Save disabled; confirm `"Unnamed"` works.
+
+**Studio seed + trash (2026-03-18):** **Randomized** is the default seed mode (new seed per generate / alternate / refine / expand). Users can switch to **Locked** to reuse the current seed. **Trash** on the live image (Character + Asset Studio, including zoom modal) removes that image from **Recent** generations and the in-memory **This session** strip, and revokes `blob:` object URLs. **Files:** `generationSeed.ts`, `characterStudioStore.ts`, `assetStudioStore.ts`, `CharacterStudio.tsx`, `AssetsStudio.tsx`, `recentGenerations.ts` (`removeRecentByImageUrl`), `generationSessionCache.ts` (`removeCachedGenerationByUrl`). **Verify:** toggle Locked → repeated generates share seed; Randomized → seeds differ; trash removes thumbnail from Recent + session row.
+
 **ARCS migration:** Work is done on branch `arcs-migration` in the worktree at `.worktrees/arcs-migration` (or in main after merge). **ARCS rebrand and portal restructure (complete):** (1) **Rebrand:** Product label "ARCS" in AppShell and landing hero; ARCS Golden-Blue design tokens live in `src/shared/theme/Phase12DesignTokens.ts` (single source of truth); AppShell and LandingPage use them; DESIGN.md documents ARCS alongside Jewel-Tone. (2) **Restructure:** `src/shared/` holds theme, context (ThemeContext, ProjectContext), shared components (Tooltip, CopyButton, HeroHeader), and shared utils (PromptCompiler, geometry-utils); path alias `@/` points at `src/`. All portal entries live under `src/portals/` including `ComicPortal.tsx` (wraps ComicEditor); `Portal` type is centralized in `src/shared/portals.ts`. (3) **Code-splitting:** Portals are lazy-loaded via `React.lazy`; nav hover triggers prefetch (`portals-prefetch.ts`) so first click is fast. **Future:** Dual-studio (TBD — e.g. two studio modes or split view; define in a later spec). **Next phase:** WordArt expansion per Phase 16 (Transform dropdown, Reflection/Glow/3D, preset gallery).
 
 ---

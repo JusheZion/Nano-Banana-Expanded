@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CharacterArchiveItem } from '@/shared/api/arcsArchive';
-import { updateCharacterThumbnailFocusDb } from '@/shared/api/arcsPersistence';
+import { updateAssetThumbnailFocusDb, updateCharacterThumbnailFocusDb } from '@/shared/api/arcsPersistence';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
-import { updateCharacterGenerationThumbnailFocus } from '@/shared/utils/generationOutputRouter';
+import {
+  updateAssetGenerationThumbnailFocus,
+  updateCharacterGenerationThumbnailFocus,
+} from '@/shared/utils/generationOutputRouter';
 
 const PREVIEW_W = 280;
 const PREVIEW_H = 380;
@@ -17,12 +19,21 @@ function clamp(n: number, min: number, max: number) {
 }
 
 type Props = {
-  item: CharacterArchiveItem;
+  context: 'character' | 'asset';
+  item: {
+    id: string;
+    image_url: string;
+    name?: string | null;
+    cast_name?: string | null;
+    thumbnail_focus_x?: number | null;
+    thumbnail_focus_y?: number | null;
+    thumbnail_scale?: number | null;
+  };
   onClose: () => void;
   onSaved: () => void;
 };
 
-export function ArchiveThumbnailFocusModal({ item, onClose, onSaved }: Props) {
+export function ArchiveThumbnailFocusModal({ context, item, onClose, onSaved }: Props) {
   const [x, setX] = useState(item.thumbnail_focus_x ?? 50);
   const [y, setY] = useState(item.thumbnail_focus_y ?? 50);
   const [scale, setScale] = useState(item.thumbnail_scale ?? 1);
@@ -102,13 +113,19 @@ export function ArchiveThumbnailFocusModal({ item, onClose, onSaved }: Props) {
     setSaving(true);
     try {
       if (isSupabaseConfigured()) {
-        const r = await updateCharacterThumbnailFocusDb(item.id, focus);
+        const r =
+          context === 'character'
+            ? await updateCharacterThumbnailFocusDb(item.id, focus)
+            : await updateAssetThumbnailFocusDb(item.id, focus);
         if (!r.ok) {
           setErr(r.error ?? 'Save failed');
           return;
         }
       } else {
-        const ok = updateCharacterGenerationThumbnailFocus(item.id, focus);
+        const ok =
+          context === 'character'
+            ? updateCharacterGenerationThumbnailFocus(item.id, focus)
+            : updateAssetGenerationThumbnailFocus(item.id, focus);
         if (!ok) {
           setErr('Could not update this entry in browser storage.');
           return;

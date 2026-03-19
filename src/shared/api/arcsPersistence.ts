@@ -21,26 +21,76 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
   return new Blob([bytes], { type: mime });
 }
 
-async function uploadImageIfDataUrl(url: string): Promise<string> {
-  if (!url.startsWith('data:')) return url;
-  if (!supabase) return url;
-  const blob = dataUrlToBlob(url);
-  if (!blob) return url;
-  const ext = url.startsWith('data:image/png') ? 'png' : 'jpg';
+/** Pick file extension from MIME type for storage object key. */
+function extFromMime(mime: string): string {
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('gif')) return 'gif';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+  return 'jpg';
+}
+
+/**
+ * Upload raw image bytes to Supabase Storage and return a public URL.
+ * Returns null if upload fails (caller keeps original URL).
+ */
+async function uploadBlobToArcsBucket(blob: Blob): Promise<string | null> {
+  if (!supabase) return null;
+  const mime = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+  const ext = extFromMime(mime);
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-    contentType: blob.type,
+    contentType: mime,
     upsert: false,
   });
   if (error) {
     // #region agent log
-    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:uploadImageIfDataUrl:storageError',message:'Storage upload failed, storing data URL',data:{error:error.message},timestamp:Date.now(),hypothesisId:'img1'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:uploadBlobToArcsBucket:storageError',message:'Storage upload failed',data:{error:error.message},timestamp:Date.now(),hypothesisId:'img1'})}).catch(()=>{});
     // #endregion
-    return url;
+    return null;
   }
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return pub.publicUrl;
 }
+
+/**
+ * Ensures `image_url` stored in Postgres is loadable after refresh.
+ * - `data:` (API generations) → upload to Storage, store public URL.
+ * - `blob:` (imported / pasted files in-session) → fetch blob, upload, store public URL.
+ * - `http(s):` and app paths → unchanged.
+ */
+async function ensurePersistentImageUrl(url: string): Promise<string> {
+  if (!url || !isSupabaseConfigured() || !supabase) return url;
+
+  if (url.startsWith('data:')) {
+    const blob = dataUrlToBlob(url);
+    if (!blob) return url;
+    const uploaded = await uploadBlobToArcsBucket(blob);
+    return uploaded ?? url;
+  }
+
+  if (url.startsWith('blob:')) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return url;
+      const blob = await res.blob();
+      const uploaded = await uploadBlobToArcsBucket(blob);
+      return uploaded ?? url;
+    } catch {
+      return url;
+    }
+  }
+
+  return url;
+}
+
+/** `blob:` URLs never survive a full page reload; never persist them to Postgres when using Supabase. */
+function isBlobUrl(url: string): boolean {
+  return url.startsWith('blob:');
+}
+
+const STORAGE_UPLOAD_HINT =
+  'Ensure Storage bucket "arcs-generations" exists and policies allow INSERT for your anon key; for display after refresh the bucket/objects must be publicly readable (or use signed URLs — not yet wired in the app).';
 
 function buildCharacterMetadataTags(store: CharacterStudioState): Record<string, unknown> {
   return {
@@ -95,10 +145,16 @@ export async function saveCharacterToDb(
   const existingIds = (rows ?? []).map((r) => r.id);
   const id = generateSemanticId('CHAR', baseName, existingIds);
 
-  const finalImageUrl = await uploadImageIfDataUrl(imageUrl);
+  const finalImageUrl = await ensurePersistentImageUrl(imageUrl);
   // #region agent log
-  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:finalUrl',message:'Image URL to store',data:{isDataUrl:finalImageUrl.startsWith('data:'),len:finalImageUrl.length,prefix:finalImageUrl.slice(0,50)},timestamp:Date.now(),hypothesisId:'img2'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:finalUrl',message:'Image URL to store',data:{ephemeral:imageUrl.startsWith('data:')||imageUrl.startsWith('blob:'),len:finalImageUrl.length,prefix:finalImageUrl.slice(0,80)},timestamp:Date.now(),hypothesisId:'img2'})}).catch(()=>{});
   // #endregion
+  if (isBlobUrl(finalImageUrl)) {
+    return {
+      ok: false,
+      error: `Could not upload this image to Supabase Storage, so it would break after refresh. ${STORAGE_UPLOAD_HINT}`,
+    };
+  }
   const metadataTags = buildCharacterMetadataTags(store);
   const seed = store.currentGenerationSeed != null ? Number(store.currentGenerationSeed) : null;
 
@@ -156,6 +212,30 @@ export async function updateCharacterThumbnailFocusDb(
   return { ok: true };
 }
 
+export async function updateAssetThumbnailFocusDb(
+  id: string,
+  focus: ThumbnailFocus
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const { data: row, error: fetchErr } = await supabase
+    .from('assets')
+    .select('metadata_tags')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr) return { ok: false, error: fetchErr.message };
+  if (!row) return { ok: false, error: 'Asset not found' };
+  const prev =
+    row.metadata_tags && typeof row.metadata_tags === 'object' && !Array.isArray(row.metadata_tags)
+      ? { ...(row.metadata_tags as Record<string, unknown>) }
+      : {};
+  prev.archive_thumbnail = { x: focus.x, y: focus.y, scale: focus.scale };
+  const { error } = await supabase.from('assets').update({ metadata_tags: prev }).eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export interface SaveAssetResult {
   ok: boolean;
   id?: string;
@@ -179,7 +259,13 @@ export async function saveAssetToDb(
   const existingIds = (rows ?? []).map((r) => r.id);
   const id = generateSemanticId('ASST', baseName, existingIds);
 
-  const finalImageUrl = await uploadImageIfDataUrl(imageUrl);
+  const finalImageUrl = await ensurePersistentImageUrl(imageUrl);
+  if (isBlobUrl(finalImageUrl)) {
+    return {
+      ok: false,
+      error: `Could not upload this image to Supabase Storage, so it would break after refresh. ${STORAGE_UPLOAD_HINT}`,
+    };
+  }
   const metadataTags = buildAssetMetadataTags(store);
   const seed = store.currentGenerationSeed != null ? Number(store.currentGenerationSeed) : null;
 

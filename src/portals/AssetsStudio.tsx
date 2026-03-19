@@ -35,12 +35,19 @@ import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
 import { generateImage } from '@/shared/api/geminiImageApi';
 import { saveAssetToDb } from '@/shared/api/arcsPersistence';
-import { addCachedGeneration, getCachedGenerations } from '@/shared/utils/generationSessionCache';
+import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
+import {
+  addCachedGeneration,
+  getCachedGenerations,
+  removeCachedGenerationByUrl,
+} from '@/shared/utils/generationSessionCache';
 import {
   addRecentFromAsset,
   getRecentAssets,
+  removeRecentByImageUrl,
   type RecentGeneration,
 } from '@/shared/utils/recentGenerations';
+import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
 
@@ -282,6 +289,8 @@ export const AssetsStudio: React.FC = () => {
   const [saveAssetCollectionName, setSaveAssetCollectionName] = useState('');
   const [saveAssetAssetName, setSaveAssetAssetName] = useState('');
   const [saveAssetMode, setSaveAssetMode] = useState<'new' | 'library'>('new');
+  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
+  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
   const [recentAssets, setRecentAssets] = useState<RecentGeneration[]>([]);
   const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'edit' | 'refine'>('auto');
   const [snippetNameInput, setSnippetNameInput] = useState('');
@@ -358,9 +367,33 @@ export const AssetsStudio: React.FC = () => {
   const artStyleLabel =
     store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId;
 
+  const discardLiveAssetImage = () => {
+    const url = store.currentLiveImageUrl;
+    if (url) {
+      removeRecentByImageUrl(url, 'asset');
+      removeCachedGenerationByUrl('asset', url);
+      if (url.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          /* ignore */
+        }
+      }
+      setRecentAssets(getRecentAssets());
+    }
+    store.setCurrentLiveImageUrl(null);
+  };
+
+  const getMatchedExistingCollection = (typed: string): string | null => {
+    const q = typed.trim();
+    if (!q) return null;
+    const lower = q.toLowerCase();
+    return vaultCollectionOptions.find((c) => c.toLowerCase() === lower) ?? null;
+  };
+
   const handleGenerateAsset = async () => {
     store.setGenerationStatus('pending');
-    const seed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
     store.setCurrentGenerationSeed(seed);
     const refUrls = store.referenceImageUrls.length > 0
       ? store.referenceImageUrls
@@ -413,7 +446,8 @@ export const AssetsStudio: React.FC = () => {
     const refinement = store.refinementPromptOverride.trim();
     if (!live || !refinement) return;
     store.setGenerationStatus('pending');
-    const seed = Math.floor(Math.random() * 0xFFFFFFFF);
+    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
+    store.setCurrentGenerationSeed(seed);
     const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
     const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this environment or asset image according to these instructions while preserving style and readable composition: ${refinement}`;
     const result = await generateImage({
@@ -465,35 +499,72 @@ export const AssetsStudio: React.FC = () => {
     setSaveAssetAssetName('');
     setSaveAssetMode(mode);
     setShowSaveAssetModal(true);
+
+    if (mode === 'library') {
+      setVaultCollectionLoading(true);
+      getAssetAlbums()
+        .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
+        .catch(() => setVaultCollectionOptions([]))
+        .finally(() => setVaultCollectionLoading(false));
+    }
   };
 
   const handleSaveAssetModalConfirm = async () => {
-    const collectionName = saveAssetCollectionName.trim();
-    if (!collectionName) return;
+    const typedCollectionDisplay = saveAssetCollectionName.trim();
+    if (!typedCollectionDisplay) return;
+
+    if (saveAssetMode === 'library') {
+      const matched = getMatchedExistingCollection(typedCollectionDisplay);
+      if (!matched) return;
+    }
+
+    const matchedExistingCollection =
+      saveAssetMode === 'library'
+        ? getMatchedExistingCollection(typedCollectionDisplay)!
+        : typedCollectionDisplay;
+
+    const isUnnamed = matchedExistingCollection.toLowerCase() === 'unnamed';
+    const baseNameForId = isUnnamed ? 'Unnamed' : matchedExistingCollection;
+    const collectionNameForDb = isUnnamed ? undefined : matchedExistingCollection;
     const url = store.currentLiveImageUrl;
     if (!url) return;
     const assetName = saveAssetAssetName.trim() || undefined;
-    saveGeneration('asset', url, store.currentGenerationSeed ?? undefined, { collectionName });
-    addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
-    const result = await saveAssetToDb(store, collectionName, collectionName, assetName);
+    const result = await saveAssetToDb(store, baseNameForId, collectionNameForDb, assetName);
     if (result.ok && result.id != null && result.imageUrl != null) {
+      saveGeneration('asset', result.imageUrl, store.currentGenerationSeed ?? undefined, {
+        collectionName: collectionNameForDb,
+        assetName,
+      });
+      addCachedGeneration('asset', {
+        url: result.imageUrl,
+        seed: store.currentGenerationSeed ?? undefined,
+      });
       addRecentFromAsset({
         id: result.id,
         image_url: result.imageUrl,
-        collection_name: collectionName,
+        collection_name: matchedExistingCollection,
         asset_name: assetName ?? null,
         seed: store.currentGenerationSeed ?? null,
       });
       setRecentAssets(getRecentAssets());
-    }
-    setShowSaveAssetModal(false);
-    if (!result.ok && result.error && result.error !== 'Supabase not configured') {
-      store.setGenerationStatus('error', result.error);
+      setShowSaveAssetModal(false);
+    } else if (!result.ok && result.error === 'Supabase not configured') {
+      saveGeneration('asset', url, store.currentGenerationSeed ?? undefined, {
+        collectionName: collectionNameForDb,
+        assetName,
+      });
+      addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
+      setShowSaveAssetModal(false);
+    } else {
+      if (result.error && result.error !== 'Supabase not configured') {
+        store.setGenerationStatus('error', result.error);
+      }
     }
   };
 
   const handleExpandSetting = async () => {
-    const primarySeed = store.currentGenerationSeed ?? Math.floor(Math.random() * 0xFFFFFFFF);
+    const primarySeed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
+    store.setCurrentGenerationSeed(primarySeed);
     const expansionSeed = primarySeed + 1;
     store.setGenerationStatus('pending');
     const refUrls = store.referenceImageUrls.length > 0
@@ -1507,7 +1578,7 @@ export const AssetsStudio: React.FC = () => {
                         <Tooltip variant="asset" content="Delete this image" side="left">
                           <button
                             type="button"
-                            onClick={() => store.setCurrentLiveImageUrl(null)}
+                            onClick={() => discardLiveAssetImage()}
                             className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
                             aria-label="Delete image"
                           >
@@ -1533,6 +1604,31 @@ export const AssetsStudio: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
+                  <span className="text-[10px] uppercase tracking-wider text-violet-200/60">Seed</span>
+                  <button
+                    type="button"
+                    onClick={() => store.setSeedMode('randomized')}
+                    className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                      (store.seedMode ?? 'randomized') === 'randomized'
+                        ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
+                        : 'border-white/20 text-violet-200/70 hover:bg-white/10'
+                    }`}
+                  >
+                    Randomized
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => store.setSeedMode('locked')}
+                    className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                      store.seedMode === 'locked'
+                        ? 'border-amber-500/60 bg-amber-500/15'
+                        : 'border-white/20 text-violet-200/70 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Locked</span>
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={handleGenerateAsset}
@@ -1732,9 +1828,29 @@ export const AssetsStudio: React.FC = () => {
               value={saveAssetCollectionName}
               onChange={(e) => setSaveAssetCollectionName(e.target.value)}
               placeholder="e.g. City exteriors"
+              list={saveAssetMode === 'library' ? 'vault-collection-options' : undefined}
               className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
               autoFocus
             />
+            {saveAssetMode === 'library' && (
+              <datalist id="vault-collection-options">
+                {vaultCollectionOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            )}
+            {saveAssetMode === 'library' && (
+              <p className="text-[11px] text-white/55 -mt-2 mb-3">
+                {vaultCollectionLoading
+                  ? 'Loading collections…'
+                  : vaultCollectionOptions.length === 0
+                    ? 'No existing collections found. Use “Save New Asset”.'
+                    : saveAssetCollectionName.trim() &&
+                        !getMatchedExistingCollection(saveAssetCollectionName)
+                      ? 'Type to search, but Save only enables on an exact existing collection.'
+                      : '\u00A0'}
+              </p>
+            )}
             <label className="block text-sm font-medium text-white/80 mb-1">Asset name (optional)</label>
             <input
               type="text"
@@ -1754,7 +1870,11 @@ export const AssetsStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveAssetModalConfirm}
-                disabled={!saveAssetCollectionName.trim()}
+                disabled={
+                  saveAssetMode === 'library'
+                    ? vaultCollectionLoading || !getMatchedExistingCollection(saveAssetCollectionName)
+                    : !saveAssetCollectionName.trim()
+                }
                 className="px-3 py-2 rounded-lg text-sm font-medium text-black border border-amber-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
@@ -1807,7 +1927,7 @@ export const AssetsStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    store.setCurrentLiveImageUrl(null);
+                    discardLiveAssetImage();
                     setShowZoomModal(false);
                   }}
                   className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
