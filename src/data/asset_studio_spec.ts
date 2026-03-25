@@ -17,30 +17,38 @@ export const ART_STYLE_LIBRARY = [
   'Claymation',
 ] as const;
 
+/** Design era / cultural line — aligns with location reference workflows. */
 export const ERA_STYLE_TAGS = [
-  'Cyberpunk',
-  'Afrofuturist',
-  'Ancient Mythic',
-  '1990s Nostalgic',
-  'Modern Luxury',
-  'Gothic',
-  'Industrial',
+  'Contemporary',
+  'Mid-century modern',
+  'Industrial heritage',
+  'Art Deco revival',
+  'Neo-futurist',
+  'Rustic vernacular',
+  'Colonial revival',
 ] as const;
 
+/** Where the camera sits in the world — place type for setting refs. */
 export const LOCATION_TYPE_TAGS = [
-  'Urban Cityscape',
-  'Interior Residential',
-  'High-Tech Lab',
-  'Natural Wilderness',
-  'Galactic Station',
+  'Interior domestic',
+  'Interior commercial',
+  'Exterior street',
+  'Exterior landscape',
+  'Rooftop / terrace',
+  'Industrial district',
+  'Coastal waterfront',
+  'High-tech campus',
 ] as const;
 
+/** Architectural vocabulary for shell and interior read. */
 export const ARCHITECTURAL_DETAIL_TAGS = [
   'Brutalist',
   'Art Deco',
-  'Ornate/Baroque',
+  'Neoclassical',
   'Minimalist',
-  'Bio-organic',
+  'High-tech',
+  'Biophilic',
+  'Ornate historic',
 ] as const;
 
 /** Room Type tags for Scene Setting & Props (alphabetized) */
@@ -146,10 +154,11 @@ export type TimeSeasonId = (typeof TIME_SEASON_OPTIONS)[number];
 /** Aspect Ratio for Spatial Expansion Gallery (parity with Reference Character Studio) */
 export type AspectRatioId = '9:16' | '1:1' | '21:9';
 
-/** Camera Angle options for Spatial Expansion Gallery right panel (same as Reference Character Studio Reference Gallery) */
+/** Camera Angle options for Spatial Expansion Gallery right panel (includes Wide-angle for parity with Cinematic Suite). */
 export const SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS = [
   'Low',
   'High',
+  'Wide-angle',
   "Bird's Eye",
   'Dutch',
 ] as const;

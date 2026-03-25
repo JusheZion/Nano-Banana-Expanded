@@ -316,142 +316,183 @@ export const CharacterStudio: React.FC = () => {
   };
 
   const handleGenerateCharacter = async () => {
-    store.setGenerationStatus('pending');
-    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
-    store.setCurrentGenerationSeed(seed);
-    const refUrls = store.referenceImageUrls.length > 0
-      ? store.referenceImageUrls
-      : store.currentLiveImageUrl
-        ? [store.currentLiveImageUrl]
-        : [];
-    const refUrlsForApi = Array.from(
-      { length: 14 },
-      (_, i) => (refUrls[i] ?? '')
-    );
-    const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
-    const basePrompt =
-      refUrls.length > 0
-        ? hasWardrobeDna
-          ? `Art style ${artStyleLabel}: use it for lighting, palette, and illustration treatment. The person comes from Character DNA refs; their clothing, shoes, hat, bag, and accessories must match Wardrobe DNA reference images literally (same real-world garments), not a fantasy or “inspired” outfit. ${compiledPrompt}`
-          : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
-        : compiledPrompt;
-    const surgical = getSurgicalInstructionsFromReferenceSlots(
-      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
-    );
-    const promptForApi =
-      surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
-    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
-    const result = await generateImage({
-      prompt: promptForApi,
-      referenceImageUrls: refUrlsForApi,
-      seed,
-      aspectRatio: '9:16',
-      modelId: store.selectedOnyxModelId,
-      isVaultOverride,
-      context: 'character',
-    });
-    if (result.ok) {
-      if (store.currentLiveImageUrl) {
-        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+    try {
+      const st = useCharacterStudioStore.getState();
+      st.setGenerationStatus('pending');
+      const seed = pickGenerationSeed(st.seedMode ?? 'randomized', st.currentGenerationSeed);
+      st.setCurrentGenerationSeed(seed);
+      const rawRefs = st.referenceImageUrls;
+      const hasAnyRefSlot = rawRefs.some((u) => Boolean(u));
+      const refUrls = hasAnyRefSlot
+        ? Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '')
+        : st.currentLiveImageUrl
+          ? [st.currentLiveImageUrl]
+          : [];
+      const refUrlsForApi = Array.from(
+        { length: 14 },
+        (_, i) => (refUrls[i] ?? '')
+      );
+      const hasApiRefs = refUrlsForApi.some(Boolean);
+      const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
+      const basePrompt =
+        hasApiRefs
+          ? hasWardrobeDna
+            ? `Art style ${artStyleLabel}: use it for lighting, palette, and illustration treatment. The person comes from Character DNA refs; their clothing, shoes, hat, bag, and accessories must match Wardrobe DNA reference images literally (same real-world garments), not a fantasy or “inspired” outfit. ${compiledPrompt}`
+            : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+          : compiledPrompt;
+      const paddedRefsForSurgical = Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '');
+      const surgical = getSurgicalInstructionsFromReferenceSlots(
+        hasAnyRefSlot ? paddedRefsForSurgical : refUrlsForApi
+      );
+      const promptForApi =
+        surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
+      const isVaultOverride = Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const result = await generateImage({
+        prompt: promptForApi,
+        referenceImageUrls: refUrlsForApi,
+        seed,
+        aspectRatio: '9:16',
+        modelId: st.selectedOnyxModelId,
+        isVaultOverride,
+        context: 'character',
+      });
+      const stAfter = useCharacterStudioStore.getState();
+      if (result.ok) {
+        if (stAfter.currentLiveImageUrl) {
+          stAfter.setPreviousLiveSnapshot(stAfter.currentLiveImageUrl, stAfter.currentGenerationSeed);
+        }
+        stAfter.setLastUsedPrompt(promptForApi);
+        stAfter.setCurrentLiveImageUrl(result.imageDataUrl);
+        stAfter.setCurrentGenerationSeed(seed);
+        stAfter.setGenerationStatus('idle');
+        addCachedGeneration('character', { url: result.imageDataUrl, seed });
+      } else if ('blocked' in result && result.blocked) {
+        stAfter.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+      } else if ('error' in result && result.error) {
+        stAfter.setGenerationStatus('error', result.error);
+      } else {
+        stAfter.setGenerationStatus('error', 'Unexpected response from image API.');
       }
-      store.setLastUsedPrompt(promptForApi);
-      store.setCurrentLiveImageUrl(result.imageDataUrl);
-      store.setCurrentGenerationSeed(seed);
-      store.setGenerationStatus('idle');
-      addCachedGeneration('character', { url: result.imageDataUrl, seed });
-    } else if ('blocked' in result && result.blocked) {
-      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
-    } else if ('error' in result) {
-      store.setGenerationStatus('error', result.error);
+    } catch (e) {
+      useCharacterStudioStore.getState().setGenerationStatus(
+        'error',
+        e instanceof Error ? e.message : 'Generation failed'
+      );
     }
   };
 
   generateCharacterRef.current = handleGenerateCharacter;
 
   const handleGenerateAlternate = async () => {
-    store.setGenerationStatus('pending');
-    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
-    store.setCurrentGenerationSeed(seed);
-    const refUrls = store.referenceImageUrls.length > 0
-      ? store.referenceImageUrls
-      : store.currentLiveImageUrl
-        ? [store.currentLiveImageUrl]
-        : [];
-    const refUrlsForApi = Array.from(
-      { length: 14 },
-      (_, i) => (refUrls[i] ?? '')
-    );
-    const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
-    const basePrompt =
-      refUrls.length > 0
-        ? hasWardrobeDna
-          ? `Art style ${artStyleLabel}: lighting and illustration treatment only; keep Wardrobe DNA clothing literal on Character DNA person. ${compiledPrompt}`
-          : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
-        : compiledPrompt;
-    const surgical = getSurgicalInstructionsFromReferenceSlots(
-      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
-    );
-    const promptForApi =
-      surgical.length > 0
-        ? `${basePrompt}\n\n${surgical.join(' ')} Alternate pose, same character.`
-        : `${basePrompt} Alternate pose, same character.`;
-    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
-    const result = await generateImage({
-      prompt: promptForApi,
-      referenceImageUrls: refUrlsForApi,
-      seed,
-      aspectRatio: '9:16',
-      modelId: store.selectedOnyxModelId,
-      isVaultOverride,
-      context: 'character',
-    });
-    if (result.ok) {
-      if (store.currentLiveImageUrl) {
-        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+    try {
+      const st = useCharacterStudioStore.getState();
+      st.setGenerationStatus('pending');
+      const seed = pickGenerationSeed(st.seedMode ?? 'randomized', st.currentGenerationSeed);
+      st.setCurrentGenerationSeed(seed);
+      const rawRefs = st.referenceImageUrls;
+      const hasAnyRefSlot = rawRefs.some((u) => Boolean(u));
+      const refUrls = hasAnyRefSlot
+        ? Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '')
+        : st.currentLiveImageUrl
+          ? [st.currentLiveImageUrl]
+          : [];
+      const refUrlsForApi = Array.from(
+        { length: 14 },
+        (_, i) => (refUrls[i] ?? '')
+      );
+      const hasApiRefs = refUrlsForApi.some(Boolean);
+      const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
+      const basePrompt =
+        hasApiRefs
+          ? hasWardrobeDna
+            ? `Art style ${artStyleLabel}: lighting and illustration treatment only; keep Wardrobe DNA clothing literal on Character DNA person. ${compiledPrompt}`
+            : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+          : compiledPrompt;
+      const paddedRefsForSurgical = Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '');
+      const surgical = getSurgicalInstructionsFromReferenceSlots(
+        hasAnyRefSlot ? paddedRefsForSurgical : refUrlsForApi
+      );
+      const promptForApi =
+        surgical.length > 0
+          ? `${basePrompt}\n\n${surgical.join(' ')} Alternate pose, same character.`
+          : `${basePrompt} Alternate pose, same character.`;
+      const isVaultOverride = Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const result = await generateImage({
+        prompt: promptForApi,
+        referenceImageUrls: refUrlsForApi,
+        seed,
+        aspectRatio: '9:16',
+        modelId: st.selectedOnyxModelId,
+        isVaultOverride,
+        context: 'character',
+      });
+      const stAfter = useCharacterStudioStore.getState();
+      if (result.ok) {
+        if (stAfter.currentLiveImageUrl) {
+          stAfter.setPreviousLiveSnapshot(stAfter.currentLiveImageUrl, stAfter.currentGenerationSeed);
+        }
+        stAfter.setLastUsedPrompt(promptForApi);
+        stAfter.setCurrentLiveImageUrl(result.imageDataUrl);
+        stAfter.setCurrentGenerationSeed(seed);
+        stAfter.setGenerationStatus('idle');
+        addCachedGeneration('character', { url: result.imageDataUrl, seed });
+      } else if ('blocked' in result && result.blocked) {
+        stAfter.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+      } else if ('error' in result && result.error) {
+        stAfter.setGenerationStatus('error', result.error);
+      } else {
+        stAfter.setGenerationStatus('error', 'Unexpected response from image API.');
       }
-      store.setLastUsedPrompt(promptForApi);
-      store.setCurrentLiveImageUrl(result.imageDataUrl);
-      store.setCurrentGenerationSeed(seed);
-      store.setGenerationStatus('idle');
-      addCachedGeneration('character', { url: result.imageDataUrl, seed });
-    } else if ('blocked' in result && result.blocked) {
-      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
-    } else if ('error' in result) {
-      store.setGenerationStatus('error', result.error);
+    } catch (e) {
+      useCharacterStudioStore.getState().setGenerationStatus(
+        'error',
+        e instanceof Error ? e.message : 'Generation failed'
+      );
     }
   };
 
   const handleRefineCharacter = async () => {
-    const live = store.currentLiveImageUrl;
-    const refinement = store.refinementPromptOverride.trim();
+    const st0 = useCharacterStudioStore.getState();
+    const live = st0.currentLiveImageUrl;
+    const refinement = st0.refinementPromptOverride.trim();
     if (!live || !refinement) return;
-    store.setGenerationStatus('pending');
-    const seed = pickGenerationSeed(store.seedMode ?? 'randomized', store.currentGenerationSeed);
-    store.setCurrentGenerationSeed(seed);
-    const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
-    const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this character image according to these instructions while preserving identity and overall style: ${refinement}`;
-    const result = await generateImage({
-      prompt: promptForApi,
-      referenceImageUrls: refUrlsForApi,
-      seed,
-      aspectRatio: '9:16',
-      modelId: store.selectedOnyxModelId,
-      isVaultOverride: false,
-      context: 'character',
-    });
-    if (result.ok) {
-      if (store.currentLiveImageUrl) {
-        store.setPreviousLiveSnapshot(store.currentLiveImageUrl, store.currentGenerationSeed);
+    try {
+      st0.setGenerationStatus('pending');
+      const seed = pickGenerationSeed(st0.seedMode ?? 'randomized', st0.currentGenerationSeed);
+      st0.setCurrentGenerationSeed(seed);
+      const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
+      const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this character image according to these instructions while preserving identity and overall style: ${refinement}`;
+      const result = await generateImage({
+        prompt: promptForApi,
+        referenceImageUrls: refUrlsForApi,
+        seed,
+        aspectRatio: '9:16',
+        modelId: st0.selectedOnyxModelId,
+        isVaultOverride: false,
+        context: 'character',
+      });
+      const stAfter = useCharacterStudioStore.getState();
+      if (result.ok) {
+        if (stAfter.currentLiveImageUrl) {
+          stAfter.setPreviousLiveSnapshot(stAfter.currentLiveImageUrl, stAfter.currentGenerationSeed);
+        }
+        stAfter.setLastUsedPrompt(promptForApi);
+        stAfter.setCurrentLiveImageUrl(result.imageDataUrl);
+        stAfter.setCurrentGenerationSeed(seed);
+        stAfter.setGenerationStatus('idle');
+        addCachedGeneration('character', { url: result.imageDataUrl, seed });
+      } else if ('blocked' in result && result.blocked) {
+        stAfter.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
+      } else if ('error' in result && result.error) {
+        stAfter.setGenerationStatus('error', result.error);
+      } else {
+        stAfter.setGenerationStatus('error', 'Unexpected response from image API.');
       }
-      store.setLastUsedPrompt(promptForApi);
-      store.setCurrentLiveImageUrl(result.imageDataUrl);
-      store.setCurrentGenerationSeed(seed);
-      store.setGenerationStatus('idle');
-      addCachedGeneration('character', { url: result.imageDataUrl, seed });
-    } else if ('blocked' in result && result.blocked) {
-      store.setGenerationStatus('safety_blocked', 'Prompt restricted by safety filters. Please adjust and try again.');
-    } else if ('error' in result) {
-      store.setGenerationStatus('error', result.error);
+    } catch (e) {
+      useCharacterStudioStore.getState().setGenerationStatus(
+        'error',
+        e instanceof Error ? e.message : 'Generation failed'
+      );
     }
   };
 
@@ -492,16 +533,8 @@ export const CharacterStudio: React.FC = () => {
   };
 
   const handleSaveCharacterModalConfirm = async () => {
-    // #region agent log
-    const _profileRaw = saveCharacterProfileName;
-    const _url = store.currentLiveImageUrl;
-    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:entry',message:'Save character handler invoked',data:{profileNameRawLength:_profileRaw?.length,profileNameTrimmed:_profileRaw?.trim?.()?.length,hasUrl:!!_url,urlPrefix:_url?.slice?.(0,30)},timestamp:Date.now(),hypothesisId:'A_B_E'})}).catch(()=>{});
-    // #endregion
     const typedProfileDisplay = saveCharacterProfileName.trim();
     if (!typedProfileDisplay) {
-      // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:earlyReturn',message:'Early return: no profile name',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
@@ -522,20 +555,11 @@ export const CharacterStudio: React.FC = () => {
     const profileNameForDb = isUnnamed ? undefined : matchedExistingProfile;
     const url = store.currentLiveImageUrl;
     if (!url) {
-      // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:earlyReturn',message:'Early return: no image url',data:{},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       return;
     }
     const castName = saveCharacterCastName.trim() || undefined;
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:beforeDb',message:'Calling saveCharacterToDb',data:{profileNameForDb,castName:castName??null},timestamp:Date.now(),hypothesisId:'C_D'})}).catch(()=>{});
-      // #endregion
       const result = await saveCharacterToDb(store, baseNameForId, profileNameForDb, castName);
-      // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:afterDb',message:'saveCharacterToDb result',data:{ok:result.ok,id:result.id,error:result.error},timestamp:Date.now(),hypothesisId:'C_D'})}).catch(()=>{});
-      // #endregion
       if (result.ok && result.id != null && result.imageUrl != null) {
         if (saveCharacterIsEditProfile && store.selectedPoseId) {
           store.updatePose(store.selectedPoseId, { imageUrl: result.imageUrl });
@@ -577,9 +601,6 @@ export const CharacterStudio: React.FC = () => {
         }
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'CharacterStudio.tsx:handleSaveCharacterModalConfirm:catch',message:'saveCharacterToDb threw',data:{errMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       setShowSaveCharacterModal(false);
       store.setGenerationStatus('error', err instanceof Error ? err.message : String(err));
     }

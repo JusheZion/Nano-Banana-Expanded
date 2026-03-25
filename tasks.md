@@ -67,6 +67,17 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Studios: Character save-as-existing combobox (`profile_name`)
 - [x] Studios: Asset save-as-existing combobox (`collection_name`)
 
+## Asset Reference Studio alignment (Mar 2026) — COMPLETE
+
+- [x] Asset reference slot taxonomy + `getSlotLabel`/`getSlotRole` context; Gemini asset role labels and `subjectOnly`
+- [x] `getSurgicalInstructionsFromReferenceSlots(..., 'asset')`; remove tag lockout except Architectural Lock; remove `diversifyStyle`
+- [x] `SectionAddToLibrary` on Era, Location, Architectural; `assetGenerationPromptWrappers` + default scene constraints unless vault override
+- [x] `asset_tag_library.json` + `asset_studio_spec.ts` taxonomy; tests + build; walkthrough / implementation_plan notes
+
+## Debug instrumentation cleanup (Mar 21, 2026) — COMPLETE
+
+- [x] Removed ingest `fetch` / `#region agent log` from `CharacterStudio.tsx` (save handler), `arcsPersistence.ts`, `generationOutputRouter.ts`; repo grep clean; `npm run test -- --run` passes
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).

@@ -1,26 +1,97 @@
 {
   "app_metadata": {
     "context": "Assets Studio",
-    "description": "Tag library for environment and prop generation (world-building, concept art)"
+    "description": "Tag library for location, setting, and environment references for generative image workflows"
   },
   "tag_library": {
-    "environment_architecture": {
-      "Architecture": ["Brutalist", "Gothic", "Cyberpunk", "Neo-Classical", "Solarpunk", "Industrial", "Victorian"]
+    "setting_place": {
+      "Place type": [
+        "Interior domestic",
+        "Interior commercial",
+        "Interior hospitality",
+        "Exterior street",
+        "Exterior plaza",
+        "Exterior landscape",
+        "Rooftop or terrace",
+        "Underground or service",
+        "Transit hub",
+        "Aerial establishing"
+      ]
     },
-    "environment_lighting": {
-      "Lighting": ["Golden Hour", "High Contrast", "Volumetric", "Bio-luminescent", "Noir", "Neon", "Cinematic"]
+    "setting_region": {
+      "Region / context": [
+        "Dense urban core",
+        "Suburban",
+        "Coastal waterfront",
+        "Desert",
+        "Forest",
+        "Mountain",
+        "Arctic",
+        "Industrial district",
+        "Rural farmland",
+        "High-tech campus"
+      ]
     },
-    "environment_setting": {
-      "Setting": ["Deep Space", "Urban Slum", "Fantasy Forest", "Underwater", "Desert Outpost", "Astral Plane"]
+    "setting_scale": {
+      "Spatial scale": [
+        "Establishing wide",
+        "Room interior",
+        "Corridor",
+        "Detail macro",
+        "Cross-section",
+        "Courtyard read"
+      ]
     },
-    "props_materials": {
-      "Materials": ["Weathered Wood", "Brushed Chrome", "Obsidian", "Liquid Metal", "Rough Stone", "Holographic"]
+    "architectural_line": {
+      "Architecture": [
+        "Brutalist",
+        "Art Deco",
+        "Neoclassical",
+        "Mid-century modern",
+        "High-tech",
+        "Rustic vernacular",
+        "Neo-futurist",
+        "Colonial revival",
+        "Bauhaus",
+        "Biophilic"
+      ]
     },
-    "props_state": {
-      "State": ["Pristine", "Battle-Damaged", "Ancient", "High-Tech", "Organic", "Overgrown", "Cursed"]
+    "lighting_time": {
+      "Lighting": [
+        "Golden hour",
+        "Blue hour",
+        "Overcast",
+        "Neon night",
+        "Volumetric sun",
+        "Practical fixtures",
+        "Soft ambient",
+        "Hard midday"
+      ]
     },
-    "props_category": {
-      "Category": ["Weaponry", "Tactical Gear", "Relics", "Furniture", "Tech-Decks", "Transport", "Artifacts"]
+    "atmosphere_weather": {
+      "Atmosphere": [
+        "Clear",
+        "Fog",
+        "Rain",
+        "Snow",
+        "Humid haze",
+        "Dust",
+        "Post-storm"
+      ]
+    },
+    "materials_surfaces": {
+      "Materials": [
+        "Weathered wood",
+        "Brushed metal",
+        "Polished stone",
+        "Glass curtain wall",
+        "Rough concrete",
+        "Terracotta",
+        "Marble",
+        "Plaster",
+        "Tile mosaic",
+        "Living plant wall"
+      ]
     }
   }
 }

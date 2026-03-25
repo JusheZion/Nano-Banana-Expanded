@@ -12,9 +12,8 @@ import {
  * Build final Asset Studio prompt: compile chips + manual input + extra parts.
  * When assetModifiers and setDressingSelections are provided, fuse [Color] [Material] [Tag]
  * segments and append them to extra parts.
- * When reference image is uploaded and diversifyStyle is false, caller may prefix
- * "absolute architectural reference, composition and style from image".
- * When diversifyStyle is true, "composition/layout from reference image, era and materials from tags".
+ * Tag sections remain available alongside reference images; architectural lock
+ * (when enabled in the UI) excludes setting/location segments from the compiled extras.
  */
 export function buildAssetStudioPrompt(
   tags: ChipTag[],

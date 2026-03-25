@@ -2,7 +2,7 @@
  * ARCS persistence: save characters and assets to Supabase with semantic IDs and metadata_tags.
  * Falls back to no-op when Supabase is not configured (generationOutputRouter still handles localStorage).
  */
-import { supabase, isSupabaseConfigured, getSupabaseDiagnostic } from '@/shared/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { generateSemanticId } from '@/shared/utils/semanticId';
 import type { ThumbnailFocus } from '@/shared/utils/generationOutputRouter';
 import type { CharacterStudioState } from '@/stores/characterStudioStore';
@@ -44,9 +44,6 @@ async function uploadBlobToArcsBucket(blob: Blob): Promise<string | null> {
     upsert: false,
   });
   if (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:uploadBlobToArcsBucket:storageError',message:'Storage upload failed',data:{error:error.message},timestamp:Date.now(),hypothesisId:'img1'})}).catch(()=>{});
-    // #endregion
     return null;
   }
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
@@ -146,9 +143,6 @@ export async function saveCharacterToDb(
   const id = generateSemanticId('CHAR', baseName, existingIds);
 
   const finalImageUrl = await ensurePersistentImageUrl(imageUrl);
-  // #region agent log
-  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:finalUrl',message:'Image URL to store',data:{ephemeral:imageUrl.startsWith('data:')||imageUrl.startsWith('blob:'),len:finalImageUrl.length,prefix:finalImageUrl.slice(0,80)},timestamp:Date.now(),hypothesisId:'img2'})}).catch(()=>{});
-  // #endregion
   if (isBlobUrl(finalImageUrl)) {
     return {
       ok: false,
@@ -169,15 +163,8 @@ export async function saveCharacterToDb(
   });
 
   if (error) {
-    if (error.message?.includes('Invalid API key')) {
-      const diag = getSupabaseDiagnostic();
-      fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:invalidKey',message:'Invalid API key diagnostic',data:{urlPresent:diag.urlPresent,anonKeyLength:diag.anonKeyLength},timestamp:Date.now(),hypothesisId:'apikey'})}).catch(()=>{});
-    }
     return { ok: false, error: error.message };
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2f6fd'},body:JSON.stringify({sessionId:'a2f6fd',location:'arcsPersistence.ts:saveCharacterToDb:insertOk',message:'Character insert success',data:{id,imageUrlLen:finalImageUrl.length},timestamp:Date.now(),hypothesisId:'img3'})}).catch(()=>{});
-  // #endregion
   return { ok: true, id, imageUrl: finalImageUrl };
 }
 

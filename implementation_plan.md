@@ -1,5 +1,13 @@
 # Current feature: Character Vault Foundation (Ruby & Gold Edition) (2026-03-18)
 
+## Asset Reference Studio alignment (Mar 2026)
+
+- **Reference slots:** Asset Studio uses `REFERENCE_SLOT_GROUPS_ASSET` and `getSlotLabel(index, 'asset')`. [`geminiImageApi.ts`](src/shared/api/geminiImageApi.ts) sends asset-specific slot role labels and environment `subjectOnly` when `context: 'asset'`.
+- **Tags:** Era / Location / Scene sections are gated only by **Architectural Lock** (removed live-image lockout and `diversifyStyle`). Per-section **Save as Tag** on Era, Location, and Architectural Detail (replacing the combined dropdown).
+- **Prompts:** [`assetGenerationPromptWrappers.ts`](src/shared/utils/assetGenerationPromptWrappers.ts) — environment-appropriate style prefix; empty-of-figures constraint unless vault override. [`buildPrompt.ts`](src/shared/utils/buildPrompt.ts) — `getSurgicalInstructionsFromReferenceSlots(urls, 'asset')`.
+- **Taxonomy:** [`asset_tag_library.json`](src/data/asset_tag_library.json) and [`asset_studio_spec.ts`](src/data/asset_studio_spec.ts) preset chips aligned to place/setting workflows.
+- **Verify:** `npm run test -- --run`; `npm run build`.
+
 ## Navigation (2026-03-18)
 
 - **Image Vault:** Main sidebar + landing card label for the `reference` portal is **Image Vault** (replaces “Character Archive”). `ReferenceAlbum` uses tabs **Characters** / **Assets**.

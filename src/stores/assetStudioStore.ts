@@ -17,6 +17,16 @@ import {
 const ONYX_PASSWORD = 'onyx';
 const STORAGE_KEY = 'arcs-asset-studio';
 const REFERENCE_IMAGE_SLOTS = 14;
+const MAX_PERSISTED_DATA_URL_LENGTH = 350_000;
+
+function sanitizeReferenceUrlsForPersist(urls: string[] | undefined): string[] {
+  return Array.from({ length: REFERENCE_IMAGE_SLOTS }, (_, i) => {
+    const u = urls?.[i] ?? '';
+    if (u.startsWith('blob:')) return '';
+    if (u.startsWith('data:') && u.length > MAX_PERSISTED_DATA_URL_LENGTH) return '';
+    return u;
+  });
+}
 
 export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
 export type OnyxModelId = 'flash' | 'pro';
@@ -96,7 +106,6 @@ export interface AssetStudioState {
   currentLiveImageUrl: string | null;
   currentGenerationSeed: number | null;
   seedMode: SeedMode;
-  diversifyStyle: boolean;
   artStyleId: string;
   customStyles: string[];
   eraStyleSelection: string[];
@@ -135,7 +144,6 @@ export interface AssetStudioState {
   setCurrentLiveImageUrl: (url: string | null) => void;
   setCurrentGenerationSeed: (seed: number | null) => void;
   setSeedMode: (mode: SeedMode) => void;
-  setDiversifyStyle: (value: boolean) => void;
   setArtStyle: (id: string) => void;
   addCustomStyle: (style: string) => void;
   setEraStyleSelection: (values: string[]) => void;
@@ -192,7 +200,6 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       currentLiveImageUrl: null,
       currentGenerationSeed: null,
       seedMode: 'randomized',
-      diversifyStyle: false,
       artStyleId: 'flagship',
       customStyles: [],
       eraStyleSelection: [],
@@ -211,7 +218,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       spatialRoomOption: null,
       spatialUrbanOption: null,
       timeSeason: null,
-      aspectRatio: '9:16',
+      aspectRatio: '21:9',
       referenceImageUrls: [],
       selectedOnyxModelId: 'flash',
       generationStatus: 'idle',
@@ -231,7 +238,6 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       setCurrentLiveImageUrl: (url) => set({ currentLiveImageUrl: url }),
       setCurrentGenerationSeed: (seed) => set({ currentGenerationSeed: seed }),
       setSeedMode: (mode) => set({ seedMode: mode }),
-      setDiversifyStyle: (value) => set({ diversifyStyle: value }),
       setArtStyle: (id) => set({ artStyleId: id }),
       addCustomStyle: (style) =>
         set((s) => {
@@ -452,6 +458,14 @@ export const useAssetStudioStore = create<AssetStudioState>()(
           localStorage.setItem(name, value),
         removeItem: (name: string) => localStorage.removeItem(name),
       })),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<AssetStudioState>;
+        const merged = { ...current, ...p };
+        if (Array.isArray(p.referenceImageUrls)) {
+          merged.referenceImageUrls = sanitizeReferenceUrlsForPersist(p.referenceImageUrls);
+        }
+        return merged;
+      },
       partialize: (state) => ({
         tags: state.tags,
         currentGenerationSeed: state.currentGenerationSeed,
@@ -474,7 +488,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         spatialUrbanOption: state.spatialUrbanOption,
         timeSeason: state.timeSeason,
         aspectRatio: state.aspectRatio,
-        referenceImageUrls: state.referenceImageUrls,
+        referenceImageUrls: sanitizeReferenceUrlsForPersist(state.referenceImageUrls),
         selectedOnyxModelId: state.selectedOnyxModelId,
         assetModifiers: state.assetModifiers,
         refinementPromptOverride: state.refinementPromptOverride,

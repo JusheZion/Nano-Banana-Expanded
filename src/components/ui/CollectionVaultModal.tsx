@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   FolderInput,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
   Tag,
@@ -50,7 +49,7 @@ export function CollectionVaultModal(props: {
   const [renameValue, setRenameValue] = useState('');
   const [showDeleteCollection, setShowDeleteCollection] = useState(false);
 
-  const [actionItemId, setActionItemId] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [nameEditId, setNameEditId] = useState<string | null>(null);
   const [nameEditValue, setNameEditValue] = useState('');
   const [moveItemId, setMoveItemId] = useState<string | null>(null);
@@ -394,168 +393,206 @@ export function CollectionVaultModal(props: {
             )}
 
             <div className="mt-6 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 pb-4">
+              <datalist id="vault-asset-collections-global">
+                {allCollectionNames
+                  .filter((c) => normCol(c) !== normCol(collectionName))
+                  .map((c) => (
+                    <option key={c} value={c === 'Unnamed' ? '' : c} />
+                  ))}
+              </datalist>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-4">
                 {sorted.map((item) => {
                   const title = item.asset_name || item.name || 'Asset';
-                  const show = actionItemId === item.id;
+                  const isSelected = selectedItemId === item.id;
+                  const showTopBar =
+                    isSelected || nameEditId === item.id || moveItemId === item.id;
                   return (
                     <div
                       key={item.id}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                      className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20"
                     >
-                      <VaultImageWithFallback
-                        src={item.image_url}
-                        alt={title}
-                        frameClassName="w-full h-[200px]"
-                        imgClassName="w-full h-[200px] object-cover"
-                        imgStyle={{
-                          objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                          transform: `scale(${item.thumbnail_scale ?? 1})`,
-                          transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          setSelectedItemId((s) => (s === item.id ? null : item.id))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedItemId((s) => (s === item.id ? null : item.id));
+                          }
                         }}
-                      />
-                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 to-transparent">
-                        <div className="flex items-end justify-between gap-2">
-                          <div className="min-w-0 truncate text-sm font-medium text-violet-100">
-                            {title}
-                          </div>
+                        className="relative cursor-pointer"
+                      >
+                        <div
+                          className={[
+                            'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
+                            'bg-gradient-to-b from-black/85 via-black/50 to-transparent',
+                            'transition-opacity duration-200',
+                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+                            showTopBar && 'opacity-100 pointer-events-auto',
+                          ].join(' ')}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
                             type="button"
-                            onClick={() => setActionItemId(show ? null : item.id)}
-                            className="shrink-0 rounded-lg border border-violet-500/40 p-1.5 text-violet-200"
+                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            title="Framing"
+                            onClick={() => {
+                              setFocusEditItem(item);
+                              setSelectedItemId(null);
+                            }}
                           >
-                            <MoreHorizontal className="w-4 h-4" />
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            title="Edit asset name"
+                            onClick={() => {
+                              setNameEditId(item.id);
+                              setNameEditValue(item.asset_name || item.name || '');
+                              setSelectedItemId(item.id);
+                            }}
+                          >
+                            <Tag className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            title="Move to collection"
+                            onClick={() => {
+                              setMoveItemId(item.id);
+                              setMoveTarget('');
+                              setSelectedItemId(item.id);
+                            }}
+                          >
+                            <FolderInput className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border border-red-500/40 bg-black/40 p-1.5 text-red-200 hover:bg-red-950/40"
+                            title="Delete asset"
+                            onClick={async () => {
+                              if (!confirm('Delete this asset?')) return;
+                              setBusy(true);
+                              const res = await deleteVaultAsset(item.id);
+                              setBusy(false);
+                              if (!res.ok) setSaveError(res.error);
+                              else {
+                                setSelectedItemId(null);
+                                onVaultChanged();
+                                if (items.length <= 1) onClose();
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                        {show && (
-                          <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFocusEditItem(item);
-                                setActionItemId(null);
-                              }}
-                              className="flex items-center gap-1 w-full text-left text-xs text-violet-200 hover:text-violet-100"
-                            >
-                              <Pencil className="w-3 h-3" />
-                              Framing…
-                            </button>
 
-                            {nameEditId === item.id ? (
-                              <div className="flex gap-1">
-                                <input
-                                  value={nameEditValue}
-                                  onChange={(e) => setNameEditValue(e.target.value)}
-                                  className="flex-1 min-w-0 rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-xs text-white"
-                                />
+                        <div className="flex w-full items-center justify-center bg-black/25 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                          <VaultImageWithFallback
+                            src={item.image_url}
+                            alt={title}
+                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
+                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain"
+                            imgStyle={{
+                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                              transform: `scale(${item.thumbnail_scale ?? 1})`,
+                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {(nameEditId === item.id || moveItemId === item.id) && (
+                        <div
+                          className="border-t border-white/10 bg-black/40 px-3 py-2 space-y-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {nameEditId === item.id && (
+                            <div className="flex gap-1">
+                              <input
+                                value={nameEditValue}
+                                onChange={(e) => setNameEditValue(e.target.value)}
+                                className="flex-1 min-w-0 rounded-lg border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-white"
+                              />
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={async () => {
+                                  setBusy(true);
+                                  const res = await updateVaultAssetNames({
+                                    id: item.id,
+                                    assetName: nameEditValue.trim() || null,
+                                  });
+                                  setBusy(false);
+                                  if (!res.ok) setSaveError(res.error);
+                                  else {
+                                    setNameEditId(null);
+                                    onVaultChanged();
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                                style={{ backgroundColor: AMETHYST }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNameEditId(null)}
+                                className="px-2 text-xs text-white/50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                          {moveItemId === item.id && (
+                            <div className="space-y-1">
+                              <input
+                                list="vault-asset-collections-global"
+                                value={moveTarget}
+                                onChange={(e) => setMoveTarget(e.target.value)}
+                                placeholder="Target collection"
+                                className="w-full rounded-lg border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-white"
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMoveItemId(null);
+                                    setMoveTarget('');
+                                  }}
+                                  className="px-2 py-1 text-xs text-white/50"
+                                >
+                                  Cancel
+                                </button>
                                 <button
                                   type="button"
                                   disabled={busy}
-                                  onClick={async () => {
-                                    setBusy(true);
-                                    const res = await updateVaultAssetNames({
-                                      id: item.id,
-                                      assetName: nameEditValue.trim() || null,
-                                    });
-                                    setBusy(false);
-                                    if (!res.ok) setSaveError(res.error);
-                                    else {
-                                      setNameEditId(null);
-                                      onVaultChanged();
-                                    }
-                                  }}
-                                  className="px-2 py-1 rounded-lg text-xs text-white"
-                                  style={{ backgroundColor: AMETHYST }}
+                                  onClick={() => startMove(item.id)}
+                                  className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-800/80 text-white text-xs"
                                 >
-                                  Save
+                                  <FolderInput className="w-3 h-3" />
+                                  Move
                                 </button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setNameEditId(item.id);
-                                  setNameEditValue(item.asset_name || item.name || '');
-                                }}
-                                className="flex items-center gap-1 w-full text-left text-xs text-violet-300"
-                              >
-                                <Tag className="w-3 h-3" />
-                                Edit asset name
-                              </button>
-                            )}
-                            {moveItemId === item.id ? (
-                              <div className="space-y-1">
-                                <input
-                                  list="vault-asset-collections"
-                                  value={moveTarget}
-                                  onChange={(e) => setMoveTarget(e.target.value)}
-                                  placeholder="Target collection"
-                                  className="w-full rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-xs text-white"
-                                />
-                                <datalist id="vault-asset-collections">
-                                  {allCollectionNames
-                                    .filter((c) => normCol(c) !== normCol(collectionName))
-                                    .map((c) => (
-                                      <option key={c} value={c === 'Unnamed' ? '' : c} />
-                                    ))}
-                                </datalist>
-                                <div className="flex gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => startMove(item.id)}
-                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-emerald-800/80 text-white text-xs"
-                                  >
-                                    <FolderInput className="w-3 h-3" />
-                                    Move
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMoveItemId(null);
-                                      setMoveTarget('');
-                                    }}
-                                    className="px-2 text-xs text-white/50"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMoveItemId(item.id);
-                                  setMoveTarget('');
-                                }}
-                                className="flex items-center gap-1 w-full text-left text-xs text-violet-300"
-                              >
-                                <FolderInput className="w-3 h-3" />
-                                Move to collection…
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={async () => {
-                                if (!confirm('Delete this asset?')) return;
-                                setBusy(true);
-                                const res = await deleteVaultAsset(item.id);
-                                setBusy(false);
-                                if (!res.ok) setSaveError(res.error);
-                                else {
-                                  setActionItemId(null);
-                                  onVaultChanged();
-                                  if (items.length <= 1) onClose();
-                                }
-                              }}
-                              className="flex items-center gap-1 w-full text-left text-xs text-red-300"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Delete asset
-                            </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="border-t border-white/10 bg-black/35 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="min-w-0 truncate text-sm font-medium text-violet-100">
+                            {title}
                           </div>
-                        )}
+                          <span className="text-[10px] text-violet-400/50 shrink-0 hidden sm:inline">
+                            Click image for actions
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );

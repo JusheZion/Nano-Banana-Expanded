@@ -102,6 +102,31 @@ export interface PromptSnippet {
 
 const REFERENCE_IMAGE_SLOTS = 14;
 
+/** Max length for a persisted `data:` ref — larger values stay in RAM but are omitted from localStorage to avoid multi‑MB JSON.stringify blocking the UI. */
+const MAX_PERSISTED_DATA_URL_LENGTH = 350_000;
+
+/** `blob:` URLs are session-only; huge `data:` URLs blow up persist JSON and freeze the main thread on every setState. */
+function sanitizeReferenceUrlsForPersist(urls: string[] | undefined): string[] {
+  return Array.from({ length: REFERENCE_IMAGE_SLOTS }, (_, i) => {
+    const u = urls?.[i] ?? '';
+    if (u.startsWith('blob:')) return '';
+    if (u.startsWith('data:') && u.length > MAX_PERSISTED_DATA_URL_LENGTH) return '';
+    return u;
+  });
+}
+
+function posesForPersist(poses: CharacterPose[]): CharacterPose[] {
+  return poses.map((p) => ({
+    ...p,
+    imageUrl:
+      p.imageUrl &&
+      !p.imageUrl.startsWith('blob:') &&
+      !p.imageUrl.startsWith('data:')
+        ? p.imageUrl
+        : undefined,
+  }));
+}
+
 export interface CharacterStudioState {
   tags: ChipTag[];
   dnaLock: boolean;
@@ -499,6 +524,14 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
           localStorage.setItem(name, value),
         removeItem: (name: string) => localStorage.removeItem(name),
       })),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<CharacterStudioState>;
+        const merged = { ...current, ...p };
+        if (Array.isArray(p.referenceImageUrls)) {
+          merged.referenceImageUrls = sanitizeReferenceUrlsForPersist(p.referenceImageUrls);
+        }
+        return merged;
+      },
       partialize: (state) => ({
         tags: state.tags,
         dnaLock: state.dnaLock,
@@ -512,7 +545,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         ageModifier: state.ageModifier,
         aspectRatio: state.aspectRatio,
         diversifyLikeness: state.diversifyLikeness,
-        poses: state.poses,
+        poses: posesForPersist(state.poses),
         physicalSelections: state.physicalSelections,
         heritageSelection: state.heritageSelection,
         genderSelection: state.genderSelection,
@@ -522,7 +555,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         genderLibrary: state.genderLibrary,
         physicalLibraries: state.physicalLibraries,
         cinematicLibraries: state.cinematicLibraries,
-        referenceImageUrls: state.referenceImageUrls,
+        referenceImageUrls: sanitizeReferenceUrlsForPersist(state.referenceImageUrls),
         selectedOnyxModelId: state.selectedOnyxModelId,
         refinementPromptOverride: state.refinementPromptOverride,
         lastUsedPrompt: state.lastUsedPrompt,

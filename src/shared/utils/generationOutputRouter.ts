@@ -61,27 +61,7 @@ export function saveGeneration(
         options.assetName.trim() !== '' && { assetName: options.assetName.trim() }),
     });
     localStorage.setItem(key, JSON.stringify(list));
-  } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7503/ingest/38906f41-21ab-4611-a211-2685b306cf1c', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': 'a2f6fd',
-      },
-      body: JSON.stringify({
-        sessionId: 'a2f6fd',
-        location: 'generationOutputRouter.ts:saveGeneration:catch',
-        message: 'Failed to persist generation to localStorage',
-        data: {
-          contextType,
-          errorMessage: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'quota',
-      }),
-    }).catch(() => {});
-    // #endregion
+  } catch {
     // Swallow localStorage quota/JSON errors so they don't block Supabase persistence.
   }
 }

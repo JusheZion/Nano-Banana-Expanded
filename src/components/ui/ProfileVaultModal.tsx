@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   FolderInput,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
   Tag,
@@ -83,7 +82,8 @@ export function ProfileVaultModal(props: {
 
   const [showDeleteAlbum, setShowDeleteAlbum] = useState(false);
 
-  const [actionItemId, setActionItemId] = useState<string | null>(null);
+  /** Card focus: show top action bar without hover; also used for inline panels. */
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [castEditId, setCastEditId] = useState<string | null>(null);
   const [castEditValue, setCastEditValue] = useState('');
   const [moveItemId, setMoveItemId] = useState<string | null>(null);
@@ -447,17 +447,29 @@ export function ProfileVaultModal(props: {
             )}
 
             <div className="mt-6 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 pb-4">
+              <datalist id="vault-profile-destinations-global">
+                {allProfileNames
+                  .filter((p) => normalizeProf(p) !== normalizeProf(profileName))
+                  .map((p) => (
+                    <option key={p} value={p === 'Unnamed' ? '' : p} />
+                  ))}
+              </datalist>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-4">
                 {sorted.map((item) => {
                   const isActive = coverId === item.id;
                   const isSaving = savingId === item.id;
                   const title = item.cast_name || item.name || 'Visual Reference';
-                  const showActions = actionItemId === item.id;
+                  const isSelected = selectedItemId === item.id;
+                  const showTopBar =
+                    isSelected ||
+                    castEditId === item.id ||
+                    moveItemId === item.id ||
+                    isSaving;
                   return (
                     <div
                       key={item.id}
                       className={[
-                        'relative overflow-hidden rounded-2xl border',
+                        'group relative flex flex-col overflow-hidden rounded-2xl border',
                         'border-white/10 bg-black/20',
                         'shadow-[0_6px_36px_rgba(0,0,0,0.25)]',
                         isActive
@@ -466,211 +478,229 @@ export function ProfileVaultModal(props: {
                         'transition',
                       ].join(' ')}
                     >
-                      <VaultImageWithFallback
-                        src={item.image_url}
-                        alt={title}
-                        frameClassName="w-full h-[200px]"
-                        imgClassName="w-full h-[200px] object-cover opacity-95"
-                        imgStyle={{
-                          objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                          transform: `scale(${item.thumbnail_scale ?? 1})`,
-                          transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          setSelectedItemId((s) => (s === item.id ? null : item.id))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedItemId((s) => (s === item.id ? null : item.id));
+                          }
                         }}
-                      />
+                        className="relative cursor-pointer"
+                      >
+                        <div
+                          className={[
+                            'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
+                            'bg-gradient-to-b from-black/85 via-black/50 to-transparent',
+                            'transition-opacity duration-200',
+                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+                            showTopBar && 'opacity-100 pointer-events-auto',
+                          ].join(' ')}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            disabled={Boolean(savingId) || busy}
+                            className={[
+                              'rounded-lg border p-1.5 shrink-0',
+                              isActive
+                                ? 'border-[#FBBF24]/70 bg-[#FBBF24]/15'
+                                : 'border-[#D4AF37]/35 bg-black/40',
+                            ].join(' ')}
+                            title="Set cover"
+                            aria-label={isActive ? 'Cover' : 'Set cover'}
+                            onClick={async () => {
+                              if (savingId) return;
+                              setSaveError(null);
+                              setSavingId(item.id);
+                              const res = await setProfileCover({
+                                profileName,
+                                id: item.id,
+                              });
+                              setSavingId(null);
+                              if (!res.ok) {
+                                setSaveError(res.error);
+                                return;
+                              }
+                              onCoverUpdated();
+                            }}
+                          >
+                            <RubyEncrustedStar active={isActive} />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            title="Framing"
+                            onClick={() => {
+                              setFocusEditItem(item);
+                              setSelectedItemId(null);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            title="Edit cast name"
+                            onClick={() => {
+                              setCastEditId(item.id);
+                              setCastEditValue(item.cast_name || '');
+                              setSelectedItemId(item.id);
+                            }}
+                          >
+                            <Tag className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            title="Move to profile"
+                            onClick={() => {
+                              setMoveItemId(item.id);
+                              setMoveTarget('');
+                              setSelectedItemId(item.id);
+                            }}
+                          >
+                            <FolderInput className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border border-red-500/40 bg-black/40 p-1.5 text-red-200 hover:bg-red-950/50"
+                            title="Delete image"
+                            onClick={async () => {
+                              if (!confirm('Delete this image from the vault?')) return;
+                              setBusy(true);
+                              const res = await deleteVaultCharacter(item.id);
+                              setBusy(false);
+                              if (!res.ok) setSaveError(res.error);
+                              else {
+                                setSelectedItemId(null);
+                                onVaultChanged();
+                                if (items.length <= 1) onClose();
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
 
-                      <div className="absolute inset-x-0 bottom-0 p-3 bg-[linear-gradient(to_top,rgba(0,0,0,0.85),transparent)]">
-                        <div className="flex items-end justify-between gap-2">
+                        <div className="flex w-full items-center justify-center bg-black/30 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                          <VaultImageWithFallback
+                            src={item.image_url}
+                            alt={title}
+                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
+                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain opacity-95"
+                            imgStyle={{
+                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                              transform: `scale(${item.thumbnail_scale ?? 1})`,
+                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                            }}
+                          />
+                        </div>
+
+                        {isSaving && (
+                          <div className="absolute inset-0 z-10 bg-black/35 backdrop-blur-[1px]" />
+                        )}
+                      </div>
+
+                      {(castEditId === item.id || moveItemId === item.id) && (
+                        <div
+                          className="border-t border-white/10 bg-black/45 px-3 py-2 space-y-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {castEditId === item.id && (
+                            <div className="flex gap-1">
+                              <input
+                                value={castEditValue}
+                                onChange={(e) => setCastEditValue(e.target.value)}
+                                placeholder="Cast / look name"
+                                className="flex-1 min-w-0 rounded-lg border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-[#FBF5D4]"
+                              />
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={async () => {
+                                  setBusy(true);
+                                  const res = await updateVaultCharacterCastName(
+                                    item.id,
+                                    castEditValue.trim() || null
+                                  );
+                                  setBusy(false);
+                                  if (!res.ok) setSaveError(res.error);
+                                  else {
+                                    setCastEditId(null);
+                                    onVaultChanged();
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-[#FBBF24]/90 text-black text-xs font-medium"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCastEditId(null)}
+                                className="px-2 text-xs text-white/60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                          {moveItemId === item.id && (
+                            <div className="space-y-1">
+                              <input
+                                list="vault-profile-destinations-global"
+                                value={moveTarget}
+                                onChange={(e) => setMoveTarget(e.target.value)}
+                                placeholder="Target profile"
+                                className="w-full rounded-lg border border-white/20 bg-black/50 px-2 py-1.5 text-xs text-[#FBF5D4]"
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMoveItemId(null);
+                                    setMoveTarget('');
+                                  }}
+                                  className="px-2 py-1 text-xs text-white/60"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => startMove(item.id)}
+                                  className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-800/80 text-white text-xs"
+                                >
+                                  <FolderInput className="w-3 h-3" />
+                                  Move
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="border-t border-white/10 bg-black/35 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-semibold text-[#FBF5D4] truncate">
                               {title}
                             </div>
                             {item.seed != null && (
-                              <div className="text-[10px] font-mono text-white/60 mt-0.5">
+                              <div className="text-[10px] font-mono text-white/55 mt-0.5">
                                 #{item.seed}
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              disabled={Boolean(savingId) || busy}
-                              className={[
-                                'rounded-lg border p-1.5',
-                                isActive
-                                  ? 'border-[#FBBF24]/70 bg-[#FBBF24]/15'
-                                  : 'border-[#D4AF37]/35 bg-black/25',
-                              ].join(' ')}
-                              aria-label={isActive ? 'Cover' : 'Set cover'}
-                              onClick={async () => {
-                                if (savingId) return;
-                                setSaveError(null);
-                                setSavingId(item.id);
-                                const res = await setProfileCover({
-                                  profileName,
-                                  id: item.id,
-                                });
-                                setSavingId(null);
-                                if (!res.ok) {
-                                  setSaveError(res.error);
-                                  return;
-                                }
-                                onCoverUpdated();
-                              }}
-                            >
-                              <RubyEncrustedStar active={isActive} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActionItemId(showActions ? null : item.id)
-                              }
-                              className="rounded-lg border border-[#D4AF37]/35 bg-black/25 p-1.5 text-[#FBF5D4]"
-                              aria-label="More actions"
-                            >
-                              <MoreHorizontal className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <span className="text-[10px] text-[#D4AF37]/50 shrink-0 hidden sm:inline">
+                            Click image for actions
+                          </span>
                         </div>
-
-                        {showActions && (
-                          <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFocusEditItem(item);
-                                setActionItemId(null);
-                              }}
-                              className="flex items-center gap-1 w-full text-left text-xs text-[#D4AF37] hover:text-[#FBBF24]"
-                            >
-                              <Pencil className="w-3 h-3" />
-                              Framing…
-                            </button>
-
-                            {castEditId === item.id ? (
-                              <div className="flex gap-1">
-                                <input
-                                  value={castEditValue}
-                                  onChange={(e) => setCastEditValue(e.target.value)}
-                                  placeholder="Cast / look name"
-                                  className="flex-1 min-w-0 rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-xs text-[#FBF5D4]"
-                                />
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={async () => {
-                                    setBusy(true);
-                                    const res = await updateVaultCharacterCastName(
-                                      item.id,
-                                      castEditValue.trim() || null
-                                    );
-                                    setBusy(false);
-                                    if (!res.ok) setSaveError(res.error);
-                                    else {
-                                      setCastEditId(null);
-                                      onVaultChanged();
-                                    }
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-[#FBBF24]/90 text-black text-xs"
-                                >
-                                  Save
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCastEditId(item.id);
-                                  setCastEditValue(item.cast_name || '');
-                                }}
-                                className="flex items-center gap-1 w-full text-left text-xs text-[#D4AF37] hover:text-[#FBBF24]"
-                              >
-                                <Tag className="w-3 h-3" />
-                                Edit cast name
-                              </button>
-                            )}
-
-                            {moveItemId === item.id ? (
-                              <div className="space-y-1">
-                                <input
-                                  list="vault-profile-destinations"
-                                  value={moveTarget}
-                                  onChange={(e) => setMoveTarget(e.target.value)}
-                                  placeholder="Target profile"
-                                  className="w-full rounded-lg border border-white/20 bg-black/50 px-2 py-1 text-xs text-[#FBF5D4]"
-                                />
-                                <datalist id="vault-profile-destinations">
-                                  {allProfileNames
-                                    .filter(
-                                      (p) =>
-                                        normalizeProf(p) !== normalizeProf(profileName)
-                                    )
-                                    .map((p) => (
-                                      <option key={p} value={p === 'Unnamed' ? '' : p} />
-                                    ))}
-                                </datalist>
-                                <div className="flex gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => startMove(item.id)}
-                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-emerald-800/80 text-white text-xs"
-                                  >
-                                    <FolderInput className="w-3 h-3" />
-                                    Move
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMoveItemId(null);
-                                      setMoveTarget('');
-                                    }}
-                                    className="px-2 py-1 text-xs text-white/60"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMoveItemId(item.id);
-                                  setMoveTarget('');
-                                }}
-                                className="flex items-center gap-1 w-full text-left text-xs text-[#D4AF37] hover:text-[#FBBF24]"
-                              >
-                                <FolderInput className="w-3 h-3" />
-                                Move to profile…
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={async () => {
-                                if (!confirm('Delete this image from the vault?')) return;
-                                setBusy(true);
-                                const res = await deleteVaultCharacter(item.id);
-                                setBusy(false);
-                                if (!res.ok) setSaveError(res.error);
-                                else {
-                                  setActionItemId(null);
-                                  onVaultChanged();
-                                  if (items.length <= 1) onClose();
-                                }
-                              }}
-                              className="flex items-center gap-1 w-full text-left text-xs text-red-300/90 hover:text-red-200"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              Delete image
-                            </button>
-                          </div>
-                        )}
                       </div>
-
-                      {isSaving && (
-                        <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px]" />
-                      )}
                     </div>
                   );
                 })}

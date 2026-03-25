@@ -30,14 +30,13 @@ describe('useGenerationEngine', () => {
 
     const { tagLibrary, tagLibraryCategories, systemPrompt } = result.current;
 
-    // Asset library has environment_* and props_* keys
     const lib = tagLibrary as { tag_library?: Record<string, unknown> };
     expect(lib.tag_library).toBeDefined();
     const keys = Object.keys(lib.tag_library ?? {});
-    expect(keys.some((k) => k.startsWith('environment_') || k.startsWith('props_'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('setting_') || k.startsWith('architectural'))).toBe(true);
 
-    // Normalized categories include asset-specific categories
     const categoryNames = tagLibraryCategories.map((c) => c.categoryName);
+    expect(categoryNames).toContain('Place type');
     expect(categoryNames).toContain('Architecture');
     expect(categoryNames).toContain('Lighting');
     expect(categoryNames).toContain('Materials');
@@ -58,6 +57,6 @@ describe('useGenerationEngine', () => {
     const { result } = renderHook(() => useGenerationEngine('character'));
     const categoryNames = result.current.tagLibraryCategories.map((c) => c.categoryName);
     expect(categoryNames).not.toContain('Architecture');
-    expect(categoryNames).not.toContain('Brutalist');
+    expect(categoryNames).not.toContain('Place type');
   });
 });

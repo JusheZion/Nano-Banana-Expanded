@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
@@ -8,12 +8,17 @@ import { Tooltip, PinnedHelpTooltip } from '@/shared/components/Tooltip';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
 import {
+  ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT,
+  buildAssetPromptWithReferenceStyle,
+  getEffectiveGeminiAspectRatioForAsset,
+} from '@/shared/utils/assetGenerationPromptWrappers';
+import {
   ASSET_STUDIO_BG,
   ACCENT_GOLD_GRADIENT,
   ASSET_STUDIO_AMETHYST_TEXT,
   GEM_AMETHYST,
 } from '@/shared/theme/Phase12DesignTokens';
-import { getSlotLabel, REFERENCE_SLOT_DNA_GROUPS } from '@/shared/constants/referenceSlots';
+import { getSlotLabel, REFERENCE_SLOT_GROUPS_ASSET } from '@/shared/constants/referenceSlots';
 import { getSurgicalInstructionsFromReferenceSlots } from '@/shared/utils/buildPrompt';
 import {
   ART_STYLE_FLAGSHIP,
@@ -61,16 +66,29 @@ const goldTextStyle: React.CSSProperties = {
 const chipInactive =
   'bg-white/5 border border-white/20 hover:border-amber-500/50';
 
+/** Shown on spatial expansion chips (Room / Urban / Time). */
+const SPATIAL_CHIP_TOOLTIP =
+  'Adds this to the live prompt. Use Expand Setting for a new shot from the current preview; Generate Asset runs the full prompt again (often a variation).';
+
+const ASPECT_RATIO_CHIP_TOOLTIP =
+  'Output aspect for the next Generate Asset or Expand Setting.';
+
+const CAMERA_ANGLE_CHIP_TOOLTIP =
+  'Lens / framing style for the prompt; may combine with aspect for the effective render ratio.';
+
 function Chip({
   label,
   active,
   onClick,
+  tooltip,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  /** Optional hover tooltip (Radix). */
+  tooltip?: string;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
@@ -85,6 +103,12 @@ function Chip({
         </span>
       )}
     </button>
+  );
+  if (!tooltip) return button;
+  return (
+    <Tooltip variant="asset" content={tooltip} side="top">
+      {button}
+    </Tooltip>
   );
 }
 
@@ -147,50 +171,6 @@ function MultiChip({
           onRemove={libraryOptions?.includes(opt) ? () => onRemoveLibrary?.(opt) : undefined}
         />
       ))}
-    </div>
-  );
-}
-
-/** Single category dropdown (Era/Style, Location Type, Architectural Detail) + input + Save as Tag */
-function SceneSettingCategoryAdd({
-  onSave,
-}: {
-  onSave: (categoryId: string, value: string) => void;
-}) {
-  const [categoryId, setCategoryId] = useState<'eraStyle' | 'locationType' | 'architecturalDetail'>('architecturalDetail');
-  const [input, setInput] = useState('');
-  const handleSave = () => {
-    if (input.trim()) {
-      onSave(categoryId, input.trim());
-      setInput('');
-    }
-  };
-  return (
-    <div className="flex gap-2 mt-2 flex-wrap items-center">
-      <select
-        value={categoryId}
-        onChange={(e) => setCategoryId(e.target.value as 'eraStyle' | 'locationType' | 'architecturalDetail')}
-        className="bg-black/40 text-white border border-white/20 rounded px-2 py-1.5 text-xs min-w-0 flex-1 basis-24"
-      >
-        <option value="eraStyle">Era / Style</option>
-        <option value="locationType">Location Type</option>
-        <option value="architecturalDetail">Architectural Detail</option>
-      </select>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Custom tag..."
-        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
-      />
-      <button
-        type="button"
-        onClick={handleSave}
-        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-        style={{ background: ACCENT_GOLD_GRADIENT }}
-      >
-        Save as Tag
-      </button>
     </div>
   );
 }
@@ -332,9 +312,13 @@ export const AssetsStudio: React.FC = () => {
     return () => clearInterval(id);
   }, [store.generationStatus]);
 
-  const hasReferenceImage = !!store.currentLiveImageUrl;
-  const settingAndLocationDisabled =
-    (hasReferenceImage && !store.diversifyStyle) || store.architecturalLock;
+  const effectiveAspectRatio = useMemo(
+    () =>
+      getEffectiveGeminiAspectRatioForAsset(store.aspectRatio, store.cinematic.angle),
+    [store.aspectRatio, store.cinematic.angle]
+  );
+
+  const settingAndLocationDisabled = store.architecturalLock;
 
   const extraParts: string[] = [
     store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId,
@@ -346,12 +330,26 @@ export const AssetsStudio: React.FC = () => {
     ...(store.spatialRoomOption ? [store.spatialRoomOption] : []),
     ...(store.spatialUrbanOption ? [store.spatialUrbanOption] : []),
     ...(store.timeSeason ? [store.timeSeason] : []),
-    ...(store.aspectRatio ? [`aspect ratio ${store.aspectRatio}`] : []),
+    ...(effectiveAspectRatio ? [`aspect ratio ${effectiveAspectRatio}`] : []),
   ].filter(Boolean);
+
+  const spatialExpansionLine = [
+    store.spatialRoomOption,
+    store.spatialUrbanOption,
+    store.timeSeason,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   const compiledPrompt =
     store.vaultUnlocked && store.vaultPromptOverride.trim()
-      ? store.vaultPromptOverride
+      ? [
+          store.vaultPromptOverride.trim(),
+          spatialExpansionLine ? `Spatial expansion: ${spatialExpansionLine}.` : '',
+          effectiveAspectRatio ? `Output aspect ratio ${effectiveAspectRatio}.` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
       : buildAssetStudioPrompt(store.tags, '', extraParts, {
           assetModifiers: store.assetModifiers,
           setDressingSelections: store.setDressingSelections,
@@ -406,19 +404,23 @@ export const AssetsStudio: React.FC = () => {
     );
     const basePrompt =
       refUrls.length > 0
-        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        ? buildAssetPromptWithReferenceStyle(compiledPrompt, artStyleLabel)
         : compiledPrompt;
     const surgical = getSurgicalInstructionsFromReferenceSlots(
-      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
+      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi,
+      'asset'
     );
-    const promptForApi =
+    let promptForApi =
       surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
     const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
+    if (!isVaultOverride) {
+      promptForApi = `${promptForApi}\n\n${ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT}`;
+    }
     const result = await generateImage({
       prompt: promptForApi,
       referenceImageUrls: refUrlsForApi,
       seed,
-      aspectRatio: store.aspectRatio,
+      aspectRatio: effectiveAspectRatio,
       modelId: store.selectedOnyxModelId,
       isVaultOverride,
       context: 'asset',
@@ -454,7 +456,7 @@ export const AssetsStudio: React.FC = () => {
       prompt: promptForApi,
       referenceImageUrls: refUrlsForApi,
       seed,
-      aspectRatio: store.aspectRatio,
+      aspectRatio: effectiveAspectRatio,
       modelId: store.selectedOnyxModelId,
       isVaultOverride: false,
       context: 'asset',
@@ -583,22 +585,28 @@ export const AssetsStudio: React.FC = () => {
     ].filter(Boolean);
     const expansionBase =
       refUrls.length > 0
-        ? `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
+        ? buildAssetPromptWithReferenceStyle(compiledPrompt, artStyleLabel)
         : compiledPrompt;
     const surgical = getSurgicalInstructionsFromReferenceSlots(
-      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi
+      store.referenceImageUrls.length > 0 ? store.referenceImageUrls : refUrlsForApi,
+      'asset'
     );
     const baseWithSurgical =
       surgical.length > 0 ? `${expansionBase}\n\n${surgical.join(' ')}` : expansionBase;
-    const expansionPrompt = expansionParts.length > 0
-      ? `${baseWithSurgical}, spatial expansion: ${expansionParts.join(', ')}`
-      : baseWithSurgical;
     const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
+    const alreadyHasSpatialExpansionClause = /spatial expansion:/i.test(baseWithSurgical);
+    let expansionPrompt =
+      expansionParts.length > 0 && !alreadyHasSpatialExpansionClause
+        ? `${baseWithSurgical}, spatial expansion: ${expansionParts.join(', ')}`
+        : baseWithSurgical;
+    if (!isVaultOverride) {
+      expansionPrompt = `${expansionPrompt}\n\n${ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT}`;
+    }
     const result = await generateImage({
       prompt: expansionPrompt,
       referenceImageUrls: refUrlsForApi,
       seed: expansionSeed,
-      aspectRatio: store.aspectRatio,
+      aspectRatio: effectiveAspectRatio,
       modelId: store.selectedOnyxModelId,
       isVaultOverride,
       context: 'asset',
@@ -654,9 +662,15 @@ export const AssetsStudio: React.FC = () => {
   };
 
   const previewAspect =
-    store.aspectRatio === '21:9' ? '21 / 9' : store.aspectRatio === '1:1' ? '1 / 1' : '9 / 16';
+    effectiveAspectRatio === '21:9'
+      ? '21 / 9'
+      : effectiveAspectRatio === '1:1'
+        ? '1 / 1'
+        : '9 / 16';
   const previewMaxH =
-    store.aspectRatio === '21:9' ? 'min(36vh, calc(100vh - 24rem))' : 'min(76vh, calc(100vh - 22rem))';
+    effectiveAspectRatio === '21:9'
+      ? 'min(36vh, calc(100vh - 24rem))'
+      : 'min(76vh, calc(100vh - 22rem))';
 
   return (
     <>
@@ -763,7 +777,7 @@ export const AssetsStudio: React.FC = () => {
               {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
                 <p className="text-xs text-amber-200/70 mb-2">No references yet. Upload per slot or paste.</p>
               )}
-              {REFERENCE_SLOT_DNA_GROUPS.map((group) => (
+              {REFERENCE_SLOT_GROUPS_ASSET.map((group) => (
                 <div key={group.id}>
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1">
                     {group.label} <span className="font-normal opacity-80">({group.subtitle})</span>
@@ -821,7 +835,7 @@ export const AssetsStudio: React.FC = () => {
                               <span className="text-[8px] text-white/40">{i + 1}</span>
                             )}
                           </div>
-                          <span className="text-[10px] text-white/70">{getSlotLabel(i)}</span>
+                          <span className="text-[10px] text-white/70">{getSlotLabel(i, 'asset')}</span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
@@ -854,17 +868,6 @@ export const AssetsStudio: React.FC = () => {
                 </div>
               ))}
             </div>
-            {hasReferenceImage && (
-              <label className="flex items-center gap-2 cursor-pointer mt-2 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={store.diversifyStyle}
-                  onChange={(e) => store.setDiversifyStyle(e.target.checked)}
-                  className="rounded border-amber-500/50"
-                />
-                <span className="text-xs inline-block" style={goldTextStyle}>Diversify Style</span>
-              </label>
-            )}
             </div>
           </div>
 
@@ -950,9 +953,7 @@ export const AssetsStudio: React.FC = () => {
               </h2>
               {settingAndLocationDisabled && (
                 <p className="text-xs text-white/60 mb-2">
-                  {store.architecturalLock
-                    ? 'Architectural Lock is on. Turn off to edit setting/location tags.'
-                    : 'Uploaded image is absolute reference. Enable "Diversify Style" to use tags.'}
+                  Architectural Lock is on. Turn off to edit setting/location tags.
                 </p>
               )}
               <MultiChip
@@ -961,6 +962,10 @@ export const AssetsStudio: React.FC = () => {
                 onToggle={toggleEra}
                 libraryOptions={store.eraStyleLibrary}
                 onRemoveLibrary={(v) => store.removeEraStyleOption(v)}
+              />
+              <SectionAddToLibrary
+                categories={[{ id: 'era', label: 'Era / Style' }]}
+                onSave={(_id, v) => store.addEraStyleOption(v)}
               />
             </section>
 
@@ -979,6 +984,10 @@ export const AssetsStudio: React.FC = () => {
                 libraryOptions={store.locationTypeLibrary}
                 onRemoveLibrary={(v) => store.removeLocationTypeOption(v)}
               />
+              <SectionAddToLibrary
+                categories={[{ id: 'location', label: 'Location Type' }]}
+                onSave={(_id, v) => store.addLocationTypeOption(v)}
+              />
             </section>
 
             {/* Architectural Detail */}
@@ -996,26 +1005,9 @@ export const AssetsStudio: React.FC = () => {
                 libraryOptions={store.architecturalDetailLibrary}
                 onRemoveLibrary={(v) => store.removeArchitecturalDetailOption(v)}
               />
-              <SceneSettingCategoryAdd
-                onSave={(categoryId, value) => {
-                  const trimmed = value.trim();
-                  if (!trimmed) return;
-                  const slug = trimmed.replace(/\s+/g, '-').toLowerCase();
-                  store.setTags([
-                    ...store.tags,
-                    { id: crypto.randomUUID(), text: slug, polarity: 'positive' },
-                  ]);
-                  if (categoryId === 'eraStyle') {
-                    store.addEraStyleOption(trimmed);
-                    store.setEraStyleSelection([...store.eraStyleSelection, trimmed]);
-                  } else if (categoryId === 'locationType') {
-                    store.addLocationTypeOption(trimmed);
-                    store.setLocationTypeSelection([...store.locationTypeSelection, trimmed]);
-                  } else {
-                    store.addArchitecturalDetailOption(trimmed);
-                    store.setArchitecturalDetailSelection([...store.architecturalDetailSelection, trimmed]);
-                  }
-                }}
+              <SectionAddToLibrary
+                categories={[{ id: 'arch', label: 'Architectural Detail' }]}
+                onSave={(_id, v) => store.addArchitecturalDetailOption(v)}
               />
             </section>
 
@@ -1588,7 +1580,12 @@ export const AssetsStudio: React.FC = () => {
                       </div>
                     </div>
                     <p className="mt-1 text-center text-[10px] text-violet-200/50">
-                      {store.aspectRatio} preview — full image fits; expand for zoom
+                      {effectiveAspectRatio} output
+                      {effectiveAspectRatio !== store.aspectRatio
+                        ? ` (angle uses ${effectiveAspectRatio}; Aspect Ratio chip: ${store.aspectRatio})`
+                        : ''}
+                      {' '}
+                      — full image fits; expand for zoom
                     </p>
                   </>
                 ) : (
@@ -1606,111 +1603,179 @@ export const AssetsStudio: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
                 <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
                   <span className="text-[10px] uppercase tracking-wider text-violet-200/60">Seed</span>
-                  <button
-                    type="button"
-                    onClick={() => store.setSeedMode('randomized')}
-                    className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
-                      (store.seedMode ?? 'randomized') === 'randomized'
-                        ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
-                        : 'border-white/20 text-violet-200/70 hover:bg-white/10'
-                    }`}
+                  <Tooltip
+                    variant="asset"
+                    content="Use a new random seed on each generation (more variation)."
+                    side="top"
                   >
-                    Randomized
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => store.setSeedMode('locked')}
-                    className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
-                      store.seedMode === 'locked'
-                        ? 'border-amber-500/60 bg-amber-500/15'
-                        : 'border-white/20 text-violet-200/70 hover:bg-white/10'
-                    }`}
+                    <button
+                      type="button"
+                      onClick={() => store.setSeedMode('randomized')}
+                      className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                        (store.seedMode ?? 'randomized') === 'randomized'
+                          ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
+                          : 'border-white/20 text-violet-200/70 hover:bg-white/10'
+                      }`}
+                    >
+                      Randomized
+                    </button>
+                  </Tooltip>
+                  <Tooltip
+                    variant="asset"
+                    content="Reuse the current seed so successive runs stay more consistent."
+                    side="top"
                   >
-                    <span className="inline-block" style={goldTextStyle}>Locked</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => store.setSeedMode('locked')}
+                      className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                        store.seedMode === 'locked'
+                          ? 'border-amber-500/60 bg-amber-500/15'
+                          : 'border-white/20 text-violet-200/70 hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="inline-block" style={goldTextStyle}>Locked</span>
+                    </button>
+                  </Tooltip>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleGenerateAsset}
-                  disabled={store.generationStatus === 'pending'}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
-                  style={
-                    store.generationStatus === 'pending'
-                      ? { background: GEM_AMETHYST, boxShadow: `0 0 16px ${GEM_AMETHYST}` }
-                      : { background: ACCENT_GOLD_GRADIENT }
-                  }
+                <Tooltip
+                  variant="asset"
+                  content="Full render from the compiled prompt and your references. When the live preview is used as a reference, results often look like variations of the same scene."
+                  side="top"
                 >
-                  {store.generationStatus === 'pending' ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
-                        style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
-                        aria-label="Generating..."
-                      />
-                      <span className="animate-pulse">Working…</span>
-                    </span>
-                  ) : (
-                    'Generate Asset'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateAsset()}
-                  disabled={store.generationStatus === 'pending'}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
-                >
-                  <span className="text-violet-200/90">Generate again</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={!store.previousLiveImageUrl}
-                  onClick={() => {
-                    if (!store.previousLiveImageUrl) return;
-                    store.setCurrentLiveImageUrl(store.previousLiveImageUrl);
-                    store.setCurrentGenerationSeed(store.previousGenerationSeed);
-                    store.setPreviousLiveSnapshot(null, null);
-                  }}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
-                >
-                  Undo last gen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openSaveAssetModal('new')}
-                  disabled={!store.currentLiveImageUrl}
-                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Save New Asset</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExpandSetting}
-                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Expand Setting</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openSaveAssetModal('library')}
-                  disabled={!store.currentLiveImageUrl}
-                  className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Add to Library</span>
-                </button>
-                {hasStories ? (
-                  <CastInStoryButton
-                    stories={stories}
-                    onSelect={handleCastInStory}
-                    disabled={!store.currentLiveImageUrl}
-                  />
-                ) : (
                   <button
                     type="button"
-                    disabled
-                    className="px-3 py-1.5 rounded-full border border-white/20 font-medium text-xs cursor-not-allowed opacity-60"
+                    onClick={handleGenerateAsset}
+                    disabled={store.generationStatus === 'pending'}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                    style={
+                      store.generationStatus === 'pending'
+                        ? { background: GEM_AMETHYST, boxShadow: `0 0 16px ${GEM_AMETHYST}` }
+                        : { background: ACCENT_GOLD_GRADIENT }
+                    }
                   >
-                    <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
+                    {store.generationStatus === 'pending' ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                          style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
+                          aria-label="Generating..."
+                        />
+                        <span className="animate-pulse">Working…</span>
+                      </span>
+                    ) : (
+                      'Generate Asset'
+                    )}
                   </button>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Run generation again with the same settings (respects Randomized vs Locked)."
+                  side="top"
+                >
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => void handleGenerateAsset()}
+                      disabled={store.generationStatus === 'pending'}
+                      className="px-3 py-1.5 rounded-full text-xs font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
+                    >
+                      <span className="text-violet-200/90">Generate again</span>
+                    </button>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Restore the previous live preview and seed."
+                  side="top"
+                >
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      disabled={!store.previousLiveImageUrl}
+                      onClick={() => {
+                        if (!store.previousLiveImageUrl) return;
+                        store.setCurrentLiveImageUrl(store.previousLiveImageUrl);
+                        store.setCurrentGenerationSeed(store.previousGenerationSeed);
+                        store.setPreviousLiveSnapshot(null, null);
+                      }}
+                      className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      Undo last gen
+                    </button>
+                  </span>
+                </Tooltip>
+                <Tooltip variant="asset" content="Save this image as a new standalone asset." side="top">
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => openSaveAssetModal('new')}
+                      disabled={!store.currentLiveImageUrl}
+                      className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="inline-block" style={goldTextStyle}>Save New Asset</span>
+                    </button>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Derive a new shot from the live preview using Room/Urban/Time and a different seed—not “expand” as in wider framing alone."
+                  side="top"
+                >
+                  <button
+                    type="button"
+                    onClick={handleExpandSetting}
+                    className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs"
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Expand Setting</span>
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Save this image into a vault collection you choose."
+                  side="top"
+                >
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => openSaveAssetModal('library')}
+                      disabled={!store.currentLiveImageUrl}
+                      className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="inline-block" style={goldTextStyle}>Add to Library</span>
+                    </button>
+                  </span>
+                </Tooltip>
+                {hasStories ? (
+                  <Tooltip
+                    variant="asset"
+                    content="Attach this image to a story's photo collection as a reference."
+                    side="top"
+                  >
+                    <span className="inline-flex">
+                      <CastInStoryButton
+                        stories={stories}
+                        onSelect={handleCastInStory}
+                        disabled={!store.currentLiveImageUrl}
+                      />
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <Tooltip
+                    variant="asset"
+                    content="Available when you have at least one story with a photo collection."
+                    side="top"
+                  >
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        disabled
+                        className="px-3 py-1.5 rounded-full border border-white/20 font-medium text-xs cursor-not-allowed opacity-60"
+                      >
+                        <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
+                      </button>
+                    </span>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -1722,6 +1787,11 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-2" style={goldTextStyle}>
                 Spatial Expansion Gallery
               </h2>
+              <p className="text-[10px] leading-snug text-violet-200/70 mb-3">
+                Choose Room / Urban / Time, then use{' '}
+                <span className="text-amber-200/90">Expand Setting</span> to push a new shot from the live preview (different seed + expansion cue).{' '}
+                <span className="text-amber-200/90">Generate Asset</span> runs the full prompt with your references and may look like a variation of the same scene.
+              </p>
 
               <div>
                 <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Room Expansion</label>
@@ -1732,6 +1802,7 @@ export const AssetsStudio: React.FC = () => {
                       label={opt}
                       active={store.spatialRoomOption === opt}
                       onClick={() => store.setSpatialRoomOption(store.spatialRoomOption === opt ? null : opt)}
+                      tooltip={SPATIAL_CHIP_TOOLTIP}
                     />
                   ))}
                 </div>
@@ -1746,6 +1817,7 @@ export const AssetsStudio: React.FC = () => {
                       label={opt}
                       active={store.spatialUrbanOption === opt}
                       onClick={() => store.setSpatialUrbanOption(store.spatialUrbanOption === opt ? null : opt)}
+                      tooltip={SPATIAL_CHIP_TOOLTIP}
                     />
                   ))}
                 </div>
@@ -1760,6 +1832,7 @@ export const AssetsStudio: React.FC = () => {
                       label={opt}
                       active={store.timeSeason === opt}
                       onClick={() => store.setTimeSeason(store.timeSeason === opt ? null : opt)}
+                      tooltip={SPATIAL_CHIP_TOOLTIP}
                     />
                   ))}
                 </div>
@@ -1774,6 +1847,7 @@ export const AssetsStudio: React.FC = () => {
                       label={ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'}
                       active={store.aspectRatio === ratio}
                       onClick={() => store.setAspectRatio(ratio)}
+                      tooltip={ASPECT_RATIO_CHIP_TOOLTIP}
                     />
                   ))}
                 </div>
@@ -1788,6 +1862,7 @@ export const AssetsStudio: React.FC = () => {
                       label={opt}
                       active={(store.cinematic.angle || '') === opt}
                       onClick={() => store.setCinematic('angle', opt)}
+                      tooltip={CAMERA_ANGLE_CHIP_TOOLTIP}
                     />
                   ))}
                 </div>

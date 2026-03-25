@@ -113,11 +113,17 @@ export function fuseAssetModifiers(
 }
 
 /**
- * Slot ranges for reference DNA: identity (0–3), style (4–9), composition (10–13).
+ * Character slot ranges: identity (0–3), style (4–9), composition (10–13).
+ * Asset slot ranges: site/exterior (0–3), interior (4–6), materials (7–10), light (11–13).
  */
 const IDENTITY_SLOTS = { start: 0, end: 3 };
 const STYLE_SLOTS = { start: 4, end: 9 };
 const COMPOSITION_SLOTS = { start: 10, end: 13 };
+
+const ASSET_SITE_SLOTS = { start: 0, end: 3 };
+const ASSET_INTERIOR_SLOTS = { start: 4, end: 6 };
+const ASSET_MATERIALS_SLOTS = { start: 7, end: 10 };
+const ASSET_LIGHT_SLOTS = { start: 11, end: 13 };
 
 function hasSlotInRange(
   referenceImageUrls: string[],
@@ -129,13 +135,19 @@ function hasSlotInRange(
   return false;
 }
 
+export type SurgicalReferenceContext = 'character' | 'asset';
+
 /**
  * Returns "Surgical Instructions" to append to the prompt based on which reference
  * slot groups are used. Call this when building the final API prompt.
  */
 export function getSurgicalInstructionsFromReferenceSlots(
-  referenceImageUrls: string[]
+  referenceImageUrls: string[],
+  context: SurgicalReferenceContext = 'character'
 ): string[] {
+  if (context === 'asset') {
+    return getAssetSurgicalInstructions(referenceImageUrls);
+  }
   const instructions: string[] = [];
   if (hasSlotInRange(referenceImageUrls, IDENTITY_SLOTS)) {
     instructions.push(
@@ -150,6 +162,43 @@ export function getSurgicalInstructionsFromReferenceSlots(
   if (hasSlotInRange(referenceImageUrls, COMPOSITION_SLOTS)) {
     instructions.push(
       'Match the lighting and atmospheric mood from the composition references.'
+    );
+  }
+  return instructions;
+}
+
+function getAssetSurgicalInstructions(referenceImageUrls: string[]): string[] {
+  const instructions: string[] = [];
+  const hasSite = hasSlotInRange(referenceImageUrls, ASSET_SITE_SLOTS);
+  const hasInterior = hasSlotInRange(referenceImageUrls, ASSET_INTERIOR_SLOTS);
+  const hasMaterials = hasSlotInRange(referenceImageUrls, ASSET_MATERIALS_SLOTS);
+  const hasLight = hasSlotInRange(referenceImageUrls, ASSET_LIGHT_SLOTS);
+
+  if (hasSite && hasInterior) {
+    instructions.push(
+      'Site/exterior and interior references are both present: interior spaces, circulation, and décor must read as plausibly inside the same building or site as the exterior—consistent era, palette, and architectural language.'
+    );
+  } else if (hasSite || hasInterior) {
+    instructions.push(
+      'Keep materials, décor, and architectural style aligned with the spatial references and with the written tags.'
+    );
+  }
+  if (hasMaterials && (hasSite || hasInterior)) {
+    instructions.push(
+      'Materials and finishes references must agree with the shell/interior spatial references—same palette and fixture language unless the prompt contradicts.'
+    );
+  } else if (hasMaterials && !hasSite && !hasInterior) {
+    instructions.push(
+      'Use materials and finishes references to lock surfaces and props; keep décor coherent with the text prompt.'
+    );
+  }
+  if (hasLight && !hasSite && !hasInterior && !hasMaterials) {
+    instructions.push(
+      'Light and atmosphere references set mood and time of day only—do not invent unrelated architecture unless the written prompt asks for it.'
+    );
+  } else if (hasLight) {
+    instructions.push(
+      'Match lighting and atmospheric mood from the light/atmosphere references with the rest of the scene.'
     );
   }
   return instructions;
