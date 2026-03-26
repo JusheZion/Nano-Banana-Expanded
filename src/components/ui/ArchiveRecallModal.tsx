@@ -28,6 +28,7 @@ export interface ArchiveRecallModalProps {
   onClose: () => void;
   context: 'character' | 'asset';
   slotIndex: number;
+  selectedUrl?: string | null;
   onSelect: (imageUrl: string) => void;
 }
 
@@ -39,6 +40,7 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
   onClose,
   context,
   slotIndex,
+  selectedUrl,
   onSelect,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,9 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
 
   const borderAccent = context === 'character' ? 'border-amber-500/40' : 'border-violet-500/40';
   const hoverAccent = context === 'character' ? 'hover:border-amber-500/70' : 'hover:border-violet-500/70';
+  const selectedRing =
+    context === 'character' ? 'ring-4 ring-amber-300/25' : 'ring-4 ring-violet-300/25';
+  const selectedBorder = context === 'character' ? 'border-amber-500/90' : 'border-violet-500/90';
 
   if (!open) return null;
 
@@ -113,29 +118,45 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
                       {key}
                     </h3>
                     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                      {groupedCharacters[key].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            onSelect(item.image_url);
-                            onClose();
-                          }}
-                          className={`flex flex-col rounded-lg border overflow-hidden bg-black/40 transition-colors ${borderAccent} ${hoverAccent}`}
-                        >
-                          <img
-                            src={item.image_url}
-                            alt=""
-                            className="w-full aspect-[9/16] object-cover"
-                          />
-                          <span className="text-[10px] text-white/80 truncate px-1 py-0.5">
-                            {item.cast_name ?? item.name ?? item.profile_name ?? '—'}
-                          </span>
-                          {item.seed != null && (
-                            <span className="text-[9px] text-white/50 px-1">seed {item.seed}</span>
-                          )}
-                        </button>
-                      ))}
+                      {groupedCharacters[key].map((item) => {
+                        const isSelected = selectedUrl && item.image_url === selectedUrl;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              onSelect(item.image_url);
+                              onClose();
+                            }}
+                            className={`flex flex-col rounded-lg border overflow-hidden bg-black/40 transition-colors ${borderAccent} ${hoverAccent} ${
+                              isSelected ? `${selectedBorder} ${selectedRing}` : ''
+                            }`}
+                          >
+                            <div className="relative">
+                              <img
+                                src={item.image_url}
+                                alt=""
+                                className="w-full aspect-[9/16] object-cover"
+                              />
+                              {isSelected && (
+                                <div
+                                  className="absolute top-1 left-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200"
+                                >
+                                  Selected
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-white/80 truncate px-1 py-0.5">
+                              {item.cast_name ?? item.name ?? item.profile_name ?? '—'}
+                            </span>
+                            {item.seed != null && (
+                              <span className="text-[9px] text-white/50 px-1">
+                                seed {item.seed}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </section>
                 ))}
@@ -146,29 +167,45 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
                       {key}
                     </h3>
                     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                      {groupedAssets[key].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            onSelect(item.image_url);
-                            onClose();
-                          }}
-                          className={`flex flex-col rounded-lg border overflow-hidden bg-black/40 transition-colors ${borderAccent} ${hoverAccent}`}
-                        >
-                          <img
-                            src={item.image_url}
-                            alt=""
-                            className="w-full aspect-[9/16] object-cover"
-                          />
-                          <span className="text-[10px] text-white/80 truncate px-1 py-0.5">
-                            {item.asset_name ?? item.name ?? item.collection_name ?? '—'}
-                          </span>
-                          {item.seed != null && (
-                            <span className="text-[9px] text-white/50 px-1">seed {item.seed}</span>
-                          )}
-                        </button>
-                      ))}
+                      {groupedAssets[key].map((item) => {
+                        const isSelected = selectedUrl && item.image_url === selectedUrl;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              onSelect(item.image_url);
+                              onClose();
+                            }}
+                            className={`flex flex-col rounded-lg border overflow-hidden bg-black/40 transition-colors ${borderAccent} ${hoverAccent} ${
+                              isSelected ? `${selectedBorder} ${selectedRing}` : ''
+                            }`}
+                          >
+                            <div className="relative">
+                              <img
+                                src={item.image_url}
+                                alt=""
+                                className="w-full aspect-[9/16] object-cover"
+                              />
+                              {isSelected && (
+                                <div
+                                  className="absolute top-1 left-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-200"
+                                >
+                                  Selected
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-white/80 truncate px-1 py-0.5">
+                              {item.asset_name ?? item.name ?? item.collection_name ?? '—'}
+                            </span>
+                            {item.seed != null && (
+                              <span className="text-[9px] text-white/50 px-1">
+                                seed {item.seed}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </section>
                 ))}

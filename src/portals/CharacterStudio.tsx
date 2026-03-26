@@ -1,6 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Archive,
+  ChevronDown,
+  Copy,
+  Expand,
+  ExternalLink,
+  ImagePlus,
+  Trash2,
+  Upload,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
@@ -10,6 +22,7 @@ import {
   type WardrobeModifierCategory,
 } from '@/stores/characterStudioStore';
 import { buildCharacterStudioPrompt } from '@/shared/utils/characterStudioPrompt';
+import { buildCharacterStudioPromptForApi } from '@/shared/utils/buildCharacterStudioPromptForApi';
 import {
   CHARACTER_STUDIO_BG_V4,
   ACCENT_GOLD_GRADIENT,
@@ -21,6 +34,8 @@ import { getSurgicalInstructionsFromReferenceSlots } from '@/shared/utils/buildP
 import {
   ART_STYLE_FLAGSHIP,
   ART_STYLE_LIBRARY,
+  ART_STYLE_PERMANENT_TAG,
+  FACIAL_EXPRESSION_TAGS,
   HERITAGE_TAGS,
   GENDER_TAGS,
   SURGICAL_PHYSICAL,
@@ -202,11 +217,22 @@ export const CharacterStudio: React.FC = () => {
   const { setTheme } = useTheme();
   const store = useCharacterStudioStore();
   const [vaultPassword, setVaultPassword] = useState('');
+  const onyxEnabled = import.meta.env.VITE_ENABLE_ONYX_VAULT === 'true';
+  const vaultUnlockedEffective = onyxEnabled && store.vaultUnlocked;
   const [customStyleInput, setCustomStyleInput] = useState('');
+  const [facialExpressionCustomInput, setFacialExpressionCustomInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
   const [showZoomModal, setShowZoomModal] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [compareSplit, setCompareSplit] = useState(false);
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
+  /** Single focused slot drives the shared Upload / Archive / Clear toolbar. */
+  const [focusedReferenceSlotIndex, setFocusedReferenceSlotIndex] = useState(0);
+  const [expandedRefDnaGroupId, setExpandedRefDnaGroupId] = useState<string>(
+    REFERENCE_SLOT_DNA_GROUPS[0]?.id ?? 'identity'
+  );
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadSlotIndexRef = useRef<number | null>(null);
   const [showSaveCharacterModal, setShowSaveCharacterModal] = useState(false);
   const [saveCharacterProfileName, setSaveCharacterProfileName] = useState('');
   const [saveCharacterCastName, setSaveCharacterCastName] = useState('');
@@ -215,7 +241,7 @@ export const CharacterStudio: React.FC = () => {
   const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
   const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
   const [recentCharacters, setRecentCharacters] = useState<RecentGeneration[]>([]);
-  const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'edit' | 'refine'>('auto');
+  const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'reference' | 'edit' | 'refine'>('auto');
   const [snippetNameInput, setSnippetNameInput] = useState('');
   const [snippetTextInput, setSnippetTextInput] = useState('');
   const [refHoverPreview, setRefHoverPreview] = useState<{
@@ -243,6 +269,14 @@ export const CharacterStudio: React.FC = () => {
   }, [setTheme]);
 
   useEffect(() => {
+    const grp = REFERENCE_SLOT_DNA_GROUPS.find(
+      (g) =>
+        focusedReferenceSlotIndex >= g.start && focusedReferenceSlotIndex <= g.end
+    );
+    if (grp) setExpandedRefDnaGroupId(grp.id);
+  }, [focusedReferenceSlotIndex]);
+
+  useEffect(() => {
     setRecentCharacters(getRecentCharacters());
   }, []);
 
@@ -268,25 +302,87 @@ export const CharacterStudio: React.FC = () => {
   const dnaAndPhysicalDisabled = hasReferenceImage && !store.diversifyLikeness;
 
   const extraParts: string[] = [
+    ART_STYLE_PERMANENT_TAG,
     artStyleLabel,
     ...(dnaAndPhysicalDisabled ? [] : store.heritageSelection),
     ...(dnaAndPhysicalDisabled ? [] : store.genderSelection),
     ...(dnaAndPhysicalDisabled ? [] : Object.values(store.physicalSelections).flat()),
     ...Object.values(store.wardrobeSelections).flat(),
     ...Object.values(store.cinematic).filter(Boolean),
+    ...store.facialExpressionSelection,
   ].filter(Boolean);
   const compiledPrompt =
-    store.vaultUnlocked && store.vaultPromptOverride.trim()
+    vaultUnlockedEffective && store.vaultPromptOverride.trim()
       ? store.vaultPromptOverride
       : buildCharacterStudioPrompt(store.tags, '', dna, extraParts, {
           appendOfficialRules: true,
           wardrobeModifiers: store.wardrobeModifiers,
           wardrobeSelections: store.wardrobeSelections,
         });
+
+  const { promptForApi: referencePromptText } = buildCharacterStudioPromptForApi({
+    tags: store.tags,
+    vaultUnlocked: vaultUnlockedEffective,
+    vaultPromptOverride: store.vaultPromptOverride,
+    artStyleId: store.artStyleId,
+    diversifyLikeness: store.diversifyLikeness,
+    currentLiveImageUrl: store.currentLiveImageUrl,
+    heritageSelection: store.heritageSelection,
+    genderSelection: store.genderSelection,
+    physicalSelections: store.physicalSelections,
+    wardrobeSelections: store.wardrobeSelections,
+    wardrobeModifiers: store.wardrobeModifiers,
+    cinematic: store.cinematic,
+    facialExpressionSelection: store.facialExpressionSelection,
+    referenceImageUrls: store.referenceImageUrls,
+  });
+
   const displayPrompt =
     store.currentGenerationSeed != null
-      ? `${compiledPrompt}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`
-      : compiledPrompt;
+      ? `${referencePromptText}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`
+      : referencePromptText;
+
+  const copyPromptText =
+    promptPanelTab === 'auto'
+      ? displayPrompt
+      : promptPanelTab === 'reference'
+        ? referencePromptText
+        : promptPanelTab === 'edit'
+          ? store.vaultPromptOverride
+          : store.refinementPromptOverride;
+
+  const activeReferenceForCompare =
+    store.referenceImageUrls.find((u) => Boolean(u)) ?? store.currentLiveImageUrl ?? null;
+
+  const selectedPoseForSummary = store.poses.find((p) => p.id === store.selectedPoseId);
+  const poseSessionLabel = selectedPoseForSummary
+    ? selectedPoseForSummary.name?.trim() || 'Untitled pose'
+    : 'No pose selected';
+  const aspectSessionLabel =
+    store.aspectRatio === '9:16'
+      ? 'Portrait 9:16'
+      : store.aspectRatio === '21:9'
+        ? 'Cinematic 21:9'
+        : 'Square 1:1';
+  const cameraSessionLabel = store.cinematic.angle?.trim()
+    ? `Cam: ${store.cinematic.angle}`
+    : 'Cam: —';
+
+  const sendPoseImageToFirstEmptyReferenceSlot = (imageUrl: string | undefined) => {
+    if (!imageUrl?.trim()) {
+      store.setGenerationStatus('error', 'This pose has no image to add.');
+      return;
+    }
+    const urls = useCharacterStudioStore.getState().referenceImageUrls;
+    const emptyIdx = urls.findIndex((u) => !u);
+    if (emptyIdx < 0) {
+      store.setGenerationStatus('error', 'All reference slots are full. Clear a slot first.');
+      return;
+    }
+    store.setReferenceImageAt(emptyIdx, imageUrl);
+    store.setCurrentLiveImageUrl(imageUrl);
+    setFocusedReferenceSlotIndex(emptyIdx);
+  };
 
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
@@ -321,32 +417,24 @@ export const CharacterStudio: React.FC = () => {
       st.setGenerationStatus('pending');
       const seed = pickGenerationSeed(st.seedMode ?? 'randomized', st.currentGenerationSeed);
       st.setCurrentGenerationSeed(seed);
-      const rawRefs = st.referenceImageUrls;
-      const hasAnyRefSlot = rawRefs.some((u) => Boolean(u));
-      const refUrls = hasAnyRefSlot
-        ? Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '')
-        : st.currentLiveImageUrl
-          ? [st.currentLiveImageUrl]
-          : [];
-      const refUrlsForApi = Array.from(
-        { length: 14 },
-        (_, i) => (refUrls[i] ?? '')
-      );
-      const hasApiRefs = refUrlsForApi.some(Boolean);
-      const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
-      const basePrompt =
-        hasApiRefs
-          ? hasWardrobeDna
-            ? `Art style ${artStyleLabel}: use it for lighting, palette, and illustration treatment. The person comes from Character DNA refs; their clothing, shoes, hat, bag, and accessories must match Wardrobe DNA reference images literally (same real-world garments), not a fantasy or “inspired” outfit. ${compiledPrompt}`
-            : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
-          : compiledPrompt;
-      const paddedRefsForSurgical = Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '');
-      const surgical = getSurgicalInstructionsFromReferenceSlots(
-        hasAnyRefSlot ? paddedRefsForSurgical : refUrlsForApi
-      );
-      const promptForApi =
-        surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
-      const isVaultOverride = Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const { promptForApi, refUrlsForApi } =
+        buildCharacterStudioPromptForApi({
+          tags: st.tags,
+          vaultUnlocked: st.vaultUnlocked && onyxEnabled,
+          vaultPromptOverride: st.vaultPromptOverride,
+          artStyleId: st.artStyleId,
+          diversifyLikeness: st.diversifyLikeness,
+          currentLiveImageUrl: st.currentLiveImageUrl,
+          heritageSelection: st.heritageSelection,
+          genderSelection: st.genderSelection,
+          physicalSelections: st.physicalSelections,
+          wardrobeSelections: st.wardrobeSelections,
+          wardrobeModifiers: st.wardrobeModifiers,
+          cinematic: st.cinematic,
+          facialExpressionSelection: st.facialExpressionSelection,
+          referenceImageUrls: st.referenceImageUrls,
+        });
+      const isVaultOverride = onyxEnabled && Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
       const result = await generateImage({
         prompt: promptForApi,
         referenceImageUrls: refUrlsForApi,
@@ -416,7 +504,7 @@ export const CharacterStudio: React.FC = () => {
         surgical.length > 0
           ? `${basePrompt}\n\n${surgical.join(' ')} Alternate pose, same character.`
           : `${basePrompt} Alternate pose, same character.`;
-      const isVaultOverride = Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const isVaultOverride = onyxEnabled && Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
       const result = await generateImage({
         prompt: promptForApi,
         referenceImageUrls: refUrlsForApi,
@@ -671,7 +759,7 @@ export const CharacterStudio: React.FC = () => {
       <div className="flex gap-3 w-full flex-1 min-h-0">
         <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col gap-3 flex-shrink-0">
           {/* Reference panel — own card + scrollbar */}
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-col min-h-[200px] max-h-[min(46vh,440px)] flex-shrink-0 overflow-hidden shadow-lg shadow-black/20">
+          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-col min-h-[200px] flex-1 overflow-hidden shadow-lg shadow-black/20">
             <div className="p-2 flex flex-col min-h-0 flex-1 overflow-hidden">
             <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
               Reference images
@@ -752,104 +840,186 @@ export const CharacterStudio: React.FC = () => {
                 Paste in first empty
               </button>
             </div>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const slotIndex = uploadSlotIndexRef.current;
+                if (slotIndex == null) return;
+                const url = URL.createObjectURL(file);
+                store.setReferenceImageAt(slotIndex, url);
+                store.setCurrentLiveImageUrl(url);
+                uploadSlotIndexRef.current = null;
+                e.target.value = '';
+              }}
+            />
+            <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-2">
+              <div className="text-[10px] text-white/85 min-w-0 flex-1 basis-[160px]">
+                <span className="font-bold text-amber-200/90">
+                  Slot {focusedReferenceSlotIndex + 1}
+                </span>
+                <span className="text-white/45"> · </span>
+                <span className="text-white/75">{getSlotLabel(focusedReferenceSlotIndex)}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <Tooltip variant="character" content="Upload an image into the focused slot" side="bottom">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+                    onClick={() => {
+                      uploadSlotIndexRef.current = focusedReferenceSlotIndex;
+                      uploadInputRef.current?.click();
+                    }}
+                  >
+                    <Upload className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Upload
+                  </button>
+                </Tooltip>
+                <Tooltip variant="character" content="Choose from archive for the focused slot" side="bottom">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+                    onClick={() => setRecallSlotIndex(focusedReferenceSlotIndex)}
+                  >
+                    <Archive className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Archive
+                  </button>
+                </Tooltip>
+                <Tooltip variant="character" content="Remove image from the focused slot" side="bottom">
+                  <button
+                    type="button"
+                    disabled={!store.referenceImageUrls[focusedReferenceSlotIndex]}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-white/20 text-white/80 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+                    onClick={() => {
+                      const i = focusedReferenceSlotIndex;
+                      const url = store.referenceImageUrls[i];
+                      if (!url) return;
+                      const wasLive = store.currentLiveImageUrl === url;
+                      store.removeReferenceImage(i);
+                      if (wasLive) {
+                        const nextUrls = useCharacterStudioStore.getState().referenceImageUrls;
+                        const still = nextUrls.filter(Boolean);
+                        store.setCurrentLiveImageUrl(still[0] ?? null);
+                      }
+                    }}
+                  >
+                    Clear
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+            <p className="text-[10px] text-white/50 mb-1 shrink-0">
+              Click a thumbnail to focus a slot. One DNA group is open at a time—expand a header to switch groups.
+            </p>
             <div className="mt-1 space-y-2 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
                 <p className="text-xs text-amber-200/70 mb-2">
-                  No references yet. Upload via a slot below or paste an image.
+                  No references yet. Pick a slot, use Upload or Archive, or paste an image.
                 </p>
               )}
-              {REFERENCE_SLOT_DNA_GROUPS.map((group) => (
-                <div key={group.id}>
-                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1">
-                    {group.label} <span className="font-normal opacity-80">({group.subtitle})</span>
-                  </h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: group.end - group.start + 1 }, (_, j) => {
-                      const i = group.start + j;
-                      const url = store.referenceImageUrls[i];
-                      return (
-                        <div key={i} className="relative group flex flex-col items-center gap-0.5">
-                          <div
-                            className={`relative w-10 h-10 rounded bg-black/40 flex items-center justify-center overflow-hidden ${
-                              url
-                                ? 'border-2 border-amber-500/60'
-                                : 'border-2 border-dashed border-white/25'
-                            }`}
-                            onMouseEnter={
-                              url
-                                ? (e) =>
-                                    setRefHoverPreview({
-                                      url,
-                                      x: e.clientX + 12,
-                                      y: e.clientY + 12,
-                                    })
-                                : undefined
-                            }
-                            onMouseMove={
-                              url
-                                ? (e) =>
-                                    setRefHoverPreview({
-                                      url,
-                                      x: e.clientX + 12,
-                                      y: e.clientY + 12,
-                                    })
-                                : undefined
-                            }
-                            onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
-                          >
-                            {url ? (
-                              <>
-                                <img src={url} alt="" className="w-full h-full object-cover" />
+              {REFERENCE_SLOT_DNA_GROUPS.map((group) => {
+                const isExpanded = expandedRefDnaGroupId === group.id;
+                return (
+                  <div key={group.id} className="rounded-lg border border-white/10 bg-black/20 overflow-hidden">
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors"
+                      onClick={() => setExpandedRefDnaGroupId(group.id)}
+                      aria-expanded={isExpanded}
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 shrink-0 text-amber-400/80 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                        aria-hidden
+                      />
+                      <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 flex-1 min-w-0">
+                        {group.label}{' '}
+                        <span className="font-normal opacity-80">({group.subtitle})</span>
+                      </h3>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-2 pb-2 pt-0.5 flex flex-wrap gap-2 border-t border-white/5">
+                        {Array.from({ length: group.end - group.start + 1 }, (_, j) => {
+                          const i = group.start + j;
+                          const url = store.referenceImageUrls[i];
+                          const isFocused = focusedReferenceSlotIndex === i;
+                          return (
+                            <div key={i} className="flex flex-col items-center gap-0.5 group/slot">
+                              <div className="relative">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    store.removeReferenceImage(i);
-                                    if (store.currentLiveImageUrl === url) {
-                                      const next = (store.referenceImageUrls as string[]).filter(Boolean);
-                                      store.setCurrentLiveImageUrl(next[0] ?? null);
-                                    }
-                                  }}
-                                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
+                                  onClick={() => setFocusedReferenceSlotIndex(i)}
+                                  className={`relative w-11 h-11 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
+                                    url
+                                      ? 'border-2 border-amber-500/55'
+                                      : 'border-2 border-dashed border-white/25'
+                                  } ${isFocused ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-black/70' : ''}`}
+                                  aria-pressed={isFocused}
+                                  aria-label={`Reference slot ${i + 1}, ${getSlotLabel(i)}`}
+                                  onMouseEnter={
+                                    url
+                                      ? (e) =>
+                                          setRefHoverPreview({
+                                            url,
+                                            x: e.clientX + 12,
+                                            y: e.clientY + 12,
+                                          })
+                                      : undefined
+                                  }
+                                  onMouseMove={
+                                    url
+                                      ? (e) =>
+                                          setRefHoverPreview({
+                                            url,
+                                            x: e.clientX + 12,
+                                            y: e.clientY + 12,
+                                          })
+                                      : undefined
+                                  }
+                                  onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
                                 >
-                                  ×
+                                  {url ? (
+                                    <img src={url} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-[8px] text-white/40">{i + 1}</span>
+                                  )}
                                 </button>
-                              </>
-                            ) : (
-                              <span className="text-[8px] text-white/40">{i + 1}</span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-white/70">{getSlotLabel(i)}</span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setRecallSlotIndex(i)}
-                              className="text-[10px] text-amber-400/90 hover:text-amber-300"
-                            >
-                              Archive
-                            </button>
-                            <label className="text-[10px] text-amber-400/90 hover:text-amber-300 cursor-pointer">
-                              Upload
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  const url = URL.createObjectURL(file);
-                                  store.setReferenceImageAt(i, url);
-                                  store.setCurrentLiveImageUrl(url);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      );
-                    })}
+                                {url ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      const wasLive = store.currentLiveImageUrl === url;
+                                      store.removeReferenceImage(i);
+                                      if (wasLive) {
+                                        const nextUrls =
+                                          useCharacterStudioStore.getState().referenceImageUrls;
+                                        const still = nextUrls.filter(Boolean);
+                                        store.setCurrentLiveImageUrl(still[0] ?? null);
+                                      }
+                                    }}
+                                    className="absolute -top-1 -right-1 z-10 w-4 h-4 rounded-full bg-black/85 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
+                                    aria-label={`Remove slot ${i + 1}`}
+                                  >
+                                    ×
+                                  </button>
+                                ) : null}
+                              </div>
+                              <span className="text-[9px] text-center text-white/65 max-w-[4.5rem] leading-tight">
+                                {getSlotLabel(i)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {hasReferenceImage && (
               <label className="flex items-center gap-2 cursor-pointer mt-2 shrink-0">
@@ -992,6 +1162,65 @@ export const CharacterStudio: React.FC = () => {
               </div>
             </section>
 
+            {/* Facial Expressions */}
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Facial Expressions
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {[...FACIAL_EXPRESSION_TAGS, ...store.facialExpressionLibrary]
+                      .sort((a, b) => a.localeCompare(b))
+                      .map((tag) => (
+                        <ChipWithOptionalRemove
+                          key={tag}
+                          label={tag}
+                          active={store.facialExpressionSelection.includes(tag)}
+                          onClick={() => store.toggleFacialExpression(tag)}
+                          isCustom={store.facialExpressionLibrary.includes(tag)}
+                          onRemove={
+                            store.facialExpressionLibrary.includes(tag)
+                              ? () => store.removeFacialExpressionOption(tag)
+                              : undefined
+                          }
+                        />
+                      ))}
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={facialExpressionCustomInput}
+                    onChange={(e) => setFacialExpressionCustomInput(e.target.value)}
+                    placeholder="Custom expression..."
+                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      const t = facialExpressionCustomInput.trim();
+                      if (!t) return;
+                      store.addFacialExpressionOption(t);
+                      setFacialExpressionCustomInput('');
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = facialExpressionCustomInput.trim();
+                      if (!t) return;
+                      store.addFacialExpressionOption(t);
+                      setFacialExpressionCustomInput('');
+                    }}
+                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    Save as Tag
+                  </button>
+                </div>
+              </div>
+            </section>
+
             {/* Surgical Physical */}
             <section
               className={dnaAndPhysicalDisabled ? 'opacity-50 pointer-events-none' : ''}
@@ -1086,60 +1315,40 @@ export const CharacterStudio: React.FC = () => {
                 Cinematic Suite
               </h2>
               <div className="space-y-4">
-                {(Object.keys(CINEMATIC_OPTIONS) as CinematicKey[]).map(
-                  (key) => (
+                {(Object.keys(CINEMATIC_OPTIONS) as CinematicKey[])
+                  .filter((key) => key !== 'angle')
+                  .map((key) => (
                     <div key={key}>
-                      <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{key}</h3>
+                      <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>
+                        {key}
+                      </h3>
                       <div className="flex flex-wrap gap-2">
-                        {[...CINEMATIC_OPTIONS[key], ...(store.cinematicLibraries[key] ?? [])].map((opt) => (
-                          <ChipWithOptionalRemove
-                            key={opt}
-                            label={opt}
-                            active={(store.cinematic[key] || '') === opt}
-                            onClick={() => store.setCinematic(key, opt)}
-                            isCustom={(store.cinematicLibraries[key] ?? []).includes(opt)}
-                            onRemove={(store.cinematicLibraries[key] ?? []).includes(opt) ? () => store.removeCinematicOption(key, opt) : undefined}
-                          />
-                        ))}
+                        {[...CINEMATIC_OPTIONS[key], ...(store.cinematicLibraries[key] ?? [])].map(
+                          (opt) => (
+                            <ChipWithOptionalRemove
+                              key={opt}
+                              label={opt}
+                              active={(store.cinematic[key] || '') === opt}
+                              onClick={() => store.setCinematic(key, opt)}
+                              isCustom={(store.cinematicLibraries[key] ?? []).includes(opt)}
+                              onRemove={
+                                (store.cinematicLibraries[key] ?? []).includes(opt)
+                                  ? () => store.removeCinematicOption(key, opt)
+                                  : undefined
+                              }
+                            />
+                          )
+                        )}
                       </div>
                     </div>
-                  )
-                )}
+                  ))}
                 <SectionAddToLibrary
-                  categories={(Object.keys(CINEMATIC_OPTIONS) as CinematicKey[]).map((k) => ({ id: k, label: k }))}
+                  categories={(Object.keys(CINEMATIC_OPTIONS) as CinematicKey[])
+                    .filter((k) => k !== 'angle')
+                    .map((k) => ({ id: k, label: k }))}
                   onSave={(cat, v) => store.addCinematicOption(cat as CinematicKey, v)}
                 />
               </div>
-            </section>
-
-            {/* Onyx Vault — unlock only; edit prompt in center Edit tab */}
-            <section>
-              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-                The Onyx Vault
-              </h2>
-              {!store.vaultUnlocked ? (
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={vaultPassword}
-                    onChange={(e) => setVaultPassword(e.target.value)}
-                    placeholder="Password"
-                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => store.unlockVault(vaultPassword)}
-                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50 min-w-[72px]"
-                    style={{ background: ACCENT_GOLD_GRADIENT }}
-                  >
-                    Unlock
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-white/70">
-                  Unlocked. Edit the full prompt in <strong className="text-amber-300/90">Live Prompt → Edit</strong> tab.
-                </p>
-              )}
             </section>
 
             {/* Tag bar */}
@@ -1160,7 +1369,7 @@ export const CharacterStudio: React.FC = () => {
         <div className="flex-1 flex gap-3 min-w-0 min-h-0 max-h-[calc(85vh+100px)] overflow-hidden">
         {/* Center: full width, Live Prompt (+100px height) then Reference Image Generation (+100px down) then Add Pose + pills */}
         <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
-          <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[480px] flex flex-col">
+          <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[420px] flex flex-col">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
                 Live Prompt
@@ -1188,6 +1397,7 @@ export const CharacterStudio: React.FC = () => {
               {(
                 [
                   { id: 'auto' as const, label: 'Prompt' },
+                  { id: 'reference' as const, label: 'Reference Prompt' },
                   { id: 'edit' as const, label: 'Edit' },
                   { id: 'refine' as const, label: 'Refine' },
                 ]
@@ -1207,6 +1417,8 @@ export const CharacterStudio: React.FC = () => {
                   <PinnedHelpTooltip variant="character" title={label}>
                     {id === 'auto' &&
                       'Read-only compiled prompt from tags and references. Use Generate (⌘/Ctrl+Enter) to run.'}
+                    {id === 'reference' &&
+                      'Read-only prompt built for Generate from tags + current reference inputs. Copy for use in other tabs.'}
                     {id === 'edit' &&
                       'Unlock the vault with password, then edit the raw prompt override. Overrides tag-built prompt when non-empty.'}
                     {id === 'refine' &&
@@ -1220,26 +1432,37 @@ export const CharacterStudio: React.FC = () => {
                 {displayPrompt || '// Prompt is empty...'}
               </div>
             )}
+            {promptPanelTab === 'reference' && (
+              <div className="bg-black/60 p-3 rounded-lg font-mono text-sm text-emerald-100/85 break-words flex-1 min-h-[360px] overflow-y-auto custom-scrollbar transition-opacity duration-200">
+                {referencePromptText || '// Prompt is empty...'}
+              </div>
+            )}
             {promptPanelTab === 'edit' && (
               <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
-                {!store.vaultUnlocked ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={vaultPassword}
-                      onChange={(e) => setVaultPassword(e.target.value)}
-                      placeholder="Vault password"
-                      className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => store.unlockVault(vaultPassword)}
-                      className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-                      style={{ background: ACCENT_GOLD_GRADIENT }}
-                    >
-                      Unlock
-                    </button>
-                  </div>
+                {!vaultUnlockedEffective ? (
+                  onyxEnabled ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={vaultPassword}
+                        onChange={(e) => setVaultPassword(e.target.value)}
+                        placeholder="Vault password"
+                        className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => store.unlockVault(vaultPassword)}
+                        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                      >
+                        Unlock
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/70">
+                      Onyx Vault unlock is disabled until production deployment.
+                    </p>
+                  )
                 ) : (
                   <>
                     <div>
@@ -1260,13 +1483,6 @@ export const CharacterStudio: React.FC = () => {
                       className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
                     />
                     <div className="flex flex-wrap gap-2 items-center">
-                      <button
-                        type="button"
-                        onClick={() => store.setVaultPromptOverride('')}
-                        className="px-2 py-1 text-xs rounded border border-amber-500/40"
-                      >
-                        Reset to tags
-                      </button>
                       <select
                         className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
                         defaultValue=""
@@ -1413,7 +1629,33 @@ export const CharacterStudio: React.FC = () => {
               </div>
             )}
             <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-              <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
+              <div className="flex items-center gap-2 flex-wrap">
+                <CopyButton text={copyPromptText} labelStyle={goldTextStyle} />
+                {promptPanelTab === 'auto' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      store.setVaultPromptOverride('');
+                      store.setRefinementPromptOverride('');
+                      setVaultPassword('');
+                    }}
+                    className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
+                  >
+                    Refresh
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.setVaultPromptOverride('');
+                    store.setRefinementPromptOverride('');
+                    setVaultPassword('');
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
+                >
+                  Reset to tags
+                </button>
+              </div>
               <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
                 <span className="text-xs font-bold tracking-widest inline-block" style={goldTextStyle}>
                   DNA LOCK
@@ -1495,6 +1737,19 @@ export const CharacterStudio: React.FC = () => {
               >
                 Comfortable
               </button>
+              <button
+                type="button"
+                aria-pressed={compareSplit}
+                onClick={() => setCompareSplit((v) => !v)}
+                className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                  compareSplit
+                    ? 'text-emerald-950 border-amber-500 shadow-md'
+                    : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
+                }`}
+                style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+              >
+                Compare {compareSplit ? 'On' : 'Off'}
+              </button>
             </div>
             {((recentCharacters.length > 0) || (getCachedGenerations('character').length > 0)) && (
               <div className="flex-shrink-0 px-2 pb-2 flex flex-col gap-1.5">
@@ -1543,51 +1798,135 @@ export const CharacterStudio: React.FC = () => {
             )}
             <div className="flex-1 min-h-[220px] min-w-0 flex flex-col items-center justify-center p-2">
               {store.currentLiveImageUrl ? (
-                <>
-                  <div
-                    className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                    style={{
-                      aspectRatio: '9/16',
-                      height: 'min(76vh, calc(100vh - 22rem))',
-                      maxHeight: 'min(76vh, 100%)',
-                      width: 'auto',
-                      maxWidth: '100%',
-                    }}
-                  >
-                    <img
-                      src={store.currentLiveImageUrl}
-                      alt="Live character"
-                      className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
-                    />
-                    <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
-                      <Tooltip variant="character" content="View full size with zoom" side="left">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setZoomLevel(1);
-                            setShowZoomModal(true);
-                          }}
-                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                        >
-                          <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                        </button>
-                      </Tooltip>
-                      <Tooltip variant="character" content="Delete this image" side="left">
-                        <button
-                          type="button"
-                          onClick={() => discardLiveCharacterImage()}
-                          className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                          aria-label="Delete image"
-                        >
-                          <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                        </button>
-                      </Tooltip>
+                compareSplit ? (
+                  <>
+                    <div className="w-full flex gap-3 items-stretch justify-center">
+                      <div
+                        className="group/ref relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
+                        style={{
+                          aspectRatio: '9/16',
+                          height: 'min(76vh, calc(100vh - 22rem))',
+                          maxHeight: 'min(76vh, 100%)',
+                          width: 'auto',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
+                          Reference
+                        </div>
+                        {activeReferenceForCompare ? (
+                          <img
+                            src={activeReferenceForCompare}
+                            alt="Reference slot image"
+                            className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/ref:scale-[1.08]"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-white/50 text-xs">
+                            No reference
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className="group/live relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                        style={{
+                          aspectRatio: '9/16',
+                          height: 'min(76vh, calc(100vh - 22rem))',
+                          maxHeight: 'min(76vh, 100%)',
+                          width: 'auto',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
+                          Generated
+                        </div>
+                        <img
+                          src={store.currentLiveImageUrl}
+                          alt="Live character"
+                          className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.08]"
+                        />
+                        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                          <Tooltip variant="character" content="View full size with zoom" side="left">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setZoomLevel(1);
+                                setShowZoomModal(true);
+                              }}
+                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                            >
+                              <Expand
+                                className="w-4 h-4"
+                                style={{ color: 'var(--color-gold, #fcf6ba)' }}
+                              />
+                            </button>
+                          </Tooltip>
+                          <Tooltip variant="character" content="Delete this image" side="left">
+                            <button
+                              type="button"
+                              onClick={() => discardLiveCharacterImage()}
+                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                              aria-label="Delete image"
+                            >
+                              <Trash2
+                                className="w-4 h-4"
+                                style={{ color: 'var(--color-gold, #fcf6ba)' }}
+                              />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <p className="mt-1 text-center text-[10px] text-emerald-200/50">
-                    9:16 preview — full image fits; open expand for zoom
-                  </p>
-                </>
+                    <p className="mt-1 text-center text-[10px] text-emerald-200/50">
+                      Split view — hover to zoom; Generated panel includes zoom + delete
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                      style={{
+                        aspectRatio: '9/16',
+                        height: 'min(76vh, calc(100vh - 22rem))',
+                        maxHeight: 'min(76vh, 100%)',
+                        width: 'auto',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      <img
+                        src={store.currentLiveImageUrl}
+                        alt="Live character"
+                        className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.08]"
+                      />
+                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                        <Tooltip variant="character" content="View full size with zoom" side="left">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setZoomLevel(1);
+                              setShowZoomModal(true);
+                            }}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                          >
+                            <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip variant="character" content="Delete this image" side="left">
+                          <button
+                            type="button"
+                            onClick={() => discardLiveCharacterImage()}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                            aria-label="Delete image"
+                          >
+                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-center text-[10px] text-emerald-200/50">
+                      9:16 preview — full image fits; open expand for zoom
+                    </p>
+                  </>
+                )
               ) : (
                 <div className="text-center space-y-2 px-4">
                   <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
@@ -1732,111 +2071,202 @@ export const CharacterStudio: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Reference Gallery 28% width (ref 950/3354), same capped height as center */}
-        <div className="flex-[0_0_28%] min-w-0 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
-            <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-2" style={goldTextStyle}>
+        {/* Right: Reference Gallery — framing summary + pose light table + controls */}
+        <div className="flex-[0_0_28%] min-w-0 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden shadow-lg shadow-black/15">
+          <div className="flex flex-col flex-1 min-h-0 p-3 sm:p-4">
+            <h2 className="text-sm font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1.5 shrink-0" style={goldTextStyle}>
               Reference Gallery
             </h2>
-            <p className="text-xs inline-block" style={goldTextStyle}>
-              New generations here are derived from the official Full Body Reference.
+            <p className="text-[10px] text-white/55 mt-1.5 shrink-0 leading-snug">
+              Session framing and saved poses. Generations use your live reference and these settings.
             </p>
-            {/* Pose gallery: click to set as live, trash to delete */}
-            {store.poses.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 inline-block" style={goldTextStyle}>
+            <div className="mt-2 flex flex-wrap gap-1.5 shrink-0">
+              {[
+                { key: 'pose', label: poseSessionLabel },
+                { key: 'aspect', label: aspectSessionLabel },
+                { key: 'cam', label: cameraSessionLabel },
+                { key: 'age', label: `Age ${store.ageModifier}` },
+              ].map(({ key, label }) => (
+                <span
+                  key={key}
+                  className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/80"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex-1 min-h-0 mt-3 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-0.5">
+              <section className="flex-1 min-h-[200px] flex flex-col min-w-0">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2 shrink-0 inline-block" style={goldTextStyle}>
                   Poses ({store.poses.length})
                 </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {store.poses.map((pose) => (
-                    <div
-                      key={pose.id}
-                      className={`relative rounded-lg border overflow-hidden aspect-[9/16] max-h-28 ${
-                        store.selectedPoseId === pose.id ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-white/20'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          store.setSelectedPoseId(pose.id);
-                          if (pose.imageUrl) {
-                            store.setCurrentLiveImageUrl(pose.imageUrl);
-                          }
-                        }}
-                        className="absolute inset-0 w-full h-full block"
+                {store.poses.length === 0 ? (
+                  <div className="flex-1 min-h-[140px] rounded-xl border border-dashed border-amber-500/25 bg-black/25 flex flex-col items-center justify-center gap-2 px-3 text-center">
+                    <p className="text-[11px] text-white/55 max-w-[14rem]">
+                      No saved poses yet. Use{' '}
+                      <span className="text-amber-200/90 font-medium">Save New Pose</span> after a generation to fill this gallery.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 flex-1 auto-rows-min content-start">
+                    {store.poses.map((pose) => (
+                      <div
+                        key={pose.id}
+                        className={`relative rounded-lg border overflow-hidden aspect-[9/16] min-h-[132px] max-h-[min(42vh,320px)] ${
+                          store.selectedPoseId === pose.id
+                            ? 'border-amber-500 ring-2 ring-amber-500/45'
+                            : 'border-white/20'
+                        }`}
                       >
-                        {pose.imageUrl ? (
-                          <img src={pose.imageUrl} alt={pose.name ?? 'Pose'} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-black/50 text-white/50 text-xs">
-                            Empty
-                          </div>
-                        )}
-                      </button>
-                      <Tooltip variant="character" content="Delete this pose" side="left">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            store.removePose(pose.id);
-                            if (store.selectedPoseId === pose.id) {
-                              store.setSelectedPoseId(null);
-                              store.setCurrentLiveImageUrl(null);
+                          onClick={() => {
+                            store.setSelectedPoseId(pose.id);
+                            if (pose.imageUrl) {
+                              store.setCurrentLiveImageUrl(pose.imageUrl);
                             }
                           }}
-                          className="absolute bottom-1 right-1 p-1.5 rounded bg-black/70 border border-amber-500/40 hover:bg-amber-500/20"
-                          aria-label="Delete pose"
+                          className="absolute inset-0 z-0 w-full h-full block text-left"
                         >
-                          <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          {pose.imageUrl ? (
+                            <img
+                              src={pose.imageUrl}
+                              alt={pose.name ?? 'Pose'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-black/50 text-white/50 text-xs">
+                              Empty
+                            </div>
+                          )}
                         </button>
-                      </Tooltip>
-                    </div>
+                        <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between gap-0.5 p-1 bg-gradient-to-t from-black/85 via-black/50 to-transparent pointer-events-none">
+                          <div className="flex gap-0.5 pointer-events-auto">
+                            <Tooltip variant="character" content="Duplicate pose" side="top">
+                              <button
+                                type="button"
+                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25"
+                                aria-label="Duplicate pose"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  store.addPose({
+                                    name:
+                                      pose.name?.trim() ?
+                                        `Copy · ${pose.name}`
+                                      : 'Copy · Pose',
+                                    imageUrl: pose.imageUrl,
+                                  });
+                                }}
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip variant="character" content="Add image to first empty reference slot" side="top">
+                              <button
+                                type="button"
+                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
+                                aria-label="Send pose to reference slot"
+                                disabled={!pose.imageUrl}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  sendPoseImageToFirstEmptyReferenceSlot(pose.imageUrl);
+                                }}
+                              >
+                                <ImagePlus className="w-3 h-3" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip variant="character" content="Open image in new tab" side="top">
+                              <button
+                                type="button"
+                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
+                                aria-label="Open pose image"
+                                disabled={!pose.imageUrl}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (pose.imageUrl) {
+                                    window.open(pose.imageUrl, '_blank', 'noopener,noreferrer');
+                                  }
+                                }}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </Tooltip>
+                          </div>
+                          <Tooltip variant="character" content="Delete this pose" side="top">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                store.removePose(pose.id);
+                                if (store.selectedPoseId === pose.id) {
+                                  store.setSelectedPoseId(null);
+                                  store.setCurrentLiveImageUrl(null);
+                                }
+                              }}
+                              className="pointer-events-auto p-1 rounded-md bg-black/75 border border-amber-500/40 hover:bg-amber-500/20"
+                              aria-label="Delete pose"
+                            >
+                              <Trash2 className="w-3 h-3" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="shrink-0">
+                <label className="text-xs block mb-1 inline-block" style={goldTextStyle}>
+                  Age Modifier
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={store.ageModifier}
+                    onChange={(e) => store.setAgeModifier(Number(e.target.value))}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="text-xs w-8 tabular-nums inline-block" style={goldTextStyle}>
+                    {store.ageModifier}
+                  </span>
+                </div>
+              </section>
+              <section className="shrink-0">
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>
+                  Aspect Ratio
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
+                    <Chip
+                      key={ratio}
+                      label={
+                        ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'
+                      }
+                      active={store.aspectRatio === ratio}
+                      onClick={() => store.setAspectRatio(ratio)}
+                    />
                   ))}
                 </div>
-              </div>
-            )}
-            {/* Age Modifier 0-100 */}
-            <div>
-              <label className="text-xs block mb-1 inline-block" style={goldTextStyle}>Age Modifier</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={store.ageModifier}
-                  onChange={(e) => store.setAgeModifier(Number(e.target.value))}
-                  className="flex-1 accent-amber-500"
-                />
-                <span className="text-xs w-8 tabular-nums inline-block" style={goldTextStyle}>{store.ageModifier}</span>
-              </div>
-            </div>
-            {/* Aspect Ratio */}
-            <div>
-              <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Aspect Ratio</label>
-              <div className="flex flex-wrap gap-2">
-                {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
-                  <Chip
-                    key={ratio}
-                    label={ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'}
-                    active={store.aspectRatio === ratio}
-                    onClick={() => store.setAspectRatio(ratio)}
-                  />
-                ))}
-              </div>
-            </div>
-            {/* Camera Angle */}
-            <div>
-              <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Camera Angle</label>
-              <div className="flex flex-wrap gap-2">
-                {CINEMATIC_OPTIONS.angle.map((opt) => (
-                  <Chip
-                    key={opt}
-                    label={opt}
-                    active={(store.cinematic.angle || '') === opt}
-                    onClick={() => store.setCinematic('angle', opt)}
-                  />
-                ))}
-              </div>
+              </section>
+              <section className="shrink-0 pb-1">
+                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>
+                  Camera Angle
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {CINEMATIC_OPTIONS.angle.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={(store.cinematic.angle || '') === opt}
+                      onClick={() => store.setCinematic('angle', opt)}
+                    />
+                  ))}
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -1848,6 +2278,9 @@ export const CharacterStudio: React.FC = () => {
         onClose={() => setRecallSlotIndex(null)}
         context="character"
         slotIndex={recallSlotIndex ?? 0}
+        selectedUrl={
+          recallSlotIndex != null ? store.referenceImageUrls[recallSlotIndex] ?? null : null
+        }
         onSelect={(url) => {
           if (recallSlotIndex != null) {
             store.setReferenceImageAt(recallSlotIndex, url);
@@ -2016,17 +2449,17 @@ export const CharacterStudio: React.FC = () => {
       typeof document !== 'undefined' &&
       createPortal(
         <div
-          className="pointer-events-none fixed z-[9999] w-48 overflow-hidden rounded-xl border-2 border-amber-400 bg-neutral-950 shadow-2xl ring-2 ring-black/50"
+          className="pointer-events-none fixed z-[9999] w-56 overflow-hidden rounded-xl border-2 border-amber-400 bg-neutral-950 shadow-2xl ring-2 ring-black/50"
           style={{
             left: Math.min(refHoverPreview.x, window.innerWidth - 200),
             top: Math.min(refHoverPreview.y, window.innerHeight - 320),
-            maxHeight: 'min(70vh, 360px)',
+            maxHeight: 'min(80vh, 520px)',
           }}
         >
           <img
             src={refHoverPreview.url}
             alt=""
-            className="h-full max-h-[min(70vh,360px)] w-full object-contain"
+            className="h-full max-h-[min(80vh,520px)] w-full object-contain"
           />
         </div>,
         document.body

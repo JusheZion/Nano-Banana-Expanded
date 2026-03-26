@@ -149,11 +149,13 @@ export interface CharacterStudioState {
   physicalSelections: Record<string, string[]>;
   heritageSelection: string[];
   genderSelection: string[];
+  facialExpressionSelection: string[];
   currentLiveImageUrl: string | null;
   currentGenerationSeed: number | null;
   seedMode: SeedMode; // persisted; default randomized
   heritageLibrary: string[];
   genderLibrary: string[];
+  facialExpressionLibrary: string[];
   physicalLibraries: Record<string, string[]>;
   cinematicLibraries: Record<CinematicKey, string[]>;
   /** Reference images for API (max 14 slots). */
@@ -186,6 +188,7 @@ export interface CharacterStudioState {
   setPhysicalSelection: (category: string, values: string[]) => void;
   setHeritageSelection: (values: string[]) => void;
   setGenderSelection: (values: string[]) => void;
+  setFacialExpressionSelection: (values: string[]) => void;
   setWardrobeSelection: (category: WardrobeCategory, values: string[]) => void;
   setWardrobeModifierColor: (category: WardrobeModifierCategory, hex: string) => void;
   setWardrobeModifierMaterial: (
@@ -198,11 +201,15 @@ export interface CharacterStudioState {
   setSeedMode: (mode: SeedMode) => void;
   addHeritageOption: (value: string) => void;
   addGenderOption: (value: string) => void;
+  toggleFacialExpression: (value: string) => void;
+  addFacialExpressionOption: (value: string) => void;
+  removeFacialExpressionOption: (value: string) => void;
   addPhysicalOption: (category: string, value: string) => void;
   addCinematicOption: (key: CinematicKey, value: string) => void;
   removeWardrobeOption: (category: WardrobeCategory, value: string) => void;
   removeHeritageOption: (value: string) => void;
   removeGenderOption: (value: string) => void;
+  // facialExpression option removal also unselects it
   removePhysicalOption: (category: string, value: string) => void;
   removeCinematicOption: (key: CinematicKey, value: string) => void;
   removeCustomStyle: (value: string) => void;
@@ -251,11 +258,13 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       physicalSelections: {},
       heritageSelection: [],
       genderSelection: [],
+      facialExpressionSelection: [],
       currentLiveImageUrl: null,
       currentGenerationSeed: null,
       seedMode: 'randomized',
       heritageLibrary: [],
       genderLibrary: [],
+      facialExpressionLibrary: [],
       physicalLibraries: emptyPhysicalLibraries(),
       cinematicLibraries: emptyCinematicLibraries(),
       referenceImageUrls: [],
@@ -329,6 +338,7 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         })),
       setHeritageSelection: (values) => set({ heritageSelection: values }),
       setGenderSelection: (values) => set({ genderSelection: values }),
+      setFacialExpressionSelection: (values) => set({ facialExpressionSelection: values }),
       setWardrobeSelection: (category, values) =>
         set((s) => ({
           wardrobeSelections: {
@@ -366,6 +376,29 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
           const t = value.trim();
           if (!t || s.genderLibrary.includes(t)) return s;
           return { genderLibrary: [...s.genderLibrary, t] };
+        }),
+      toggleFacialExpression: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t) return s;
+          const sel = s.facialExpressionSelection ?? [];
+          const next = sel.includes(t) ? sel.filter((v) => v !== t) : [...sel, t];
+          return { facialExpressionSelection: next };
+        }),
+      addFacialExpressionOption: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t || s.facialExpressionLibrary.includes(t)) return s;
+          return { facialExpressionLibrary: [...s.facialExpressionLibrary, t] };
+        }),
+      removeFacialExpressionOption: (value) =>
+        set((s) => {
+          const t = value.trim();
+          if (!t || !s.facialExpressionLibrary.includes(t)) return s;
+          return {
+            facialExpressionLibrary: s.facialExpressionLibrary.filter((v) => v !== t),
+            facialExpressionSelection: (s.facialExpressionSelection ?? []).filter((v) => v !== t),
+          };
         }),
       addPhysicalOption: (category, value) =>
         set((s) => {
@@ -549,10 +582,12 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         physicalSelections: state.physicalSelections,
         heritageSelection: state.heritageSelection,
         genderSelection: state.genderSelection,
+        facialExpressionSelection: state.facialExpressionSelection,
         currentGenerationSeed: state.currentGenerationSeed,
         seedMode: state.seedMode,
         heritageLibrary: state.heritageLibrary,
         genderLibrary: state.genderLibrary,
+        facialExpressionLibrary: state.facialExpressionLibrary,
         physicalLibraries: state.physicalLibraries,
         cinematicLibraries: state.cinematicLibraries,
         referenceImageUrls: sanitizeReferenceUrlsForPersist(state.referenceImageUrls),

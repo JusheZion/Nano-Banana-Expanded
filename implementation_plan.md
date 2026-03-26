@@ -132,6 +132,56 @@ Notes:
     - Offline: `generationOutputRouter.updateCharacterGenerationThumbnailFocus`
   - **Verify**: Adjust framing → Save → immediately reflected in Vault; refresh persists (Supabase/local).
 
+---
+
+## Character Studio Panel UX (2026-03-25)
+
+### Scope
+
+- Space optimization across panels (reduce unused height caps and tighten vertical spacing).
+- Reference images UX: larger hover preview, Upload/Archive icon buttons, clearer group label for background/setting refs.
+- Tags & Style: add Facial Expressions section (preset + custom library with remove) and ensure click-off works.
+- Live Prompt: add `Reference Prompt` tab; per-tab Copy; `Reset to tags`; `Refresh` on Prompt tab.
+- Onyx Vault: keep logic but disable unlock/edit UI until production via feature flag.
+
+### Key Files
+
+- `src/portals/CharacterStudio.tsx`
+- `src/stores/characterStudioStore.ts`
+- `src/data/character_studio_spec.ts`
+- `src/shared/constants/referenceSlots.ts`
+- `src/components/ui/ArchiveRecallModal.tsx`
+- `src/shared/utils/buildCharacterStudioPromptForApi.ts`
+
+### Feature Flag
+
+- `VITE_ENABLE_ONYX_VAULT`: when not `'true'`, vault unlock UI is hidden/disabled and vault override is ignored for prompt compilation/generation.
+
+### Verification
+
+- Unit tests: `npm run test` (includes `src/shared/utils/__tests__/buildCharacterStudioPromptForApi.test.ts`)
+- Lint: `npm run lint` (repo has warnings; no errors)
+- Build: `npm run build`
+- Manual UI smoke test: verify tabs/buttons/icons/compare split render and behave as expected in Character Studio
+
+## Character Studio: reference toolbar + gallery density (2026-03-25)
+
+### Goals
+
+- Remove repeated per-slot control rows; use **focused slot** + one **Upload / Archive / Clear** toolbar (word labels + icons for scanability).
+- **Accordion** DNA groups: one open at a time; opening tracks **focused slot** so the active slot stays visible.
+- **Reference Gallery:** consume vertical space with a **pose grid** (larger tiles), **session summary** chips, **empty state**, and **pose actions** (duplicate, push to first empty reference slot, open externally).
+
+### Files
+
+- `src/portals/CharacterStudio.tsx`
+
+### Verification
+
+- `npm run test -- --run`
+- `npm run build`
+- Manual: click slots to change focus and use toolbar; collapse/expand DNA headers; duplicate pose; fill all 14 refs then “send to slot” should surface error status
+
 ## Hybrid fallback strategy (Supabase + localStorage)
 
 ### Repository pattern (new helper module)

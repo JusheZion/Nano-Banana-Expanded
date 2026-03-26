@@ -17,6 +17,46 @@ export const ART_STYLE_LIBRARY = [
   'Claymation',
 ] as const;
 
+/**
+ * Permanent art-style tag baked into the compiled prompt.
+ * Kept separate so it can be reused across UI tabs and generate logic.
+ */
+export const ART_STYLE_PERMANENT_TAG =
+  '8k, unreal engine 5, octane render, masterwork, extreme detail, 3D/cgi smooth digital animation';
+
+/**
+ * Preset facial-expression tags for the Character Studio UI.
+ * Alphabetized for predictable browsing.
+ */
+export const FACIAL_EXPRESSION_TAGS = [
+  'angry',
+  'attentive',
+  'bored',
+  'confident',
+  'concerned',
+  'crying',
+  'daydreaming',
+  'focus',
+  'haughty',
+  'happy',
+  'hungry',
+  'laughing',
+  'mischievous',
+  'meek',
+  'sad',
+  'scowl',
+  'sexy',
+  'serious',
+  'silly',
+  'sleepy',
+  'surprised',
+  'tense',
+  'tired',
+] as const;
+
+export type FacialExpressionTag =
+  (typeof FACIAL_EXPRESSION_TAGS)[number];
+
 export const HERITAGE_TAGS = [
   'West African',
   'East African',

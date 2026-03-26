@@ -31,7 +31,7 @@ export type ReferenceSlotContext = 'character' | 'asset';
 export const REFERENCE_SLOT_DNA_GROUPS = [
   { id: 'identity', label: 'Character DNA', subtitle: 'Identity/Face', start: 0, end: 3 },
   { id: 'style', label: 'Wardrobe DNA', subtitle: 'Clothing/Accessories', start: 4, end: 9 },
-  { id: 'composition', label: 'Atmospheric DNA', subtitle: 'Lighting/Vibe', start: 10, end: 13 },
+  { id: 'composition', label: 'Background/Setting', subtitle: 'Lighting/Vibe', start: 10, end: 13 },
 ] as const;
 
 /** Asset Studio reference panel — environment-focused groups (indices match slot ranges). */

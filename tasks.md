@@ -78,6 +78,27 @@ Checklist for current and upcoming phases. Update as work completes.
 
 - [x] Removed ingest `fetch` / `#region agent log` from `CharacterStudio.tsx` (save handler), `arcsPersistence.ts`, `generationOutputRouter.ts`; repo grep clean; `npm run test -- --run` passes
 
+## Character Studio Panel UX (Mar 25, 2026) — COMPLETE
+
+- [x] Add facial expressions tags + permanent art-style tag constants (`character_studio_spec.ts`)
+- [x] Store: persist facial expression selection + library (`characterStudioStore.ts`)
+- [x] Single-source Generate prompt: `buildCharacterStudioPromptForApi` helper + unit tests
+- [x] Live Prompt: new `Reference Prompt` tab; per-tab copy; Reset to tags; Refresh on Prompt tab
+- [x] Onyx Vault: removed from left Tags panel; gated Edit-tab unlock behind `VITE_ENABLE_ONYX_VAULT`
+- [x] Tags & Style: Facial Expressions section (preset + custom add/remove + click-off)
+- [x] Cinematic Suite: remove left-side angle controls (right panel is canonical)
+- [x] Reference images: Upload/Archive icon buttons + larger hover preview; rename “Atmospheric DNA” → “Background/Setting”
+- [x] Archive recall modal: stronger selected-frame highlight (`selectedUrl`)
+- [x] Reference Image Generation: inline Compare split toggle (Reference vs Generated) + stronger hover zoom
+- [x] Space optimization: remove hard max-height cap on reference slots card; tighten spacing
+- [x] Verify: `npm run test`, `npm run lint` (warnings only), `npm run build`, browser smoke test
+
+## Character Studio reference toolbar + gallery (Mar 25, 2026) — COMPLETE
+
+- [x] Reference images: focused slot + shared Upload / Archive / Clear toolbar; DNA accordion (one group expanded; sync with focused slot)
+- [x] Reference Gallery: session summary chips; larger pose grid + empty state; pose actions (duplicate, first empty ref slot, open tab)
+- [x] Verify: `npm run test -- --run`, `npm run build`
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).
