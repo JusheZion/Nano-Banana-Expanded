@@ -6,6 +6,7 @@ import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Tooltip, PinnedHelpTooltip } from '@/shared/components/Tooltip';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
+import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
 import {
   ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT,
@@ -46,6 +47,11 @@ import {
   getCachedGenerations,
   removeCachedGenerationByUrl,
 } from '@/shared/utils/generationSessionCache';
+import {
+  studioPreviewAspectCss,
+  studioPreviewMaxHeightCss,
+  type StudioPreviewAspectId,
+} from '@/shared/utils/studioPreviewLayout';
 import {
   addRecentFromAsset,
   getRecentAssets,
@@ -259,11 +265,11 @@ function SetDressingRow({
 export const AssetsStudio: React.FC = () => {
   const { setTheme } = useTheme();
   const store = useAssetStudioStore();
-  const [vaultPassword, setVaultPassword] = useState('');
   const [customStyleInput, setCustomStyleInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
   const [showZoomModal, setShowZoomModal] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [compareSplit, setCompareSplit] = useState(false);
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
   const [showSaveAssetModal, setShowSaveAssetModal] = useState(false);
   const [saveAssetCollectionName, setSaveAssetCollectionName] = useState('');
@@ -299,6 +305,18 @@ export const AssetsStudio: React.FC = () => {
   useEffect(() => {
     setTheme('purple');
   }, [setTheme]);
+
+  const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
+
+  useEffect(() => {
+    const chunk = consumeImportForTarget('assets');
+    if (chunk?.imageUrl) {
+      useAssetStudioStore.getState().setCurrentLiveImageUrl(chunk.imageUrl);
+      if (chunk.promptHint?.trim()) {
+        useAssetStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
+      }
+    }
+  }, [consumeImportForTarget]);
 
   useEffect(() => {
     setRecentAssets(getRecentAssets());
@@ -342,7 +360,7 @@ export const AssetsStudio: React.FC = () => {
     .join(', ');
 
   const compiledPrompt =
-    store.vaultUnlocked && store.vaultPromptOverride.trim()
+    store.vaultPromptOverride.trim()
       ? [
           store.vaultPromptOverride.trim(),
           spatialExpansionLine ? `Spatial expansion: ${spatialExpansionLine}.` : '',
@@ -412,7 +430,7 @@ export const AssetsStudio: React.FC = () => {
     );
     let promptForApi =
       surgical.length > 0 ? `${basePrompt}\n\n${surgical.join(' ')}` : basePrompt;
-    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
+    const isVaultOverride = Boolean(store.vaultPromptOverride.trim());
     if (!isVaultOverride) {
       promptForApi = `${promptForApi}\n\n${ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT}`;
     }
@@ -593,7 +611,7 @@ export const AssetsStudio: React.FC = () => {
     );
     const baseWithSurgical =
       surgical.length > 0 ? `${expansionBase}\n\n${surgical.join(' ')}` : expansionBase;
-    const isVaultOverride = Boolean(store.vaultUnlocked && store.vaultPromptOverride.trim());
+    const isVaultOverride = Boolean(store.vaultPromptOverride.trim());
     const alreadyHasSpatialExpansionClause = /spatial expansion:/i.test(baseWithSurgical);
     let expansionPrompt =
       expansionParts.length > 0 && !alreadyHasSpatialExpansionClause
@@ -661,16 +679,11 @@ export const AssetsStudio: React.FC = () => {
     store.setSetDressingSelection(category, next);
   };
 
-  const previewAspect =
-    effectiveAspectRatio === '21:9'
-      ? '21 / 9'
-      : effectiveAspectRatio === '1:1'
-        ? '1 / 1'
-        : '9 / 16';
-  const previewMaxH =
-    effectiveAspectRatio === '21:9'
-      ? 'min(36vh, calc(100vh - 24rem))'
-      : 'min(76vh, calc(100vh - 22rem))';
+  const previewAspectId = effectiveAspectRatio as StudioPreviewAspectId;
+  const previewAspectCss = studioPreviewAspectCss(previewAspectId);
+  const previewMaxHeightCss = studioPreviewMaxHeightCss(previewAspectId);
+  const activeReferenceForCompare =
+    store.referenceImageUrls.find((u) => Boolean(u?.trim())) ?? null;
 
   return (
     <>
@@ -1131,29 +1144,10 @@ export const AssetsStudio: React.FC = () => {
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
                 The Onyx Vault
               </h2>
-              {!store.vaultUnlocked ? (
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={vaultPassword}
-                    onChange={(e) => setVaultPassword(e.target.value)}
-                    placeholder="Password"
-                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => store.unlockVault(vaultPassword)}
-                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50 min-w-[72px]"
-                    style={{ background: ACCENT_GOLD_GRADIENT }}
-                  >
-                    Unlock
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-white/70">
-                  Unlocked. Edit prompt in <strong className="text-amber-300/90">Live Prompt → Edit</strong>.
-                </p>
-              )}
+              <p className="text-xs text-white/70">
+                Edit the raw prompt override in <strong className="text-amber-300/90">Live Prompt → Edit</strong>. Leave it
+                empty to use compiled tags; when non-empty it replaces the tag-built prompt for generation.
+              </p>
             </section>
 
             <section>
@@ -1214,7 +1208,8 @@ export const AssetsStudio: React.FC = () => {
                     </button>
                     <PinnedHelpTooltip variant="asset" title={label}>
                       {id === 'auto' && 'Compiled prompt from tags. ⌘/Ctrl+Enter generates.'}
-                      {id === 'edit' && 'Vault password unlocks raw prompt override.'}
+                      {id === 'edit' &&
+                        'Raw prompt override and model. Overrides compiled tags when the override field is non-empty.'}
                       {id === 'refine' && 'Refine the current live image with your instructions.'}
                     </PinnedHelpTooltip>
                   </span>
@@ -1227,114 +1222,92 @@ export const AssetsStudio: React.FC = () => {
               )}
               {promptPanelTab === 'edit' && (
                 <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
-                  {!store.vaultUnlocked ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={vaultPassword}
-                        onChange={(e) => setVaultPassword(e.target.value)}
-                        placeholder="Vault password"
-                        className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => store.unlockVault(vaultPassword)}
-                        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-                        style={{ background: ACCENT_GOLD_GRADIENT }}
-                      >
-                        Unlock
-                      </button>
+                  <select
+                    value={store.selectedOnyxModelId}
+                    onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                    className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="flash">Nano Banana 2 (Speed)</option>
+                    <option value="pro">Nano Banana Pro (Detail)</option>
+                  </select>
+                  <textarea
+                    value={store.vaultPromptOverride}
+                    onChange={(e) => store.setVaultPromptOverride(e.target.value)}
+                    placeholder="Override prompt…"
+                    className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
+                  />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={() => store.setVaultPromptOverride('')}
+                      className="px-2 py-1 text-xs rounded border border-amber-500/40"
+                    >
+                      Reset to tags
+                    </button>
+                    <select
+                      className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
+                      defaultValue=""
+                      onChange={(e) => {
+                        const s = store.promptSnippets.find((x) => x.id === e.target.value);
+                        if (s) {
+                          store.setVaultPromptOverride(
+                            `${store.vaultPromptOverride}${store.vaultPromptOverride && !store.vaultPromptOverride.endsWith('\n') ? '\n' : ''}${s.text}`
+                          );
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">Insert snippet…</option>
+                      {store.promptSnippets.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={snippetNameInput}
+                      onChange={(e) => setSnippetNameInput(e.target.value)}
+                      placeholder="Snippet name"
+                      className="w-24 bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                    />
+                    <input
+                      type="text"
+                      value={snippetTextInput}
+                      onChange={(e) => setSnippetTextInput(e.target.value)}
+                      placeholder="Snippet text"
+                      className="flex-1 min-w-[100px] bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        store.addPromptSnippet(snippetNameInput, snippetTextInput);
+                        setSnippetNameInput('');
+                        setSnippetTextInput('');
+                      }}
+                      className="text-xs px-2 py-1 rounded border border-amber-500/40"
+                    >
+                      Save snippet
+                    </button>
+                  </div>
+                  {store.promptSnippets.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {store.promptSnippets.map((s) => (
+                        <span
+                          key={s.id}
+                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
+                        >
+                          {s.name}
+                          <button
+                            type="button"
+                            className="text-red-300"
+                            onClick={() => store.removePromptSnippet(s.id)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
                     </div>
-                  ) : (
-                    <>
-                      <select
-                        value={store.selectedOnyxModelId}
-                        onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                        className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
-                      >
-                        <option value="flash">Nano Banana 2 (Speed)</option>
-                        <option value="pro">Nano Banana Pro (Detail)</option>
-                      </select>
-                      <textarea
-                        value={store.vaultPromptOverride}
-                        onChange={(e) => store.setVaultPromptOverride(e.target.value)}
-                        placeholder="Override prompt…"
-                        className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
-                      />
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <button
-                          type="button"
-                          onClick={() => store.setVaultPromptOverride('')}
-                          className="px-2 py-1 text-xs rounded border border-amber-500/40"
-                        >
-                          Reset to tags
-                        </button>
-                        <select
-                          className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
-                          defaultValue=""
-                          onChange={(e) => {
-                            const s = store.promptSnippets.find((x) => x.id === e.target.value);
-                            if (s) {
-                              store.setVaultPromptOverride(
-                                `${store.vaultPromptOverride}${store.vaultPromptOverride && !store.vaultPromptOverride.endsWith('\n') ? '\n' : ''}${s.text}`
-                              );
-                            }
-                            e.target.value = '';
-                          }}
-                        >
-                          <option value="">Insert snippet…</option>
-                          {store.promptSnippets.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          value={snippetNameInput}
-                          onChange={(e) => setSnippetNameInput(e.target.value)}
-                          placeholder="Snippet name"
-                          className="w-24 bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
-                        />
-                        <input
-                          type="text"
-                          value={snippetTextInput}
-                          onChange={(e) => setSnippetTextInput(e.target.value)}
-                          placeholder="Snippet text"
-                          className="flex-1 min-w-[100px] bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            store.addPromptSnippet(snippetNameInput, snippetTextInput);
-                            setSnippetNameInput('');
-                            setSnippetTextInput('');
-                          }}
-                          className="text-xs px-2 py-1 rounded border border-amber-500/40"
-                        >
-                          Save snippet
-                        </button>
-                      </div>
-                      {store.promptSnippets.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {store.promptSnippets.map((s) => (
-                            <span
-                              key={s.id}
-                              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
-                            >
-                              {s.name}
-                              <button
-                                type="button"
-                                className="text-red-300"
-                                onClick={() => store.removePromptSnippet(s.id)}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </>
                   )}
                 </div>
               )}
@@ -1448,11 +1421,13 @@ export const AssetsStudio: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex-1 min-h-[280px] rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0">
+            <div className="flex-1 min-h-[280px] xl:min-h-0 rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0 xl:flex-1">
               <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
                 Live Generation / Vault
               </h2>
-              <div className="flex-shrink-0 px-2 pb-2 flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-3 px-2 pb-1">
+              <div className="flex flex-col gap-2 xl:w-72 xl:max-w-[min(40%,320px)] xl:flex-shrink-0 xl:overflow-y-auto xl:min-h-0 xl:pr-1 custom-scrollbar">
+              <div className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">
                   Thumbnail size
                 </span>
@@ -1490,9 +1465,22 @@ export const AssetsStudio: React.FC = () => {
                 >
                   Comfortable
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={compareSplit}
+                  onClick={() => setCompareSplit((v) => !v)}
+                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    compareSplit
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                >
+                  Compare {compareSplit ? 'On' : 'Off'}
+                </button>
               </div>
               {((recentAssets.length > 0) || (getCachedGenerations('asset').length > 0)) && (
-                <div className="flex-shrink-0 px-2 pb-2 flex flex-col gap-1.5">
+                <div className="flex-shrink-0 flex flex-col gap-1.5">
                   {recentAssets.length > 0 && (
                     <div className="flex items-center gap-2 overflow-x-auto">
                       <span className="text-[10px] uppercase tracking-wider text-white/60">Recent (saved)</span>
@@ -1536,58 +1524,137 @@ export const AssetsStudio: React.FC = () => {
                   )}
                 </div>
               )}
-              <div className="flex-1 min-h-[220px] min-w-0 flex flex-col items-center justify-center p-2">
+              </div>
+              <div className="flex-1 min-h-[240px] xl:min-h-0 min-w-0 flex flex-col items-center justify-center p-2 overflow-auto">
                 {store.currentLiveImageUrl ? (
-                  <>
-                    <div
-                      className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                      style={{
-                        aspectRatio: previewAspect,
-                        height: previewMaxH,
-                        maxHeight: 'min(76vh, 100%)',
-                        width: 'auto',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      <img
-                        src={store.currentLiveImageUrl}
-                        alt="Live asset"
-                        className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
-                      />
-                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
-                        <Tooltip variant="asset" content="View full size with zoom" side="left">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setZoomLevel(1);
-                              setShowZoomModal(true);
-                            }}
-                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                          >
-                            <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                          </button>
-                        </Tooltip>
-                        <Tooltip variant="asset" content="Delete this image" side="left">
-                          <button
-                            type="button"
-                            onClick={() => discardLiveAssetImage()}
-                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                            aria-label="Delete image"
-                          >
-                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                          </button>
-                        </Tooltip>
+                  compareSplit ? (
+                    <>
+                      <div className="w-full flex flex-col md:flex-row gap-3 items-stretch justify-center">
+                        <div
+                          className="group/ref relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
+                          style={{
+                            aspectRatio: previewAspectCss,
+                            height: previewMaxHeightCss,
+                            maxHeight: previewMaxHeightCss,
+                            width: 'auto',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                            Reference
+                          </div>
+                          {activeReferenceForCompare ? (
+                            <img
+                              src={activeReferenceForCompare}
+                              alt="Reference slot"
+                              className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/ref:scale-[1.02]"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-white/50 text-xs">
+                              No reference slot
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          className="group/live relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                          style={{
+                            aspectRatio: previewAspectCss,
+                            height: previewMaxHeightCss,
+                            maxHeight: previewMaxHeightCss,
+                            width: 'auto',
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                            Generated
+                          </div>
+                          <img
+                            src={store.currentLiveImageUrl}
+                            alt="Live asset"
+                            className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
+                          />
+                          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                            <Tooltip variant="asset" content="View full size with zoom" side="left">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setZoomLevel(1);
+                                  setShowZoomModal(true);
+                                }}
+                                className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                              >
+                                <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip variant="asset" content="Delete this image" side="left">
+                              <button
+                                type="button"
+                                onClick={() => discardLiveAssetImage()}
+                                className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                                aria-label="Delete image"
+                              >
+                                <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <p className="mt-1 text-center text-[10px] text-violet-200/50">
-                      {effectiveAspectRatio} output
-                      {effectiveAspectRatio !== store.aspectRatio
-                        ? ` (angle uses ${effectiveAspectRatio}; Aspect Ratio chip: ${store.aspectRatio})`
-                        : ''}
-                      {' '}
-                      — full image fits; expand for zoom
-                    </p>
-                  </>
+                      <p className="mt-1 text-center text-[10px] text-violet-200/50">
+                        Split view — Reference (first slot) vs Generated ({effectiveAspectRatio})
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                        style={{
+                          aspectRatio: previewAspectCss,
+                          height: previewMaxHeightCss,
+                          maxHeight: previewMaxHeightCss,
+                          width: 'auto',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <img
+                          src={store.currentLiveImageUrl}
+                          alt="Live asset"
+                          className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
+                        />
+                        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                          <Tooltip variant="asset" content="View full size with zoom" side="left">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setZoomLevel(1);
+                                setShowZoomModal(true);
+                              }}
+                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                            >
+                              <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip variant="asset" content="Delete this image" side="left">
+                            <button
+                              type="button"
+                              onClick={() => discardLiveAssetImage()}
+                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                              aria-label="Delete image"
+                            >
+                              <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-center text-[10px] text-violet-200/50">
+                        {effectiveAspectRatio} output
+                        {effectiveAspectRatio !== store.aspectRatio
+                          ? ` (angle uses ${effectiveAspectRatio}; Aspect Ratio chip: ${store.aspectRatio})`
+                          : ''}
+                        {' '}
+                        — full image fits; expand for zoom
+                      </p>
+                    </>
+                  )
                 ) : (
                   <div className="text-center space-y-2 px-4">
                     <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
@@ -1599,6 +1666,7 @@ export const AssetsStudio: React.FC = () => {
                     <p className="text-xs text-white/50">Generate your first image or load from Recent.</p>
                   </div>
                 )}
+              </div>
               </div>
               <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
                 <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">

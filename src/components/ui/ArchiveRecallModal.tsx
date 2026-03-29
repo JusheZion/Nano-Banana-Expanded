@@ -49,6 +49,18 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
     setLoading(true);
     if (context === 'character') {
       getCharactersGroupedByProfile()

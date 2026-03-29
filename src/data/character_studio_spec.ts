@@ -64,8 +64,8 @@ export const HERITAGE_TAGS = [
   'Southern African',
   'Afro-Caribbean',
   'Afro-Latino',
-  'Blatino',
-  'African-American',
+  'Black Latino',
+  'African American',
   'Native American',
   'First Nations',
   'Aboriginal Australian',
@@ -104,9 +104,6 @@ export const GENDER_TAGS = [
   'Feminine',
   'Delicate',
 ] as const;
-
-/** DNA weight boost: +15% for these when unselected */
-export const DNA_WEIGHTED_HERITAGE = ['African-American', 'Blatino'] as const;
 
 export const SURGICAL_PHYSICAL = {
   height: [

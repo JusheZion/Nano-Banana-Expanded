@@ -65,3 +65,14 @@ export const ASSET_STUDIO_AMETHYST_TEXT =
 /** Gemstone Pulse (Generate button loading): CSS variable hooks for theming */
 export const GEM_EMERALD = '#10b981';
 export const GEM_AMETHYST = '#8b5cf6';
+/** Storyline Studio / Master Director — magenta jewel pulse */
+export const GEM_MAGENTA = '#e45da2';
+
+/**
+ * Storyline Studio (Master Director): deep magenta → dark violet (Jewel-Tone family).
+ */
+export const STORYLINE_DIRECTOR_BG =
+  'linear-gradient(160deg, #1a0520 0%, #4a0e3c 28%, #6b2d6b 52%, #2d1b4e 78%, #0f0618 100%)';
+/** Header title on gold strip — magenta / violet */
+export const STORYLINE_MAGENTA_TEXT =
+  'linear-gradient(135deg, #fce7f3 0%, #e45da2 35%, #a855f7 65%, #6b21a8 100%)';

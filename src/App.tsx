@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { useProject } from '@/shared/context/ProjectContext';
 import type { Portal } from '@/shared/portals';
+import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
 
@@ -22,10 +23,20 @@ function App() {
   const { setTheme } = useTheme();
   useProject();
 
+  const portalToOpen = useStudioImportBridge((s) => s.portalToOpen);
+  const clearPortalRequest = useStudioImportBridge((s) => s.clearPortalRequest);
+
+  useEffect(() => {
+    if (portalToOpen) {
+      setActivePortal(portalToOpen);
+      clearPortalRequest();
+    }
+  }, [portalToOpen, clearPortalRequest]);
+
   useEffect(() => {
     if (activePortal === 'home' || activePortal === 'studio') setTheme('teal');
     else if (activePortal === 'reference' || activePortal === 'assets') setTheme('purple');
-    else if (activePortal === 'lab') setTheme('gold');
+    else if (activePortal === 'lab') setTheme('purple');
     else if (activePortal === 'comic') setTheme('obsidian');
     else setTheme('crimson');
   }, [activePortal, setTheme]);

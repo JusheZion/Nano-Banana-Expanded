@@ -21,7 +21,7 @@ import {
   useCharacterStudioStore,
   type WardrobeModifierCategory,
 } from '@/stores/characterStudioStore';
-import { buildCharacterStudioPrompt } from '@/shared/utils/characterStudioPrompt';
+import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { buildCharacterStudioPromptForApi } from '@/shared/utils/buildCharacterStudioPromptForApi';
 import {
   CHARACTER_STUDIO_BG_V4,
@@ -30,11 +30,9 @@ import {
   GEM_EMERALD,
 } from '@/shared/theme/Phase12DesignTokens';
 import { getSlotLabel, REFERENCE_SLOT_DNA_GROUPS } from '@/shared/constants/referenceSlots';
-import { getSurgicalInstructionsFromReferenceSlots } from '@/shared/utils/buildPrompt';
 import {
   ART_STYLE_FLAGSHIP,
   ART_STYLE_LIBRARY,
-  ART_STYLE_PERMANENT_TAG,
   FACIAL_EXPRESSION_TAGS,
   HERITAGE_TAGS,
   GENDER_TAGS,
@@ -65,6 +63,10 @@ import {
 import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
+import {
+  studioPreviewFrameStyle,
+  type StudioPreviewAspectId,
+} from '@/shared/utils/studioPreviewLayout';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -216,9 +218,6 @@ function SectionAddToLibrary({
 export const CharacterStudio: React.FC = () => {
   const { setTheme } = useTheme();
   const store = useCharacterStudioStore();
-  const [vaultPassword, setVaultPassword] = useState('');
-  const onyxEnabled = import.meta.env.VITE_ENABLE_ONYX_VAULT === 'true';
-  const vaultUnlockedEffective = onyxEnabled && store.vaultUnlocked;
   const [customStyleInput, setCustomStyleInput] = useState('');
   const [facialExpressionCustomInput, setFacialExpressionCustomInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
@@ -268,6 +267,18 @@ export const CharacterStudio: React.FC = () => {
     setTheme('teal');
   }, [setTheme]);
 
+  const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
+
+  useEffect(() => {
+    const chunk = consumeImportForTarget('studio');
+    if (chunk?.imageUrl) {
+      useCharacterStudioStore.getState().setCurrentLiveImageUrl(chunk.imageUrl);
+      if (chunk.promptHint?.trim()) {
+        useCharacterStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
+      }
+    }
+  }, [consumeImportForTarget]);
+
   useEffect(() => {
     const grp = REFERENCE_SLOT_DNA_GROUPS.find(
       (g) =>
@@ -290,10 +301,6 @@ export const CharacterStudio: React.FC = () => {
 
   const generateCharacterRef = useRef<() => Promise<void>>(async () => {});
 
-  const dna = {
-    heritage: store.heritageSelection,
-    gender: store.genderSelection,
-  };
   const artStyleLabel =
     store.artStyleId === 'flagship'
       ? ART_STYLE_FLAGSHIP
@@ -301,28 +308,16 @@ export const CharacterStudio: React.FC = () => {
   const hasReferenceImage = !!store.currentLiveImageUrl;
   const dnaAndPhysicalDisabled = hasReferenceImage && !store.diversifyLikeness;
 
-  const extraParts: string[] = [
-    ART_STYLE_PERMANENT_TAG,
-    artStyleLabel,
-    ...(dnaAndPhysicalDisabled ? [] : store.heritageSelection),
-    ...(dnaAndPhysicalDisabled ? [] : store.genderSelection),
-    ...(dnaAndPhysicalDisabled ? [] : Object.values(store.physicalSelections).flat()),
-    ...Object.values(store.wardrobeSelections).flat(),
-    ...Object.values(store.cinematic).filter(Boolean),
-    ...store.facialExpressionSelection,
-  ].filter(Boolean);
-  const compiledPrompt =
-    vaultUnlockedEffective && store.vaultPromptOverride.trim()
-      ? store.vaultPromptOverride
-      : buildCharacterStudioPrompt(store.tags, '', dna, extraParts, {
-          appendOfficialRules: true,
-          wardrobeModifiers: store.wardrobeModifiers,
-          wardrobeSelections: store.wardrobeSelections,
-        });
+  const selectedPoseForPrompt = store.selectedPoseId
+    ? store.poses.find((p) => p.id === store.selectedPoseId)
+    : null;
+  const selectedPoseNameForPrompt = selectedPoseForPrompt?.name?.trim() || null;
+  const selectedGalleryPoseActiveForPrompt = Boolean(
+    selectedPoseForPrompt?.imageUrl && store.selectedPoseId
+  );
 
   const { promptForApi: referencePromptText } = buildCharacterStudioPromptForApi({
     tags: store.tags,
-    vaultUnlocked: vaultUnlockedEffective,
     vaultPromptOverride: store.vaultPromptOverride,
     artStyleId: store.artStyleId,
     diversifyLikeness: store.diversifyLikeness,
@@ -335,6 +330,10 @@ export const CharacterStudio: React.FC = () => {
     cinematic: store.cinematic,
     facialExpressionSelection: store.facialExpressionSelection,
     referenceImageUrls: store.referenceImageUrls,
+    ageModifier: store.ageModifier,
+    selectedPoseName: selectedPoseNameForPrompt,
+    selectedGalleryPoseActive: selectedGalleryPoseActiveForPrompt,
+    outputAspectRatio: store.aspectRatio,
   });
 
   const displayPrompt =
@@ -354,7 +353,7 @@ export const CharacterStudio: React.FC = () => {
   const activeReferenceForCompare =
     store.referenceImageUrls.find((u) => Boolean(u)) ?? store.currentLiveImageUrl ?? null;
 
-  const selectedPoseForSummary = store.poses.find((p) => p.id === store.selectedPoseId);
+  const selectedPoseForSummary = selectedPoseForPrompt;
   const poseSessionLabel = selectedPoseForSummary
     ? selectedPoseForSummary.name?.trim() || 'Untitled pose'
     : 'No pose selected';
@@ -364,6 +363,9 @@ export const CharacterStudio: React.FC = () => {
       : store.aspectRatio === '21:9'
         ? 'Cinematic 21:9'
         : 'Square 1:1';
+  const previewAspectId = store.aspectRatio as StudioPreviewAspectId;
+  const previewFrameSingle = studioPreviewFrameStyle(previewAspectId, 'single');
+  const previewFrameCompare = studioPreviewFrameStyle(previewAspectId, 'compare');
   const cameraSessionLabel = store.cinematic.angle?.trim()
     ? `Cam: ${store.cinematic.angle}`
     : 'Cam: —';
@@ -417,10 +419,13 @@ export const CharacterStudio: React.FC = () => {
       st.setGenerationStatus('pending');
       const seed = pickGenerationSeed(st.seedMode ?? 'randomized', st.currentGenerationSeed);
       st.setCurrentGenerationSeed(seed);
+      const poseForGen = st.selectedPoseId
+        ? st.poses.find((p) => p.id === st.selectedPoseId)
+        : null;
+      const selectedGalleryPoseActive = Boolean(poseForGen?.imageUrl && st.selectedPoseId);
       const { promptForApi, refUrlsForApi } =
         buildCharacterStudioPromptForApi({
           tags: st.tags,
-          vaultUnlocked: st.vaultUnlocked && onyxEnabled,
           vaultPromptOverride: st.vaultPromptOverride,
           artStyleId: st.artStyleId,
           diversifyLikeness: st.diversifyLikeness,
@@ -433,13 +438,17 @@ export const CharacterStudio: React.FC = () => {
           cinematic: st.cinematic,
           facialExpressionSelection: st.facialExpressionSelection,
           referenceImageUrls: st.referenceImageUrls,
+          ageModifier: st.ageModifier,
+          selectedPoseName: poseForGen?.name?.trim() || null,
+          selectedGalleryPoseActive,
+          outputAspectRatio: st.aspectRatio,
         });
-      const isVaultOverride = onyxEnabled && Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const isVaultOverride = Boolean(st.vaultPromptOverride.trim());
       const result = await generateImage({
         prompt: promptForApi,
         referenceImageUrls: refUrlsForApi,
         seed,
-        aspectRatio: '9:16',
+        aspectRatio: st.aspectRatio,
         modelId: st.selectedOnyxModelId,
         isVaultOverride,
         context: 'character',
@@ -477,39 +486,36 @@ export const CharacterStudio: React.FC = () => {
       st.setGenerationStatus('pending');
       const seed = pickGenerationSeed(st.seedMode ?? 'randomized', st.currentGenerationSeed);
       st.setCurrentGenerationSeed(seed);
-      const rawRefs = st.referenceImageUrls;
-      const hasAnyRefSlot = rawRefs.some((u) => Boolean(u));
-      const refUrls = hasAnyRefSlot
-        ? Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '')
-        : st.currentLiveImageUrl
-          ? [st.currentLiveImageUrl]
-          : [];
-      const refUrlsForApi = Array.from(
-        { length: 14 },
-        (_, i) => (refUrls[i] ?? '')
-      );
-      const hasApiRefs = refUrlsForApi.some(Boolean);
-      const hasWardrobeDna = [4, 5, 6, 7, 8, 9].some((idx) => Boolean(refUrlsForApi[idx]));
-      const basePrompt =
-        hasApiRefs
-          ? hasWardrobeDna
-            ? `Art style ${artStyleLabel}: lighting and illustration treatment only; keep Wardrobe DNA clothing literal on Character DNA person. ${compiledPrompt}`
-            : `Apply this art style to the entire image, including the subject (face, skin, hair, body). Do not keep the subject photorealistic—reinterpret the reference in the chosen style so the subject looks like a ${artStyleLabel}, not a photograph. Art style: ${artStyleLabel}. ${compiledPrompt}`
-          : compiledPrompt;
-      const paddedRefsForSurgical = Array.from({ length: 14 }, (_, i) => rawRefs[i] ?? '');
-      const surgical = getSurgicalInstructionsFromReferenceSlots(
-        hasAnyRefSlot ? paddedRefsForSurgical : refUrlsForApi
-      );
-      const promptForApi =
-        surgical.length > 0
-          ? `${basePrompt}\n\n${surgical.join(' ')} Alternate pose, same character.`
-          : `${basePrompt} Alternate pose, same character.`;
-      const isVaultOverride = onyxEnabled && Boolean(st.vaultUnlocked && st.vaultPromptOverride.trim());
+      const poseForGen = st.selectedPoseId
+        ? st.poses.find((p) => p.id === st.selectedPoseId)
+        : null;
+      const selectedGalleryPoseActive = Boolean(poseForGen?.imageUrl && st.selectedPoseId);
+      const { promptForApi: basePrompt, refUrlsForApi } = buildCharacterStudioPromptForApi({
+        tags: st.tags,
+        vaultPromptOverride: st.vaultPromptOverride,
+        artStyleId: st.artStyleId,
+        diversifyLikeness: st.diversifyLikeness,
+        currentLiveImageUrl: st.currentLiveImageUrl,
+        heritageSelection: st.heritageSelection,
+        genderSelection: st.genderSelection,
+        physicalSelections: st.physicalSelections,
+        wardrobeSelections: st.wardrobeSelections,
+        wardrobeModifiers: st.wardrobeModifiers,
+        cinematic: st.cinematic,
+        facialExpressionSelection: st.facialExpressionSelection,
+        referenceImageUrls: st.referenceImageUrls,
+        ageModifier: st.ageModifier,
+        selectedPoseName: poseForGen?.name?.trim() || null,
+        selectedGalleryPoseActive,
+        outputAspectRatio: st.aspectRatio,
+      });
+      const promptForApi = `${basePrompt} Alternate pose, same character.`;
+      const isVaultOverride = Boolean(st.vaultPromptOverride.trim());
       const result = await generateImage({
         prompt: promptForApi,
         referenceImageUrls: refUrlsForApi,
         seed,
-        aspectRatio: '9:16',
+        aspectRatio: st.aspectRatio,
         modelId: st.selectedOnyxModelId,
         isVaultOverride,
         context: 'character',
@@ -549,12 +555,15 @@ export const CharacterStudio: React.FC = () => {
       const seed = pickGenerationSeed(st0.seedMode ?? 'randomized', st0.currentGenerationSeed);
       st0.setCurrentGenerationSeed(seed);
       const refUrlsForApi = Array.from({ length: 14 }, (_, i) => (i === 0 ? live : ''));
-      const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Refine this character image according to these instructions while preserving identity and overall style: ${refinement}`;
+      const ar = st0.aspectRatio;
+      const aspectWords =
+        ar === '9:16' ? 'portrait 9:16' : ar === '1:1' ? 'square 1:1' : 'cinematic 21:9';
+      const promptForApi = `Apply this art style to the entire image. Art style: ${artStyleLabel}. Output framing: ${aspectWords}. Refine this character image according to these instructions while preserving identity and overall style: ${refinement}`;
       const result = await generateImage({
         prompt: promptForApi,
         referenceImageUrls: refUrlsForApi,
         seed,
-        aspectRatio: '9:16',
+        aspectRatio: st0.aspectRatio,
         modelId: st0.selectedOnyxModelId,
         isVaultOverride: false,
         context: 'character',
@@ -583,26 +592,6 @@ export const CharacterStudio: React.FC = () => {
       );
     }
   };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === 'Enter' && store.generationStatus !== 'pending') {
-        e.preventDefault();
-        void generateCharacterRef.current();
-      }
-      if (e.key === 'Escape') {
-        setShowZoomModal(false);
-        setShowSaveCharacterModal(false);
-        setRecallSlotIndex(null);
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [store.generationStatus]);
 
   const openSaveCharacterModal = (isEditProfile: boolean) => {
     setSaveCharacterProfileName('');
@@ -693,6 +682,58 @@ export const CharacterStudio: React.FC = () => {
       store.setGenerationStatus('error', err instanceof Error ? err.message : String(err));
     }
   };
+
+  const handleSaveCharacterModalConfirmRef = useRef(handleSaveCharacterModalConfirm);
+  handleSaveCharacterModalConfirmRef.current = handleSaveCharacterModalConfirm;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === 'Enter' && store.generationStatus !== 'pending') {
+        e.preventDefault();
+        void generateCharacterRef.current();
+      }
+      if (e.key === 'Enter' && !mod && showZoomModal) {
+        e.preventDefault();
+        setShowZoomModal(false);
+        return;
+      }
+      if (e.key === 'Enter' && !mod && showSaveCharacterModal) {
+        const t = e.target;
+        if (
+          t instanceof HTMLInputElement ||
+          t instanceof HTMLTextAreaElement ||
+          t instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+        e.preventDefault();
+        const dis =
+          saveCharacterIsEditProfile
+            ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
+            : !saveCharacterProfileName.trim();
+        if (!dis) void handleSaveCharacterModalConfirmRef.current();
+      }
+      if (e.key === 'Escape') {
+        setShowZoomModal(false);
+        setShowSaveCharacterModal(false);
+        setRecallSlotIndex(null);
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    store.generationStatus,
+    showZoomModal,
+    showSaveCharacterModal,
+    saveCharacterIsEditProfile,
+    saveCharacterProfileName,
+    vaultProfileLoading,
+    vaultProfileOptions,
+  ]);
 
   const handleSaveNewPose = () => {
     const url = store.currentLiveImageUrl;
@@ -1420,7 +1461,7 @@ export const CharacterStudio: React.FC = () => {
                     {id === 'reference' &&
                       'Read-only prompt built for Generate from tags + current reference inputs. Copy for use in other tabs.'}
                     {id === 'edit' &&
-                      'Unlock the vault with password, then edit the raw prompt override. Overrides tag-built prompt when non-empty.'}
+                      'Edit the raw prompt override and model. Overrides the tag-built prompt when the override field is non-empty.'}
                     {id === 'refine' &&
                       'Describe changes to the current live image; Refine sends it as reference. Use Suggest chips or type freely.'}
                   </PinnedHelpTooltip>
@@ -1439,116 +1480,88 @@ export const CharacterStudio: React.FC = () => {
             )}
             {promptPanelTab === 'edit' && (
               <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
-                {!vaultUnlockedEffective ? (
-                  onyxEnabled ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={vaultPassword}
-                        onChange={(e) => setVaultPassword(e.target.value)}
-                        placeholder="Vault password"
-                        className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => store.unlockVault(vaultPassword)}
-                        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                <div>
+                  <span className="text-xs text-white/70 mb-1 block">Model</span>
+                  <select
+                    value={store.selectedOnyxModelId}
+                    onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                    className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="flash">Nano Banana 2 (Speed)</option>
+                    <option value="pro">Nano Banana Pro (Detail)</option>
+                  </select>
+                </div>
+                <textarea
+                  value={store.vaultPromptOverride}
+                  onChange={(e) => store.setVaultPromptOverride(e.target.value)}
+                  placeholder="Override prompt…"
+                  className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
+                />
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select
+                    className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const s = store.promptSnippets.find((x) => x.id === e.target.value);
+                      if (s) {
+                        store.setVaultPromptOverride(
+                          `${store.vaultPromptOverride}${store.vaultPromptOverride && !store.vaultPromptOverride.endsWith('\n') ? '\n' : ''}${s.text}`
+                        );
+                      }
+                      e.target.value = '';
+                    }}
+                  >
+                    <option value="">Insert snippet…</option>
+                    {store.promptSnippets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={snippetNameInput}
+                    onChange={(e) => setSnippetNameInput(e.target.value)}
+                    placeholder="Snippet name"
+                    className="w-24 bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                  />
+                  <input
+                    type="text"
+                    value={snippetTextInput}
+                    onChange={(e) => setSnippetTextInput(e.target.value)}
+                    placeholder="Snippet text"
+                    className="flex-1 min-w-[100px] bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      store.addPromptSnippet(snippetNameInput, snippetTextInput);
+                      setSnippetNameInput('');
+                      setSnippetTextInput('');
+                    }}
+                    className="text-xs px-2 py-1 rounded border border-amber-500/40"
+                  >
+                    Save snippet
+                  </button>
+                </div>
+                {store.promptSnippets.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {store.promptSnippets.map((s) => (
+                      <span
+                        key={s.id}
+                        className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
                       >
-                        Unlock
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-white/70">
-                      Onyx Vault unlock is disabled until production deployment.
-                    </p>
-                  )
-                ) : (
-                  <>
-                    <div>
-                      <span className="text-xs text-white/70 mb-1 block">Model</span>
-                      <select
-                        value={store.selectedOnyxModelId}
-                        onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                        className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
-                      >
-                        <option value="flash">Nano Banana 2 (Speed)</option>
-                        <option value="pro">Nano Banana Pro (Detail)</option>
-                      </select>
-                    </div>
-                    <textarea
-                      value={store.vaultPromptOverride}
-                      onChange={(e) => store.setVaultPromptOverride(e.target.value)}
-                      placeholder="Override prompt…"
-                      className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
-                    />
-                    <div className="flex flex-wrap gap-2 items-center">
-                      <select
-                        className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
-                        defaultValue=""
-                        onChange={(e) => {
-                          const s = store.promptSnippets.find((x) => x.id === e.target.value);
-                          if (s) {
-                            store.setVaultPromptOverride(
-                              `${store.vaultPromptOverride}${store.vaultPromptOverride && !store.vaultPromptOverride.endsWith('\n') ? '\n' : ''}${s.text}`
-                            );
-                          }
-                          e.target.value = '';
-                        }}
-                      >
-                        <option value="">Insert snippet…</option>
-                        {store.promptSnippets.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        value={snippetNameInput}
-                        onChange={(e) => setSnippetNameInput(e.target.value)}
-                        placeholder="Snippet name"
-                        className="w-24 bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
-                      />
-                      <input
-                        type="text"
-                        value={snippetTextInput}
-                        onChange={(e) => setSnippetTextInput(e.target.value)}
-                        placeholder="Snippet text"
-                        className="flex-1 min-w-[100px] bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/15"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          store.addPromptSnippet(snippetNameInput, snippetTextInput);
-                          setSnippetNameInput('');
-                          setSnippetTextInput('');
-                        }}
-                        className="text-xs px-2 py-1 rounded border border-amber-500/40"
-                      >
-                        Save snippet
-                      </button>
-                    </div>
-                    {store.promptSnippets.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {store.promptSnippets.map((s) => (
-                          <span
-                            key={s.id}
-                            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
-                          >
-                            {s.name}
-                            <button
-                              type="button"
-                              className="text-red-300 hover:text-red-100"
-                              onClick={() => store.removePromptSnippet(s.id)}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                        {s.name}
+                        <button
+                          type="button"
+                          className="text-red-300 hover:text-red-100"
+                          onClick={() => store.removePromptSnippet(s.id)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -1637,7 +1650,6 @@ export const CharacterStudio: React.FC = () => {
                     onClick={() => {
                       store.setVaultPromptOverride('');
                       store.setRefinementPromptOverride('');
-                      setVaultPassword('');
                     }}
                     className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
                   >
@@ -1649,7 +1661,6 @@ export const CharacterStudio: React.FC = () => {
                   onClick={() => {
                     store.setVaultPromptOverride('');
                     store.setRefinementPromptOverride('');
-                    setVaultPassword('');
                   }}
                   className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
                 >
@@ -1694,12 +1705,14 @@ export const CharacterStudio: React.FC = () => {
             </span>
           </div>
 
-          {/* Reference Image Generation: same gap as gold bar to panels (gap-3); min height so it keeps space */}
-          <div className="flex-1 min-h-[280px] rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0">
+          {/* Reference Image Generation: dedicated preview column on xl+; stacked + scroll on small screens */}
+          <div className="flex-1 min-h-[280px] xl:min-h-0 rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0 xl:flex-1">
             <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
               Reference Image Generation
             </h2>
-            <div className="flex-shrink-0 px-2 pb-2 flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-3 px-2 pb-1">
+            <div className="flex flex-col gap-2 xl:w-72 xl:max-w-[min(40%,320px)] xl:flex-shrink-0 xl:overflow-y-auto xl:min-h-0 xl:pr-1 custom-scrollbar">
+            <div className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90">
                 Thumbnail size
               </span>
@@ -1796,108 +1809,101 @@ export const CharacterStudio: React.FC = () => {
                 )}
               </div>
             )}
-            <div className="flex-1 min-h-[220px] min-w-0 flex flex-col items-center justify-center p-2">
+            </div>
+            <div className="flex-1 min-h-[240px] xl:min-h-0 min-w-0 flex flex-col items-center justify-center p-2 pb-6 overflow-y-auto overflow-x-hidden">
               {store.currentLiveImageUrl ? (
                 compareSplit ? (
                   <>
-                    <div className="w-full flex gap-3 items-stretch justify-center">
-                      <div
-                        className="group/ref relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
-                        style={{
-                          aspectRatio: '9/16',
-                          height: 'min(76vh, calc(100vh - 22rem))',
-                          maxHeight: 'min(76vh, 100%)',
-                          width: 'auto',
-                          maxWidth: '100%',
-                        }}
-                      >
-                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
-                          Reference
-                        </div>
-                        {activeReferenceForCompare ? (
-                          <img
-                            src={activeReferenceForCompare}
-                            alt="Reference slot image"
-                            className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/ref:scale-[1.08]"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-white/50 text-xs">
-                            No reference
+                    <div className="flex w-full max-w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-center lg:gap-4">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center lg:max-w-[min(100%,calc(50%-0.5rem))]">
+                        <div
+                          className="group/ref mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
+                          style={previewFrameCompare}
+                        >
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
+                            Reference
                           </div>
-                        )}
-                      </div>
-                      <div
-                        className="group/live relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                        style={{
-                          aspectRatio: '9/16',
-                          height: 'min(76vh, calc(100vh - 22rem))',
-                          maxHeight: 'min(76vh, 100%)',
-                          width: 'auto',
-                          maxWidth: '100%',
-                        }}
-                      >
-                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
-                          Generated
+                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
+                            {activeReferenceForCompare ? (
+                              <img
+                                src={activeReferenceForCompare}
+                                alt="Reference slot image"
+                                className="max-h-full max-w-full object-contain object-center"
+                              />
+                            ) : (
+                              <div className="flex max-h-full w-full items-center justify-center px-3 text-center text-white/50 text-xs">
+                                No reference image in slots — add one on the left
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <img
-                          src={store.currentLiveImageUrl}
-                          alt="Live character"
-                          className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.08]"
-                        />
-                        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
-                          <Tooltip variant="character" content="View full size with zoom" side="left">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setZoomLevel(1);
-                                setShowZoomModal(true);
-                              }}
-                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                            >
-                              <Expand
-                                className="w-4 h-4"
-                                style={{ color: 'var(--color-gold, #fcf6ba)' }}
-                              />
-                            </button>
-                          </Tooltip>
-                          <Tooltip variant="character" content="Delete this image" side="left">
-                            <button
-                              type="button"
-                              onClick={() => discardLiveCharacterImage()}
-                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                              aria-label="Delete image"
-                            >
-                              <Trash2
-                                className="w-4 h-4"
-                                style={{ color: 'var(--color-gold, #fcf6ba)' }}
-                              />
-                            </button>
-                          </Tooltip>
+                      </div>
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center lg:max-w-[min(100%,calc(50%-0.5rem))]">
+                        <div
+                          className="group/live mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                          style={previewFrameCompare}
+                        >
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
+                            Generated
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
+                            <img
+                              src={store.currentLiveImageUrl}
+                              alt="Live character"
+                              className="max-h-full max-w-full object-contain object-center"
+                            />
+                          </div>
+                          <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
+                            <Tooltip variant="character" content="View full size with zoom" side="left">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setZoomLevel(1);
+                                  setShowZoomModal(true);
+                                }}
+                                className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                              >
+                                <Expand
+                                  className="w-4 h-4"
+                                  style={{ color: 'var(--color-gold, #fcf6ba)' }}
+                                />
+                              </button>
+                            </Tooltip>
+                            <Tooltip variant="character" content="Delete this image" side="left">
+                              <button
+                                type="button"
+                                onClick={() => discardLiveCharacterImage()}
+                                className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                                aria-label="Delete image"
+                              >
+                                <Trash2
+                                  className="w-4 h-4"
+                                  style={{ color: 'var(--color-gold, #fcf6ba)' }}
+                                />
+                              </button>
+                            </Tooltip>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <p className="mt-1 text-center text-[10px] text-emerald-200/50">
-                      Split view — hover to zoom; Generated panel includes zoom + delete
+                    <p className="mt-2 max-w-xl text-center text-[10px] text-emerald-200/60">
+                      Compare on — hover either panel to zoom in place ({aspectSessionLabel}). Turn Compare off for one large preview.
                     </p>
                   </>
                 ) : (
                   <>
                     <div
-                      className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                      style={{
-                        aspectRatio: '9/16',
-                        height: 'min(76vh, calc(100vh - 22rem))',
-                        maxHeight: 'min(76vh, 100%)',
-                        width: 'auto',
-                        maxWidth: '100%',
-                      }}
+                      className="group/live mx-auto shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                      style={previewFrameSingle}
                     >
-                      <img
-                        src={store.currentLiveImageUrl}
-                        alt="Live character"
-                        className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.08]"
-                      />
-                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                      <div className="absolute inset-0 flex items-center justify-center p-3 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
+                        <img
+                          src={store.currentLiveImageUrl}
+                          alt="Live character"
+                          className="max-h-full max-w-full object-contain object-center"
+                        />
+                      </div>
+                      <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
                         <Tooltip variant="character" content="View full size with zoom" side="left">
                           <button
                             type="button"
@@ -1922,8 +1928,8 @@ export const CharacterStudio: React.FC = () => {
                         </Tooltip>
                       </div>
                     </div>
-                    <p className="mt-1 text-center text-[10px] text-emerald-200/50">
-                      9:16 preview — full image fits; open expand for zoom
+                    <p className="mt-2 max-w-md text-center text-[10px] text-emerald-200/60">
+                      {aspectSessionLabel} — frame matches gallery aspect; hover preview to zoom. Use Compare for side-by-side with references.
                     </p>
                   </>
                 )
@@ -1941,39 +1947,52 @@ export const CharacterStudio: React.FC = () => {
                 </div>
               )}
             </div>
+            </div>
             {/* Add Pose + pill-shaped buttons in one row */}
             <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => store.addPose({})}
-                className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20"
+              <Tooltip
+                variant="character"
+                content="Adds a blank pose card only (no API call). To generate, use the gold Generate image button. After a good result, use Save New Pose to store the live frame on a card."
+                side="top"
               >
-                <span className="inline-block" style={goldTextStyle}>Add Character Pose</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleGenerateCharacter}
-                disabled={store.generationStatus === 'pending'}
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors disabled:opacity-90 disabled:cursor-wait"
-                style={
-                  store.generationStatus === 'pending'
-                    ? { background: GEM_EMERALD, boxShadow: `0 0 16px ${GEM_EMERALD}` }
-                    : { background: ACCENT_GOLD_GRADIENT }
-                }
+                <button
+                  type="button"
+                  onClick={() => store.addPose({})}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Add empty pose card</span>
+                </button>
+              </Tooltip>
+              <Tooltip
+                variant="character"
+                content="Runs the image API using Tags & Style, all Reference slots (left), the live preview merged into refs if needed, plus gallery framing (aspect ratio, age slider, pose name). Main action for new images. Shortcut: ⌘/Ctrl+Enter."
+                side="top"
               >
-                {store.generationStatus === 'pending' ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
-                      style={{ background: GEM_EMERALD, boxShadow: `0 0 10px ${GEM_EMERALD}` }}
-                      aria-label="Generating..."
-                    />
-                    <span className="animate-pulse">Working…</span>
-                  </span>
-                ) : (
-                  'Generate Character'
-                )}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateCharacter}
+                  disabled={store.generationStatus === 'pending'}
+                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                  style={
+                    store.generationStatus === 'pending'
+                      ? { background: GEM_EMERALD, boxShadow: `0 0 16px ${GEM_EMERALD}` }
+                      : { background: ACCENT_GOLD_GRADIENT }
+                  }
+                >
+                  {store.generationStatus === 'pending' ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                        style={{ background: GEM_EMERALD, boxShadow: `0 0 10px ${GEM_EMERALD}` }}
+                        aria-label="Generating..."
+                      />
+                      <span className="animate-pulse">Working…</span>
+                    </span>
+                  ) : (
+                    'Generate image'
+                  )}
+                </button>
+              </Tooltip>
               <div className="flex items-center gap-1.5 flex-wrap w-full">
                 <span className="text-[10px] uppercase tracking-wider text-emerald-200/60">Seed</span>
                 <button
@@ -1999,21 +2018,30 @@ export const CharacterStudio: React.FC = () => {
                   <span className="inline-block" style={goldTextStyle}>Locked</span>
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleGenerateAlternate}
-                disabled={store.generationStatus === 'pending' || (!store.currentLiveImageUrl && store.referenceImageUrls.length === 0)}
-                className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              <Tooltip
+                variant="character"
+                content="Same pipeline as Generate image (tags, refs, live preview merge, gallery framing), then adds “alternate pose, same character.” Requires a live preview and/or at least one reference slot."
+                side="top"
               >
-                <span className="inline-block" style={goldTextStyle}>Generate Alternate</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateAlternate}
+                  disabled={
+                    store.generationStatus === 'pending' ||
+                    (!store.currentLiveImageUrl && !store.referenceImageUrls.some(Boolean))
+                  }
+                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Alternate pose</span>
+                </button>
+              </Tooltip>
               <button
                 type="button"
                 onClick={() => void handleGenerateCharacter()}
                 disabled={store.generationStatus === 'pending'}
                 className="px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-50"
               >
-                <span className="inline-block text-emerald-200/90">Generate again</span>
+                <span className="inline-block text-emerald-200/90">Run again (same settings)</span>
               </button>
               <button
                 type="button"
@@ -2078,7 +2106,13 @@ export const CharacterStudio: React.FC = () => {
               Reference Gallery
             </h2>
             <p className="text-[10px] text-white/55 mt-1.5 shrink-0 leading-snug">
-              Session framing and saved poses. Generations use your live reference and these settings.
+              Gallery controls (aspect, age, pose name) and the Tags panel camera settings are merged into the same prompt as{' '}
+              <span className="text-amber-200/90 font-medium">Generate image</span>. The{' '}
+              <span className="text-white/80">live preview</span> (including when you click a pose that has a picture) is{' '}
+              <span className="text-white/80">added to the reference set</span> if it is not already in the 14 slots, so the model can see it.{' '}
+              <span className="text-amber-200/90 font-medium">Alternate pose</span> uses the same stack, then asks for another pose.{' '}
+              <span className="text-white/45">Add empty pose card</span> does not call the API — use{' '}
+              <span className="text-amber-200/90 font-medium">Save New Pose</span> after a good generation to store the live frame.
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5 shrink-0">
               {[
@@ -2301,6 +2335,10 @@ export const CharacterStudio: React.FC = () => {
             <h3 className="text-lg font-bold mb-4" style={goldTextStyle}>
               {saveCharacterIsEditProfile ? 'Save edited profile' : 'Save new character'}
             </h3>
+            <p className="text-[10px] text-white/45 mb-2">
+              Press Enter in a field to save, or focus the dialog (click the heading) and press Enter when Save is enabled.
+              Escape cancels.
+            </p>
             <label className="block text-sm font-medium text-white/80 mb-1">Profile name (required)</label>
             <input
               type="text"
@@ -2308,6 +2346,15 @@ export const CharacterStudio: React.FC = () => {
               onChange={(e) => {
                 setSaveCharacterProfileName(e.target.value);
                 if (saveCharacterError) setSaveCharacterError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const dis =
+                  saveCharacterIsEditProfile
+                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
+                    : !saveCharacterProfileName.trim();
+                if (!dis) void handleSaveCharacterModalConfirm();
               }}
               placeholder="e.g. Detective Mara"
               list={saveCharacterIsEditProfile ? 'vault-profile-options' : undefined}
@@ -2338,6 +2385,15 @@ export const CharacterStudio: React.FC = () => {
               type="text"
               value={saveCharacterCastName}
               onChange={(e) => setSaveCharacterCastName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const dis =
+                  saveCharacterIsEditProfile
+                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
+                    : !saveCharacterProfileName.trim();
+                if (!dis) void handleSaveCharacterModalConfirm();
+              }}
               placeholder="e.g. Mara in ch. 3"
               className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-4 text-sm placeholder-white/40"
             />

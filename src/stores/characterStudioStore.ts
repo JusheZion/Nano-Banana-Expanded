@@ -20,6 +20,12 @@ import {
 const ONYX_PASSWORD = 'onyx';
 const STORAGE_KEY = 'arcs-character-studio';
 
+/** Map legacy heritage chip labels to current HERITAGE_TAGS after renames. */
+const HERITAGE_SELECTION_MIGRATION: Record<string, string> = {
+  'African-American': 'African American',
+  Blatino: 'Black Latino',
+};
+
 export type WardrobeModifierCategory = 'tops' | 'bottoms' | 'outerwear' | 'accessories' | 'hats' | 'glasses';
 
 const WARDROBE_MODIFIER_CATEGORIES: WardrobeModifierCategory[] = [
@@ -562,6 +568,16 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
         const merged = { ...current, ...p };
         if (Array.isArray(p.referenceImageUrls)) {
           merged.referenceImageUrls = sanitizeReferenceUrlsForPersist(p.referenceImageUrls);
+        }
+        if (Array.isArray(merged.heritageSelection)) {
+          merged.heritageSelection = merged.heritageSelection.map(
+            (v) => HERITAGE_SELECTION_MIGRATION[v] ?? v
+          );
+        }
+        if (Array.isArray(merged.heritageLibrary)) {
+          merged.heritageLibrary = merged.heritageLibrary.map(
+            (v) => HERITAGE_SELECTION_MIGRATION[v] ?? v
+          );
         }
         return merged;
       },

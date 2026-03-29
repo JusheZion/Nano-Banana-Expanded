@@ -24,7 +24,6 @@ const defaultWardrobeSelections = {
 function makeBaseArgs(overrides?: Partial<Parameters<typeof buildCharacterStudioPromptForApi>[0]>) {
   const base = {
     tags: [] as ChipTag[],
-    vaultUnlocked: false,
     vaultPromptOverride: '',
     artStyleId: 'flagship',
     diversifyLikeness: true,
@@ -42,6 +41,21 @@ function makeBaseArgs(overrides?: Partial<Parameters<typeof buildCharacterStudio
 }
 
 describe('buildCharacterStudioPromptForApi', () => {
+  it('uses non-empty vaultPromptOverride as the compiled base (before expressions and permanent tag)', () => {
+    const unique = 'CUSTOM_VAULT_OVERRIDE_XYZ';
+    const { promptForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        tags: [
+          { id: 't1', text: 'should-not-appear-from-tags', polarity: 'positive' },
+        ] as ChipTag[],
+        vaultPromptOverride: unique,
+        referenceImageUrls: Array.from({ length: 14 }, () => ''),
+      })
+    );
+    expect(promptForApi).toContain(unique);
+    expect(promptForApi).not.toContain('should-not-appear-from-tags');
+  });
+
   it('always includes the permanent art-style tag', () => {
     const args = makeBaseArgs({
       referenceImageUrls: Array.from({ length: 14 }, () => ''),
@@ -89,6 +103,67 @@ describe('buildCharacterStudioPromptForApi', () => {
 
     expect(promptForApi).toContain('Apply this art style to the entire image, including the subject');
     expect(promptForApi).toContain('Art style: Smooth Animated 3D/CGI Render.');
+  });
+
+  it('appends session framing for aspect ratio and optional age / pose', () => {
+    const { promptForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        referenceImageUrls: Array.from({ length: 14 }, () => ''),
+        ageModifier: 2,
+        selectedPoseName: 'Hero stance',
+        outputAspectRatio: '21:9',
+      })
+    );
+    expect(promptForApi).toContain('Session framing:');
+    expect(promptForApi).toContain('Age direction:');
+    expect(promptForApi).toContain('+2');
+    expect(promptForApi).toContain('cinematic 21:9');
+    expect(promptForApi).toContain('Hero stance');
+  });
+
+  it('includes neutral age line when ageModifier is 0', () => {
+    const { promptForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        referenceImageUrls: Array.from({ length: 14 }, () => ''),
+        ageModifier: 0,
+      })
+    );
+    expect(promptForApi).toContain('Age modifier: gallery slider at 0');
+  });
+
+  it('merges currentLiveImageUrl into first empty ref slot when not already present', () => {
+    const refs = Array.from({ length: 14 }, () => '');
+    refs[0] = 'http://identity';
+    const { refUrlsForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        referenceImageUrls: refs,
+        currentLiveImageUrl: 'http://live-pose',
+      })
+    );
+    expect(refUrlsForApi[0]).toBe('http://identity');
+    expect(refUrlsForApi[1]).toBe('http://live-pose');
+  });
+
+  it('uses slot 0 for live image when all slots are full and live is not in the grid', () => {
+    const refs = Array.from({ length: 14 }, (_, i) => `http://ref-${i}`);
+    const { refUrlsForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        referenceImageUrls: refs,
+        currentLiveImageUrl: 'http://live-only',
+      })
+    );
+    expect(refUrlsForApi[0]).toBe('http://live-only');
+  });
+
+  it('adds unnamed gallery pose hint when selectedGalleryPoseActive', () => {
+    const { promptForApi } = buildCharacterStudioPromptForApi(
+      makeBaseArgs({
+        referenceImageUrls: Array.from({ length: 14 }, () => ''),
+        selectedPoseName: null,
+        selectedGalleryPoseActive: true,
+      })
+    );
+    expect(promptForApi).toContain('Active gallery pose (unnamed)');
   });
 
   it('appends surgical instructions based on populated slot groups', () => {

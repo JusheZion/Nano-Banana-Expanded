@@ -84,7 +84,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Store: persist facial expression selection + library (`characterStudioStore.ts`)
 - [x] Single-source Generate prompt: `buildCharacterStudioPromptForApi` helper + unit tests
 - [x] Live Prompt: new `Reference Prompt` tab; per-tab copy; Reset to tags; Refresh on Prompt tab
-- [x] Onyx Vault: removed from left Tags panel; gated Edit-tab unlock behind `VITE_ENABLE_ONYX_VAULT`
+- [x] Onyx Vault: removed from left Tags panel; Live Prompt Edit has no password gate (2026-03-27)
 - [x] Tags & Style: Facial Expressions section (preset + custom add/remove + click-off)
 - [x] Cinematic Suite: remove left-side angle controls (right panel is canonical)
 - [x] Reference images: Upload/Archive icon buttons + larger hover preview; rename “Atmospheric DNA” → “Background/Setting”
@@ -99,7 +99,32 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Reference Gallery: session summary chips; larger pose grid + empty state; pose actions (duplicate, first empty ref slot, open tab)
 - [x] Verify: `npm run test -- --run`, `npm run build`
 
+## Storyline Studio — Master Director (Mar 25, 2026) — PHASE 1 COMPLETE
+
+- [x] Replace PhotoLab mock with StorylineStudio (row-based workspace, tokens, Zustand persist)
+- [x] Gemini text API + director prompts (script doctor, beats, interpolation)
+- [x] Beat timeline, B-roll insert menu, per-beat generate/redo, export JSON
+- [x] Production cast from Image Vault; name→beat linking; reference slot packing
+- [x] Neutral Character Studio prompts + heritage label migration in spec/store
+- [x] Unit tests: storyline helpers (`linkCastNamesToBeats`, parse JSON, reference slots)
+- [x] Save story sequence to Supabase Asset Vault (`saveStorySequenceToAssetsVault`, `story_sequence_v1` metadata) + Save to Vault modal
+- [x] Promote beat: `studioImportBridge` + App portal switch; Character/Asset studio consume import; “Open in Character/Assets Studio” on beat panel
+- [x] Tests: `storySequencePayload`, `studioImportBridge`
+- [x] Phase 1c UX: manual per-beat cast linking checkboxes, timeline beat hover zoom preview, and generation refs limited to explicitly linked cast
+- [x] Per-beat aspect ratio selector (9:16 / 1:1 / 21:9) wired through beat schema/store and generation API
+- [x] Asset links for beats: production assets pool from Asset Vault + per-beat asset link checkboxes; generation uses linked cast + linked assets refs
+- [x] Storyline generation quality pass: switch beat generation model from flash to pro
+
+## Phase 2 — Studio preview / compare (2026-03-27) — COMPLETE (initial pass)
+
+- [x] Character Studio: xl+ split in Reference Image Generation — sidebar (thumbs, Compare, strips) + large aspect-aware preview; compare uses selected aspect
+- [x] Asset Studio: same pattern + Compare (first ref slot vs generated)
+- [x] Generic Image Lab: lg+ split — controls column + large preview column ([`studioPreviewLayout.ts`](src/shared/utils/studioPreviewLayout.ts))
+- [x] Verify: `npm run test -- --run`, `npm run build`; manual spot-check 9:16 / 1:1 / 21:9 in studios + Image Lab
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).
 - Optional: Supabase Storage bucket `arcs-generations` creation and RLS if not already present.
+- [ ] Phase 1d: Beat reference strength (none/light/strict) to control how strongly cast/assets constrain generation.
+- [x] Phase 1d: Generic Image Lab panel (upload refs + prompt + AI prompt helper + generate + import into storyline beats).

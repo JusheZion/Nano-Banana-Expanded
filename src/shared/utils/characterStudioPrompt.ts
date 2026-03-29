@@ -1,9 +1,8 @@
 /**
- * Reference Character Studio: compile tags + DNA weighting for final prompt.
+ * Reference Character Studio: compile tags + optional DNA hints for final prompt.
  */
 import type { ChipTag } from '@/shared/utils/PromptCompiler';
 import { PromptCompiler } from '@/shared/utils/PromptCompiler';
-import { DNA_WEIGHTED_HERITAGE } from '@/data/character_studio_spec';
 import {
   fuseWardrobeModifiers,
   type WardrobeModifierCategory,
@@ -15,8 +14,8 @@ export interface DnaSelections {
 }
 
 /**
- * When heritage or gender is unselected, we append a hint for 1/N equal probability
- * and +15% weight for African-American and Blatino.
+ * When heritage or gender is unselected, append a neutral hint so the model
+ * follows references and explicit user text only—no demographic invention.
  */
 export function applyDnaWeights(
   basePrompt: string,
@@ -26,17 +25,13 @@ export function applyDnaWeights(
   const parts: string[] = [];
   if (heritageSelection.length === 0) {
     parts.push(
-      'heritage: equal probability across list; +15% emphasis on African-American, Blatino'
+      'heritage: use only explicit user tags, reference images, and written prompt—do not assume or invent unstated regional or ancestral details'
     );
   }
   if (genderSelection.length === 0) {
-    parts.push('gender: equal probability across list');
-  }
-  if (heritageSelection.length > 0 && DNA_WEIGHTED_HERITAGE.some(
-    (w) => heritageSelection.includes(w)
-  )) {
-    // User selected a weighted option; optional extra hint
-    parts.push('+15% emphasis on African-American, Blatino representation');
+    parts.push(
+      'gender presentation: use only explicit user selections, references, and written prompt'
+    );
   }
   if (parts.length === 0) return basePrompt;
   return basePrompt

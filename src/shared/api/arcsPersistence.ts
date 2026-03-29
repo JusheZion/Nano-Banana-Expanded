@@ -7,6 +7,17 @@ import { generateSemanticId } from '@/shared/utils/semanticId';
 import type { ThumbnailFocus } from '@/shared/utils/generationOutputRouter';
 import type { CharacterStudioState } from '@/stores/characterStudioStore';
 import type { AssetStudioState } from '@/stores/assetStudioStore';
+import type {
+  DirectorSettings,
+  ProductionAssetMember,
+  ProductionCastMember,
+  StoryBeat,
+} from '@/portals/storyline/storylineTypes';
+import {
+  buildStorySequenceV1Payload,
+  STORY_SEQUENCE_V1_KEY,
+  STORYLINE_ASSET_SOURCE,
+} from '@/shared/utils/storySequencePayload';
 
 const BUCKET = 'arcs-generations';
 
@@ -264,6 +275,85 @@ export async function saveAssetToDb(
     name: assetName ?? collectionName ?? (baseName !== 'asset' ? baseName : null),
     collection_name: collectionName ?? null,
     asset_name: assetName ?? null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id, imageUrl: finalImageUrl };
+}
+
+export interface SaveStorySequenceResult {
+  ok: boolean;
+  id?: string;
+  imageUrl?: string;
+  error?: string;
+}
+
+/**
+ * Save a Storyline Studio sequence as an `assets` row: cover image + story_sequence_v1 in metadata_tags.
+ */
+export async function saveStorySequenceToAssetsVault(args: {
+  coverImageUrl: string;
+  storyTitle: string;
+  rawStoryline: string;
+  cleanedStoryline: string;
+  beatIntervalSec: number;
+  directorSettings: DirectorSettings;
+  productionCast: ProductionCastMember[];
+  productionAssets: ProductionAssetMember[];
+  beats: StoryBeat[];
+  collectionNameForDb: string | undefined;
+  baseNameForId: string;
+  assetName?: string;
+}): Promise<SaveStorySequenceResult> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const cover = args.coverImageUrl.trim();
+  if (!cover) {
+    return { ok: false, error: 'No cover image — generate at least one beat first.' };
+  }
+
+  const { data: rows } = await supabase.from('assets').select('id').limit(5000);
+  const existingIds = (rows ?? []).map((r) => r.id);
+  const id = generateSemanticId('ASST', args.baseNameForId, existingIds);
+
+  const finalImageUrl = await ensurePersistentImageUrl(cover);
+  if (isBlobUrl(finalImageUrl)) {
+    return {
+      ok: false,
+      error: `Could not upload cover image to Supabase Storage. ${STORAGE_UPLOAD_HINT}`,
+    };
+  }
+
+  const storyPayload = buildStorySequenceV1Payload({
+    storyTitle: args.storyTitle,
+    rawStoryline: args.rawStoryline,
+    cleanedStoryline: args.cleanedStoryline,
+    beatIntervalSec: args.beatIntervalSec,
+    directorSettings: args.directorSettings,
+    productionCast: args.productionCast,
+    productionAssets: args.productionAssets,
+    beats: args.beats,
+  });
+
+  const metadataTags: Record<string, unknown> = {
+    [STORY_SEQUENCE_V1_KEY]: storyPayload as unknown as Record<string, unknown>,
+    source: STORYLINE_ASSET_SOURCE,
+  };
+
+  const displayName =
+    args.assetName?.trim() ||
+    args.storyTitle.trim() ||
+    (args.baseNameForId !== 'Unnamed' ? args.baseNameForId : null);
+
+  const { error } = await supabase.from('assets').insert({
+    id,
+    metadata_tags: metadataTags,
+    seed: null,
+    image_url: finalImageUrl,
+    name: displayName,
+    collection_name: args.collectionNameForDb ?? null,
+    asset_name: args.assetName?.trim() || null,
   });
 
   if (error) return { ok: false, error: error.message };

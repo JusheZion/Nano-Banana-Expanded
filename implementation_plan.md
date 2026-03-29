@@ -1,4 +1,97 @@
-# Current feature: Character Vault Foundation (Ruby & Gold Edition) (2026-03-18)
+# Current feature: Storyline Studio — Master Director portal (2026-03-25)
+
+## Summary
+
+- **Replace** mock [`PhotoLab.tsx`](src/portals/PhotoLab.tsx) with [`StorylineStudio`](src/portals/storyline/StorylineStudio.tsx): **row-based** ARCS Office layout (story + director + production libraries | beat timeline + **selected-frame preview** | beat detail ∥ Image Lab), magenta–violet shell via [`STORYLINE_DIRECTOR_BG`](src/shared/theme/Phase12DesignTokens.ts), gold chrome.
+- **State:** [`storylineStudioStore`](src/stores/storylineStudioStore.ts) (Zustand + persist `arcs-storyline-studio`); beats omit `data:`/`blob:` images from persist (http(s) only).
+- **AI text:** [`geminiTextApi`](src/shared/api/geminiTextApi.ts) (`gemini-2.5-flash`, JSON mode; fallback to `gemini-1.5-flash`) + [`storylineDirectorPrompts`](src/data/storylineDirectorPrompts.ts) — Script Doctor, Plan beats, post-gen interpolation.
+- **AI image:** Per-beat [`generateImage`](src/shared/api/geminiImageApi.ts) with [`buildStorylineReferenceSlots`](src/portals/storyline/buildStorylineReferenceSlots.ts); [`compileVisualPromptForBeat`](src/portals/storyline/compileBeatPrompt.ts) for wardrobe lock.
+- **Cast:** Production cast from [`getCharacterAlbums`](src/shared/api/arcsVault.ts); [`linkCastNamesToBeats`](src/portals/storyline/linkCastToBeats.ts) for name detection.
+- **UX:** Tooltips (default Radix), ⌘/Ctrl+Enter (story field → Script Doctor; else generate selected beat), Esc closes vault/B-roll menu, timeline keyboard nav when focused.
+- **Character Studio neutrality:** [`systemPrompts.ts`](src/data/systemPrompts.ts) + [`characterStudioPrompt.ts`](src/shared/utils/characterStudioPrompt.ts); heritage labels in [`character_studio_spec.ts`](src/data/character_studio_spec.ts) (`African American`, `Black Latino`); persist merge in [`characterStudioStore`](src/stores/characterStudioStore.ts) for legacy labels.
+
+## Phase 1b — Asset vault save + studio promote
+
+- **Save:** [`saveStorySequenceToAssetsVault`](src/shared/api/arcsPersistence.ts) — first beat with any `imageUrl` as cover (upload via `ensurePersistentImageUrl`); `metadata_tags`: `story_sequence_v1` + `source: arcs_storyline_studio`. UI: **Save to Vault** in Storyline header; modal new/existing collection (same rules as Assets Studio library save).
+- **Promote:** [`studioImportBridge`](src/stores/studioImportBridge.ts); [`App.tsx`](src/App.tsx) applies `portalToOpen`; Character/Asset studios `consumeImportForTarget` on mount. Beat panel: **Open in Character Studio** / **Open in Assets Studio**.
+
+## Phase 1c — Storyline usability pass
+
+- **Manual cast link controls:** In beat inspector, add explicit character link toggles per beat (selected beat can include/exclude cast members without relying only on name auto-linking).
+- **Manual asset link controls:** Add production-asset pool from Asset Vault and per-beat asset link toggles; include linked asset refs in generation slots after cast refs.
+- **Beat hover zoom:** Add enlarged image preview on hover for timeline beat cards so users can inspect details without opening another modal.
+- **Reference behavior fix:** In beat generation, stop defaulting to full production cast when a beat has no linked cast IDs; send references only for explicitly linked cast to reduce unintended character injection.
+- **Per-beat aspect ratio:** add `aspectRatio` to beat state/schema (`9:16` | `1:1` | `21:9`), controls in beat inspector, and pass selected ratio into `generateImage` per beat.
+- **Quality tuning:** use `pro` image model for Storyline beat generation to reduce blur/distortion on complex prompts.
+
+## Phase 1d — Reference strength + Generic Image Lab
+
+- **Beat reference strength (none/light/strict):**
+  - Add `referenceStrength` to each `StoryBeat` (default `strict`).
+  - UI: beat inspector chips for `none` / `light` / `strict`.
+  - Generation behavior:
+    - `none`: send no cast/assets reference slots; disable strict wardrobe lock lines.
+    - `light`: send a reduced subset of linked cast/assets refs (e.g., first identity/style slots) and disable strict wardrobe lock lines (use refs as “soft guidance”).
+    - `strict`: send all linked refs and keep strict wardrobe lock behavior.
+- **Generic Image Lab panel (in StorylineStudio for now):**
+  - References input:
+    - Upload local images (up to 14) or paste URLs.
+    - Quick-add buttons for “use linked cast/assets from selected beat” and/or “use production cast/assets pool”.
+  - Prompt input:
+    - Main prompt textarea.
+    - Optional **AI prompt helper**: button to refine the prompt into a more generation-ready prompt; toggle between raw vs refined prompt.
+  - Generation controls:
+    - Aspect ratio selector (9:16 / 1:1 / 21:9).
+    - Model set to `pro` by default.
+    - Context toggle: `character` vs `asset` (maps to reference slot role labeling).
+  - Import into storyline:
+    - “Use as selected beat image” (replaces selected beat `imageUrl`, sets seed/status).
+    - If no beat selected: “Create new B-roll beat” (or narrative beat) using the generated image.
+  - Comic import: included as a later integration step after we confirm the preferred comic insertion behavior.
+
+### Comic image layers/objects — exploration
+
+- **Definitions**
+  - **Panel image**: background/art locked to panel shape/clipping (`Panel.imageUrl` in [`comicStore`](src/stores/comicStore.ts)).
+  - **Overlay object**: raster “sticker” above panels (characters/props/SFX), independent transform ([`OverlayObject`](src/stores/comicStore.ts), rendered via [`FloatingAsset`](src/modes/comic/components/FloatingAsset.tsx)).
+  - **Layer stack**: z-ordering across elements on a page ([`layerOrder`](src/stores/comicStore.ts), [`LayerTree`](src/modes/comic/components/LayerTree.tsx)).
+- **Pros (layered objects)**: editable placement/transforms without full re-render; faster iteration; backgrounds vs subjects vs lettering separated; more non-destructive workflows.
+- **Cons / costs**: selection, snapping, grouping, undo granularity; export must flatten correctly; sticker/matte artifacts; Konva perf with many large images.
+- **Near-term stance:** Storyline → Comic handoff stays **copy/download** until we pick where imports land.
+- **Integration options (later)**
+  - **A:** Set selected comic panel `imageUrl` (simplest, flattened plate).
+  - **B:** `addOverlay` image (uses existing transform tooling).
+  - **C:** Panel-internal multi-layer + masks (largest; new schema + renderer).
+
+## Phase 1e — Horizontal-friendly viewing (row panes)
+
+- **Row 1 — Story & production:** Full-width card; grid places storyline + director controls with **wider** story textarea and scrollable **cleaned story** readout; **Production cast** and **Production assets** columns with capped height + scroll.
+- **Row 2 — Timeline + preview:** Beat timeline (horizontal scroll) beside a **Selected frame preview** pane that uses the **selected beat’s `aspectRatio`** and `max-height` so **21:9** frames stay readable; timeline cards use **per-beat aspect** (width varies for cinematic beats) and hover zoom matches that aspect.
+- **Row 3 — Beat detail | Image Lab:** Two columns on `xl` screens: beat fields (taller narrative/ visual prompt / dialogue textarea where helpful) and [`GenericImageLabPanel`](src/portals/storyline/GenericImageLabPanel.tsx) in its own scroll region.
+- **Files:** [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx); Image Lab preview uses chosen lab aspect ratio (not fixed 9:16).
+
+## Phase 2 — Studio preview and compare (planned, approved 2026-03-27)
+
+**Goal:** Dedicated pane for **large** image preview and **compare** across Character Studio, Asset Studio, and Storyline (including Generic Image Lab), honoring portrait (9:16), square (1:1), and landscape (21:9).
+
+**Layout options**
+
+- **A — Stacked / vertical scroll:** Single column on narrow viewports; controls + preview + gallery stack; full-page scroll when content exceeds the viewport.
+- **B — Split:** From `lg`/`xl` upward, two columns: **controls** (tabs for prompts / tags / references) + **primary preview** with gallery strip; `min-h-0` flex so the image region gets usable height.
+
+**Recommended:** Responsive **hybrid** — use **B** on large breakpoints and **A** on small screens; add an explicit **Compare** mode (second pane, drawer, or A/B control) so comparisons are not squeezed into the live thumbnail. Align preview aspect with selected output ratio (reuse Storyline Phase 1e selected-frame pattern).
+
+**Primary files:** [`CharacterStudio.tsx`](src/portals/CharacterStudio.tsx), [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx), [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx), [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx).
+
+**Implementation (2026-03-27):** Shared helpers [`studioPreviewLayout.ts`](src/shared/utils/studioPreviewLayout.ts) (`studioPreviewAspectCss`, `studioPreviewMaxHeightCss`). Character and Asset studios use an **xl+ split** inside the generation card: scrollable sidebar (thumbnail density, **Compare**, recent/session strips) beside a **large `object-contain` preview** sized to the active aspect ratio (Character: gallery aspect; Asset: effective Gemini aspect). Compare on Asset = first reference slot vs generated. Image Lab uses **lg+** two-column layout with a dedicated large preview column. Beat/timeline preview remains as in Phase 1e.
+
+## Verify
+
+- `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
+
+---
+
+# Character Vault Foundation (Ruby & Gold Edition) (2026-03-18)
 
 ## Asset Reference Studio alignment (Mar 2026)
 
@@ -142,7 +235,7 @@ Notes:
 - Reference images UX: larger hover preview, Upload/Archive icon buttons, clearer group label for background/setting refs.
 - Tags & Style: add Facial Expressions section (preset + custom library with remove) and ensure click-off works.
 - Live Prompt: add `Reference Prompt` tab; per-tab Copy; `Reset to tags`; `Refresh` on Prompt tab.
-- Onyx Vault: keep logic but disable unlock/edit UI until production via feature flag.
+- Onyx Vault: Live Prompt **Edit** tab always shows model + raw override (no password); non-empty override replaces tag-built prompt in [`buildCharacterStudioPromptForApi`](src/shared/utils/buildCharacterStudioPromptForApi.ts).
 
 ### Key Files
 
@@ -152,10 +245,6 @@ Notes:
 - `src/shared/constants/referenceSlots.ts`
 - `src/components/ui/ArchiveRecallModal.tsx`
 - `src/shared/utils/buildCharacterStudioPromptForApi.ts`
-
-### Feature Flag
-
-- `VITE_ENABLE_ONYX_VAULT`: when not `'true'`, vault unlock UI is hidden/disabled and vault override is ignored for prompt compilation/generation.
 
 ### Verification
 
