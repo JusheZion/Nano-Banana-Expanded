@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Expand, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Archive,
+  Boxes,
+  Expand,
+  LayoutGrid,
+  Paintbrush,
+  Pin,
+  PinOff,
+  Trash2,
+  Upload,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
@@ -19,7 +32,7 @@ import {
   ASSET_STUDIO_AMETHYST_TEXT,
   GEM_AMETHYST,
 } from '@/shared/theme/Phase12DesignTokens';
-import { getSlotLabel, REFERENCE_SLOT_GROUPS_ASSET } from '@/shared/constants/referenceSlots';
+import { getSlotLabel } from '@/shared/constants/referenceSlots';
 import { getSurgicalInstructionsFromReferenceSlots } from '@/shared/utils/buildPrompt';
 import {
   ART_STYLE_FLAGSHIP,
@@ -48,8 +61,7 @@ import {
   removeCachedGenerationByUrl,
 } from '@/shared/utils/generationSessionCache';
 import {
-  studioPreviewAspectCss,
-  studioPreviewMaxHeightCss,
+  studioPreviewFrameStyle,
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
 import {
@@ -287,6 +299,12 @@ export const AssetsStudio: React.FC = () => {
     x: number;
     y: number;
   } | null>(null);
+  type AssetLeftModule = 'hub' | 'structural' | 'material';
+  const [leftModule, setLeftModule] = useState<AssetLeftModule>('hub');
+  const [promptPinned, setPromptPinned] = useState(true);
+  const [focusedReferenceSlotIndex, setFocusedReferenceSlotIndex] = useState(0);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadSlotIndexRef = useRef<number | null>(null);
 
   const REFINE_SUGGEST_CHIPS = [
     'Softer ambient light',
@@ -335,6 +353,33 @@ export const AssetsStudio: React.FC = () => {
       getEffectiveGeminiAspectRatioForAsset(store.aspectRatio, store.cinematic.angle),
     [store.aspectRatio, store.cinematic.angle]
   );
+
+  const assetSessionChips = useMemo(() => {
+    const chips: { key: string; label: string }[] = [
+      { key: 'aspect', label: `Aspect ${store.aspectRatio}` },
+      { key: 'out', label: `Output ${effectiveAspectRatio}` },
+    ];
+    if (store.cinematic.angle) {
+      chips.push({ key: 'cam', label: store.cinematic.angle });
+    }
+    if (store.spatialRoomOption) {
+      chips.push({ key: 'room', label: store.spatialRoomOption });
+    }
+    if (store.spatialUrbanOption) {
+      chips.push({ key: 'urban', label: store.spatialUrbanOption });
+    }
+    if (store.timeSeason) {
+      chips.push({ key: 'time', label: store.timeSeason });
+    }
+    return chips;
+  }, [
+    store.aspectRatio,
+    effectiveAspectRatio,
+    store.cinematic.angle,
+    store.spatialRoomOption,
+    store.spatialUrbanOption,
+    store.timeSeason,
+  ]);
 
   const settingAndLocationDisabled = store.architecturalLock;
 
@@ -680,15 +725,15 @@ export const AssetsStudio: React.FC = () => {
   };
 
   const previewAspectId = effectiveAspectRatio as StudioPreviewAspectId;
-  const previewAspectCss = studioPreviewAspectCss(previewAspectId);
-  const previewMaxHeightCss = studioPreviewMaxHeightCss(previewAspectId);
+  const previewFrameSingle = studioPreviewFrameStyle(previewAspectId, 'stage');
+  const previewFrameCompare = studioPreviewFrameStyle(previewAspectId, 'stageCompare');
   const activeReferenceForCompare =
     store.referenceImageUrls.find((u) => Boolean(u?.trim())) ?? null;
 
   return (
     <>
     <div
-      className="flex flex-col min-h-screen p-4 animate-fade-in"
+      className="flex flex-col h-full min-h-0 overflow-hidden p-3 animate-fade-in"
       style={{ background: ASSET_STUDIO_BG }}
     >
       <header
@@ -703,259 +748,213 @@ export const AssetsStudio: React.FC = () => {
         </h1>
       </header>
 
-      <div className="flex gap-3 w-full flex-1 min-h-0">
-        <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col gap-3 flex-shrink-0">
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-col min-h-[200px] max-h-[min(46vh,440px)] flex-shrink-0 overflow-hidden shadow-lg shadow-black/20">
-            <div className="p-2 flex flex-col min-h-0 flex-1 overflow-hidden">
+      <div className="flex gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
+        <div className="flex-[0_0_60%] max-w-[60%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
+          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
+            {leftModule === 'hub' && (
+            <>
             <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
               Reference images
             </h2>
-            <Tooltip
-              variant="asset"
-              content="Bulk add fills empty slots in order (1–4 Identity, 5–10 Wardrobe, 11–14 Atmospheric). Per-slot Upload targets one slot."
-              side="bottom"
-            >
-              <label className="flex rounded-lg border border-dashed border-amber-500/50 bg-black/25 px-2 py-2 mb-2 cursor-pointer hover:border-amber-400/70 shrink-0">
-                <span className="text-[10px] font-medium text-violet-200/90">
-                  Add image(s) to next empty slots ({Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).filter(Boolean).length}/14)
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const slotIndex = uploadSlotIndexRef.current;
+                if (slotIndex == null) return;
+                const url = URL.createObjectURL(file);
+                store.setReferenceImageAt(slotIndex, url);
+                store.setCurrentLiveImageUrl(url);
+                uploadSlotIndexRef.current = null;
+                e.target.value = '';
+              }}
+            />
+            <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-2">
+              <div className="text-[10px] text-white/85 min-w-0 flex-1 basis-[140px]">
+                <span className="font-bold text-amber-200/90">
+                  Slot {focusedReferenceSlotIndex + 1}
                 </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = e.target.files;
-                    if (!files?.length) return;
-                    const next = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i] ?? '');
-                    let slot = 0;
-                    let lastUrl: string | null = null;
-                    for (const file of Array.from(files)) {
-                      if (!file.type.startsWith('image/')) continue;
-                      while (slot < 14 && next[slot]) slot++;
-                      if (slot >= 14) break;
-                      const url = URL.createObjectURL(file);
-                      next[slot] = url;
-                      lastUrl = url;
-                      slot++;
-                    }
-                    store.setReferenceImageUrls(next);
-                    if (lastUrl) store.setCurrentLiveImageUrl(lastUrl);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </Tooltip>
-            <div className="flex flex-wrap gap-2 mb-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  store.clearAllReferenceSlots();
-                  store.setCurrentLiveImageUrl(null);
-                }}
-                className="px-2 py-1 rounded-lg text-[10px] border border-white/20 hover:bg-white/10"
-              >
-                Clear all slots
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const clipItems = await navigator.clipboard.read();
-                    for (const item of clipItems) {
-                      for (const type of item.types) {
-                        if (type.startsWith('image/')) {
-                          const blob = await item.getType(type);
-                          const url = URL.createObjectURL(blob);
-                          const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
-                          const firstEmpty = slots.findIndex((u) => !u);
-                          if (firstEmpty >= 0) {
-                            store.setReferenceImageAt(firstEmpty, url);
-                            store.setCurrentLiveImageUrl(url);
-                          }
-                          return;
-                        }
-                      }
-                    }
-                  } catch {
-                    store.setGenerationStatus('error', 'Could not paste image from clipboard.');
-                  }
-                }}
-                className="px-2 py-1 rounded-lg text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
-              >
-                Paste in first empty
-              </button>
-            </div>
-            <div className="mt-1 space-y-2 overflow-y-auto custom-scrollbar flex-1 min-h-0">
-              {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
-                <p className="text-xs text-amber-200/70 mb-2">No references yet. Upload per slot or paste.</p>
-              )}
-              {REFERENCE_SLOT_GROUPS_ASSET.map((group) => (
-                <div key={group.id}>
-                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 mb-1">
-                    {group.label} <span className="font-normal opacity-80">({group.subtitle})</span>
-                  </h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: group.end - group.start + 1 }, (_, j) => {
-                      const i = group.start + j;
-                      const url = store.referenceImageUrls[i];
-                      return (
-                        <div key={i} className="relative group flex flex-col items-center gap-0.5">
-                          <div
-                            className={`relative w-10 h-10 rounded bg-black/40 flex items-center justify-center overflow-hidden ${
-                              url ? 'border-2 border-amber-500/60' : 'border-2 border-dashed border-white/25'
-                            }`}
-                            onMouseEnter={
-                              url
-                                ? (e) =>
-                                    setRefHoverPreview({
-                                      url,
-                                      x: e.clientX + 12,
-                                      y: e.clientY + 12,
-                                    })
-                                : undefined
-                            }
-                            onMouseMove={
-                              url
-                                ? (e) =>
-                                    setRefHoverPreview({
-                                      url,
-                                      x: e.clientX + 12,
-                                      y: e.clientY + 12,
-                                    })
-                                : undefined
-                            }
-                            onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
-                          >
-                            {url ? (
-                              <>
-                                <img src={url} alt="" className="w-full h-full object-cover" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    store.removeReferenceImage(i);
-                                    if (store.currentLiveImageUrl === url) {
-                                      const next = (store.referenceImageUrls as string[]).filter(Boolean);
-                                      store.setCurrentLiveImageUrl(next[0] ?? null);
-                                    }
-                                  }}
-                                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/80 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
-                                >
-                                  ×
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-[8px] text-white/40">{i + 1}</span>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-white/70">{getSlotLabel(i, 'asset')}</span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setRecallSlotIndex(i)}
-                              className="text-[10px] text-amber-400/90 hover:text-amber-300"
-                            >
-                              Archive
-                            </button>
-                            <label className="text-[10px] text-amber-400/90 hover:text-amber-300 cursor-pointer">
-                              Upload
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (!file) return;
-                                  const url = URL.createObjectURL(file);
-                                  store.setReferenceImageAt(i, url);
-                                  store.setCurrentLiveImageUrl(url);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
-            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2 pb-1 shrink-0 border-b border-white/10" style={goldTextStyle}>
-              Tags & style
-            </h2>
-            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
-            <section>
-              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-                Art Style
-              </h2>
-              <div className="space-y-2">
-                <Chip
-                  label={ART_STYLE_FLAGSHIP}
-                  active={store.artStyleId === 'flagship'}
-                  onClick={() => store.setArtStyle('flagship')}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {ART_STYLE_LIBRARY.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={store.artStyleId === opt}
-                      onClick={() =>
-                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
-                      }
-                    />
-                  ))}
-                  {store.customStyles.map((opt) => (
-                    <ChipWithOptionalRemove
-                      key={opt}
-                      label={opt}
-                      active={store.artStyleId === opt}
-                      onClick={() =>
-                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
-                      }
-                      isCustom
-                      onRemove={() => store.removeCustomStyle(opt)}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={customStyleInput}
-                    onChange={(e) => setCustomStyleInput(e.target.value)}
-                    placeholder="Custom style..."
-                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                  />
+                <span className="text-white/45"> · </span>
+                <span className="text-white/75">{getSlotLabel(focusedReferenceSlotIndex, 'asset')}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                <Tooltip variant="asset" content="Upload an image into the focused slot" side="bottom">
                   <button
                     type="button"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
                     onClick={() => {
-                      if (customStyleInput.trim()) {
-                        store.addCustomStyle(customStyleInput.trim());
-                        store.setTags([
-                          ...store.tags,
-                          {
-                            id: crypto.randomUUID(),
-                            text: customStyleInput.trim().replace(/\s+/g, '-').toLowerCase(),
-                            polarity: 'positive',
-                          },
-                        ]);
-                        setCustomStyleInput('');
+                      uploadSlotIndexRef.current = focusedReferenceSlotIndex;
+                      uploadInputRef.current?.click();
+                    }}
+                  >
+                    <Upload className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Upload
+                  </button>
+                </Tooltip>
+                <Tooltip variant="asset" content="Choose from archive for the focused slot" side="bottom">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+                    onClick={() => setRecallSlotIndex(focusedReferenceSlotIndex)}
+                  >
+                    <Archive className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    Archive
+                  </button>
+                </Tooltip>
+                <Tooltip variant="asset" content="Remove image from the focused slot" side="bottom">
+                  <button
+                    type="button"
+                    disabled={!store.referenceImageUrls[focusedReferenceSlotIndex]}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-white/20 text-white/80 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+                    onClick={() => {
+                      const i = focusedReferenceSlotIndex;
+                      const url = store.referenceImageUrls[i];
+                      if (!url) return;
+                      const wasLive = store.currentLiveImageUrl === url;
+                      store.removeReferenceImage(i);
+                      if (wasLive) {
+                        const nextUrls = useAssetStudioStore.getState().referenceImageUrls;
+                        const still = nextUrls.filter(Boolean);
+                        store.setCurrentLiveImageUrl(still[0] ?? null);
                       }
                     }}
-                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-                    style={{ background: ACCENT_GOLD_GRADIENT }}
                   >
-                    Save as Tag
+                    Clear
                   </button>
-                </div>
+                </Tooltip>
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.clearAllReferenceSlots();
+                    store.setCurrentLiveImageUrl(null);
+                  }}
+                  className="px-2 py-1 rounded-md text-[10px] border border-white/20 hover:bg-white/10"
+                >
+                  Clear all
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const clipItems = await navigator.clipboard.read();
+                      for (const item of clipItems) {
+                        for (const type of item.types) {
+                          if (type.startsWith('image/')) {
+                            const blob = await item.getType(type);
+                            const url = URL.createObjectURL(blob);
+                            const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
+                            const firstEmpty = slots.findIndex((u) => !u);
+                            if (firstEmpty >= 0) {
+                              store.setReferenceImageAt(firstEmpty, url);
+                              store.setCurrentLiveImageUrl(url);
+                            }
+                            return;
+                          }
+                        }
+                      }
+                    } catch {
+                      store.setGenerationStatus('error', 'Could not paste image from clipboard.');
+                    }
+                  }}
+                  className="px-2 py-1 rounded-md text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
+                >
+                  Paste first empty
+                </button>
               </div>
-            </section>
+            </div>
+            <p className="text-[10px] text-white/50 mb-1 shrink-0">
+              Click a thumbnail to focus a slot. Labels show slot role in the API stack.
+            </p>
+            <div className="mt-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
+                <p className="text-xs text-amber-200/70 mb-2">
+                  No references yet. Pick a slot, use Upload or Archive, or paste an image.
+                </p>
+              )}
+              <div className="grid grid-cols-7 gap-1.5 w-full">
+                {Array.from({ length: 14 }, (_, i) => {
+                  const url = store.referenceImageUrls[i];
+                  const isFocused = focusedReferenceSlotIndex === i;
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-0.5 min-w-0 group/slot">
+                      <div className="relative w-full aspect-square max-h-[4.5rem]">
+                        <button
+                          type="button"
+                          onClick={() => setFocusedReferenceSlotIndex(i)}
+                          className={`absolute inset-0 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
+                            url
+                              ? 'border-2 border-amber-500/55'
+                              : 'border-2 border-dashed border-white/25'
+                          } ${isFocused ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-black/70' : ''}`}
+                          aria-pressed={isFocused}
+                          aria-label={`Reference slot ${i + 1}, ${getSlotLabel(i, 'asset')}`}
+                          onMouseEnter={
+                            url
+                              ? (e) =>
+                                  setRefHoverPreview({
+                                    url,
+                                    x: e.clientX + 12,
+                                    y: e.clientY + 12,
+                                  })
+                              : undefined
+                          }
+                          onMouseMove={
+                            url
+                              ? (e) =>
+                                  setRefHoverPreview({
+                                    url,
+                                    x: e.clientX + 12,
+                                    y: e.clientY + 12,
+                                  })
+                              : undefined
+                          }
+                          onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
+                        >
+                          {url ? (
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[8px] text-white/40">{i + 1}</span>
+                          )}
+                        </button>
+                        {url ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const wasLive = store.currentLiveImageUrl === url;
+                              store.removeReferenceImage(i);
+                              if (wasLive) {
+                                const nextUrls = useAssetStudioStore.getState().referenceImageUrls;
+                                const still = nextUrls.filter(Boolean);
+                                store.setCurrentLiveImageUrl(still[0] ?? null);
+                              }
+                            }}
+                            className="absolute -top-0.5 -right-0.5 z-10 w-3.5 h-3.5 rounded-full bg-black/85 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
+                            aria-label={`Remove slot ${i + 1}`}
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </div>
+                      <span className="text-[7px] text-center text-white/60 max-w-full leading-tight line-clamp-2">
+                        {getSlotLabel(i, 'asset')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            </>
+            )}
 
+            {leftModule === 'structural' && (
+            <>
             {/* Era / Style */}
             <section
               className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
@@ -1109,6 +1108,77 @@ export const AssetsStudio: React.FC = () => {
                 onSave={(cat, v) => store.addSetDressingOption(cat as SetDressingCategory, v)}
               />
             </section>
+            </>
+            )}
+
+            {leftModule === 'material' && (
+            <>
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Art Style
+              </h2>
+              <div className="space-y-2">
+                <Chip
+                  label={ART_STYLE_FLAGSHIP}
+                  active={store.artStyleId === 'flagship'}
+                  onClick={() => store.setArtStyle('flagship')}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {ART_STYLE_LIBRARY.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
+                      onClick={() =>
+                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
+                      }
+                    />
+                  ))}
+                  {store.customStyles.map((opt) => (
+                    <ChipWithOptionalRemove
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
+                      onClick={() =>
+                        store.setArtStyle(store.artStyleId === opt ? 'flagship' : opt)
+                      }
+                      isCustom
+                      onRemove={() => store.removeCustomStyle(opt)}
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={customStyleInput}
+                    onChange={(e) => setCustomStyleInput(e.target.value)}
+                    placeholder="Custom style..."
+                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customStyleInput.trim()) {
+                        store.addCustomStyle(customStyleInput.trim());
+                        store.setTags([
+                          ...store.tags,
+                          {
+                            id: crypto.randomUUID(),
+                            text: customStyleInput.trim().replace(/\s+/g, '-').toLowerCase(),
+                            polarity: 'positive',
+                          },
+                        ]);
+                        setCustomStyleInput('');
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    Save as Tag
+                  </button>
+                </div>
+              </div>
+            </section>
 
             {/* Cinematic Suite */}
             <section>
@@ -1156,37 +1226,27 @@ export const AssetsStudio: React.FC = () => {
               </h2>
               <HybridTagBar tags={store.tags} setTags={store.setTags} variant="amethyst" />
             </section>
+            </>
+            )}
             </div>
-          </div>
-        </div>
 
-        {/* Center: Live Prompt + Live Generation + footer pills */}
-        <div className="flex-1 flex gap-3 min-w-0 min-h-0 max-h-[calc(85vh+100px)] overflow-hidden">
-          <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
-            <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[480px] flex flex-col">
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
-                  Live Prompt
-                </h2>
-                {store.lastUsedPrompt ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(store.lastUsedPrompt);
-                      store.setRefinementPromptOverride(
-                        store.refinementPromptOverride
-                          ? `${store.refinementPromptOverride}\n${store.lastUsedPrompt.slice(0, 200)}…`
-                          : store.lastUsedPrompt.slice(0, 500)
-                      );
-                      setPromptPanelTab('refine');
-                    }}
-                    className="text-[10px] px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200/90 hover:bg-violet-500/10 truncate max-w-[140px]"
-                  >
-                    Last prompt
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2">
+          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(42vh,360px)] overflow-hidden">
+            <div className="mb-1 shrink-0">
+              <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
+                Live Prompt
+              </h2>
+            </div>
+            {!promptPinned ? (
+              <p
+                className="text-[11px] font-mono text-violet-100/85 truncate border border-white/10 rounded-lg px-2 py-1.5 bg-black/50 min-h-[2rem]"
+                title={displayPrompt || undefined}
+              >
+                {(displayPrompt || '// Pin to expand — full prompt, tabs, and Architectural Lock').split('\n')[0].slice(0, 140)}
+                {displayPrompt && (displayPrompt.length > 140 || displayPrompt.includes('\n')) ? '…' : ''}
+              </p>
+            ) : (
+            <>
+              <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2 shrink-0">
                 {(
                   [
                     { id: 'auto' as const, label: 'Prompt' },
@@ -1209,41 +1269,26 @@ export const AssetsStudio: React.FC = () => {
                     <PinnedHelpTooltip variant="asset" title={label}>
                       {id === 'auto' && 'Compiled prompt from tags. ⌘/Ctrl+Enter generates.'}
                       {id === 'edit' &&
-                        'Raw prompt override and model. Overrides compiled tags when the override field is non-empty.'}
+                        'Raw prompt override. Model is in the bottom bar. Overrides compiled tags when the override field is non-empty.'}
                       {id === 'refine' && 'Refine the current live image with your instructions.'}
                     </PinnedHelpTooltip>
                   </span>
                 ))}
               </div>
               {promptPanelTab === 'auto' && (
-                <div className="bg-black/60 p-3 rounded-lg font-mono text-sm text-violet-100/85 break-words flex-1 min-h-[360px] overflow-y-auto custom-scrollbar">
+                <div className="bg-black/60 p-2 rounded-lg font-mono text-xs text-violet-100/85 break-words flex-1 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto custom-scrollbar transition-opacity duration-200">
                   {displayPrompt || '// Prompt is empty...'}
                 </div>
               )}
               {promptPanelTab === 'edit' && (
-                <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
-                  <select
-                    value={store.selectedOnyxModelId}
-                    onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                    className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="flash">Nano Banana 2 (Speed)</option>
-                    <option value="pro">Nano Banana Pro (Detail)</option>
-                  </select>
+                <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                   <textarea
                     value={store.vaultPromptOverride}
                     onChange={(e) => store.setVaultPromptOverride(e.target.value)}
                     placeholder="Override prompt…"
-                    className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
+                    className="w-full flex-1 min-h-[120px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
                   />
                   <div className="flex flex-wrap gap-2 items-center">
-                    <button
-                      type="button"
-                      onClick={() => store.setVaultPromptOverride('')}
-                      className="px-2 py-1 text-xs rounded border border-amber-500/40"
-                    >
-                      Reset to tags
-                    </button>
                     <select
                       className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1 max-w-[160px]"
                       defaultValue=""
@@ -1312,7 +1357,7 @@ export const AssetsStudio: React.FC = () => {
                 </div>
               )}
               {promptPanelTab === 'refine' && (
-                <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
+                <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                   {!store.currentLiveImageUrl ? (
                     <p className="text-sm text-violet-200/80">Generate or load an image first.</p>
                   ) : (
@@ -1382,198 +1427,187 @@ export const AssetsStudio: React.FC = () => {
                   )}
                 </div>
               )}
-              <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-                <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
-                <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
-                  <span className="text-xs font-bold tracking-widest inline-block" style={goldTextStyle}>
-                    Architectural Lock
-                  </span>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => store.setArchitecturalLock(!store.architecturalLock)}
-                    onKeyDown={(e) => e.key === 'Enter' && store.setArchitecturalLock(!store.architecturalLock)}
-                    className="w-10 h-5 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
-                    style={store.architecturalLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                        store.architecturalLock ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div
-              className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
-              data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
-            >
-              <span className="text-xs font-mono" style={goldTextStyle}>
-                {store.generationStatus === 'safety_blocked'
-                  ? 'Prompt restricted by safety filters. Please adjust and try again'
-                  : store.generationStatus === 'error' && store.generationStatusMessage
-                    ? store.generationStatusMessage
-                    : store.generationStatus === 'pending'
-                      ? STATUS_BREADCRUMBS[statusStep]
-                      : '\u00A0'}
-              </span>
-            </div>
-
-            <div className="flex-1 min-h-[280px] xl:min-h-0 rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0 xl:flex-1">
-              <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
-                Live Generation / Vault
-              </h2>
-              <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-3 px-2 pb-1">
-              <div className="flex flex-col gap-2 xl:w-72 xl:max-w-[min(40%,320px)] xl:flex-shrink-0 xl:overflow-y-auto xl:min-h-0 xl:pr-1 custom-scrollbar">
-              <div className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">
-                  Thumbnail size
-                </span>
+            </>
+            )}
+            <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
+              <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
+              {promptPinned && promptPanelTab === 'auto' && (
                 <button
                   type="button"
-                  aria-pressed={store.galleryDensity === 'compact'}
-                  onClick={() => store.setGalleryDensity('compact')}
-                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                    store.galleryDensity === 'compact'
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={
-                    store.galleryDensity === 'compact'
-                      ? { background: ACCENT_GOLD_GRADIENT }
-                      : undefined
-                  }
+                  onClick={() => {
+                    store.setVaultPromptOverride('');
+                    store.setRefinementPromptOverride('');
+                  }}
+                  className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
                 >
-                  Compact
+                  Refresh
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={store.galleryDensity === 'comfortable'}
-                  onClick={() => store.setGalleryDensity('comfortable')}
-                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                    store.galleryDensity === 'comfortable'
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={
-                    store.galleryDensity === 'comfortable'
-                      ? { background: ACCENT_GOLD_GRADIENT }
-                      : undefined
-                  }
-                >
-                  Comfortable
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={compareSplit}
-                  onClick={() => setCompareSplit((v) => !v)}
-                  className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                    compareSplit
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
-                >
-                  Compare {compareSplit ? 'On' : 'Off'}
-                </button>
-              </div>
-              {((recentAssets.length > 0) || (getCachedGenerations('asset').length > 0)) && (
-                <div className="flex-shrink-0 flex flex-col gap-1.5">
-                  {recentAssets.length > 0 && (
-                    <div className="flex items-center gap-2 overflow-x-auto">
-                      <span className="text-[10px] uppercase tracking-wider text-white/60">Recent (saved)</span>
-                      {recentAssets.map((item) => (
-                        <Tooltip variant="asset" key={item.id} content={item.displayName ?? item.collectionName ?? 'Asset'}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              store.setCurrentLiveImageUrl(item.imageUrl);
-                              if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                            }}
-                            className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
-                              store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
-                            }`}
-                          >
-                            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        </Tooltip>
-                      ))}
-                    </div>
-                  )}
-                  {getCachedGenerations('asset').length > 0 && (
-                    <div className="flex items-center gap-2 overflow-x-auto">
-                      <span className="text-[10px] uppercase tracking-wider text-white/60">This session</span>
-                      {getCachedGenerations('asset').map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            store.setCurrentLiveImageUrl(item.url);
-                            if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                          }}
-                          className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
-                            store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
-                          }`}
-                        >
-                          <img src={item.url} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
               )}
-              </div>
-              <div className="flex-1 min-h-[240px] xl:min-h-0 min-w-0 flex flex-col items-center justify-center p-2 overflow-auto">
-                {store.currentLiveImageUrl ? (
-                  compareSplit ? (
-                    <>
-                      <div className="w-full flex flex-col md:flex-row gap-3 items-stretch justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  store.setVaultPromptOverride('');
+                  store.setRefinementPromptOverride('');
+                }}
+                className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
+              >
+                Reset to tags
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromptPinned((p) => !p)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border border-amber-500/40 text-amber-200/90 hover:bg-amber-500/10"
+                aria-pressed={promptPinned}
+              >
+                {promptPinned ? <Pin className="w-3 h-3 shrink-0" aria-hidden /> : <PinOff className="w-3 h-3 shrink-0" aria-hidden />}
+                {promptPinned ? 'Pinned' : 'Pin'}
+              </button>
+              {store.lastUsedPrompt ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(store.lastUsedPrompt);
+                    store.setRefinementPromptOverride(
+                      store.refinementPromptOverride
+                        ? `${store.refinementPromptOverride}\n${store.lastUsedPrompt.slice(0, 200)}…`
+                        : store.lastUsedPrompt.slice(0, 500)
+                    );
+                    setPromptPanelTab('refine');
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200/90 hover:bg-violet-500/10 truncate max-w-[120px]"
+                  title="Copy full prompt to clipboard; append summary to Refine tab"
+                >
+                  Last prompt
+                </button>
+              ) : null}
+              <span className="text-[9px] text-white/55 uppercase tracking-wider">Model</span>
+              <select
+                value={store.selectedOnyxModelId}
+                onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                className="max-w-[9.5rem] bg-black/55 text-white border border-amber-500/25 rounded-md px-1.5 py-0.5 text-[10px]"
+              >
+                <option value="flash">Nano Banana 2</option>
+                <option value="pro">Nano Banana Pro</option>
+              </select>
+              <label className="flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all ml-auto">
+                <span className="text-[9px] font-bold tracking-wide inline-block max-w-[5.5rem] leading-tight" style={goldTextStyle}>
+                  Architectural lock
+                </span>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => store.setArchitecturalLock(!store.architecturalLock)}
+                  onKeyDown={(e) => e.key === 'Enter' && store.setArchitecturalLock(!store.architecturalLock)}
+                  className="w-9 h-4 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
+                  style={store.architecturalLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                      store.architecturalLock ? 'translate-x-[1.125rem]' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div
+            className="shrink-0 flex rounded-lg border border-white/15 bg-black/45 p-1 gap-0.5"
+            role="tablist"
+            aria-label="Studio modules"
+          >
+            {(
+              [
+                { id: 'hub' as const, label: 'Refs', Icon: LayoutGrid },
+                { id: 'structural' as const, label: 'Build', Icon: Boxes },
+                { id: 'material' as const, label: 'Look', Icon: Paintbrush },
+              ] as const
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={leftModule === id}
+                onClick={() => setLeftModule(id)}
+                className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-2 rounded-md text-[9px] font-bold uppercase tracking-wide border transition-colors min-w-0 ${
+                  leftModule === id
+                    ? 'text-black border-amber-500/60 shadow-sm'
+                    : 'border-transparent text-violet-200/75 hover:bg-white/10'
+                }`}
+                style={leftModule === id ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0 opacity-90" aria-hidden />
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        </div>
+
+        <div className="flex-[0_0_40%] max-w-[40%] min-w-0 min-h-0 flex flex-col gap-2 overflow-hidden overflow-x-hidden">
+          <div
+            className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
+            data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
+          >
+            <span className="text-xs font-mono truncate" style={goldTextStyle}>
+              {store.generationStatus === 'safety_blocked'
+                ? 'Prompt restricted by safety filters. Please adjust and try again'
+                : store.generationStatus === 'error' && store.generationStatusMessage
+                  ? store.generationStatusMessage
+                  : store.generationStatus === 'pending'
+                    ? STATUS_BREADCRUMBS[statusStep]
+                    : '\u00A0'}
+            </span>
+          </div>
+
+          <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md flex flex-col overflow-hidden shadow-lg shadow-black/15">
+            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2.5 pb-1.5 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
+              Asset workspace
+            </h2>
+            <div className="flex-1 min-h-[120px] min-w-0 flex flex-col items-center justify-center p-2 overflow-y-auto overflow-x-hidden">
+              {store.currentLiveImageUrl ? (
+                compareSplit ? (
+                  <>
+                    <div className="flex w-full max-w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-center lg:gap-4">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center lg:max-w-[min(100%,calc(50%-0.5rem))]">
                         <div
-                          className="group/ref relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
-                          style={{
-                            aspectRatio: previewAspectCss,
-                            height: previewMaxHeightCss,
-                            maxHeight: previewMaxHeightCss,
-                            width: 'auto',
-                            maxWidth: '100%',
-                          }}
+                          className="group/ref relative mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
+                          style={previewFrameCompare}
                         >
-                          <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
                             Reference
                           </div>
-                          {activeReferenceForCompare ? (
-                            <img
-                              src={activeReferenceForCompare}
-                              alt="Reference slot"
-                              className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/ref:scale-[1.02]"
-                            />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center text-white/50 text-xs">
-                              No reference slot
-                            </div>
-                          )}
+                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
+                            {activeReferenceForCompare ? (
+                              <img
+                                src={activeReferenceForCompare}
+                                alt="Reference slot"
+                                className="max-h-full max-w-full object-contain object-center"
+                              />
+                            ) : (
+                              <div className="flex max-h-full w-full items-center justify-center px-3 text-center text-white/50 text-xs">
+                                No reference slot
+                              </div>
+                            )}
+                          </div>
                         </div>
+                      </div>
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center lg:max-w-[min(100%,calc(50%-0.5rem))]">
                         <div
-                          className="group/live relative flex w-full items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                          style={{
-                            aspectRatio: previewAspectCss,
-                            height: previewMaxHeightCss,
-                            maxHeight: previewMaxHeightCss,
-                            width: 'auto',
-                            maxWidth: '100%',
-                          }}
+                          className="group/live relative mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                          style={previewFrameCompare}
                         >
-                          <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
                             Generated
                           </div>
-                          <img
-                            src={store.currentLiveImageUrl}
-                            alt="Live asset"
-                            className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
-                          />
-                          <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
+                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
+                            <img
+                              src={store.currentLiveImageUrl}
+                              alt="Live asset"
+                              className="max-h-full max-w-full object-contain object-center"
+                            />
+                          </div>
+                          <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
                             <Tooltip variant="asset" content="View full size with zoom" side="left">
                               <button
                                 type="button"
@@ -1599,110 +1633,294 @@ export const AssetsStudio: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <p className="mt-1 text-center text-[10px] text-violet-200/50">
-                        Split view — Reference (first slot) vs Generated ({effectiveAspectRatio})
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        className="group/live relative flex w-full max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                        style={{
-                          aspectRatio: previewAspectCss,
-                          height: previewMaxHeightCss,
-                          maxHeight: previewMaxHeightCss,
-                          width: 'auto',
-                          maxWidth: '100%',
-                        }}
-                      >
+                    </div>
+                    <p className="mt-2 max-w-xl text-center text-[10px] text-violet-200/60">
+                      Compare on — hover either panel to zoom in place ({effectiveAspectRatio}). Turn Compare off for one large preview.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="group/live relative mx-auto shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                      style={previewFrameSingle}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center p-3 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
                         <img
                           src={store.currentLiveImageUrl}
                           alt="Live asset"
-                          className="h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover/live:scale-[1.02]"
+                          className="max-h-full max-w-full object-contain object-center"
                         />
-                        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1">
-                          <Tooltip variant="asset" content="View full size with zoom" side="left">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setZoomLevel(1);
-                                setShowZoomModal(true);
-                              }}
-                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                            >
-                              <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                            </button>
-                          </Tooltip>
-                          <Tooltip variant="asset" content="Delete this image" side="left">
-                            <button
-                              type="button"
-                              onClick={() => discardLiveAssetImage()}
-                              className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                              aria-label="Delete image"
-                            >
-                              <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                            </button>
-                          </Tooltip>
+                      </div>
+                      <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
+                        <Tooltip variant="asset" content="View full size with zoom" side="left">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setZoomLevel(1);
+                              setShowZoomModal(true);
+                            }}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                          >
+                            <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                        <Tooltip variant="asset" content="Delete this image" side="left">
+                          <button
+                            type="button"
+                            onClick={() => discardLiveAssetImage()}
+                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
+                            aria-label="Delete image"
+                          >
+                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <p className="mt-2 max-w-md text-center text-[10px] text-violet-200/60">
+                      {effectiveAspectRatio} output
+                      {effectiveAspectRatio !== store.aspectRatio
+                        ? ` (effective ${effectiveAspectRatio}; chip ${store.aspectRatio})`
+                        : ''}
+                      {' '}
+                      — hover preview to zoom. Use Compare for side-by-side with references.
+                    </p>
+                  </>
+                )
+              ) : (
+                <div className="text-center space-y-2 px-4">
+                  <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
+                    <span className="text-2xl">🌍</span>
+                  </div>
+                  <p className="font-mono text-sm inline-block" style={goldTextStyle}>
+                    {store.architecturalLock ? 'ARCH LOCKED' : 'No live asset'}
+                  </p>
+                  <p className="text-xs text-white/50 max-w-xs mx-auto">
+                    Generate your first image or load from Recent in the workspace below.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 min-h-0 max-h-[min(36vh,300px)] flex flex-col border-t border-white/10 bg-black/20">
+              <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5">
+                <p className="text-[9px] leading-snug text-violet-200/65 line-clamp-2">
+                  Set <span className="text-amber-200/90">Room / Urban / Time</span>, then{' '}
+                  <span className="text-amber-200/90">Expand Setting</span> or{' '}
+                  <span className="text-amber-200/90">Generate Asset</span> (full prompt + refs).
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {assetSessionChips.map(({ key, label }) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/80"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                {((recentAssets.length > 0) || (getCachedGenerations('asset').length > 0)) && (
+                  <div className="rounded-lg border border-white/10 bg-black/25 p-2 space-y-2">
+                    {recentAssets.length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {recentAssets.map((item) => (
+                            <Tooltip variant="asset" key={item.id} content={item.displayName ?? item.collectionName ?? 'Asset'}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  store.setCurrentLiveImageUrl(item.imageUrl);
+                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                                }}
+                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                                }`}
+                              >
+                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            </Tooltip>
+                          ))}
                         </div>
                       </div>
-                      <p className="mt-1 text-center text-[10px] text-violet-200/50">
-                        {effectiveAspectRatio} output
-                        {effectiveAspectRatio !== store.aspectRatio
-                          ? ` (angle uses ${effectiveAspectRatio}; Aspect Ratio chip: ${store.aspectRatio})`
-                          : ''}
-                        {' '}
-                        — full image fits; expand for zoom
-                      </p>
-                    </>
-                  )
-                ) : (
-                  <div className="text-center space-y-2 px-4">
-                    <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
-                      <span className="text-2xl">🌍</span>
-                    </div>
-                    <p className="font-mono text-sm inline-block" style={goldTextStyle}>
-                      {store.architecturalLock ? 'ARCH LOCKED' : 'No live asset'}
-                    </p>
-                    <p className="text-xs text-white/50">Generate your first image or load from Recent.</p>
+                    )}
+                    {getCachedGenerations('asset').length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">This session</span>
+                        <div className="flex flex-wrap gap-2">
+                          {getCachedGenerations('asset').map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                store.setCurrentLiveImageUrl(item.url);
+                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                              }}
+                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                              }`}
+                            >
+                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+              <div className="flex-1 min-h-[120px] overflow-y-auto overflow-x-hidden custom-scrollbar px-3 pb-2 space-y-3">
+                <div>
+                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Room</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SPATIAL_ROOM_OPTIONS.map((opt) => (
+                      <Chip
+                        key={opt}
+                        label={opt}
+                        active={store.spatialRoomOption === opt}
+                        onClick={() => store.setSpatialRoomOption(store.spatialRoomOption === opt ? null : opt)}
+                        tooltip={SPATIAL_CHIP_TOOLTIP}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Urban</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SPATIAL_URBAN_OPTIONS.map((opt) => (
+                      <Chip
+                        key={opt}
+                        label={opt}
+                        active={store.spatialUrbanOption === opt}
+                        onClick={() => store.setSpatialUrbanOption(store.spatialUrbanOption === opt ? null : opt)}
+                        tooltip={SPATIAL_CHIP_TOOLTIP}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Time / season</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TIME_SEASON_OPTIONS.map((opt) => (
+                      <Chip
+                        key={opt}
+                        label={opt}
+                        active={store.timeSeason === opt}
+                        onClick={() => store.setTimeSeason(store.timeSeason === opt ? null : opt)}
+                        tooltip={SPATIAL_CHIP_TOOLTIP}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Aspect</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
+                      <Chip
+                        key={ratio}
+                        label={ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'}
+                        active={store.aspectRatio === ratio}
+                        onClick={() => store.setAspectRatio(ratio)}
+                        tooltip={ASPECT_RATIO_CHIP_TOOLTIP}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Camera</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS.map((opt) => (
+                      <Chip
+                        key={opt}
+                        label={opt}
+                        active={(store.cinematic.angle || '') === opt}
+                        onClick={() => store.setCinematic('angle', opt)}
+                        tooltip={CAMERA_ANGLE_CHIP_TOOLTIP}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
-                <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
-                  <span className="text-[10px] uppercase tracking-wider text-violet-200/60">Seed</span>
-                  <Tooltip
-                    variant="asset"
-                    content="Use a new random seed on each generation (more variation)."
-                    side="top"
-                  >
+            </div>
+
+            <div className="shrink-0 border-t border-white/10 bg-black/35 p-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">Thumbnails</span>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'compact'}
+                  onClick={() => store.setGalleryDensity('compact')}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'compact'
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'compact'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'comfortable'}
+                  onClick={() => store.setGalleryDensity('comfortable')}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'comfortable'
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'comfortable'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Comfortable
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={compareSplit}
+                  onClick={() => setCompareSplit((v) => !v)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    compareSplit
+                      ? 'text-violet-950 border-amber-500 shadow-md'
+                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                >
+                  Compare {compareSplit ? 'On' : 'Off'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px] uppercase tracking-wider text-violet-200/60">Seed</span>
+                  <Tooltip variant="asset" content="Use a new random seed on each generation (more variation)." side="top">
                     <button
                       type="button"
                       onClick={() => store.setSeedMode('randomized')}
-                      className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                      className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
                         (store.seedMode ?? 'randomized') === 'randomized'
                           ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
                           : 'border-white/20 text-violet-200/70 hover:bg-white/10'
                       }`}
                     >
-                      Randomized
+                      Random
                     </button>
                   </Tooltip>
-                  <Tooltip
-                    variant="asset"
-                    content="Reuse the current seed so successive runs stay more consistent."
-                    side="top"
-                  >
+                  <Tooltip variant="asset" content="Reuse the current seed so successive runs stay more consistent." side="top">
                     <button
                       type="button"
                       onClick={() => store.setSeedMode('locked')}
-                      className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
+                      className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
                         store.seedMode === 'locked'
                           ? 'border-amber-500/60 bg-amber-500/15'
                           : 'border-white/20 text-violet-200/70 hover:bg-white/10'
                       }`}
                     >
-                      <span className="inline-block" style={goldTextStyle}>Locked</span>
+                      <span className="inline-block" style={goldTextStyle}>Lock</span>
                     </button>
                   </Tooltip>
                 </div>
@@ -1715,7 +1933,7 @@ export const AssetsStudio: React.FC = () => {
                     type="button"
                     onClick={handleGenerateAsset}
                     disabled={store.generationStatus === 'pending'}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                    className="px-2.5 py-1 rounded-full text-[10px] font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
                     style={
                       store.generationStatus === 'pending'
                         ? { background: GEM_AMETHYST, boxShadow: `0 0 16px ${GEM_AMETHYST}` }
@@ -1725,38 +1943,30 @@ export const AssetsStudio: React.FC = () => {
                     {store.generationStatus === 'pending' ? (
                       <span className="inline-flex items-center gap-2">
                         <span
-                          className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
+                          className="inline-block w-3.5 h-3.5 rounded-sm rotate-45 animate-pulse"
                           style={{ background: GEM_AMETHYST, boxShadow: `0 0 10px ${GEM_AMETHYST}` }}
                           aria-label="Generating..."
                         />
                         <span className="animate-pulse">Working…</span>
                       </span>
                     ) : (
-                      'Generate Asset'
+                      'Generate'
                     )}
                   </button>
                 </Tooltip>
-                <Tooltip
-                  variant="asset"
-                  content="Run generation again with the same settings (respects Randomized vs Locked)."
-                  side="top"
-                >
+                <Tooltip variant="asset" content="Run generation again with the same settings (respects Randomized vs Locked)." side="top">
                   <span className="inline-flex">
                     <button
                       type="button"
                       onClick={() => void handleGenerateAsset()}
                       disabled={store.generationStatus === 'pending'}
-                      className="px-3 py-1.5 rounded-full text-xs font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
+                      className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
                     >
-                      <span className="text-violet-200/90">Generate again</span>
+                      <span className="text-violet-200/90">Again</span>
                     </button>
                   </span>
                 </Tooltip>
-                <Tooltip
-                  variant="asset"
-                  content="Restore the previous live preview and seed."
-                  side="top"
-                >
+                <Tooltip variant="asset" content="Restore the previous live preview and seed." side="top">
                   <span className="inline-flex">
                     <button
                       type="button"
@@ -1767,9 +1977,9 @@ export const AssetsStudio: React.FC = () => {
                         store.setCurrentGenerationSeed(store.previousGenerationSeed);
                         store.setPreviousLiveSnapshot(null, null);
                       }}
-                      className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
+                      className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
                     >
-                      Undo last gen
+                      Undo
                     </button>
                   </span>
                 </Tooltip>
@@ -1779,9 +1989,9 @@ export const AssetsStudio: React.FC = () => {
                       type="button"
                       onClick={() => openSaveAssetModal('new')}
                       disabled={!store.currentLiveImageUrl}
-                      className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span className="inline-block" style={goldTextStyle}>Save New Asset</span>
+                      <span className="inline-block" style={goldTextStyle}>Save new</span>
                     </button>
                   </span>
                 </Tooltip>
@@ -1793,33 +2003,25 @@ export const AssetsStudio: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleExpandSetting}
-                    className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs"
+                    className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px]"
                   >
-                    <span className="inline-block" style={goldTextStyle}>Expand Setting</span>
+                    <span className="inline-block" style={goldTextStyle}>Expand</span>
                   </button>
                 </Tooltip>
-                <Tooltip
-                  variant="asset"
-                  content="Save this image into a vault collection you choose."
-                  side="top"
-                >
+                <Tooltip variant="asset" content="Save this image into a vault collection you choose." side="top">
                   <span className="inline-flex">
                     <button
                       type="button"
                       onClick={() => openSaveAssetModal('library')}
                       disabled={!store.currentLiveImageUrl}
-                      className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span className="inline-block" style={goldTextStyle}>Add to Library</span>
+                      <span className="inline-block" style={goldTextStyle}>Library</span>
                     </button>
                   </span>
                 </Tooltip>
                 {hasStories ? (
-                  <Tooltip
-                    variant="asset"
-                    content="Attach this image to a story's photo collection as a reference."
-                    side="top"
-                  >
+                  <Tooltip variant="asset" content="Attach this image to a story's photo collection as a reference." side="top">
                     <span className="inline-flex">
                       <CastInStoryButton
                         stories={stories}
@@ -1829,111 +2031,18 @@ export const AssetsStudio: React.FC = () => {
                     </span>
                   </Tooltip>
                 ) : (
-                  <Tooltip
-                    variant="asset"
-                    content="Available when you have at least one story with a photo collection."
-                    side="top"
-                  >
+                  <Tooltip variant="asset" content="Available when you have at least one story with a photo collection." side="top">
                     <span className="inline-flex">
                       <button
                         type="button"
                         disabled
-                        className="px-3 py-1.5 rounded-full border border-white/20 font-medium text-xs cursor-not-allowed opacity-60"
+                        className="px-2.5 py-1 rounded-full border border-white/20 font-medium text-[10px] cursor-not-allowed opacity-60"
                       >
-                        <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
+                        <span className="inline-block" style={goldTextStyle}>Cast</span>
                       </button>
                     </span>
                   </Tooltip>
                 )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Spatial Expansion Gallery */}
-          <div className="flex-[0_0_28%] min-w-0 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
-              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-2" style={goldTextStyle}>
-                Spatial Expansion Gallery
-              </h2>
-              <p className="text-[10px] leading-snug text-violet-200/70 mb-3">
-                Choose Room / Urban / Time, then use{' '}
-                <span className="text-amber-200/90">Expand Setting</span> to push a new shot from the live preview (different seed + expansion cue).{' '}
-                <span className="text-amber-200/90">Generate Asset</span> runs the full prompt with your references and may look like a variation of the same scene.
-              </p>
-
-              <div>
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Room Expansion</label>
-                <div className="flex flex-wrap gap-2">
-                  {SPATIAL_ROOM_OPTIONS.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={store.spatialRoomOption === opt}
-                      onClick={() => store.setSpatialRoomOption(store.spatialRoomOption === opt ? null : opt)}
-                      tooltip={SPATIAL_CHIP_TOOLTIP}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Urban Expansion</label>
-                <div className="flex flex-wrap gap-2">
-                  {SPATIAL_URBAN_OPTIONS.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={store.spatialUrbanOption === opt}
-                      onClick={() => store.setSpatialUrbanOption(store.spatialUrbanOption === opt ? null : opt)}
-                      tooltip={SPATIAL_CHIP_TOOLTIP}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Time / Season</label>
-                <div className="flex flex-wrap gap-2">
-                  {TIME_SEASON_OPTIONS.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={store.timeSeason === opt}
-                      onClick={() => store.setTimeSeason(store.timeSeason === opt ? null : opt)}
-                      tooltip={SPATIAL_CHIP_TOOLTIP}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Aspect Ratio</label>
-                <div className="flex flex-wrap gap-2">
-                  {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
-                    <Chip
-                      key={ratio}
-                      label={ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'}
-                      active={store.aspectRatio === ratio}
-                      onClick={() => store.setAspectRatio(ratio)}
-                      tooltip={ASPECT_RATIO_CHIP_TOOLTIP}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>Camera Angle</label>
-                <div className="flex flex-wrap gap-2">
-                  {SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={(store.cinematic.angle || '') === opt}
-                      onClick={() => store.setCinematic('angle', opt)}
-                      tooltip={CAMERA_ANGLE_CHIP_TOOLTIP}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </div>

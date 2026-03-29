@@ -85,6 +85,22 @@
 
 **Implementation (2026-03-27):** Shared helpers [`studioPreviewLayout.ts`](src/shared/utils/studioPreviewLayout.ts) (`studioPreviewAspectCss`, `studioPreviewMaxHeightCss`). Character and Asset studios use an **xl+ split** inside the generation card: scrollable sidebar (thumbnail density, **Compare**, recent/session strips) beside a **large `object-contain` preview** sized to the active aspect ratio (Character: gallery aspect; Asset: effective Gemini aspect). Compare on Asset = first reference slot vs generated. Image Lab uses **lg+** two-column layout with a dedicated large preview column. Beat/timeline preview remains as in Phase 1e.
 
+**Superseded in part by Phase 2b (2026-03-28):** Both studios now use a **viewport-locked 40/60 shell** (see below). The xl sidebar beside the preview is removed in favor of **toolbar-only** controls on the top stage and **recent/session + spatial** in the **bottom ~40%** pane (Asset: spatial gallery moved off the third column).
+
+## Phase 2b — Studio 40/60 split shell (2026-03-28)
+
+**Goal:** Lock Character and Asset studios to the main viewport (**no page scroll** on `studio` / `assets` portals at 1080p): **left 40%** = one scrollable module area + **Live Prompt** (with **PIN**) + **bottom module dock**; **right 60%** = **~60% top** live generation stage (`flex-[3]`, `studioPreviewFrameStyle` **`stage` / `stageCompare`**) + **~40% bottom** scrollable workspace (`flex-[2]`).
+
+**Files**
+
+- [`App.tsx`](src/App.tsx): `studio` / `assets` lazy portals wrapped in `h-full min-h-0 flex flex-col overflow-hidden` (no `space-y-8` on those routes).
+- [`AppShell.tsx`](src/components/layout/AppShell.tsx): When `activePortal === 'studio' || 'assets'`, main content uses `overflow-y-hidden` + `min-h-0` so only internal studio regions scroll.
+- [`studioPreviewLayout.ts`](src/shared/utils/studioPreviewLayout.ts): `StudioPreviewLayoutMode` includes **`stage`** / **`stageCompare`** with tighter caps for the split right column.
+- [`CharacterStudio.tsx`](src/portals/CharacterStudio.tsx): `flex-[0_0_40%]` left column; modules **Refs / DNA / Style**; flat **7×2** reference hub; right column **status** + **`flex-[3]`** generation + **`flex-[2]`** Reference Gallery (poses, recents, session — **flex-wrap**, no horizontal strip).
+- [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx): Same shell; modules **Refs / Build / Look** (hub, structural tags, material + cinematic + tags); right column **status** + **`flex-[3]`** Reference Image Generation + **`flex-[2]`** Spatial Expansion Gallery, aspect/camera chips, **flex-wrap** recents/session.
+
+**Verify:** `npm run test -- --run`; `npm run build`; manual at **1920×1080**, **100% zoom** — no document scroll on studio roots; **PIN** expand/collapse; **Compare** + generate; bottom panes scroll internally only.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
@@ -224,6 +240,15 @@ Notes:
     - Supabase: `arcsPersistence.updateCharacterThumbnailFocusDb` → `metadata_tags.archive_thumbnail`
     - Offline: `generationOutputRouter.updateCharacterGenerationThumbnailFocus`
   - **Verify**: Adjust framing → Save → immediately reflected in Vault; refresh persists (Supabase/local).
+
+---
+
+## Reference studios — 60/40 shell + merged workspace (2026-03-28)
+
+- **Split:** Left column `flex-[0_0_60%] max-w-[60%]`; right `flex-[0_0_40%] max-w-[40%]` in `CharacterStudio.tsx` and `AssetsStudio.tsx`.
+- **Hub:** No dashed bulk multi-upload row; **Clear all** / **Paste first empty** on the focused-slot toolbar row.
+- **Live Prompt:** **Model** and pin/last-prompt controls moved to a shared **footer** under tabs; Edit tab is textarea + snippets only.
+- **Right:** One card (**Reference workspace** / **Asset workspace**): preview → scrollable gallery/spatial block → stacked **horizontal tool strips** (thumbnails + Compare; generate/save; Character: age + aspect + camera compact).
 
 ---
 

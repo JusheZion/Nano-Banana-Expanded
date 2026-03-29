@@ -13,22 +13,43 @@ export function studioPreviewAspectCss(id: StudioPreviewAspectId): string {
   return '9 / 16';
 }
 
+export type StudioPreviewLayoutMode = 'single' | 'compare' | 'stage' | 'stageCompare';
+
 /** Max height for the framed preview (object-contain inside). */
 export function studioPreviewMaxHeightCss(
   id: StudioPreviewAspectId,
-  mode: 'single' | 'compare' = 'single'
+  mode: StudioPreviewLayoutMode = 'single'
 ): string {
+  const isCompare = mode === 'compare' || mode === 'stageCompare';
+  const isStage = mode === 'stage' || mode === 'stageCompare';
+
+  if (isStage) {
+    if (id === '21:9') {
+      return isCompare
+        ? 'min(28vh, calc(100vh - 22rem))'
+        : 'min(36vh, calc(100vh - 18rem))';
+    }
+    if (id === '1:1') {
+      return isCompare
+        ? 'min(42vh, calc(100vh - 20rem))'
+        : 'min(50vh, calc(100vh - 17rem))';
+    }
+    return isCompare
+      ? 'min(44vh, calc(100vh - 19rem))'
+      : 'min(52vh, calc(100vh - 16rem))';
+  }
+
   if (id === '21:9') {
-    return mode === 'compare'
+    return isCompare
       ? 'min(44vh, calc(100vh - 15rem))'
       : 'min(58vh, calc(100vh - 11rem))';
   }
   if (id === '1:1') {
-    return mode === 'compare'
+    return isCompare
       ? 'min(68vh, calc(100vh - 15rem))'
       : 'min(84vh, calc(100vh - 9rem))';
   }
-  return mode === 'compare'
+  return isCompare
     ? 'min(76vh, calc(100vh - 13rem))'
     : 'min(86vh, calc(100vh - 9rem))';
 }
@@ -40,7 +61,7 @@ export function studioPreviewMaxHeightCss(
  */
 export function studioPreviewFrameStyle(
   id: StudioPreviewAspectId,
-  mode: 'single' | 'compare' = 'single'
+  mode: StudioPreviewLayoutMode = 'single'
 ): CSSProperties {
   const mh = studioPreviewMaxHeightCss(id, mode);
   return {

@@ -46,14 +46,16 @@ function App() {
       {activePortal === 'home' && <LandingPage onNavigate={setActivePortal} />}
       {activePortal === 'studio' && (
         <Suspense fallback={<PortalFallback />}>
-          <div className="space-y-8">
+          <div className="h-full min-h-0 flex flex-col overflow-hidden">
             <CharacterStudio />
           </div>
         </Suspense>
       )}
       {activePortal === 'assets' && (
         <Suspense fallback={<PortalFallback />}>
-          <AssetsStudio />
+          <div className="h-full min-h-0 flex flex-col overflow-hidden">
+            <AssetsStudio />
+          </div>
         </Suspense>
       )}
       {activePortal === 'reference' && (

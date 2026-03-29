@@ -193,3 +193,118 @@ export async function generateGeminiText(
 
   return { ok: false, error: lastError || 'Unknown error' };
 }
+
+export interface GenerateGeminiTextFromImageOptions {
+  systemPrompt: string;
+  userText: string;
+  imageBase64: string;
+  mimeType: string;
+}
+
+/**
+ * Single-turn vision → text (e.g. describe a portrait for a reference prompt).
+ * Uses the same models and retry policy as {@link generateGeminiText}.
+ */
+export async function generateGeminiTextFromImage(
+  options: GenerateGeminiTextFromImageOptions
+): Promise<GenerateGeminiTextResult> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  if (!apiKey) {
+    return { ok: false, error: 'Missing VITE_GEMINI_API_KEY' };
+  }
+
+  const body: Record<string, unknown> = {
+    systemInstruction: { parts: [{ text: options.systemPrompt }] },
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: options.mimeType, data: options.imageBase64 } },
+          { text: options.userText },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.35,
+      maxOutputTokens: 2048,
+    },
+  };
+
+  let lastError: string | null = null;
+  try {
+    for (const model of TEXT_MODELS) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        let res: Response;
+        try {
+          res = await fetchWithTimeout(
+            url,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            },
+            GEMINI_FETCH_TIMEOUT_MS
+          );
+        } catch (netErr) {
+          return {
+            ok: false,
+            error: isAbortError(netErr)
+              ? 'Text request timed out.'
+              : netErr instanceof Error
+                ? netErr.message
+                : 'Network error while calling text API',
+          };
+        }
+
+        if (isRateLimitResponse(res)) {
+          lastError = 'Rate limited. Try again in a moment.';
+          if (attempt < MAX_RETRIES) {
+            await delay(backoffDelay(attempt));
+            continue;
+          }
+          return { ok: false, error: lastError };
+        }
+
+        let data: unknown;
+        try {
+          data = await readResponseJsonWithTimeout(res, GEMINI_READ_BODY_TIMEOUT_MS);
+        } catch (readErr) {
+          const msg = readErr instanceof Error ? readErr.message : String(readErr);
+          return { ok: false, error: msg };
+        }
+
+        if (!res.ok) {
+          const errObj = (data as { error?: { message?: string } })?.error;
+          const msg =
+            errObj?.message && typeof errObj.message === 'string'
+              ? errObj.message
+              : res.statusText || 'Request failed';
+
+          if (isModelUnavailableError(msg) && model !== TEXT_MODELS[TEXT_MODELS.length - 1]) {
+            lastError = msg;
+            break;
+          }
+          return { ok: false, error: msg };
+        }
+
+        const text = extractTextFromResponse(data).trim();
+        if (text) {
+          return { ok: true, text };
+        }
+        lastError = 'No text in response';
+        if (attempt < MAX_RETRIES) {
+          await delay(backoffDelay(attempt));
+          continue;
+        }
+      }
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Vision text generation failed unexpectedly',
+    };
+  }
+
+  return { ok: false, error: lastError || 'Unknown error' };
+}

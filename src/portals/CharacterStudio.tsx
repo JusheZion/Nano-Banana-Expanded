@@ -2,11 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
-  ChevronDown,
   Copy,
+  Dna,
   Expand,
   ExternalLink,
   ImagePlus,
+  LayoutGrid,
+  Pin,
+  PinOff,
+  Shirt,
+  Sparkles,
   Trash2,
   Upload,
   X,
@@ -29,7 +34,7 @@ import {
   CHARACTER_STUDIO_EMERALD_TEXT,
   GEM_EMERALD,
 } from '@/shared/theme/Phase12DesignTokens';
-import { getSlotLabel, REFERENCE_SLOT_DNA_GROUPS } from '@/shared/constants/referenceSlots';
+import { getSlotLabel } from '@/shared/constants/referenceSlots';
 import {
   ART_STYLE_FLAGSHIP,
   ART_STYLE_LIBRARY,
@@ -46,7 +51,8 @@ import {
 } from '@/data/character_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
-import { generateImage } from '@/shared/api/geminiImageApi';
+import { generateImage, urlToBase64WithMime } from '@/shared/api/geminiImageApi';
+import { generateGeminiTextFromImage } from '@/shared/api/geminiTextApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import {
@@ -227,9 +233,9 @@ export const CharacterStudio: React.FC = () => {
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
   /** Single focused slot drives the shared Upload / Archive / Clear toolbar. */
   const [focusedReferenceSlotIndex, setFocusedReferenceSlotIndex] = useState(0);
-  const [expandedRefDnaGroupId, setExpandedRefDnaGroupId] = useState<string>(
-    REFERENCE_SLOT_DNA_GROUPS[0]?.id ?? 'identity'
-  );
+  type CharacterLeftModule = 'hub' | 'dna' | 'style';
+  const [leftModule, setLeftModule] = useState<CharacterLeftModule>('hub');
+  const [promptPinned, setPromptPinned] = useState(true);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadSlotIndexRef = useRef<number | null>(null);
   const [showSaveCharacterModal, setShowSaveCharacterModal] = useState(false);
@@ -243,6 +249,10 @@ export const CharacterStudio: React.FC = () => {
   const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'reference' | 'edit' | 'refine'>('auto');
   const [snippetNameInput, setSnippetNameInput] = useState('');
   const [snippetTextInput, setSnippetTextInput] = useState('');
+  /** Vision model: text prompt describing the current live frame (Reference Prompt tab). */
+  const [aiReferencePrompt, setAiReferencePrompt] = useState('');
+  const [aiReferencePromptLoading, setAiReferencePromptLoading] = useState(false);
+  const [aiReferencePromptError, setAiReferencePromptError] = useState<string | null>(null);
   const [refHoverPreview, setRefHoverPreview] = useState<{
     url: string;
     x: number;
@@ -280,14 +290,6 @@ export const CharacterStudio: React.FC = () => {
   }, [consumeImportForTarget]);
 
   useEffect(() => {
-    const grp = REFERENCE_SLOT_DNA_GROUPS.find(
-      (g) =>
-        focusedReferenceSlotIndex >= g.start && focusedReferenceSlotIndex <= g.end
-    );
-    if (grp) setExpandedRefDnaGroupId(grp.id);
-  }, [focusedReferenceSlotIndex]);
-
-  useEffect(() => {
     setRecentCharacters(getRecentCharacters());
   }, []);
 
@@ -298,6 +300,11 @@ export const CharacterStudio: React.FC = () => {
     }, 2500);
     return () => clearInterval(id);
   }, [store.generationStatus]);
+
+  useEffect(() => {
+    setAiReferencePrompt('');
+    setAiReferencePromptError(null);
+  }, [store.currentLiveImageUrl]);
 
   const generateCharacterRef = useRef<() => Promise<void>>(async () => {});
 
@@ -345,7 +352,7 @@ export const CharacterStudio: React.FC = () => {
     promptPanelTab === 'auto'
       ? displayPrompt
       : promptPanelTab === 'reference'
-        ? referencePromptText
+        ? aiReferencePrompt.trim()
         : promptPanelTab === 'edit'
           ? store.vaultPromptOverride
           : store.refinementPromptOverride;
@@ -364,11 +371,50 @@ export const CharacterStudio: React.FC = () => {
         ? 'Cinematic 21:9'
         : 'Square 1:1';
   const previewAspectId = store.aspectRatio as StudioPreviewAspectId;
-  const previewFrameSingle = studioPreviewFrameStyle(previewAspectId, 'single');
-  const previewFrameCompare = studioPreviewFrameStyle(previewAspectId, 'compare');
+  const previewFrameCompare = studioPreviewFrameStyle(previewAspectId, 'stageCompare');
+  /** Live + Pose 1/2 tiles — target ~231×409 (portrait), wrap on narrow panes */
+  const tripleSlotFrameStyle: React.CSSProperties = {
+    width: 231,
+    height: 409,
+    maxWidth: '100%',
+    flexShrink: 0,
+    boxSizing: 'border-box',
+    position: 'relative',
+  };
   const cameraSessionLabel = store.cinematic.angle?.trim()
     ? `Cam: ${store.cinematic.angle}`
     : 'Cam: —';
+
+  const handleGenerateAiReferencePrompt = async () => {
+    const url = store.currentLiveImageUrl;
+    if (!url?.trim()) {
+      setAiReferencePromptError('Generate or load a live image first.');
+      return;
+    }
+    if (store.generationStatus === 'pending') return;
+    setAiReferencePromptLoading(true);
+    setAiReferencePromptError(null);
+    try {
+      const { base64, mimeType } = await urlToBase64WithMime(url);
+      const res = await generateGeminiTextFromImage({
+        systemPrompt:
+          'You write dense, generation-ready image prompts for character portrait models. Stay faithful to what is visible in the image; do not invent identity or heritage details that are not shown. Plain text only, no markdown.',
+        userText:
+          'Write one detailed text-to-image prompt describing this portrait: visible appearance, clothing, pose, expression, lighting, framing, and rendering style. Optimize for use with Gemini / Nano Banana image generation.',
+        imageBase64: base64,
+        mimeType: mimeType || 'image/jpeg',
+      });
+      if (!res.ok) {
+        setAiReferencePromptError(res.error);
+        return;
+      }
+      setAiReferencePrompt(res.text);
+    } catch (e) {
+      setAiReferencePromptError(e instanceof Error ? e.message : 'Could not describe image.');
+    } finally {
+      setAiReferencePromptLoading(false);
+    }
+  };
 
   const sendPoseImageToFirstEmptyReferenceSlot = (imageUrl: string | undefined) => {
     if (!imageUrl?.trim()) {
@@ -780,7 +826,7 @@ export const CharacterStudio: React.FC = () => {
   return (
     <>
     <div
-      className="flex flex-col min-h-screen p-4 animate-fade-in"
+      className="flex flex-col h-full min-h-0 overflow-hidden p-3 animate-fade-in"
       style={{ background: CHARACTER_STUDIO_BG_V4 }}
     >
       {/* Header: gold strip (Comic Studio style), title in emerald gradient */}
@@ -796,91 +842,16 @@ export const CharacterStudio: React.FC = () => {
         </h1>
       </header>
 
-      {/* Main content: left full height + scroll; center+right capped height + 100px */}
-      <div className="flex gap-3 w-full flex-1 min-h-0">
-        <div className="flex-[0_0_34%] min-w-0 h-[calc(85vh+100px)] flex flex-col gap-3 flex-shrink-0">
-          {/* Reference panel — own card + scrollbar */}
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-col min-h-[200px] flex-1 overflow-hidden shadow-lg shadow-black/20">
-            <div className="p-2 flex flex-col min-h-0 flex-1 overflow-hidden">
+      {/* Main: 60% module column | 40% visual stage */}
+      <div className="flex gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
+        <div className="flex-[0_0_60%] max-w-[60%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
+          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
+            {leftModule === 'hub' && (
+            <>
             <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
               Reference images
             </h2>
-            <Tooltip
-              variant="character"
-              content="Bulk add: images fill empty slots in order (slots 1–4 Identity, 5–10 Wardrobe, 11–14 Atmospheric). Per-slot Upload still assigns a specific slot."
-              side="bottom"
-            >
-              <label className="flex rounded-lg border border-dashed border-amber-500/50 bg-black/25 px-2 py-2 mb-2 cursor-pointer hover:border-amber-400/70 hover:bg-black/35 transition-colors shrink-0">
-                <span className="text-[10px] font-medium text-emerald-200/90">
-                  Add image(s) to next empty slots ({Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).filter(Boolean).length}/14)
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = e.target.files;
-                    if (!files?.length) return;
-                    const next = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i] ?? '');
-                    let slot = 0;
-                    let lastUrl: string | null = null;
-                    for (const file of Array.from(files)) {
-                      if (!file.type.startsWith('image/')) continue;
-                      while (slot < 14 && next[slot]) slot++;
-                      if (slot >= 14) break;
-                      const url = URL.createObjectURL(file);
-                      next[slot] = url;
-                      lastUrl = url;
-                      slot++;
-                    }
-                    store.setReferenceImageUrls(next);
-                    if (lastUrl) store.setCurrentLiveImageUrl(lastUrl);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </Tooltip>
-            <div className="flex flex-wrap gap-2 mb-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  store.clearAllReferenceSlots();
-                  store.setCurrentLiveImageUrl(null);
-                }}
-                className="px-2 py-1 rounded-lg text-[10px] border border-white/20 hover:bg-white/10"
-              >
-                Clear all slots
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const clipItems = await navigator.clipboard.read();
-                    for (const item of clipItems) {
-                      for (const type of item.types) {
-                        if (type.startsWith('image/')) {
-                          const blob = await item.getType(type);
-                          const url = URL.createObjectURL(blob);
-                          const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
-                          const firstEmpty = slots.findIndex((u) => !u);
-                          if (firstEmpty >= 0) {
-                            store.setReferenceImageAt(firstEmpty, url);
-                            store.setCurrentLiveImageUrl(url);
-                          }
-                          return;
-                        }
-                      }
-                    }
-                  } catch {
-                    store.setGenerationStatus('error', 'Could not paste image from clipboard (permission or no image).');
-                  }
-                }}
-                className="px-2 py-1 rounded-lg text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
-              >
-                Paste in first empty
-              </button>
-            </div>
             <input
               ref={uploadInputRef}
               type="file"
@@ -898,8 +869,8 @@ export const CharacterStudio: React.FC = () => {
                 e.target.value = '';
               }}
             />
-            <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-2">
-              <div className="text-[10px] text-white/85 min-w-0 flex-1 basis-[160px]">
+            <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <div className="text-[10px] text-white/85 min-w-0 flex-1 basis-[140px]">
                 <span className="font-bold text-amber-200/90">
                   Slot {focusedReferenceSlotIndex + 1}
                 </span>
@@ -907,6 +878,44 @@ export const CharacterStudio: React.FC = () => {
                 <span className="text-white/75">{getSlotLabel(focusedReferenceSlotIndex)}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.clearAllReferenceSlots();
+                    store.setCurrentLiveImageUrl(null);
+                  }}
+                  className="px-2 py-1 rounded-md text-[9px] border border-white/25 hover:bg-white/10"
+                >
+                  Clear all
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const clipItems = await navigator.clipboard.read();
+                      for (const item of clipItems) {
+                        for (const type of item.types) {
+                          if (type.startsWith('image/')) {
+                            const blob = await item.getType(type);
+                            const url = URL.createObjectURL(blob);
+                            const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
+                            const firstEmpty = slots.findIndex((u) => !u);
+                            if (firstEmpty >= 0) {
+                              store.setReferenceImageAt(firstEmpty, url);
+                              store.setCurrentLiveImageUrl(url);
+                            }
+                            return;
+                          }
+                        }
+                      }
+                    } catch {
+                      store.setGenerationStatus('error', 'Could not paste image from clipboard (permission or no image).');
+                    }
+                  }}
+                  className="px-2 py-1 rounded-md text-[9px] border border-amber-500/40 hover:bg-amber-500/10"
+                >
+                  Paste first empty
+                </button>
                 <Tooltip variant="character" content="Upload an image into the focused slot" side="bottom">
                   <button
                     type="button"
@@ -954,113 +963,88 @@ export const CharacterStudio: React.FC = () => {
               </div>
             </div>
             <p className="text-[10px] text-white/50 mb-1 shrink-0">
-              Click a thumbnail to focus a slot. One DNA group is open at a time—expand a header to switch groups.
+              Click a thumbnail to focus a slot. Labels show slot role in the API stack.
             </p>
-            <div className="mt-1 space-y-2 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+            <div className="mt-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
               {!Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]).some(Boolean) && (
                 <p className="text-xs text-amber-200/70 mb-2">
                   No references yet. Pick a slot, use Upload or Archive, or paste an image.
                 </p>
               )}
-              {REFERENCE_SLOT_DNA_GROUPS.map((group) => {
-                const isExpanded = expandedRefDnaGroupId === group.id;
-                return (
-                  <div key={group.id} className="rounded-lg border border-white/10 bg-black/20 overflow-hidden">
-                    <button
-                      type="button"
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors"
-                      onClick={() => setExpandedRefDnaGroupId(group.id)}
-                      aria-expanded={isExpanded}
-                    >
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 shrink-0 text-amber-400/80 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
-                        aria-hidden
-                      />
-                      <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400/90 flex-1 min-w-0">
-                        {group.label}{' '}
-                        <span className="font-normal opacity-80">({group.subtitle})</span>
-                      </h3>
-                    </button>
-                    {isExpanded && (
-                      <div className="px-2 pb-2 pt-0.5 flex flex-wrap gap-2 border-t border-white/5">
-                        {Array.from({ length: group.end - group.start + 1 }, (_, j) => {
-                          const i = group.start + j;
-                          const url = store.referenceImageUrls[i];
-                          const isFocused = focusedReferenceSlotIndex === i;
-                          return (
-                            <div key={i} className="flex flex-col items-center gap-0.5 group/slot">
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => setFocusedReferenceSlotIndex(i)}
-                                  className={`relative w-11 h-11 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
-                                    url
-                                      ? 'border-2 border-amber-500/55'
-                                      : 'border-2 border-dashed border-white/25'
-                                  } ${isFocused ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-black/70' : ''}`}
-                                  aria-pressed={isFocused}
-                                  aria-label={`Reference slot ${i + 1}, ${getSlotLabel(i)}`}
-                                  onMouseEnter={
-                                    url
-                                      ? (e) =>
-                                          setRefHoverPreview({
-                                            url,
-                                            x: e.clientX + 12,
-                                            y: e.clientY + 12,
-                                          })
-                                      : undefined
-                                  }
-                                  onMouseMove={
-                                    url
-                                      ? (e) =>
-                                          setRefHoverPreview({
-                                            url,
-                                            x: e.clientX + 12,
-                                            y: e.clientY + 12,
-                                          })
-                                      : undefined
-                                  }
-                                  onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
-                                >
-                                  {url ? (
-                                    <img src={url} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <span className="text-[8px] text-white/40">{i + 1}</span>
-                                  )}
-                                </button>
-                                {url ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      const wasLive = store.currentLiveImageUrl === url;
-                                      store.removeReferenceImage(i);
-                                      if (wasLive) {
-                                        const nextUrls =
-                                          useCharacterStudioStore.getState().referenceImageUrls;
-                                        const still = nextUrls.filter(Boolean);
-                                        store.setCurrentLiveImageUrl(still[0] ?? null);
-                                      }
-                                    }}
-                                    className="absolute -top-1 -right-1 z-10 w-4 h-4 rounded-full bg-black/85 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
-                                    aria-label={`Remove slot ${i + 1}`}
-                                  >
-                                    ×
-                                  </button>
-                                ) : null}
-                              </div>
-                              <span className="text-[9px] text-center text-white/65 max-w-[4.5rem] leading-tight">
-                                {getSlotLabel(i)}
-                              </span>
-                            </div>
-                          );
-                        })}
+              <div className="grid grid-cols-7 gap-x-1 gap-y-1.5 w-full justify-items-center">
+                {Array.from({ length: 14 }, (_, i) => {
+                  const url = store.referenceImageUrls[i];
+                  const isFocused = focusedReferenceSlotIndex === i;
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-0.5 min-w-0 max-w-[4.5rem] group/slot">
+                      <div className="relative h-[106px] w-[60px] shrink-0 mx-auto">
+                        <button
+                          type="button"
+                          onClick={() => setFocusedReferenceSlotIndex(i)}
+                          className={`absolute inset-0 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
+                            url
+                              ? 'border-2 border-amber-500/55'
+                              : 'border-2 border-dashed border-white/25'
+                          } ${isFocused ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-black/70' : ''}`}
+                          aria-pressed={isFocused}
+                          aria-label={`Reference slot ${i + 1}, ${getSlotLabel(i)}`}
+                          onMouseEnter={
+                            url
+                              ? (e) =>
+                                  setRefHoverPreview({
+                                    url,
+                                    x: e.clientX + 12,
+                                    y: e.clientY + 12,
+                                  })
+                              : undefined
+                          }
+                          onMouseMove={
+                            url
+                              ? (e) =>
+                                  setRefHoverPreview({
+                                    url,
+                                    x: e.clientX + 12,
+                                    y: e.clientY + 12,
+                                  })
+                              : undefined
+                          }
+                          onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
+                        >
+                          {url ? (
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[8px] text-white/40">{i + 1}</span>
+                          )}
+                        </button>
+                        {url ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const wasLive = store.currentLiveImageUrl === url;
+                              store.removeReferenceImage(i);
+                              if (wasLive) {
+                                const nextUrls =
+                                  useCharacterStudioStore.getState().referenceImageUrls;
+                                const still = nextUrls.filter(Boolean);
+                                store.setCurrentLiveImageUrl(still[0] ?? null);
+                              }
+                            }}
+                            className="absolute -top-0.5 -right-0.5 z-10 w-3.5 h-3.5 rounded-full bg-black/85 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
+                            aria-label={`Remove slot ${i + 1}`}
+                          >
+                            ×
+                          </button>
+                        ) : null}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      <span className="text-[7px] text-center text-white/60 max-w-full leading-tight line-clamp-2">
+                        {getSlotLabel(i)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             {hasReferenceImage && (
               <label className="flex items-center gap-2 cursor-pointer mt-2 shrink-0">
@@ -1073,87 +1057,11 @@ export const CharacterStudio: React.FC = () => {
                 <span className="text-xs inline-block" style={goldTextStyle}>Diversify Likeness</span>
               </label>
             )}
-            </div>
-          </div>
+            </>
+            )}
 
-          {/* Tags panel — separate card, full remaining height + scroll */}
-          <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
-            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2 pb-1 shrink-0 border-b border-white/10" style={goldTextStyle}>
-              Tags & style
-            </h2>
-            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 space-y-4">
-            {/* Art Style Engine */}
-            <section>
-              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-                Art Style Engine
-              </h2>
-              <div className="space-y-2">
-                <Chip
-                  label={ART_STYLE_FLAGSHIP}
-                  active={store.artStyleId === 'flagship'}
-                  onClick={() => store.setArtStyle('flagship')}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {ART_STYLE_LIBRARY.map((opt) => (
-                    <Chip
-                      key={opt}
-                      label={opt}
-                      active={store.artStyleId === opt}
-                      onClick={() =>
-                        store.setArtStyle(
-                          store.artStyleId === opt ? 'flagship' : opt
-                        )
-                      }
-                    />
-                  ))}
-                  {store.customStyles.map((opt) => (
-                    <ChipWithOptionalRemove
-                      key={opt}
-                      label={opt}
-                      active={store.artStyleId === opt}
-                      onClick={() =>
-                        store.setArtStyle(
-                          store.artStyleId === opt ? 'flagship' : opt
-                        )
-                      }
-                      isCustom
-                      onRemove={() => store.removeCustomStyle(opt)}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={customStyleInput}
-                    onChange={(e) => setCustomStyleInput(e.target.value)}
-                    placeholder="Custom style..."
-                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (customStyleInput.trim()) {
-                        store.addCustomStyle(customStyleInput.trim());
-                        store.setTags([
-                          ...store.tags,
-                          {
-                            id: crypto.randomUUID(),
-                            text: customStyleInput.trim().replace(/\s+/g, '-').toLowerCase(),
-                            polarity: 'positive',
-                          },
-                        ]);
-                        setCustomStyleInput('');
-                      }
-                    }}
-                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-                    style={{ background: ACCENT_GOLD_GRADIENT }}
-                  >
-                    Save as Tag
-                  </button>
-                </div>
-              </div>
-            </section>
-
+            {leftModule === 'dna' && (
+            <>
             {/* DNA Engine */}
             <section
               className={dnaAndPhysicalDisabled ? 'opacity-50 pointer-events-none' : ''}
@@ -1296,6 +1204,82 @@ export const CharacterStudio: React.FC = () => {
                 />
               </div>
             </section>
+            </>
+            )}
+
+            {leftModule === 'style' && (
+            <>
+            {/* Art Style Engine */}
+            <section>
+              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
+                Art Style Engine
+              </h2>
+              <div className="space-y-2">
+                <Chip
+                  label={ART_STYLE_FLAGSHIP}
+                  active={store.artStyleId === 'flagship'}
+                  onClick={() => store.setArtStyle('flagship')}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {ART_STYLE_LIBRARY.map((opt) => (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
+                      onClick={() =>
+                        store.setArtStyle(
+                          store.artStyleId === opt ? 'flagship' : opt
+                        )
+                      }
+                    />
+                  ))}
+                  {store.customStyles.map((opt) => (
+                    <ChipWithOptionalRemove
+                      key={opt}
+                      label={opt}
+                      active={store.artStyleId === opt}
+                      onClick={() =>
+                        store.setArtStyle(
+                          store.artStyleId === opt ? 'flagship' : opt
+                        )
+                      }
+                      isCustom
+                      onRemove={() => store.removeCustomStyle(opt)}
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={customStyleInput}
+                    onChange={(e) => setCustomStyleInput(e.target.value)}
+                    placeholder="Custom style..."
+                    className="flex-1 bg-black/40 text-white placeholder-white/40 px-3 py-2 rounded-lg border border-white/10 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customStyleInput.trim()) {
+                        store.addCustomStyle(customStyleInput.trim());
+                        store.setTags([
+                          ...store.tags,
+                          {
+                            id: crypto.randomUUID(),
+                            text: customStyleInput.trim().replace(/\s+/g, '-').toLowerCase(),
+                            polarity: 'positive',
+                          },
+                        ]);
+                        setCustomStyleInput('');
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    Save as Tag
+                  </button>
+                </div>
+              </div>
+            </section>
 
             {/* Wardrobe Engine */}
             <section>
@@ -1402,39 +1386,28 @@ export const CharacterStudio: React.FC = () => {
                 setTags={store.setTags}
               />
             </section>
+            </>
+            )}
             </div>
           </div>
-        </div>
 
-        {/* Center + Right wrapper: capped height + 100px (85vh + 100px) */}
-        <div className="flex-1 flex gap-3 min-w-0 min-h-0 max-h-[calc(85vh+100px)] overflow-hidden">
-        {/* Center: full width, Live Prompt (+100px height) then Reference Image Generation (+100px down) then Add Pose + pills */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
-          <div className="flex-shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 min-h-[420px] flex flex-col">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
+          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(42vh,360px)] overflow-hidden">
+            <div className="mb-1 shrink-0">
+              <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
                 Live Prompt
               </h2>
-              {store.lastUsedPrompt ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(store.lastUsedPrompt);
-                    store.setRefinementPromptOverride(
-                      store.refinementPromptOverride
-                        ? `${store.refinementPromptOverride}\n${store.lastUsedPrompt.slice(0, 200)}…`
-                        : store.lastUsedPrompt.slice(0, 500)
-                    );
-                    setPromptPanelTab('refine');
-                  }}
-                  className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-200/90 hover:bg-emerald-500/10 truncate max-w-[140px]"
-                  title="Copy full prompt to clipboard; append summary to Refine tab"
-                >
-                  Last prompt
-                </button>
-              ) : null}
             </div>
-            <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2">
+            {!promptPinned ? (
+              <p
+                className="text-[11px] font-mono text-emerald-100/85 truncate border border-white/10 rounded-lg px-2 py-1.5 bg-black/50 min-h-[2rem]"
+                title={displayPrompt || undefined}
+              >
+                {(displayPrompt || '// Pin to expand — full prompt, tabs, and DNA lock').split('\n')[0].slice(0, 140)}
+                {displayPrompt && (displayPrompt.length > 140 || displayPrompt.includes('\n')) ? '…' : ''}
+              </p>
+            ) : (
+            <>
+            <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2 shrink-0">
               {(
                 [
                   { id: 'auto' as const, label: 'Prompt' },
@@ -1459,9 +1432,9 @@ export const CharacterStudio: React.FC = () => {
                     {id === 'auto' &&
                       'Read-only compiled prompt from tags and references. Use Generate (⌘/Ctrl+Enter) to run.'}
                     {id === 'reference' &&
-                      'Read-only prompt built for Generate from tags + current reference inputs. Copy for use in other tabs.'}
+                      'AI-generated prompt from the live portrait (vision). Use Describe live image. Different from the Prompt tab, which shows the tag-built compile.'}
                     {id === 'edit' &&
-                      'Edit the raw prompt override and model. Overrides the tag-built prompt when the override field is non-empty.'}
+                      'Edit the raw prompt override. Model is in the bottom bar. Overrides the tag-built prompt when the override field is non-empty.'}
                     {id === 'refine' &&
                       'Describe changes to the current live image; Refine sends it as reference. Use Suggest chips or type freely.'}
                   </PinnedHelpTooltip>
@@ -1469,33 +1442,51 @@ export const CharacterStudio: React.FC = () => {
               ))}
             </div>
             {promptPanelTab === 'auto' && (
-              <div className="bg-black/60 p-3 rounded-lg font-mono text-sm text-emerald-100/85 break-words flex-1 min-h-[360px] overflow-y-auto custom-scrollbar transition-opacity duration-200">
+              <div className="bg-black/60 p-2 rounded-lg font-mono text-xs text-emerald-100/85 break-words flex-1 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto custom-scrollbar transition-opacity duration-200">
                 {displayPrompt || '// Prompt is empty...'}
               </div>
             )}
             {promptPanelTab === 'reference' && (
-              <div className="bg-black/60 p-3 rounded-lg font-mono text-sm text-emerald-100/85 break-words flex-1 min-h-[360px] overflow-y-auto custom-scrollbar transition-opacity duration-200">
-                {referencePromptText || '// Prompt is empty...'}
+              <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-hidden">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Tooltip
+                    variant="character"
+                    content="Calls Gemini vision on the image currently shown in the live frame (right panel). Use after Generate or when you load a portrait."
+                    side="bottom"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void handleGenerateAiReferencePrompt()}
+                      disabled={
+                        aiReferencePromptLoading ||
+                        !store.currentLiveImageUrl ||
+                        store.generationStatus === 'pending'
+                      }
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-amber-500/50 text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: ACCENT_GOLD_GRADIENT }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                      {aiReferencePromptLoading ? 'Describing…' : 'Describe live image'}
+                    </button>
+                  </Tooltip>
+                  {aiReferencePromptError ? (
+                    <span className="text-[10px] text-red-300/95 max-w-[12rem]">{aiReferencePromptError}</span>
+                  ) : null}
+                </div>
+                <div className="flex-1 min-h-[48px] overflow-y-auto rounded-lg bg-black/60 p-2 font-mono text-xs text-emerald-100/85 break-words custom-scrollbar">
+                  {aiReferencePrompt.trim()
+                    ? aiReferencePrompt
+                    : '// Click “Describe live image” to generate an AI reference prompt from the portrait in the live frame. The Prompt tab still shows the tag-built compile for Generate.'}
+                </div>
               </div>
             )}
             {promptPanelTab === 'edit' && (
-              <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
-                <div>
-                  <span className="text-xs text-white/70 mb-1 block">Model</span>
-                  <select
-                    value={store.selectedOnyxModelId}
-                    onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                    className="w-full bg-black/60 text-white border border-amber-500/20 rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="flash">Nano Banana 2 (Speed)</option>
-                    <option value="pro">Nano Banana Pro (Detail)</option>
-                  </select>
-                </div>
+              <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                 <textarea
                   value={store.vaultPromptOverride}
                   onChange={(e) => store.setVaultPromptOverride(e.target.value)}
                   placeholder="Override prompt…"
-                  className="w-full flex-1 min-h-[200px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
+                  className="w-full flex-1 min-h-[120px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm font-mono resize-y"
                 />
                 <div className="flex flex-wrap gap-2 items-center">
                   <select
@@ -1566,7 +1557,7 @@ export const CharacterStudio: React.FC = () => {
               </div>
             )}
             {promptPanelTab === 'refine' && (
-              <div className="flex-1 flex flex-col gap-2 min-h-[360px]">
+              <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                 {!store.currentLiveImageUrl ? (
                   <p className="text-sm text-amber-200/80">Generate or load an image first, then describe refinements here.</p>
                 ) : (
@@ -1641,34 +1632,70 @@ export const CharacterStudio: React.FC = () => {
                 )}
               </div>
             )}
-            <div className="flex items-center justify-between gap-3 mt-2 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                <CopyButton text={copyPromptText} labelStyle={goldTextStyle} />
-                {promptPanelTab === 'auto' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      store.setVaultPromptOverride('');
-                      store.setRefinementPromptOverride('');
-                    }}
-                    className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
-                  >
-                    Refresh
-                  </button>
-                )}
+            </>
+            )}
+            <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
+              <CopyButton text={copyPromptText} labelStyle={goldTextStyle} />
+              {promptPinned && promptPanelTab === 'auto' && (
                 <button
                   type="button"
                   onClick={() => {
                     store.setVaultPromptOverride('');
                     store.setRefinementPromptOverride('');
                   }}
-                  className="px-3 py-1.5 rounded-full text-xs border border-amber-500/40 hover:bg-amber-500/20"
+                  className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
                 >
-                  Reset to tags
+                  Refresh
                 </button>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all group ml-auto">
-                <span className="text-xs font-bold tracking-widest inline-block" style={goldTextStyle}>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  store.setVaultPromptOverride('');
+                  store.setRefinementPromptOverride('');
+                }}
+                className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
+              >
+                Reset to tags
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromptPinned((p) => !p)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border border-amber-500/40 text-amber-200/90 hover:bg-amber-500/10"
+                aria-pressed={promptPinned}
+              >
+                {promptPinned ? <Pin className="w-3 h-3 shrink-0" aria-hidden /> : <PinOff className="w-3 h-3 shrink-0" aria-hidden />}
+                {promptPinned ? 'Pinned' : 'Pin'}
+              </button>
+              {store.lastUsedPrompt ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(store.lastUsedPrompt);
+                    store.setRefinementPromptOverride(
+                      store.refinementPromptOverride
+                        ? `${store.refinementPromptOverride}\n${store.lastUsedPrompt.slice(0, 200)}…`
+                        : store.lastUsedPrompt.slice(0, 500)
+                    );
+                    setPromptPanelTab('refine');
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-200/90 hover:bg-emerald-500/10 truncate max-w-[120px]"
+                  title="Copy full prompt to clipboard; append summary to Refine tab"
+                >
+                  Last prompt
+                </button>
+              ) : null}
+              <span className="text-[9px] text-white/55 uppercase tracking-wider">Model</span>
+              <select
+                value={store.selectedOnyxModelId}
+                onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
+                className="max-w-[9.5rem] bg-black/55 text-white border border-amber-500/25 rounded-md px-1.5 py-0.5 text-[10px]"
+              >
+                <option value="flash">Nano Banana 2</option>
+                <option value="pro">Nano Banana Pro</option>
+              </select>
+              <label className="flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all ml-auto">
+                <span className="text-[10px] font-bold tracking-widest inline-block" style={goldTextStyle}>
                   DNA LOCK
                 </span>
                 <div
@@ -1676,12 +1703,12 @@ export const CharacterStudio: React.FC = () => {
                   tabIndex={0}
                   onClick={() => store.setDnaLock(!store.dnaLock)}
                   onKeyDown={(e) => e.key === 'Enter' && store.setDnaLock(!store.dnaLock)}
-                  className="w-10 h-5 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
+                  className="w-9 h-4 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
                   style={store.dnaLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
                 >
                   <div
-                    className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                      store.dnaLock ? 'translate-x-5' : 'translate-x-0'
+                    className={`w-3.5 h-3.5 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                      store.dnaLock ? 'translate-x-[1.125rem]' : 'translate-x-0'
                     }`}
                   />
                 </div>
@@ -1689,130 +1716,47 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
 
-          {/* Status breadcrumb: cycle during generation; safety message when blocked */}
           <div
-            className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
-            data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
+            className="shrink-0 flex rounded-lg border border-white/15 bg-black/45 p-1 gap-0.5"
+            role="tablist"
+            aria-label="Studio modules"
           >
-            <span className="text-xs font-mono" style={goldTextStyle}>
-              {store.generationStatus === 'safety_blocked'
-                ? 'Prompt restricted by safety filters. Please adjust and try again'
-                : store.generationStatus === 'error' && store.generationStatusMessage
-                  ? store.generationStatusMessage
-                  : store.generationStatus === 'pending'
-                    ? STATUS_BREADCRUMBS[statusStep]
-                    : '\u00A0'}
-            </span>
+            {(
+              [
+                { id: 'hub' as const, label: 'Refs', Icon: LayoutGrid },
+                { id: 'dna' as const, label: 'DNA', Icon: Dna },
+                { id: 'style' as const, label: 'Style', Icon: Shirt },
+              ] as const
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={leftModule === id}
+                onClick={() => setLeftModule(id)}
+                className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-2 rounded-md text-[9px] font-bold uppercase tracking-wide border transition-colors min-w-0 ${
+                  leftModule === id
+                    ? 'text-black border-amber-500/60 shadow-sm'
+                    : 'border-transparent text-emerald-200/75 hover:bg-white/10'
+                }`}
+                style={leftModule === id ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0 opacity-90" aria-hidden />
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Reference Image Generation: dedicated preview column on xl+; stacked + scroll on small screens */}
-          <div className="flex-1 min-h-[280px] xl:min-h-0 rounded-2xl border border-white/10 bg-black/40 flex flex-col overflow-hidden flex-shrink-0 xl:flex-1">
-            <h2 className="text-base font-bold uppercase tracking-widest px-4 pt-3 pb-1 flex-shrink-0" style={goldTextStyle}>
-              Reference Image Generation
+        {/* Right column — visual stage */}
+        <div className="flex-[0_0_40%] max-w-[40%] min-w-0 min-h-0 flex flex-col gap-2 overflow-hidden overflow-x-hidden">
+          {/* Generation + gallery — single workspace panel */}
+          <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md flex flex-col overflow-hidden shadow-lg shadow-black/15">
+            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2.5 pb-1.5 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
+              Reference workspace
             </h2>
-            <div className="flex flex-col xl:flex-row flex-1 min-h-0 gap-3 px-2 pb-1">
-            <div className="flex flex-col gap-2 xl:w-72 xl:max-w-[min(40%,320px)] xl:flex-shrink-0 xl:overflow-y-auto xl:min-h-0 xl:pr-1 custom-scrollbar">
-            <div className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90">
-                Thumbnail size
-              </span>
-              <button
-                type="button"
-                aria-pressed={store.galleryDensity === 'compact'}
-                onClick={() => store.setGalleryDensity('compact')}
-                className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                  store.galleryDensity === 'compact'
-                    ? 'text-emerald-950 border-amber-500 shadow-md'
-                    : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
-                }`}
-                style={
-                  store.galleryDensity === 'compact'
-                    ? { background: ACCENT_GOLD_GRADIENT }
-                    : undefined
-                }
-              >
-                Compact
-              </button>
-              <button
-                type="button"
-                aria-pressed={store.galleryDensity === 'comfortable'}
-                onClick={() => store.setGalleryDensity('comfortable')}
-                className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                  store.galleryDensity === 'comfortable'
-                    ? 'text-emerald-950 border-amber-500 shadow-md'
-                    : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
-                }`}
-                style={
-                  store.galleryDensity === 'comfortable'
-                    ? { background: ACCENT_GOLD_GRADIENT }
-                    : undefined
-                }
-              >
-                Comfortable
-              </button>
-              <button
-                type="button"
-                aria-pressed={compareSplit}
-                onClick={() => setCompareSplit((v) => !v)}
-                className={`text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                  compareSplit
-                    ? 'text-emerald-950 border-amber-500 shadow-md'
-                    : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
-                }`}
-                style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
-              >
-                Compare {compareSplit ? 'On' : 'Off'}
-              </button>
-            </div>
-            {((recentCharacters.length > 0) || (getCachedGenerations('character').length > 0)) && (
-              <div className="flex-shrink-0 px-2 pb-2 flex flex-col gap-1.5">
-                {recentCharacters.length > 0 && (
-                  <div className="flex items-center gap-2 overflow-x-auto">
-                    <span className="text-[10px] uppercase tracking-wider text-white/60">Recent (saved)</span>
-                    {recentCharacters.map((item) => (
-                      <Tooltip variant="character" key={item.id} content={item.displayName ?? item.profileName ?? 'Character'}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            store.setCurrentLiveImageUrl(item.imageUrl);
-                            if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                          }}
-                          className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
-                            store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
-                          }`}
-                        >
-                          <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                        </button>
-                      </Tooltip>
-                    ))}
-                  </div>
-                )}
-                {getCachedGenerations('character').length > 0 && (
-                  <div className="flex items-center gap-2 overflow-x-auto">
-                    <span className="text-[10px] uppercase tracking-wider text-white/60">This session</span>
-                    {getCachedGenerations('character').map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          store.setCurrentLiveImageUrl(item.url);
-                          if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                        }}
-                        className={`flex-shrink-0 rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-110 hover:z-10 ${
-                          store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-14 h-14'
-                        }`}
-                      >
-                        <img src={item.url} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            </div>
-            <div className="flex-1 min-h-[240px] xl:min-h-0 min-w-0 flex flex-col items-center justify-center p-2 pb-6 overflow-y-auto overflow-x-hidden">
-              {store.currentLiveImageUrl ? (
-                compareSplit ? (
+            <div className="flex-1 min-h-[120px] min-w-0 flex flex-col items-stretch justify-center p-2 overflow-y-auto overflow-x-hidden">
+              {compareSplit && store.currentLiveImageUrl ? (
                   <>
                     <div className="flex w-full max-w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-center lg:gap-4">
                       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center lg:max-w-[min(100%,calc(50%-0.5rem))]">
@@ -1853,6 +1797,29 @@ export const CharacterStudio: React.FC = () => {
                               className="max-h-full max-w-full object-contain object-center"
                             />
                           </div>
+                          {store.generationStatus !== 'idle' && (
+                            <div
+                              className={`absolute inset-0 z-[25] flex flex-col items-center justify-center gap-1 bg-black/65 px-2 text-center ${
+                                store.generationStatus === 'pending' ? 'pointer-events-auto' : 'pointer-events-none'
+                              }`}
+                            >
+                              {store.generationStatus === 'pending' && (
+                                <span className="text-[9px] font-mono animate-pulse" style={goldTextStyle}>
+                                  {STATUS_BREADCRUMBS[statusStep]}
+                                </span>
+                              )}
+                              {store.generationStatus === 'safety_blocked' && (
+                                <span className="text-[9px] text-amber-200/90 leading-snug">
+                                  Prompt restricted by safety filters. Adjust and try again.
+                                </span>
+                              )}
+                              {store.generationStatus === 'error' && store.generationStatusMessage && (
+                                <span className="text-[9px] text-red-200/90 leading-snug">
+                                  {store.generationStatusMessage}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
                             <Tooltip variant="character" content="View full size with zoom" side="left">
                               <button
@@ -1887,425 +1854,574 @@ export const CharacterStudio: React.FC = () => {
                       </div>
                     </div>
                     <p className="mt-2 max-w-xl text-center text-[10px] text-emerald-200/60">
-                      Compare on — hover either panel to zoom in place ({aspectSessionLabel}). Turn Compare off for one large preview.
+                      Compare on — hover either panel to zoom ({aspectSessionLabel}). Turn Compare off for Live + pose slots.
                     </p>
                   </>
-                ) : (
-                  <>
-                    <div
-                      className="group/live mx-auto shrink-0 cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                      style={previewFrameSingle}
-                    >
-                      <div className="absolute inset-0 flex items-center justify-center p-3 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
-                        <img
-                          src={store.currentLiveImageUrl}
-                          alt="Live character"
-                          className="max-h-full max-w-full object-contain object-center"
-                        />
-                      </div>
-                      <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
-                        <Tooltip variant="character" content="View full size with zoom" side="left">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setZoomLevel(1);
-                              setShowZoomModal(true);
-                            }}
-                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                          >
-                            <Expand className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                          </button>
-                        </Tooltip>
-                        <Tooltip variant="character" content="Delete this image" side="left">
-                          <button
-                            type="button"
-                            onClick={() => discardLiveCharacterImage()}
-                            className="p-2 rounded-lg bg-black/60 border border-amber-500/40 hover:bg-amber-500/20"
-                            aria-label="Delete image"
-                          >
-                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                          </button>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <p className="mt-2 max-w-md text-center text-[10px] text-emerald-200/60">
-                      {aspectSessionLabel} — frame matches gallery aspect; hover preview to zoom. Use Compare for side-by-side with references.
-                    </p>
-                  </>
-                )
               ) : (
-                <div className="text-center space-y-2 px-4">
-                  <div className="w-16 h-16 rounded-full border border-dashed border-amber-500/30 mx-auto flex items-center justify-center bg-black/40">
-                    <span className="text-2xl">&#9889;</span>
-                  </div>
-                  <p className="font-mono text-sm inline-block" style={goldTextStyle}>
-                    {store.dnaLock ? 'DNA LOCKED' : 'No live image'}
-                  </p>
-                  <p className="text-xs text-white/50 max-w-xs mx-auto">
-                    Add a reference or generate your first image.
-                  </p>
-                </div>
-              )}
-            </div>
-            </div>
-            {/* Add Pose + pill-shaped buttons in one row */}
-            <div className="flex flex-wrap items-center gap-3 p-3 border-t border-white/10 flex-shrink-0">
-              <Tooltip
-                variant="character"
-                content="Adds a blank pose card only (no API call). To generate, use the gold Generate image button. After a good result, use Save New Pose to store the live frame on a card."
-                side="top"
-              >
-                <button
-                  type="button"
-                  onClick={() => store.addPose({})}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Add empty pose card</span>
-                </button>
-              </Tooltip>
-              <Tooltip
-                variant="character"
-                content="Runs the image API using Tags & Style, all Reference slots (left), the live preview merged into refs if needed, plus gallery framing (aspect ratio, age slider, pose name). Main action for new images. Shortcut: ⌘/Ctrl+Enter."
-                side="top"
-              >
-                <button
-                  type="button"
-                  onClick={handleGenerateCharacter}
-                  disabled={store.generationStatus === 'pending'}
-                  className="px-3 py-1.5 rounded-full text-xs font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors disabled:opacity-90 disabled:cursor-wait"
-                  style={
-                    store.generationStatus === 'pending'
-                      ? { background: GEM_EMERALD, boxShadow: `0 0 16px ${GEM_EMERALD}` }
-                      : { background: ACCENT_GOLD_GRADIENT }
-                  }
-                >
-                  {store.generationStatus === 'pending' ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className="inline-block w-4 h-4 rounded-sm rotate-45 animate-pulse"
-                        style={{ background: GEM_EMERALD, boxShadow: `0 0 10px ${GEM_EMERALD}` }}
-                        aria-label="Generating..."
-                      />
-                      <span className="animate-pulse">Working…</span>
-                    </span>
-                  ) : (
-                    'Generate image'
-                  )}
-                </button>
-              </Tooltip>
-              <div className="flex items-center gap-1.5 flex-wrap w-full">
-                <span className="text-[10px] uppercase tracking-wider text-emerald-200/60">Seed</span>
-                <button
-                  type="button"
-                  onClick={() => store.setSeedMode('randomized')}
-                  className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
-                    (store.seedMode ?? 'randomized') === 'randomized'
-                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
-                      : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
-                  }`}
-                >
-                  Randomized
-                </button>
-                <button
-                  type="button"
-                  onClick={() => store.setSeedMode('locked')}
-                  className={`px-2 py-1 rounded-full text-[10px] font-medium border ${
-                    store.seedMode === 'locked'
-                      ? 'border-amber-500/60 bg-amber-500/15'
-                      : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
-                  }`}
-                >
-                  <span className="inline-block" style={goldTextStyle}>Locked</span>
-                </button>
-              </div>
-              <Tooltip
-                variant="character"
-                content="Same pipeline as Generate image (tags, refs, live preview merge, gallery framing), then adds “alternate pose, same character.” Requires a live preview and/or at least one reference slot."
-                side="top"
-              >
-                <button
-                  type="button"
-                  onClick={handleGenerateAlternate}
-                  disabled={
-                    store.generationStatus === 'pending' ||
-                    (!store.currentLiveImageUrl && !store.referenceImageUrls.some(Boolean))
-                  }
-                  className="px-3 py-1.5 rounded-full text-xs font-medium border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Alternate pose</span>
-                </button>
-              </Tooltip>
-              <button
-                type="button"
-                onClick={() => void handleGenerateCharacter()}
-                disabled={store.generationStatus === 'pending'}
-                className="px-3 py-1.5 rounded-full text-xs font-medium border border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-50"
-              >
-                <span className="inline-block text-emerald-200/90">Run again (same settings)</span>
-              </button>
-              <button
-                type="button"
-                disabled={!store.previousLiveImageUrl}
-                onClick={() => {
-                  if (!store.previousLiveImageUrl) return;
-                  store.setCurrentLiveImageUrl(store.previousLiveImageUrl);
-                  store.setCurrentGenerationSeed(store.previousGenerationSeed);
-                  store.setPreviousLiveSnapshot(null, null);
-                }}
-                className="px-3 py-1.5 rounded-full text-xs font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Undo last gen
-              </button>
-              <button
-                type="button"
-                onClick={() => openSaveCharacterModal(false)}
-                disabled={!store.currentLiveImageUrl}
-                className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="inline-block" style={goldTextStyle}>Save New Character</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveNewPose}
-                disabled={!store.currentLiveImageUrl}
-                className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="inline-block" style={goldTextStyle}>Save New Pose</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openSaveCharacterModal(true)}
-                disabled={!store.selectedPoseId || !store.currentLiveImageUrl}
-                className="px-3 py-1.5 rounded-full border border-amber-500/50 font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="inline-block" style={goldTextStyle}>Save Edited Profile</span>
-              </button>
-              {hasStories ? (
-                <CastInStoryButton
-                  stories={stories}
-                  onSelect={handleCastInStory}
-                  disabled={!store.currentLiveImageUrl}
-                />
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="px-3 py-1.5 rounded-full border border-white/20 font-medium text-xs cursor-not-allowed opacity-60"
-                >
-                  <span className="inline-block" style={goldTextStyle}>Cast in Story</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Reference Gallery — framing summary + pose light table + controls */}
-        <div className="flex-[0_0_28%] min-w-0 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md overflow-hidden shadow-lg shadow-black/15">
-          <div className="flex flex-col flex-1 min-h-0 p-3 sm:p-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1.5 shrink-0" style={goldTextStyle}>
-              Reference Gallery
-            </h2>
-            <p className="text-[10px] text-white/55 mt-1.5 shrink-0 leading-snug">
-              Gallery controls (aspect, age, pose name) and the Tags panel camera settings are merged into the same prompt as{' '}
-              <span className="text-amber-200/90 font-medium">Generate image</span>. The{' '}
-              <span className="text-white/80">live preview</span> (including when you click a pose that has a picture) is{' '}
-              <span className="text-white/80">added to the reference set</span> if it is not already in the 14 slots, so the model can see it.{' '}
-              <span className="text-amber-200/90 font-medium">Alternate pose</span> uses the same stack, then asks for another pose.{' '}
-              <span className="text-white/45">Add empty pose card</span> does not call the API — use{' '}
-              <span className="text-amber-200/90 font-medium">Save New Pose</span> after a good generation to store the live frame.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5 shrink-0">
-              {[
-                { key: 'pose', label: poseSessionLabel },
-                { key: 'aspect', label: aspectSessionLabel },
-                { key: 'cam', label: cameraSessionLabel },
-                { key: 'age', label: `Age ${store.ageModifier}` },
-              ].map(({ key, label }) => (
-                <span
-                  key={key}
-                  className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/80"
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-
-            <div className="flex-1 min-h-0 mt-3 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-0.5">
-              <section className="flex-1 min-h-[200px] flex flex-col min-w-0">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2 shrink-0 inline-block" style={goldTextStyle}>
-                  Poses ({store.poses.length})
-                </h3>
-                {store.poses.length === 0 ? (
-                  <div className="flex-1 min-h-[140px] rounded-xl border border-dashed border-amber-500/25 bg-black/25 flex flex-col items-center justify-center gap-2 px-3 text-center">
-                    <p className="text-[11px] text-white/55 max-w-[14rem]">
-                      No saved poses yet. Use{' '}
-                      <span className="text-amber-200/90 font-medium">Save New Pose</span> after a generation to fill this gallery.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 flex-1 auto-rows-min content-start">
-                    {store.poses.map((pose) => (
+                <>
+                  <div className="flex w-full flex-1 min-h-[104px] flex-row flex-wrap items-center justify-center gap-2 py-0.5">
+                    <div className="flex flex-col items-center gap-0.5 shrink-0">
                       <div
-                        key={pose.id}
-                        className={`relative rounded-lg border overflow-hidden aspect-[9/16] min-h-[132px] max-h-[min(42vh,320px)] ${
-                          store.selectedPoseId === pose.id
-                            ? 'border-amber-500 ring-2 ring-amber-500/45'
-                            : 'border-white/20'
-                        }`}
+                        className="group/live relative cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
+                        style={tripleSlotFrameStyle}
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            store.setSelectedPoseId(pose.id);
-                            if (pose.imageUrl) {
-                              store.setCurrentLiveImageUrl(pose.imageUrl);
-                            }
-                          }}
-                          className="absolute inset-0 z-0 w-full h-full block text-left"
-                        >
-                          {pose.imageUrl ? (
+                        <div className="pointer-events-none absolute top-1 left-1 z-20 rounded-full border border-amber-500/30 bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-amber-200/90">
+                          Live
+                        </div>
+                        {store.currentLiveImageUrl ? (
+                          <div className="absolute inset-0 z-[1] flex items-center justify-center p-1.5 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.06] group-hover/live:z-10">
                             <img
-                              src={pose.imageUrl}
-                              alt={pose.name ?? 'Pose'}
-                              className="w-full h-full object-cover"
+                              src={store.currentLiveImageUrl}
+                              alt="Live character"
+                              className="max-h-full max-w-full object-contain object-center"
                             />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-black/50 text-white/50 text-xs">
-                              Empty
-                            </div>
-                          )}
-                        </button>
-                        <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between gap-0.5 p-1 bg-gradient-to-t from-black/85 via-black/50 to-transparent pointer-events-none">
-                          <div className="flex gap-0.5 pointer-events-auto">
-                            <Tooltip variant="character" content="Duplicate pose" side="top">
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-1.5 text-center">
+                            <span className="text-[8px] leading-tight text-white/45">
+                              {store.dnaLock ? 'DNA locked' : 'No live image'}
+                            </span>
+                          </div>
+                        )}
+                        {store.generationStatus !== 'idle' && (
+                          <div
+                            className={`absolute inset-0 z-[25] flex flex-col items-center justify-center gap-0.5 bg-black/65 px-1 text-center ${
+                              store.generationStatus === 'pending' ? 'pointer-events-auto' : 'pointer-events-none'
+                            }`}
+                          >
+                            {store.generationStatus === 'pending' && (
+                              <span className="text-[8px] font-mono animate-pulse leading-tight" style={goldTextStyle}>
+                                {STATUS_BREADCRUMBS[statusStep]}
+                              </span>
+                            )}
+                            {store.generationStatus === 'safety_blocked' && (
+                              <span className="text-[8px] leading-tight text-amber-200/90">Safety blocked — adjust prompt</span>
+                            )}
+                            {store.generationStatus === 'error' && store.generationStatusMessage && (
+                              <span className="text-[8px] leading-tight break-words text-red-200/90">
+                                {store.generationStatusMessage}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {store.currentLiveImageUrl ? (
+                          <div className="absolute bottom-1 right-1 z-30 flex items-center gap-0.5">
+                            <Tooltip variant="character" content="View full size" side="left">
                               <button
                                 type="button"
-                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25"
-                                aria-label="Duplicate pose"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  store.addPose({
-                                    name:
-                                      pose.name?.trim() ?
-                                        `Copy · ${pose.name}`
-                                      : 'Copy · Pose',
-                                    imageUrl: pose.imageUrl,
-                                  });
+                                onClick={() => {
+                                  setZoomLevel(1);
+                                  setShowZoomModal(true);
                                 }}
+                                className="rounded-md border border-amber-500/40 bg-black/60 p-1 hover:bg-amber-500/20"
                               >
-                                <Copy className="w-3 h-3" />
+                                <Expand className="h-3 w-3" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
                               </button>
                             </Tooltip>
-                            <Tooltip variant="character" content="Add image to first empty reference slot" side="top">
+                            <Tooltip variant="character" content="Delete live image" side="left">
                               <button
                                 type="button"
-                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
-                                aria-label="Send pose to reference slot"
-                                disabled={!pose.imageUrl}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  sendPoseImageToFirstEmptyReferenceSlot(pose.imageUrl);
-                                }}
+                                onClick={() => discardLiveCharacterImage()}
+                                className="rounded-md border border-amber-500/40 bg-black/60 p-1 hover:bg-amber-500/20"
+                                aria-label="Delete image"
                               >
-                                <ImagePlus className="w-3 h-3" />
-                              </button>
-                            </Tooltip>
-                            <Tooltip variant="character" content="Open image in new tab" side="top">
-                              <button
-                                type="button"
-                                className="p-1 rounded-md bg-black/75 border border-white/20 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
-                                aria-label="Open pose image"
-                                disabled={!pose.imageUrl}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (pose.imageUrl) {
-                                    window.open(pose.imageUrl, '_blank', 'noopener,noreferrer');
-                                  }
-                                }}
-                              >
-                                <ExternalLink className="w-3 h-3" />
+                                <Trash2 className="h-3 w-3" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
                               </button>
                             </Tooltip>
                           </div>
-                          <Tooltip variant="character" content="Delete this pose" side="top">
+                        ) : null}
+                      </div>
+                    </div>
+                    {([0, 1] as const).map((poseSlotIdx) => {
+                      const pose = store.poses[poseSlotIdx];
+                      const selected = Boolean(pose && store.selectedPoseId === pose.id);
+                      return (
+                        <div key={poseSlotIdx} className="flex flex-col items-center gap-0.5 shrink-0">
+                          <div
+                            className={`relative overflow-hidden rounded-xl border bg-black/50 shadow-inner ${
+                              selected ? 'border-amber-500 ring-2 ring-amber-500/40' : 'border-white/20'
+                            }`}
+                            style={tripleSlotFrameStyle}
+                          >
+                            <div className="pointer-events-none absolute top-1 left-1 z-20 rounded-full border border-amber-500/30 bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-amber-200/90">
+                              Pose {poseSlotIdx + 1}
+                            </div>
+                            {pose ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    store.setSelectedPoseId(pose.id);
+                                    if (pose.imageUrl) {
+                                      store.setCurrentLiveImageUrl(pose.imageUrl);
+                                    }
+                                  }}
+                                  className="absolute inset-0 z-0 block text-left"
+                                  aria-label={pose.name ?? `Pose ${poseSlotIdx + 1}`}
+                                />
+                                {pose.imageUrl ? (
+                                  <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden">
+                                    <img
+                                      src={pose.imageUrl}
+                                      alt={pose.name ?? 'Pose'}
+                                      className="h-full w-full object-cover object-center"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center text-[8px] text-white/45">
+                                    Empty
+                                  </div>
+                                )}
+                                <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between gap-0.5 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-0.5">
+                                  <div className="pointer-events-auto flex gap-0.5">
+                                    <Tooltip variant="character" content="Duplicate" side="top">
+                                      <button
+                                        type="button"
+                                        className="rounded border border-white/20 bg-black/75 p-0.5 text-white/90 hover:bg-amber-500/25"
+                                        aria-label="Duplicate pose"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          store.addPose({
+                                            name: pose.name?.trim() ? `Copy · ${pose.name}` : 'Copy · Pose',
+                                            imageUrl: pose.imageUrl,
+                                          });
+                                        }}
+                                      >
+                                        <Copy className="h-2.5 w-2.5" />
+                                      </button>
+                                    </Tooltip>
+                                    <Tooltip variant="character" content="To reference slot" side="top">
+                                      <button
+                                        type="button"
+                                        className="rounded border border-white/20 bg-black/75 p-0.5 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
+                                        aria-label="Send to reference"
+                                        disabled={!pose.imageUrl}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          sendPoseImageToFirstEmptyReferenceSlot(pose.imageUrl);
+                                        }}
+                                      >
+                                        <ImagePlus className="h-2.5 w-2.5" />
+                                      </button>
+                                    </Tooltip>
+                                    <Tooltip variant="character" content="Open in new tab" side="top">
+                                      <button
+                                        type="button"
+                                        className="rounded border border-white/20 bg-black/75 p-0.5 text-white/90 hover:bg-amber-500/25 disabled:opacity-40"
+                                        aria-label="Open image"
+                                        disabled={!pose.imageUrl}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (pose.imageUrl) {
+                                            window.open(pose.imageUrl, '_blank', 'noopener,noreferrer');
+                                          }
+                                        }}
+                                      >
+                                        <ExternalLink className="h-2.5 w-2.5" />
+                                      </button>
+                                    </Tooltip>
+                                  </div>
+                                  <Tooltip variant="character" content="Delete pose" side="top">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        store.removePose(pose.id);
+                                        if (store.selectedPoseId === pose.id) {
+                                          store.setSelectedPoseId(null);
+                                          store.setCurrentLiveImageUrl(null);
+                                        }
+                                      }}
+                                      className="pointer-events-auto rounded border border-amber-500/40 bg-black/75 p-0.5 hover:bg-amber-500/20"
+                                      aria-label="Delete pose"
+                                    >
+                                      <Trash2 className="h-2.5 w-2.5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
+                                    </button>
+                                  </Tooltip>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-1.5 text-center text-[8px] text-white/40">
+                                <span>No pose card</span>
+                                <span className="mt-0.5 text-[7px] text-white/35">Add empty pose below</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {store.poses.length > 2 ? (
+                    <div className="mt-1 w-full shrink-0 border-t border-white/10 px-1 pt-1.5">
+                      <span className="mb-1 block px-1 text-[8px] uppercase tracking-wider text-white/45">
+                        More poses ({store.poses.length - 2})
+                      </span>
+                      <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                        {store.poses.slice(2).map((pose) => (
+                          <div
+                            key={pose.id}
+                            className={`relative h-[106px] w-[60px] shrink-0 overflow-hidden rounded-md border ${
+                              store.selectedPoseId === pose.id
+                                ? 'border-amber-500 ring-1 ring-amber-500/50'
+                                : 'border-white/20'
+                            }`}
+                          >
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                store.removePose(pose.id);
-                                if (store.selectedPoseId === pose.id) {
-                                  store.setSelectedPoseId(null);
-                                  store.setCurrentLiveImageUrl(null);
+                              onClick={() => {
+                                store.setSelectedPoseId(pose.id);
+                                if (pose.imageUrl) {
+                                  store.setCurrentLiveImageUrl(pose.imageUrl);
                                 }
                               }}
-                              className="pointer-events-auto p-1 rounded-md bg-black/75 border border-amber-500/40 hover:bg-amber-500/20"
-                              aria-label="Delete pose"
-                            >
-                              <Trash2 className="w-3 h-3" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
-                            </button>
-                          </Tooltip>
+                              className="absolute inset-0 z-0 block"
+                            />
+                            {pose.imageUrl ? (
+                              <img src={pose.imageUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-[7px] text-white/40">Empty</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="mt-1 max-w-[14rem] px-2 text-center text-[9px] text-emerald-200/55">
+                    {aspectSessionLabel} — Live + two pose slots; extra poses in the strip below when present. Hover Live to zoom.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="shrink-0 min-h-0 max-h-[min(32vh,280px)] flex flex-col border-t border-white/10 bg-black/20">
+              <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5">
+                <p className="text-[9px] text-white/50 line-clamp-2 leading-snug">
+                  <span className="text-amber-200/80 font-medium">Generate</span> uses tags, refs, and framing below.{' '}
+                  <span className="text-white/70">Live preview</span> merges into refs when not in slots.{' '}
+                  <span className="text-amber-200/80 font-medium">Alternate pose</span> reuses the stack.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: 'pose', label: poseSessionLabel },
+                    { key: 'aspect', label: aspectSessionLabel },
+                    { key: 'cam', label: cameraSessionLabel },
+                    { key: 'age', label: `Age ${store.ageModifier}` },
+                  ].map(({ key, label }) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/80"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                {((recentCharacters.length > 0) || (getCachedGenerations('character').length > 0)) && (
+                  <div className="rounded-lg border border-white/10 bg-black/25 p-2 space-y-2">
+                    {recentCharacters.length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {recentCharacters.map((item) => (
+                            <Tooltip variant="character" key={item.id} content={item.displayName ?? item.profileName ?? 'Character'}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  store.setCurrentLiveImageUrl(item.imageUrl);
+                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                                }}
+                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                                }`}
+                              >
+                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            </Tooltip>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+                    {getCachedGenerations('character').length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">This session</span>
+                        <div className="flex flex-wrap gap-2">
+                          {getCachedGenerations('character').map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                store.setCurrentLiveImageUrl(item.url);
+                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                              }}
+                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                              }`}
+                            >
+                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </section>
+              </div>
+            </div>
 
-              <section className="shrink-0">
-                <label className="text-xs block mb-1 inline-block" style={goldTextStyle}>
-                  Age Modifier
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={store.ageModifier}
-                    onChange={(e) => store.setAgeModifier(Number(e.target.value))}
-                    className="flex-1 accent-amber-500"
+            <div className="shrink-0 border-t border-white/10 bg-black/35 p-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90">Thumbnails</span>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'compact'}
+                  onClick={() => store.setGalleryDensity('compact')}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'compact'
+                      ? 'text-emerald-950 border-amber-500 shadow-md'
+                      : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'compact'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={store.galleryDensity === 'comfortable'}
+                  onClick={() => store.setGalleryDensity('comfortable')}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    store.galleryDensity === 'comfortable'
+                      ? 'text-emerald-950 border-amber-500 shadow-md'
+                      : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={
+                    store.galleryDensity === 'comfortable'
+                      ? { background: ACCENT_GOLD_GRADIENT }
+                      : undefined
+                  }
+                >
+                  Comfortable
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={compareSplit}
+                  onClick={() => setCompareSplit((v) => !v)}
+                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    compareSplit
+                      ? 'text-emerald-950 border-amber-500 shadow-md'
+                      : 'text-emerald-200/80 border-emerald-700/50 hover:border-amber-500/60 bg-black/30'
+                  }`}
+                  style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                >
+                  Compare {compareSplit ? 'On' : 'Off'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Tooltip
+                  variant="character"
+                  content="Adds a blank pose card only (no API call). To generate, use the gold Generate image button. After a good result, use Save New Pose to store the live frame on a card."
+                  side="top"
+                >
+                  <button
+                    type="button"
+                    onClick={() => store.addPose({})}
+                    className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-amber-500/40 hover:bg-amber-500/20"
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Add empty pose</span>
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  variant="character"
+                  content="Runs the image API using Tags & Style, all Reference slots (left), the live preview merged into refs if needed, plus gallery framing (aspect ratio, age slider, pose name). Main action for new images. Shortcut: ⌘/Ctrl+Enter."
+                  side="top"
+                >
+                  <button
+                    type="button"
+                    onClick={handleGenerateCharacter}
+                    disabled={store.generationStatus === 'pending'}
+                    className="px-2.5 py-1 rounded-full text-[10px] font-medium text-black border border-amber-600/50 hover:text-emerald-400 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                    style={
+                      store.generationStatus === 'pending'
+                        ? { background: GEM_EMERALD, boxShadow: `0 0 16px ${GEM_EMERALD}` }
+                        : { background: ACCENT_GOLD_GRADIENT }
+                    }
+                  >
+                    {store.generationStatus === 'pending' ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="inline-block w-3.5 h-3.5 rounded-sm rotate-45 animate-pulse"
+                          style={{ background: GEM_EMERALD, boxShadow: `0 0 10px ${GEM_EMERALD}` }}
+                          aria-label="Generating..."
+                        />
+                        <span className="animate-pulse">Working…</span>
+                      </span>
+                    ) : (
+                      'Generate image'
+                    )}
+                  </button>
+                </Tooltip>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[9px] uppercase tracking-wider text-emerald-200/60">Seed</span>
+                  <button
+                    type="button"
+                    onClick={() => store.setSeedMode('randomized')}
+                    className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
+                      (store.seedMode ?? 'randomized') === 'randomized'
+                        ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                        : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
+                    }`}
+                  >
+                    Random
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => store.setSeedMode('locked')}
+                    className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
+                      store.seedMode === 'locked'
+                        ? 'border-amber-500/60 bg-amber-500/15'
+                        : 'border-white/20 text-emerald-200/70 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Lock</span>
+                  </button>
+                </div>
+                <Tooltip
+                  variant="character"
+                  content="Same pipeline as Generate image (tags, refs, live preview merge, gallery framing), then adds “alternate pose, same character.” Requires a live preview and/or at least one reference slot."
+                  side="top"
+                >
+                  <button
+                    type="button"
+                    onClick={handleGenerateAlternate}
+                    disabled={
+                      store.generationStatus === 'pending' ||
+                      (!store.currentLiveImageUrl && !store.referenceImageUrls.some(Boolean))
+                    }
+                    className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Alt pose</span>
+                  </button>
+                </Tooltip>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateCharacter()}
+                  disabled={store.generationStatus === 'pending'}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-emerald-500/40 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  <span className="inline-block text-emerald-200/90">Run again</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!store.previousLiveImageUrl}
+                  onClick={() => {
+                    if (!store.previousLiveImageUrl) return;
+                    store.setCurrentLiveImageUrl(store.previousLiveImageUrl);
+                    store.setCurrentGenerationSeed(store.previousGenerationSeed);
+                    store.setPreviousLiveSnapshot(null, null);
+                  }}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Undo gen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSaveCharacterModal(false)}
+                  disabled={!store.currentLiveImageUrl}
+                  className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Save character</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveNewPose}
+                  disabled={!store.currentLiveImageUrl}
+                  className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Save pose</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSaveCharacterModal(true)}
+                  disabled={!store.selectedPoseId || !store.currentLiveImageUrl}
+                  className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="inline-block" style={goldTextStyle}>Save profile</span>
+                </button>
+                {hasStories ? (
+                  <CastInStoryButton
+                    stories={stories}
+                    onSelect={handleCastInStory}
+                    disabled={!store.currentLiveImageUrl}
                   />
-                  <span className="text-xs w-8 tabular-nums inline-block" style={goldTextStyle}>
-                    {store.ageModifier}
-                  </span>
-                </div>
-              </section>
-              <section className="shrink-0">
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>
-                  Aspect Ratio
-                </label>
-                <div className="flex flex-wrap gap-2">
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-2.5 py-1 rounded-full border border-white/20 font-medium text-[10px] cursor-not-allowed opacity-60"
+                  >
+                    <span className="inline-block" style={goldTextStyle}>Cast</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <span className="text-[9px] uppercase tracking-wider text-white/55 shrink-0">Age</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={store.ageModifier}
+                  onChange={(e) => store.setAgeModifier(Number(e.target.value))}
+                  className="w-20 sm:w-28 accent-amber-500 shrink-0"
+                />
+                <span className="text-[10px] w-6 tabular-nums inline-block shrink-0" style={goldTextStyle}>
+                  {store.ageModifier}
+                </span>
+                <span className="text-[9px] uppercase tracking-wider text-white/55 shrink-0 ml-1">Aspect</span>
+                <div className="flex flex-wrap gap-1">
                   {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
-                    <Chip
+                    <button
                       key={ratio}
-                      label={
-                        ratio === '9:16' ? 'Portrait (9:16)' : ratio === '21:9' ? 'Cinematic (21:9)' : 'Square (1:1)'
-                      }
-                      active={store.aspectRatio === ratio}
+                      type="button"
                       onClick={() => store.setAspectRatio(ratio)}
-                    />
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-medium border transition-all ${
+                        store.aspectRatio === ratio
+                          ? 'text-black border-amber-600/80'
+                          : 'bg-white/5 border border-white/20 hover:border-amber-500/50 text-emerald-200/80'
+                      }`}
+                      style={store.aspectRatio === ratio ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                    >
+                      {ratio === '9:16' ? '9:16' : ratio === '21:9' ? '21:9' : '1:1'}
+                    </button>
                   ))}
                 </div>
-              </section>
-              <section className="shrink-0 pb-1">
-                <label className="text-xs block mb-2 inline-block" style={goldTextStyle}>
-                  Camera Angle
-                </label>
-                <div className="flex flex-wrap gap-2">
+                <span className="text-[9px] uppercase tracking-wider text-white/55 shrink-0">Cam</span>
+                <div className="flex flex-wrap gap-1">
                   {CINEMATIC_OPTIONS.angle.map((opt) => (
-                    <Chip
+                    <button
                       key={opt}
-                      label={opt}
-                      active={(store.cinematic.angle || '') === opt}
+                      type="button"
                       onClick={() => store.setCinematic('angle', opt)}
-                    />
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-medium border transition-all ${
+                        (store.cinematic.angle || '') === opt
+                          ? 'text-black border-amber-600/80'
+                          : 'bg-white/5 border border-white/20 hover:border-amber-500/50 text-emerald-200/80'
+                      }`}
+                      style={(store.cinematic.angle || '') === opt ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                    >
+                      {opt}
+                    </button>
                   ))}
                 </div>
-              </section>
+              </div>
             </div>
           </div>
         </div>
-        </div>
       </div>
+    </div>
 
       <ArchiveRecallModal
         open={recallSlotIndex !== null}
@@ -2500,7 +2616,6 @@ export const CharacterStudio: React.FC = () => {
         </div>
       )}
 
-    </div>
     {refHoverPreview &&
       typeof document !== 'undefined' &&
       createPortal(

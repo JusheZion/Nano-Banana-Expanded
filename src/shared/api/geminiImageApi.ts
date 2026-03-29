@@ -98,7 +98,7 @@ function backoffDelay(attempt: number): number {
 }
 
 /** Raw base64 payload for Gemini inlineData (no data: prefix). */
-function readBlobAsImageBase64(blob: Blob): Promise<string> {
+export function readBlobAsImageBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -149,6 +149,48 @@ export async function urlToBase64(url: string): Promise<string> {
     }
   }
   throw new Error('Unsupported URL type; use data: or blob:');
+}
+
+/** Base64 + MIME for vision / multimodal APIs (data URL, blob URL, or http(s)). */
+export async function urlToBase64WithMime(url: string): Promise<{ base64: string; mimeType: string }> {
+  if (url.startsWith('data:')) {
+    const mimeMatch = /^data:([^;]+);base64,/.exec(url);
+    const mimeType = mimeMatch?.[1]?.trim() || 'image/jpeg';
+    const base64 = url.split(',')[1];
+    if (!base64) throw new Error('Invalid data URL');
+    return { base64, mimeType };
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, undefined, REFERENCE_FETCH_TIMEOUT_MS);
+    } catch (e) {
+      if (isAbortError(e)) {
+        throw new Error('Reference image download timed out');
+      }
+      throw e;
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch reference image (${res.status})`);
+    }
+    const blob = await res.blob();
+    const base64 = await readBlobAsImageBase64(blob);
+    return { base64, mimeType: blob.type || 'image/jpeg' };
+  }
+  if (url.startsWith('blob:')) {
+    try {
+      const res = await fetchWithTimeout(url, undefined, REFERENCE_FETCH_TIMEOUT_MS);
+      const blob = await res.blob();
+      const base64 = await readBlobAsImageBase64(blob);
+      return { base64, mimeType: blob.type || 'image/jpeg' };
+    } catch (e) {
+      if (isAbortError(e)) {
+        throw new Error('Reference image (blob) load timed out');
+      }
+      throw e;
+    }
+  }
+  throw new Error('Unsupported URL type; use data:, blob:, or http(s)');
 }
 
 export interface GenerateImageOptions {

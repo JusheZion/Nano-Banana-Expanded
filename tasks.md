@@ -19,6 +19,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Studio UX refinement & polish (Mar 15, 2026) — IN PROGRESS / MOSTLY DONE
 
+- [x] **2026-03-28:** Character + Asset: **60/40** split; hub **Clear all** / **Paste first empty** on focused slot row; Live Prompt **footer** (model compact); **merged** right workspace (preview + scroll + bottom strips)
 - [x] Prompt: subject-only prefix + `isVaultOverride` + context (character/asset) in `geminiImageApi.ts`
 - [x] Stores: `refinementPromptOverride`, `previousLiveImageUrl`/`Seed`, `lastUsedPrompt`, `promptSnippets`, `galleryDensity`, `clearAllReferenceSlots`
 - [x] Character + Asset: split Reference vs Tags panels; remove top bulk upload; Clear all / Paste first empty
@@ -121,6 +122,15 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Asset Studio: same pattern + Compare (first ref slot vs generated)
 - [x] Generic Image Lab: lg+ split — controls column + large preview column ([`studioPreviewLayout.ts`](src/shared/utils/studioPreviewLayout.ts))
 - [x] Verify: `npm run test -- --run`, `npm run build`; manual spot-check 9:16 / 1:1 / 21:9 in studios + Image Lab
+
+## Phase 2b — Studio 40/60 viewport-locked shell (2026-03-28) — COMPLETE
+
+- [x] `App.tsx` + `AppShell.tsx`: `h-full` / `min-h-0` / `overflow-hidden` chain for `studio` + `assets`; main content `overflow-y-hidden` on those portals
+- [x] `studioPreviewLayout.ts`: `stage` / `stageCompare` modes for split-pane preview caps
+- [x] Character Studio: 40% left (hub + DNA + Style modules, dock, Live Prompt + PIN), 60% right (`flex-[3]` stage + `flex-[2]` gallery workspace, flex-wrap recents)
+- [x] Asset Studio: 40% left (hub + structural + material, dock, Live Prompt + PIN), 60% right (`flex-[3]` stage + `flex-[2]` spatial + session chips + flex-wrap recents); root `h-full min-h-0 overflow-hidden`
+- [x] Docs: `implementation_plan.md` Phase 2b; this checklist; `walkthrough.md` entry
+- [x] Verify: `npm run test -- --run`, `npm run build`; manual 1920×1080 — no page scroll, internal scroll only
 
 ## Future / Backlog
 

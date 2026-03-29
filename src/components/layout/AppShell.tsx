@@ -144,8 +144,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                 </div>
             </aside>
 
-            <main className="flex-1 relative overflow-hidden flex flex-col h-full">
-                <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar relative">
+            <main className="flex-1 relative overflow-hidden flex flex-col h-full min-h-0">
+                <div
+                    className={`flex-1 min-h-0 overflow-x-hidden relative ${
+                        activePortal === 'studio' || activePortal === 'assets'
+                            ? 'overflow-y-hidden'
+                            : 'overflow-y-auto custom-scrollbar'
+                    }`}
+                >
                     {children}
                 </div>
             </main>
