@@ -36,3 +36,9 @@ dist-ssr
 # Stray empty files sometimes created by tooling
 nano-banana-expanded@0.0.0
 vite
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
