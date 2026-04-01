@@ -4,7 +4,7 @@
 
 - **Replace** mock [`PhotoLab.tsx`](src/portals/PhotoLab.tsx) with [`StorylineStudio`](src/portals/storyline/StorylineStudio.tsx): **row-based** ARCS Office layout (story + director + production libraries | beat timeline + **selected-frame preview** | beat detail ∥ Image Lab), magenta–violet shell via [`STORYLINE_DIRECTOR_BG`](src/shared/theme/Phase12DesignTokens.ts), gold chrome.
 - **State:** [`storylineStudioStore`](src/stores/storylineStudioStore.ts) (Zustand + persist `arcs-storyline-studio`); beats omit `data:`/`blob:` images from persist (http(s) only).
-- **AI text:** [`geminiTextApi`](src/shared/api/geminiTextApi.ts) (`gemini-2.5-flash`, JSON mode; fallback to `gemini-1.5-flash`) + [`storylineDirectorPrompts`](src/data/storylineDirectorPrompts.ts) — Script Doctor, Plan beats, post-gen interpolation.
+- **AI text:** [`geminiTextApi`](src/shared/api/geminiTextApi.ts) (Gemini **3** preview stack: `gemini-3-flash-preview` → `gemini-3.1-flash-lite-preview` → `gemini-3.1-pro-preview`, JSON mode) + [`storylineDirectorPrompts`](src/data/storylineDirectorPrompts.ts) — Script Doctor, Plan beats, post-gen interpolation.
 - **AI image:** Per-beat [`generateImage`](src/shared/api/geminiImageApi.ts) with [`buildStorylineReferenceSlots`](src/portals/storyline/buildStorylineReferenceSlots.ts); [`compileVisualPromptForBeat`](src/portals/storyline/compileBeatPrompt.ts) for wardrobe lock.
 - **Cast:** Production cast from [`getCharacterAlbums`](src/shared/api/arcsVault.ts); [`linkCastNamesToBeats`](src/portals/storyline/linkCastToBeats.ts) for name detection.
 - **UX:** Tooltips (default Radix), ⌘/Ctrl+Enter (story field → Script Doctor; else generate selected beat), Esc closes vault/B-roll menu, timeline keyboard nav when focused.
@@ -360,3 +360,89 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 4. **Efficiency** — Keyboard shortcuts, last-prompt chip, clear/paste slots, generate again, undo one step.
 
 **Follow-up:** “NEW” describe-from-image (separate API work).
+
+---
+
+## Writers' Workshop (2026-03-29)
+
+### Phase 0 (done)
+
+- SQL: `writer_series`, `writer_issues`, `writer_issue_outlines`, `writer_pages`, `writer_cast`, `writer_locations`, `writer_style_bibles`, `writer_video_shot_plans`; permissive RLS.
+- UI: `WriterPortal` — main column Tiffany + gold slant (hub unchanged); tree + tabs; placeholders.
+- API reads: `listWriterSeries`, `listWriterIssues`, `listWriterPages`.
+
+### Phase 1 (done)
+
+- Edge Function `writer-tools`: `outline_issue` loads issue + series + cast/locations/style bibles; **Gemini** `generateContent` with `responseMimeType: application/json`; validates with Zod; inserts `writer_issue_outlines` with next `version`.
+- Client: `invokeWriterTools`, `listWriterOutlinesForIssue`; Outline tab — target page count, Generate, latest JSON preview; AI run log in dock **Activity** (was a side rail in early shells).
+- Config: [`supabase/config.toml`](supabase/config.toml) — `[functions.writer-tools] verify_jwt = true`. Secrets: `GEMINI_API_KEY` (or `GOOGLE_API_KEY`; same value as app `VITE_GEMINI_API_KEY`), optional `GEMINI_MODEL` (default **`gemini-3-flash-preview`**; fallbacks **`gemini-3.1-flash-lite-preview`**, **`gemini-3.1-pro-preview`** — avoids deprecated 1.5 / soon‑retired 2.5).
+
+### Phase 2 (done)
+
+- Edge `writer-tools`: `page_beats` (Gemini JSON → `writer_pages.beats_json`), `draft_dialogue` (→ `script_text`); shared Zod in `src/shared/writer/` + `supabase/functions/_shared/writerSchemas.ts`.
+- Client: `WriterPageRow` includes `beats_json`, `script_text`, `updated_at`; `listWriterPages` selects them. `WriterPortal` — selectable page in dock **Library → Pages**; **Beats** and **Dialogue** tabs call `invokeWriterTools`, refetch pages, show saved JSON/script.
+- Tests: `schemas.test.ts` covers `page_beats` / `draft_dialogue` requests and `pageBeatsJsonSchema`.
+
+### Phase 3 (done)
+
+- Edge: `pacing_review`, `canon_check` — Gemini JSON validated with Zod; results merged into `writer_issues.notes.writer_tool_cache` (`pacing_review` / `canon_check` entries with `at` + `result`).
+- Client: `WriterIssueRow.notes` loaded via `listWriterIssues`; **Arc Planner** tab runs both tools and shows last saved JSON.
+
+### Phase 4 (done)
+
+- Edge: `plan_shots_from_issue` — optional `creative_brief`; persists to `writer_video_shot_plans` with next `version`.
+- Client: `listWriterShotPlansForIssue`; **Video** tab — generate plan, preview JSON, **Download** shot plan / outline / issue pack.
+
+### Phase 5 (partial, 2026-03-30)
+
+- **Arc Planner:** horizontal **issue spine** (sorted by `issue_number`); chips set `selectedIssueId` (same as Library → Issues selection).
+- **Video:** [`shotPlanJsonToCsv`](src/portals/writer/shotPlanCsv.ts) + **Download shot plan CSV**; [`WriterShotStoryboardStrip`](src/portals/writer/WriterShotStoryboardStrip.tsx) (react-konva frame per shot, horizontal scroll).
+- Tests: [`shotPlanCsv.test.ts`](src/portals/writer/__tests__/shotPlanCsv.test.ts).
+
+### Phase 6 — Ribbon + dock + Find (done, 2026-03-30)
+
+- **Layout:** [`WriterRibbon`](src/portals/writer/WriterRibbon.tsx) under the workshop header (menu tabs + contextual groups, Find + next/prev, dock toggle). [`WriterStudioDock`](src/portals/writer/WriterStudioDock.tsx) — **Library** (series/issues/pages), **Activity** (AI history), **Shortcuts**; collapsible strip.
+- **Find:** [`writerSearch.ts`](src/portals/writer/writerSearch.ts) — `getWriterSearchableText`, `countFindMatches`, `formatArcReviewPlainText` (Arc tab: **one** labeled plain-text blob so match indices align with a single `<pre>`). [`WriterHighlightedText`](src/portals/writer/WriterHighlightedText.tsx) for `<mark>` highlights + active scroll.
+- **Input:** [`useWriterHotkeys.ts`](src/portals/writer/useWriterHotkeys.ts) (workspace tabs ⌘1–5, Find, dock toggle, Esc clears find). [`WriterContextMenu.tsx`](src/portals/writer/WriterContextMenu.tsx) for copy / outline JSON / issue pack download.
+- **Misc:** Lucide **`PanelRight`** for dock affordance (replaces unavailable `LayoutPanelRight`).
+
+### Phase 6b — UI parity: glass panels + reliable scroll (done, 2026-03-31)
+
+- **Goal:** match the other portals’ “separate frosted panels” look (not one connected cream block with divider lines) and ensure the outline preview is never trapped below the fold.
+- **Approach:**
+  - Center workspace becomes a **scroll container** (`overflow-y-scroll`, stable gutter) with multiple **glass cards** (`bg-white/15–25`, `backdrop-blur`, `border-white/25–35`) over the Tiffany gradient.
+  - “Latest saved outline” preview grows taller and remains independently scrollable inside its card.
+  - Ensure the **flex height chain** supports internal scrolling (`AppShell` main wrapper `flex flex-col min-h-0`; `App.tsx` writer wrapper `flex-1 min-h-0`; `WriterPortal` root `flex-1 min-h-0 overflow-hidden`).
+
+### Phase 6c — Help registry + tooltips (done, 2026-03-31)
+
+- **Registry:** [`writerHelpRegistry.tsx`](src/portals/writer/writerHelpRegistry.tsx) — `WRITER_UI_TIPS` (ribbon/dock/workspace tooltips), `WriterHelpCategoryBody` (modal sections per category), `WriterSectionTip`, `writerHelpCategoryTitle`.
+- **Portal:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) — `helpCategory` state; Library/Series/Pages/Issues and workspace tabs use tips; dock **Shortcuts** defers to ribbon **Help**; Supabase-off story card uses short copy + tooltip.
+- **Ribbon:** [`WriterRibbon.tsx`](src/portals/writer/WriterRibbon.tsx) — Help tab opens categories; category icons match typed `CatIcon` (no invalid `strokeWidth`).
+
+### Phase 6d — Auth awareness in UI (done, 2026-03-31)
+
+- When Supabase env is configured but **no user session**, show a **dismissible** banner under the workshop header: AI tools need a signed-in JWT; links into **Help → Setup** (opens category modal).
+- [`writerTools.ts`](src/shared/api/writerTools.ts) — **401/403** from Edge Functions returns a clear “sign in / session expired” message (in addition to parsing JSON `error` when present).
+
+### Phase 5+ (backlog)
+
+- Richer cross-issue arc timeline; panel thumbnails / scrubbing in the strip; PDF export.
+
+### Verification
+
+- `npm run test -- --run`, `npm run build`
+- Deploy function + set secrets; `supabase db push` for migration; manual Generate outline in app.
+
+### Deploy `writer-tools` (checklist)
+
+1. **CLI + project:** `cd` to repo root (folder containing `supabase/functions/`). Run `supabase login` if you see “Access token not provided”.
+2. **Link (once per machine / project):** `supabase link --project-ref <your-reference-id>` (Dashboard → Project Settings → General → Reference ID).
+3. **Upload:** `supabase functions deploy writer-tools`
+4. **Secrets:** `supabase secrets set GEMINI_API_KEY="..."` (same value as `VITE_GEMINI_API_KEY`). Optional: `supabase secrets set GEMINI_MODEL="gemini-3-flash-preview"`.
+
+### JWT / signed-in user (`verify_jwt = true`)
+
+1. [`supabase/config.toml`](supabase/config.toml) sets `verify_jwt = true` for `writer-tools`, so Supabase **rejects** requests without a valid **user** JWT (the anon key alone is not enough if there is no logged-in session).
+2. In the app, use the normal `supabase` client **after** the user signs in with Supabase Auth. `supabase.functions.invoke('writer-tools', { body })` **automatically** sends the session `Authorization` header.
+3. **Without the app:** call the function URL with `Authorization: Bearer <user_access_token>` and the `apikey` header set to your **anon** key (see Supabase docs for Edge Function invocation).

@@ -132,6 +132,19 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Docs: `implementation_plan.md` Phase 2b; this checklist; `walkthrough.md` entry
 - [x] Verify: `npm run test -- --run`, `npm run build`; manual 1920×1080 — no page scroll, internal scroll only
 
+## Writers' Workshop (2026-03-29)
+
+- [x] Phase 0: `writer_*` migration, design tokens, `WriterPortal` shell, nav + routing + landing card
+- [x] Phase 1: `writer-tools` Edge Function (`outline_issue`), shared Zod schemas + tests, `listWriterOutlinesForIssue`, Outline tab UI + AI history rail
+- [x] Phase 2: `page_beats` / `draft_dialogue` + UI (`arcsWriterRoom` page fields, `WriterPortal` Beats/Dialogue tabs, schema tests)
+- [x] Phase 3: `pacing_review` / `canon_check` + UI (notes.writer_tool_cache)
+- [x] Phase 4: `plan_shots_from_issue`, Video tab, JSON exports + Konva stub
+- [x] Phase 5 (slice): Arc Planner **issue spine** chips; shot plan **CSV** export; **Konva** storyboard strip (`WriterShotStoryboardStrip`, `shotPlanCsv` + test)
+- [x] Phase 6 (UX, 2026-03-30): **Ribbon** (`WriterRibbon`) + **right dock** Library / Activity / Shortcuts (`WriterStudioDock`); **Find in view** + match nav (`writerSearch`, `WriterHighlightedText`); **hotkeys** (`useWriterHotkeys`); **context menu** (`WriterContextMenu`); monospace + text size; **Arc** tab uses one combined **Review output** block so Find indices match highlights (`formatArcReviewPlainText`)
+- [x] Phase 6b (UI parity, 2026-03-31): Writer workspace uses **glassmorphism panels** (separate cards, not one cream block) over the **Tiffany gradient**; main workspace is **scrollable** so “Latest saved outline” is always reachable (even with DevTools open)
+- [x] Phase 6c (help UX, 2026-03-31): **`writerHelpRegistry`** — `WRITER_UI_TIPS`, help **categories** (modal sections), **`WriterSectionTip`**; **`WriterPortal`** wired to **`onOpenHelpCategory`**; library/dock/workspace guidance moved to tooltips where noted; **`WriterRibbon`** Help tiles type-safe icons
+- [x] Phase 6d (auth UX, 2026-03-31): Dismissible **sign-in for AI** banner when Supabase env is set but **no session**; **`writerTools`** maps **401/403** to a clear JWT / sign-in message; **`implementation_plan.md`** Writers section aligned (Library dock / Activity, Phase 6c–6d)
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).

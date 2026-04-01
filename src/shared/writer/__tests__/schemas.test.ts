@@ -1,0 +1,119 @@
+import { describe, expect, it } from 'vitest';
+import {
+  issueOutlineSchema,
+  pageBeatsJsonSchema,
+  pacingReviewResultSchema,
+  shotPlanJsonSchema,
+  writerToolsDraftDialogueRequestSchema,
+  writerToolsOutlineIssueRequestSchema,
+  writerToolsPageBeatsRequestSchema,
+  writerToolsRequestSchema,
+} from '../schemas';
+
+describe('issueOutlineSchema', () => {
+  it('accepts minimal valid outline', () => {
+    const parsed = issueOutlineSchema.parse({
+      title: 'Issue 1',
+      page_beats: [{ summary: 'Cold open' }],
+    });
+    expect(parsed.title).toBe('Issue 1');
+    expect(parsed.page_beats).toHaveLength(1);
+  });
+
+  it('allows extra top-level keys (passthrough for LLM drift)', () => {
+    const parsed = issueOutlineSchema.parse({
+      title: 'X',
+      extra: 1,
+    });
+    expect((parsed as { extra?: number }).extra).toBe(1);
+  });
+});
+
+describe('writerToolsRequestSchema', () => {
+  it('parses outline_issue', () => {
+    const r = writerToolsRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      target_page_count: 22,
+    });
+    expect(r).toMatchObject({ mode: 'outline_issue', target_page_count: 22 });
+  });
+
+  it('outline_issue rejects invalid uuid', () => {
+    expect(() =>
+      writerToolsOutlineIssueRequestSchema.parse({
+        mode: 'outline_issue',
+        issue_id: 'not-a-uuid',
+      }),
+    ).toThrow();
+  });
+
+  it('parses page_beats', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsRequestSchema.parse({ mode: 'page_beats', page_id: id });
+    expect(r).toMatchObject({ mode: 'page_beats', page_id: id });
+  });
+
+  it('parses draft_dialogue', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsDraftDialogueRequestSchema.parse({
+      mode: 'draft_dialogue',
+      page_id: id,
+      style: 'comic_script',
+    });
+    expect(r.style).toBe('comic_script');
+  });
+
+  it('pageBeatsJsonSchema requires panels with action', () => {
+    const p = pageBeatsJsonSchema.parse({
+      panels: [{ action: 'Wide establishing shot' }],
+    });
+    expect(p.panels).toHaveLength(1);
+  });
+
+  it('parses pacing_review request', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(writerToolsRequestSchema.parse({ mode: 'pacing_review', issue_id: id })).toMatchObject({
+      mode: 'pacing_review',
+      issue_id: id,
+    });
+  });
+
+  it('parses canon_check request', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(writerToolsRequestSchema.parse({ mode: 'canon_check', issue_id: id })).toMatchObject({
+      mode: 'canon_check',
+    });
+  });
+
+  it('parses plan_shots_from_issue request', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(
+      writerToolsRequestSchema.parse({
+        mode: 'plan_shots_from_issue',
+        issue_id: id,
+        creative_brief: 'Trailer tone',
+      }),
+    ).toMatchObject({ mode: 'plan_shots_from_issue', creative_brief: 'Trailer tone' });
+  });
+
+  it('pacingReviewResultSchema requires overall_pacing', () => {
+    const r = pacingReviewResultSchema.parse({ overall_pacing: 'Steady climb; act 2 sags slightly.' });
+    expect(r.overall_pacing).toContain('Steady');
+  });
+
+  it('shotPlanJsonSchema requires shots', () => {
+    const s = shotPlanJsonSchema.parse({
+      shots: [{ shot_index: 1, description: 'Wide on skyline' }],
+    });
+    expect(s.shots).toHaveLength(1);
+  });
+});
+
+describe('writerToolsPageBeatsRequestSchema', () => {
+  it('rejects invalid page uuid', () => {
+    expect(() =>
+      writerToolsPageBeatsRequestSchema.parse({ mode: 'page_beats', page_id: 'x' }),
+    ).toThrow();
+  });
+});

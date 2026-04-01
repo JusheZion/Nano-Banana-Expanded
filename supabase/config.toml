@@ -1,0 +1,7 @@
+# Supabase local / deploy config. Set project_id via `supabase link`.
+
+[api]
+enabled = true
+
+[functions.writer-tools]
+verify_jwt = true

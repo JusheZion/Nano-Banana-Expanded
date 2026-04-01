@@ -23,5 +23,8 @@ export function prefetchPortal(portal: Portal): void {
     case 'comic':
       void import('./portals/ComicPortal');
       return;
+    case 'writer':
+      void import('./portals/writer/WriterPortal');
+      return;
   }
 }

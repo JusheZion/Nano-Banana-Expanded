@@ -76,3 +76,15 @@ export const STORYLINE_DIRECTOR_BG =
 /** Header title on gold strip — magenta / violet */
 export const STORYLINE_MAGENTA_TEXT =
   'linear-gradient(135deg, #fce7f3 0%, #e45da2 35%, #a855f7 65%, #6b21a8 100%)';
+
+/** Writers' Workshop — Tiffany diagonal workspace (main column only; hub sidebar unchanged). */
+export const WRITERS_WORKSHOP_BG =
+  'linear-gradient(135deg, #81D8D0 0%, #5ec4bc 22%, #3db8ae 48%, #6fd4cc 72%, #b8f0ea 100%)';
+/** Slanted metallic gold for dividers/buttons alongside Tiffany (matches ACCENT_GOLD palette). */
+export const WRITERS_GOLD_SLANT =
+  'linear-gradient(135deg, #bf953f 0%, #fcf6ba 45%, #b38728 70%, #fbf5b7 85%, #aa771c 100%)';
+/** Header title on gold strip — Tiffany / deep teal glitter */
+export const WRITERS_TIFFANY_TEXT =
+  'linear-gradient(135deg, #0d4f4a 0%, #1a7a72 28%, #3db8ae 55%, #81D8D0 78%, #e0fffa 100%)';
+/** Hub nav accent when Writers' Workshop is active */
+export const WRITERS_NAV_ACCENT = '#2a9d8f';

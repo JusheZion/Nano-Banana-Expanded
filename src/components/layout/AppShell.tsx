@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Palette, Image as ImageIcon, Wand2, BookOpen, Box } from 'lucide-react';
+import { Home, Palette, Image as ImageIcon, Wand2, BookOpen, Box, PenLine } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import type { Portal } from '@/shared/portals';
 import { prefetchPortal } from '@/portals-prefetch';
@@ -8,6 +8,7 @@ import {
   ACCENT_GOLD_GRADIENT,
   ACCENT_GOLD_SOLID,
   SIDEBAR_JEWEL_GRADIENT,
+  WRITERS_NAV_ACCENT,
 } from '@/shared/theme/Phase12DesignTokens';
 
 interface AppShellProps {
@@ -18,6 +19,7 @@ interface AppShellProps {
 
 function accentForPortal(p: Portal): string {
     return p === 'studio' ? '#37615D' :
+        p === 'writer' ? WRITERS_NAV_ACCENT :
         p === 'reference' ? '#5F368E' :
         p === 'assets' ? '#5F368E' :
         p === 'comic' ? ACCENT_GOLD_SOLID :
@@ -72,8 +74,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
 
     const handleNavClick = (portal: Portal) => {
         setActivePortal(portal);
-        if (portal === 'studio') setTheme('teal');
-        else if (portal === 'reference' || portal === 'assets') setTheme('purple');
+        if (portal === 'studio' || portal === 'writer') setTheme('teal');
+        else if (portal === 'reference' || portal === 'assets' || portal === 'lab') setTheme('purple');
         else if (portal === 'comic') setTheme('obsidian');
         else if (portal === 'home') setTheme('crimson');
     };
@@ -122,6 +124,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     <NavItem targetPortal="reference" icon={ImageIcon} label="Image Vault" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'reference'} onSelect={handleNavClick} />
                     <NavItem targetPortal="comic" icon={BookOpen} label="Comic Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'comic'} onSelect={handleNavClick} />
                     <NavItem targetPortal="lab" icon={Palette} label="Storyline Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'lab'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="writer" icon={PenLine} label={"Writers' Workshop"} sidebarExpanded={sidebarExpanded} isActive={activePortal === 'writer'} onSelect={handleNavClick} />
                 </nav>
 
                 <div className={`${sidebarExpanded ? 'p-6' : 'p-3'} mt-auto flex justify-center relative transition-all duration-300`}>
@@ -146,8 +149,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
 
             <main className="flex-1 relative overflow-hidden flex flex-col h-full min-h-0">
                 <div
-                    className={`flex-1 min-h-0 overflow-x-hidden relative ${
-                        activePortal === 'studio' || activePortal === 'assets'
+                    className={`flex-1 min-h-0 overflow-x-hidden relative flex flex-col ${
+                        activePortal === 'studio' || activePortal === 'assets' || activePortal === 'writer'
                             ? 'overflow-y-hidden'
                             : 'overflow-y-auto custom-scrollbar'
                     }`}
