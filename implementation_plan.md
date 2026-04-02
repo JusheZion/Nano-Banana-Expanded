@@ -380,7 +380,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 ### Phase 2 (done)
 
 - Edge `writer-tools`: `page_beats` (Gemini JSON → `writer_pages.beats_json`), `draft_dialogue` (→ `script_text`); shared Zod in `src/shared/writer/` + `supabase/functions/_shared/writerSchemas.ts`.
-- Client: `WriterPageRow` includes `beats_json`, `script_text`, `updated_at`; `listWriterPages` selects them. `WriterPortal` — selectable page in dock **Library → Pages**; **Beats** and **Dialogue** tabs call `invokeWriterTools`, refetch pages, show saved JSON/script.
+- Client: `WriterPageRow` includes `beats_json`, `script_text`, `updated_at`; `listWriterPages` selects them; **`createWriterPage`** inserts the next `page_number` for an issue. `WriterPortal` — **Add page** in dock **Library → Pages**; selectable page list; **Beats** and **Dialogue** tabs call `invokeWriterTools`, refetch pages, show saved JSON/script.
 - Tests: `schemas.test.ts` covers `page_beats` / `draft_dialogue` requests and `pageBeatsJsonSchema`.
 
 ### Phase 3 (done)
@@ -425,6 +425,13 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - When Supabase env is configured but **no user session**, show a **dismissible** banner under the workshop header: AI tools need a signed-in JWT; links into **Help → Setup** (opens category modal).
 - [`writerTools.ts`](src/shared/api/writerTools.ts) — **401/403** from Edge Functions returns a clear “sign in / session expired” message (in addition to parsing JSON `error` when present).
 
+### Phase 6e — In-app Supabase Auth (email/password) (done, 2026-03-31)
+
+- **Global state:** [`AuthContext.tsx`](src/shared/context/AuthContext.tsx) — `getSession` + `onAuthStateChange`, `signInWithPassword`, `signUpWithPassword` (email confirmation path surfaces “check your email”), `signOut`, `openSignInModal`. Renders [`AuthModal`](src/components/auth/AuthModal.tsx) when `VITE_SUPABASE_*` is set.
+- **Shell:** [`AppShell.tsx`](src/components/layout/AppShell.tsx) — bottom account control: **Sign in** (opens modal) vs **initials + Sign out** when a session exists; muted placeholder when Supabase env is missing.
+- **Writer:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) uses `useAuth()` (no duplicate auth listener); banner includes **Sign in here** → same modal.
+- **Bootstrap:** [`main.tsx`](src/main.tsx) wraps the app with **`AuthProvider`** inside `ThemeProvider` (with `ProjectProvider`).
+
 ### Phase 5+ (backlog)
 
 - Richer cross-issue arc timeline; panel thumbnails / scrubbing in the strip; PDF export.
@@ -438,11 +445,60 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 1. **CLI + project:** `cd` to repo root (folder containing `supabase/functions/`). Run `supabase login` if you see “Access token not provided”.
 2. **Link (once per machine / project):** `supabase link --project-ref <your-reference-id>` (Dashboard → Project Settings → General → Reference ID).
-3. **Upload:** `supabase functions deploy writer-tools`
-4. **Secrets:** `supabase secrets set GEMINI_API_KEY="..."` (same value as `VITE_GEMINI_API_KEY`). Optional: `supabase secrets set GEMINI_MODEL="gemini-3-flash-preview"`.
+3. **Database:** `supabase db push` (or your usual migration path) so `writer_*` tables and RLS exist before relying on the app.
+4. **Upload:** `supabase functions deploy writer-tools`
+5. **Secrets:** `supabase secrets set GEMINI_API_KEY="..."` (same value as `VITE_GEMINI_API_KEY`). Optional: `supabase secrets set GEMINI_MODEL="gemini-3-flash-preview"`.
 
-### JWT / signed-in user (`verify_jwt = true`)
+### Supabase Dashboard — Auth URLs (aligns with `verify_jwt` + in-app sign-in)
 
-1. [`supabase/config.toml`](supabase/config.toml) sets `verify_jwt = true` for `writer-tools`, so Supabase **rejects** requests without a valid **user** JWT (the anon key alone is not enough if there is no logged-in session).
+Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
+
+1. **Authentication → URL configuration**
+   - **Site URL:** production origin (e.g. `https://your-app.example.com`).
+   - **Redirect URLs:** include production origin, and for local dev add `http://localhost:5173` (or whatever port Vite uses) and/or `http://127.0.0.1:5173`.
+2. **Authentication → Providers:** enable **Email** (password sign-in / sign-up as needed for your product policy).
+3. After deploy, users **sign in inside the app** (sidebar account or Writers’ banner **Sign in here**); the session JWT is what Edge `writer-tools` validates (see JWT note below).
+
+### JWT / signed-in user (`writer-tools`)
+
+1. [`supabase/config.toml`](supabase/config.toml) sets **`verify_jwt = false`** for `writer-tools` so the Functions gateway does not reject valid user JWTs; the **Deno function** validates `Authorization: Bearer <access_token>` via `supabase.auth.getUser(token)` before running tool logic.
 2. In the app, use the normal `supabase` client **after** the user signs in with Supabase Auth. `supabase.functions.invoke('writer-tools', { body })` **automatically** sends the session `Authorization` header.
 3. **Without the app:** call the function URL with `Authorization: Bearer <user_access_token>` and the `apikey` header set to your **anon** key (see Supabase docs for Edge Function invocation).
+
+### Cloudflare Pages — production SPA (approved)
+
+**Goal:** Host the Vite static build on **Cloudflare Pages**; keep **Supabase** (Postgres, Auth, Edge Functions) as the backend. Same Supabase project as local → production URL only changes where the SPA is served; data stays in Supabase.
+
+**Engineering (repo)**
+
+- Add SPA fallback: [`public/_redirects`](public/_redirects) with:
+
+  ```text
+  /*    /index.html   200
+  ```
+
+  so client-side routes survive browser refresh (Vite copies `public/` into `dist/`).
+
+- **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
+- Optional: set Cloudflare **environment variable** `NODE_VERSION` = `20` (or `22`) if the default Node fails the build.
+
+**Owner / operator checklist**
+
+- Step-by-step tasks (accounts, Git connect, env vars, Supabase URL config, optional custom domain, troubleshooting): **[`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md)** in the repo root — work through it in parallel with implementation.
+
+**Environment variables (Cloudflare Pages)**
+
+- Set **`VITE_SUPABASE_URL`** and **`VITE_SUPABASE_ANON_KEY`** (and any other `VITE_*` the app uses) under **Production** and, if needed, **Preview**. Redeploy after adding variables so Vite embeds them at build time.
+
+**Supabase Auth URLs for Cloudflare**
+
+- **Site URL:** the live Pages URL (`https://<project>.pages.dev`) or your custom domain once attached.
+- **Redirect URLs:** include that same origin plus local dev (`http://localhost:5173`, etc.). Preview branch URLs (`*.pages.dev`) must be listed if you test auth on previews.
+
+**Not hosted on Cloudflare**
+
+- **`writer-tools`** and other Edge Functions deploy only to **Supabase** (`supabase functions deploy …`). Secrets remain in the Supabase project.
+
+**Approved roadmap (Writers’ Workshop + platform)**
+
+- Cursor plan **Writers’ Workshop UX Roadmap** covers remaining UX (tab bar, arc layout, ribbon format phase A, pages sync, series rename, Google OAuth, RLS hardening). Cloudflare tasks there: `cloudflare-pages-spa`, `cloudflare-env-docs`.

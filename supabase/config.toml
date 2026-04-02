@@ -4,4 +4,4 @@
 enabled = true
 
 [functions.writer-tools]
-verify_jwt = true
+verify_jwt = false

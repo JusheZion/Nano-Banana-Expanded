@@ -444,6 +444,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Auth: we validate JWT here because verify_jwt is disabled in config.toml.
+    const authHeader = req.headers.get('authorization') ?? req.headers.get('Authorization') ?? '';
+    const token = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice('bearer '.length).trim() : '';
+    if (!token) {
+      return Response.json(
+        { success: false, error: 'Missing JWT', details: 'Send Authorization: Bearer <access_token>' },
+        { status: 401, headers: corsHeaders },
+      );
+    }
+
     const body = await req.json().catch(() => null);
     const parsedReq = writerToolsRequestSchema.safeParse(body);
     if (!parsedReq.success) {
@@ -454,6 +464,14 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    const { error: authErr } = await supabase.auth.getUser(token);
+    if (authErr) {
+      return Response.json(
+        { success: false, error: 'Invalid JWT', details: authErr.message },
+        { status: 401, headers: corsHeaders },
+      );
+    }
 
     if (parsedReq.data.mode === 'outline_issue') {
       const { issue_id, target_page_count } = parsedReq.data;

@@ -144,6 +144,9 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Phase 6b (UI parity, 2026-03-31): Writer workspace uses **glassmorphism panels** (separate cards, not one cream block) over the **Tiffany gradient**; main workspace is **scrollable** so “Latest saved outline” is always reachable (even with DevTools open)
 - [x] Phase 6c (help UX, 2026-03-31): **`writerHelpRegistry`** — `WRITER_UI_TIPS`, help **categories** (modal sections), **`WriterSectionTip`**; **`WriterPortal`** wired to **`onOpenHelpCategory`**; library/dock/workspace guidance moved to tooltips where noted; **`WriterRibbon`** Help tiles type-safe icons
 - [x] Phase 6d (auth UX, 2026-03-31): Dismissible **sign-in for AI** banner when Supabase env is set but **no session**; **`writerTools`** maps **401/403** to a clear JWT / sign-in message; **`implementation_plan.md`** Writers section aligned (Library dock / Activity, Phase 6c–6d)
+- [x] Phase 6e (auth, 2026-03-31): **`AuthProvider`** + **`AuthModal`** (email/password); **`AppShell`** account sign-in / sign-out; **`WriterPortal`** uses **`useAuth`** + banner **Sign in here**; **`implementation_plan.md`** deploy checklist + Dashboard Auth URLs
+- [x] Phase 6f (writer-tools JWT, 2026-03-31): **`invokeWriterTools`** — **`getSession()`** + optional **`refreshSession`** when expiring; explicit **`Authorization: Bearer <user access_token>`** on **`functions.invoke`** (avoids anon-key **`Bearer`** fallback); gateway **`verify_jwt`** workaround: **`config.toml`** **`verify_jwt = false`** + in-function **`getUser(token)`** validation
+- [x] Phase 6g (Cloudflare prep, 2026-04-01): **`implementation_plan.md`** — **Cloudflare Pages** section + owner pointer to **`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**; **`public/_redirects`** (`/*` → `/index.html` **`200`**); Supabase Auth / JWT docs in plan aligned with current **`writer-tools`** config
 
 ## Future / Backlog
 

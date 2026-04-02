@@ -187,6 +187,27 @@ export async function listWriterPages(issueId: string): Promise<WriterPageRow[]>
   return (data ?? []) as WriterPageRow[];
 }
 
+/** Insert a page row for an issue (next page_number must be unique for that issue). */
+export async function createWriterPage(input: {
+  issue_id: string;
+  page_number: number;
+}): Promise<WriterPageRow | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from('writer_pages')
+    .insert({
+      issue_id: input.issue_id,
+      page_number: input.page_number,
+    })
+    .select('id, issue_id, page_number, beats_json, script_text, created_at, updated_at')
+    .single();
+  if (error) {
+    console.warn('[arcsWriterRoom] createWriterPage', error.message);
+    return null;
+  }
+  return data as WriterPageRow;
+}
+
 export async function listWriterShotPlansForIssue(issueId: string): Promise<WriterVideoShotPlanRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase

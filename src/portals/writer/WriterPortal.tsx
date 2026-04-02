@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { HelpCircle } from 'lucide-react';
 import {
   createWriterIssue,
+  createWriterPage,
   createWriterSeries,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -17,7 +18,8 @@ import {
   type WriterVideoShotPlanRow,
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
-import { getSupabaseDiagnostic, isSupabaseConfigured, supabase } from '@/shared/lib/supabase';
+import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { useAuth } from '@/shared/context/AuthContext';
 import { shotPlanJsonToCsv } from '@/portals/writer/shotPlanCsv';
 import { WriterShotStoryboardStrip } from '@/portals/writer/WriterShotStoryboardStrip';
 import { WriterContextMenu } from '@/portals/writer/WriterContextMenu';
@@ -104,8 +106,7 @@ export const WriterPortal: React.FC = () => {
   const [dockTab, setDockTab] = useState<WriterDockTabId>('library');
   const [dockCollapsed, setDockCollapsed] = useState(false);
   const [helpCategory, setHelpCategory] = useState<WriterHelpCategoryId | null>(null);
-  const [authSessionChecked, setAuthSessionChecked] = useState(false);
-  const [hasAuthUser, setHasAuthUser] = useState(false);
+  const { user: authUser, ready: authReady, openSignInModal } = useAuth();
   const [aiAuthBannerDismissed, setAiAuthBannerDismissed] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [findActiveIndex, setFindActiveIndex] = useState(0);
@@ -134,6 +135,8 @@ export const WriterPortal: React.FC = () => {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [createSeriesBusy, setCreateSeriesBusy] = useState(false);
   const [createIssueBusy, setCreateIssueBusy] = useState(false);
+  const [createPageBusy, setCreatePageBusy] = useState(false);
+  const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
   const [issueSynopsisDraft, setIssueSynopsisDraft] = useState('');
   const [seriesLoglineDraft, setSeriesLoglineDraft] = useState('');
@@ -154,26 +157,8 @@ export const WriterPortal: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!supabase) {
-      setHasAuthUser(false);
-      setAuthSessionChecked(true);
-      return;
-    }
-    let cancelled = false;
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      setHasAuthUser(Boolean(session?.user));
-      setAuthSessionChecked(true);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setHasAuthUser(Boolean(session?.user));
-      if (session?.user) setAiAuthBannerDismissed(false);
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
+    if (authUser) setAiAuthBannerDismissed(false);
+  }, [authUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,6 +229,10 @@ export const WriterPortal: React.FC = () => {
   }, [selectedIssueId]);
 
   useEffect(() => {
+    setCreatePageError(null);
+  }, [selectedIssueId]);
+
+  useEffect(() => {
     const row = issues.find((x) => x.id === selectedIssueId);
     if (row) {
       setIssueTitleDraft(row.title ?? '');
@@ -271,6 +260,11 @@ export const WriterPortal: React.FC = () => {
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
     [pages],
   );
+
+  const nextPageNumber = useMemo(() => {
+    if (sortedPages.length === 0) return 1;
+    return Math.max(...sortedPages.map((p) => p.page_number)) + 1;
+  }, [sortedPages]);
 
   const searchableCtx = useMemo(
     () => ({
@@ -652,6 +646,44 @@ export const WriterPortal: React.FC = () => {
           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">Pages</p>
           <WriterSectionTip tipKey="pagesLibrary" label="About pages and beats" />
         </div>
+        {supabaseOk && selectedIssueId ? (
+          <div className="mb-1.5 space-y-1">
+            <button
+              type="button"
+              disabled={createPageBusy || nextPageNumber > 500}
+              onClick={async () => {
+                if (!selectedIssueId) return;
+                setCreatePageError(null);
+                setCreatePageBusy(true);
+                const row = await createWriterPage({
+                  issue_id: selectedIssueId,
+                  page_number: nextPageNumber,
+                });
+                setCreatePageBusy(false);
+                if (row) {
+                  const pageRows = await listWriterPages(selectedIssueId);
+                  setPages(pageRows);
+                  setSelectedPageId(row.id);
+                  pushHistory(`added page ${row.page_number}`);
+                } else {
+                  const msg =
+                    'Could not add page (duplicate number or network). Try again or refresh the list.';
+                  setCreatePageError(msg);
+                  pushHistory(`error: add page`);
+                }
+              }}
+              className="w-full rounded-lg px-2 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+              style={{ background: ACCENT_GOLD_GRADIENT }}
+            >
+              {createPageBusy ? 'Adding…' : `Add page ${nextPageNumber}`}
+            </button>
+            {createPageError ? (
+              <p className="text-[10px] text-red-800 leading-snug px-0.5">{createPageError}</p>
+            ) : null}
+          </div>
+        ) : supabaseOk ? (
+          <p className="text-[10px] text-black/45 mb-1.5 leading-snug">Select an issue to add pages.</p>
+        ) : null}
         <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1">
           {sortedPages.map((p) => (
             <Tooltip key={p.id} content={`Page ${p.page_number}`} side="left">
@@ -760,14 +792,22 @@ export const WriterPortal: React.FC = () => {
         </div>
       </header>
 
-      {supabaseOk && authSessionChecked && !hasAuthUser && !aiAuthBannerDismissed ? (
+      {supabaseOk && authReady && !authUser && !aiAuthBannerDismissed ? (
         <div
           className="flex-shrink-0 flex items-start gap-2 px-4 py-2 border-b border-amber-300/60 bg-amber-100/95 text-[11px] text-amber-950"
           role="status"
         >
           <p className="flex-1 min-w-0 leading-snug">
             <span className="font-bold">Sign in for AI tools.</span> Writer-tools expects a logged-in Supabase user (JWT).
-            Add Auth to your deployment and sign in, or use a test user.{' '}
+            Use the sidebar account control or{' '}
+            <button
+              type="button"
+              className="font-bold underline underline-offset-2 hover:text-black"
+              onClick={() => openSignInModal()}
+            >
+              Sign in here
+            </button>
+            .{' '}
             <button
               type="button"
               className="font-bold underline underline-offset-2 hover:text-black"

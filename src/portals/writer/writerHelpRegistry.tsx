@@ -33,7 +33,7 @@ export const WRITER_UI_TIPS = {
   issuesStoryContext:
     'After you pick an issue: Issue Outline → Story context → Save (in-app; Supabase UI optional). Cast / locations / bibles: Table Editor only for now.',
   pagesLibrary:
-    'Page beats, dialogue, and some tools need a row in writer_pages for this issue. Add pages in Supabase if the list is empty; outline alone does not create page rows.',
+    'Beats and dialogue attach to a page row. Use Add page (next number) under Library → Pages after you pick an issue. Generating an outline does not create page rows automatically.',
   storyContextSupabase:
     'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env, restart the dev server, then reload. Inputs appear once the app can reach Supabase.',
   dockLibraryHidden:
@@ -160,8 +160,9 @@ export function WriterHelpCategoryBody({
           {h('Pages')}
           <p>
             <strong>Page beats</strong> and <strong>dialogue</strong> need a <strong>page</strong> selected under Library →
-            Pages. Outline generation does not create <code className="rounded bg-black/10 px-1">writer_pages</code> rows —
-            add pages via Supabase (or your workflow) when the list is empty.
+            Pages. Outline generation does not create <code className="rounded bg-black/10 px-1">writer_pages</code> rows — use{' '}
+            <strong>Add page</strong> (next number) in the Library when the list is empty, then pick the page and run beats or
+            dialogue.
           </p>
           {h('Beats & dialogue')}
           <p>
