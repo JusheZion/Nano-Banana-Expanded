@@ -432,6 +432,21 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Writer:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) uses `useAuth()` (no duplicate auth listener); banner includes **Sign in here** → same modal.
 - **Bootstrap:** [`main.tsx`](src/main.tsx) wraps the app with **`AuthProvider`** inside `ThemeProvider` (with `ProjectProvider`).
 
+### Phase 6f — Writer tools auth refresh optimization (planned, 2026-04-02)
+
+- **Problem:** `invokeWriterTools` currently calls `supabase.auth.refreshSession()` on every tool invocation when a `refresh_token` exists, even if the access token is still fresh. This adds a network round-trip and can race when multiple AI tool calls happen concurrently.
+- **Plan:** only refresh when needed:
+  - Decode JWT `exp` and refresh only when \(exp - now\) is below a small buffer (e.g. 120s), or when validation indicates it is expired.
+  - If multiple calls want refresh at the same time, dedupe with a module-scoped in-flight refresh promise so only one network refresh happens.
+  - Keep retry-on-401 behavior, but avoid the unconditional pre-flight refresh.
+
+### Phase 6g — Series library UX + stale series refresh fix (done, 2026-04-02)
+
+- **Problem (refresh):** `refreshIssuesForSeries` closed over `selectedSeriesId` while `runPacingFromRibbon` / `runCanonFromRibbon` used `useCallback([selectedIssueId])` only, so after switching series those callbacks could refresh the wrong series’ issues.
+- **Fix:** `refreshIssuesForSeries` is `useCallback` with `[selectedSeriesId]`; ribbon callbacks list `[selectedIssueId, refreshIssuesForSeries]`.
+- **Problem (UX):** “Create first series” only appeared when the list was empty, so users could not add another series. Series **title** was not editable in the UI (only logline was saved, and saving required a selected issue).
+- **Fix:** **+ Add series** in Library when at least one series exists; **Issue Outline → Story context** includes **Series title** and **Save story context** updates `writer_series.title` + `logline` with only a series selected; issue fields save when an issue is selected.
+
 ### Phase 5+ (backlog)
 
 - Richer cross-issue arc timeline; panel thumbnails / scrubbing in the strip; PDF export.

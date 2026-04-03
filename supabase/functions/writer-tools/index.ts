@@ -272,6 +272,7 @@ function buildPageBeatsUserPrompt(args: {
   locations: unknown[];
   styleBibles: unknown[];
   latestOutline: unknown;
+  priorPagesDigest: string;
 }): string {
   const outlineBeat = extractOutlineBeatForPage(args.latestOutline, args.page.page_number);
   return [
@@ -279,6 +280,7 @@ function buildPageBeatsUserPrompt(args: {
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
     `This page number: ${args.page.page_number}`,
+    `Prior pages context (most recent first; do NOT repeat):\n${args.priorPagesDigest || '(none)'}`,
     `Existing beats_json (may be null): ${JSON.stringify(args.page.beats_json ?? null)}`,
     `Existing script_text preview: ${(args.page.script_text ?? '').slice(0, 500) || '(none)'}`,
     `Issue outline context for this page:\n${outlineBeat}`,
@@ -289,6 +291,7 @@ function buildPageBeatsUserPrompt(args: {
     'Return JSON:',
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
     'Must have at least one panel; every panel needs non-empty "action".',
+    'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
   ].join('\n');
 }
 
@@ -585,7 +588,7 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
       }
       const sid = issueRow.series_id;
-      const [castRes, locRes, bibleRes, outlineRes] = await Promise.all([
+      const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', sid),
         supabase.from('writer_locations').select('*').eq('series_id', sid),
         supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
@@ -596,9 +599,17 @@ Deno.serve(async (req) => {
           .order('version', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('writer_pages')
+          .select('page_number, beats_json, script_text')
+          .eq('issue_id', page.issue_id)
+          .lt('page_number', page.page_number)
+          .order('page_number', { ascending: false })
+          .limit(2),
       ]);
       const system =
         'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
+      const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
       const userPrompt = buildPageBeatsUserPrompt({
         page,
         issue: issueRow,
@@ -606,6 +617,7 @@ Deno.serve(async (req) => {
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
         latestOutline: outlineRes.data?.outline_json ?? null,
+        priorPagesDigest,
       });
       let beatsJson: unknown;
       try {

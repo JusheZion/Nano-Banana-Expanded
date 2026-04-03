@@ -6,6 +6,19 @@ import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { parseWriterToolsResponse } from '@/shared/writer/schemas';
 import type { WriterToolsRequest, WriterToolsResponse } from '@/shared/writer/types';
 
+let refreshInFlight: Promise<
+  { data: { session: { access_token?: string } | null } | null; error: { message: string } | null } | null
+> | null = null;
+
+async function refreshSessionDeduped() {
+  if (!supabase) return null;
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = supabase.auth.refreshSession().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
 async function errorBodyFromFunctionsHttpError(
   err: FunctionsHttpError,
 ): Promise<{ json: unknown | null; text: string | null } | null> {
@@ -153,9 +166,18 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
     return { success: false, error: authHint, details: preCheck.details };
   }
 
-  if (initialSession.refresh_token) {
-    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
-    if (!refreshErr && refreshed.session?.access_token) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = decodeJwtPayload(accessToken)?.exp;
+  const expInSec = typeof exp === 'number' ? exp - nowSec : null;
+  const refreshBufferSec = 120;
+  const shouldRefresh =
+    !!initialSession.refresh_token && (!preCheck.ok || (typeof expInSec === 'number' && expInSec < refreshBufferSec));
+
+  if (shouldRefresh) {
+    const refreshedRes = await refreshSessionDeduped();
+    const refreshed = refreshedRes?.data ?? null;
+    const refreshErr = refreshedRes?.error ?? null;
+    if (!refreshErr && refreshed?.session?.access_token) {
       accessToken = refreshed.session.access_token;
     }
   }
@@ -182,8 +204,10 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
     const res = error.context as Response | undefined;
     const status = res && typeof res.status === 'number' ? res.status : undefined;
     if (status === 401 && initialSession.refresh_token) {
-      const { data: retryRefresh, error: retryRefErr } = await supabase.auth.refreshSession();
-      if (!retryRefErr && retryRefresh.session?.access_token) {
+      const retryRes = await refreshSessionDeduped();
+      const retryRefresh = retryRes?.data ?? null;
+      const retryRefErr = retryRes?.error ?? null;
+      if (!retryRefErr && retryRefresh?.session?.access_token) {
         ({ data, error } = await invokeWriterToolsWithToken(retryRefresh.session.access_token, body));
       }
     }
