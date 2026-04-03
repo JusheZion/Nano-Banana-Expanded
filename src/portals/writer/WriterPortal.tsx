@@ -350,7 +350,7 @@ export const WriterPortal: React.FC = () => {
       setPacingError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId]);
+  }, [refreshIssuesForSeries, selectedIssueId]);
 
   const runCanonFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -366,7 +366,7 @@ export const WriterPortal: React.FC = () => {
       setCanonError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId]);
+  }, [refreshIssuesForSeries, selectedIssueId]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'outline' && selectedIssueId) {

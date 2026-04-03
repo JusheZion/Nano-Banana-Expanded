@@ -149,11 +149,12 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
   let accessToken = initialSession.access_token;
 
   const preCheck = validateAccessTokenForEdge(accessToken);
-  if (!preCheck.ok && !preCheck.details.includes('expired')) {
+  const needsRefresh = !preCheck.ok && preCheck.details.includes('expired');
+  if (!preCheck.ok && !needsRefresh) {
     return { success: false, error: authHint, details: preCheck.details };
   }
 
-  if (initialSession.refresh_token) {
+  if (needsRefresh && initialSession.refresh_token) {
     const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
     if (!refreshErr && refreshed.session?.access_token) {
       accessToken = refreshed.session.access_token;

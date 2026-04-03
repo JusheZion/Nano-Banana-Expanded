@@ -432,6 +432,12 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Writer:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) uses `useAuth()` (no duplicate auth listener); banner includes **Sign in here** → same modal.
 - **Bootstrap:** [`main.tsx`](src/main.tsx) wraps the app with **`AuthProvider`** inside `ThemeProvider` (with `ProjectProvider`).
 
+### Phase 6h — writer-tools token refresh optimization (planned, 2026-04-03)
+
+- **Issue:** [`invokeWriterTools`](src/shared/api/writerTools.ts) currently calls `supabase.auth.refreshSession()` whenever a `refresh_token` exists, even when `getSession()` returns a still-valid access token.
+- **Fix strategy:** only refresh when JWT pre-check reports an **expired** token (or on explicit 401 retry path), and keep existing invalid-token guards (`anon` role / wrong issuer / malformed token).
+- **Expected impact:** removes one avoidable auth network round-trip from most writer tool invocations and reduces refresh race pressure under concurrent calls.
+
 ### Phase 5+ (backlog)
 
 - Richer cross-issue arc timeline; panel thumbnails / scrubbing in the strip; PDF export.

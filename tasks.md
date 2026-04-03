@@ -147,6 +147,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Phase 6e (auth, 2026-03-31): **`AuthProvider`** + **`AuthModal`** (email/password); **`AppShell`** account sign-in / sign-out; **`WriterPortal`** uses **`useAuth`** + banner **Sign in here**; **`implementation_plan.md`** deploy checklist + Dashboard Auth URLs
 - [x] Phase 6f (writer-tools JWT, 2026-03-31): **`invokeWriterTools`** — **`getSession()`** + optional **`refreshSession`** when expiring; explicit **`Authorization: Bearer <user access_token>`** on **`functions.invoke`** (avoids anon-key **`Bearer`** fallback); gateway **`verify_jwt`** workaround: **`config.toml`** **`verify_jwt = false`** + in-function **`getUser(token)`** validation
 - [x] Phase 6g (Cloudflare prep, 2026-04-01): **`implementation_plan.md`** — **Cloudflare Pages** section + owner pointer to **`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**; **`public/_redirects`** (`/*` → `/index.html` **`200`**); Supabase Auth / JWT docs in plan aligned with current **`writer-tools`** config
+- [x] Phase 6h (writer-tools refresh optimization, 2026-04-03): **`invokeWriterTools`** now refreshes only when the JWT is expired (no unconditional refresh on every invocation), keeps 401 refresh+retry behavior, and resolves Writer lint errors by including `refreshIssuesForSeries` in ribbon callback dependencies.
 
 ## Future / Backlog
 
