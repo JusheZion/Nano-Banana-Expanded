@@ -39,3 +39,8 @@ vite
 
 # Supabase CLI local artifacts
 supabase/.temp/
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
