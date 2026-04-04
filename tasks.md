@@ -151,6 +151,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **2026-04-04:** **Cloudflare CI** — repaired **merge-corrupted `package.json`** on branch (invalid JSON / duplicated content), restored **Wrangler** tooling (`wrangler.jsonc`, `wrangler` + `@cloudflare/vite-plugin`, `vite.config` plugin, `preview`/`deploy` scripts), regenerated **`package-lock.json`**
 - [x] **2026-04-04:** **Wrangler deploy** — [`wrangler.jsonc`](wrangler.jsonc) **`assets.directory`** = **`dist`** (fixes *missing required `directory` property* on **`wrangler versions upload`**); deduped **`package.json`** again if merge reintroduced duplicate root; checklist **D4b** + troubleshooting for **build before Wrangler**
 - [x] **2026-04-04:** **Merge-corruption cleanup** — WriterPortal / writerTools / writerHelpRegistry / vite.config / writerTools.test repaired; **`npm run build`** passes
+- [x] **2026-04-04:** **Docs + push** — Checklist **Merge conflicts after a PR** + **`EJSONPARSE`** row; walkthrough; pushed to **`origin/main`** (GitHub → Cloudflare if project watches **`main`**)
 - [x] **2026-04-02:** `invokeWriterTools` refresh optimization — avoid unconditional `refreshSession()` (only near-expiry) + dedupe concurrent refresh; Edge `page_beats` prompt includes prior-page digest to reduce repeated beats; removed debug instrumentation after verification
 
 ## Writers' Workshop bugfixes (Apr 2026)
