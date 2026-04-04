@@ -22,9 +22,17 @@ vi.mock('@/shared/lib/supabase', () => ({
 
 import { invokeWriterTools } from '@/shared/api/writerTools';
 
+function base64UrlEncodeJson(payload: unknown): string {
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function makeJwt(payload: { role: string; exp: number; iss?: string }): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const header = base64UrlEncodeJson({ alg: 'HS256', typ: 'JWT' });
+  const body = base64UrlEncodeJson(payload);
   return `${header}.${body}.signature`;
 }
 

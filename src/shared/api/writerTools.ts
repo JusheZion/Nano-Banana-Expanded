@@ -178,14 +178,6 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
     const refreshed = refreshedRes?.data ?? null;
     const refreshErr = refreshedRes?.error ?? null;
     if (!refreshErr && refreshed?.session?.access_token) {
-  const needsRefresh = !preCheck.ok && preCheck.details.includes('expired');
-  if (!preCheck.ok && !needsRefresh) {
-    return { success: false, error: authHint, details: preCheck.details };
-  }
-
-  if (needsRefresh && initialSession.refresh_token) {
-    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
-    if (!refreshErr && refreshed.session?.access_token) {
       accessToken = refreshed.session.access_token;
     }
   }
@@ -216,8 +208,6 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
       const retryRefresh = retryRes?.data ?? null;
       const retryRefErr = retryRes?.error ?? null;
       if (!retryRefErr && retryRefresh?.session?.access_token) {
-      const { data: retryRefresh, error: retryRefErr } = await supabase.auth.refreshSession();
-      if (!retryRefErr && retryRefresh.session?.access_token) {
         ({ data, error } = await invokeWriterToolsWithToken(retryRefresh.session.access_token, body));
       }
     }
