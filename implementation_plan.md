@@ -495,6 +495,7 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
   so client-side routes survive browser refresh (Vite copies `public/` into `dist/`).
 
 - **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
+- **CI guardrail:** **`package.json` must be valid JSON**. A bad merge can append a second copy of the manifest (duplicate keys) and break **`npm ci`** / install with **`EJSONPARSE`** or misleading errors; fix the file, run **`npm install`**, commit **`package-lock.json`**. Repo keeps **`wrangler.jsonc`**, **`wrangler`** + **`@cloudflare/vite-plugin`**, and **`preview` / `deploy`** scripts aligned with the Cloudflare Workers + Vite integration.
 - Optional: set Cloudflare **environment variable** `NODE_VERSION` = `20` (or `22`) if the default Node fails the build.
 
 **Owner / operator checklist**

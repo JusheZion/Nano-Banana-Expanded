@@ -195,6 +195,7 @@ Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supa
 | Google works locally but not prod | Supabase Site URL + Redirect URLs must include prod; Google redirect URI stays Supabase callback, not Cloudflare. |
 | writer-tools 401 | User must be signed in; JWT / Edge function config — coordinate with dev (not Cloudflare-specific). |
 | **Writers’ Workshop (or other new work) missing** on the live site but works locally | **Branch mismatch:** Cloudflare is building **`main`** while your work is only on **`feat/...`**. Fix: **Pages → Settings → Builds & deployments → Production branch** → set to the branch that has the feature, **or** open a **PR and merge** into `main`, then redeploy. |
+| Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. |
 
 ---
 

@@ -39,3 +39,6 @@ vite
 
 # Supabase CLI local artifacts
 supabase/.temp/
+
+# Wrangler local state
+.wrangler/
