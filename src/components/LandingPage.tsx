@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ArrowRight, Layers, BookOpen, Box } from 'lucide-react';
+import { Sparkles, ArrowRight, Layers, BookOpen, Box, PenLine } from 'lucide-react';
 import { useTheme, type Theme } from '@/shared/context/ThemeContext';
 import type { Portal } from '@/shared/portals';
 import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE, PRIMARY_BG_FLAT } from '@/shared/theme/Phase12DesignTokens';
@@ -52,7 +52,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
             </div>
 
             {/* Quick Access Grid - Jewel Tone Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* Card 1: Studio (Teal) */}
                 <div onClick={() => handleCardClick('studio', 'teal')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(55,97,93,0.5)] border border-white/5 hover:border-[#37615D]/50">
@@ -121,6 +121,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         </div>
                         <h3 className="text-2xl font-bold text-white mb-1 leading-none">Comic Studio</h3>
                         <p className="text-xs text-[#00D1FF] font-medium tracking-wide">VISUAL STORYTELLING</p>
+                    </div>
+                </div>
+
+                {/* Card 6: Writers' Workshop (Tiffany + gold) */}
+                <div onClick={() => handleCardClick('writer', 'teal')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(129,216,208,0.45)] border border-white/5 hover:border-[#81D8D0]/60">
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#0d4f4a] via-[#1a7a72] to-[#81D8D0] opacity-95 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-transparent to-[#fcf6ba]/15 opacity-80" />
+
+                    <div className="absolute bottom-0 left-0 p-6 w-full">
+                        <div
+                            className="w-10 h-10 rounded-full border border-white/25 flex items-center justify-center mb-4 shadow-md"
+                            style={{
+                                background: 'linear-gradient(135deg, #bf953f 0%, #fcf6ba 50%, #b38728 100%)',
+                            }}
+                        >
+                            <PenLine className="w-5 h-5 text-black/80" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Writers&apos; Workshop</h3>
+                        <p className="text-xs font-medium tracking-wide" style={{ color: '#b8f0ea' }}>
+                            SCRIPTS &amp; ARCS
+                        </p>
                     </div>
                 </div>
 

@@ -11,6 +11,7 @@ const AssetsStudio = lazy(() => import('./portals/AssetsStudio').then(m => ({ de
 const ReferenceAlbum = lazy(() => import('./portals/ReferenceAlbum').then(m => ({ default: m.ReferenceAlbum })));
 const PhotoLab = lazy(() => import('./portals/PhotoLab').then(m => ({ default: m.PhotoLab })));
 const ComicPortal = lazy(() => import('./portals/ComicPortal').then(m => ({ default: m.ComicPortal })));
+const WriterPortal = lazy(() => import('./portals/writer/WriterPortal').then(m => ({ default: m.WriterPortal })));
 
 const PortalFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh] text-white/60">
@@ -38,6 +39,7 @@ function App() {
     else if (activePortal === 'reference' || activePortal === 'assets') setTheme('purple');
     else if (activePortal === 'lab') setTheme('purple');
     else if (activePortal === 'comic') setTheme('obsidian');
+    else if (activePortal === 'writer') setTheme('teal');
     else setTheme('crimson');
   }, [activePortal, setTheme]);
 
@@ -71,6 +73,13 @@ function App() {
       {activePortal === 'comic' && (
         <Suspense fallback={<PortalFallback />}>
           <ComicPortal />
+        </Suspense>
+      )}
+      {activePortal === 'writer' && (
+        <Suspense fallback={<PortalFallback />}>
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
+            <WriterPortal />
+          </div>
         </Suspense>
       )}
     </AppShell>

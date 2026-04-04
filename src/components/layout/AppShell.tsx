@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Home, Palette, Image as ImageIcon, Wand2, BookOpen, Box } from 'lucide-react';
+import { Home, Palette, Image as ImageIcon, Wand2, BookOpen, Box, PenLine, LogIn } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { useAuth } from '@/shared/context/AuthContext';
 import type { Portal } from '@/shared/portals';
 import { prefetchPortal } from '@/portals-prefetch';
 import {
@@ -8,6 +10,7 @@ import {
   ACCENT_GOLD_GRADIENT,
   ACCENT_GOLD_SOLID,
   SIDEBAR_JEWEL_GRADIENT,
+  WRITERS_NAV_ACCENT,
 } from '@/shared/theme/Phase12DesignTokens';
 
 interface AppShellProps {
@@ -18,12 +21,27 @@ interface AppShellProps {
 
 function accentForPortal(p: Portal): string {
     return p === 'studio' ? '#37615D' :
+        p === 'writer' ? WRITERS_NAV_ACCENT :
         p === 'reference' ? '#5F368E' :
         p === 'assets' ? '#5F368E' :
         p === 'comic' ? ACCENT_GOLD_SOLID :
         p === 'lab' ? ACCENT_GOLD_SOLID :
         p === 'home' ? ACCENT_GOLD_SOLID :
         '#893741';
+}
+
+function initialsForUser(u: User): string {
+  const meta = u.user_metadata as Record<string, unknown> | undefined;
+  const name = typeof meta?.full_name === 'string' ? meta.full_name.trim() : '';
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean);
+    const a = parts[0]?.[0] ?? '';
+    const b = parts[1]?.[0] ?? '';
+    return (a + b).toUpperCase() || a.toUpperCase() || '?';
+  }
+  const email = u.email?.trim() ?? '';
+  if (!email) return '?';
+  return email.slice(0, 2).toUpperCase();
 }
 
 type NavItemProps = {
@@ -68,12 +86,13 @@ const NavItem: React.FC<NavItemProps> = ({
 
 export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setActivePortal }) => {
     const { setTheme } = useTheme();
+    const { user, ready, supabaseConfigured, openSignInModal, signOut } = useAuth();
     const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
     const handleNavClick = (portal: Portal) => {
         setActivePortal(portal);
-        if (portal === 'studio') setTheme('teal');
-        else if (portal === 'reference' || portal === 'assets') setTheme('purple');
+        if (portal === 'studio' || portal === 'writer') setTheme('teal');
+        else if (portal === 'reference' || portal === 'assets' || portal === 'lab') setTheme('purple');
         else if (portal === 'comic') setTheme('obsidian');
         else if (portal === 'home') setTheme('crimson');
     };
@@ -122,32 +141,83 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     <NavItem targetPortal="reference" icon={ImageIcon} label="Image Vault" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'reference'} onSelect={handleNavClick} />
                     <NavItem targetPortal="comic" icon={BookOpen} label="Comic Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'comic'} onSelect={handleNavClick} />
                     <NavItem targetPortal="lab" icon={Palette} label="Storyline Studio" sidebarExpanded={sidebarExpanded} isActive={activePortal === 'lab'} onSelect={handleNavClick} />
+                    <NavItem targetPortal="writer" icon={PenLine} label={"Writers' Workshop"} sidebarExpanded={sidebarExpanded} isActive={activePortal === 'writer'} onSelect={handleNavClick} />
                 </nav>
 
                 <div className={`${sidebarExpanded ? 'p-6' : 'p-3'} mt-auto flex justify-center relative transition-all duration-300`}>
                     <div className="group relative">
-                        <button
-                            className="w-10 h-10 rounded-full border flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105"
-                            style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
-                        >
-                            <span className="text-xs font-bold tracking-widest text-white">JD</span>
-                        </button>
-                        <div className="absolute left-14 bottom-0 w-max bg-black/60 backdrop-blur-2xl border p-3 rounded-xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ease-out shadow-2xl z-[100] ring-1 ring-white/5" style={{ borderColor: `${ACCENT_GOLD_SOLID}40` }}>
-                            <p className="font-bold text-sm tracking-wide text-white">John Doe</p>
-                            <div className="h-px w-full bg-white/10 my-2" />
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full opacity-90" style={{ backgroundColor: ACCENT_GOLD_SOLID }} />
-                                <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: ACCENT_GOLD_SOLID }}>Pro Plan</p>
-                            </div>
-                        </div>
+                        {!supabaseConfigured ? (
+                            <button
+                                type="button"
+                                title="Supabase not configured"
+                                className="w-10 h-10 rounded-full border flex items-center justify-center shadow-lg transition-all duration-300 opacity-70"
+                                style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                            >
+                                <span className="text-[10px] font-bold text-white/80">—</span>
+                            </button>
+                        ) : !ready ? (
+                            <div
+                                className="w-10 h-10 rounded-full border flex items-center justify-center shadow-lg animate-pulse"
+                                style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                                aria-hidden
+                            />
+                        ) : user ? (
+                            <>
+                                <button
+                                    type="button"
+                                    title={user.email ?? 'Signed in'}
+                                    className="w-10 h-10 rounded-full border flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105"
+                                    style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                                >
+                                    <span className="text-xs font-bold tracking-tight text-white">{initialsForUser(user)}</span>
+                                </button>
+                                <div className="absolute left-14 bottom-0 w-max min-w-[200px] bg-black/60 backdrop-blur-2xl border p-3 rounded-xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:pointer-events-auto transition-all duration-300 ease-out shadow-2xl z-[100] ring-1 ring-white/5" style={{ borderColor: `${ACCENT_GOLD_SOLID}40` }}>
+                                    <p className="font-bold text-sm tracking-wide text-white truncate max-w-[240px]" title={user.email ?? undefined}>
+                                        {user.email ?? 'Signed in'}
+                                    </p>
+                                    <div className="h-px w-full bg-white/10 my-2" />
+                                    <button
+                                        type="button"
+                                        className="text-xs font-bold uppercase tracking-wider text-white/90 hover:text-white w-full text-left py-1 rounded-md hover:bg-white/10 px-1 -mx-1"
+                                        onClick={() => void signOut()}
+                                    >
+                                        Sign out
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={openSignInModal}
+                                    title="Sign in"
+                                    className="w-10 h-10 rounded-full border flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 text-white/90 hover:text-white"
+                                    style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                                >
+                                    <LogIn className="w-5 h-5" aria-hidden />
+                                </button>
+                                <div className="absolute left-14 bottom-0 w-max bg-black/60 backdrop-blur-2xl border p-3 rounded-xl opacity-0 translate-x-[-10px] pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:pointer-events-auto transition-all duration-300 ease-out shadow-2xl z-[100] ring-1 ring-white/5" style={{ borderColor: `${ACCENT_GOLD_SOLID}40` }}>
+                                    <p className="font-bold text-sm tracking-wide text-white">Account</p>
+                                    <p className="text-[10px] text-white/60 mt-1 max-w-[220px] leading-snug">Sign in for Supabase-backed data and AI tools (JWT).</p>
+                                    <button
+                                        type="button"
+                                        className="mt-2 w-full rounded-lg py-2 text-xs font-bold text-black"
+                                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                                        onClick={openSignInModal}
+                                    >
+                                        Sign in
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </aside>
 
             <main className="flex-1 relative overflow-hidden flex flex-col h-full min-h-0">
                 <div
-                    className={`flex-1 min-h-0 overflow-x-hidden relative ${
-                        activePortal === 'studio' || activePortal === 'assets'
+                    className={`flex-1 min-h-0 overflow-x-hidden relative flex flex-col ${
+                        activePortal === 'studio' || activePortal === 'assets' || activePortal === 'writer'
                             ? 'overflow-y-hidden'
                             : 'overflow-y-auto custom-scrollbar'
                     }`}

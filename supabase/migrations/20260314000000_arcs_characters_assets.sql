@@ -31,5 +31,8 @@ CREATE INDEX IF NOT EXISTS idx_assets_metadata_tags ON public.assets USING GIN (
 ALTER TABLE public.characters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
 
+-- Idempotent: remote DBs created earlier may already have these policies
+DROP POLICY IF EXISTS "Allow all for characters" ON public.characters;
 CREATE POLICY "Allow all for characters" ON public.characters FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all for assets" ON public.assets;
 CREATE POLICY "Allow all for assets" ON public.assets FOR ALL USING (true) WITH CHECK (true);

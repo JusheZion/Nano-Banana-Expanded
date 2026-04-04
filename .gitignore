@@ -37,6 +37,8 @@ dist-ssr
 nano-banana-expanded@0.0.0
 vite
 
+# Supabase CLI local artifacts
+supabase/.temp/
 # wrangler files
 .wrangler
 .dev.vars*

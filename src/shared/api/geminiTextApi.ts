@@ -3,7 +3,11 @@
  * Same API key as image generation; uses a text-capable model.
  */
 
-const TEXT_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash'] as const;
+const TEXT_MODELS = [
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3.1-pro-preview',
+] as const;
 const BASE_DELAY_MS = 1000;
 const MAX_RETRIES = 4;
 const JITTER_MS = 500;
