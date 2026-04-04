@@ -214,6 +214,18 @@ On **`walkthrough.md`** (and sometimes TS), both sides edited the **same paragra
 | Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. |
 | Wrangler: **`assets` … missing `directory`** / deploy after install only | Set **`assets.directory`** to **`dist`** in **`wrangler.jsonc`** and ensure **build command** runs **`npm run build`** before **`wrangler versions upload`** so **`dist/`** exists. |
 | **`EJSONPARSE`** / **JSON** error right after merging a PR | Search for **`<<<<<<<`** — conflict markers are still in **`package.json`** (or another file). Remove all markers; ensure **one** valid JSON object. See **Merge conflicts after a PR** above. |
+| **Commit SHA on Cloudflare is older than GitHub `main`** (build not updating) | See **Stale Cloudflare vs GitHub (commit mismatch)** below. |
+
+### Stale Cloudflare vs GitHub (commit mismatch)
+
+Cloudflare shows a **commit hash** (SHA) per deployment. If it is **behind** GitHub:
+
+1. **Production branch** — **Workers & Pages** → your **Pages** project → **Settings** → **Builds & deployments** → **Production branch** must be **`main`** (or whichever branch you actually push to). If it still says **`feat/...`** or an old default, every new push to **`main`** will **not** trigger production.
+2. **Latest deployment status** — Open **Deployments**. If the **newest** row is **Failed**, production may still be serving the **last successful** (older) commit. Fix the error in the log, then **Retry deployment** or push a small commit.
+3. **Git connection** — **Settings** → confirm the repo is still linked; re-authorize the Cloudflare GitHub App if GitHub prompted for reduced permissions. **Disconnect + reconnect** the repo only if builds stopped entirely.
+4. **Wrong project or zone** — Confirm you are in the same Cloudflare account and the same **Pages** project URL you expect (not an old test project).
+5. **Workers (not Pages)** — A **Worker** deployed only via **`wrangler deploy`** from a laptop does **not** auto-update when you push to GitHub unless you added a **Git integration** or **CI** that runs Wrangler. Pushes update **Pages**; **Workers** need that pipeline or a manual **`npm run deploy`**.
+6. **Force a new build** — After fixing settings: **Deployments** → **Create deployment** → select **`main`** and latest commit, or push an empty commit: `git commit --allow-empty -m "chore: trigger Cloudflare build" && git push`.
 
 ---
 
