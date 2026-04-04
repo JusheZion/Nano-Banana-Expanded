@@ -156,6 +156,8 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
 - [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
 - [x] Issue Outline → Story context: **Series title** field + save `title` via `updateWriterSeries`; **Save story context** works with only a series selected (issue fields optional); series logline no longer requires an issue to edit
+- [x] Phase 6h (writer-tools refresh optimization, 2026-04-03): **`invokeWriterTools`** now refreshes only when the JWT is expired (no unconditional refresh on every invocation), keeps 401 refresh+retry behavior, and resolves Writer lint errors by including `refreshIssuesForSeries` in ribbon callback dependencies.
+- [x] Phase 6i (writer-tools verification hardening, 2026-04-04): verified `invokeWriterTools` is not unconditionally refreshing and added regression tests for fresh-token/no-refresh vs expired-token/refresh paths.
 
 ## Future / Backlog
 

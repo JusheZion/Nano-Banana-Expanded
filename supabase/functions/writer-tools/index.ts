@@ -589,6 +589,7 @@ Deno.serve(async (req) => {
       }
       const sid = issueRow.series_id;
       const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
+      const [castRes, locRes, bibleRes, outlineRes] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', sid),
         supabase.from('writer_locations').select('*').eq('series_id', sid),
         supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
@@ -610,6 +611,9 @@ Deno.serve(async (req) => {
       const system =
         'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
       const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
+      ]);
+      const system =
+        'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
       const userPrompt = buildPageBeatsUserPrompt({
         page,
         issue: issueRow,

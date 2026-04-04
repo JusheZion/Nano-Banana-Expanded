@@ -446,6 +446,20 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Fix:** `refreshIssuesForSeries` is `useCallback` with `[selectedSeriesId]`; ribbon callbacks list `[selectedIssueId, refreshIssuesForSeries]`.
 - **Problem (UX):** “Create first series” only appeared when the list was empty, so users could not add another series. Series **title** was not editable in the UI (only logline was saved, and saving required a selected issue).
 - **Fix:** **+ Add series** in Library when at least one series exists; **Issue Outline → Story context** includes **Series title** and **Save story context** updates `writer_series.title` + `logline` with only a series selected; issue fields save when an issue is selected.
+### Phase 6h — writer-tools token refresh optimization (planned, 2026-04-03)
+
+- **Issue:** [`invokeWriterTools`](src/shared/api/writerTools.ts) currently calls `supabase.auth.refreshSession()` whenever a `refresh_token` exists, even when `getSession()` returns a still-valid access token.
+- **Fix strategy:** only refresh when JWT pre-check reports an **expired** token (or on explicit 401 retry path), and keep existing invalid-token guards (`anon` role / wrong issuer / malformed token).
+- **Expected impact:** removes one avoidable auth network round-trip from most writer tool invocations and reduces refresh race pressure under concurrent calls.
+
+### Hotfix verification — `invokeWriterTools` refresh behavior (2026-04-04)
+
+- **Request:** verify and fix the report that `invokeWriterTools` unconditionally refreshes auth on every invocation.
+- **Verification scope:** [`src/shared/api/writerTools.ts`](src/shared/api/writerTools.ts), especially the preflight auth block around `getSession` → `validateAccessTokenForEdge` → conditional `refreshSession`.
+- **Proposed implementation:** no functional change if guard is present; add regression tests to lock expected behavior:
+  1. **Fresh token:** `refreshSession` is **not** called and function invocation uses current token.
+  2. **Expired token:** `refreshSession` is called once and function invocation uses refreshed token.
+- **QA / verify:** run targeted vitest for the new test file, then run lint to confirm no TS/ESLint errors introduced.
 
 ### Phase 5+ (backlog)
 

@@ -45,6 +45,7 @@ Complete these so you are not hunting mid-setup.
 - [x] **D1.** In Cloudflare: **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
 - [x] **D2.** I authorized Cloudflare to access my Git provider and **selected this repository**.
 - [x] **D3.** I selected the **production branch** that actually contains the features I expect (often **`main`**). If development happened on another branch (e.g. **`feat/writers-workshop`**) and was **never merged** into `main`, Pages will build **old** `main` — missing newer portals until you **change the production branch** in Pages settings or **merge** to `main`.
+- [x] **D3.** I selected the **production branch** (e.g. `main`).
 - [x] **D4.** Build settings (adjust only if the UI suggests something wrong):
 
   | Field | Value |
@@ -84,26 +85,7 @@ Variables must be set in **Cloudflare**, not only in `.env` on your laptop. Vite
 
 - [ ] **F3.** I repeated the same for **Preview** (branch/PR builds), *or* I accept that previews may be broken until I duplicate vars — **Preview** is optional for first launch.
 
-- [ ] **F4.** I triggered a **new deployment** after saving variables so Vite can bake in the new `VITE_*` values (see **How to trigger a rebuild** below).
-
-**How to trigger a rebuild (pick one — no code changes required)**
-
-Cloudflare only injects environment variables during a **build**. Saving vars in Settings does **not** automatically rebuild; you must start a new build.
-
-1. **Dashboard (recommended)**  
-   - Open **Workers & Pages** → select your **Pages** project.  
-   - Go to **Deployments**.  
-   - Find the latest **Production** deployment (success).  
-   - Open the **⋯** menu (three dots) on that row — choose **Retry deployment** (wording may be **Redeploy** / **Retry** depending on Cloudflare’s UI).  
-   - That runs a **new build** of the **same commit** using the **current** environment variables (including the keys you just added).
-
-2. **Git (empty commit)**  
-   - If you prefer to trigger from git:  
-     `git commit --allow-empty -m "chore: trigger Pages rebuild for env vars"`  
-     then `git push` to the branch Pages watches (e.g. `main` or `feat/writers-workshop`).  
-   - That creates a new deployment because there is a new commit, even though no files changed.
-
-**Do not rely on** “push with nothing to push” — if Git says *Everything up-to-date*, no new deployment runs. Use **Retry deployment** or an **empty commit** instead.
+- [ ] **F4.** I triggered a **new deployment** after saving variables (Cloudflare often offers “Retry deployment” or an empty commit — builds must run **after** vars exist so Vite can bake them in).
 
 ---
 
