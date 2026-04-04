@@ -56,6 +56,12 @@ Complete these so you are not hunting mid-setup.
 
 - [x] **D4b. Workers + Wrangler deploy (this repo):** If Cloudflare runs **`npx wrangler versions upload`** (or **`wrangler deploy`**) after install, the **build** step must run **`npm run build` first** so **`dist/`** exists. Repo [`wrangler.jsonc`](wrangler.jsonc) sets **`assets.directory`** to **`dist`** and **`not_found_handling`**: **`single-page-application`** — without **`directory`**, Wrangler fails with *“assets … missing the required directory property”*. Do **not** rely on **New deployment → upload files** for this app; use **Git push** / retry on a **Git-sourced** build.
 
+- [x] **D4c. Local terminal — `wrangler` “not a command”:** There is no shell command named **`versions upload`**. Wrangler is the **`wrangler`** CLI; **`versions upload`** is two nested subcommands. From the **repo root** (after **`npm install`**), use **`npx`** so Node resolves the local **`node_modules`** binary:
+  - **Recommended:** **`npm run deploy`** — runs **`npm run build`** then **`wrangler deploy`**.
+  - **If `dist/` is already built:** **`npx wrangler deploy`**
+  - **Same as many CI logs:** **`npx wrangler versions upload`** (not a separate top-level `versions` command).
+  If you type **`wrangler`** without **`npx`** and without a global install, the shell will report **command not found**.
+
 - [x] **D5.** I clicked **Save and Deploy** (or equivalent) and waited for the first build to finish.
 
 ---
@@ -69,6 +75,7 @@ Complete these so you are not hunting mid-setup.
   - [ ] **Install command:** If the build skipped `npm ci`, set **Environment variable** or build setting so dependencies install (often automatic for `npm run build`).
   - [ ] **Wrong output folder:** Confirm output is **`dist`**, not `build` or `public`.
   - [ ] **Wrangler `assets.directory`:** If the log shows Wrangler after **`npm ci`** only, set **build command** to **`npm run build`** (or ensure a separate build step runs before **`wrangler versions upload`**). Confirm **`wrangler.jsonc`** includes **`assets.directory`**: **`dist`**.
+  - [ ] **Local: `wrangler` not found:** Use **`npm run deploy`** or **`npx wrangler deploy`** from the repo root (see **D4c**). The Cloudflare log phrase **`wrangler versions upload`** means run **`npx wrangler versions upload`**, not **`versions upload`** alone.
 
 - [ ] **E3.** Build is now **Success** and I have a **`.pages.dev` URL** (e.g. `https://my-app.pages.dev`).
 
@@ -169,6 +176,31 @@ Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supa
 
 ---
 
+## Merge conflicts after a PR (why “JSON error” comes back)
+
+GitHub can show **Merge pull request** as available, but the merge still has to **apply cleanly** or you resolve conflicts locally / on GitHub. If anything goes wrong, **leftover conflict markers** (`<<<<<<<`, `=======`, `>>>>>>>`) stay in files. **`package.json` with those markers is not valid JSON** — `npm` and Cloudflare report **`EJSONPARSE` / JSON parse** errors. That is not a mysterious regression; it means the merge was not finished.
+
+**What to do every time you see conflicts**
+
+1. **Search the repo** for `<<<<<<<` (Source Control search or IDE “Find in files”). **Every** file with markers must be fixed before you commit — especially **`package.json`**, **`package-lock.json`**, tests, and **`walkthrough.md`**.
+2. In **`package.json`**, do **not** use **Accept both changes** — that often produces **two** `scripts` blocks or **two** roots and still breaks JSON. Pick **one** coherent file: usually **keep your branch’s** `scripts` (`build`, `preview`, `deploy`, `wrangler`) **plus** any **new dependencies** from `main` that you actually need, then hand-merge into a **single** valid object.
+3. **Delete** every line that is only a marker (`<<<<<<< …`, `=======`, `>>>>>>> …`).
+4. **Verify before push:** from repo root run:
+   - `node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json OK')"`
+   - `npm run build`
+5. Commit the **resolved** files (no markers left), push, then let Cloudflare rebuild.
+
+**Why it looks like “only indentation changed”**
+
+On **`walkthrough.md`** (and sometimes TS), both sides edited the **same paragraphs**. Git marks a big block as conflict even when the only visible difference is spaces or heading level. You still must **remove markers** and keep **one** version of the text, then save.
+
+**Reduce repeats**
+
+- Before opening or merging a PR: **`git fetch origin`** and **`git merge origin/main`** (or rebase) **on your feature branch**, fix conflicts **there**, run **`npm run build`**, then merge to `main`. That way `main` usually stays clean.
+- After resolving, open **`package.json`** in a raw view and confirm there is **exactly one** opening `{` at the top and **exactly one** closing `}` at the bottom — no duplicate `"name"` keys.
+
+---
+
 ## Quick troubleshooting
 
 | Symptom | Things to check |
@@ -181,6 +213,7 @@ Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supa
 | **Writers’ Workshop (or other new work) missing** on the live site but works locally | **Branch mismatch:** Cloudflare is building **`main`** while your work is only on **`feat/...`**. Fix: **Pages → Settings → Builds & deployments → Production branch** → set to the branch that has the feature, **or** open a **PR and merge** into `main`, then redeploy. |
 | Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. |
 | Wrangler: **`assets` … missing `directory`** / deploy after install only | Set **`assets.directory`** to **`dist`** in **`wrangler.jsonc`** and ensure **build command** runs **`npm run build`** before **`wrangler versions upload`** so **`dist/`** exists. |
+| **`EJSONPARSE`** / **JSON** error right after merging a PR | Search for **`<<<<<<<`** — conflict markers are still in **`package.json`** (or another file). Remove all markers; ensure **one** valid JSON object. See **Merge conflicts after a PR** above. |
 
 ---
 
