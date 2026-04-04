@@ -62,6 +62,13 @@ Complete these so you are not hunting mid-setup.
   - **Same as many CI logs:** **`npx wrangler versions upload`** (not a separate top-level `versions` command).
   If you type **`wrangler`** without **`npx`** and without a global install, the shell will report **command not found**.
 
+- [x] **D4d. Workers + Git (dashboard like “Build command / Deploy command”):** If Cloudflare shows **Workers** connected to **GitHub** (not Pages), the dashboard has a **Build command** and a **Deploy command**. For this Vite repo, **`Build command` must not be `None`**. Wrangler reads **`assets.directory`**: **`dist`** in [`wrangler.jsonc`](wrangler.jsonc) — that folder is **created only** by **`npm run build`**. Recommended settings (repo root **`/`**):
+  - **Build command:** **`npm ci && npm run build`** (or **`npm install && npm run build`** if **`npm ci`** fails without a lockfile).
+  - **Deploy command:** **`npx wrangler deploy`** (matches [`package.json`](package.json) **`deploy`** script’s second half).
+  - **Production branch:** **`main`** (must match where you push).
+  If **Build command** stays **`None`**, the checkout has **no `dist/`**, deploy fails or stays stale, and the UI shows **“Your last build failed.”**  
+  **Static assets only** on the Worker is **expected** for this SPA — there is no Worker script, only uploaded **`dist/`** files. **`VITE_*`** values are baked in at **build** time; add them under the **build / CI environment variables** for this Worker’s Git builds (Cloudflare’s UI may label this **Variables** on the **Build** configuration, not “Worker secrets”). Without them, the app may build but show blank / missing Supabase in production.
+
 - [x] **D5.** I clicked **Save and Deploy** (or equivalent) and waited for the first build to finish.
 
 ---
@@ -215,6 +222,7 @@ On **`walkthrough.md`** (and sometimes TS), both sides edited the **same paragra
 | Wrangler: **`assets` … missing `directory`** / deploy after install only | Set **`assets.directory`** to **`dist`** in **`wrangler.jsonc`** and ensure **build command** runs **`npm run build`** before **`wrangler versions upload`** so **`dist/`** exists. |
 | **`EJSONPARSE`** / **JSON** error right after merging a PR | Search for **`<<<<<<<`** — conflict markers are still in **`package.json`** (or another file). Remove all markers; ensure **one** valid JSON object. See **Merge conflicts after a PR** above. |
 | **Commit SHA on Cloudflare is older than GitHub `main`** (build not updating) | See **Stale Cloudflare vs GitHub (commit mismatch)** below. |
+| **Workers + Git: “Your last build failed”** / SHA never updates | Set **Build command** to **`npm ci && npm run build`** (not **`None`**). See **D4d**. Open **View build** and fix any **`npm ci`** / **`tsc`** / missing **`VITE_*`** errors. |
 
 ### Stale Cloudflare vs GitHub (commit mismatch)
 

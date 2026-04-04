@@ -1,5 +1,7 @@
 # ARCS: Walkthrough & Roadmap
 
+**Cloudflare Workers + Git — Build command must not be None (2026-04-04):** Dashboard screenshots showed **Build command: None** while **Deploy** runs **`npx wrangler deploy`** — **`dist/`** is never produced in CI, so builds fail or never match GitHub. Checklist **D4d** documents: **`npm ci && npm run build`** as Build command; **`VITE_*`** for static-asset Workers belong on **build** env, not Worker secrets.
+
 **Pushed to GitHub (2026-04-04):** **`main`** — merge-conflict playbook (**`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**) + walkthrough entries; **`npm run build`** verified locally. Cloudflare should rebuild from **`main`** if the project is Git-connected; optional local publish: **`npx wrangler login`** then **`npm run deploy`**.
 
 **Docs — merge conflicts vs JSON errors (2026-04-04):** [`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md) — new section **Merge conflicts after a PR** (why `<<<<<<<` markers break `package.json` / Cloudflare; do not “Accept both”; validate with `node -e JSON.parse(...)` + `npm run build`); troubleshooting row for **`EJSONPARSE`** after merge.
