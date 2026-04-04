@@ -1,6 +1,6 @@
 # ARCS: Walkthrough & Roadmap
 
-**Pushed to GitHub (2026-04-04):** Commit **`a85bbbe`** on **`main`** — merge-conflict playbook (**`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**) + walkthrough pointer; **`npm run build`** verified locally. Cloudflare should rebuild from **`main`** if the project is Git-connected; optional local publish: **`npx wrangler login`** then **`npm run deploy`**.
+**Pushed to GitHub (2026-04-04):** **`main`** — merge-conflict playbook (**`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**) + walkthrough entries; **`npm run build`** verified locally. Cloudflare should rebuild from **`main`** if the project is Git-connected; optional local publish: **`npx wrangler login`** then **`npm run deploy`**.
 
 **Docs — merge conflicts vs JSON errors (2026-04-04):** [`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md) — new section **Merge conflicts after a PR** (why `<<<<<<<` markers break `package.json` / Cloudflare; do not “Accept both”; validate with `node -e JSON.parse(...)` + `npm run build`); troubleshooting row for **`EJSONPARSE`** after merge.
 
