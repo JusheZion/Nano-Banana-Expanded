@@ -22,10 +22,14 @@ vi.mock('@/shared/lib/supabase', () => ({
 
 import { invokeWriterTools } from '@/shared/api/writerTools';
 
+function b64urlJson(obj: unknown): string {
+  const s = JSON.stringify(obj);
+  const b64 = btoa(unescape(encodeURIComponent(s)));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function makeJwt(payload: { role: string; exp: number; iss?: string }): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  return `${header}.${body}.signature`;
+  return `${b64urlJson({ alg: 'HS256', typ: 'JWT' })}.${b64urlJson(payload)}.signature`;
 }
 
 describe('invokeWriterTools token refresh behavior', () => {

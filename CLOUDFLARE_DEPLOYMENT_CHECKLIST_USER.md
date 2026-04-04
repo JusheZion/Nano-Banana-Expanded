@@ -45,7 +45,6 @@ Complete these so you are not hunting mid-setup.
 - [x] **D1.** In Cloudflare: **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
 - [x] **D2.** I authorized Cloudflare to access my Git provider and **selected this repository**.
 - [x] **D3.** I selected the **production branch** that actually contains the features I expect (often **`main`**). If development happened on another branch (e.g. **`feat/writers-workshop`**) and was **never merged** into `main`, Pages will build **old** `main` — missing newer portals until you **change the production branch** in Pages settings or **merge** to `main`.
-- [x] **D3.** I selected the **production branch** (e.g. `main`).
 - [x] **D4.** Build settings (adjust only if the UI suggests something wrong):
 
   | Field | Value |
@@ -54,6 +53,8 @@ Complete these so you are not hunting mid-setup.
   | Build command | `npm run build` |
   | Build output directory | `dist` |
   | Root directory | `/` (repo root) |
+
+- [x] **D4b. Workers + Wrangler deploy (this repo):** If Cloudflare runs **`npx wrangler versions upload`** (or **`wrangler deploy`**) after install, the **build** step must run **`npm run build` first** so **`dist/`** exists. Repo [`wrangler.jsonc`](wrangler.jsonc) sets **`assets.directory`** to **`dist`** and **`not_found_handling`**: **`single-page-application`** — without **`directory`**, Wrangler fails with *“assets … missing the required directory property”*. Do **not** rely on **New deployment → upload files** for this app; use **Git push** / retry on a **Git-sourced** build.
 
 - [x] **D5.** I clicked **Save and Deploy** (or equivalent) and waited for the first build to finish.
 
@@ -67,6 +68,7 @@ Complete these so you are not hunting mid-setup.
   - [ ] **Node version:** In Pages → **Settings** → **Environment variables** → add **`NODE_VERSION`** = `20` (or `22`), then **Retry deployment**.
   - [ ] **Install command:** If the build skipped `npm ci`, set **Environment variable** or build setting so dependencies install (often automatic for `npm run build`).
   - [ ] **Wrong output folder:** Confirm output is **`dist`**, not `build` or `public`.
+  - [ ] **Wrangler `assets.directory`:** If the log shows Wrangler after **`npm ci`** only, set **build command** to **`npm run build`** (or ensure a separate build step runs before **`wrangler versions upload`**). Confirm **`wrangler.jsonc`** includes **`assets.directory`**: **`dist`**.
 
 - [ ] **E3.** Build is now **Success** and I have a **`.pages.dev` URL** (e.g. `https://my-app.pages.dev`).
 
@@ -178,6 +180,7 @@ Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supa
 | writer-tools 401 | User must be signed in; JWT / Edge function config — coordinate with dev (not Cloudflare-specific). |
 | **Writers’ Workshop (or other new work) missing** on the live site but works locally | **Branch mismatch:** Cloudflare is building **`main`** while your work is only on **`feat/...`**. Fix: **Pages → Settings → Builds & deployments → Production branch** → set to the branch that has the feature, **or** open a **PR and merge** into `main`, then redeploy. |
 | Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. |
+| Wrangler: **`assets` … missing `directory`** / deploy after install only | Set **`assets.directory`** to **`dist`** in **`wrangler.jsonc`** and ensure **build command** runs **`npm run build`** before **`wrangler versions upload`** so **`dist/`** exists. |
 
 ---
 

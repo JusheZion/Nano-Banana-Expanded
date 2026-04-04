@@ -175,11 +175,6 @@ export const WriterPortal: React.FC = () => {
     setDockTab('library');
     pushHistory(`created series “${row.title || 'Untitled'}”`);
   }, []);
-  const refreshIssuesForSeries = async () => {
-    if (!selectedSeriesId) return;
-    const rows = await listWriterIssues(selectedSeriesId);
-    setIssues(rows);
-  };
 
   useEffect(() => {
     if (authUser) setAiAuthBannerDismissed(false);
@@ -377,7 +372,6 @@ export const WriterPortal: React.FC = () => {
       pushHistory(`error: ${msg}`);
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
-  }, [refreshIssuesForSeries, selectedIssueId]);
 
   const runCanonFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -394,7 +388,6 @@ export const WriterPortal: React.FC = () => {
       pushHistory(`error: ${msg}`);
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
-  }, [refreshIssuesForSeries, selectedIssueId]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'outline' && selectedIssueId) {
@@ -572,23 +565,6 @@ export const WriterPortal: React.FC = () => {
                 type="button"
                 disabled={createSeriesBusy}
                 onClick={() => void handleCreateSeries()}
-                onClick={async () => {
-                  setBootstrapError(null);
-                  setCreateSeriesBusy(true);
-                  const row = await createWriterSeries();
-                  setCreateSeriesBusy(false);
-                  if (!row) {
-                    setBootstrapError(
-                      'Could not create a series. Confirm writer_series exists, RLS allows insert, and see the browser console.',
-                    );
-                    return;
-                  }
-                  const rows = await listWriterSeries();
-                  setSeriesList(rows);
-                  setSelectedSeriesId(row.id);
-                  setDockTab('library');
-                  pushHistory(`created series “${row.title || 'Untitled'}”`);
-                }}
                 className="w-full rounded-lg px-3 py-2 text-[11px] font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
@@ -1025,12 +1001,6 @@ export const WriterPortal: React.FC = () => {
                               selectedSeriesId
                                 ? 'One- or two-sentence series premise'
                                 : 'Select a series in Library…'
-                            disabled={!selectedSeriesId || !selectedIssueId}
-                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder={
-                              selectedIssueId && selectedSeriesId
-                                ? 'One- or two-sentence series premise'
-                                : 'Select an issue in Library to edit…'
                             }
                           />
                         </label>
@@ -1053,16 +1023,6 @@ export const WriterPortal: React.FC = () => {
                             }
                             const okSeries = await updateWriterSeries(selectedSeriesId, {
                               title: seriesTitleDraft.trim() || null,
-                          disabled={contextSaveLoading || !selectedIssueId || !selectedSeriesId}
-                          onClick={async () => {
-                            if (!selectedIssueId || !selectedSeriesId) return;
-                            setContextSaveError(null);
-                            setContextSaveLoading(true);
-                            const okIssue = await updateWriterIssue(selectedIssueId, {
-                              title: issueTitleDraft.trim() || null,
-                              synopsis: issueSynopsisDraft.trim() || null,
-                            });
-                            const okSeries = await updateWriterSeries(selectedSeriesId, {
                               logline: seriesLoglineDraft.trim() || null,
                             });
                             setContextSaveLoading(false);
@@ -1076,7 +1036,6 @@ export const WriterPortal: React.FC = () => {
                             pushHistory(
                               selectedIssueId ? 'saved story context' : 'saved series title & logline',
                             );
-                            pushHistory('saved story context');
                           }}
                           className="rounded-lg px-4 py-2 text-xs font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         >
