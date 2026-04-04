@@ -139,6 +139,7 @@ export const WriterPortal: React.FC = () => {
   const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
   const [issueSynopsisDraft, setIssueSynopsisDraft] = useState('');
+  const [seriesTitleDraft, setSeriesTitleDraft] = useState('');
   const [seriesLoglineDraft, setSeriesLoglineDraft] = useState('');
   const [contextSaveLoading, setContextSaveLoading] = useState(false);
   const [contextSaveError, setContextSaveError] = useState<string | null>(null);
@@ -150,6 +151,30 @@ export const WriterPortal: React.FC = () => {
   const toolErrorMessage = (res: { error: string; details?: string }) =>
     'details' in res && res.details ? `${res.error}: ${res.details}` : res.error;
 
+  const refreshIssuesForSeries = useCallback(async () => {
+    if (!selectedSeriesId) return;
+    const rows = await listWriterIssues(selectedSeriesId);
+    setIssues(rows);
+  }, [selectedSeriesId]);
+
+  const handleCreateSeries = useCallback(async () => {
+    setBootstrapError(null);
+    setCreateSeriesBusy(true);
+    const row = await createWriterSeries();
+    setCreateSeriesBusy(false);
+    if (!row) {
+      setBootstrapError(
+        'Could not create a series. Confirm writer_series exists, RLS allows insert, and see the browser console.',
+      );
+      return;
+    }
+    const rows = await listWriterSeries();
+    setSeriesList(rows);
+    setSelectedSeriesId(row.id);
+    setSelectedIssueId(null);
+    setDockTab('library');
+    pushHistory(`created series “${row.title || 'Untitled'}”`);
+  }, []);
   const refreshIssuesForSeries = async () => {
     if (!selectedSeriesId) return;
     const rows = await listWriterIssues(selectedSeriesId);
@@ -245,6 +270,7 @@ export const WriterPortal: React.FC = () => {
 
   useEffect(() => {
     const s = seriesList.find((x) => x.id === selectedSeriesId);
+    setSeriesTitleDraft(s?.title ?? '');
     setSeriesLoglineDraft(s?.logline ?? '');
   }, [selectedSeriesId, seriesList]);
 
@@ -350,6 +376,7 @@ export const WriterPortal: React.FC = () => {
       setPacingError(msg);
       pushHistory(`error: ${msg}`);
     }
+  }, [selectedIssueId, refreshIssuesForSeries]);
   }, [refreshIssuesForSeries, selectedIssueId]);
 
   const runCanonFromRibbon = useCallback(async () => {
@@ -366,6 +393,7 @@ export const WriterPortal: React.FC = () => {
       setCanonError(msg);
       pushHistory(`error: ${msg}`);
     }
+  }, [selectedIssueId, refreshIssuesForSeries]);
   }, [refreshIssuesForSeries, selectedIssueId]);
 
   const quickGenerate = useCallback(async () => {
@@ -525,12 +553,25 @@ export const WriterPortal: React.FC = () => {
         {bootstrapError && supabaseOk && (
           <p className="text-[11px] text-red-800 bg-red-100/80 rounded-lg px-2 py-1.5 mb-2">{bootstrapError}</p>
         )}
+        {supabaseOk && seriesList.length > 0 ? (
+          <div className="mb-1.5 px-0.5">
+            <button
+              type="button"
+              disabled={createSeriesBusy}
+              onClick={() => void handleCreateSeries()}
+              className="w-full rounded-lg px-2 py-1.5 text-[10px] font-bold text-black/85 border border-black/15 bg-white/45 hover:bg-white/70 shadow-sm disabled:opacity-45 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            >
+              {createSeriesBusy ? 'Creating…' : '+ Add series'}
+            </button>
+          </div>
+        ) : null}
         <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1">
           {seriesList.length === 0 && supabaseOk && (
             <div className="px-1 space-y-2">
               <button
                 type="button"
                 disabled={createSeriesBusy}
+                onClick={() => void handleCreateSeries()}
                 onClick={async () => {
                   setBootstrapError(null);
                   setCreateSeriesBusy(true);
@@ -923,6 +964,21 @@ export const WriterPortal: React.FC = () => {
                             </Tooltip>
                           ) : null}
                         </div>
+                        <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-title">
+                          Series title
+                          <input
+                            id="writer-series-title"
+                            name="writer-series-title"
+                            type="text"
+                            value={seriesTitleDraft}
+                            onChange={(e) => setSeriesTitleDraft(e.target.value)}
+                            disabled={!selectedSeriesId}
+                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                            placeholder={
+                              selectedSeriesId ? 'e.g. Midnight Archives' : 'Select a series in Library…'
+                            }
+                          />
+                        </label>
                         <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-issue-title">
                           Issue title
                           <input
@@ -963,6 +1019,12 @@ export const WriterPortal: React.FC = () => {
                             value={seriesLoglineDraft}
                             onChange={(e) => setSeriesLoglineDraft(e.target.value)}
                             rows={3}
+                            disabled={!selectedSeriesId}
+                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
+                            placeholder={
+                              selectedSeriesId
+                                ? 'One- or two-sentence series premise'
+                                : 'Select a series in Library…'
                             disabled={!selectedSeriesId || !selectedIssueId}
                             className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
                             placeholder={
@@ -977,6 +1039,20 @@ export const WriterPortal: React.FC = () => {
                         )}
                         <button
                           type="button"
+                          disabled={contextSaveLoading || !selectedSeriesId}
+                          onClick={async () => {
+                            if (!selectedSeriesId) return;
+                            setContextSaveError(null);
+                            setContextSaveLoading(true);
+                            let okIssue = true;
+                            if (selectedIssueId) {
+                              okIssue = await updateWriterIssue(selectedIssueId, {
+                                title: issueTitleDraft.trim() || null,
+                                synopsis: issueSynopsisDraft.trim() || null,
+                              });
+                            }
+                            const okSeries = await updateWriterSeries(selectedSeriesId, {
+                              title: seriesTitleDraft.trim() || null,
                           disabled={contextSaveLoading || !selectedIssueId || !selectedSeriesId}
                           onClick={async () => {
                             if (!selectedIssueId || !selectedSeriesId) return;
@@ -997,6 +1073,9 @@ export const WriterPortal: React.FC = () => {
                             await refreshIssuesForSeries();
                             const seriesRows = await listWriterSeries();
                             setSeriesList(seriesRows);
+                            pushHistory(
+                              selectedIssueId ? 'saved story context' : 'saved series title & logline',
+                            );
                             pushHistory('saved story context');
                           }}
                           className="rounded-lg px-4 py-2 text-xs font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45 disabled:pointer-events-none"

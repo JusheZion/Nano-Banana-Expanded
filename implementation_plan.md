@@ -432,6 +432,20 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Writer:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) uses `useAuth()` (no duplicate auth listener); banner includes **Sign in here** → same modal.
 - **Bootstrap:** [`main.tsx`](src/main.tsx) wraps the app with **`AuthProvider`** inside `ThemeProvider` (with `ProjectProvider`).
 
+### Phase 6f — Writer tools auth refresh optimization (planned, 2026-04-02)
+
+- **Problem:** `invokeWriterTools` currently calls `supabase.auth.refreshSession()` on every tool invocation when a `refresh_token` exists, even if the access token is still fresh. This adds a network round-trip and can race when multiple AI tool calls happen concurrently.
+- **Plan:** only refresh when needed:
+  - Decode JWT `exp` and refresh only when \(exp - now\) is below a small buffer (e.g. 120s), or when validation indicates it is expired.
+  - If multiple calls want refresh at the same time, dedupe with a module-scoped in-flight refresh promise so only one network refresh happens.
+  - Keep retry-on-401 behavior, but avoid the unconditional pre-flight refresh.
+
+### Phase 6g — Series library UX + stale series refresh fix (done, 2026-04-02)
+
+- **Problem (refresh):** `refreshIssuesForSeries` closed over `selectedSeriesId` while `runPacingFromRibbon` / `runCanonFromRibbon` used `useCallback([selectedIssueId])` only, so after switching series those callbacks could refresh the wrong series’ issues.
+- **Fix:** `refreshIssuesForSeries` is `useCallback` with `[selectedSeriesId]`; ribbon callbacks list `[selectedIssueId, refreshIssuesForSeries]`.
+- **Problem (UX):** “Create first series” only appeared when the list was empty, so users could not add another series. Series **title** was not editable in the UI (only logline was saved, and saving required a selected issue).
+- **Fix:** **+ Add series** in Library when at least one series exists; **Issue Outline → Story context** includes **Series title** and **Save story context** updates `writer_series.title` + `logline` with only a series selected; issue fields save when an issue is selected.
 ### Phase 6h — writer-tools token refresh optimization (planned, 2026-04-03)
 
 - **Issue:** [`invokeWriterTools`](src/shared/api/writerTools.ts) currently calls `supabase.auth.refreshSession()` whenever a `refresh_token` exists, even when `getSession()` returns a still-valid access token.
@@ -495,6 +509,7 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
   so client-side routes survive browser refresh (Vite copies `public/` into `dist/`).
 
 - **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
+- **CI guardrail:** **`package.json` must be valid JSON**. A bad merge can append a second copy of the manifest (duplicate keys) and break **`npm ci`** / install with **`EJSONPARSE`** or misleading errors; fix the file, run **`npm install`**, commit **`package-lock.json`**. Repo keeps **`wrangler.jsonc`**, **`wrangler`** + **`@cloudflare/vite-plugin`**, and **`preview` / `deploy`** scripts aligned with the Cloudflare Workers + Vite integration.
 - Optional: set Cloudflare **environment variable** `NODE_VERSION` = `20` (or `22`) if the default Node fails the build.
 
 **Owner / operator checklist**

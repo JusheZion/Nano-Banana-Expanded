@@ -147,6 +147,15 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Phase 6e (auth, 2026-03-31): **`AuthProvider`** + **`AuthModal`** (email/password); **`AppShell`** account sign-in / sign-out; **`WriterPortal`** uses **`useAuth`** + banner **Sign in here**; **`implementation_plan.md`** deploy checklist + Dashboard Auth URLs
 - [x] Phase 6f (writer-tools JWT, 2026-03-31): **`invokeWriterTools`** — **`getSession()`** + optional **`refreshSession`** when expiring; explicit **`Authorization: Bearer <user access_token>`** on **`functions.invoke`** (avoids anon-key **`Bearer`** fallback); gateway **`verify_jwt`** workaround: **`config.toml`** **`verify_jwt = false`** + in-function **`getUser(token)`** validation
 - [x] Phase 6g (Cloudflare prep, 2026-04-01): **`implementation_plan.md`** — **Cloudflare Pages** section + owner pointer to **`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**; **`public/_redirects`** (`/*` → `/index.html` **`200`**); Supabase Auth / JWT docs in plan aligned with current **`writer-tools`** config
+- [x] **2026-04-04:** **`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`** — troubleshooting row for **`npm ci`** “no **package-lock.json**”: set Pages **Root directory** to repo root (empty/`/`) so install runs where **`package-lock.json`** lives; confirm lockfile exists on the built commit
+- [x] **2026-04-04:** **Cloudflare CI** — repaired **merge-corrupted `package.json`** on branch (invalid JSON / duplicated content), restored **Wrangler** tooling (`wrangler.jsonc`, `wrangler` + `@cloudflare/vite-plugin`, `vite.config` plugin, `preview`/`deploy` scripts), regenerated **`package-lock.json`**
+- [x] **2026-04-02:** `invokeWriterTools` refresh optimization — avoid unconditional `refreshSession()` (only near-expiry) + dedupe concurrent refresh; Edge `page_beats` prompt includes prior-page digest to reduce repeated beats; removed debug instrumentation after verification
+
+## Writers' Workshop bugfixes (Apr 2026)
+
+- [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
+- [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
+- [x] Issue Outline → Story context: **Series title** field + save `title` via `updateWriterSeries`; **Save story context** works with only a series selected (issue fields optional); series logline no longer requires an issue to edit
 - [x] Phase 6h (writer-tools refresh optimization, 2026-04-03): **`invokeWriterTools`** now refreshes only when the JWT is expired (no unconditional refresh on every invocation), keeps 401 refresh+retry behavior, and resolves Writer lint errors by including `refreshIssuesForSeries` in ribbon callback dependencies.
 - [x] Phase 6i (writer-tools verification hardening, 2026-04-04): verified `invokeWriterTools` is not unconditionally refreshing and added regression tests for fresh-token/no-refresh vs expired-token/refresh paths.
 

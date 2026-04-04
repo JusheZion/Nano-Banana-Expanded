@@ -44,6 +44,7 @@ Complete these so you are not hunting mid-setup.
 
 - [x] **D1.** In Cloudflare: **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
 - [x] **D2.** I authorized Cloudflare to access my Git provider and **selected this repository**.
+- [x] **D3.** I selected the **production branch** that actually contains the features I expect (often **`main`**). If development happened on another branch (e.g. **`feat/writers-workshop`**) and was **never merged** into `main`, Pages will build **old** `main` — missing newer portals until you **change the production branch** in Pages settings or **merge** to `main`.
 - [x] **D3.** I selected the **production branch** (e.g. `main`).
 - [x] **D4.** Build settings (adjust only if the UI suggests something wrong):
 
@@ -175,6 +176,8 @@ Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supa
 | Auth redirect loop or “redirect URL not allowed” | Supabase **Redirect URLs** must include exact production origin. |
 | Google works locally but not prod | Supabase Site URL + Redirect URLs must include prod; Google redirect URI stays Supabase callback, not Cloudflare. |
 | writer-tools 401 | User must be signed in; JWT / Edge function config — coordinate with dev (not Cloudflare-specific). |
+| **Writers’ Workshop (or other new work) missing** on the live site but works locally | **Branch mismatch:** Cloudflare is building **`main`** while your work is only on **`feat/...`**. Fix: **Pages → Settings → Builds & deployments → Production branch** → set to the branch that has the feature, **or** open a **PR and merge** into `main`, then redeploy. |
+| Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. |
 
 ---
 

@@ -27,6 +27,9 @@ export const WRITER_UI_TIPS = {
   seriesSupabase:
     'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env, then restart npm run dev. Vite only reads env on startup.',
   seriesEmpty:
+    'No series yet. After migration, tables are ready—use Create first series here or insert rows in Supabase.',
+  seriesLibrary:
+    'Use “+ Add series” in the Library to add another series after the first. Click a series to load its issues; switching series clears the active issue until you pick one again.',
     'No series yet. After migration, tables are ready—create your first series here or insert rows in Supabase.',
   seriesLibrary:
     'Click a series to load its issues. Switching to another series clears the active issue until you select an issue again.',
