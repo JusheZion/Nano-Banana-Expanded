@@ -500,13 +500,9 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 **Engineering (repo)**
 
-- Add SPA fallback: [`public/_redirects`](public/_redirects) with:
-
-  ```text
-  /*    /index.html   200
-  ```
-
-  so client-side routes survive browser refresh (Vite copies `public/` into `dist/`).
+- **SPA fallback — pick the path that matches your host:**
+  - **Workers + `wrangler deploy` (static assets in `wrangler.jsonc`):** Use **`not_found_handling`**: **`single-page-application`** only. **Do not** add **`public/_redirects`** with `/* /index.html 200` — the Workers API rejects it as an **infinite loop** (error **10021**) because it overlaps with SPA asset routing.
+  - **Cloudflare Pages only** (build uploads `dist` to Pages, no Wrangler asset deploy): add [`public/_redirects`](public/_redirects) with `/* /index.html 200` so refreshes on client routes work (Vite copies `public/` into `dist/`).
 
 - **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
 - **CI guardrail:** **`package.json` must be valid JSON**. A bad merge can append a second copy of the manifest (duplicate keys) and break **`npm ci`** / install with **`EJSONPARSE`** or misleading errors; fix the file, run **`npm install`**, commit **`package-lock.json`**. Repo keeps **`wrangler.jsonc`**, **`wrangler`** + **`@cloudflare/vite-plugin`**, and **`preview` / `deploy`** scripts aligned with the Cloudflare Workers + Vite integration.

@@ -2,7 +2,7 @@
 
 Use this while the app repo is updated for production (SPA routing, env docs, etc.). Check boxes as you complete each step. If a step does not apply, mark it N/A and note why.
 
-**Related plan:** Writers’ Workshop UX roadmap (Cursor plan) — section 7 covers Cloudflare; engineering tasks include `public/_redirects` and build verification.
+**Related plan:** Writers’ Workshop UX roadmap (Cursor plan) — section 7 covers Cloudflare; SPA routing uses **`wrangler.jsonc`** for Workers deploys (or **`public/_redirects`** for Pages-only).
 
 ---
 
@@ -28,13 +28,9 @@ Complete these so you are not hunting mid-setup.
 ## C. Git repository state
 
 - [x] **C1.** Latest code is **pushed** to the branch Cloudflare will build (usually `main` or `feat/...` — I know which branch I will select in Pages).
-- [x] **C2.** I confirmed with the dev that **`public/_redirects`** exists (or will exist before go-live) with SPA fallback:
-
-  ```text
-  /*    /index.html   200
-  ```
-
-  *Without this, refreshing the browser on a non-home URL may show a 404.*
+- [x] **C2.** **SPA routing** is covered for my deployment type:
+  - **Workers + Git** (`npx wrangler deploy` with static assets): SPA is handled by **`wrangler.jsonc`** → **`assets.not_found_handling`**: **`single-page-application`**. **Do not** ship **`public/_redirects`** with `/* /index.html 200` — deploy fails with **Invalid _redirects** / **infinite loop** (**10021**).
+  - **Cloudflare Pages only** (no Wrangler deploy of the same `dist`): ensure **`public/_redirects`** contains `/* /index.html 200` so refresh on client routes does not 404.
 
 - [x] **C3.** I ran **`npm run build`** locally once (optional but recommended). It finished without errors and produced a **`dist/`** folder.
 
@@ -109,7 +105,7 @@ Variables must be set in **Cloudflare**, not only in `.env` on your laptop. Vite
 
 - [ ] **G1.** I opened the **`*.pages.dev`** URL in a normal browser window.
 - [ ] **G2.** The app **loads** (no blank white screen; check DevTools **Console** for missing env errors).
-- [ ] **G3.** I navigated inside the app, then **refreshed the page**. It still loads (tests SPA `_redirects`).
+- [ ] **G3.** I navigated inside the app, then **refreshed the page**. It still loads (**Workers:** SPA via **`not_found_handling`**; **Pages:** via **`_redirects`** if used).
 - [ ] **G4.** I tried **Writers’ Workshop** (or another heavy route) and refresh again — still OK.
 
 ---
@@ -213,12 +209,13 @@ On **`walkthrough.md`** (and sometimes TS), both sides edited the **same paragra
 | Symptom | Things to check |
 |--------|------------------|
 | Blank app, console mentions `undefined` Supabase | `VITE_*` vars missing in Pages **or** deployment ran **before** vars were added — redeploy. |
-| 404 on refresh | `public/_redirects` missing or wrong; rebuild and redeploy. |
+| 404 on refresh | **Pages:** add **`public/_redirects`** (`/* /index.html 200`). **Workers static assets:** use **`not_found_handling`**: **`single-page-application`** in **`wrangler.jsonc`** — do not add the same `_redirects` rule or deploy can fail (**10021**). |
 | Auth redirect loop or “redirect URL not allowed” | Supabase **Redirect URLs** must include exact production origin. |
 | Google works locally but not prod | Supabase Site URL + Redirect URLs must include prod; Google redirect URI stays Supabase callback, not Cloudflare. |
 | writer-tools 401 | User must be signed in; JWT / Edge function config — coordinate with dev (not Cloudflare-specific). |
 | **Writers’ Workshop (or other new work) missing** on the live site but works locally | **Branch mismatch:** Cloudflare is building **`main`** while your work is only on **`feat/...`**. Fix: **Pages → Settings → Builds & deployments → Production branch** → set to the branch that has the feature, **or** open a **PR and merge** into `main`, then redeploy. |
 | Build fails: `npm ci` / “**can only install with an existing package-lock.json**” | **Root directory** in Pages must be the folder that contains **`package.json` and `package-lock.json`** together (usually **empty** or **`/`** = repo root). If Root is a subfolder, `npm ci` sees no lockfile. Confirm that commit on GitHub lists **`package-lock.json`** at that path; merge/commit the lockfile if missing. **Also:** open **`package.json`** on that same commit — if a bad merge duplicated half the file, it is **invalid JSON** (GitHub shows red/error or `npm` would report `EJSONPARSE`). Fix the file on **`main`**, run **`npm install`** locally to refresh **`package-lock.json`**, commit, push, redeploy. **If the lockfile is present but you still get this error:** the lockfile may be **merge-corrupted** (invalid JSON — e.g. duplicate package entries or a second `"lockfileVersion"` block pasted mid-file). Locally run `node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"`; if it throws, delete **`package-lock.json`**, run **`npm install`**, commit the new lockfile, push. |
+| Wrangler: **`Invalid _redirects`** / **Infinite loop** / **`10021`** on deploy | Remove **`public/_redirects`** (or the `/* /index.html 200` rule) when using **Workers static assets** + **`not_found_handling`**: **`single-page-application`**. Rely on Wrangler SPA handling only; rebuild and redeploy. |
 | Wrangler: **`assets` … missing `directory`** / deploy after install only | Set **`assets.directory`** to **`dist`** in **`wrangler.jsonc`** and ensure **build command** runs **`npm run build`** before **`wrangler versions upload`** so **`dist/`** exists. |
 | **`EJSONPARSE`** / **JSON** error right after merging a PR | Search for **`<<<<<<<`** — conflict markers are still in **`package.json`** (or another file). Remove all markers; ensure **one** valid JSON object. See **Merge conflicts after a PR** above. |
 | **Commit SHA on Cloudflare is older than GitHub `main`** (build not updating) | See **Stale Cloudflare vs GitHub (commit mismatch)** below. |
