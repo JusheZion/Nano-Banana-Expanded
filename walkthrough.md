@@ -1,5 +1,7 @@
 # ARCS: Walkthrough & Roadmap
 
+**package-lock.json merge corruption → `npm ci` EUSAGE (2026-04-05):** **`package-lock.json`** had invalid JSON from a bad merge (duplicate **`node_modules/zod`** block; a second copy of the lockfile root starting at **`"name": "nano-banana-expanded"`** spliced **inside** **`node_modules/zustand`**). **`npm ci`** then fails with *can only install with an existing package-lock.json* (npm treats an unparseable lockfile like a missing one). **Fix:** removed lockfile and ran **`npm install`** to regenerate; **`npm ci`** + **`npm run build`** pass. Checklist troubleshooting row updated ([`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md)). **Push** the new **`package-lock.json`** to **`main`** so Cloudflare’s install step succeeds.
+
 **Cloudflare Workers + Git — Build command must not be None (2026-04-04):** Dashboard screenshots showed **Build command: None** while **Deploy** runs **`npx wrangler deploy`** — **`dist/`** is never produced in CI, so builds fail or never match GitHub. Checklist **D4d** documents: **`npm ci && npm run build`** as Build command; **`VITE_*`** for static-asset Workers belong on **build** env, not Worker secrets.
 
 **Pushed to GitHub (2026-04-04):** **`main`** — merge-conflict playbook (**`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`**) + walkthrough entries; **`npm run build`** verified locally. Cloudflare should rebuild from **`main`** if the project is Git-connected; optional local publish: **`npx wrangler login`** then **`npm run deploy`**.
