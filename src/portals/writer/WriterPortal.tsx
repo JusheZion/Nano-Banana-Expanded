@@ -42,6 +42,7 @@ import {
   type WriterWorkspaceTabId,
 } from '@/portals/writer/writerSearch';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import {
   ACCENT_GOLD_GRADIENT,
   WRITERS_GOLD_SLANT,
@@ -95,7 +96,13 @@ function downloadTextFile(filename: string, body: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-export const WriterPortal: React.FC = () => {
+export type WriterPortalProps = {
+  /** Deep-link into Portals Wiki → Writers' Workshop (optional section id). */
+  onRequestPortalsWiki?: (opts: { chapterId: string; headingId?: string }) => void;
+};
+
+export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
+  const { isPhone } = useResponsiveLayout();
   const [seriesList, setSeriesList] = useState<WriterSeriesRow[]>([]);
   const [issues, setIssues] = useState<WriterIssueRow[]>([]);
   const [pages, setPages] = useState<WriterPageRow[]>([]);
@@ -105,6 +112,10 @@ export const WriterPortal: React.FC = () => {
   const [activeRibbonMenu, setActiveRibbonMenu] = useState<WriterRibbonMenuId>('home');
   const [dockTab, setDockTab] = useState<WriterDockTabId>('library');
   const [dockCollapsed, setDockCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (isPhone) setDockCollapsed(true);
+  }, [isPhone]);
   const [helpCategory, setHelpCategory] = useState<WriterHelpCategoryId | null>(null);
   const { user: authUser, ready: authReady, openSignInModal } = useAuth();
   const [aiAuthBannerDismissed, setAiAuthBannerDismissed] = useState(false);
@@ -886,13 +897,29 @@ export const WriterPortal: React.FC = () => {
         title={helpCategory ? writerHelpCategoryTitle(helpCategory) : 'Help'}
         onClose={() => setHelpCategory(null)}
       >
-        {helpCategory ? <WriterHelpCategoryBody category={helpCategory} supabaseDiag={supabaseDiag} /> : null}
+        {helpCategory ? (
+          <WriterHelpCategoryBody
+            category={helpCategory}
+            supabaseDiag={supabaseDiag}
+            onOpenPortalsWiki={
+              onRequestPortalsWiki
+                ? (headingId) => onRequestPortalsWiki({ chapterId: 'writer', headingId })
+                : undefined
+            }
+          />
+        ) : null}
       </WriterHelpModal>
 
-      <div className="flex-1 min-h-0 flex min-w-0">
+      <div
+        className={`flex-1 min-h-0 flex min-w-0 ${isPhone ? 'flex-col' : 'flex-row'}`}
+      >
         <WriterContextMenu items={contextItems}>
           <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-scroll overscroll-y-contain scrollbar-gutter-stable custom-scrollbar p-4 pb-10 min-w-0">
+            <div
+              className={`flex-1 min-h-0 overflow-y-scroll overscroll-y-contain scrollbar-gutter-stable custom-scrollbar min-w-0 ${
+                isPhone ? 'p-3 pb-28' : 'p-4 pb-10'
+              }`}
+            >
               <div className="w-full min-w-0 space-y-4 text-slate-900/90">
                 <div className={`${WRITER_GLASS_CARD} p-4`}>
                   <h2 className="text-sm font-bold text-slate-900 tracking-tight">
@@ -1517,6 +1544,7 @@ export const WriterPortal: React.FC = () => {
           help={helpPanel}
           collapsed={dockCollapsed}
           onToggleCollapse={() => setDockCollapsed((c) => !c)}
+          phoneLayout={isPhone}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Sparkles, ArrowRight, Layers, BookOpen, Box, PenLine } from 'lucide-react';
+import { Sparkles, ArrowRight, Layers, BookOpen, Box, PenLine, BookMarked } from 'lucide-react';
 import { useTheme, type Theme } from '@/shared/context/ThemeContext';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import type { Portal } from '@/shared/portals';
 import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE, PRIMARY_BG_FLAT } from '@/shared/theme/Phase12DesignTokens';
 
@@ -10,6 +11,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     const { setTheme } = useTheme();
+    const { isPhone } = useResponsiveLayout();
 
     const handleCardClick = (portal: Portal, theme: Theme) => {
         setTheme(theme);
@@ -17,9 +19,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     };
 
     return (
-        <div className="space-y-8 animate-fade-in p-8 pb-20">
+        <div className={`space-y-8 animate-fade-in pb-20 ${isPhone ? 'p-4' : 'p-8'}`}>
             {/* Hero Section - High Fidelity Glass */}
-            <div className="relative h-96 rounded-[30px] overflow-hidden group shadow-premium ring-1 ring-white/10">
+            <div
+                className={`relative rounded-[30px] overflow-hidden group shadow-premium ring-1 ring-white/10 ${
+                    isPhone ? 'h-64' : 'h-96'
+                }`}
+            >
                 {/* Dynamic Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-[#893741] via-[#0F0F12] to-[#5F368E] opacity-80 z-0" />
                 <div className="absolute inset-0 bg-[url('/assets/images/Aries%20Approaches%20the%20Observatory.png')] bg-cover bg-center opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-[2s]" />
@@ -27,7 +33,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 {/* Glass Slices Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-transparent to-transparent opacity-90" />
 
-                <div className="relative z-20 h-full flex flex-col justify-end p-12 max-w-4xl">
+                <div
+                    className={`relative z-20 h-full flex flex-col justify-end max-w-4xl ${
+                        isPhone ? 'p-6' : 'p-12'
+                    }`}
+                >
                     <div className="inline-flex items-center space-x-3 mb-6">
                         <div
                             className="px-3 py-1 rounded-full backdrop-blur-md border"
@@ -40,7 +50,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         </div>
                     </div>
 
-                    <h1 className="text-7xl font-black text-white mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl">
+                    <h1
+                        className={`font-black text-white mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl ${
+                            isPhone ? 'text-4xl' : 'text-7xl'
+                        }`}
+                    >
                         Visualizing the <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00FFC2] via-white to-[#BF5AF2] animate-pulse-slow">Cinematic Universe</span>
                     </h1>
@@ -96,6 +110,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
+                {!isPhone && (
+                <>
                 {/* Card 4: Photo Lab (Gold) */}
                 <div onClick={() => handleCardClick('lab', 'gold')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.5)] border border-white/5 hover:border-[#D4AF37]/50">
                     <div className="absolute inset-0 bg-[url('/assets/images/Aquarius%20Sphere.jpg')] bg-cover bg-center transition-transform duration-700 group-hover:scale-110" />
@@ -123,6 +139,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <p className="text-xs text-[#00D1FF] font-medium tracking-wide">VISUAL STORYTELLING</p>
                     </div>
                 </div>
+                </>
+                )}
 
                 {/* Card 6: Writers' Workshop (Tiffany + gold) */}
                 <div onClick={() => handleCardClick('writer', 'teal')} className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(129,216,208,0.45)] border border-white/5 hover:border-[#81D8D0]/60">
@@ -141,6 +159,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                         <h3 className="text-2xl font-bold text-white mb-1 leading-none">Writers&apos; Workshop</h3>
                         <p className="text-xs font-medium tracking-wide" style={{ color: '#b8f0ea' }}>
                             SCRIPTS &amp; ARCS
+                        </p>
+                    </div>
+                </div>
+
+                {/* Portals Wiki */}
+                <div
+                    onClick={() => handleCardClick('wiki', 'wiki')}
+                    className="h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 hover:shadow-[0_10px_40px_-10px_rgba(217,70,163,0.45)] border border-white/5 hover:border-[#d946a3]/55"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#2a1535] via-[#4a0e3c] to-[#1a0f22] opacity-95 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F12] via-transparent to-[#fcf6ba]/10 opacity-75" />
+
+                    <div className="absolute bottom-0 left-0 p-6 w-full">
+                        <div
+                            className="w-10 h-10 rounded-full border flex items-center justify-center mb-4 shadow-md"
+                            style={{
+                                background: 'linear-gradient(45deg, #bf953f 0%, #fcf6ba 50%, #b38728 100%)',
+                            }}
+                        >
+                            <BookMarked className="w-5 h-5 text-black/80" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Portals Wiki</h3>
+                        <p className="text-xs font-medium tracking-wide" style={{ color: '#fbcfe8' }}>
+                            DOCS &amp; HOW-TO
                         </p>
                     </div>
                 </div>

@@ -19,6 +19,7 @@ import {
   WRITER_UI_TIPS,
   type WriterHelpCategoryId,
 } from '@/portals/writer/writerHelpRegistry';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 
 export type WriterRibbonMenuId = 'file' | 'home' | 'insert' | 'review' | 'view' | 'ai' | 'help';
 
@@ -113,10 +114,12 @@ export const WriterRibbon: React.FC<Props> = ({
   onNextPage,
   onOpenHelpCategory,
 }) => {
+  const { isPhone } = useResponsiveLayout();
+
   return (
     <div className="flex-shrink-0 flex flex-col border-b border-white/25 bg-white/20 backdrop-blur-md">
       <div
-        className="flex items-stretch gap-0.5 px-1 py-0.5 border-b border-black/10 min-h-[2.25rem]"
+        className="flex items-stretch gap-0.5 px-1 py-0.5 border-b border-black/10 min-h-[2.25rem] overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
         style={{ background: WRITERS_GOLD_SLANT }}
         role="tablist"
         aria-label="Ribbon menus"
@@ -128,7 +131,7 @@ export const WriterRibbon: React.FC<Props> = ({
             role="tab"
             aria-selected={activeMenu === m.id}
             onClick={() => onActiveMenu(m.id)}
-            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-t-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+            className={`shrink-0 px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wide rounded-t-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
               activeMenu === m.id
                 ? 'bg-[#ebe8dc] text-black shadow-sm'
                 : 'text-black/65 hover:bg-black/10'
@@ -146,7 +149,14 @@ export const WriterRibbon: React.FC<Props> = ({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 px-2 py-2 min-h-[3.25rem]">
+      <div
+        className={`flex px-2 py-2 min-h-[3.25rem] ${
+          isPhone ? 'flex-col items-stretch gap-2' : 'flex-wrap items-center gap-1'
+        }`}
+      >
+        <div
+          className={`flex flex-wrap items-center gap-1 min-w-0 ${isPhone ? 'w-full' : ''}`}
+        >
         {activeMenu === 'file' && (
           <div className="flex items-center px-2">
             <Tooltip content={WRITER_UI_TIPS.fileRibbon} side="bottom">
@@ -360,10 +370,17 @@ export const WriterRibbon: React.FC<Props> = ({
             </div>
           </div>
         )}
+        </div>
 
-        <div className="flex-1 min-w-[120px]" />
+        {!isPhone ? <div className="flex-1 min-w-[120px]" /> : null}
 
-        <div className="flex items-center gap-1 shrink-0 border-l border-black/10 pl-2 ml-auto">
+        <div
+          className={`flex items-center gap-1 shrink-0 ${
+            isPhone
+              ? 'w-full border-t border-black/10 pt-2 justify-between'
+              : 'border-l border-black/10 pl-2 ml-auto'
+          }`}
+        >
           <Search size={14} className="text-black/45 shrink-0" aria-hidden />
           <input
             ref={findInputRef}
@@ -371,7 +388,9 @@ export const WriterRibbon: React.FC<Props> = ({
             placeholder="Find in view…"
             value={findQuery}
             onChange={(e) => onFindQuery(e.target.value)}
-            className="w-[min(200px,28vw)] rounded-md border border-black/15 bg-white/90 px-2 py-1 text-[11px] text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            className={`rounded-md border border-black/15 bg-white/90 px-2 py-1 text-[11px] text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+              isPhone ? 'flex-1 min-w-0 max-w-full' : 'w-[min(200px,28vw)]'
+            }`}
             aria-label="Find in document"
           />
           <span className="text-[10px] text-black/45 tabular-nums min-w-[3rem]">

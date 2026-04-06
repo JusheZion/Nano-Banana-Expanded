@@ -9,6 +9,18 @@ export type WriterSupabaseDiagnostic = { urlPresent: boolean; anonKeyLength: num
 /** Ribbon + modal open this category (multi-section document per category). */
 export type WriterHelpCategoryId = 'setup' | 'workflow' | 'pages_tools' | 'review_export' | 'keyboard';
 
+/** DOM id on wiki `writer.md` ## headings (must match `rehype-slug` output). */
+export function writerHelpCategoryWikiHeadingId(id: WriterHelpCategoryId): string {
+  const m: Record<WriterHelpCategoryId, string> = {
+    setup: 'setup',
+    workflow: 'workflow',
+    pages_tools: 'pages-tools',
+    review_export: 'review-export',
+    keyboard: 'keyboard',
+  };
+  return m[id];
+}
+
 export const WRITER_HELP_CATEGORIES: {
   id: WriterHelpCategoryId;
   label: string;
@@ -93,15 +105,32 @@ export function writerHelpCategoryTitle(id: WriterHelpCategoryId): string {
 export function WriterHelpCategoryBody({
   category,
   supabaseDiag,
+  onOpenPortalsWiki,
 }: {
   category: WriterHelpCategoryId;
   supabaseDiag: WriterSupabaseDiagnostic;
+  /** Jump to Portals Wiki → Writers' Workshop with this section slug. */
+  onOpenPortalsWiki?: (headingId: string) => void;
 }): React.ReactNode {
   const h = (children: React.ReactNode) => (
     <h3 className="text-[11px] font-black uppercase tracking-wider text-black/55 border-b border-black/10 pb-1 mt-4 first:mt-0">
       {children}
     </h3>
   );
+
+  const wikiLink =
+    onOpenPortalsWiki != null ? (
+      <p className="mt-4 pt-3 border-t border-black/10 text-xs text-black/70">
+        <button
+          type="button"
+          className="font-bold text-teal-900 underline decoration-teal-600/50 hover:decoration-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700/30 rounded"
+          onClick={() => onOpenPortalsWiki(writerHelpCategoryWikiHeadingId(category))}
+        >
+          Open full chapter in Portals Wiki
+        </button>{' '}
+        <span className="text-black/50">(Writers&apos; Workshop)</span>
+      </p>
+    ) : null;
 
   switch (category) {
     case 'setup':
@@ -130,6 +159,7 @@ export function WriterHelpCategoryBody({
             To debug calls, use DevTools <strong>Network</strong> on your <strong>local app</strong> (e.g.{' '}
             <code className="rounded bg-black/10 px-1">localhost</code>), not only the Supabase dashboard.
           </p>
+          {wikiLink}
         </>
       );
     case 'workflow':
@@ -152,6 +182,7 @@ export function WriterHelpCategoryBody({
           <p>
             Workspace <kbd className="rounded bg-black/10 px-1">⌘2</kbd> opens <strong>Issue Outline</strong> for story fields.
           </p>
+          {wikiLink}
         </>
       );
     case 'pages_tools':
@@ -174,6 +205,7 @@ export function WriterHelpCategoryBody({
             Shot plans combine the latest outline and page digests. Export JSON, CSV, or an issue pack from the Video
             workspace.
           </p>
+          {wikiLink}
         </>
       );
     case 'review_export':
@@ -195,10 +227,12 @@ export function WriterHelpCategoryBody({
             Combined review text appears in <strong>Review output</strong>; <strong>Find in view</strong> searches that block
             together with other visible JSON.
           </p>
+          {wikiLink}
         </>
       );
     case 'keyboard':
       return (
+        <>
         <ul className="list-disc pl-4 space-y-2">
           <li>
             <kbd className="rounded bg-black/10 px-1">⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌘5</kbd> — Arc,
@@ -214,6 +248,8 @@ export function WriterHelpCategoryBody({
             <kbd className="rounded bg-black/10 px-1">Esc</kbd> — clear find (when Find is focused)
           </li>
         </ul>
+        {wikiLink}
+        </>
       );
     default:
       return null;

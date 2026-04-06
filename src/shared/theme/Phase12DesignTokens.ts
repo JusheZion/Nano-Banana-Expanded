@@ -88,3 +88,10 @@ export const WRITERS_TIFFANY_TEXT =
   'linear-gradient(135deg, #0d4f4a 0%, #1a7a72 28%, #3db8ae 55%, #81D8D0 78%, #e0fffa 100%)';
 /** Hub nav accent when Writers' Workshop is active */
 export const WRITERS_NAV_ACCENT = '#2a9d8f';
+
+/** Portals Wiki — calm flat magenta–plum field (no heavy gradient on the content canvas). */
+export const WIKI_SHELL_BG_FLAT = '#2a1535';
+/** Slightly lighter panel stripe for wiki article column */
+export const WIKI_PANEL_BG = 'rgba(42, 21, 53, 0.72)';
+/** Wiki nav / TOC accent (magenta calm, pairs with gold chrome) */
+export const WIKI_NAV_ACCENT = '#d946a3';

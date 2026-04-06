@@ -164,6 +164,40 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Phase 6h (writer-tools refresh optimization, 2026-04-03): **`invokeWriterTools`** now refreshes only when the JWT is expired (no unconditional refresh on every invocation), keeps 401 refresh+retry behavior, and resolves Writer lint errors by including `refreshIssuesForSeries` in ribbon callback dependencies.
 - [x] Phase 6i (writer-tools verification hardening, 2026-04-04): verified `invokeWriterTools` is not unconditionally refreshing and added regression tests for fresh-token/no-refresh vs expired-token/refresh paths.
 
+## Supabase — per-user RLS phase A (2026-04-06)
+
+- [x] Migration `20260406000000_arcs_per_user_rls.sql`: `owner_id` + strict authenticated RLS on `writer_*`, `characters`, `assets`
+- [x] `writer-tools`: user-scoped Supabase client (anon key + `Authorization: Bearer <JWT>`); repair corrupted `page_beats` `Promise.all`
+- [x] Vault / archive: session-gated Supabase reads; `characterVaultUsesSupabase` / `assetVaultUsesSupabase` use session not “any row exists”
+- [ ] Operator: run migration on hosted Supabase + redeploy `writer-tools`; smoke-test two accounts + signed-out vault local fallback
+- [ ] Phase B (later): private storage paths + signed URLs for generations
+
+## Portals Wiki — in-app documentation (2026-04)
+
+- [x] Portal id `wiki`: routing, lazy chunk, prefetch, Landing + AppShell Docs nav (no auth gate for wiki v1)
+- [x] Theme: `theme-wiki` on `body`, calm canvas + `.wiki-prose`, wiki design tokens
+- [x] Content: `src/content/wiki/` manifest + markdown chapters + `wikiImports.ts`; optional screenshots under `public/wiki/screenshots/`
+- [x] Markdown pipeline: react-markdown, remark-gfm, rehype-slug, rehype-autolink-headings (TOC / anchors)
+- [x] Writers’ Workshop: help registry wiki heading ids + `onOpenPortalsWiki` / modal footer
+- [x] Build verification: `npm run build` passes after wiki work
+
+## Mobile web — iPhone / iPad (2026-04)
+
+### Phase 0 — Preparation (before code)
+
+- [x] Read **[`MOBILE_PHASE0_PREPARATION.md`](MOBILE_PHASE0_PREPARATION.md)** and answer questions (in-file or via **[`docs/MOBILE_PHASE0_INTAKE.html`](docs/MOBILE_PHASE0_INTAKE.html)** → **Copy for ARCS assistant**)
+- [x] Submitted answers in chat (2026-04-05): one app / two profiles; **phone** bottom tabs; **tablet** split; Comic + Storyline **hidden on phone**; Character + Asset **phone** — no tag-gallery/reference gallery strips, Live Prompt **Edit only** + forced pin; Home + Writer priority; PWA yes; prod `asset-reference-comics-studio.onyxzion.workers.dev`
+
+### Phase 1+ (after Phase 0 approved — implementation)
+
+- [x] Touch-first **`AppShell`** — phone bottom nav + tap account sheet; md+ sidebar with hover-expand when `prefersHoverSidebar`; block **Comic** / **Storyline** on phone (`App.tsx` + `LandingPage`)
+- [x] PWA shell: `manifest.webmanifest`, viewport-fit / web-app meta (`index.html`)
+- [x] Global safe-area / mobile CSS pass (**`theme.css`**: `--safe-*` / `--app-vh`, `html`/`body`/`#root` min-height + iOS `-webkit-fill-available`, `color-scheme: dark`, **`background-attachment: scroll`** on ≤767px for main theme; **`.app-safe-x`** / **`.min-h-app-viewport`**; **`AppShell`**: horizontal safe-area + `min-h-0`; phone **tab bar** honors left/right safe-area)
+- [x] Studios **phone compact** pass: **`CharacterStudio.tsx`** + **`AssetsStudio.tsx`** (stacked columns, hide module tablist + prompt tabs on phone, hide recent/session galleries + thumbnail density on phone, keep **Compare**)
+- [x] **`WriterPortal`** Phase 3 — `isPhone` column workspace + **`WriterStudioDock`** bottom dock / collapse bar; **`WriterRibbon`** scrollable tabs + full-width find row; **`WriterContextMenu`** long-press + clamped position; **`LandingPage`** hero/padding on phone; `writerWikiAnchors.test.ts` — `/// <reference types="node" />` for `tsc -b`
+- [ ] **Other portals** — optional spot-check (Wiki, Photo Lab) if issues show in Phase 4
+- [ ] Verify: real **iPad Air / iPad Pro / Safari** matrix + desktop regression (G1: owner does not rely on desktop emulation alone)
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).

@@ -425,14 +425,20 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const anonKey =
+      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('NEXT_PUBLIC_SUPABASE_ANON_KEY');
     const geminiKey = Deno.env.get('GEMINI_API_KEY') ?? Deno.env.get('GOOGLE_API_KEY');
     const geminiModel =
       normalizeGeminiModelId(Deno.env.get('GEMINI_MODEL')) ?? DEFAULT_GEMINI_MODEL;
 
-    if (!supabaseUrl || !serviceKey) {
+    if (!supabaseUrl || !anonKey) {
       return Response.json(
-        { success: false, error: 'Server misconfigured: Supabase env missing' },
+        {
+          success: false,
+          error: 'Server misconfigured: Supabase URL or anon key missing',
+          details:
+            'Edge Functions need SUPABASE_ANON_KEY (auto-injected on Supabase hosting). DB calls use the caller JWT so RLS applies.',
+        },
         { status: 500, headers: corsHeaders },
       );
     }
@@ -466,9 +472,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
 
-    const { error: authErr } = await supabase.auth.getUser(token);
+    const { error: authErr } = await supabase.auth.getUser();
     if (authErr) {
       return Response.json(
         { success: false, error: 'Invalid JWT', details: authErr.message },
@@ -589,7 +597,6 @@ Deno.serve(async (req) => {
       }
       const sid = issueRow.series_id;
       const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
-      const [castRes, locRes, bibleRes, outlineRes] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', sid),
         supabase.from('writer_locations').select('*').eq('series_id', sid),
         supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
@@ -611,9 +618,6 @@ Deno.serve(async (req) => {
       const system =
         'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
       const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
-      ]);
-      const system =
-        'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
       const userPrompt = buildPageBeatsUserPrompt({
         page,
         issue: issueRow,

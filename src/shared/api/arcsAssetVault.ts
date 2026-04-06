@@ -57,40 +57,43 @@ function groupAssetAlbums(items: VaultAssetItem[]): VaultAssetAlbum[] {
 
 export async function getAssetAlbums(): Promise<VaultAssetAlbum[]> {
   if (isSupabaseConfigured() && supabase) {
-    const { data, error } = await supabase
-      .from('assets')
-      .select('id, image_url, collection_name, asset_name, name, seed, created_at, metadata_tags');
-    if (!error && data && data.length > 0) {
-      const list = (data ?? []).map((raw) => {
-        const row = raw as Record<string, unknown>;
-        const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
-        const at = mt?.archive_thumbnail as
-          | { x?: number; y?: number; scale?: number }
-          | undefined;
-        const hasThumb =
-          at &&
-          (typeof at.x === 'number' ||
-            typeof at.y === 'number' ||
-            typeof at.scale === 'number');
-        const base: VaultAssetItem = {
-          id: row.id as string,
-          image_url: row.image_url as string,
-          collection_name: (row.collection_name as string | null) ?? null,
-          asset_name: (row.asset_name as string | null) ?? null,
-          name: (row.name as string | null) ?? null,
-          seed: (row.seed as number | null) ?? null,
-          created_at: (row.created_at as string | null) ?? null,
-        };
-        return hasThumb
-          ? {
-              ...base,
-              thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
-              thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
-              thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
-            }
-          : base;
-      }) as VaultAssetItem[];
-      return groupAssetAlbums(list);
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      const { data, error } = await supabase
+        .from('assets')
+        .select('id, image_url, collection_name, asset_name, name, seed, created_at, metadata_tags');
+      if (!error && data != null) {
+        const list = (data ?? []).map((raw) => {
+          const row = raw as Record<string, unknown>;
+          const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
+          const at = mt?.archive_thumbnail as
+            | { x?: number; y?: number; scale?: number }
+            | undefined;
+          const hasThumb =
+            at &&
+            (typeof at.x === 'number' ||
+              typeof at.y === 'number' ||
+              typeof at.scale === 'number');
+          const base: VaultAssetItem = {
+            id: row.id as string,
+            image_url: row.image_url as string,
+            collection_name: (row.collection_name as string | null) ?? null,
+            asset_name: (row.asset_name as string | null) ?? null,
+            name: (row.name as string | null) ?? null,
+            seed: (row.seed as number | null) ?? null,
+            created_at: (row.created_at as string | null) ?? null,
+          };
+          return hasThumb
+            ? {
+                ...base,
+                thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
+                thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
+                thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
+              }
+            : base;
+        }) as VaultAssetItem[];
+        return groupAssetAlbums(list);
+      }
     }
   }
 
@@ -150,8 +153,8 @@ type MutOk = { ok: true } | { ok: false; error: string };
 
 async function assetVaultUsesSupabase(): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { data, error } = await supabase.from('assets').select('id').limit(1);
-  return !error && Boolean(data && data.length > 0);
+  const { data: sessionData } = await supabase.auth.getSession();
+  return sessionData.session != null;
 }
 
 export async function renameVaultAssetCollection(

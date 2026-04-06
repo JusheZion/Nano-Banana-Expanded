@@ -529,3 +529,49 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 **Approved roadmap (Writers’ Workshop + platform)**
 
 - Cursor plan **Writers’ Workshop UX Roadmap** covers remaining UX (tab bar, arc layout, ribbon format phase A, pages sync, series rename, Google OAuth, RLS hardening). Cloudflare tasks there: `cloudflare-pages-spa`, `cloudflare-env-docs`.
+
+## Portals Wiki (in-app documentation)
+
+**Goal:** Shipholder wiki, organized by portal, calm **magenta / glass / gold-accent** chrome distinct from studio themes; markdown-first with optional screenshots; v1 is **reference**, not a guided tutorial.
+
+**Implementation (shipped):**
+
+- **Portal:** `wiki` in `src/shared/portals.ts`; `WikiPortal.tsx` (hub list, article view, TOC from headings).
+- **Content:** `src/content/wiki/manifest.ts` + `wikiImports.ts` + `.md` chapters; `WIKI_APP_DOC_VERSION` / `lastReviewed` in manifest for manual freshness.
+- **Markdown:** `react-markdown`, `remark-gfm`, `rehype-slug`, `rehype-autolink-headings` (heading ids must match Writers’ Workshop `writerHelpCategoryWikiHeadingId` strings where used).
+- **Theming:** `ThemeContext` id `wiki` → `body.theme-wiki`; `Phase12DesignTokens` wiki tokens; `theme.css` `.wiki-prose`.
+- **Navigation:** AppShell **Docs** section; Landing card; `App.tsx` uses `navigatePortal` vs `requestPortalsWiki` for Writers’ help deep-link.
+- **Assets:** `public/wiki/screenshots/` — replace placeholders when capturing real UI.
+- **Verification:** `npm run build`.
+
+## Supabase — per-user RLS (phase A, 2026-04-06)
+
+**Goal:** Rows in `writer_*`, `characters`, and `assets` are visible and mutable only to the authenticated owner (`auth.uid()`). Anonymous clients (anon key, no user JWT) have no table access. **Storage** (`arcs-generations` bucket) remains unchanged in this phase; tighten in phase B (private bucket, signed URLs).
+
+**Migration:** [`supabase/migrations/20260406000000_arcs_per_user_rls.sql`](supabase/migrations/20260406000000_arcs_per_user_rls.sql) — adds `owner_id` on `writer_series`, `characters`, `assets`; backfills to earliest `auth.users` row; deletes still-null orphans; `NOT NULL` + `DEFAULT auth.uid()` on inserts; replaces permissive policies with `TO authenticated` policies (writer children scoped via `writer_series.owner_id`).
+
+**Edge Function:** [`supabase/functions/writer-tools/index.ts`](supabase/functions/writer-tools/index.ts) uses **`SUPABASE_ANON_KEY`** and `createClient(..., { global: { headers: { Authorization: \`Bearer ${token}\` }}})` so PostgREST runs as the signed-in user and RLS applies. **Redeploy** after pulling: `supabase functions deploy writer-tools`.
+
+**App:** Vault / archive reads use `getSession()` — Supabase path only when signed in; otherwise local generation archive. (`arcsVault.ts`, `arcsAssetVault.ts`, `arcsArchive.ts`.)
+
+**Verify:** `supabase db push` (or SQL editor) on the project; sign in → workshop + vault work; second account sees empty workshop/vault; `npm run build`.
+
+## Mobile web — iPhone & iPad (preparation → implementation)
+
+**Before** changing layouts or `AppShell` for touch:
+
+1. Complete **[`MOBILE_PHASE0_PREPARATION.md`](MOBILE_PHASE0_PREPARATION.md)** — Phase 0 checklist and decision questions (markdown checkboxes + answer blocks).
+2. Optionally open **[`docs/MOBILE_PHASE0_INTAKE.html`](docs/MOBILE_PHASE0_INTAKE.html)** in a browser (local file), fill fields, click **Copy for ARCS assistant**, paste into chat.
+
+**After** answers are aligned:
+
+- **Phase 1:** Touch-first **`AppShell`** (no hover-only navigation or account menus).
+- **Phase 2:** Global **safe-area / mobile CSS** (`src/styles/theme.css`, viewport meta if needed).
+- **Phase 3:** **Portal-by-portal** responsive passes in agreed priority order.
+- **Phase 4:** Verification (DevTools device modes + real iPhone/iPad + desktop regression).
+
+Track checklist items in [`tasks.md`](tasks.md) under **Mobile web — iPhone / iPad**.
+
+**Phase 0 locked (2026-04-chat):** Single responsive app; phone ≤767px uses bottom tabs; tablet split view; Comic + Storyline unavailable on phone; Character/Asset on phone omit tagging/reference-gallery UIs and Live Prompt tabs except **Edit** (pinned); production + Supabase redirect URLs include **`https://asset-reference-comics-studio.onyxzion.workers.dev`** and local dev origins; PWA **yes**.
+
+**Implementation status:** `ResponsiveLayoutContext` + `AppShell` phone nav + studio restrictions live; Character + Asset studios finished phone layout/gallery/density parity (2026-04-05). **Phase 2 (2026-04-05):** global mobile CSS in `theme.css` + shell/tab-bar safe-area. **Phase 3 (Writers’ Workshop, 2026-04-05):** `WriterPortal` uses `isPhone` column layout (workspace above dock); `WriterStudioDock` **`phoneLayout`** full-width bottom strip with safe-area; `WriterRibbon` horizontal menu scroll + stacked find row; `WriterContextMenu` touch **long-press** (~520ms) + viewport-clamped menu; phone defaults dock collapsed (expand via ribbon **Panels** or dock bar); `LandingPage` tighter hero on phone. **Next:** Phase 4 device QA (iPad/Safari) + optional Wiki / Photo Lab spot-checks.

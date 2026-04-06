@@ -1,0 +1,17 @@
+{
+  "name": "ARCS Expanded",
+  "short_name": "ARCS",
+  "description": "ARCS visual universe — character, asset, and writer tools",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F0F12",
+  "theme_color": "#0F0F12",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

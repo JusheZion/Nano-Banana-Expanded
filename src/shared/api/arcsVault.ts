@@ -108,45 +108,46 @@ function groupAlbums(items: VaultCharacterItem[]): VaultCharacterAlbum[] {
 
 export async function getCharacterAlbums(): Promise<VaultCharacterAlbum[]> {
   if (isSupabaseConfigured() && supabase) {
-    const { data, error } = await supabase
-      .from('characters')
-      .select(
-        'id, image_url, profile_name, cast_name, name, seed, created_at, is_profile_cover, metadata_tags'
-      );
-    // If Supabase is configured but the DB is empty (or query fails),
-    // fall back to localStorage so existing local archives don't "disappear".
-    if (!error && data && data.length > 0) {
-      const list = (data ?? []).map((raw) => {
-        const row = raw as Record<string, unknown>;
-        const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
-        const at = mt?.archive_thumbnail as
-          | { x?: number; y?: number; scale?: number }
-          | undefined;
-        const hasThumb =
-          at &&
-          (typeof at.x === 'number' ||
-            typeof at.y === 'number' ||
-            typeof at.scale === 'number');
-        const base: VaultCharacterItem = {
-          id: row.id as string,
-          image_url: row.image_url as string,
-          profile_name: (row.profile_name as string | null) ?? null,
-          cast_name: (row.cast_name as string | null) ?? null,
-          name: (row.name as string | null) ?? null,
-          seed: (row.seed as number | null) ?? null,
-          created_at: (row.created_at as string | null) ?? null,
-          is_profile_cover: (row.is_profile_cover as boolean | null) ?? null,
-        };
-        return hasThumb
-          ? {
-              ...base,
-              thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
-              thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
-              thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
-            }
-          : base;
-      }) as VaultCharacterItem[];
-      return groupAlbums(list);
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      const { data, error } = await supabase
+        .from('characters')
+        .select(
+          'id, image_url, profile_name, cast_name, name, seed, created_at, is_profile_cover, metadata_tags'
+        );
+      if (!error && data != null) {
+        const list = (data ?? []).map((raw) => {
+          const row = raw as Record<string, unknown>;
+          const mt = row.metadata_tags as Record<string, unknown> | null | undefined;
+          const at = mt?.archive_thumbnail as
+            | { x?: number; y?: number; scale?: number }
+            | undefined;
+          const hasThumb =
+            at &&
+            (typeof at.x === 'number' ||
+              typeof at.y === 'number' ||
+              typeof at.scale === 'number');
+          const base: VaultCharacterItem = {
+            id: row.id as string,
+            image_url: row.image_url as string,
+            profile_name: (row.profile_name as string | null) ?? null,
+            cast_name: (row.cast_name as string | null) ?? null,
+            name: (row.name as string | null) ?? null,
+            seed: (row.seed as number | null) ?? null,
+            created_at: (row.created_at as string | null) ?? null,
+            is_profile_cover: (row.is_profile_cover as boolean | null) ?? null,
+          };
+          return hasThumb
+            ? {
+                ...base,
+                thumbnail_focus_x: typeof at!.x === 'number' ? at!.x! : 50,
+                thumbnail_focus_y: typeof at!.y === 'number' ? at!.y! : 50,
+                thumbnail_scale: typeof at!.scale === 'number' ? at!.scale! : 1,
+              }
+            : base;
+        }) as VaultCharacterItem[];
+        return groupAlbums(list);
+      }
     }
   }
 
@@ -174,26 +175,29 @@ export async function setProfileCover(args: {
   const profileKey = normalizeProfileKey(args.profileName);
 
   if (isSupabaseConfigured() && supabase) {
-    // Swap semantics: clear all covers for the profile, then set the clicked id.
-    // Note: "Unnamed" maps to NULL profile_name.
-    const isUnnamed = profileKey === UNNAMED_KEY;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      // Swap semantics: clear all covers for the profile, then set the clicked id.
+      // Note: "Unnamed" maps to NULL profile_name.
+      const isUnnamed = profileKey === UNNAMED_KEY;
 
-    const clearQuery = supabase.from('characters').update({ is_profile_cover: false });
-    const clearResult = isUnnamed
-      ? await clearQuery.is('profile_name', null)
-      : await clearQuery.eq('profile_name', profileKey);
-    if (clearResult.error) {
-      return { ok: false, error: clearResult.error.message };
+      const clearQuery = supabase.from('characters').update({ is_profile_cover: false });
+      const clearResult = isUnnamed
+        ? await clearQuery.is('profile_name', null)
+        : await clearQuery.eq('profile_name', profileKey);
+      if (clearResult.error) {
+        return { ok: false, error: clearResult.error.message };
+      }
+
+      const { error: setErr } = await supabase
+        .from('characters')
+        .update({ is_profile_cover: true })
+        .eq('id', args.id);
+      if (setErr) return { ok: false, error: setErr.message };
+
+      writeCoverIdToStorage(profileKey, args.id);
+      return { ok: true };
     }
-
-    const { error: setErr } = await supabase
-      .from('characters')
-      .update({ is_profile_cover: true })
-      .eq('id', args.id);
-    if (setErr) return { ok: false, error: setErr.message };
-
-    writeCoverIdToStorage(profileKey, args.id);
-    return { ok: true };
   }
 
   // Offline: store the generation id as the cover.
@@ -224,8 +228,8 @@ type VaultMutOk = { ok: true } | { ok: false; error: string };
 
 async function characterVaultUsesSupabase(): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { data, error } = await supabase.from('characters').select('id').limit(1);
-  return !error && Boolean(data && data.length > 0);
+  const { data: sessionData } = await supabase.auth.getSession();
+  return sessionData.session != null;
 }
 
 /** Rename an entire profile (all rows). */
