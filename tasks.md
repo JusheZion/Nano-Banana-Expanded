@@ -169,7 +169,8 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Migration `20260406000000_arcs_per_user_rls.sql`: `owner_id` + strict authenticated RLS on `writer_*`, `characters`, `assets`
 - [x] `writer-tools`: user-scoped Supabase client (anon key + `Authorization: Bearer <JWT>`); repair corrupted `page_beats` `Promise.all`
 - [x] Vault / archive: session-gated Supabase reads; `characterVaultUsesSupabase` / `assetVaultUsesSupabase` use session not “any row exists”
-- [ ] Operator: run migration on hosted Supabase + redeploy `writer-tools`; smoke-test two accounts + signed-out vault local fallback
+- [x] Operator: `supabase db push` + `supabase functions deploy writer-tools` on hosted project (2026-04-06)
+- [ ] Operator smoke-test: two accounts isolated + signed-out vault local fallback
 - [ ] Phase B (later): private storage paths + signed URLs for generations
 
 ## Portals Wiki — in-app documentation (2026-04)
