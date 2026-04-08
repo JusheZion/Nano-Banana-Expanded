@@ -103,7 +103,7 @@ Variables must be set in **Cloudflare**, not only in `.env` on your laptop. Vite
 
 ## G. Verify the live site (before custom domain)
 
-- [ ] **G1.** I opened the **`*.pages.dev`** URL in a normal browser window.
+- [x] **G1.** I opened the **`*.pages.dev`** URL in a normal browser window.
 - [ ] **G2.** The app **loads** (no blank white screen; check DevTools **Console** for missing env errors).
 - [ ] **G3.** I navigated inside the app, then **refreshed the page**. It still loads (**Workers:** SPA via **`not_found_handling`**; **Pages:** via **`_redirects`** if used).
 - [ ] **G4.** I tried **Writers’ Workshop** (or another heavy route) and refresh again — still OK.
@@ -114,24 +114,24 @@ Variables must be set in **Cloudflare**, not only in `.env` on your laptop. Vite
 
 Replace `https://YOUR-PAGES-DEV-URL` with your real URL (no trailing slash unless Supabase accepts it — usually **no** trailing slash).
 
-- [ ] **H1.** Supabase dashboard → **Authentication** → **URL Configuration**.
-- [ ] **H2.** **Site URL** set to: `https://YOUR-PAGES-DEV-URL` (production entry point users land on after auth).
-- [ ] **H3.** **Redirect URLs** includes **all** of:
+- [x] **H1.** Supabase dashboard → **Authentication** → **URL Configuration**.
+- [x] **H2.** **Site URL** set to: `https://YOUR-PAGES-DEV-URL` (production entry point users land on after auth).
+- [x] **H3.** **Redirect URLs** includes **all** of:
 
-  - [ ] `http://localhost:5173` (Vite dev — keep for local work)
-  - [ ] `http://127.0.0.1:5173` (optional but helpful)
-  - [ ] `https://YOUR-PAGES-DEV-URL`
-  - [ ] `https://YOUR-PAGES-DEV-URL/**` if Supabase UI allows wildcard patterns (follow current Supabase docs for exact syntax)
+  - [x] `http://localhost:5173` (Vite dev — keep for local work)
+  - [x] `http://127.0.0.1:5173` (optional but helpful)
+  - [x] `https://YOUR-PAGES-DEV-URL`
+  - [x] `https://YOUR-PAGES-DEV-URL/**` if Supabase UI allows wildcard patterns (follow current Supabase docs for exact syntax)
   - [ ] Each **Preview** URL I care about (e.g. `https://branch-name.project.pages.dev`) — optional
 
-- [ ] **H4.** I clicked **Save** in Supabase.
+- [x] **H4.** I clicked **Save** in Supabase.
 
 ---
 
 ## I. Google sign-in only (skip if not using Google yet)
 
-- [ ] **I1.** Supabase → **Authentication** → **Providers** → **Google** is enabled with Client ID / Secret.
-- [ ] **I2.** Google Cloud Console → **APIs & Services** → **Credentials** → my OAuth client → **Authorized redirect URIs** includes:
+- [x] **I1.** Supabase → **Authentication** → **Providers** → **Google** is enabled with Client ID / Secret.
+- [x] **I2.** Google Cloud Console → **APIs & Services** → **Credentials** → my OAuth client → **Authorized redirect URIs** includes:
 
   `https://<project-ref>.supabase.co/auth/v1/callback`
 
@@ -155,17 +155,17 @@ Replace `https://YOUR-PAGES-DEV-URL` with your real URL (no trailing slash unles
 
 Hosting on Cloudflare does **not** deploy Edge Functions — they stay on **Supabase**.
 
-- [ ] **K1.** I confirmed **`writer-tools`** (and any others) are **deployed** on the same Supabase project: `supabase functions deploy writer-tools` (or Dashboard).
-- [ ] **K2.** Required **secrets** exist in Supabase for those functions (the dev maintains the list).
-- [ ] **K3.** From the **live Cloudflare URL**, I signed in and ran an action that calls **writer-tools**; Network tab shows **200** (not 401/500).
+- [x] **K1.** I confirmed **`writer-tools`** (and any others) are **deployed** on the same Supabase project: `supabase functions deploy writer-tools` (or Dashboard).
+- [x] **K2.** Required **secrets** exist in Supabase for those functions (the dev maintains the list).
+- [x] **K3.** From the **live Cloudflare URL**, I signed in and ran an action that calls **writer-tools**; Network tab shows **200** (not 401/500).
 
 ---
 
 ## L. Data, backups, and expectations
 
-- [ ] **L1.** I understand **Writer’s Room data** lives in **Supabase Postgres** when the app is configured — not “inside Cloudflare.”
-- [ ] **L2.** Deploying to Cloudflare **does not delete** Supabase data if I use the **same** `VITE_SUPABASE_URL` / project as local.
-- [ ] **L3.** I know **open RLS** (`USING (true)`) means data is **not** private per user until a future migration; I will not put highly sensitive content in writer tables until then.
+- [x] **L1.** I understand **Writer’s Room data** lives in **Supabase Postgres** when the app is configured — not “inside Cloudflare.”
+- [x] **L2.** Deploying to Cloudflare **does not delete** Supabase data if I use the **same** `VITE_SUPABASE_URL` / project as local.
+- [x] **L3.** I know **open RLS** (`USING (true)`) means data is **not** private per user until a future migration; I will not put highly sensitive content in writer tables until then.
 - [ ] **L4.** (Optional) I exported a backup from Supabase **SQL Editor** or Table Editor before major changes (CSV/SQL dump of `writer_*` tables).
 
 ---

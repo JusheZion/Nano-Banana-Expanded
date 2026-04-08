@@ -94,6 +94,7 @@ const NavItem: React.FC<NavItemProps> = ({
       onClick={() => onSelect(targetPortal)}
       onMouseEnter={() => prefetchPortal(targetPortal)}
       title={!sidebarExpanded ? label : undefined}
+      aria-label={label}
       className={`
                     w-full flex items-center gap-3 rounded-xl transition-all duration-300 group
                     ${sidebarExpanded ? 'px-4 py-3' : 'px-0 py-3 justify-center'}
@@ -145,6 +146,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
   const [accountOpen, setAccountOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const accountWrapRef = useRef<HTMLDivElement>(null);
+  const mobileHeaderRef = useRef<HTMLElement>(null);
   const moreColumnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,15 +161,16 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
 
   useEffect(() => {
     if (!accountOpen && !moreOpen) return;
-    const close = (e: MouseEvent) => {
+    const close = (e: Event) => {
       const t = e.target as Node;
+      if (mobileHeaderRef.current?.contains(t)) return;
       if (accountWrapRef.current?.contains(t)) return;
       if (moreColumnRef.current?.contains(t)) return;
       setAccountOpen(false);
       setMoreOpen(false);
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
   }, [accountOpen, moreOpen]);
 
   const handleNavClick = (portal: Portal) => {
@@ -233,7 +236,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
   );
 
   return (
-    <div className="app-safe-x flex h-[100dvh] max-h-[100dvh] min-h-0 bg-transparent text-white overflow-hidden text-sm flex-col md:flex-row">
+    <div className="app-safe-x flex h-[100dvh] max-h-[100dvh] min-h-0 bg-transparent text-white overflow-x-hidden max-md:overflow-y-visible md:overflow-hidden text-sm flex-col md:flex-row">
       <aside
         className={`hidden md:flex flex-shrink-0 flex-col z-50 relative transition-all duration-300 ease-in-out ${
           sidebarExpanded ? 'w-[230px]' : 'w-[60px]'
@@ -298,6 +301,19 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
           />
 
           {sidebarExpanded && (
+            <div className="text-[10px] font-bold px-4 mb-2 mt-4 uppercase tracking-[0.15em] opacity-80">Docs</div>
+          )}
+          {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
+          <NavItem
+            targetPortal="wiki"
+            icon={BookMarked}
+            label="Portals Wiki"
+            sidebarExpanded={sidebarExpanded}
+            isActive={activePortal === 'wiki'}
+            onSelect={handleNavClick}
+          />
+
+          {sidebarExpanded && (
             <div className="text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-[0.15em] opacity-80">Creative Suite</div>
           )}
           {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
@@ -347,19 +363,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
             label={"Writers' Workshop"}
             sidebarExpanded={sidebarExpanded}
             isActive={activePortal === 'writer'}
-            onSelect={handleNavClick}
-          />
-
-          {sidebarExpanded && (
-            <div className="text-[10px] font-bold px-4 mb-2 mt-6 uppercase tracking-[0.15em] opacity-80">Docs</div>
-          )}
-          {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
-          <NavItem
-            targetPortal="wiki"
-            icon={BookMarked}
-            label="Portals Wiki"
-            sidebarExpanded={sidebarExpanded}
-            isActive={activePortal === 'wiki'}
             onSelect={handleNavClick}
           />
         </nav>
@@ -416,55 +419,13 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
 
       <main
         className={`flex-1 relative overflow-hidden flex flex-col h-full min-h-0 w-full min-w-0 ${
-          isPhone ? 'pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]' : ''
+          isPhone
+            ? 'pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))] pt-[calc(max(0.5rem,env(safe-area-inset-top,0px))+3.25rem)]'
+            : ''
         }`}
       >
-        {isPhone && (
-          <header className="flex-shrink-0 flex items-center justify-end gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 border-b border-white/5 bg-black/20 backdrop-blur-md relative z-40">
-            <div className="relative" ref={accountWrapRef}>
-              {!supabaseConfigured ? (
-                <span className="text-[10px] text-white/50">—</span>
-              ) : !ready ? (
-                <span className="text-[10px] text-white/50">…</span>
-              ) : user ? (
-                <>
-                  <button
-                    type="button"
-                    className="w-9 h-9 rounded-full border flex items-center justify-center shadow-md active:scale-95"
-                    style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
-                    onClick={() => {
-                      setMoreOpen(false);
-                      setAccountOpen((o) => !o);
-                    }}
-                    aria-expanded={accountOpen}
-                  >
-                    <span className="text-[10px] font-bold text-white">{initialsForUser(user)}</span>
-                  </button>
-                  {accountOpen ? accountPanel : null}
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="w-9 h-9 rounded-full border flex items-center justify-center shadow-md active:scale-95 text-white/90"
-                    style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
-                    onClick={() => {
-                      setMoreOpen(false);
-                      setAccountOpen((o) => !o);
-                    }}
-                    aria-expanded={accountOpen}
-                  >
-                    <LogIn className="w-4 h-4" aria-hidden />
-                  </button>
-                  {accountOpen ? accountPanel : null}
-                </>
-              )}
-            </div>
-          </header>
-        )}
-
         <div
-          className={`flex-1 min-h-0 overflow-x-hidden relative flex flex-col ${
+          className={`flex-1 min-h-0 overflow-x-hidden relative z-0 flex flex-col ${
             activePortal === 'studio' || activePortal === 'assets' || activePortal === 'writer'
               ? 'overflow-y-hidden'
               : 'overflow-y-auto custom-scrollbar'
@@ -550,6 +511,19 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     <BookMarked className="w-5 h-5 shrink-0" aria-hidden />
                     Portals Wiki
                   </button>
+                  {supabaseConfigured && ready && user ? (
+                    <button
+                      type="button"
+                      className="mt-2 w-full rounded-lg py-2.5 text-left text-xs font-bold uppercase tracking-wider text-white/90 hover:bg-white/10 px-3 border border-white/15"
+                      onClick={() => {
+                        void signOut();
+                        setMoreOpen(false);
+                        setAccountOpen(false);
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  ) : null}
                   <p className="mt-2 text-[9px] text-white/45 leading-snug">
                     Comic Studio and Storyline Studio are optimized for larger screens — use a tablet or desktop.
                   </p>
@@ -558,6 +532,60 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
             </div>
           </nav>
         </>
+      )}
+      {isPhone && (
+        <header
+          ref={mobileHeaderRef}
+          className="fixed top-0 left-0 right-0 z-[49] isolate flex items-center justify-end gap-2 border-b border-white/5 bg-black/60 pointer-events-auto touch-manipulation"
+          style={{
+            paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+            paddingBottom: '0.5rem',
+            paddingLeft: 'max(0.75rem, env(safe-area-inset-left, 0px))',
+            paddingRight: 'max(0.75rem, env(safe-area-inset-right, 0px))',
+            transform: 'translateZ(0)',
+            WebkitTransform: 'translateZ(0)',
+          }}
+          aria-label="App"
+        >
+          <div className="relative" ref={accountWrapRef}>
+            {!supabaseConfigured ? (
+              <span className="text-[10px] text-white/50">—</span>
+            ) : !ready ? (
+              <span className="text-[10px] text-white/50">…</span>
+            ) : user ? (
+              <>
+                <button
+                  type="button"
+                  className="relative z-[1] min-h-[44px] min-w-[44px] rounded-full border flex items-center justify-center shadow-md touch-manipulation active:scale-95"
+                  style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setAccountOpen((o) => !o);
+                  }}
+                  aria-expanded={accountOpen}
+                  aria-label="Account menu"
+                >
+                  <span className="text-[10px] font-bold text-white">{initialsForUser(user)}</span>
+                </button>
+                {accountOpen ? accountPanel : null}
+              </>
+            ) : (
+              <button
+                type="button"
+                className="relative z-[1] min-h-[44px] min-w-[44px] rounded-full border flex items-center justify-center shadow-md touch-manipulation active:scale-95 text-white/90"
+                style={{ background: PRIMARY_BG_FLAT, borderColor: `${ACCENT_GOLD_SOLID}80` }}
+                onClick={() => {
+                  setMoreOpen(false);
+                  openSignInModal();
+                }}
+                aria-label="Sign in"
+              >
+                <LogIn className="w-5 h-5" aria-hidden />
+              </button>
+            )}
+          </div>
+        </header>
       )}
     </div>
   );
