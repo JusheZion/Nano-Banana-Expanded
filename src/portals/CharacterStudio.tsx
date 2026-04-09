@@ -74,6 +74,9 @@ import {
   studioPreviewFrameStyle,
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { resolveArcsGenerationsDisplayUrl } from '@/shared/lib/arcsGenerationsUrls';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -1021,7 +1024,7 @@ export const CharacterStudio: React.FC = () => {
                           onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
                         >
                           {url ? (
-                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <ArcsStorageImg src={url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-[8px] text-white/40">{i + 1}</span>
                           )}
@@ -1787,7 +1790,7 @@ export const CharacterStudio: React.FC = () => {
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
                             {activeReferenceForCompare ? (
-                              <img
+                              <ArcsStorageImg
                                 src={activeReferenceForCompare}
                                 alt="Reference slot image"
                                 className="max-h-full max-w-full object-contain object-center"
@@ -1809,7 +1812,7 @@ export const CharacterStudio: React.FC = () => {
                             Generated
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
-                            <img
+                            <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
                               className="max-h-full max-w-full object-contain object-center"
@@ -1888,7 +1891,7 @@ export const CharacterStudio: React.FC = () => {
                         </div>
                         {store.currentLiveImageUrl ? (
                           <div className="absolute inset-0 z-[1] flex items-center justify-center p-1.5 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.06] group-hover/live:z-10">
-                            <img
+                            <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
                               className="max-h-full max-w-full object-contain object-center"
@@ -1979,7 +1982,7 @@ export const CharacterStudio: React.FC = () => {
                                 />
                                 {pose.imageUrl ? (
                                   <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden">
-                                    <img
+                                    <ArcsStorageImg
                                       src={pose.imageUrl}
                                       alt={pose.name ?? 'Pose'}
                                       className="h-full w-full object-cover object-center"
@@ -2030,9 +2033,18 @@ export const CharacterStudio: React.FC = () => {
                                         disabled={!pose.imageUrl}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          if (pose.imageUrl) {
-                                            window.open(pose.imageUrl, '_blank', 'noopener,noreferrer');
-                                          }
+                                          const raw = pose.imageUrl;
+                                          if (!raw) return;
+                                          void (async () => {
+                                            const url =
+                                              isSupabaseConfigured() && supabase
+                                                ? await resolveArcsGenerationsDisplayUrl(
+                                                    supabase,
+                                                    raw
+                                                  )
+                                                : raw;
+                                            window.open(url, '_blank', 'noopener,noreferrer');
+                                          })();
                                         }}
                                       >
                                         <ExternalLink className="h-2.5 w-2.5" />
@@ -2095,7 +2107,7 @@ export const CharacterStudio: React.FC = () => {
                               className="absolute inset-0 z-0 block"
                             />
                             {pose.imageUrl ? (
-                              <img src={pose.imageUrl} alt="" className="h-full w-full object-cover" />
+                              <ArcsStorageImg src={pose.imageUrl} alt="" className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full items-center justify-center text-[7px] text-white/40">Empty</div>
                             )}
@@ -2152,7 +2164,7 @@ export const CharacterStudio: React.FC = () => {
                                   store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                                 }`}
                               >
-                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                                <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                               </button>
                             </Tooltip>
                           ))}
@@ -2175,7 +2187,7 @@ export const CharacterStudio: React.FC = () => {
                                 store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                               }`}
                             >
-                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                              <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -2629,7 +2641,7 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
-            <img
+            <ArcsStorageImg
               src={store.currentLiveImageUrl}
               alt="Full size character reference"
               className="max-w-none transition-transform origin-center"
@@ -2650,7 +2662,7 @@ export const CharacterStudio: React.FC = () => {
             maxHeight: 'min(80vh, 520px)',
           }}
         >
-          <img
+          <ArcsStorageImg
             src={refHoverPreview.url}
             alt=""
             className="h-full max-h-[min(80vh,520px)] w-full object-contain"

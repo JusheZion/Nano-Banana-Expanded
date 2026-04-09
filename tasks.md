@@ -170,8 +170,8 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] `writer-tools`: user-scoped Supabase client (anon key + `Authorization: Bearer <JWT>`); repair corrupted `page_beats` `Promise.all`
 - [x] Vault / archive: session-gated Supabase reads; `characterVaultUsesSupabase` / `assetVaultUsesSupabase` use session not “any row exists”
 - [x] Operator: `supabase db push` + `supabase functions deploy writer-tools` on hosted project (2026-04-06)
-- [ ] Operator smoke-test: two accounts isolated + signed-out vault local fallback
-- [ ] Phase B (later): private storage paths + signed URLs for generations
+- [x] Operator smoke-test: two accounts isolated + signed-out vault local fallback (2026-04-06)
+- [x] Phase B: private `arcs-generations` bucket + per-user object paths + signed URLs for display (`20260407120000_arcs_generations_private_storage.sql`, `arcsGenerationsUrls.ts`, `ArcsStorageImg`, vault/archive/storyline/studios). **Operator:** `supabase db push` applied on linked hosted project (migration `20260407120000_arcs_generations_private_storage.sql`). Legacy root-level objects still need re-upload or move to `{userId}/…` if any remain.
 
 ## Portals Wiki — in-app documentation (2026-04)
 

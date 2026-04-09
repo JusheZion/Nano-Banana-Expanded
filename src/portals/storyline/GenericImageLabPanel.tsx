@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage, type OnyxModelId } from '@/shared/api/geminiImageApi';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { parseJsonFromModel } from '@/portals/storyline/parseDirectorJson';
 import type { ProductionAssetMember, ProductionCastMember, StoryBeat, StoryBeatAspectRatio } from '@/portals/storyline/storylineTypes';
 import { buildStorylineReferenceSlots } from '@/portals/storyline/buildStorylineReferenceSlots';
@@ -286,7 +287,7 @@ export function GenericImageLabPanel({
                 u ? 'border-fuchsia-400/30' : 'border-white/10'
               } bg-black/20 overflow-hidden`}
             >
-              {u ? <img src={u} alt="" className="w-full h-full object-cover" /> : null}
+              {u ? <ArcsStorageImg src={u} alt="" className="w-full h-full object-cover" /> : null}
               {u ? (
                 <button
                   type="button"
@@ -442,7 +443,7 @@ export function GenericImageLabPanel({
                   maxWidth: '100%',
                 }}
               >
-                <img src={lastImageUrl} alt="" className="h-full w-full object-contain object-center" />
+                <ArcsStorageImg src={lastImageUrl} alt="" className="h-full w-full object-contain object-center" />
               </div>
             </div>
 

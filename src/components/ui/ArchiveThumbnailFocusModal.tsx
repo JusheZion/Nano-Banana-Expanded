@@ -6,6 +6,7 @@ import {
   updateAssetGenerationThumbnailFocus,
   updateCharacterGenerationThumbnailFocus,
 } from '@/shared/utils/generationOutputRouter';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 
 const PREVIEW_W = 280;
 const PREVIEW_H = 380;
@@ -172,7 +173,7 @@ export function ArchiveThumbnailFocusModal({ context, item, onClose, onSaved }: 
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
         >
-          <img
+          <ArcsStorageImg
             src={item.image_url}
             alt=""
             draggable={false}

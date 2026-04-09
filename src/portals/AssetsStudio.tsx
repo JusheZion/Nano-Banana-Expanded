@@ -74,6 +74,7 @@ import {
 import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { ModifierRibbon } from '@/components/ui/ModifierRibbon';
 import { ArchiveRecallModal } from '@/components/ui/ArchiveRecallModal';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 
 const goldTextStyle: React.CSSProperties = {
   background: ACCENT_GOLD_GRADIENT,
@@ -926,7 +927,7 @@ export const AssetsStudio: React.FC = () => {
                           onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
                         >
                           {url ? (
-                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <ArcsStorageImg src={url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-[8px] text-white/40">{i + 1}</span>
                           )}
@@ -1597,7 +1598,7 @@ export const AssetsStudio: React.FC = () => {
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
                             {activeReferenceForCompare ? (
-                              <img
+                              <ArcsStorageImg
                                 src={activeReferenceForCompare}
                                 alt="Reference slot"
                                 className="max-h-full max-w-full object-contain object-center"
@@ -1619,7 +1620,7 @@ export const AssetsStudio: React.FC = () => {
                             Generated
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
-                            <img
+                            <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live asset"
                               className="max-h-full max-w-full object-contain object-center"
@@ -1663,7 +1664,7 @@ export const AssetsStudio: React.FC = () => {
                       style={previewFrameSingle}
                     >
                       <div className="absolute inset-0 flex items-center justify-center p-3 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
-                        <img
+                        <ArcsStorageImg
                           src={store.currentLiveImageUrl}
                           alt="Live asset"
                           className="max-h-full max-w-full object-contain object-center"
@@ -1757,7 +1758,7 @@ export const AssetsStudio: React.FC = () => {
                                   store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                                 }`}
                               >
-                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                                <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                               </button>
                             </Tooltip>
                           ))}
@@ -1780,7 +1781,7 @@ export const AssetsStudio: React.FC = () => {
                                 store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                               }`}
                             >
-                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                              <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -2224,7 +2225,7 @@ export const AssetsStudio: React.FC = () => {
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
-            <img
+            <ArcsStorageImg
               src={store.currentLiveImageUrl}
               alt="Full size asset"
               className="max-w-none transition-transform origin-center"
@@ -2246,7 +2247,7 @@ export const AssetsStudio: React.FC = () => {
             maxHeight: 'min(70vh, 360px)',
           }}
         >
-          <img
+          <ArcsStorageImg
             src={refHoverPreview.url}
             alt=""
             className="h-full max-h-[min(70vh,360px)] w-full object-contain"

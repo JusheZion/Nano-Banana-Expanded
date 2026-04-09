@@ -546,7 +546,7 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 ## Supabase — per-user RLS (phase A, 2026-04-06)
 
-**Goal:** Rows in `writer_*`, `characters`, and `assets` are visible and mutable only to the authenticated owner (`auth.uid()`). Anonymous clients (anon key, no user JWT) have no table access. **Storage** (`arcs-generations` bucket) remains unchanged in this phase; tighten in phase B (private bucket, signed URLs).
+**Goal:** Rows in `writer_*`, `characters`, and `assets` are visible and mutable only to the authenticated owner (`auth.uid()`). Anonymous clients (anon key, no user JWT) have no table access. **Storage** tightening for `arcs-generations` is **phase B** (see following section).
 
 **Migration:** [`supabase/migrations/20260406000000_arcs_per_user_rls.sql`](supabase/migrations/20260406000000_arcs_per_user_rls.sql) — adds `owner_id` on `writer_series`, `characters`, `assets`; backfills to earliest `auth.users` row; deletes still-null orphans; `NOT NULL` + `DEFAULT auth.uid()` on inserts; replaces permissive policies with `TO authenticated` policies (writer children scoped via `writer_series.owner_id`).
 
@@ -555,6 +555,16 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 **App:** Vault / archive reads use `getSession()` — Supabase path only when signed in; otherwise local generation archive. (`arcsVault.ts`, `arcsAssetVault.ts`, `arcsArchive.ts`.)
 
 **Verify:** `supabase db push` (or SQL editor) on the project; sign in → workshop + vault work; second account sees empty workshop/vault; `npm run build`.
+
+## Supabase — private `arcs-generations` storage (phase B, 2026-04-07)
+
+**Goal:** Bucket `arcs-generations` is **not** public. Objects live under `{auth.uid()}/…`. Postgres still stores stable **`/object/public/arcs-generations/…`**-shaped URLs; the client resolves them to **`createSignedUrl`** for `<img>` and similar display. Recall / `onSelect` / generation pipelines keep the **canonical** stored URL.
+
+**Migration:** [`supabase/migrations/20260407120000_arcs_generations_private_storage.sql`](supabase/migrations/20260407120000_arcs_generations_private_storage.sql) — `public = false`; storage policies allow authenticated users **SELECT/INSERT/UPDATE/DELETE** only when `split_part(name, '/', 1) = auth.uid()::text`.
+
+**Client:** [`src/shared/lib/arcsGenerationsUrls.ts`](src/shared/lib/arcsGenerationsUrls.ts) (`resolveArcsGenerationsDisplayUrl`, in-memory cache); [`src/shared/hooks/useArcsResolvedSrc.ts`](src/shared/hooks/useArcsResolvedSrc.ts); [`src/components/ui/ArcsStorageImg.tsx`](src/components/ui/ArcsStorageImg.tsx); uploads in [`arcsPersistence.ts`](src/shared/api/arcsPersistence.ts) use `${user.id}/…`. Studios, vault modals, archive galleries, Storyline, and `VaultImageWithFallback` wire display through signing.
+
+**Verify:** `npm run build`; after `supabase db push`, signed-in user sees images; unsigned / wrong user cannot read others’ objects; legacy objects without `userId/` prefix remain inaccessible until migrated.
 
 ## Mobile web — iPhone & iPad (preparation → implementation)
 
