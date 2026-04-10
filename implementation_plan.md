@@ -566,6 +566,14 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 **Verify:** `npm run build`; after `supabase db push`, signed-in user sees images; unsigned / wrong user cannot read others’ objects; legacy objects without `userId/` prefix remain inaccessible until migrated.
 
+## Landing page UI intake (copy, grid order, sign-in, motion)
+
+**Before** restructuring Overview / hero / portal cards, fill **[`LANDING_PAGE_UI_INTAKE.md`](LANDING_PAGE_UI_INTAKE.md)** or open **[`docs/LANDING_PAGE_UI_INTAKE.html`](docs/LANDING_PAGE_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat so implementation matches your wording and ordering.
+
+## Image Vault UI intake (Characters vs Assets)
+
+**Before** a full Image Vault overhaul (`reference` portal: `ReferenceAlbum` → `CharacterVault` / `AssetVault` → modals), fill **[`IMAGE_VAULT_UI_INTAKE.md`](IMAGE_VAULT_UI_INTAKE.md)** or open **[`docs/IMAGE_VAULT_UI_INTAKE.html`](docs/IMAGE_VAULT_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat. The form has **two detailed tracks**: **Characters (Ruby)** and **Assets (Amethyst)** plus shared tab/shell fields.
+
 ## Mobile web — iPhone & iPad (preparation → implementation)
 
 **Before** changing layouts or `AppShell` for touch:

@@ -46,7 +46,26 @@ export default {
                 xs: '2px',
                 'sidebar': '20px',
                 'card': '10px',
-            }
+            },
+            keyframes: {
+                'pulse-slow': {
+                    '0%, 100%': { opacity: '1' },
+                    '50%': { opacity: '0.88' },
+                },
+                'landing-aurora': {
+                    '0%, 100%': { opacity: '0.9' },
+                    '50%': { opacity: '0.65' },
+                },
+                'landing-card-in': {
+                    from: { opacity: '0', transform: 'translateY(14px)' },
+                    to: { opacity: '1', transform: 'translateY(0)' },
+                },
+            },
+            animation: {
+                'pulse-slow': 'pulse-slow 5s ease-in-out infinite',
+                'landing-aurora': 'landing-aurora 16s ease-in-out infinite',
+                'landing-card-in': 'landing-card-in 0.55s ease-out both',
+            },
         },
     },
     plugins: [],

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARCS — Image Vault UI intake</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1e;
+      --text: #f0f0f2;
+      --muted: #9898a6;
+      --accent: #d4af37;
+      --border: rgba(255,255,255,0.12);
+      --ruby: #e0115f;
+      --amethyst: #8b5cf6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 1.25rem;
+      max-width: 54rem;
+      margin-inline: auto;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+    .pill {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      margin-right: 0.35rem;
+    }
+    .pill-ruby { background: rgba(224,17,95,0.2); color: #fda4c4; border: 1px solid rgba(224,17,95,0.35); }
+    .pill-amethyst { background: rgba(139,92,246,0.2); color: #ddd6fe; border: 1px solid rgba(139,92,246,0.35); }
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      background: var(--surface);
+    }
+    fieldset.vault-char {
+      border-left: 4px solid var(--ruby);
+    }
+    fieldset.vault-asset {
+      border-left: 4px solid var(--amethyst);
+    }
+    legend {
+      padding: 0 0.35rem;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin: 0.75rem 0 0.35rem;
+      color: var(--muted);
+    }
+    label:first-of-type { margin-top: 0; }
+    textarea, input[type="text"], select {
+      width: 100%;
+      background: #0b0b0e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.5rem 0.65rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    select { cursor: pointer; }
+    textarea {
+      min-height: 3.25rem;
+      resize: vertical;
+    }
+    textarea.tall { min-height: 5rem; }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .row label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0;
+      cursor: pointer;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin: 1.25rem 0;
+    }
+    button {
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 700;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: linear-gradient(180deg, #e8c963, var(--accent));
+      color: #111;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    #status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-height: 1.25rem;
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin: 0.35rem 0 0.75rem;
+    }
+    hr.sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Image Vault UI — detailed intake</h1>
+  <p class="sub">Scope: <strong>Image Vault</strong> (<code>reference</code> portal) — <span class="pill pill-ruby">Characters</span> vs <span class="pill pill-amethyst">Assets</span> have separate aesthetics. Fill both halves, then <strong>Copy for ARCS assistant</strong> and paste into Cursor. Local-only helper (not shipped as app UI). Markdown mirror: <strong>IMAGE_VAULT_UI_INTAKE.md</strong> in the repo root.</p>
+  <p class="hint">Code today: <code>ReferenceAlbum.tsx</code> (tabs) → <code>CharacterVault.tsx</code> / <code>AssetVault.tsx</code> → <code>ProfileVaultModal.tsx</code> / <code>CollectionVaultModal.tsx</code>.</p>
+
+  <div class="actions">
+    <button type="button" id="btnCopy">Copy for ARCS assistant</button>
+    <button type="button" class="secondary" id="btnClear">Clear all fields</button>
+  </div>
+  <p id="status" aria-live="polite"></p>
+
+  <form id="intake">
+    <fieldset>
+      <legend>Shared — shell &amp; tabs</legend>
+      <p class="hint">Applies to the Characters | Assets switcher at the top of the vault.</p>
+      <label for="sh1">SH1 — Tab labels</label>
+      <input type="text" id="sh1" name="sh1" placeholder='e.g. keep "Characters" / "Assets" OR rename' autocomplete="off" />
+      <label for="sh2">SH2 — Tab control style</label>
+      <select id="sh2" name="sh2">
+        <option value="pills" selected>Current — pill buttons (amber / violet active)</option>
+        <option value="segmented">Segmented control (iOS-style)</option>
+        <option value="underline">Underline tabs (minimal)</option>
+        <option value="other">Other (describe in SH7)</option>
+      </select>
+      <label for="sh3">SH3 — Top spacing / alignment with AppShell (notes)</label>
+      <textarea id="sh3" name="sh3" placeholder="e.g. more breathing room below header; sticky tabs on scroll"></textarea>
+      <div class="row">
+        <label><input type="checkbox" name="sh4" checked="checked" /> SH4: Tabs should stay visible when scrolling the vault list</label>
+        <label><input type="checkbox" name="sh5" /> SH5: Show a single shared page title above tabs (in addition to per-vault heroes)</label>
+      </div>
+      <label for="sh6">SH6 — Shared page title (if SH5)</label>
+      <input type="text" id="sh6" name="sh6" placeholder="e.g. Image Vault" autocomplete="off" />
+      <label for="sh7">SH7 — Other shell notes</label>
+      <textarea id="sh7" name="sh7" class="tall"></textarea>
+    </fieldset>
+
+    <fieldset class="vault-char">
+      <legend><span class="pill pill-ruby">Characters</span> — Ruby vault aesthetic</legend>
+      <p class="hint">Albums = character <strong>profiles</strong>; modal = images inside one profile. Current vibe: ruby gradient, gold/pink accents, “Ruby Vault” chip.</p>
+
+      <label for="ca1">CA1 — Brand chip text (replaces “Ruby Vault” if changed)</label>
+      <input type="text" id="ca1" name="ca1" placeholder="Ruby Vault OR custom" autocomplete="off" />
+      <label for="ca2">CA2 — Hero title treatment</label>
+      <select id="ca2" name="ca2">
+        <option value="keep" selected>Keep — large “CHARACTER” + gradient “VAULT”</option>
+        <option value="single">Single line title</option>
+        <option value="minimal">Minimal — smaller type, more grid focus</option>
+        <option value="custom">Custom (CA16)</option>
+      </select>
+      <label for="ca3">CA3 — Background &amp; atmosphere</label>
+      <textarea id="ca3" name="ca3" placeholder="Linear gradients, radial hotspots, noise, film grain, depth — keep current ruby or describe new mood"></textarea>
+      <label for="ca4">CA4 — Primary accent colors (hex or names)</label>
+      <input type="text" id="ca4" name="ca4" placeholder="e.g. #D4AF37 gold, #e0115f ruby" autocomplete="off" />
+      <div class="row">
+        <label><input type="checkbox" name="ca5" checked="checked" /> CA5: Keep stats row (profile count / image count)</label>
+        <label><input type="checkbox" name="ca6" checked="checked" /> CA6: Keep search on album grid page</label>
+      </div>
+      <label for="ca7">CA7 — Search — behavior &amp; placeholder copy</label>
+      <textarea id="ca7" name="ca7" placeholder="Filter by profile name; placeholder text"></textarea>
+      <label for="ca8">CA8 — Profile album cards (grid)</label>
+      <textarea id="ca8" name="ca8" placeholder="Aspect ratio, border radius, hover lift, cover crop, title placement"></textarea>
+      <label for="ca9">CA9 — Empty state — no profiles yet</label>
+      <textarea id="ca9" name="ca9" placeholder="Copy + suggested CTA (e.g. open Character Studio)"></textarea>
+      <label for="ca10">CA10 — Profile modal — layout &amp; density</label>
+      <textarea id="ca10" name="ca10" placeholder="Grid min width, row height, spacing, scroll behavior, max width"></textarea>
+      <label for="ca11">CA11 — Image cards inside modal</label>
+      <textarea id="ca11" name="ca11" placeholder="Border, selection, hover, cast name, cover ring color"></textarea>
+      <label for="ca12">CA12 — Actions you want emphasized (pick many in text)</label>
+      <textarea id="ca12" name="ca12" placeholder="Set cover, rename, move to profile, delete, download, recall to studio…"></textarea>
+      <label for="ca13">CA13 — Motion &amp; micro-interactions</label>
+      <textarea id="ca13" name="ca13" placeholder="Stagger load, hover scale, skeleton loaders — or static only"></textarea>
+      <label for="ca14">CA14 — Mobile / narrow viewport</label>
+      <textarea id="ca14" name="ca14" placeholder="Single column, bottom sheet modal, larger tap targets"></textarea>
+      <label for="ca15">CA15 — Accessibility &amp; contrast</label>
+      <textarea id="ca15" name="ca15" placeholder="WCAG goals, focus rings, reduced motion"></textarea>
+      <label for="ca16">CA16 — Freeform — anything else for Character vault</label>
+      <textarea id="ca16" name="ca16" class="tall"></textarea>
+    </fieldset>
+
+    <fieldset class="vault-asset">
+      <legend><span class="pill pill-amethyst">Assets</span> — Amethyst vault aesthetic</legend>
+      <p class="hint">Albums = <strong>collections</strong>; modal = images in one collection. Current vibe: deep violet / slate gradient, “Amethyst Vault” chip.</p>
+
+      <label for="aa1">AA1 — Brand chip text (replaces “Amethyst Vault” if changed)</label>
+      <input type="text" id="aa1" name="aa1" placeholder="Amethyst Vault OR custom" autocomplete="off" />
+      <label for="aa2">AA2 — Hero title treatment</label>
+      <select id="aa2" name="aa2">
+        <option value="keep" selected>Keep — large “ASSET” + gradient “VAULT”</option>
+        <option value="single">Single line title</option>
+        <option value="minimal">Minimal — smaller type, more grid focus</option>
+        <option value="custom">Custom (AA16)</option>
+      </select>
+      <label for="aa3">AA3 — Background &amp; atmosphere</label>
+      <textarea id="aa3" name="aa3" placeholder="Purple/violet gradients, stars, grid texture — keep or overhaul"></textarea>
+      <label for="aa4">AA4 — Primary accent colors (hex or names)</label>
+      <input type="text" id="aa4" name="aa4" placeholder="e.g. #8B5CF6, #A78BFA" autocomplete="off" />
+      <div class="row">
+        <label><input type="checkbox" name="aa5" checked="checked" /> AA5: Keep stats row (collection count / image count)</label>
+        <label><input type="checkbox" name="aa6" checked="checked" /> AA6: Keep search on collection grid page</label>
+      </div>
+      <label for="aa7">AA7 — Search — behavior &amp; placeholder copy</label>
+      <textarea id="aa7" name="aa7"></textarea>
+      <label for="aa8">AA8 — Collection cards (grid)</label>
+      <textarea id="aa8" name="aa8" placeholder="Differences from character cards if any — props/environments feel"></textarea>
+      <label for="aa9">AA9 — Empty state — no collections yet</label>
+      <textarea id="aa9" name="aa9"></textarea>
+      <label for="aa10">AA10 — Collection modal — layout &amp; density</label>
+      <textarea id="aa10" name="aa10"></textarea>
+      <label for="aa11">AA11 — Image cards inside modal</label>
+      <textarea id="aa11" name="aa11" placeholder="Naming, selection, borders vs character vault"></textarea>
+      <label for="aa12">AA12 — Actions you want emphasized</label>
+      <textarea id="aa12" name="aa12" placeholder="Rename, move collection, delete, recall…"></textarea>
+      <label for="aa13">AA13 — Motion &amp; micro-interactions</label>
+      <textarea id="aa13" name="aa13"></textarea>
+      <label for="aa14">AA14 — Mobile / narrow viewport</label>
+      <textarea id="aa14" name="aa14"></textarea>
+      <label for="aa15">AA15 — Accessibility &amp; contrast</label>
+      <textarea id="aa15" name="aa15"></textarea>
+      <label for="aa16">AA16 — Freeform — anything else for Asset vault</label>
+      <textarea id="aa16" name="aa16" class="tall"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cross-cutting &amp; references</legend>
+      <label for="x1">X1 — Should the two vaults feel like one product with a skin swap, or two distinct “rooms”?</label>
+      <select id="x1" name="x1">
+        <option value="skin">Same layout — different color theme only</option>
+        <option value="distinct" selected>Distinct rooms — different layout details allowed</option>
+        <option value="hybrid">Hybrid (explain in X3)</option>
+      </select>
+      <label for="x2">X2 — Reference links, apps, or mood keywords (optional)</label>
+      <textarea id="x2" name="x2" placeholder="Pinterest boards, Dribbble, Apple Photos, Notion galleries…"></textarea>
+      <label for="x3">X3 — Out of scope for this pass (note for later)</label>
+      <textarea id="x3" name="x3" placeholder="e.g. batch export, AI tagging — later"></textarea>
+    </fieldset>
+  </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById("intake");
+      var status = document.getElementById("status");
+
+      function val(id) {
+        var el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      }
+      function chk(name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        return el && el.type === "checkbox" ? el.checked : false;
+      }
+      function sel(id) {
+        var el = document.getElementById(id);
+        if (!el || el.tagName !== "SELECT") return "";
+        var opt = el.options[el.selectedIndex];
+        return opt ? String(opt.value || "") + " (" + (opt.text || "") + ")" : "";
+      }
+
+      function buildMarkdown() {
+        var lines = [
+          "## Image Vault UI — submitted answers",
+          "",
+          "### Shared — shell & tabs",
+          "- SH1 tab labels: " + (val("sh1") || "(empty)"),
+          "- SH2 tab control: " + sel("sh2"),
+          "- SH3 top spacing / AppShell: " + (val("sh3") || "(empty)"),
+          "- SH4 sticky tabs when scrolling: " + (chk("sh4") ? "yes" : "no"),
+          "- SH5 shared page title above tabs: " + (chk("sh5") ? "yes" : "no"),
+          "- SH6 shared title text: " + (val("sh6") || "(empty)"),
+          "- SH7 other shell: " + (val("sh7") || "(empty)"),
+          "",
+          "### Character vault — Ruby aesthetic",
+          "- CA1 brand chip: " + (val("ca1") || "(empty)"),
+          "- CA2 hero title: " + sel("ca2"),
+          "- CA3 background / atmosphere: " + (val("ca3") || "(empty)"),
+          "- CA4 accent colors: " + (val("ca4") || "(empty)"),
+          "- CA5 stats row: " + (chk("ca5") ? "yes" : "no"),
+          "- CA6 search on grid: " + (chk("ca6") ? "yes" : "no"),
+          "- CA7 search behavior: " + (val("ca7") || "(empty)"),
+          "- CA8 profile album cards: " + (val("ca8") || "(empty)"),
+          "- CA9 empty state (no profiles): " + (val("ca9") || "(empty)"),
+          "- CA10 profile modal layout: " + (val("ca10") || "(empty)"),
+          "- CA11 image cards in modal: " + (val("ca11") || "(empty)"),
+          "- CA12 actions emphasis: " + (val("ca12") || "(empty)"),
+          "- CA13 motion: " + (val("ca13") || "(empty)"),
+          "- CA14 mobile: " + (val("ca14") || "(empty)"),
+          "- CA15 a11y / contrast: " + (val("ca15") || "(empty)"),
+          "- CA16 freeform: " + (val("ca16") || "(empty)"),
+          "",
+          "### Asset vault — Amethyst aesthetic",
+          "- AA1 brand chip: " + (val("aa1") || "(empty)"),
+          "- AA2 hero title: " + sel("aa2"),
+          "- AA3 background / atmosphere: " + (val("aa3") || "(empty)"),
+          "- AA4 accent colors: " + (val("aa4") || "(empty)"),
+          "- AA5 stats row: " + (chk("aa5") ? "yes" : "no"),
+          "- AA6 search on grid: " + (chk("aa6") ? "yes" : "no"),
+          "- AA7 search behavior: " + (val("aa7") || "(empty)"),
+          "- AA8 collection cards: " + (val("aa8") || "(empty)"),
+          "- AA9 empty state (no collections): " + (val("aa9") || "(empty)"),
+          "- AA10 collection modal layout: " + (val("aa10") || "(empty)"),
+          "- AA11 image cards in modal: " + (val("aa11") || "(empty)"),
+          "- AA12 actions emphasis: " + (val("aa12") || "(empty)"),
+          "- AA13 motion: " + (val("aa13") || "(empty)"),
+          "- AA14 mobile: " + (val("aa14") || "(empty)"),
+          "- AA15 a11y / contrast: " + (val("aa15") || "(empty)"),
+          "- AA16 freeform: " + (val("aa16") || "(empty)"),
+          "",
+          "### Cross-cutting",
+          "- X1 one product vs two rooms: " + sel("x1"),
+          "- X2 references: " + (val("x2") || "(empty)"),
+          "- X3 later / out of scope: " + (val("x3") || "(empty)"),
+          ""
+        ];
+        return lines.join("\n");
+      }
+
+      document.getElementById("btnCopy").addEventListener("click", function () {
+        var md = buildMarkdown();
+        navigator.clipboard.writeText(md).then(
+          function () {
+            status.textContent = "Copied. Paste into your Cursor chat for the assistant.";
+          },
+          function () {
+            status.textContent = "Clipboard failed — alert shows markdown to copy manually.";
+            alert(md);
+          }
+        );
+      });
+
+      document.getElementById("btnClear").addEventListener("click", function () {
+        if (!confirm("Clear all fields?")) return;
+        form.reset();
+        var defaults = { sh4: true, sh5: false, ca5: true, ca6: true, aa5: true, aa6: true };
+        for (var name in defaults) {
+          var el = form.querySelector('[name="' + name + '"]');
+          if (el && el.type === "checkbox") el.checked = defaults[name];
+        }
+        status.textContent = "Cleared.";
+      });
+    })();
+  </script>
+</body>
+</html>

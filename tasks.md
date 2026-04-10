@@ -200,6 +200,16 @@ Checklist for current and upcoming phases. Update as work completes.
 - [ ] **Other portals** — optional spot-check (Wiki, Photo Lab) if issues show in Phase 4
 - [ ] Verify: real **iPad Air / iPad Pro / Safari** matrix + desktop regression (G1: owner does not rely on desktop emulation alone)
 
+## Landing page UI intake (2026-04)
+
+- [x] Added **[`LANDING_PAGE_UI_INTAKE.md`](LANDING_PAGE_UI_INTAKE.md)** + **[`docs/LANDING_PAGE_UI_INTAKE.html`](docs/LANDING_PAGE_UI_INTAKE.html)** (linked from `implementation_plan.md`)
+- [x] Implemented intake: [`portalCatalog.ts`](src/shared/portalCatalog.ts) (order, copy, accents, icons, `HUB_HOME_LABEL`, `getPortalIcon`), [`LandingPage.tsx`](src/components/LandingPage.tsx) (hero, door **Open** + **IN**, account strip, rotating hero backdrop, cards), [`AppShell.tsx`](src/components/layout/AppShell.tsx) (ARC Hub + glitter nav icons; mobile tabs use catalog icons), [`tailwind.config.js`](tailwind.config.js) + [`theme.css`](src/styles/theme.css) (landing animations)
+
+## Image Vault UI intake (Characters vs Assets)
+
+- [x] Added **[`IMAGE_VAULT_UI_INTAKE.md`](IMAGE_VAULT_UI_INTAKE.md)** + **[`docs/IMAGE_VAULT_UI_INTAKE.html`](docs/IMAGE_VAULT_UI_INTAKE.html)** (linked from `implementation_plan.md`) — **Ruby (profiles)** and **Amethyst (collections)** sections + shared tab shell
+- [ ] Optional: fill intake → paste before Image Vault / `ReferenceAlbum` overhaul
+
 ## Future / Backlog
 
 - Image Vault (characters/assets) & any remaining archive UIs: read from Supabase when configured (fallback to localStorage).
