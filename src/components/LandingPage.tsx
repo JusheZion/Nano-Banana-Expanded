@@ -22,7 +22,7 @@ const HERO_LINE1 = 'ARCS - Assets References Comics & Stories';
 const HERO_LINE2 = 'Create stories, images and comics all in one spot!';
 const HERO_SUBLINE =
   'Have a story idea? Enter a short summary or synopsis of your story idea, and let our ARCS application guide you through fleshing out your idea for a script or a comic book. Then use our image studios to generate images for illustrating your idea. Then use your images to create a comic book or setup an outline for video generation!';
-const VERSION_BADGE = 'v2.4.0';
+const VERSION_BADGE = 'v2.4.1';
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
