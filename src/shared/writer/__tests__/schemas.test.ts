@@ -6,6 +6,7 @@ import {
   shotPlanJsonSchema,
   writerToolsDraftDialogueRequestSchema,
   writerToolsOutlineIssueRequestSchema,
+  writerToolsPageBeatsIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsRequestSchema,
 } from '../schemas';
@@ -39,6 +40,22 @@ describe('writerToolsRequestSchema', () => {
     expect(r).toMatchObject({ mode: 'outline_issue', target_page_count: 22 });
   });
 
+  it('parses outline_issue with arc_brief and arc_issue_count', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: id,
+      target_page_count: 12,
+      arc_brief: 'Three-issue redemption arc.',
+      arc_issue_count: 3,
+    });
+    expect(r).toMatchObject({
+      mode: 'outline_issue',
+      arc_brief: 'Three-issue redemption arc.',
+      arc_issue_count: 3,
+    });
+  });
+
   it('outline_issue rejects invalid uuid', () => {
     expect(() =>
       writerToolsOutlineIssueRequestSchema.parse({
@@ -52,6 +69,27 @@ describe('writerToolsRequestSchema', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     const r = writerToolsRequestSchema.parse({ mode: 'page_beats', page_id: id });
     expect(r).toMatchObject({ mode: 'page_beats', page_id: id });
+  });
+
+  it('parses page_beats_issue with defaults', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsRequestSchema.parse({
+      mode: 'page_beats_issue',
+      issue_id: id,
+    });
+    expect(r).toMatchObject({ mode: 'page_beats_issue', issue_id: id });
+  });
+
+  it('parses page_beats_issue with skip_existing and batch_limit', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsPageBeatsIssueRequestSchema.parse({
+      mode: 'page_beats_issue',
+      issue_id: id,
+      skip_existing: false,
+      batch_limit: 12,
+    });
+    expect(r.batch_limit).toBe(12);
+    expect(r.skip_existing).toBe(false);
   });
 
   it('parses draft_dialogue', () => {

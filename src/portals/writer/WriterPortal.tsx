@@ -4,6 +4,7 @@ import {
   createWriterIssue,
   createWriterPage,
   createWriterSeries,
+  ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
   listWriterPages,
@@ -35,11 +36,14 @@ import {
 import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRibbon';
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
+import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import {
   countFindMatches,
   formatArcReviewPlainText,
   getWriterSearchableText,
   type WriterWorkspaceTabId,
+  WRITER_WORKSPACE_TAB_LABELS,
+  WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
@@ -61,13 +65,15 @@ const titleTextStyle: React.CSSProperties = {
 const WRITER_GLASS_CARD =
   'rounded-2xl border border-white/35 bg-white/20 backdrop-blur-md shadow-lg shadow-teal-900/25';
 
-const TABS: { id: WriterWorkspaceTabId; label: string }[] = [
-  { id: 'arc', label: 'Arc Planner' },
-  { id: 'outline', label: 'Issue Outline' },
-  { id: 'beats', label: 'Page Beats' },
-  { id: 'dialogue', label: 'Dialogue' },
-  { id: 'video', label: 'Video' },
-];
+const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
+  id,
+  label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
+}));
+
+function pageRowHasPanelBeats(p: WriterPageRow | null | undefined): boolean {
+  const panels = (p?.beats_json as { panels?: unknown } | null)?.panels;
+  return Array.isArray(panels) && panels.length > 0;
+}
 
 function readWriterToolCache(notes: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!notes) return undefined;
@@ -131,6 +137,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
+  const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
+  const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
+  const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
+  const beatsBatchAbortRef = useRef<AbortController | null>(null);
+  const [syncPagesBusy, setSyncPagesBusy] = useState(false);
+  const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
+  const [arcBriefDraft, setArcBriefDraft] = useState('');
+  const [arcIssueCountDraft, setArcIssueCountDraft] = useState<number>(3);
+  const [outlineAllBusy, setOutlineAllBusy] = useState(false);
   const [dialogueLoading, setDialogueLoading] = useState(false);
   const [dialogueError, setDialogueError] = useState<string | null>(null);
   const [dialogueStyle, setDialogueStyle] = useState<'comic_script' | 'screenplay_light'>('comic_script');
@@ -293,6 +308,41 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [pages],
   );
 
+  const pagesWithBeatsCount = useMemo(
+    () => sortedPages.filter((p) => pageRowHasPanelBeats(p)).length,
+    [sortedPages],
+  );
+  const pagesWithScriptCount = useMemo(
+    () => sortedPages.filter((p) => (p.script_text ?? '').trim().length > 0).length,
+    [sortedPages],
+  );
+
+  const nextStepCtx = useMemo(
+    () => ({
+      hasSeries: Boolean(selectedSeriesId),
+      hasIssue: Boolean(selectedIssueId),
+      hasOutline: Boolean(latestOutline),
+      pageCount: sortedPages.length,
+      targetPageCount,
+      pagesWithBeats: pagesWithBeatsCount,
+      pagesWithScript: pagesWithScriptCount,
+    }),
+    [
+      selectedSeriesId,
+      selectedIssueId,
+      latestOutline,
+      sortedPages.length,
+      targetPageCount,
+      pagesWithBeatsCount,
+      pagesWithScriptCount,
+    ],
+  );
+
+  const quickGenerateNextHint = useMemo(
+    () => getWriterQuickGenerateNextHint(activeTab, nextStepCtx),
+    [activeTab, nextStepCtx],
+  );
+
   const nextPageNumber = useMemo(() => {
     if (sortedPages.length === 0) return 1;
     return Math.max(...sortedPages.map((p) => p.page_number)) + 1;
@@ -400,25 +450,154 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
 
-  const quickGenerate = useCallback(async () => {
-    if (activeTab === 'outline' && selectedIssueId) {
-      setOutlineGenError(null);
-      setOutlineGenLoading(true);
-      const res = await invokeWriterTools({
-        mode: 'outline_issue',
-        issue_id: selectedIssueId,
-        target_page_count: targetPageCount,
-      });
-      setOutlineGenLoading(false);
-      if (res.success) {
-        pushHistory(`outline v${res.version ?? '?'} saved`);
+  const runOutlineGenerate = useCallback(async () => {
+    if (!selectedIssueId) return;
+    setOutlineGenError(null);
+    setOutlineGenLoading(true);
+    const arcBriefTrim = arcBriefDraft.trim();
+    const res = await invokeWriterTools({
+      mode: 'outline_issue',
+      issue_id: selectedIssueId,
+      target_page_count: targetPageCount,
+      ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
+      ...(arcBriefTrim && arcIssueCountDraft >= 1
+        ? { arc_issue_count: Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft))) }
+        : {}),
+    });
+    setOutlineGenLoading(false);
+    if (res.success) {
+      pushHistory(`outline v${res.version ?? '?'} saved`);
+      const rows = await listWriterOutlinesForIssue(selectedIssueId);
+      setOutlines(rows);
+    } else {
+      const msg = toolErrorMessage(res);
+      setOutlineGenError(msg);
+      pushHistory(`error: ${msg}`);
+    }
+  }, [selectedIssueId, targetPageCount, arcBriefDraft, arcIssueCountDraft]);
+
+  const runOutlineGenerateAllIssues = useCallback(async () => {
+    if (!selectedSeriesId || issues.length === 0) return;
+    const n = issues.length;
+    if (
+      !window.confirm(
+        `Generate an outline for all ${n} issue(s) in this series? This runs one AI call per issue.`,
+      )
+    ) {
+      return;
+    }
+    setOutlineGenError(null);
+    setOutlineAllBusy(true);
+    const arcBriefTrim = arcBriefDraft.trim();
+    const arcCount =
+      arcBriefTrim && arcIssueCountDraft >= 1
+        ? Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft)))
+        : undefined;
+    try {
+      const sorted = [...issues].sort((a, b) => a.issue_number - b.issue_number);
+      for (const iss of sorted) {
+        const res = await invokeWriterTools({
+          mode: 'outline_issue',
+          issue_id: iss.id,
+          target_page_count: targetPageCount,
+          ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
+          ...(arcCount != null ? { arc_issue_count: arcCount } : {}),
+        });
+        if (!res.success) {
+          const msg = toolErrorMessage(res);
+          setOutlineGenError(`Issue #${iss.issue_number}: ${msg}`);
+          pushHistory(`error: outline all — issue #${iss.issue_number}`);
+          return;
+        }
+        pushHistory(`outline v${res.version ?? '?'} — issue #${iss.issue_number}`);
+      }
+      if (selectedIssueId) {
         const rows = await listWriterOutlinesForIssue(selectedIssueId);
         setOutlines(rows);
-      } else {
-        const msg = toolErrorMessage(res);
-        setOutlineGenError(msg);
-        pushHistory(`error: ${msg}`);
       }
+      pushHistory('outline all issues complete');
+    } finally {
+      setOutlineAllBusy(false);
+    }
+  }, [
+    selectedSeriesId,
+    selectedIssueId,
+    issues,
+    targetPageCount,
+    arcBriefDraft,
+    arcIssueCountDraft,
+  ]);
+
+  const runSyncPagesToTarget = useCallback(async () => {
+    if (!selectedIssueId) return;
+    setSyncPagesError(null);
+    setSyncPagesBusy(true);
+    const r = await ensureWriterPagesToCount(selectedIssueId, targetPageCount);
+    const pageRows = await listWriterPages(selectedIssueId);
+    setPages(pageRows);
+    setSyncPagesBusy(false);
+    if (!r.ok) {
+      setSyncPagesError('Could not create all page rows. Check Supabase and try again.');
+      pushHistory('error: sync pages');
+      return;
+    }
+    pushHistory(
+      r.created > 0 ? `synced pages (+${r.created} new, ${pageRows.length} total)` : 'pages already match target',
+    );
+  }, [selectedIssueId, targetPageCount]);
+
+  const runBatchPageBeats = useCallback(async () => {
+    if (!selectedIssueId) return;
+    beatsBatchAbortRef.current = new AbortController();
+    setBeatsBatchBusy(true);
+    setBeatsError(null);
+    setBeatsBatchLabel('Running…');
+    try {
+      let round = 0;
+      for (;;) {
+        if (beatsBatchAbortRef.current?.signal.aborted) {
+          pushHistory('batch beats cancelled');
+          break;
+        }
+        const res = await invokeWriterTools({
+          mode: 'page_beats_issue',
+          issue_id: selectedIssueId,
+          skip_existing: beatsSkipExisting,
+          batch_limit: 8,
+        });
+        if (!res.success) {
+          setBeatsError(toolErrorMessage(res));
+          pushHistory('error: batch beats');
+          break;
+        }
+        const data = res.data as {
+          processed?: number[];
+          errors?: { page_number: number; message: string }[];
+          has_more?: boolean;
+        };
+        round += 1;
+        const processed = data.processed ?? [];
+        const errs = data.errors ?? [];
+        setBeatsBatchLabel(
+          `Round ${round}: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
+        );
+        const pageRows = await listWriterPages(selectedIssueId);
+        setPages(pageRows);
+        if (!data.has_more) {
+          pushHistory(`batch beats finished (${round} round(s))`);
+          break;
+        }
+      }
+    } finally {
+      setBeatsBatchBusy(false);
+      setBeatsBatchLabel('');
+      beatsBatchAbortRef.current = null;
+    }
+  }, [selectedIssueId, beatsSkipExisting]);
+
+  const quickGenerate = useCallback(async () => {
+    if (activeTab === 'outline' && selectedIssueId) {
+      await runOutlineGenerate();
       return;
     }
     if (activeTab === 'beats' && selectedPageId && selectedIssueId) {
@@ -484,10 +663,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab,
     selectedIssueId,
     selectedPageId,
-    targetPageCount,
     dialogueStyle,
     shotsBrief,
     runPacingFromRibbon,
+    runOutlineGenerate,
   ]);
 
   const quickGenerateLabel =
@@ -506,12 +685,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     beatsLoading ||
     dialogueLoading ||
     shotsLoading ||
-    (activeTab === 'arc' && pacingLoading);
+    (activeTab === 'arc' && pacingLoading) ||
+    (activeTab === 'beats' && beatsBatchBusy);
 
   const quickGenerateDisabled =
     !supabaseOk ||
     !selectedIssueId ||
-    (activeTab === 'beats' && !selectedPageId) ||
+    (activeTab === 'outline' && outlineAllBusy) ||
+    (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
     (activeTab === 'dialogue' && !selectedPageId);
 
   useWriterHotkeys({
@@ -890,7 +1071,48 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onPrevPage={onPrevPage}
         onNextPage={onNextPage}
         onOpenHelpCategory={(id) => setHelpCategory(id)}
+        quickGenerateNextHint={quickGenerateNextHint}
       />
+
+      <div
+        className="flex-shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/20 bg-teal-950/15 text-[10px] text-black/80"
+        aria-label="Workflow steps"
+      >
+        <span className="font-bold uppercase tracking-wider text-black/50 shrink-0">Pipeline</span>
+        {WRITER_WORKSPACE_TAB_ORDER.map((id) => {
+          const done =
+            id === 'outline'
+              ? Boolean(latestOutline)
+              : id === 'beats'
+                ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
+                : id === 'dialogue'
+                  ? sortedPages.length > 0 && pagesWithScriptCount >= pagesWithBeatsCount && pagesWithBeatsCount > 0
+                  : id === 'video'
+                    ? Boolean(latestShotPlan)
+                    : id === 'arc'
+                      ? Boolean(pacingSaved?.result ?? canonSaved?.result)
+                      : false;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`rounded-full px-2.5 py-1 font-bold uppercase tracking-wide border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                activeTab === id
+                  ? 'border-amber-700 bg-amber-100 text-black'
+                  : done
+                    ? 'border-emerald-600/50 bg-emerald-100/60 text-black/80'
+                    : 'border-black/15 bg-white/50 text-black/65 hover:bg-white/80'
+              }`}
+            >
+              {WRITER_WORKSPACE_TAB_LABELS[id].ribbon}
+            </button>
+          );
+        })}
+        <span className="text-black/45 ml-auto max-w-[min(100%,280px)] leading-snug hidden sm:inline">
+          {quickGenerateNextHint}
+        </span>
+      </div>
 
       <WriterHelpModal
         open={Boolean(helpCategory)}
@@ -1090,34 +1312,79 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         disabled={
                           !supabaseOk ||
                           !selectedIssueId ||
-                          outlineGenLoading
+                          outlineGenLoading ||
+                          outlineAllBusy
                         }
-                        onClick={async () => {
-                          if (!selectedIssueId) return;
-                          setOutlineGenError(null);
-                          setOutlineGenLoading(true);
-                          const res = await invokeWriterTools({
-                            mode: 'outline_issue',
-                            issue_id: selectedIssueId,
-                            target_page_count: targetPageCount,
-                          });
-                          setOutlineGenLoading(false);
-                          if (res.success) {
-                            const v = res.version ?? '?';
-                            pushHistory(`outline v${v} saved`);
-                            const rows = await listWriterOutlinesForIssue(selectedIssueId);
-                            setOutlines(rows);
-                          } else {
-                            const msg = toolErrorMessage(res);
-                            setOutlineGenError(msg);
-                            pushHistory(`error: ${msg}`);
-                          }
-                        }}
+                        onClick={() => void runOutlineGenerate()}
                         className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         style={{ background: ACCENT_GOLD_GRADIENT }}
                       >
                         {outlineGenLoading ? 'Generating…' : 'Generate outline'}
                       </button>
+                      <Tooltip content={WRITER_UI_TIPS.syncPagesToTarget} side="bottom">
+                        <button
+                          type="button"
+                          disabled={!supabaseOk || !selectedIssueId || syncPagesBusy}
+                          onClick={() => void runSyncPagesToTarget()}
+                          className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {syncPagesBusy ? 'Syncing…' : 'Sync pages to target'}
+                        </button>
+                      </Tooltip>
+                    </div>
+                    {syncPagesError && (
+                      <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{syncPagesError}</p>
+                    )}
+                    <div className="space-y-2 pt-1 border-t border-black/10">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                          Multi-issue arc (optional)
+                        </p>
+                        <WriterSectionTip tipKey="arcBriefOutline" label="About arc brief" />
+                      </div>
+                      <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-arc-brief">
+                        Arc spine / notes
+                        <textarea
+                          id="writer-arc-brief"
+                          name="writer-arc-brief"
+                          rows={3}
+                          value={arcBriefDraft}
+                          onChange={(e) => setArcBriefDraft(e.target.value)}
+                          disabled={!selectedIssueId}
+                          placeholder="Paste a multi-issue summary; used when generating outlines."
+                          className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70 max-w-[8rem]" htmlFor="writer-arc-issue-count">
+                        Issues in arc
+                        <input
+                          id="writer-arc-issue-count"
+                          name="writer-arc-issue-count"
+                          type="number"
+                          min={1}
+                          max={48}
+                          value={arcIssueCountDraft}
+                          onChange={(e) => setArcIssueCountDraft(Number(e.target.value) || 1)}
+                          disabled={!selectedIssueId}
+                          className="rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                        />
+                      </label>
+                      <Tooltip content={WRITER_UI_TIPS.outlineAllIssues} side="bottom">
+                        <button
+                          type="button"
+                          disabled={
+                            !supabaseOk ||
+                            !selectedSeriesId ||
+                            issues.length === 0 ||
+                            outlineGenLoading ||
+                            outlineAllBusy
+                          }
+                          onClick={() => void runOutlineGenerateAllIssues()}
+                          className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {outlineAllBusy ? 'Outlining series…' : `Outline all issues (${issues.length})`}
+                        </button>
+                      </Tooltip>
                     </div>
                     {outlineGenError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
@@ -1157,12 +1424,54 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="beatsTab" label="About page beats" />
                     </div>
-                    {!selectedPageId && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={beatsSkipExisting}
+                          onChange={(e) => setBeatsSkipExisting(e.target.checked)}
+                          className="rounded border-black/30"
+                        />
+                        Skip pages that already have beats
+                      </label>
+                      <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                        <button
+                          type="button"
+                          disabled={
+                            !supabaseOk ||
+                            !selectedIssueId ||
+                            sortedPages.length === 0 ||
+                            beatsBatchBusy ||
+                            beatsLoading
+                          }
+                          onClick={() => void runBatchPageBeats()}
+                          className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          style={{ background: ACCENT_GOLD_GRADIENT }}
+                        >
+                          {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
+                        </button>
+                      </Tooltip>
+                      {beatsBatchBusy ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            beatsBatchAbortRef.current?.abort();
+                          }}
+                          className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
+                        >
+                          Cancel after this batch
+                        </button>
+                      ) : null}
+                    </div>
+                    {!selectedPageId && sortedPages.length > 0 && (
+                      <p className="text-xs text-black/50">Select a page in the Library to preview, or use Generate all beats.</p>
+                    )}
+                    {sortedPages.length === 0 && (
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
                     )}
                     <button
                       type="button"
-                      disabled={!supabaseOk || !selectedPageId || beatsLoading}
+                      disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
                       onClick={async () => {
                         if (!selectedPageId || !selectedIssueId) return;
                         setBeatsError(null);

@@ -156,6 +156,14 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **2026-04-04:** **Docs + push** — Checklist **Merge conflicts after a PR** + **`EJSONPARSE`** row; walkthrough; pushed to **`origin/main`** (GitHub → Cloudflare if project watches **`main`**)
 - [x] **2026-04-02:** `invokeWriterTools` refresh optimization — avoid unconditional `refreshSession()` (only near-expiry) + dedupe concurrent refresh; Edge `page_beats` prompt includes prior-page digest to reduce repeated beats; removed debug instrumentation after verification
 
+## Writers' Workshop QoL — batch beats, sync pages, arc MVP, UX pipeline (2026-04-10)
+
+- [x] Edge + shared Zod: `outline_issue` + `arc_brief` / `arc_issue_count`; `page_beats_issue` with `skip_existing`, `batch_limit`; `writer-tools` sequential batch handler + `has_more`
+- [x] Client: `ensureWriterPagesToCount`; `WriterPortal` — sync pages, arc fields, outline-all, batch beats + cancel; shared tab order / hotkeys / ribbon; pipeline strip + `writerNextStep` hints
+- [x] Tests: `schemas.test.ts` for extended `outline_issue` and `page_beats_issue`
+- [x] Docs: `implementation_plan.md` Phase 7; this checklist; `walkthrough.md` entry
+- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy
+
 ## Writers' Workshop bugfixes (Apr 2026)
 
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it

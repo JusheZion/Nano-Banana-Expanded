@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
-import type { WriterWorkspaceTabId } from '@/portals/writer/writerSearch';
+import {
+  type WriterWorkspaceTabId,
+  WRITER_WORKSPACE_TAB_ORDER,
+} from '@/portals/writer/writerSearch';
 
-const TAB_ORDER: WriterWorkspaceTabId[] = ['arc', 'outline', 'beats', 'dialogue', 'video'];
+const TAB_ORDER: WriterWorkspaceTabId[] = WRITER_WORKSPACE_TAB_ORDER;
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!el || !(el instanceof HTMLElement)) return false;

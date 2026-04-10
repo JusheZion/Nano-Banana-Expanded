@@ -13,7 +13,11 @@ import {
   ACCENT_GOLD_GRADIENT,
   WRITERS_GOLD_SLANT,
 } from '@/shared/theme/Phase12DesignTokens';
-import type { WriterWorkspaceTabId } from '@/portals/writer/writerSearch';
+import {
+  type WriterWorkspaceTabId,
+  WRITER_WORKSPACE_TAB_LABELS,
+  WRITER_WORKSPACE_TAB_ORDER,
+} from '@/portals/writer/writerSearch';
 import {
   WRITER_HELP_CATEGORIES,
   WRITER_UI_TIPS,
@@ -33,13 +37,11 @@ const MENUS: { id: WriterRibbonMenuId; label: string }[] = [
   { id: 'help', label: 'Help' },
 ];
 
-const WORKSPACE_TABS: { id: WriterWorkspaceTabId; label: string }[] = [
-  { id: 'arc', label: 'Arc' },
-  { id: 'outline', label: 'Outline' },
-  { id: 'beats', label: 'Beats' },
-  { id: 'dialogue', label: 'Dialogue' },
-  { id: 'video', label: 'Video' },
-];
+const WORKSPACE_TABS: { id: WriterWorkspaceTabId; label: string }[] =
+  WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
+    id,
+    label: WRITER_WORKSPACE_TAB_LABELS[id].ribbon,
+  }));
 
 const RIBBON_DIVIDER = <div className="h-8 w-px bg-black/15 shrink-0 mx-1" aria-hidden />;
 
@@ -77,6 +79,8 @@ type Props = {
   onPrevPage: () => void;
   onNextPage: () => void;
   onOpenHelpCategory: (id: WriterHelpCategoryId) => void;
+  /** Shown under the primary AI action tooltip (next step in the pipeline). */
+  quickGenerateNextHint?: string;
 };
 
 export const WriterRibbon: React.FC<Props> = ({
@@ -113,6 +117,7 @@ export const WriterRibbon: React.FC<Props> = ({
   onPrevPage,
   onNextPage,
   onOpenHelpCategory,
+  quickGenerateNextHint,
 }) => {
   const { isPhone } = useResponsiveLayout();
 
@@ -177,7 +182,11 @@ export const WriterRibbon: React.FC<Props> = ({
               <span className="text-[9px] font-bold uppercase tracking-wider text-black/45">Workspace</span>
               <div className="flex flex-wrap gap-1">
                 {WORKSPACE_TABS.map((t) => (
-                  <Tooltip key={t.id} content={`${t.label} (⌘${WORKSPACE_TABS.indexOf(t) + 1})`} side="bottom">
+                  <Tooltip
+                    key={t.id}
+                    content={`${t.label} (⌘${WRITER_WORKSPACE_TAB_ORDER.indexOf(t.id) + 1})`}
+                    side="bottom"
+                  >
                     <button
                       type="button"
                       onClick={() => onWorkspaceTab(t.id)}
@@ -329,7 +338,14 @@ export const WriterRibbon: React.FC<Props> = ({
 
         {activeMenu === 'ai' && (
           <div className="flex flex-wrap items-center gap-2 px-2">
-            <Tooltip content={WRITER_UI_TIPS.aiQuickGenerate} side="bottom">
+            <Tooltip
+              content={
+                quickGenerateNextHint?.trim()
+                  ? `${WRITER_UI_TIPS.aiQuickGenerate}\n\nNext: ${quickGenerateNextHint.trim()}`
+                  : WRITER_UI_TIPS.aiQuickGenerate
+              }
+              side="bottom"
+            >
               <button
                 type="button"
                 disabled={quickGenerateDisabled || quickGenerateLoading}

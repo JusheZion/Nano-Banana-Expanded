@@ -186,6 +186,8 @@ function buildOutlineUserPrompt(args: {
   cast: unknown[];
   locations: unknown[];
   styleBibles: unknown[];
+  arcBrief?: string;
+  arcIssueCount?: number;
 }): string {
   const s = args.issue.writer_series;
   const seriesBlock = s
@@ -201,6 +203,16 @@ function buildOutlineUserPrompt(args: {
         2,
       )
     : '{}';
+  const arcBrief = args.arcBrief?.trim();
+  const arcLines: string[] = [];
+  if (arcBrief) {
+    if (args.arcIssueCount != null && args.arcIssueCount > 0) {
+      arcLines.push(
+        `This issue is ONE chapter of a larger arc spanning about ${args.arcIssueCount} issues. Align beats and emotional turns with the spine below while staying specific to issue #${args.issue.issue_number}.`,
+      );
+    }
+    arcLines.push('Cross-issue arc / author spine (reference):', arcBrief, '');
+  }
   return [
     `Create a comic issue outline as JSON only.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`.trim(),
@@ -208,6 +220,7 @@ function buildOutlineUserPrompt(args: {
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
     `Series context:\n${seriesBlock}`,
     args.targetPages ? `Target approximate page count for pacing: ${args.targetPages}.` : '',
+    ...arcLines,
     `Writer cast (reference):\n${JSON.stringify(args.cast, null, 2)}`,
     `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
@@ -337,6 +350,77 @@ function buildPagesDigest(
     null,
     2,
   );
+}
+
+function pageHasPanelBeats(beatsJson: unknown): boolean {
+  const panels = (beatsJson as { panels?: unknown } | null)?.panels;
+  return Array.isArray(panels) && panels.length > 0;
+}
+
+async function executeSinglePageBeats(
+  supabase: SupabaseAdmin,
+  page: { id: string; issue_id: string; page_number: number; beats_json: unknown; script_text: string | null },
+  issueRow: IssueRow,
+  geminiModel: string,
+  geminiKey: string,
+): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
+  const sid = issueRow.series_id;
+  const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
+    supabase.from('writer_cast').select('*').eq('series_id', sid),
+    supabase.from('writer_locations').select('*').eq('series_id', sid),
+    supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
+    supabase
+      .from('writer_issue_outlines')
+      .select('outline_json')
+      .eq('issue_id', page.issue_id)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('writer_pages')
+      .select('page_number, beats_json, script_text')
+      .eq('issue_id', page.issue_id)
+      .lt('page_number', page.page_number)
+      .order('page_number', { ascending: false })
+      .limit(2),
+  ]);
+  const system =
+    'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
+  const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
+  const userPrompt = buildPageBeatsUserPrompt({
+    page,
+    issue: issueRow,
+    cast: castRes.data ?? [],
+    locations: locRes.data ?? [],
+    styleBibles: bibleRes.data ?? [],
+    latestOutline: outlineRes.data?.outline_json ?? null,
+    priorPagesDigest,
+  });
+  let beatsJson: unknown;
+  try {
+    beatsJson = await callGeminiJson({
+      system,
+      user: userPrompt,
+      preferredModel: geminiModel,
+      apiKey: geminiKey,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: msg };
+  }
+  const beatsParsed = pageBeatsJsonSchema.safeParse(beatsJson);
+  if (!beatsParsed.success) {
+    return { ok: false, message: beatsParsed.error.message };
+  }
+  const now = new Date().toISOString();
+  const { error: upErr } = await supabase
+    .from('writer_pages')
+    .update({ beats_json: beatsParsed.data, updated_at: now })
+    .eq('id', page.id);
+  if (upErr) {
+    return { ok: false, message: upErr.message };
+  }
+  return { ok: true, data: beatsParsed.data };
 }
 
 function buildPacingReviewUserPrompt(args: {
@@ -485,7 +569,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'outline_issue') {
-      const { issue_id, target_page_count } = parsedReq.data;
+      const { issue_id, target_page_count, arc_brief, arc_issue_count } = parsedReq.data;
 
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
@@ -511,6 +595,8 @@ Deno.serve(async (req) => {
         cast: castRes.data ?? [],
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
+        arcBrief: arc_brief,
+        arcIssueCount: arc_issue_count,
       });
 
       let llmJson: unknown;
@@ -595,70 +681,86 @@ Deno.serve(async (req) => {
       if (!issueRow) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
       }
-      const sid = issueRow.series_id;
-      const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
-        supabase.from('writer_cast').select('*').eq('series_id', sid),
-        supabase.from('writer_locations').select('*').eq('series_id', sid),
-        supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
-        supabase
-          .from('writer_issue_outlines')
-          .select('outline_json')
-          .eq('issue_id', page.issue_id)
-          .order('version', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('writer_pages')
-          .select('page_number, beats_json, script_text')
-          .eq('issue_id', page.issue_id)
-          .lt('page_number', page.page_number)
-          .order('page_number', { ascending: false })
-          .limit(2),
-      ]);
-      const system =
-        'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
-      const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
-      const userPrompt = buildPageBeatsUserPrompt({
-        page,
-        issue: issueRow,
-        cast: castRes.data ?? [],
-        locations: locRes.data ?? [],
-        styleBibles: bibleRes.data ?? [],
-        latestOutline: outlineRes.data?.outline_json ?? null,
-        priorPagesDigest,
-      });
-      let beatsJson: unknown;
-      try {
-        beatsJson = await callGeminiJson({
-          system,
-          user: userPrompt,
-          preferredModel: geminiModel,
-          apiKey: geminiKey,
-        });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return llmFailureResponse(msg);
-      }
-      const beatsParsed = pageBeatsJsonSchema.safeParse(beatsJson);
-      if (!beatsParsed.success) {
+      const result = await executeSinglePageBeats(supabase, page, issueRow, geminiModel, geminiKey);
+      if (!result.ok) {
+        if (/api key|GEMINI|Google|quota|429/i.test(result.message)) {
+          return llmFailureResponse(result.message);
+        }
         return Response.json(
-          { success: false, error: 'Page beats failed validation', details: beatsParsed.error.message },
+          { success: false, error: 'Page beats failed', details: result.message },
           { status: 422, headers: corsHeaders },
         );
       }
-      const now = new Date().toISOString();
-      const { error: upErr } = await supabase
+      return Response.json(
+        { success: true, mode: 'page_beats', data: result.data, page_id },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'page_beats_issue') {
+      const { issue_id, skip_existing, batch_limit } = parsedReq.data;
+      const issueRow = await loadIssueRow(supabase, issue_id);
+      if (!issueRow) {
+        return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
+      }
+      const { data: allPages, error: pagesErr } = await supabase
         .from('writer_pages')
-        .update({ beats_json: beatsParsed.data, updated_at: now })
-        .eq('id', page_id);
-      if (upErr) {
+        .select('id, issue_id, page_number, beats_json, script_text')
+        .eq('issue_id', issue_id)
+        .order('page_number', { ascending: true });
+      if (pagesErr) {
         return Response.json(
-          { success: false, error: 'Failed to save page beats', details: upErr.message },
+          { success: false, error: 'Failed to load pages', details: pagesErr.message },
           { status: 500, headers: corsHeaders },
         );
       }
+      const rows = (allPages ?? []) as Array<{
+        id: string;
+        issue_id: string;
+        page_number: number;
+        beats_json: unknown;
+        script_text: string | null;
+      }>;
+      if (rows.length === 0) {
+        return Response.json(
+          {
+            success: false,
+            error: 'No pages for this issue',
+            details: 'Sync pages from target count or add pages in the Library, then retry.',
+          },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const skip = skip_existing === true;
+      const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
+      const limit = Math.min(Math.max(1, batch_limit ?? 8), 20);
+      const batch = candidates.slice(0, limit);
+      const processed: number[] = [];
+      const errors: { page_number: number; message: string }[] = [];
+      for (const page of batch) {
+        const r = await executeSinglePageBeats(supabase, page, issueRow, geminiModel, geminiKey);
+        if (r.ok) {
+          processed.push(page.page_number);
+        } else {
+          errors.push({ page_number: page.page_number, message: r.message });
+          if (/api key|GEMINI|Google|quota|429/i.test(r.message)) {
+            return llmFailureResponse(r.message);
+          }
+        }
+      }
+      const has_more = candidates.length > batch.length;
       return Response.json(
-        { success: true, mode: 'page_beats', data: beatsParsed.data, page_id },
+        {
+          success: true,
+          mode: 'page_beats_issue',
+          issue_id,
+          data: {
+            processed,
+            errors,
+            has_more,
+            batch_size: batch.length,
+          },
+        },
         { headers: corsHeaders },
       );
     }

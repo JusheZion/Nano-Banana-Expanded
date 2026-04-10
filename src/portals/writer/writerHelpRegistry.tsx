@@ -45,7 +45,15 @@ export const WRITER_UI_TIPS = {
   issuesStoryContext:
     'After you pick an issue: Issue Outline → Story context → Save (in-app; Supabase UI optional). Cast / locations / bibles: Table Editor only for now.',
   pagesLibrary:
-    'Beats and dialogue attach to a page row. Use Add page (next number) under Library → Pages after you pick an issue. Generating an outline does not create page rows automatically.',
+    'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows.',
+  syncPagesToTarget:
+    'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
+  batchPageBeats:
+    'Runs the page-beats model on up to 8 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
+  arcBriefOutline:
+    'Optional multi-issue spine: paste your arc summary. With “Issues in arc” set, the model treats this issue as one chapter of that arc. Same fields are used when you “Outline all issues in series”.',
+  outlineAllIssues:
+    'Runs Generate outline once per issue in the current series using the same target pages, arc brief, and issue count. Confirm before starting — one model call per issue.',
   storyContextSupabase:
     'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env, restart the dev server, then reload. Inputs appear once the app can reach Supabase.',
   dockLibraryHidden:
@@ -71,7 +79,7 @@ export const WRITER_UI_TIPS = {
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',
   activityPanel: 'A short log of AI tool runs. Open Ribbon → Help for full workflow guides.',
   dockShortcutsBlurb:
-    '⌘1–⌘5: workspace tabs. ⌘F: Find. ⌘⇧H: show/hide panels. Esc: clear find. Full list: Ribbon → Help → Keys.',
+    '⌘1 Outline · ⌘2 Beats · ⌘3 Dialogue · ⌘4 Video · ⌘5 Arc. ⌘F: Find. ⌘⇧H: show/hide panels. Esc: clear find. Full list: Ribbon → Help → Keys.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
 } as const;
 
