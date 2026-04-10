@@ -570,6 +570,8 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 **Before** restructuring Overview / hero / portal cards, fill **[`LANDING_PAGE_UI_INTAKE.md`](LANDING_PAGE_UI_INTAKE.md)** or open **[`docs/LANDING_PAGE_UI_INTAKE.html`](docs/LANDING_PAGE_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat so implementation matches your wording and ordering.
 
+**Implemented (2026-04):** [`portalCatalog.ts`](src/shared/portalCatalog.ts), [`LandingPage.tsx`](src/components/LandingPage.tsx), [`AppShell.tsx`](src/components/layout/AppShell.tsx), [`landingHeroRotation.ts`](src/shared/landingHeroRotation.ts), landing CSS/Tailwind animations. **Polish:** mobile home tab label **ARC Hub**; hero subline grammar; **Asset Studio** naming aligned; Writers' landing card photo (`City of Capricorn`).
+
 ## Image Vault UI intake (Characters vs Assets)
 
 **Before** a full Image Vault overhaul (`reference` portal: `ReferenceAlbum` → `CharacterVault` / `AssetVault` → modals), fill **[`IMAGE_VAULT_UI_INTAKE.md`](IMAGE_VAULT_UI_INTAKE.md)** or open **[`docs/IMAGE_VAULT_UI_INTAKE.html`](docs/IMAGE_VAULT_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat. The form has **two detailed tracks**: **Characters (Ruby)** and **Assets (Amethyst)** plus shared tab/shell fields.

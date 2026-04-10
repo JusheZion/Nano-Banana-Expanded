@@ -44,6 +44,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'AI Assistance from Arcs and Outlines to Beats and Dialogue',
     accentHex: '#81D8D0',
     Icon: PenLine,
+    cardImageUrl: '/assets/images/City%20of%20Capricorn.jpg',
   },
   {
     portal: 'studio',
@@ -59,7 +60,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     portal: 'assets',
     theme: 'purple',
     navLabel: 'Asset Studio',
-    cardTitle: 'Assets Studio',
+    cardTitle: 'Asset Studio',
     cardSubtitle: 'Generate Settings & Props for Stories',
     accentHex: '#a855f7',
     Icon: Building2,

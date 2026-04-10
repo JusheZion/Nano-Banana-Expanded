@@ -204,6 +204,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 - [x] Added **[`LANDING_PAGE_UI_INTAKE.md`](LANDING_PAGE_UI_INTAKE.md)** + **[`docs/LANDING_PAGE_UI_INTAKE.html`](docs/LANDING_PAGE_UI_INTAKE.html)** (linked from `implementation_plan.md`)
 - [x] Implemented intake: [`portalCatalog.ts`](src/shared/portalCatalog.ts) (order, copy, accents, icons, `HUB_HOME_LABEL`, `getPortalIcon`), [`LandingPage.tsx`](src/components/LandingPage.tsx) (hero, door **Open** + **IN**, account strip, rotating hero backdrop, cards), [`AppShell.tsx`](src/components/layout/AppShell.tsx) (ARC Hub + glitter nav icons; mobile tabs use catalog icons), [`tailwind.config.js`](tailwind.config.js) + [`theme.css`](src/styles/theme.css) (landing animations)
+- [x] Polish: hero subline grammar (**to** create); mobile home tab uses **`HUB_HOME_LABEL`** (ARC Hub); **Asset Studio** card title matches nav; Writers' card uses **`City of Capricorn`** backdrop
 
 ## Image Vault UI intake (Characters vs Assets)
 

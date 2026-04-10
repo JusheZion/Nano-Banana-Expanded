@@ -391,7 +391,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
             <MobileTab
               targetPortal="home"
               icon={Home}
-              label="Hub"
+              label={HUB_HOME_LABEL}
               isActive={activePortal === 'home'}
               onSelect={handleNavClick}
             />
