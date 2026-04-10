@@ -10,6 +10,8 @@
 
 **Live site vs GitHub (2026-04-05):** Pushing **`main`** updates the repo only. The production Worker ([`wrangler.jsonc`](wrangler.jsonc)) serves **`dist/`** from the last **`npm run deploy`** (or **`npx wrangler deploy`** after **`npm run build`**). This repo has **no** GitHub Actions workflow for deploy — confirm in **Cloudflare → Workers & Pages** that a build ran for your commit, or deploy from your machine with **`wrangler login`**. After a successful deploy, the hero shows version **v2.4.1** so you can confirm the new JS bundle is live (hard refresh or incognito if needed).
 
+**CI / Vitest (2026-04-10):** [`writerTools.test.ts`](src/shared/api/__tests__/writerTools.test.ts) — Supabase mocks moved into **`vi.hoisted()`** so the **`vi.mock('@/shared/lib/supabase')`** factory does not reference `const` mocks before initialization (fixes **`Cannot access 'getSessionMock' before initialization`**). **`npm run test`** → 79 passed.
+
 **Landing hero images — wire rotation into [`landingHeroRotation.ts`](src/shared/landingHeroRotation.ts) (reference):**
 
 1. **Add files** under [`public/assets/images/hero/`](public/assets/images/hero/) (JPG, PNG, or WebP). Prefer filenames without spaces; if you use spaces, encode them in the URL as `%20` (e.g. `My%20Shot.jpg`).
