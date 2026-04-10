@@ -162,7 +162,10 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Client: `ensureWriterPagesToCount`; `WriterPortal` — sync pages, arc fields, outline-all, batch beats + cancel; shared tab order / hotkeys / ribbon; pipeline strip + `writerNextStep` hints
 - [x] Tests: `schemas.test.ts` for extended `outline_issue` and `page_beats_issue`
 - [x] Docs: `implementation_plan.md` Phase 7; this checklist; `walkthrough.md` entry
-- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy
+- [x] UX: **Arc length (for AI)** vs batch count — inline hint + **`Outline all in series (N in Library)`** + **`arcIssueCountHint`** / updated tooltips (`WriterPortal`, `writerHelpRegistry`)
+- [x] Library → Issues: **`Add issue #N`** always when series selected (was hidden after first issue); outline panel **Open Library → Issues** link + help copy
+- [x] Edge **`outline_issue`**: arc spine prompt includes **part k of N** (ordered by issue #) + anti-hallucination rules so batch outline slices the author spine per issue
+- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy (required for arc prompt fix)
 
 ## Writers' Workshop bugfixes (Apr 2026)
 

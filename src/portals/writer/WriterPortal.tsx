@@ -227,6 +227,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     return Math.max(...issues.map((i) => i.issue_number)) + 1;
   }, [issues]);
 
+  const handleAddWriterIssue = useCallback(async () => {
+    if (!selectedSeriesId) return;
+    setBootstrapError(null);
+    setCreateIssueBusy(true);
+    const row = await createWriterIssue({
+      series_id: selectedSeriesId,
+      issue_number: nextIssueNumber,
+    });
+    setCreateIssueBusy(false);
+    if (!row) {
+      setBootstrapError(
+        'Could not create an issue. Confirm writer_issues exists and issue_number is unique.',
+      );
+      return;
+    }
+    await refreshIssuesForSeries();
+    setSelectedIssueId(row.id);
+    setDockTab('library');
+    setDockCollapsed(false);
+    pushHistory(`created issue #${row.issue_number}`);
+  }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries]);
+
   useEffect(() => {
     if (!selectedSeriesId) {
       setIssues([]);
@@ -798,39 +820,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </button>
           </Tooltip>
         </div>
-        {selectedSeriesId && issues.length === 0 && supabaseOk && (
-          <div className="mb-2 space-y-1">
-            <p className="text-[11px] text-black/55">No issues in this series yet.</p>
+        {selectedSeriesId && supabaseOk ? (
+          <div className="mb-1.5 space-y-1">
             <button
               type="button"
               disabled={createIssueBusy}
-              onClick={async () => {
-                if (!selectedSeriesId) return;
-                setBootstrapError(null);
-                setCreateIssueBusy(true);
-                const row = await createWriterIssue({
-                  series_id: selectedSeriesId,
-                  issue_number: nextIssueNumber,
-                });
-                setCreateIssueBusy(false);
-                if (!row) {
-                  setBootstrapError(
-                    'Could not create an issue. Confirm writer_issues exists and issue_number is unique.',
-                  );
-                  return;
-                }
-                await refreshIssuesForSeries();
-                setSelectedIssueId(row.id);
-                setDockTab('library');
-                pushHistory(`created issue #${row.issue_number}`);
-              }}
-              className="w-full rounded-lg px-3 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+              onClick={() => void handleAddWriterIssue()}
+              className="w-full rounded-lg px-2 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
               style={{ background: ACCENT_GOLD_GRADIENT }}
             >
               {createIssueBusy ? 'Creating…' : `Add issue #${nextIssueNumber}`}
             </button>
+            {issues.length === 0 ? (
+              <p className="text-[10px] text-black/55 leading-snug px-0.5">
+                No issues yet. Add one above for each comic issue you want in this series.
+              </p>
+            ) : null}
           </div>
-        )}
+        ) : !selectedSeriesId && supabaseOk ? (
+          <p className="text-[10px] text-black/45 mb-1.5 leading-snug">Select a series to add issues.</p>
+        ) : null}
         <div className="flex-1 min-h-[80px] max-h-40 overflow-y-auto custom-scrollbar space-y-1">
           {issues.map((i) => (
             <Tooltip key={i.id} content={`Open issue #${i.issue_number}`} side="left">
@@ -1351,12 +1360,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           value={arcBriefDraft}
                           onChange={(e) => setArcBriefDraft(e.target.value)}
                           disabled={!selectedIssueId}
-                          placeholder="Paste a multi-issue summary; used when generating outlines."
+                          placeholder="Full arc in your words. Label beats per issue if you can (e.g. Issue 1: … Issue 2: …). Each outline call is told which part of the arc it covers."
                           className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
                         />
                       </label>
-                      <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70 max-w-[8rem]" htmlFor="writer-arc-issue-count">
-                        Issues in arc
+                      <div className="space-y-1 max-w-md">
+                        <div className="flex items-center gap-1.5">
+                          <label
+                            className="text-[11px] font-semibold text-black/70"
+                            htmlFor="writer-arc-issue-count"
+                          >
+                            Arc length (for AI)
+                          </label>
+                          <WriterSectionTip tipKey="arcIssueCountHint" label="About arc length" />
+                        </div>
                         <input
                           id="writer-arc-issue-count"
                           name="writer-arc-issue-count"
@@ -1366,9 +1383,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           value={arcIssueCountDraft}
                           onChange={(e) => setArcIssueCountDraft(Number(e.target.value) || 1)}
                           disabled={!selectedIssueId}
-                          className="rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                          className="max-w-[8rem] rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black disabled:opacity-50"
                         />
-                      </label>
+                        <p className="text-[10px] text-black/55 leading-snug">
+                          Batch outline uses{' '}
+                          <span className="font-semibold text-black/70">{issues.length}</span> issue
+                          {issues.length === 1 ? '' : 's'} in the right-hand Library (Issues list)—not this
+                          number.{' '}
+                          <button
+                            type="button"
+                            className="font-semibold text-black/75 underline decoration-black/25 underline-offset-2 hover:text-black hover:decoration-black/50"
+                            onClick={() => {
+                              setDockCollapsed(false);
+                              setDockTab('library');
+                            }}
+                          >
+                            Open Library → Issues
+                          </button>
+                          {selectedSeriesId && supabaseOk
+                            ? ' — use “Add issue” at the top of that list.'
+                            : ''}
+                        </p>
+                      </div>
                       <Tooltip content={WRITER_UI_TIPS.outlineAllIssues} side="bottom">
                         <button
                           type="button"
@@ -1382,7 +1418,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           onClick={() => void runOutlineGenerateAllIssues()}
                           className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         >
-                          {outlineAllBusy ? 'Outlining series…' : `Outline all issues (${issues.length})`}
+                          {outlineAllBusy
+                            ? 'Outlining series…'
+                            : `Outline all in series (${issues.length} in Library)`}
                         </button>
                       </Tooltip>
                     </div>

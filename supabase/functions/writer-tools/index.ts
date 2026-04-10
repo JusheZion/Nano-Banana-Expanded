@@ -187,7 +187,12 @@ function buildOutlineUserPrompt(args: {
   locations: unknown[];
   styleBibles: unknown[];
   arcBrief?: string;
-  arcIssueCount?: number;
+  /** 1-based: this DB issue’s slot when series issues are sorted by issue_number */
+  arcPartPosition: number;
+  /** Total parts the author (or UI) says the arc has; must be >= arcPartPosition */
+  arcPartTotal: number;
+  /** How many issue rows exist in this series (for context if totals differ) */
+  seriesIssueRowCount: number;
 }): string {
   const s = args.issue.writer_series;
   const seriesBlock = s
@@ -206,12 +211,23 @@ function buildOutlineUserPrompt(args: {
   const arcBrief = args.arcBrief?.trim();
   const arcLines: string[] = [];
   if (arcBrief) {
-    if (args.arcIssueCount != null && args.arcIssueCount > 0) {
-      arcLines.push(
-        `This issue is ONE chapter of a larger arc spanning about ${args.arcIssueCount} issues. Align beats and emotional turns with the spine below while staying specific to issue #${args.issue.issue_number}.`,
-      );
-    }
-    arcLines.push('Cross-issue arc / author spine (reference):', arcBrief, '');
+    const pos = args.arcPartPosition;
+    const tot = args.arcPartTotal;
+    const nRows = args.seriesIssueRowCount;
+    arcLines.push(
+      `MULTI-ISSUE ARC — Outline PART ${pos} of ${tot} ONLY (comic issue #${args.issue.issue_number} in this series).`,
+      `The block below labeled "Cross-issue arc / author spine" is the human-written story for the full arc. This API call generates ONE issue outline; other issues are outlined in separate calls, each with the same spine but a different part number.`,
+      `Hard rules:`,
+      `- Use ONLY the slice of the spine that belongs to part ${pos} of ${tot}. Do not resolve cliffhangers or finale beats that clearly belong to a later part.`,
+      `- Do NOT invent a substitute plot, villain, or twist for "the other issues" — stay inside this segment of the spine.`,
+      `- Do NOT paste or summarize the entire spine into this outline; pace for roughly ${args.targetPages ?? 'the given target'} pages.`,
+      `- If the spine names parts by issue/chapter, follow that mapping for part ${pos}. If not, mentally divide the spine’s progression into ${tot} sequential segments and use segment ${pos} only.`,
+      nRows !== tot
+        ? `(Context: ${nRows} issue row(s) exist in this series in the database; the arc is described as ${tot} part(s). Still honor part ${pos} of ${tot}.)`
+        : '',
+      '',
+    );
+    arcLines.push('Cross-issue arc / author spine (full arc — you take one slice only):', arcBrief, '');
   }
   return [
     `Create a comic issue outline as JSON only.`,
@@ -580,6 +596,27 @@ Deno.serve(async (req) => {
       }
       const seriesId = row.series_id;
 
+      const { data: orderedIssueRows, error: orderedErr } = await supabase
+        .from('writer_issues')
+        .select('id, issue_number')
+        .eq('series_id', seriesId)
+        .order('issue_number', { ascending: true });
+      if (orderedErr) {
+        return Response.json(
+          { success: false, error: 'Failed to load series issues', details: orderedErr.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const ordered = (orderedIssueRows ?? []) as Array<{ id: string; issue_number: number }>;
+      const partIdx = ordered.findIndex((r) => r.id === issue_id);
+      const arcPartPosition = partIdx >= 0 ? partIdx + 1 : 1;
+      const seriesIssueRowCount = Math.max(1, ordered.length);
+      let arcPartTotal =
+        arc_issue_count != null && arc_issue_count > 0 ? arc_issue_count : seriesIssueRowCount;
+      if (arcPartPosition > arcPartTotal) {
+        arcPartTotal = arcPartPosition;
+      }
+
       const [castRes, locRes, bibleRes] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', seriesId),
         supabase.from('writer_locations').select('*').eq('series_id', seriesId),
@@ -596,7 +633,9 @@ Deno.serve(async (req) => {
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
         arcBrief: arc_brief,
-        arcIssueCount: arc_issue_count,
+        arcPartPosition,
+        arcPartTotal,
+        seriesIssueRowCount: Math.max(1, ordered.length),
       });
 
       let llmJson: unknown;

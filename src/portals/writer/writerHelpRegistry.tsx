@@ -43,7 +43,7 @@ export const WRITER_UI_TIPS = {
   seriesLibrary:
     'Use “+ Add series” in the Library to add another series after the first. Click a series to load its issues; switching series clears the active issue until you pick one again.',
   issuesStoryContext:
-    'After you pick an issue: Issue Outline → Story context → Save (in-app; Supabase UI optional). Cast / locations / bibles: Table Editor only for now.',
+    'With a series selected, Library → Issues always shows “Add issue #N” at the top (same idea as Add page). Each row is one comic issue; add as many as you need, then pick one to edit. After you pick an issue: Issue Outline → Story context → Save. Cast / locations / bibles: Table Editor only for now.',
   pagesLibrary:
     'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows.',
   syncPagesToTarget:
@@ -51,9 +51,11 @@ export const WRITER_UI_TIPS = {
   batchPageBeats:
     'Runs the page-beats model on up to 8 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
   arcBriefOutline:
-    'Optional multi-issue spine: paste your arc summary. With “Issues in arc” set, the model treats this issue as one chapter of that arc. Same fields are used when you “Outline all issues in series”.',
+    'Paste the full arc in your own words. The server assigns each Library issue a part number (1…N by issue # order) and tells the model to outline only that slice—so batch “Outline all” should not improvise unrelated plots for issues 2–N. Labeling “Issue 1: … Issue 2: …” in the spine helps. “Arc length (for AI)” sets N for dividing the spine; it does not create issue rows.',
+  arcIssueCountHint:
+    'Prompt context only: how many issues you imagine in the arc. It does not create rows or change batch size. “Outline all in series” runs once per issue row in Library → Issues. Use “Add issue #N” at the top of that Issues list (Issue Outline has “Open Library → Issues” to jump there).',
   outlineAllIssues:
-    'Runs Generate outline once per issue in the current series using the same target pages, arc brief, and issue count. Confirm before starting — one model call per issue.',
+    'Runs Generate outline once per Library issue in this series (same target pages + arc fields). The number in parentheses is how many issue rows exist under Library → Issues—not the arc-length box. Add more with “Add issue #N” at the top of the Issues list.',
   storyContextSupabase:
     'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env, restart the dev server, then reload. Inputs appear once the app can reach Supabase.',
   dockLibraryHidden:
