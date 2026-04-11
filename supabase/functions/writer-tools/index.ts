@@ -127,13 +127,15 @@ async function callGeminiJson(args: {
   user: string;
   preferredModel: string;
   apiKey: string;
+  /** Lower = stick closer to prompt (default 0.65). */
+  temperature?: number;
 }): Promise<unknown> {
   const body = {
     systemInstruction: { parts: [{ text: args.system }] },
     contents: [{ role: 'user', parts: [{ text: args.user }] }],
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.65,
+      temperature: args.temperature ?? 0.65,
     },
   };
 
@@ -186,13 +188,6 @@ function buildOutlineUserPrompt(args: {
   cast: unknown[];
   locations: unknown[];
   styleBibles: unknown[];
-  arcBrief?: string;
-  /** 1-based: this DB issue’s slot when series issues are sorted by issue_number */
-  arcPartPosition: number;
-  /** Total parts the author (or UI) says the arc has; must be >= arcPartPosition */
-  arcPartTotal: number;
-  /** How many issue rows exist in this series (for context if totals differ) */
-  seriesIssueRowCount: number;
 }): string {
   const s = args.issue.writer_series;
   const seriesBlock = s
@@ -208,35 +203,17 @@ function buildOutlineUserPrompt(args: {
         2,
       )
     : '{}';
-  const arcBrief = args.arcBrief?.trim();
-  const arcLines: string[] = [];
-  if (arcBrief) {
-    const pos = args.arcPartPosition;
-    const tot = args.arcPartTotal;
-    const nRows = args.seriesIssueRowCount;
-    arcLines.push(
-      `MULTI-ISSUE ARC — Outline PART ${pos} of ${tot} ONLY (comic issue #${args.issue.issue_number} in this series).`,
-      `The block below labeled "Cross-issue arc / author spine" is the human-written story for the full arc. This API call generates ONE issue outline; other issues are outlined in separate calls, each with the same spine but a different part number.`,
-      `Hard rules:`,
-      `- Use ONLY the slice of the spine that belongs to part ${pos} of ${tot}. Do not resolve cliffhangers or finale beats that clearly belong to a later part.`,
-      `- Do NOT invent a substitute plot, villain, or twist for "the other issues" — stay inside this segment of the spine.`,
-      `- Do NOT paste or summarize the entire spine into this outline; pace for roughly ${args.targetPages ?? 'the given target'} pages.`,
-      `- If the spine names parts by issue/chapter, follow that mapping for part ${pos}. If not, mentally divide the spine’s progression into ${tot} sequential segments and use segment ${pos} only.`,
-      nRows !== tot
-        ? `(Context: ${nRows} issue row(s) exist in this series in the database; the arc is described as ${tot} part(s). Still honor part ${pos} of ${tot}.)`
-        : '',
-      '',
-    );
-    arcLines.push('Cross-issue arc / author spine (full arc — you take one slice only):', arcBrief, '');
-  }
+  const synopsisTrim = (args.issue.synopsis ?? '').trim();
   return [
     `Create a comic issue outline as JSON only.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`.trim(),
     `Status: ${args.issue.status}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    synopsisTrim
+      ? `If synopsis is not "(none)", premise and page_beats MUST align with it.`
+      : '',
     `Series context:\n${seriesBlock}`,
     args.targetPages ? `Target approximate page count for pacing: ${args.targetPages}.` : '',
-    ...arcLines,
     `Writer cast (reference):\n${JSON.stringify(args.cast, null, 2)}`,
     `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
@@ -303,19 +280,23 @@ function buildPageBeatsUserPrompt(args: {
   latestOutline: unknown;
   priorPagesDigest: string;
 }): string {
-  const outlineBeat = extractOutlineBeatForPage(args.latestOutline, args.page.page_number);
+  const outlineBeatRaw = extractOutlineBeatForPage(args.latestOutline, args.page.page_number);
+  const outlineBeat =
+    outlineBeatRaw.length <= PAGE_BEATS_PROMPT_CAPS.outlineBeat
+      ? outlineBeatRaw
+      : `${outlineBeatRaw.slice(0, PAGE_BEATS_PROMPT_CAPS.outlineBeat)}\n…(truncated)`;
   return [
     `Create panel-by-panel beats for ONE comic book page as JSON.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
     `This page number: ${args.page.page_number}`,
     `Prior pages context (most recent first; do NOT repeat):\n${args.priorPagesDigest || '(none)'}`,
-    `Existing beats_json (may be null): ${JSON.stringify(args.page.beats_json ?? null)}`,
+    `Existing beats_json (may be null): ${jsonForPrompt(args.page.beats_json ?? null, PAGE_BEATS_PROMPT_CAPS.existingBeats)}`,
     `Existing script_text preview: ${(args.page.script_text ?? '').slice(0, 500) || '(none)'}`,
     `Issue outline context for this page:\n${outlineBeat}`,
-    `Cast:\n${JSON.stringify(args.cast, null, 2)}`,
-    `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
-    `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
+    `Cast:\n${jsonForPrompt(args.cast, PAGE_BEATS_PROMPT_CAPS.cast)}`,
+    `Locations:\n${jsonForPrompt(args.locations, PAGE_BEATS_PROMPT_CAPS.locations)}`,
+    `Style bibles:\n${jsonForPrompt(args.styleBibles, PAGE_BEATS_PROMPT_CAPS.styleBibles)}`,
     '',
     'Return JSON:',
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
@@ -367,6 +348,26 @@ function buildPagesDigest(
     2,
   );
 }
+
+/** Caps JSON blobs in prompts to avoid huge strings (memory / CPU → Supabase HTTP 546 WORKER_LIMIT). */
+function jsonForPrompt(value: unknown, maxChars: number): string {
+  try {
+    const s = JSON.stringify(value, null, 2);
+    if (s.length <= maxChars) return s;
+    return `${s.slice(0, maxChars)}\n…(truncated; prompt size cap)`;
+  } catch {
+    return String(value).slice(0, maxChars);
+  }
+}
+
+const PAGE_BEATS_PROMPT_CAPS = {
+  cast: 8000,
+  locations: 4000,
+  styleBibles: 8000,
+  /** Prior full beats_json when regenerating; large panels blow past Edge limits if unbounded. */
+  existingBeats: 14_000,
+  outlineBeat: 6000,
+} as const;
 
 function pageHasPanelBeats(beatsJson: unknown): boolean {
   const panels = (beatsJson as { panels?: unknown } | null)?.panels;
@@ -585,7 +586,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'outline_issue') {
-      const { issue_id, target_page_count, arc_brief, arc_issue_count } = parsedReq.data;
+      const { issue_id, target_page_count } = parsedReq.data;
 
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
@@ -595,27 +596,6 @@ Deno.serve(async (req) => {
         );
       }
       const seriesId = row.series_id;
-
-      const { data: orderedIssueRows, error: orderedErr } = await supabase
-        .from('writer_issues')
-        .select('id, issue_number')
-        .eq('series_id', seriesId)
-        .order('issue_number', { ascending: true });
-      if (orderedErr) {
-        return Response.json(
-          { success: false, error: 'Failed to load series issues', details: orderedErr.message },
-          { status: 500, headers: corsHeaders },
-        );
-      }
-      const ordered = (orderedIssueRows ?? []) as Array<{ id: string; issue_number: number }>;
-      const partIdx = ordered.findIndex((r) => r.id === issue_id);
-      const arcPartPosition = partIdx >= 0 ? partIdx + 1 : 1;
-      const seriesIssueRowCount = Math.max(1, ordered.length);
-      let arcPartTotal =
-        arc_issue_count != null && arc_issue_count > 0 ? arc_issue_count : seriesIssueRowCount;
-      if (arcPartPosition > arcPartTotal) {
-        arcPartTotal = arcPartPosition;
-      }
 
       const [castRes, locRes, bibleRes] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', seriesId),
@@ -632,10 +612,6 @@ Deno.serve(async (req) => {
         cast: castRes.data ?? [],
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
-        arcBrief: arc_brief,
-        arcPartPosition,
-        arcPartTotal,
-        seriesIssueRowCount: Math.max(1, ordered.length),
       });
 
       let llmJson: unknown;
@@ -645,6 +621,7 @@ Deno.serve(async (req) => {
           user: userPrompt,
           preferredModel: geminiModel,
           apiKey: geminiKey,
+          temperature: 0.65,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

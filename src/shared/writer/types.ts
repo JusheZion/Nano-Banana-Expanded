@@ -28,8 +28,6 @@ export type WriterToolsOutlineIssuePayload = {
   mode: 'outline_issue';
   issue_id: string;
   target_page_count?: number;
-  arc_brief?: string;
-  arc_issue_count?: number;
 };
 
 /** Stored in writer_pages.beats_json */

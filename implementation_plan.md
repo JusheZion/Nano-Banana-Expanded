@@ -471,18 +471,18 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Backend / contract**
 
-- **`outline_issue`:** optional `arc_brief` (string, max 8000) and `arc_issue_count` (1–48) so the model can align a single-issue outline with a stated multi-issue spine (MVP — no new `writer_series_arcs` table).
+- **`outline_issue`:** `issue_id`, optional `target_page_count` — per-issue outline only (no multi-issue spine in the API; use Arc tab batch pacing/canon for cross-issue tooling).
 - **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–20; server default 8). Edge handler loads pages in `page_number` order, runs the same logic as single-page `page_beats` sequentially for up to `batch_limit` pages per invocation, returns `{ processed, errors, has_more, batch_size }` so the client can loop until `has_more` is false.
 
 **Client**
 
 - **`ensureWriterPagesToCount(issueId, targetCount)`** in `arcsWriterRoom.ts` — inserts missing `writer_pages` rows for 1…N (cap 500).
-- **`WriterPortal`:** Issue Outline — **Sync pages to target**, optional arc brief + issues-in-arc, **Outline all issues in series** (confirm, one `outline_issue` per issue). Beats tab — **Skip pages that already have beats**, **Generate all beats** (loops `page_beats_issue` with `batch_limit: 8`), **Cancel after this batch** (abort between rounds).
+- **`WriterPortal`:** Issue Outline — **Sync pages to target**, **Generate outline** (single issue). Beats tab — **Skip pages that already have beats**, **Generate all beats** (loops `page_beats_issue` with `batch_limit: 8`), **Cancel after this batch** (abort between rounds). **Arc tab** — **Batch arc tools**: multi-select issues in the series, then run pacing or canon sequentially (one call per issue); single-issue pacing/canon still available for the Library-focused issue.
 - **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌘1–5): **Outline → Beats → Dialogue → Video → Arc**.
 - **`writerNextStep.ts`:** `getWriterQuickGenerateNextHint` for ribbon AI quick-generate tooltip; **Pipeline** strip under ribbon with per-tab completion heuristics + same hint on wide screens.
-- **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc brief, outline-all; keyboard blurb matches new tab order.
+- **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc batch multi-select; keyboard blurb matches new tab order.
 
-**Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline with arc brief, outline all (small series).
+**Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline per issue, Arc batch pacing/canon.
 
 ### Verification
 

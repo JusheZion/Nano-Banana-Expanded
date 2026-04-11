@@ -45,7 +45,7 @@ export function getWriterQuickGenerateNextHint(
     case 'video':
       return 'Next: Arc tab (⌘5) for pacing review and canon check on the full issue.';
     case 'arc':
-      return 'Use Review menu for pacing and canon anytime. ⌘1 returns to Outline.';
+      return 'Run pacing/canon on the Library issue, or batch-select issues above for multi-issue runs. ⌘1 returns to Outline.';
     default:
       return '';
   }

@@ -30,10 +30,6 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
-  /** Optional multi-issue spine text; steers the model when generating this issue’s outline. */
-  arc_brief: z.string().max(8000).optional(),
-  /** When set with arc_brief, tells the model this issue sits inside an N-issue arc. */
-  arc_issue_count: z.number().int().min(1).max(48).optional(),
 });
 
 const pageBeatPanelSchema = z.object({

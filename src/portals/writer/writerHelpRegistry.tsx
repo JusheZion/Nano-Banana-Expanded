@@ -50,12 +50,8 @@ export const WRITER_UI_TIPS = {
     'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
   batchPageBeats:
     'Runs the page-beats model on up to 8 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
-  arcBriefOutline:
-    'Paste the full arc in your own words. The server assigns each Library issue a part number (1…N by issue # order) and tells the model to outline only that slice—so batch “Outline all” should not improvise unrelated plots for issues 2–N. Labeling “Issue 1: … Issue 2: …” in the spine helps. “Arc length (for AI)” sets N for dividing the spine; it does not create issue rows.',
-  arcIssueCountHint:
-    'Prompt context only: how many issues you imagine in the arc. It does not create rows or change batch size. “Outline all in series” runs once per issue row in Library → Issues. Use “Add issue #N” at the top of that Issues list (Issue Outline has “Open Library → Issues” to jump there).',
-  outlineAllIssues:
-    'Runs Generate outline once per Library issue in this series (same target pages + arc fields). The number in parentheses is how many issue rows exist under Library → Issues—not the arc-length box. Add more with “Add issue #N” at the top of the Issues list.',
+  arcMultiIssueBatch:
+    'Check which issues to include, then run pacing or canon in one pass (one AI call per issue, in issue-number order). Each result is saved on that issue’s row. Use Library to focus an issue and read the combined review block below. “Library issue only” resets the checkboxes to the issue you’re editing.',
   storyContextSupabase:
     'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env, restart the dev server, then reload. Inputs appear once the app can reach Supabase.',
   dockLibraryHidden:
@@ -68,7 +64,7 @@ export const WRITER_UI_TIPS = {
   dialogueTab:
     'Draft dialogue from the page’s beats and outline. Pick comic script or screenplay style, then run on the selected page. Saves to writer_pages.script_text.',
   arcTab:
-    'Pacing review and canon check run on the whole issue. When the tool succeeds, results are saved automatically on the issue under notes.writer_tool_cache (no separate Save step).',
+    'Pacing review and canon check run on the whole Library issue (single-issue buttons), or use Batch arc tools to check multiple issues at once. Results save on each issue under notes.writer_tool_cache (no separate Save step).',
   videoTab:
     'Shot plans use the latest outline and page digests. Versions are stored in writer_video_shot_plans. Use the buttons below to export JSON, CSV, or a full issue pack.',
   fileRibbon:

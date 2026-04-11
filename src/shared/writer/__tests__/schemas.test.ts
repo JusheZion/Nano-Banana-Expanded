@@ -40,22 +40,6 @@ describe('writerToolsRequestSchema', () => {
     expect(r).toMatchObject({ mode: 'outline_issue', target_page_count: 22 });
   });
 
-  it('parses outline_issue with arc_brief and arc_issue_count', () => {
-    const id = '550e8400-e29b-41d4-a716-446655440000';
-    const r = writerToolsRequestSchema.parse({
-      mode: 'outline_issue',
-      issue_id: id,
-      target_page_count: 12,
-      arc_brief: 'Three-issue redemption arc.',
-      arc_issue_count: 3,
-    });
-    expect(r).toMatchObject({
-      mode: 'outline_issue',
-      arc_brief: 'Three-issue redemption arc.',
-      arc_issue_count: 3,
-    });
-  });
-
   it('outline_issue rejects invalid uuid', () => {
     expect(() =>
       writerToolsOutlineIssueRequestSchema.parse({
