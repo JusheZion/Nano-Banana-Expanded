@@ -82,6 +82,12 @@ function readWriterToolCache(notes: Record<string, unknown> | undefined): Record
   return undefined;
 }
 
+function getOutlinePageBeatsCount(outlineJson: unknown): number {
+  if (!outlineJson || typeof outlineJson !== 'object') return 0;
+  const arr = (outlineJson as { page_beats?: unknown }).page_beats;
+  return Array.isArray(arr) ? arr.length : 0;
+}
+
 function downloadJsonFile(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -364,6 +370,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => getWriterQuickGenerateNextHint(activeTab, nextStepCtx),
     [activeTab, nextStepCtx],
   );
+
+  const outlinePageBeatsCount = useMemo(
+    () => getOutlinePageBeatsCount(latestOutline?.outline_json),
+    [latestOutline],
+  );
+  const outlineCoverageGap = Math.max(0, targetPageCount - outlinePageBeatsCount);
+  const outlineCoverageWarning =
+    Boolean(latestOutline) && targetPageCount > 0 && outlineCoverageGap >= 2;
 
   const nextPageNumber = useMemo(() => {
     if (sortedPages.length === 0) return 1;
@@ -1426,6 +1440,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                     {outlineGenError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
+                    )}
+                    {outlineCoverageWarning && (
+                      <p className="text-xs text-amber-900 bg-amber-100/85 rounded-lg px-3 py-2 border border-amber-300/70">
+                        Outline notes detected: {outlinePageBeatsCount} page beat
+                        {outlinePageBeatsCount === 1 ? '' : 's'} for target {targetPageCount} pages (gap{' '}
+                        {outlineCoverageGap}). Generate outline again or use a fuller arc brief so mid-issue pages are
+                        less likely to repeat.
+                      </p>
                     )}
                     </div>
                     </div>

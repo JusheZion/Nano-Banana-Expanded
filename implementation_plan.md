@@ -484,11 +484,11 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline with arc brief, outline all (small series).
 
-### Phase 7b — Outline coverage + anti-repetition beats (planned, 2026-04-11)
+### Phase 7b — Outline coverage + anti-repetition beats (done, 2026-04-11)
 
 **Problem observed:** outlines can save with sparse `page_beats` (fewer than target pages), and page-beats generation may repeat because missing pages fallback to weak outline context.
 
-**Plan**
+**Implemented**
 
 - **Edge prompt hardening (`outline_issue`):**
   - Require one `page_beats` entry per page when `target_page_count` is provided.
@@ -499,6 +499,8 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Page beats fallback context (`page_beats` / `page_beats_issue`):**
   - Replace “sample first beat” fallback with nearest-anchor context (previous/next outline beats or trailing progression guidance) to avoid repeated page-1 style outputs.
   - Expand prior-page digest to include panel action previews from previous pages for stronger anti-repetition grounding.
+- **Writer UI feedback (`WriterPortal`):**
+  - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
 
 **Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse arc brief to confirm per-page outline coverage and reduced repeated page beats.
 

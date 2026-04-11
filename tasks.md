@@ -165,7 +165,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] UX: **Arc length (for AI)** vs batch count — inline hint + **`Outline all in series (N in Library)`** + **`arcIssueCountHint`** / updated tooltips (`WriterPortal`, `writerHelpRegistry`)
 - [x] Library → Issues: **`Add issue #N`** always when series selected (was hidden after first issue); outline panel **Open Library → Issues** link + help copy
 - [x] Edge **`outline_issue`**: arc spine prompt includes **part k of N** (ordered by issue #) + anti-hallucination rules so batch outline slices the author spine per issue
-- [ ] Writers issue quality follow-up (2026-04-11): require `outline_issue` output to include page-level beats that cover the target page range, and strengthen `page_beats` anti-repeat context by grounding each page against nearby outline beats + recent generated page beat summaries.
+- [x] Writers issue quality follow-up (2026-04-11): require `outline_issue` output to include page-level beats that cover the target page range, strengthen `page_beats` anti-repeat context by grounding each page against nearby outline beats + recent generated page beat summaries, and add a Writer UI warning when outline beat count is materially below target page count.
 - [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy (required for arc prompt fix)
 
 ## Writers' Workshop bugfixes (Apr 2026)
