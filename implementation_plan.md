@@ -501,6 +501,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
   - Expand prior-page digest to include panel action previews from previous pages for stronger anti-repetition grounding.
 - **Writer UI feedback (`WriterPortal`):**
   - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
+  - Add a one-click **Regenerate with coverage boost** action that re-runs `outline_issue` with an appended coverage instruction in `arc_brief` (auto-persists into the draft field after success).
 
 **Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse arc brief to confirm per-page outline coverage and reduced repeated page beats.
 

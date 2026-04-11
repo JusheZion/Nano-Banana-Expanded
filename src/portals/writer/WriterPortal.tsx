@@ -88,6 +88,14 @@ function getOutlinePageBeatsCount(outlineJson: unknown): number {
   return Array.isArray(arr) ? arr.length : 0;
 }
 
+function buildCoverageBoostArcBrief(baseArcBrief: string, targetPageCount: number): string {
+  const trimmed = baseArcBrief.trim();
+  const boostLine = `Coverage boost: map this issue to about ${targetPageCount} pages with sequential per-page beats from opening to ending.`;
+  if (!trimmed) return boostLine;
+  if (trimmed.includes('Coverage boost:')) return trimmed;
+  return `${trimmed}\n\n${boostLine}`;
+}
+
 function downloadJsonFile(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -486,11 +494,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
 
-  const runOutlineGenerate = useCallback(async () => {
+  const runOutlineGenerate = useCallback(async (opts?: { coverageBoost?: boolean }) => {
     if (!selectedIssueId) return;
     setOutlineGenError(null);
     setOutlineGenLoading(true);
-    const arcBriefTrim = arcBriefDraft.trim();
+    const arcBriefTrim = opts?.coverageBoost
+      ? buildCoverageBoostArcBrief(arcBriefDraft, targetPageCount).trim()
+      : arcBriefDraft.trim();
     const res = await invokeWriterTools({
       mode: 'outline_issue',
       issue_id: selectedIssueId,
@@ -502,6 +512,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     });
     setOutlineGenLoading(false);
     if (res.success) {
+      if (opts?.coverageBoost) {
+        setArcBriefDraft(arcBriefTrim);
+      }
       pushHistory(`outline v${res.version ?? '?'} saved`);
       const rows = await listWriterOutlinesForIssue(selectedIssueId);
       setOutlines(rows);
@@ -511,6 +524,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pushHistory(`error: ${msg}`);
     }
   }, [selectedIssueId, targetPageCount, arcBriefDraft, arcIssueCountDraft]);
+
+  const runOutlineGenerateCoverageBoost = useCallback(async () => {
+    await runOutlineGenerate({ coverageBoost: true });
+  }, [runOutlineGenerate]);
 
   const runOutlineGenerateAllIssues = useCallback(async () => {
     if (!selectedSeriesId || issues.length === 0) return;
@@ -1344,6 +1361,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       >
                         {outlineGenLoading ? 'Generating…' : 'Generate outline'}
                       </button>
+                      {outlineCoverageWarning && (
+                        <button
+                          type="button"
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading || outlineAllBusy}
+                          onClick={() => void runOutlineGenerateCoverageBoost()}
+                          className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-700/35 bg-amber-100/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {outlineGenLoading
+                            ? 'Regenerating with coverage boost…'
+                            : 'Regenerate with page-coverage hint'}
+                        </button>
+                      )}
                       <Tooltip content={WRITER_UI_TIPS.syncPagesToTarget} side="bottom">
                         <button
                           type="button"
@@ -1442,12 +1471,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
                     )}
                     {outlineCoverageWarning && (
-                      <p className="text-xs text-amber-900 bg-amber-100/85 rounded-lg px-3 py-2 border border-amber-300/70">
-                        Outline notes detected: {outlinePageBeatsCount} page beat
-                        {outlinePageBeatsCount === 1 ? '' : 's'} for target {targetPageCount} pages (gap{' '}
-                        {outlineCoverageGap}). Generate outline again or use a fuller arc brief so mid-issue pages are
-                        less likely to repeat.
-                      </p>
+                      <div className="rounded-lg border border-amber-300/70 bg-amber-100/85 px-3 py-2 space-y-2">
+                        <p className="text-xs text-amber-900">
+                          Outline notes detected: {outlinePageBeatsCount} page beat
+                          {outlinePageBeatsCount === 1 ? '' : 's'} for target {targetPageCount} pages (gap{' '}
+                          {outlineCoverageGap}). Regenerate with coverage boost to reduce repeated mid-issue beats.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading || outlineAllBusy}
+                          onClick={() => void runOutlineGenerateCoverageBoost()}
+                          className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {outlineGenLoading ? 'Regenerating…' : 'Regenerate with coverage boost'}
+                        </button>
+                      </div>
                     )}
                     </div>
                     </div>
