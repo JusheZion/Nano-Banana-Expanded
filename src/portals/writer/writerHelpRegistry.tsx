@@ -45,7 +45,7 @@ export const WRITER_UI_TIPS = {
   issuesStoryContext:
     'With a series selected, Library → Issues always shows “Add issue #N” at the top (same idea as Add page). Each row is one comic issue; add as many as you need, then pick one to edit. After you pick an issue: Issue Outline → Story context → Save. Cast / locations / bibles: Table Editor only for now.',
   pagesLibrary:
-    'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows.',
+    'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows. Check up to 5 pages to batch delete, clear beats or dialogue, or download beats/dialogue as one JSON file; single-page download/clear is on the Beats and Dialogue tabs.',
   syncPagesToTarget:
     'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
   batchPageBeats:

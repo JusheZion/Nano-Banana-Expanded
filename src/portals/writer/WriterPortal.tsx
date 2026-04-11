@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import {
+  clearWriterPagesBeatsJson,
+  clearWriterPagesScriptText,
   createWriterIssue,
   createWriterPage,
   createWriterSeries,
+  deleteWriterPages,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -69,6 +72,8 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   id,
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
+
+const MAX_PAGE_MULTI_SELECT = 5;
 
 function pageRowHasPanelBeats(p: WriterPageRow | null | undefined): boolean {
   const panels = (p?.beats_json as { panels?: unknown } | null)?.panels;
@@ -153,6 +158,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
   const [beatsDirectorNotesDraft, setBeatsDirectorNotesDraft] = useState('');
+  const [selectedPageIdsForBatch, setSelectedPageIdsForBatch] = useState<string[]>([]);
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
@@ -188,6 +194,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const pushHistory = (line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
   };
+
+  const refreshPagesForIssue = useCallback(async () => {
+    if (!selectedIssueId) return;
+    const pageRows = await listWriterPages(selectedIssueId);
+    setPages(pageRows);
+    setSelectedPageId((prev) => {
+      if (prev && pageRows.some((p) => p.id === prev)) return prev;
+      return pageRows[0]?.id ?? null;
+    });
+  }, [selectedIssueId]);
+
+  const togglePageBatchSelect = useCallback((pageId: string) => {
+    setSelectedPageIdsForBatch((prev) => {
+      if (prev.includes(pageId)) return prev.filter((x) => x !== pageId);
+      if (prev.length >= MAX_PAGE_MULTI_SELECT) return prev;
+      return [...prev, pageId];
+    });
+  }, []);
+
+  const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
     'details' in res && res.details ? `${res.error}: ${res.details}` : res.error;
@@ -316,6 +342,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId]);
 
   useEffect(() => {
+    setSelectedPageIdsForBatch((prev) => prev.filter((id) => pages.some((p) => p.id === id)));
+  }, [pages]);
+
+  useEffect(() => {
     const row = issues.find((x) => x.id === selectedIssueId);
     if (row) {
       setIssueTitleDraft(row.title ?? '');
@@ -343,6 +373,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const sortedPages = useMemo(
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
     [pages],
+  );
+
+  const selectedPagesForBatchExport = useMemo(
+    () => sortedPages.filter((p) => selectedPageIdsForBatch.includes(p.id)),
+    [sortedPages, selectedPageIdsForBatch],
   );
 
   const pagesWithBeatsCount = useMemo(
@@ -599,6 +634,116 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       r.created > 0 ? `synced pages (+${r.created} new, ${pageRows.length} total)` : 'pages already match target',
     );
   }, [selectedIssueId, targetPageCount]);
+
+  const runLibraryDeleteSelectedPages = useCallback(async () => {
+    if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedPageIdsForBatch.length} page row(s) from the database? Page numbers may leave gaps (e.g. 1,2,4). This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setLibraryPagesBusy(true);
+    const ok = await deleteWriterPages(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: delete pages');
+      return;
+    }
+    const deleted = new Set(selectedPageIdsForBatch);
+    setSelectedPageIdsForBatch([]);
+    await refreshPagesForIssue();
+    pushHistory(`deleted ${deleted.size} page(s)`);
+  }, [selectedIssueId, selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const runLibraryClearBeatsSelected = useCallback(async () => {
+    if (selectedPageIdsForBatch.length === 0) return;
+    if (!window.confirm(`Clear panel beats on ${selectedPageIdsForBatch.length} page(s)?`)) return;
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesBeatsJson(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: clear beats');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory(`cleared beats on ${selectedPageIdsForBatch.length} page(s)`);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const runLibraryClearDialogueSelected = useCallback(async () => {
+    if (selectedPageIdsForBatch.length === 0) return;
+    if (!window.confirm(`Clear dialogue/script on ${selectedPageIdsForBatch.length} page(s)?`)) return;
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesScriptText(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: clear dialogue');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory(`cleared dialogue on ${selectedPageIdsForBatch.length} page(s)`);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const downloadSelectedBeatsBundle = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    downloadJsonFile(`writer-beats-pages-${sorted.map((p) => p.page_number).join('-')}.json`, {
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      pages: sorted.map((p) => ({
+        page_number: p.page_number,
+        beats_json: p.beats_json,
+      })),
+    });
+    pushHistory(`downloaded beats bundle (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport]);
+
+  const downloadSelectedDialogueBundle = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    downloadJsonFile(`writer-dialogue-pages-${sorted.map((p) => p.page_number).join('-')}.json`, {
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      pages: sorted.map((p) => ({
+        page_number: p.page_number,
+        script_text: p.script_text,
+      })),
+    });
+    pushHistory(`downloaded dialogue bundle (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport]);
+
+  const clearBeatsForSelectedPage = useCallback(async () => {
+    if (!selectedPageId) return;
+    if (!window.confirm('Clear panel beats for this page?')) return;
+    setBeatsError(null);
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesBeatsJson([selectedPageId]);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      setBeatsError('Could not clear beats.');
+      pushHistory('error: clear beats (page)');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory('cleared beats (selected page)');
+  }, [selectedPageId, refreshPagesForIssue]);
+
+  const clearDialogueForSelectedPage = useCallback(async () => {
+    if (!selectedPageId) return;
+    if (!window.confirm('Clear dialogue/script for this page?')) return;
+    setDialogueError(null);
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesScriptText([selectedPageId]);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      setDialogueError('Could not clear dialogue.');
+      pushHistory('error: clear dialogue (page)');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory('cleared dialogue (selected page)');
+  }, [selectedPageId, refreshPagesForIssue]);
 
   const runBatchPageBeats = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -942,22 +1087,95 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ) : supabaseOk ? (
           <p className="text-[10px] text-black/45 mb-1.5 leading-snug">Select an issue to add pages.</p>
         ) : null}
+        <p className="text-[9px] text-black/50 leading-snug">
+          Multi-select up to {MAX_PAGE_MULTI_SELECT} for batch delete, clear, or download bundles.
+        </p>
+        {selectedPageIdsForBatch.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mb-1">
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryDeleteSelectedPages()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900 bg-red-100/90 border border-red-300/70 disabled:opacity-45"
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryClearBeatsSelected()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Clear beats
+            </button>
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryClearDialogueSelected()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Clear dialogue
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedBeatsBundle()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Download beats
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedDialogueBundle()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Download dialogue
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedPageIdsForBatch([])}
+              className="rounded-md px-2 py-1 text-[10px] font-semibold text-black/70 hover:bg-black/10"
+            >
+              Clear selection
+            </button>
+          </div>
+        ) : null}
         <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1">
-          {sortedPages.map((p) => (
-            <Tooltip key={p.id} content={`Page ${p.page_number}`} side="left">
-              <button
-                type="button"
-                onClick={() => setSelectedPageId(p.id)}
-                className={`w-full text-left rounded-lg px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                  selectedPageId === p.id
-                    ? 'bg-black/15 text-black ring-1 ring-black/20'
-                    : 'text-black/65 hover:bg-black/10 bg-white/40'
+          {sortedPages.map((p) => {
+            const batchOn = selectedPageIdsForBatch.includes(p.id);
+            const primaryOn = selectedPageId === p.id;
+            return (
+              <div
+                key={p.id}
+                className={`flex items-center gap-1.5 rounded-lg px-1 py-0.5 ${
+                  primaryOn ? 'bg-black/10 ring-1 ring-black/15' : 'bg-white/30'
                 }`}
               >
-                Page {p.page_number}
-              </button>
-            </Tooltip>
-          ))}
+                <input
+                  type="checkbox"
+                  checked={batchOn}
+                  disabled={!supabaseOk || (!batchOn && selectedPageIdsForBatch.length >= MAX_PAGE_MULTI_SELECT)}
+                  onChange={() => togglePageBatchSelect(p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded border-black/40 shrink-0"
+                  title={`Select for batch (max ${MAX_PAGE_MULTI_SELECT})`}
+                  aria-label={`Select page ${p.page_number} for batch`}
+                />
+                <Tooltip content={`Page ${p.page_number}`} side="left">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPageId(p.id)}
+                    className={`flex-1 min-w-0 text-left rounded-md px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                      primaryOn ? 'font-bold text-black' : 'text-black/65 hover:bg-black/10'
+                    }`}
+                  >
+                    Page {p.page_number}
+                  </button>
+                </Tooltip>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1007,6 +1225,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       onClick: () => {
         if (!latestOutline) return;
         void navigator.clipboard.writeText(JSON.stringify(latestOutline.outline_json, null, 2));
+      },
+      disabled: !latestOutline,
+    },
+    {
+      label: 'Download outline JSON',
+      onClick: () => {
+        if (!latestOutline) return;
+        downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json);
+        pushHistory(`downloaded outline v${latestOutline.version}`);
       },
       disabled: !latestOutline,
     },
@@ -1503,11 +1730,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       aria-label="Outline preview"
                     >
                       <div className={`${WRITER_GLASS_CARD} p-4 space-y-2 min-h-0`}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
                             Latest saved outline
                           </p>
-                          <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={!latestOutline}
+                              onClick={() => {
+                                if (!latestOutline) return;
+                                downloadJsonFile(
+                                  `writer-outline-v${latestOutline.version}.json`,
+                                  latestOutline.outline_json,
+                                );
+                                pushHistory(`downloaded outline v${latestOutline.version}`);
+                              }}
+                              className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-40"
+                            >
+                              Download outline
+                            </button>
+                            <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                          </div>
                         </div>
                         {latestOutline ? (
                           <pre
@@ -1626,6 +1870,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     >
                       {beatsLoading ? 'Generating…' : 'Generate page beats'}
                     </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!selectedPage?.beats_json}
+                        onClick={() => {
+                          if (!selectedPage?.beats_json) return;
+                          downloadJsonFile(
+                            `writer-beats-page-${selectedPage.page_number}.json`,
+                            selectedPage.beats_json,
+                          );
+                          pushHistory(`downloaded beats page ${selectedPage.page_number}`);
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Download beats (this page)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json}
+                        onClick={() => void clearBeatsForSelectedPage()}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Clear beats (this page)
+                      </button>
+                    </div>
                     {beatsError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
                     )}
@@ -1696,6 +1965,34 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     >
                       {dialogueLoading ? 'Drafting…' : 'Draft dialogue'}
                     </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!selectedPage?.script_text?.trim()}
+                        onClick={() => {
+                          if (!selectedPage?.script_text) return;
+                          downloadTextFile(
+                            `writer-dialogue-page-${selectedPage.page_number}.txt`,
+                            selectedPage.script_text,
+                            'text/plain;charset=utf-8',
+                          );
+                          pushHistory(`downloaded dialogue page ${selectedPage.page_number}`);
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Download dialogue (this page)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          !supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.script_text?.trim()
+                        }
+                        onClick={() => void clearDialogueForSelectedPage()}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Clear dialogue (this page)
+                      </button>
+                    </div>
                     {dialogueError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{dialogueError}</p>
                     )}

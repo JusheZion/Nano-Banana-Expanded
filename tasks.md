@@ -167,6 +167,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Edge **`outline_issue`**: arc spine prompt includes **part k of N** (ordered by issue #) + anti-hallucination rules so batch outline slices the author spine per issue
 - [x] Writers issue quality follow-up (2026-04-11): require `outline_issue` output to include page-level beats that cover the target page range, strengthen `page_beats` anti-repeat context by grounding each page against nearby outline beats + recent generated page beat summaries, add a Writer UI warning when outline beat count is materially below target page count, and include one-click **Regenerate with coverage boost** action that injects an explicit coverage hint into `arc_brief`.
 - [x] Beats-only **Director notes for beats** (`director_notes_for_beats` on `page_beats` / `page_beats_issue`) + Edge/UI prompts for layout variety, visual detail, spreads, and distinct consecutive outline beats when `scene` repeats.
+- [x] Library → Pages (2026-04-11): multi-select (max 5) — batch delete pages, clear beats/dialogue, download beats/dialogue bundle; Outline tab **Download outline**; Beats/Dialogue tabs — per-page download + clear. API: `deleteWriterPages`, `clearWriterPagesBeatsJson`, `clearWriterPagesScriptText` in `arcsWriterRoom.ts`; **`pagesLibrary`** help text.
 - [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy (required for arc prompt fix)
 
 ## Writers' Workshop bugfixes (Apr 2026)

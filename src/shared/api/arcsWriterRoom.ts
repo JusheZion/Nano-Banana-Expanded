@@ -231,6 +231,47 @@ export async function ensureWriterPagesToCount(
   return { ok: true, created };
 }
 
+const nowUtcIso = () => new Date().toISOString();
+
+/** Delete page rows by id. Returns false if Supabase is off or the delete fails. */
+export async function deleteWriterPages(pageIds: string[]): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase || pageIds.length === 0) return false;
+  const { error } = await supabase.from('writer_pages').delete().in('id', pageIds);
+  if (error) {
+    console.warn('[arcsWriterRoom] deleteWriterPages', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Set beats_json to null for the given page ids. */
+export async function clearWriterPagesBeatsJson(pageIds: string[]): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase || pageIds.length === 0) return false;
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ beats_json: null, updated_at: nowUtcIso() })
+    .in('id', pageIds);
+  if (error) {
+    console.warn('[arcsWriterRoom] clearWriterPagesBeatsJson', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Set script_text to null for the given page ids. */
+export async function clearWriterPagesScriptText(pageIds: string[]): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase || pageIds.length === 0) return false;
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ script_text: null, updated_at: nowUtcIso() })
+    .in('id', pageIds);
+  if (error) {
+    console.warn('[arcsWriterRoom] clearWriterPagesScriptText', error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function listWriterShotPlansForIssue(issueId: string): Promise<WriterVideoShotPlanRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase

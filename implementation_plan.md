@@ -506,6 +506,18 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse arc brief to confirm per-page outline coverage and reduced repeated page beats.
 
+### Phase 7c — Library page multi-select, clear, delete, exports (done, 2026-04-11)
+
+**Goal:** Restore multi-select on Library → Pages (cap 5) and support batch delete pages, batch clear beats or dialogue, batch download beats/dialogue as one JSON file; single-page download/clear on Beats and Dialogue tabs; download saved outline JSON from Outline preview.
+
+**Client**
+
+- **`arcsWriterRoom.ts`:** `deleteWriterPages`, `clearWriterPagesBeatsJson`, `clearWriterPagesScriptText`.
+- **`WriterPortal.tsx`:** checkboxes + toolbar actions; Outline **Download outline**; per-tab actions for current page.
+- **`writerHelpRegistry.tsx`:** `pagesLibrary` tip mentions multi-select and batch actions.
+
+**Verify:** `npm run test -- --run`, `npm run build`; manual — select pages, batch clear/download, delete with confirm.
+
 ### Verification
 
 - `npm run test -- --run`, `npm run build`
