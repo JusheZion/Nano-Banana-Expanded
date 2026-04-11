@@ -63,7 +63,9 @@ export const WRITER_UI_TIPS = {
   outlinePreview:
     'Latest saved outline JSON for this issue. Generate a new version from Issue Outline → Target pages → Generate outline.',
   beatsTab:
-    'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json.',
+    'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis and Arc spine still drive outline_issue separately.',
+  beatsDirectorNotes:
+    'Optional text sent only when generating page beats (not outlines). Use for double-page spreads (which page is left/right), requested panel shapes (tall strip, hero panel, inset), tone, or “more environmental detail / less talking heads.” Applies to Generate page beats, Generate all beats batches, and the ribbon quick-generate on the Beats tab.',
   beatsNeedPage: 'Select an issue that has pages, then choose a page in the Library.',
   dialogueTab:
     'Draft dialogue from the page’s beats and outline. Pick comic script or screenplay style, then run on the selected page. Saves to writer_pages.script_text.',

@@ -53,6 +53,8 @@ export const pageBeatsJsonSchema = z
 export const writerToolsPageBeatsRequestSchema = z.object({
   mode: z.literal('page_beats'),
   page_id: z.string().uuid(),
+  /** Optional; only sent to page_beats — not outline_issue. Layout / spread / pacing notes for the artist. */
+  director_notes_for_beats: z.string().max(4000).optional(),
 });
 
 export const writerToolsPageBeatsIssueRequestSchema = z.object({
@@ -60,6 +62,7 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   issue_id: z.string().uuid(),
   skip_existing: z.boolean().optional(),
   batch_limit: z.number().int().min(1).max(20).optional(),
+  director_notes_for_beats: z.string().max(4000).optional(),
 });
 
 export const draftDialogueResultSchema = z

@@ -502,6 +502,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Writer UI feedback (`WriterPortal`):**
   - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
   - Add a one-click **Regenerate with coverage boost** action that re-runs `outline_issue` with an appended coverage instruction in `arc_brief` (auto-persists into the draft field after success).
+  - **Beats-only director notes:** optional `director_notes_for_beats` on `page_beats` / `page_beats_issue` (Zod max 4000) + Beats tab textarea; not sent to `outline_issue`. Edge prompt adds layout-variation and spread guidance; outline prompt nudges distinct consecutive beats when `scene` repeats.
 
 **Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse arc brief to confirm per-page outline coverage and reduced repeated page beats.
 

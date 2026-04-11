@@ -49,6 +49,7 @@ export type PageBeatsJson = {
 export type WriterToolsPageBeatsPayload = {
   mode: 'page_beats';
   page_id: string;
+  director_notes_for_beats?: string;
 };
 
 export type WriterToolsPageBeatsIssuePayload = {
@@ -56,6 +57,7 @@ export type WriterToolsPageBeatsIssuePayload = {
   issue_id: string;
   skip_existing?: boolean;
   batch_limit?: number;
+  director_notes_for_beats?: string;
 };
 
 export type WriterToolsDraftDialoguePayload = {

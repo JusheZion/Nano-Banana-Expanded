@@ -255,6 +255,8 @@ function buildOutlineUserPrompt(args: {
       : 'Coverage rule: provide enough page_beats to map the issue from opening through ending, not just a handful of broad beats.',
     'Do not leave middle pages as implicit blanks. If exact page numbers are uncertain, still provide sequential page_target values that span the issue.',
     'Avoid repeated summaries across adjacent page_beats; each beat must introduce a new development, escalation, reveal, or consequence.',
+    'When consecutive page_beats share the same location, make each summary specify a different story beat, camera/staging idea, or new information — not three near-identical council-table moments.',
+    'If the author wants a double-page spread, encode it in page_beats: e.g. page N summary starts with "Spread with page N+1:" and page N+1 summary references "right half of spread with page N" so panel generation can split left/right.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -350,8 +352,10 @@ function buildPageBeatsUserPrompt(args: {
   styleBibles: unknown[];
   latestOutline: unknown;
   priorPagesDigest: string;
+  directorNotesForBeats?: string;
 }): string {
   const outlineBeatContext = extractOutlineBeatContextForPage(args.latestOutline, args.page.page_number);
+  const directorTrim = args.directorNotesForBeats?.trim();
   return [
     `Create panel-by-panel beats for ONE comic book page as JSON.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
@@ -361,6 +365,9 @@ function buildPageBeatsUserPrompt(args: {
     `Existing beats_json (may be null): ${JSON.stringify(args.page.beats_json ?? null)}`,
     `Existing script_text preview: ${(args.page.script_text ?? '').slice(0, 500) || '(none)'}`,
     `Issue outline context for this page:\n${outlineBeatContext}`,
+    directorTrim
+      ? `Author / director notes for THIS page-beats pass only (honor unless they conflict with synopsis):\n${directorTrim}`
+      : '',
     `Cast:\n${JSON.stringify(args.cast, null, 2)}`,
     `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
@@ -370,7 +377,12 @@ function buildPageBeatsUserPrompt(args: {
     'Must have at least one panel; every panel needs non-empty "action".',
     'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
     'Do not reuse key actions from prior pages. If outline context is sparse, infer the next logical development from the nearest outline beats plus prior-page digest.',
-  ].join('\n');
+    'Flesh out concrete visual specifics in each panel (props, blocking, lighting, background detail, character business) — not generic talking-head repeats when the scene continues across pages.',
+    'Vary layout across panels on this page: mix wide, medium, close-up, unusual crops, Dutch angle, silhouette, over-shoulder, POV, inset panels, or asymmetric grid when it serves the beat. State approximate panel shape in composition when helpful (e.g. "tall narrow strip", "full-width horizontal band", "large hero panel + small reaction strip").',
+    'If the author notes a double-page spread, describe which content sits on this page (left vs right) and reference the gutter explicitly in composition for that page.',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildDraftDialogueUserPrompt(args: {
@@ -442,6 +454,7 @@ async function executeSinglePageBeats(
   issueRow: IssueRow,
   geminiModel: string,
   geminiKey: string,
+  directorNotesForBeats?: string,
 ): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
   const sid = issueRow.series_id;
   const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
@@ -474,6 +487,7 @@ async function executeSinglePageBeats(
     styleBibles: bibleRes.data ?? [],
     latestOutline: outlineRes.data?.outline_json ?? null,
     priorPagesDigest,
+    directorNotesForBeats,
   });
   let beatsJson: unknown;
   try {
@@ -767,7 +781,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'page_beats') {
-      const { page_id } = parsedReq.data;
+      const { page_id, director_notes_for_beats } = parsedReq.data;
       const { data: page, error: pageErr } = await supabase
         .from('writer_pages')
         .select('id, issue_id, page_number, beats_json, script_text')
@@ -783,7 +797,14 @@ Deno.serve(async (req) => {
       if (!issueRow) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
       }
-      const result = await executeSinglePageBeats(supabase, page, issueRow, geminiModel, geminiKey);
+      const result = await executeSinglePageBeats(
+        supabase,
+        page,
+        issueRow,
+        geminiModel,
+        geminiKey,
+        director_notes_for_beats,
+      );
       if (!result.ok) {
         if (/api key|GEMINI|Google|quota|429/i.test(result.message)) {
           return llmFailureResponse(result.message);
@@ -800,7 +821,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'page_beats_issue') {
-      const { issue_id, skip_existing, batch_limit } = parsedReq.data;
+      const { issue_id, skip_existing, batch_limit, director_notes_for_beats } = parsedReq.data;
       const issueRow = await loadIssueRow(supabase, issue_id);
       if (!issueRow) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
@@ -840,7 +861,14 @@ Deno.serve(async (req) => {
       const processed: number[] = [];
       const errors: { page_number: number; message: string }[] = [];
       for (const page of batch) {
-        const r = await executeSinglePageBeats(supabase, page, issueRow, geminiModel, geminiKey);
+        const r = await executeSinglePageBeats(
+          supabase,
+          page,
+          issueRow,
+          geminiModel,
+          geminiKey,
+          director_notes_for_beats,
+        );
         if (r.ok) {
           processed.push(page.page_number);
         } else {

@@ -152,6 +152,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
+  const [beatsDirectorNotesDraft, setBeatsDirectorNotesDraft] = useState('');
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
@@ -612,11 +613,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           pushHistory('batch beats cancelled');
           break;
         }
+        const notesTrim = beatsDirectorNotesDraft.trim();
         const res = await invokeWriterTools({
           mode: 'page_beats_issue',
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
           batch_limit: 8,
+          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
         });
         if (!res.success) {
           setBeatsError(toolErrorMessage(res));
@@ -646,7 +649,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchLabel('');
       beatsBatchAbortRef.current = null;
     }
-  }, [selectedIssueId, beatsSkipExisting]);
+  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'outline' && selectedIssueId) {
@@ -656,7 +659,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (activeTab === 'beats' && selectedPageId && selectedIssueId) {
       setBeatsError(null);
       setBeatsLoading(true);
-      const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
+      const notesTrim = beatsDirectorNotesDraft.trim();
+      const res = await invokeWriterTools({
+        mode: 'page_beats',
+        page_id: selectedPageId,
+        ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+      });
       setBeatsLoading(false);
       if (res.success) {
         pushHistory('page beats saved (page)');
@@ -716,6 +724,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab,
     selectedIssueId,
     selectedPageId,
+    beatsDirectorNotesDraft,
     dialogueStyle,
     shotsBrief,
     runPacingFromRibbon,
@@ -1567,6 +1576,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {sortedPages.length === 0 && (
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
                     )}
+                    <div className="space-y-1 max-w-2xl">
+                      <div className="flex items-center gap-1.5">
+                        <label
+                          className="text-[11px] font-semibold text-black/70"
+                          htmlFor="writer-beats-director-notes"
+                        >
+                          Director notes for beats (optional)
+                        </label>
+                        <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
+                      </div>
+                      <textarea
+                        id="writer-beats-director-notes"
+                        name="writer-beats-director-notes"
+                        rows={3}
+                        value={beatsDirectorNotesDraft}
+                        onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
+                        disabled={!selectedIssueId}
+                        placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
+                        className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
+                      />
+                    </div>
                     <button
                       type="button"
                       disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
@@ -1574,7 +1604,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         if (!selectedPageId || !selectedIssueId) return;
                         setBeatsError(null);
                         setBeatsLoading(true);
-                        const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
+                        const notesTrim = beatsDirectorNotesDraft.trim();
+                        const res = await invokeWriterTools({
+                          mode: 'page_beats',
+                          page_id: selectedPageId,
+                          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+                        });
                         setBeatsLoading(false);
                         if (res.success) {
                           pushHistory(`page beats saved (page)`);
