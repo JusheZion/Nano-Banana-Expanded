@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ImageOff } from 'lucide-react';
+import { useArcsResolvedSrc } from '@/shared/hooks/useArcsResolvedSrc';
 
 type VaultImageWithFallbackProps = {
   src: string;
@@ -23,6 +24,11 @@ export function VaultImageWithFallback({
   imgStyle,
 }: VaultImageWithFallbackProps) {
   const [failed, setFailed] = useState(false);
+  const displaySrc = useArcsResolvedSrc(src);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
 
   if (failed) {
     return (
@@ -39,7 +45,7 @@ export function VaultImageWithFallback({
 
   return (
     <img
-      src={src}
+      src={displaySrc}
       alt={alt}
       className={imgClassName}
       style={imgStyle}

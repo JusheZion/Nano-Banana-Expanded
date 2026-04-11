@@ -5,6 +5,26 @@ export function escapeRegExp(s: string): string {
 
 export type WriterWorkspaceTabId = 'arc' | 'outline' | 'beats' | 'dialogue' | 'video';
 
+/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc (review). Matches ⌘1–⌘5. */
+export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
+  'outline',
+  'beats',
+  'dialogue',
+  'video',
+  'arc',
+];
+
+export const WRITER_WORKSPACE_TAB_LABELS: Record<
+  WriterWorkspaceTabId,
+  { ribbon: string; heading: string }
+> = {
+  outline: { ribbon: 'Outline', heading: 'Issue Outline' },
+  beats: { ribbon: 'Beats', heading: 'Page Beats' },
+  dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
+  video: { ribbon: 'Video', heading: 'Video' },
+  arc: { ribbon: 'Arc', heading: 'Arc Planner' },
+};
+
 export type WriterToolSaved = { at?: string; result?: unknown } | null;
 
 export type WriterSearchContext = {

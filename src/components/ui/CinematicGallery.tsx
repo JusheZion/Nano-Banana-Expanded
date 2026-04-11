@@ -3,6 +3,7 @@ import { useTheme } from '@/shared/context/ThemeContext';
 import { getCharactersGroupedByProfile } from '@/shared/api/arcsArchive';
 import type { CharacterArchiveItem } from '@/shared/api/arcsArchive';
 import { ArchiveThumbnailFocusModal } from '@/components/ui/ArchiveThumbnailFocusModal';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 
 export const CinematicGallery: React.FC = () => {
     const [hoveredKey, setHoveredKey] = useState<string | null>(null);
@@ -98,7 +99,7 @@ export const CinematicGallery: React.FC = () => {
                                                 >
                                                     Framing
                                                 </button>
-                                                <img
+                                                <ArcsStorageImg
                                                     src={item.image_url}
                                                     alt={displayName}
                                                     className={`

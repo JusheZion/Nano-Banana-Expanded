@@ -30,6 +30,10 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
+  /** Optional multi-issue spine text; steers the model when generating this issue’s outline. */
+  arc_brief: z.string().max(8000).optional(),
+  /** When set with arc_brief, tells the model this issue sits inside an N-issue arc. */
+  arc_issue_count: z.number().int().min(1).max(48).optional(),
 });
 
 const pageBeatPanelSchema = z.object({
@@ -52,6 +56,14 @@ export const pageBeatsJsonSchema = z
 export const writerToolsPageBeatsRequestSchema = z.object({
   mode: z.literal('page_beats'),
   page_id: z.string().uuid(),
+});
+
+export const writerToolsPageBeatsIssueRequestSchema = z.object({
+  mode: z.literal('page_beats_issue'),
+  issue_id: z.string().uuid(),
+  skip_existing: z.boolean().optional(),
+  /** Pages to process per request (sequential LLM calls). Client may loop while has_more. */
+  batch_limit: z.number().int().min(1).max(20).optional(),
 });
 
 export const draftDialogueResultSchema = z
@@ -137,6 +149,7 @@ export const writerToolsPlanShotsRequestSchema = z.object({
 export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
+  writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,
   writerToolsPacingReviewRequestSchema,
   writerToolsCanonCheckRequestSchema,

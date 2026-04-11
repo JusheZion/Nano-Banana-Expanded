@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARCS — Mobile Phase 0 intake</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1e;
+      --text: #f0f0f2;
+      --muted: #9898a6;
+      --accent: #d4af37;
+      --border: rgba(255,255,255,0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 1.25rem;
+      max-width: 52rem;
+      margin-inline: auto;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      background: var(--surface);
+    }
+    legend {
+      padding: 0 0.35rem;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin: 0.75rem 0 0.35rem;
+      color: var(--muted);
+    }
+    label:first-of-type { margin-top: 0; }
+    textarea, input[type="text"] {
+      width: 100%;
+      background: #0b0b0e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.5rem 0.65rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    textarea {
+      min-height: 4.5rem;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .row label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0;
+      cursor: pointer;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin: 1.25rem 0;
+    }
+    button {
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 700;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: linear-gradient(180deg, #e8c963, var(--accent));
+      color: #111;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    #status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-height: 1.25rem;
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mobile Phase 0 — intake form</h1>
+  <p class="sub">Fill in, then click <strong>Copy for ARCS assistant</strong> and paste into your Cursor chat. This file is local-only (not part of the app UI).</p>
+
+  <div class="actions">
+    <button type="button" id="btnCopy">Copy for ARCS assistant</button>
+    <button type="button" class="secondary" id="btnClear">Clear all fields</button>
+  </div>
+  <p id="status" aria-live="polite"></p>
+
+  <form id="intake">
+    <fieldset>
+      <legend>Goals</legend>
+      <div class="row">
+        <label><input type="checkbox" name="a1" checked /> A1: One responsive web app (not two native apps) for v1</label>
+        <label><input type="checkbox" name="a2" checked /> A2: iPhone + iPad = two layout profiles, one codebase</label>
+      </div>
+      <label for="a_extra">Notes on goals (optional)</label>
+      <textarea id="a_extra" name="a_extra" placeholder="Anything to add or change…"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Product & scope</legend>
+      <label for="b1">B1 — Minimum CSS width / devices</label>
+      <textarea id="b1" name="b1" placeholder="e.g. down to 375px; iPhone SE must work"></textarea>
+      <label for="b2">B2 — Portrait vs landscape</label>
+      <textarea id="b2" name="b2" placeholder="e.g. portrait-first; landscape best-effort"></textarea>
+      <label for="b3">B3 — Portal priority (must-have on phone first)</label>
+      <textarea id="b3" name="b3" placeholder="Numbered list: Home, Writer, …"></textarea>
+      <label for="b4">B4 — Konva studios on phone: full parity vs simplified v1?</label>
+      <textarea id="b4" name="b4" placeholder="e.g. full generate required vs simplified OK"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>UX & navigation</legend>
+      <label for="c1">C1 — Phone nav preference</label>
+      <textarea id="c1" name="c1" placeholder="drawer / bottom tabs / hybrid / decide later"></textarea>
+      <label for="c2">C2 — iPad Split View / narrow column</label>
+      <textarea id="c2" name="c2" placeholder="required vs full-width only for v1"></textarea>
+      <label for="c3">C3 — OK to replace hover with tap everywhere?</label>
+      <textarea id="c3" name="c3" placeholder="yes / concerns…"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Technical</legend>
+      <div class="row">
+        <label><input type="checkbox" name="d1" /> D1: Konva/touch needs real-device check</label>
+        <label><input type="checkbox" name="d2" /> D2: Aware of scroll / 100vh / flex traps</label>
+        <label><input type="checkbox" name="d3" /> D3: Will test blur / fixed background on device</label>
+      </div>
+      <label for="d_extra">Technical risks or constraints</label>
+      <textarea id="d_extra" name="d_extra"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Auth & Supabase</legend>
+      <label for="e1">E1 — Production URL (mobile users)</label>
+      <input type="text" id="e1" name="e1" placeholder="https://…" autocomplete="off" />
+      <label for="e2">E2 — Supabase Site URL / Redirect URLs status</label>
+      <textarea id="e2" name="e2" placeholder="Confirmed for prod + localhost; preview URLs if any"></textarea>
+      <label for="e3">E3 — In-app browsers vs Safari only</label>
+      <textarea id="e3" name="e3"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Deployment & ops</legend>
+      <label for="f1">F1 — Cloudflare / routing notes</label>
+      <textarea id="f1" name="f1"></textarea>
+      <label for="f2">F2 — Client logging (e.g. Sentry) in this phase?</label>
+      <textarea id="f2" name="f2"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Testing</legend>
+      <div class="row">
+        <label><input type="checkbox" name="g1" checked /> G1: Acknowledge desktop emulation + need real devices</label>
+      </div>
+      <label for="g2">G2 — Device matrix for sign-off</label>
+      <textarea id="g2" name="g2" placeholder="e.g. iPhone 15 Pro, iPad Air, Safari"></textarea>
+      <label for="g3">G3 — One-sentence definition of done</label>
+      <textarea id="g3" name="g3"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Optional PWA</legend>
+      <label for="h1">H1 — PWA / Add to Home Screen in this phase?</label>
+      <textarea id="h1" name="h1" placeholder="yes / defer"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Audit — predicted pain</legend>
+      <label for="i1">Top 3 predicted pain areas (optional)</label>
+      <textarea id="i1" name="i1"></textarea>
+      <p class="hint">Full audit checklist lives in MOBILE_PHASE0_PREPARATION.md § I.</p>
+    </fieldset>
+  </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById("intake");
+      var status = document.getElementById("status");
+
+      function val(id) {
+        var el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      }
+      function chk(name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        return el && el.type === "checkbox" ? el.checked : false;
+      }
+
+      function buildMarkdown() {
+        var parts = [
+          "## Mobile Phase 0 — submitted answers",
+          "",
+          "### Goals",
+          "- A1 (one responsive web app): " + (chk("a1") ? "yes" : "no"),
+          "- A2 (two layout profiles, one codebase): " + (chk("a2") ? "yes" : "no"),
+          val("a_extra") ? "- Notes: " + val("a_extra") : "- Notes: (empty)",
+          "",
+          "### Product & scope",
+          "- B1 minimum width / devices: " + (val("b1") || "(empty)"),
+          "- B2 portrait / landscape: " + (val("b2") || "(empty)"),
+          "- B3 portal priority: " + (val("b3") || "(empty)"),
+          "- B4 Konva on phone: " + (val("b4") || "(empty)"),
+          "",
+          "### UX & navigation",
+          "- C1 phone nav: " + (val("c1") || "(empty)"),
+          "- C2 iPad split: " + (val("c2") || "(empty)"),
+          "- C3 tap instead of hover: " + (val("c3") || "(empty)"),
+          "",
+          "### Technical",
+          "- D1 Konva/device: " + (chk("d1") ? "ack" : "not checked"),
+          "- D2 scroll/vh/flex: " + (chk("d2") ? "ack" : "not checked"),
+          "- D3 blur/fixed bg: " + (chk("d3") ? "ack" : "not checked"),
+          "- Extra: " + (val("d_extra") || "(empty)"),
+          "",
+          "### Auth & Supabase",
+          "- E1 production URL: " + (val("e1") || "(empty)"),
+          "- E2 Supabase URLs: " + (val("e2") || "(empty)"),
+          "- E3 in-app browsers: " + (val("e3") || "(empty)"),
+          "",
+          "### Deployment & ops",
+          "- F1 Cloudflare: " + (val("f1") || "(empty)"),
+          "- F2 logging: " + (val("f2") || "(empty)"),
+          "",
+          "### Testing",
+          "- G1 desktop emulation ack: " + (chk("g1") ? "yes" : "no"),
+          "- G2 device matrix: " + (val("g2") || "(empty)"),
+          "- G3 definition of done: " + (val("g3") || "(empty)"),
+          "",
+          "### PWA",
+          "- H1: " + (val("h1") || "(empty)"),
+          "",
+          "### Audit",
+          "- Top pain areas: " + (val("i1") || "(empty)"),
+          ""
+        ];
+        return parts.join("\n");
+      }
+
+      document.getElementById("btnCopy").addEventListener("click", function () {
+        var md = buildMarkdown();
+        navigator.clipboard.writeText(md).then(
+          function () {
+            status.textContent = "Copied. Paste into your Cursor chat for the assistant.";
+          },
+          function () {
+            status.textContent = "Clipboard failed — see alert to copy manually.";
+            alert(md);
+          }
+        );
+      });
+
+      document.getElementById("btnClear").addEventListener("click", function () {
+        if (!confirm("Clear all fields?")) return;
+        form.reset();
+        var boxes = document.querySelectorAll('input[type="checkbox"]');
+        for (var i = 0; i < boxes.length; i++) {
+          var c = boxes[i];
+          if (c.name === "a1" || c.name === "a2" || c.name === "g1") c.checked = true;
+        }
+        status.textContent = "Cleared.";
+      });
+    })();
+  </script>
+</body>
+</html>

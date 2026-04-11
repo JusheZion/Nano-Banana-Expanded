@@ -15,6 +15,7 @@ import {
   CHARACTER_STUDIO_EMERALD_TEXT,
   ASSET_STUDIO_AMETHYST_TEXT,
 } from '@/shared/theme/Phase12DesignTokens';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 
 const goldTextStyle: React.CSSProperties = {
   background: ACCENT_GOLD_GRADIENT,
@@ -145,7 +146,7 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
                             }`}
                           >
                             <div className="relative">
-                              <img
+                              <ArcsStorageImg
                                 src={item.image_url}
                                 alt=""
                                 className="w-full aspect-[9/16] object-cover"
@@ -194,7 +195,7 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
                             }`}
                           >
                             <div className="relative">
-                              <img
+                              <ArcsStorageImg
                                 src={item.image_url}
                                 alt=""
                                 className="w-full aspect-[9/16] object-cover"

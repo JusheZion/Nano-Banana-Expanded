@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = 'crimson' | 'teal' | 'purple' | 'gold' | 'obsidian';
+export type Theme = 'crimson' | 'teal' | 'purple' | 'gold' | 'obsidian' | 'wiki';
 
 interface ThemeContextType {
   activeTheme: Theme;
@@ -13,7 +13,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeTheme, setActiveTheme] = useState<Theme>('crimson');
 
   useEffect(() => {
-    document.body.classList.remove('theme-crimson', 'theme-teal', 'theme-purple', 'theme-gold');
+    document.body.classList.remove(
+      'theme-crimson',
+      'theme-teal',
+      'theme-purple',
+      'theme-gold',
+      'theme-obsidian',
+      'theme-wiki',
+    );
     document.body.classList.add(`theme-${activeTheme}`);
   }, [activeTheme]);
 

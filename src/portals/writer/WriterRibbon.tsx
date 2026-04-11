@@ -13,12 +13,17 @@ import {
   ACCENT_GOLD_GRADIENT,
   WRITERS_GOLD_SLANT,
 } from '@/shared/theme/Phase12DesignTokens';
-import type { WriterWorkspaceTabId } from '@/portals/writer/writerSearch';
+import {
+  type WriterWorkspaceTabId,
+  WRITER_WORKSPACE_TAB_LABELS,
+  WRITER_WORKSPACE_TAB_ORDER,
+} from '@/portals/writer/writerSearch';
 import {
   WRITER_HELP_CATEGORIES,
   WRITER_UI_TIPS,
   type WriterHelpCategoryId,
 } from '@/portals/writer/writerHelpRegistry';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 
 export type WriterRibbonMenuId = 'file' | 'home' | 'insert' | 'review' | 'view' | 'ai' | 'help';
 
@@ -32,13 +37,11 @@ const MENUS: { id: WriterRibbonMenuId; label: string }[] = [
   { id: 'help', label: 'Help' },
 ];
 
-const WORKSPACE_TABS: { id: WriterWorkspaceTabId; label: string }[] = [
-  { id: 'arc', label: 'Arc' },
-  { id: 'outline', label: 'Outline' },
-  { id: 'beats', label: 'Beats' },
-  { id: 'dialogue', label: 'Dialogue' },
-  { id: 'video', label: 'Video' },
-];
+const WORKSPACE_TABS: { id: WriterWorkspaceTabId; label: string }[] =
+  WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
+    id,
+    label: WRITER_WORKSPACE_TAB_LABELS[id].ribbon,
+  }));
 
 const RIBBON_DIVIDER = <div className="h-8 w-px bg-black/15 shrink-0 mx-1" aria-hidden />;
 
@@ -76,6 +79,8 @@ type Props = {
   onPrevPage: () => void;
   onNextPage: () => void;
   onOpenHelpCategory: (id: WriterHelpCategoryId) => void;
+  /** Shown under the primary AI action tooltip (next step in the pipeline). */
+  quickGenerateNextHint?: string;
 };
 
 export const WriterRibbon: React.FC<Props> = ({
@@ -112,11 +117,14 @@ export const WriterRibbon: React.FC<Props> = ({
   onPrevPage,
   onNextPage,
   onOpenHelpCategory,
+  quickGenerateNextHint,
 }) => {
+  const { isPhone } = useResponsiveLayout();
+
   return (
     <div className="flex-shrink-0 flex flex-col border-b border-white/25 bg-white/20 backdrop-blur-md">
       <div
-        className="flex items-stretch gap-0.5 px-1 py-0.5 border-b border-black/10 min-h-[2.25rem]"
+        className="flex items-stretch gap-0.5 px-1 py-0.5 border-b border-black/10 min-h-[2.25rem] overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
         style={{ background: WRITERS_GOLD_SLANT }}
         role="tablist"
         aria-label="Ribbon menus"
@@ -128,7 +136,7 @@ export const WriterRibbon: React.FC<Props> = ({
             role="tab"
             aria-selected={activeMenu === m.id}
             onClick={() => onActiveMenu(m.id)}
-            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-t-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+            className={`shrink-0 px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wide rounded-t-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
               activeMenu === m.id
                 ? 'bg-[#ebe8dc] text-black shadow-sm'
                 : 'text-black/65 hover:bg-black/10'
@@ -146,7 +154,14 @@ export const WriterRibbon: React.FC<Props> = ({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 px-2 py-2 min-h-[3.25rem]">
+      <div
+        className={`flex px-2 py-2 min-h-[3.25rem] ${
+          isPhone ? 'flex-col items-stretch gap-2' : 'flex-wrap items-center gap-1'
+        }`}
+      >
+        <div
+          className={`flex flex-wrap items-center gap-1 min-w-0 ${isPhone ? 'w-full' : ''}`}
+        >
         {activeMenu === 'file' && (
           <div className="flex items-center px-2">
             <Tooltip content={WRITER_UI_TIPS.fileRibbon} side="bottom">
@@ -167,7 +182,11 @@ export const WriterRibbon: React.FC<Props> = ({
               <span className="text-[9px] font-bold uppercase tracking-wider text-black/45">Workspace</span>
               <div className="flex flex-wrap gap-1">
                 {WORKSPACE_TABS.map((t) => (
-                  <Tooltip key={t.id} content={`${t.label} (⌘${WORKSPACE_TABS.indexOf(t) + 1})`} side="bottom">
+                  <Tooltip
+                    key={t.id}
+                    content={`${t.label} (⌘${WRITER_WORKSPACE_TAB_ORDER.indexOf(t.id) + 1})`}
+                    side="bottom"
+                  >
                     <button
                       type="button"
                       onClick={() => onWorkspaceTab(t.id)}
@@ -319,7 +338,14 @@ export const WriterRibbon: React.FC<Props> = ({
 
         {activeMenu === 'ai' && (
           <div className="flex flex-wrap items-center gap-2 px-2">
-            <Tooltip content={WRITER_UI_TIPS.aiQuickGenerate} side="bottom">
+            <Tooltip
+              content={
+                quickGenerateNextHint?.trim()
+                  ? `${WRITER_UI_TIPS.aiQuickGenerate}\n\nNext: ${quickGenerateNextHint.trim()}`
+                  : WRITER_UI_TIPS.aiQuickGenerate
+              }
+              side="bottom"
+            >
               <button
                 type="button"
                 disabled={quickGenerateDisabled || quickGenerateLoading}
@@ -360,10 +386,17 @@ export const WriterRibbon: React.FC<Props> = ({
             </div>
           </div>
         )}
+        </div>
 
-        <div className="flex-1 min-w-[120px]" />
+        {!isPhone ? <div className="flex-1 min-w-[120px]" /> : null}
 
-        <div className="flex items-center gap-1 shrink-0 border-l border-black/10 pl-2 ml-auto">
+        <div
+          className={`flex items-center gap-1 shrink-0 ${
+            isPhone
+              ? 'w-full border-t border-black/10 pt-2 justify-between'
+              : 'border-l border-black/10 pl-2 ml-auto'
+          }`}
+        >
           <Search size={14} className="text-black/45 shrink-0" aria-hidden />
           <input
             ref={findInputRef}
@@ -371,7 +404,9 @@ export const WriterRibbon: React.FC<Props> = ({
             placeholder="Find in view…"
             value={findQuery}
             onChange={(e) => onFindQuery(e.target.value)}
-            className="w-[min(200px,28vw)] rounded-md border border-black/15 bg-white/90 px-2 py-1 text-[11px] text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            className={`rounded-md border border-black/15 bg-white/90 px-2 py-1 text-[11px] text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+              isPhone ? 'flex-1 min-w-0 max-w-full' : 'w-[min(200px,28vw)]'
+            }`}
             aria-label="Find in document"
           />
           <span className="text-[10px] text-black/45 tabular-nums min-w-[3rem]">

@@ -208,6 +208,29 @@ export async function createWriterPage(input: {
   return data as WriterPageRow;
 }
 
+/**
+ * Ensure page rows exist for page numbers 1..targetCount (inclusive). Creates only missing numbers.
+ * Caps at 500 to match writer_pages expectations.
+ */
+export async function ensureWriterPagesToCount(
+  issueId: string,
+  targetCount: number,
+): Promise<{ ok: boolean; created: number }> {
+  const n = Math.min(500, Math.max(0, Math.floor(targetCount)));
+  if (n < 1) return { ok: true, created: 0 };
+  const existing = await listWriterPages(issueId);
+  const have = new Set(existing.map((p) => p.page_number));
+  let created = 0;
+  for (let pageNum = 1; pageNum <= n; pageNum++) {
+    if (have.has(pageNum)) continue;
+    const row = await createWriterPage({ issue_id: issueId, page_number: pageNum });
+    if (!row) return { ok: false, created };
+    have.add(pageNum);
+    created++;
+  }
+  return { ok: true, created };
+}
+
 export async function listWriterShotPlansForIssue(issueId: string): Promise<WriterVideoShotPlanRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase

@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WriterToolsRequest } from '@/shared/writer/types';
 
-const getSessionMock = vi.fn();
-const refreshSessionMock = vi.fn();
-const getUserMock = vi.fn();
-const invokeMock = vi.fn();
+const {
+  getSessionMock,
+  refreshSessionMock,
+  getUserMock,
+  invokeMock,
+} = vi.hoisted(() => ({
+  getSessionMock: vi.fn(),
+  refreshSessionMock: vi.fn(),
+  getUserMock: vi.fn(),
+  invokeMock: vi.fn(),
+}));
 
 vi.mock('@/shared/lib/supabase', () => ({
   isSupabaseConfigured: () => true,

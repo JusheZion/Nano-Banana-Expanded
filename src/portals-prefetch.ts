@@ -26,5 +26,8 @@ export function prefetchPortal(portal: Portal): void {
     case 'writer':
       void import('./portals/writer/WriterPortal');
       return;
+    case 'wiki':
+      void import('./portals/WikiPortal');
+      return;
   }
 }

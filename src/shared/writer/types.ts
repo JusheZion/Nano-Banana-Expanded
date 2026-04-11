@@ -28,6 +28,8 @@ export type WriterToolsOutlineIssuePayload = {
   mode: 'outline_issue';
   issue_id: string;
   target_page_count?: number;
+  arc_brief?: string;
+  arc_issue_count?: number;
 };
 
 /** Stored in writer_pages.beats_json */
@@ -47,6 +49,13 @@ export type PageBeatsJson = {
 export type WriterToolsPageBeatsPayload = {
   mode: 'page_beats';
   page_id: string;
+};
+
+export type WriterToolsPageBeatsIssuePayload = {
+  mode: 'page_beats_issue';
+  issue_id: string;
+  skip_existing?: boolean;
+  batch_limit?: number;
 };
 
 export type WriterToolsDraftDialoguePayload = {
@@ -75,6 +84,7 @@ export type WriterToolsPlanShotsPayload = {
 export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsPageBeatsPayload
+  | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload
   | WriterToolsPacingReviewPayload
   | WriterToolsCanonCheckPayload

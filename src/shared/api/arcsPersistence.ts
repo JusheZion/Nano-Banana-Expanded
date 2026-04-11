@@ -42,14 +42,19 @@ function extFromMime(mime: string): string {
 }
 
 /**
- * Upload raw image bytes to Supabase Storage and return a public URL.
- * Returns null if upload fails (caller keeps original URL).
+ * Upload raw image bytes under `{auth.uid()}/…` and return the stable object/public URL string
+ * (used in Postgres; UI resolves to signed URLs for display).
+ * Returns null if not signed in or upload fails.
  */
 async function uploadBlobToArcsBucket(blob: Blob): Promise<string | null> {
   if (!supabase) return null;
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (userErr || !user?.id) return null;
+
   const mime = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
   const ext = extFromMime(mime);
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
     contentType: mime,
     upsert: false,
@@ -98,7 +103,7 @@ function isBlobUrl(url: string): boolean {
 }
 
 const STORAGE_UPLOAD_HINT =
-  'Ensure Storage bucket "arcs-generations" exists and policies allow INSERT for your anon key; for display after refresh the bucket/objects must be publicly readable (or use signed URLs — not yet wired in the app).';
+  'Sign in, ensure bucket "arcs-generations" exists, and storage policies allow authenticated uploads under your user folder. Images are served via signed URLs.';
 
 function buildCharacterMetadataTags(store: CharacterStudioState): Record<string, unknown> {
   return {

@@ -13,13 +13,18 @@ import { AuthModal } from '@/components/auth/AuthModal';
 type SignInResult = { error: AuthError | null };
 type SignUpResult = { error: AuthError | null; needsEmailConfirmation?: boolean };
 
+export type OpenSignInModalOptions = {
+  /** When opening the modal, start on sign-in or sign-up. */
+  initialMode?: 'signin' | 'signup';
+};
+
 export type AuthContextValue = {
   user: User | null;
   session: Session | null;
   /** True after the initial `getSession()` completes (or immediately if Supabase is not configured). */
   ready: boolean;
   supabaseConfigured: boolean;
-  openSignInModal: () => void;
+  openSignInModal: (opts?: OpenSignInModalOptions) => void;
   signInWithPassword: (email: string, password: string) => Promise<SignInResult>;
   signUpWithPassword: (email: string, password: string) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
@@ -45,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalInitialMode, setModalInitialMode] = useState<'signin' | 'signup'>('signin');
 
   const supabaseConfigured = isSupabaseConfigured() && Boolean(supabase);
 
@@ -78,7 +84,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const openSignInModal = useCallback(() => setModalOpen(true), []);
+  const openSignInModal = useCallback((opts?: OpenSignInModalOptions) => {
+    setModalInitialMode(opts?.initialMode ?? 'signin');
+    setModalOpen(true);
+  }, []);
   const closeSignInModal = useCallback(() => setModalOpen(false), []);
 
   const signInWithPassword = useCallback(
@@ -147,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={value}>
       {children}
       {supabaseConfigured ? (
-        <AuthModal open={modalOpen} onClose={closeSignInModal} />
+        <AuthModal open={modalOpen} onClose={closeSignInModal} initialMode={modalInitialMode} />
       ) : null}
     </AuthContext.Provider>
   );

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "https://esm.sh/@supabase/supabase-js@2.49.1": [
+        "../../node_modules/@supabase/supabase-js"
+      ],
+      "npm:zod@3.24.2": ["../../node_modules/zod"]
+    }
+  },
+  "include": ["./**/*.ts", "./**/*.d.ts"]
+}

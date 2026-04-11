@@ -465,6 +465,25 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 - Richer cross-issue arc timeline; panel thumbnails / scrubbing in the strip; PDF export.
 
+### Phase 7 — Writers’ Workshop QoL (2026-04-10)
+
+**Goal:** Reduce friction between outline → pages → beats; unify workspace tab order; add guided “next step” hints and a lightweight pipeline strip.
+
+**Backend / contract**
+
+- **`outline_issue`:** optional `arc_brief` (string, max 8000) and `arc_issue_count` (1–48) so the model can align a single-issue outline with a stated multi-issue spine (MVP — no new `writer_series_arcs` table).
+- **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–20; server default 8). Edge handler loads pages in `page_number` order, runs the same logic as single-page `page_beats` sequentially for up to `batch_limit` pages per invocation, returns `{ processed, errors, has_more, batch_size }` so the client can loop until `has_more` is false.
+
+**Client**
+
+- **`ensureWriterPagesToCount(issueId, targetCount)`** in `arcsWriterRoom.ts` — inserts missing `writer_pages` rows for 1…N (cap 500).
+- **`WriterPortal`:** Issue Outline — **Sync pages to target**, optional arc brief + issues-in-arc, **Outline all issues in series** (confirm, one `outline_issue` per issue). Beats tab — **Skip pages that already have beats**, **Generate all beats** (loops `page_beats_issue` with `batch_limit: 8`), **Cancel after this batch** (abort between rounds).
+- **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌘1–5): **Outline → Beats → Dialogue → Video → Arc**.
+- **`writerNextStep.ts`:** `getWriterQuickGenerateNextHint` for ribbon AI quick-generate tooltip; **Pipeline** strip under ribbon with per-tab completion heuristics + same hint on wide screens.
+- **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc brief, outline-all; keyboard blurb matches new tab order.
+
+**Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline with arc brief, outline all (small series).
+
 ### Verification
 
 - `npm run test -- --run`, `npm run build`
@@ -500,16 +519,13 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 **Engineering (repo)**
 
-- Add SPA fallback: [`public/_redirects`](public/_redirects) with:
-
-  ```text
-  /*    /index.html   200
-  ```
-
-  so client-side routes survive browser refresh (Vite copies `public/` into `dist/`).
+- **SPA fallback — pick the path that matches your host:**
+  - **Workers + `wrangler deploy` (static assets in `wrangler.jsonc`):** Use **`not_found_handling`**: **`single-page-application`** only. **Do not** add **`public/_redirects`** with `/* /index.html 200` — the Workers API rejects it as an **infinite loop** (error **10021**) because it overlaps with SPA asset routing.
+  - **Cloudflare Pages only** (build uploads `dist` to Pages, no Wrangler asset deploy): add [`public/_redirects`](public/_redirects) with `/* /index.html 200` so refreshes on client routes work (Vite copies `public/` into `dist/`).
 
 - **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
 - **CI guardrail:** **`package.json` must be valid JSON**. A bad merge can append a second copy of the manifest (duplicate keys) and break **`npm ci`** / install with **`EJSONPARSE`** or misleading errors; fix the file, run **`npm install`**, commit **`package-lock.json`**. Repo keeps **`wrangler.jsonc`**, **`wrangler`** + **`@cloudflare/vite-plugin`**, and **`preview` / `deploy`** scripts aligned with the Cloudflare Workers + Vite integration.
+- **Wrangler static assets:** [`wrangler.jsonc`](wrangler.jsonc) **`assets.directory`** = **`dist`** (Vite output) and **`not_found_handling`**: **`single-page-application`**. Cloudflare builds that run **`wrangler versions upload`** after **`npm ci`** must also run **`npm run build`** in the build phase so **`dist/`** exists before deploy.
 - Optional: set Cloudflare **environment variable** `NODE_VERSION` = `20` (or `22`) if the default Node fails the build.
 
 **Owner / operator checklist**
@@ -532,3 +548,69 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 **Approved roadmap (Writers’ Workshop + platform)**
 
 - Cursor plan **Writers’ Workshop UX Roadmap** covers remaining UX (tab bar, arc layout, ribbon format phase A, pages sync, series rename, Google OAuth, RLS hardening). Cloudflare tasks there: `cloudflare-pages-spa`, `cloudflare-env-docs`.
+
+## Portals Wiki (in-app documentation)
+
+**Goal:** Shipholder wiki, organized by portal, calm **magenta / glass / gold-accent** chrome distinct from studio themes; markdown-first with optional screenshots; v1 is **reference**, not a guided tutorial.
+
+**Implementation (shipped):**
+
+- **Portal:** `wiki` in `src/shared/portals.ts`; `WikiPortal.tsx` (hub list, article view, TOC from headings).
+- **Content:** `src/content/wiki/manifest.ts` + `wikiImports.ts` + `.md` chapters; `WIKI_APP_DOC_VERSION` / `lastReviewed` in manifest for manual freshness.
+- **Markdown:** `react-markdown`, `remark-gfm`, `rehype-slug`, `rehype-autolink-headings` (heading ids must match Writers’ Workshop `writerHelpCategoryWikiHeadingId` strings where used).
+- **Theming:** `ThemeContext` id `wiki` → `body.theme-wiki`; `Phase12DesignTokens` wiki tokens; `theme.css` `.wiki-prose`.
+- **Navigation:** AppShell **Docs** section; Landing card; `App.tsx` uses `navigatePortal` vs `requestPortalsWiki` for Writers’ help deep-link.
+- **Assets:** `public/wiki/screenshots/` — replace placeholders when capturing real UI.
+- **Verification:** `npm run build`.
+
+## Supabase — per-user RLS (phase A, 2026-04-06)
+
+**Goal:** Rows in `writer_*`, `characters`, and `assets` are visible and mutable only to the authenticated owner (`auth.uid()`). Anonymous clients (anon key, no user JWT) have no table access. **Storage** tightening for `arcs-generations` is **phase B** (see following section).
+
+**Migration:** [`supabase/migrations/20260406000000_arcs_per_user_rls.sql`](supabase/migrations/20260406000000_arcs_per_user_rls.sql) — adds `owner_id` on `writer_series`, `characters`, `assets`; backfills to earliest `auth.users` row; deletes still-null orphans; `NOT NULL` + `DEFAULT auth.uid()` on inserts; replaces permissive policies with `TO authenticated` policies (writer children scoped via `writer_series.owner_id`).
+
+**Edge Function:** [`supabase/functions/writer-tools/index.ts`](supabase/functions/writer-tools/index.ts) uses **`SUPABASE_ANON_KEY`** and `createClient(..., { global: { headers: { Authorization: \`Bearer ${token}\` }}})` so PostgREST runs as the signed-in user and RLS applies. **Redeploy** after pulling: `supabase functions deploy writer-tools`.
+
+**App:** Vault / archive reads use `getSession()` — Supabase path only when signed in; otherwise local generation archive. (`arcsVault.ts`, `arcsAssetVault.ts`, `arcsArchive.ts`.)
+
+**Verify:** `supabase db push` (or SQL editor) on the project; sign in → workshop + vault work; second account sees empty workshop/vault; `npm run build`.
+
+## Supabase — private `arcs-generations` storage (phase B, 2026-04-07)
+
+**Goal:** Bucket `arcs-generations` is **not** public. Objects live under `{auth.uid()}/…`. Postgres still stores stable **`/object/public/arcs-generations/…`**-shaped URLs; the client resolves them to **`createSignedUrl`** for `<img>` and similar display. Recall / `onSelect` / generation pipelines keep the **canonical** stored URL.
+
+**Migration:** [`supabase/migrations/20260407120000_arcs_generations_private_storage.sql`](supabase/migrations/20260407120000_arcs_generations_private_storage.sql) — `public = false`; storage policies allow authenticated users **SELECT/INSERT/UPDATE/DELETE** only when `split_part(name, '/', 1) = auth.uid()::text`.
+
+**Client:** [`src/shared/lib/arcsGenerationsUrls.ts`](src/shared/lib/arcsGenerationsUrls.ts) (`resolveArcsGenerationsDisplayUrl`, in-memory cache); [`src/shared/hooks/useArcsResolvedSrc.ts`](src/shared/hooks/useArcsResolvedSrc.ts); [`src/components/ui/ArcsStorageImg.tsx`](src/components/ui/ArcsStorageImg.tsx); uploads in [`arcsPersistence.ts`](src/shared/api/arcsPersistence.ts) use `${user.id}/…`. Studios, vault modals, archive galleries, Storyline, and `VaultImageWithFallback` wire display through signing.
+
+**Verify:** `npm run build`; after `supabase db push`, signed-in user sees images; unsigned / wrong user cannot read others’ objects; legacy objects without `userId/` prefix remain inaccessible until migrated.
+
+## Landing page UI intake (copy, grid order, sign-in, motion)
+
+**Before** restructuring Overview / hero / portal cards, fill **[`LANDING_PAGE_UI_INTAKE.md`](LANDING_PAGE_UI_INTAKE.md)** or open **[`docs/LANDING_PAGE_UI_INTAKE.html`](docs/LANDING_PAGE_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat so implementation matches your wording and ordering.
+
+**Implemented (2026-04):** [`portalCatalog.ts`](src/shared/portalCatalog.ts), [`LandingPage.tsx`](src/components/LandingPage.tsx), [`AppShell.tsx`](src/components/layout/AppShell.tsx), [`landingHeroRotation.ts`](src/shared/landingHeroRotation.ts), landing CSS/Tailwind animations. **Polish:** mobile home tab label **ARC Hub**; hero subline grammar; **Asset Studio** naming aligned; Writers' landing card photo (`City of Capricorn`).
+
+## Image Vault UI intake (Characters vs Assets)
+
+**Before** a full Image Vault overhaul (`reference` portal: `ReferenceAlbum` → `CharacterVault` / `AssetVault` → modals), fill **[`IMAGE_VAULT_UI_INTAKE.md`](IMAGE_VAULT_UI_INTAKE.md)** or open **[`docs/IMAGE_VAULT_UI_INTAKE.html`](docs/IMAGE_VAULT_UI_INTAKE.html)** locally → **Copy for ARCS assistant** → paste into chat. The form has **two detailed tracks**: **Characters (Ruby)** and **Assets (Amethyst)** plus shared tab/shell fields.
+
+## Mobile web — iPhone & iPad (preparation → implementation)
+
+**Before** changing layouts or `AppShell` for touch:
+
+1. Complete **[`MOBILE_PHASE0_PREPARATION.md`](MOBILE_PHASE0_PREPARATION.md)** — Phase 0 checklist and decision questions (markdown checkboxes + answer blocks).
+2. Optionally open **[`docs/MOBILE_PHASE0_INTAKE.html`](docs/MOBILE_PHASE0_INTAKE.html)** in a browser (local file), fill fields, click **Copy for ARCS assistant**, paste into chat.
+
+**After** answers are aligned:
+
+- **Phase 1:** Touch-first **`AppShell`** (no hover-only navigation or account menus).
+- **Phase 2:** Global **safe-area / mobile CSS** (`src/styles/theme.css`, viewport meta if needed).
+- **Phase 3:** **Portal-by-portal** responsive passes in agreed priority order.
+- **Phase 4:** Verification (DevTools device modes + real iPhone/iPad + desktop regression).
+
+Track checklist items in [`tasks.md`](tasks.md) under **Mobile web — iPhone / iPad**.
+
+**Phase 0 locked (2026-04-chat):** Single responsive app; phone ≤767px uses bottom tabs; tablet split view; Comic + Storyline unavailable on phone; Character/Asset on phone omit tagging/reference-gallery UIs and Live Prompt tabs except **Edit** (pinned); production + Supabase redirect URLs include **`https://asset-reference-comics-studio.onyxzion.workers.dev`** and local dev origins; PWA **yes**.
+
+**Implementation status:** `ResponsiveLayoutContext` + `AppShell` phone nav + studio restrictions live; Character + Asset studios finished phone layout/gallery/density parity (2026-04-05). **Phase 2 (2026-04-05):** global mobile CSS in `theme.css` + shell/tab-bar safe-area. **Phase 3 (Writers’ Workshop, 2026-04-05):** `WriterPortal` uses `isPhone` column layout (workspace above dock); `WriterStudioDock` **`phoneLayout`** full-width bottom strip with safe-area; `WriterRibbon` horizontal menu scroll + stacked find row; `WriterContextMenu` touch **long-press** (~520ms) + viewport-clamped menu; phone defaults dock collapsed (expand via ribbon **Panels** or dock bar); `LandingPage` tighter hero on phone. **Next:** Phase 4 device QA (iPad/Safari) + optional Wiki / Photo Lab spot-checks.

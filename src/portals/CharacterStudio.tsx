@@ -19,6 +19,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Tooltip, PinnedHelpTooltip } from '@/shared/components/Tooltip';
@@ -73,6 +74,9 @@ import {
   studioPreviewFrameStyle,
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { resolveArcsGenerationsDisplayUrl } from '@/shared/lib/arcsGenerationsUrls';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -223,6 +227,8 @@ function SectionAddToLibrary({
 
 export const CharacterStudio: React.FC = () => {
   const { setTheme } = useTheme();
+  const { isPhone } = useResponsiveLayout();
+  const phoneCompact = isPhone;
   const store = useCharacterStudioStore();
   const [customStyleInput, setCustomStyleInput] = useState('');
   const [facialExpressionCustomInput, setFacialExpressionCustomInput] = useState('');
@@ -276,6 +282,13 @@ export const CharacterStudio: React.FC = () => {
   useEffect(() => {
     setTheme('teal');
   }, [setTheme]);
+
+  useEffect(() => {
+    if (!phoneCompact) return;
+    setLeftModule('hub');
+    setPromptPanelTab('edit');
+    setPromptPinned(true);
+  }, [phoneCompact]);
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
 
@@ -842,9 +855,9 @@ export const CharacterStudio: React.FC = () => {
         </h1>
       </header>
 
-      {/* Main: 60% module column | 40% visual stage */}
-      <div className="flex gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
-        <div className="flex-[0_0_60%] max-w-[60%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
+      {/* Main: 60% module column | 40% visual stage (stacked on phone) */}
+      <div className="flex flex-col md:flex-row gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
+        <div className="w-full min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden md:flex-[0_0_60%] md:max-w-[60%]">
           <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
             {leftModule === 'hub' && (
@@ -1011,7 +1024,7 @@ export const CharacterStudio: React.FC = () => {
                           onMouseLeave={url ? () => setRefHoverPreview(null) : undefined}
                         >
                           {url ? (
-                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <ArcsStorageImg src={url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-[8px] text-white/40">{i + 1}</span>
                           )}
@@ -1407,6 +1420,7 @@ export const CharacterStudio: React.FC = () => {
               </p>
             ) : (
             <>
+            {!phoneCompact && (
             <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2 shrink-0">
               {(
                 [
@@ -1441,12 +1455,13 @@ export const CharacterStudio: React.FC = () => {
                 </span>
               ))}
             </div>
-            {promptPanelTab === 'auto' && (
+            )}
+            {!phoneCompact && promptPanelTab === 'auto' && (
               <div className="bg-black/60 p-2 rounded-lg font-mono text-xs text-emerald-100/85 break-words flex-1 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto custom-scrollbar transition-opacity duration-200">
                 {displayPrompt || '// Prompt is empty...'}
               </div>
             )}
-            {promptPanelTab === 'reference' && (
+            {!phoneCompact && promptPanelTab === 'reference' && (
               <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-hidden">
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Tooltip
@@ -1480,7 +1495,7 @@ export const CharacterStudio: React.FC = () => {
                 </div>
               </div>
             )}
-            {promptPanelTab === 'edit' && (
+            {(phoneCompact || promptPanelTab === 'edit') && (
               <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                 <textarea
                   value={store.vaultPromptOverride}
@@ -1556,7 +1571,7 @@ export const CharacterStudio: React.FC = () => {
                 )}
               </div>
             )}
-            {promptPanelTab === 'refine' && (
+            {!phoneCompact && promptPanelTab === 'refine' && (
               <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
                 {!store.currentLiveImageUrl ? (
                   <p className="text-sm text-amber-200/80">Generate or load an image first, then describe refinements here.</p>
@@ -1636,7 +1651,7 @@ export const CharacterStudio: React.FC = () => {
             )}
             <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
               <CopyButton text={copyPromptText} labelStyle={goldTextStyle} />
-              {promptPinned && promptPanelTab === 'auto' && (
+              {!phoneCompact && promptPinned && promptPanelTab === 'auto' && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1648,6 +1663,7 @@ export const CharacterStudio: React.FC = () => {
                   Refresh
                 </button>
               )}
+              {!phoneCompact && (
               <button
                 type="button"
                 onClick={() => {
@@ -1658,6 +1674,8 @@ export const CharacterStudio: React.FC = () => {
               >
                 Reset to tags
               </button>
+              )}
+              {!phoneCompact && (
               <button
                 type="button"
                 onClick={() => setPromptPinned((p) => !p)}
@@ -1667,7 +1685,8 @@ export const CharacterStudio: React.FC = () => {
                 {promptPinned ? <Pin className="w-3 h-3 shrink-0" aria-hidden /> : <PinOff className="w-3 h-3 shrink-0" aria-hidden />}
                 {promptPinned ? 'Pinned' : 'Pin'}
               </button>
-              {store.lastUsedPrompt ? (
+              )}
+              {!phoneCompact && store.lastUsedPrompt ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1716,6 +1735,7 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
 
+          {!phoneCompact && (
           <div
             className="shrink-0 flex rounded-lg border border-white/15 bg-black/45 p-1 gap-0.5"
             role="tablist"
@@ -1746,10 +1766,11 @@ export const CharacterStudio: React.FC = () => {
               </button>
             ))}
           </div>
+          )}
         </div>
 
         {/* Right column — visual stage */}
-        <div className="flex-[0_0_40%] max-w-[40%] min-w-0 min-h-0 flex flex-col gap-2 overflow-hidden overflow-x-hidden">
+        <div className="w-full min-w-0 min-h-[min(42vh,360px)] md:min-h-0 flex flex-1 flex-col gap-2 overflow-hidden overflow-x-hidden md:flex-[0_0_40%] md:max-w-[40%]">
           {/* Generation + gallery — single workspace panel */}
           <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md flex flex-col overflow-hidden shadow-lg shadow-black/15">
             <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2.5 pb-1.5 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
@@ -1769,7 +1790,7 @@ export const CharacterStudio: React.FC = () => {
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
                             {activeReferenceForCompare ? (
-                              <img
+                              <ArcsStorageImg
                                 src={activeReferenceForCompare}
                                 alt="Reference slot image"
                                 className="max-h-full max-w-full object-contain object-center"
@@ -1791,7 +1812,7 @@ export const CharacterStudio: React.FC = () => {
                             Generated
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
-                            <img
+                            <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
                               className="max-h-full max-w-full object-contain object-center"
@@ -1870,7 +1891,7 @@ export const CharacterStudio: React.FC = () => {
                         </div>
                         {store.currentLiveImageUrl ? (
                           <div className="absolute inset-0 z-[1] flex items-center justify-center p-1.5 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.06] group-hover/live:z-10">
-                            <img
+                            <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
                               className="max-h-full max-w-full object-contain object-center"
@@ -1961,7 +1982,7 @@ export const CharacterStudio: React.FC = () => {
                                 />
                                 {pose.imageUrl ? (
                                   <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center overflow-hidden">
-                                    <img
+                                    <ArcsStorageImg
                                       src={pose.imageUrl}
                                       alt={pose.name ?? 'Pose'}
                                       className="h-full w-full object-cover object-center"
@@ -2012,9 +2033,18 @@ export const CharacterStudio: React.FC = () => {
                                         disabled={!pose.imageUrl}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          if (pose.imageUrl) {
-                                            window.open(pose.imageUrl, '_blank', 'noopener,noreferrer');
-                                          }
+                                          const raw = pose.imageUrl;
+                                          if (!raw) return;
+                                          void (async () => {
+                                            const url =
+                                              isSupabaseConfigured() && supabase
+                                                ? await resolveArcsGenerationsDisplayUrl(
+                                                    supabase,
+                                                    raw
+                                                  )
+                                                : raw;
+                                            window.open(url, '_blank', 'noopener,noreferrer');
+                                          })();
                                         }}
                                       >
                                         <ExternalLink className="h-2.5 w-2.5" />
@@ -2077,7 +2107,7 @@ export const CharacterStudio: React.FC = () => {
                               className="absolute inset-0 z-0 block"
                             />
                             {pose.imageUrl ? (
-                              <img src={pose.imageUrl} alt="" className="h-full w-full object-cover" />
+                              <ArcsStorageImg src={pose.imageUrl} alt="" className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full items-center justify-center text-[7px] text-white/40">Empty</div>
                             )}
@@ -2115,7 +2145,8 @@ export const CharacterStudio: React.FC = () => {
                     </span>
                   ))}
                 </div>
-                {((recentCharacters.length > 0) || (getCachedGenerations('character').length > 0)) && (
+                {!phoneCompact &&
+                  ((recentCharacters.length > 0) || (getCachedGenerations('character').length > 0)) && (
                   <div className="rounded-lg border border-white/10 bg-black/25 p-2 space-y-2">
                     {recentCharacters.length > 0 && (
                       <div>
@@ -2133,7 +2164,7 @@ export const CharacterStudio: React.FC = () => {
                                   store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                                 }`}
                               >
-                                <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                                <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
                               </button>
                             </Tooltip>
                           ))}
@@ -2156,7 +2187,7 @@ export const CharacterStudio: React.FC = () => {
                                 store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
                               }`}
                             >
-                              <img src={item.url} alt="" className="w-full h-full object-cover" />
+                              <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -2169,6 +2200,8 @@ export const CharacterStudio: React.FC = () => {
 
             <div className="shrink-0 border-t border-white/10 bg-black/35 p-2 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
+                {!phoneCompact && (
+                  <>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90">Thumbnails</span>
                 <button
                   type="button"
@@ -2204,6 +2237,8 @@ export const CharacterStudio: React.FC = () => {
                 >
                   Comfortable
                 </button>
+                  </>
+                )}
                 <button
                   type="button"
                   aria-pressed={compareSplit}
@@ -2606,7 +2641,7 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
-            <img
+            <ArcsStorageImg
               src={store.currentLiveImageUrl}
               alt="Full size character reference"
               className="max-w-none transition-transform origin-center"
@@ -2627,7 +2662,7 @@ export const CharacterStudio: React.FC = () => {
             maxHeight: 'min(80vh, 520px)',
           }}
         >
-          <img
+          <ArcsStorageImg
             src={refHoverPreview.url}
             alt=""
             className="h-full max-h-[min(80vh,520px)] w-full object-contain"

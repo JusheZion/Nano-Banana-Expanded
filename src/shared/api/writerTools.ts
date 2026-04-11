@@ -171,7 +171,8 @@ export async function invokeWriterTools(body: WriterToolsRequest): Promise<Write
   const expInSec = typeof exp === 'number' ? exp - nowSec : null;
   const refreshBufferSec = 120;
   const shouldRefresh =
-    !!initialSession.refresh_token && (!preCheck.ok || (typeof expInSec === 'number' && expInSec < refreshBufferSec));
+    !!initialSession.refresh_token &&
+    (!preCheck.ok || (typeof expInSec === 'number' && expInSec < refreshBufferSec));
 
   if (shouldRefresh) {
     const refreshedRes = await refreshSessionDeduped();

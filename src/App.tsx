@@ -1,6 +1,7 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { useProject } from '@/shared/context/ProjectContext';
+import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import type { Portal } from '@/shared/portals';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { AppShell } from './components/layout/AppShell';
@@ -12,6 +13,7 @@ const ReferenceAlbum = lazy(() => import('./portals/ReferenceAlbum').then(m => (
 const PhotoLab = lazy(() => import('./portals/PhotoLab').then(m => ({ default: m.PhotoLab })));
 const ComicPortal = lazy(() => import('./portals/ComicPortal').then(m => ({ default: m.ComicPortal })));
 const WriterPortal = lazy(() => import('./portals/writer/WriterPortal').then(m => ({ default: m.WriterPortal })));
+const WikiPortal = lazy(() => import('./portals/WikiPortal').then(m => ({ default: m.WikiPortal })));
 
 const PortalFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh] text-white/60">
@@ -21,18 +23,45 @@ const PortalFallback = () => (
 
 function App() {
   const [activePortal, setActivePortal] = useState<Portal>('home');
+  const [wikiJumpNonce, setWikiJumpNonce] = useState(0);
+  const [wikiJump, setWikiJump] = useState<{ chapterId: string; headingId?: string } | null>(null);
   const { setTheme } = useTheme();
+  const { isPhone } = useResponsiveLayout();
   useProject();
 
   const portalToOpen = useStudioImportBridge((s) => s.portalToOpen);
   const clearPortalRequest = useStudioImportBridge((s) => s.clearPortalRequest);
+  const isPhoneRef = useRef(isPhone);
+  isPhoneRef.current = isPhone;
+
+  const navigatePortal = useCallback((p: Portal) => {
+    const phone = isPhoneRef.current;
+    if (phone && (p === 'comic' || p === 'lab')) {
+      setActivePortal('home');
+      return;
+    }
+    if (p === 'wiki') setWikiJump(null);
+    setActivePortal(p);
+  }, []);
+
+  const requestPortalsWiki = useCallback((opts: { chapterId: string; headingId?: string }) => {
+    setWikiJump(opts);
+    setWikiJumpNonce((n) => n + 1);
+    setActivePortal('wiki');
+  }, []);
 
   useEffect(() => {
     if (portalToOpen) {
-      setActivePortal(portalToOpen);
+      navigatePortal(portalToOpen);
       clearPortalRequest();
     }
-  }, [portalToOpen, clearPortalRequest]);
+  }, [portalToOpen, clearPortalRequest, navigatePortal]);
+
+  useEffect(() => {
+    if (isPhone && (activePortal === 'comic' || activePortal === 'lab')) {
+      setActivePortal('home');
+    }
+  }, [isPhone, activePortal]);
 
   useEffect(() => {
     if (activePortal === 'home' || activePortal === 'studio') setTheme('teal');
@@ -40,12 +69,13 @@ function App() {
     else if (activePortal === 'lab') setTheme('purple');
     else if (activePortal === 'comic') setTheme('obsidian');
     else if (activePortal === 'writer') setTheme('teal');
+    else if (activePortal === 'wiki') setTheme('wiki');
     else setTheme('crimson');
   }, [activePortal, setTheme]);
 
   return (
-    <AppShell activePortal={activePortal} setActivePortal={setActivePortal}>
-      {activePortal === 'home' && <LandingPage onNavigate={setActivePortal} />}
+    <AppShell activePortal={activePortal} setActivePortal={navigatePortal}>
+      {activePortal === 'home' && <LandingPage onNavigate={navigatePortal} />}
       {activePortal === 'studio' && (
         <Suspense fallback={<PortalFallback />}>
           <div className="h-full min-h-0 flex flex-col overflow-hidden">
@@ -78,8 +108,13 @@ function App() {
       {activePortal === 'writer' && (
         <Suspense fallback={<PortalFallback />}>
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
-            <WriterPortal />
+            <WriterPortal onRequestPortalsWiki={requestPortalsWiki} />
           </div>
+        </Suspense>
+      )}
+      {activePortal === 'wiki' && (
+        <Suspense fallback={<PortalFallback />}>
+          <WikiPortal jumpNonce={wikiJumpNonce} jump={wikiJump} onNavigatePortal={navigatePortal} />
         </Suspense>
       )}
     </AppShell>

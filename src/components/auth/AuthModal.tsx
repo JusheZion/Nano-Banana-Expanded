@@ -6,11 +6,12 @@ import { ACCENT_GOLD_GRADIENT } from '@/shared/theme/Phase12DesignTokens';
 type Props = {
   open: boolean;
   onClose: () => void;
+  initialMode?: 'signin' | 'signup';
 };
 
-export function AuthModal({ open, onClose }: Props) {
+export function AuthModal({ open, onClose, initialMode = 'signin' }: Props) {
   const { signInWithPassword, signUpWithPassword, user } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -22,6 +23,10 @@ export function AuthModal({ open, onClose }: Props) {
     setMessage(null);
     setError(null);
   }, [open, mode]);
+
+  useEffect(() => {
+    if (open) setMode(initialMode);
+  }, [open, initialMode]);
 
   useEffect(() => {
     if (user && open) onClose();

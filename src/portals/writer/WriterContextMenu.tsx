@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export type WriterContextMenuItem = {
   label: string;
@@ -11,18 +11,73 @@ type Props = {
   items: WriterContextMenuItem[];
 };
 
+const LONG_PRESS_MS = 520;
+
 export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onContextMenu = useCallback((e: React.MouseEvent) => {
-    const usable = items.some((i) => !i.disabled);
-    if (!usable) return;
-    e.preventDefault();
-    setPos({ x: e.clientX, y: e.clientY });
-    setOpen(true);
-  }, [items]);
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const openAt = useCallback(
+    (x: number, y: number) => {
+      const usable = items.some((i) => !i.disabled);
+      if (!usable) return;
+      setPos({ x, y });
+      setOpen(true);
+    },
+    [items],
+  );
+
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const usable = items.some((i) => !i.disabled);
+      if (!usable) return;
+      e.preventDefault();
+      openAt(e.clientX, e.clientY);
+    },
+    [items, openAt],
+  );
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      const usable = items.some((i) => !i.disabled);
+      if (!usable) return;
+      clearLongPress();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      longPressTimer.current = setTimeout(() => {
+        longPressTimer.current = null;
+        openAt(startX, startY);
+      }, LONG_PRESS_MS);
+    },
+    [items, openAt, clearLongPress],
+  );
+
+  const endLongPressTrack = useCallback(() => {
+    clearLongPress();
+  }, [clearLongPress]);
+
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current) return;
+    const el = menuRef.current;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const pad = 8;
+    setMenuPos({
+      x: Math.max(pad, Math.min(pos.x, window.innerWidth - w - pad)),
+      y: Math.max(pad, Math.min(pos.y, window.innerHeight - h - pad)),
+    });
+  }, [open, pos.x, pos.y]);
 
   useEffect(() => {
     if (!open) return;
@@ -41,15 +96,19 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
   return (
     <div
       onContextMenu={onContextMenu}
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+      onPointerDown={onPointerDown}
+      onPointerUp={endLongPressTrack}
+      onPointerCancel={endLongPressTrack}
+      onPointerLeave={endLongPressTrack}
+      className="relative flex min-h-0 min-w-0 flex-1 flex-col touch-manipulation"
     >
       {children}
       {open && (
         <div
           ref={menuRef}
           role="menu"
-          className="fixed z-[200] min-w-[180px] rounded-lg border border-black/20 bg-[#F5F5DC] py-1 shadow-xl text-black"
-          style={{ left: pos.x, top: pos.y }}
+          className="fixed z-[200] min-w-[180px] max-w-[min(100vw-1rem,280px)] rounded-lg border border-black/20 bg-[#F5F5DC] py-1 shadow-xl text-black"
+          style={{ left: menuPos.x, top: menuPos.y }}
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item) => (

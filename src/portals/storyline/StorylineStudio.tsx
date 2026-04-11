@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage } from '@/shared/api/geminiImageApi';
 import {
@@ -719,7 +720,7 @@ export const StorylineStudio: React.FC = () => {
                     key={c.vaultCharacterId}
                     className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2"
                   >
-                    <img
+                    <ArcsStorageImg
                       src={c.imageUrl}
                       alt=""
                       className="w-10 h-10 rounded object-cover shrink-0"
@@ -768,7 +769,7 @@ export const StorylineStudio: React.FC = () => {
                     key={a.vaultAssetId}
                     className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2"
                   >
-                    <img src={a.imageUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    <ArcsStorageImg src={a.imageUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate">{a.assetName}</p>
                       <p className="text-[10px] text-white/45 truncate">{a.collectionName}</p>
@@ -834,7 +835,7 @@ export const StorylineStudio: React.FC = () => {
                             <Tooltip
                               content={
                                 <div className="w-[min(22rem,85vw)]">
-                                  <img
+                                  <ArcsStorageImg
                                     src={b.imageUrl}
                                     alt=""
                                     className={`w-full ${beatAspectBoxClass(b.aspectRatio)} object-cover rounded border border-white/15`}
@@ -845,7 +846,7 @@ export const StorylineStudio: React.FC = () => {
                               side="top"
                               align="center"
                             >
-                              <img src={b.imageUrl} alt="" className="w-full h-full object-cover" />
+                              <ArcsStorageImg src={b.imageUrl} alt="" className="w-full h-full object-cover" />
                             </Tooltip>
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/30 px-1 text-center">
@@ -917,7 +918,7 @@ export const StorylineStudio: React.FC = () => {
                   }}
                 >
                   {selectedBeat.imageUrl ? (
-                    <img
+                    <ArcsStorageImg
                       src={selectedBeat.imageUrl}
                       alt=""
                       className="absolute inset-0 w-full h-full object-cover"
@@ -1360,7 +1361,7 @@ export const StorylineStudio: React.FC = () => {
                           setVaultOpen(false);
                         }}
                       >
-                        <img
+                        <ArcsStorageImg
                           src={item.image_url}
                           alt=""
                           className="w-full aspect-square object-cover"
@@ -1417,7 +1418,7 @@ export const StorylineStudio: React.FC = () => {
                           setAssetVaultOpen(false);
                         }}
                       >
-                        <img src={item.image_url} alt="" className="w-full aspect-square object-cover" />
+                        <ArcsStorageImg src={item.image_url} alt="" className="w-full aspect-square object-cover" />
                         <p className="text-[10px] p-1 truncate">
                           {(item.asset_name || item.name || 'Asset').trim() || 'Asset'}
                         </p>

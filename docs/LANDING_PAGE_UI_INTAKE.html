@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARCS — Landing page UI intake</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1e;
+      --text: #f0f0f2;
+      --muted: #9898a6;
+      --accent: #d4af37;
+      --border: rgba(255,255,255,0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 1.25rem;
+      max-width: 52rem;
+      margin-inline: auto;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      background: var(--surface);
+    }
+    legend {
+      padding: 0 0.35rem;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin: 0.75rem 0 0.35rem;
+      color: var(--muted);
+    }
+    label:first-of-type { margin-top: 0; }
+    textarea, input[type="text"], select {
+      width: 100%;
+      background: #0b0b0e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.5rem 0.65rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    select {
+      cursor: pointer;
+    }
+    textarea {
+      min-height: 4.5rem;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .row label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0;
+      cursor: pointer;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin: 1.25rem 0;
+    }
+    button {
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 700;
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: linear-gradient(180deg, #e8c963, var(--accent));
+      color: #111;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    #status {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-height: 1.25rem;
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Landing page UI — intake form</h1>
+  <p class="sub">Fill in, then click <strong>Copy for ARCS assistant</strong> and paste into your Cursor chat. This file is local-only (not part of the app UI). Full checklist mirror: <strong>LANDING_PAGE_UI_INTAKE.md</strong> in the repo root.</p>
+
+  <div class="actions">
+    <button type="button" id="btnCopy">Copy for ARCS assistant</button>
+    <button type="button" class="secondary" id="btnClear">Clear all fields</button>
+  </div>
+  <p id="status" aria-live="polite"></p>
+
+  <form id="intake">
+    <fieldset>
+      <legend>A — Hero copy</legend>
+      <label for="a1">A1 — Headline (line 1)</label>
+      <input type="text" id="a1" name="a1" placeholder="e.g. Visualizing the" autocomplete="off" />
+      <label for="a2">A2 — Headline accent line (gradient line)</label>
+      <input type="text" id="a2" name="a2" placeholder="e.g. Cinematic Universe" autocomplete="off" />
+      <label for="a3">A3 — Subline / description</label>
+      <textarea id="a3" name="a3" placeholder="One short paragraph under the headline"></textarea>
+      <div class="row">
+        <label><input type="checkbox" name="a4" checked /> A4: Keep version badge (e.g. v2.4.0) visible in hero</label>
+      </div>
+      <label for="a5">A5 — Voice / tone notes (optional)</label>
+      <textarea id="a5" name="a5" placeholder="cinematic / product / minimal / other"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>B — Hero visuals</legend>
+      <label for="b1">B1 — Hero background image</label>
+      <input type="text" id="b1" name="b1" placeholder="Keep default OR public path e.g. /assets/images/…" autocomplete="off" />
+      <label for="b2">B2 — Gradient intensity</label>
+      <select id="b2" name="b2">
+        <option value="keep">Keep current</option>
+        <option value="subtle">More subtle</option>
+        <option value="bold">Bolder / richer</option>
+      </select>
+      <label for="b3">B3 — Ambient motion (hero / page)</label>
+      <select id="b3" name="b3">
+        <option value="none">None — static only</option>
+        <option value="subtle" selected>Subtle — slow drift / soft pulse</option>
+        <option value="expressive">Expressive — stronger motion (still respect reduced-motion)</option>
+      </select>
+      <label for="b4">B4 — Notes (parallax, grain, aurora, etc.)</label>
+      <textarea id="b4" name="b4" placeholder="Optional specifics"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>C — Portal grid</legend>
+      <p class="hint">Number <strong>1 = top-left / first</strong> in reading order. Portals: Reference Character Studio (studio), Assets Studio (assets), Image Vault (reference), Storyline Studio (lab), Comic Studio (comic), Writers’ Workshop (writer), Portals Wiki (wiki). Omit any you want hidden from the grid.</p>
+      <label for="c1">C1 — Desired order (numbered list)</label>
+      <textarea id="c1" name="c1" placeholder="1. studio&#10;2. assets&#10;…"></textarea>
+      <label for="c2">C2 — Card title or micro-label overrides (optional)</label>
+      <textarea id="c2" name="c2" placeholder="e.g. Image Vault → … ; subtitle VISUAL LIBRARY → …"></textarea>
+      <label for="c3">C3 — Cards to hide for now</label>
+      <textarea id="c3" name="c3" placeholder="none OR list portal ids"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>D — Sidebar (AppShell)</legend>
+      <label for="d1">D1 — “Overview” label — keep or rename?</label>
+      <input type="text" id="d1" name="d1" placeholder="Overview OR Home OR …" autocomplete="off" />
+      <label for="d2">D2 — Section headers (“Main Hub”, “Creative Suite”, “Docs”) — changes?</label>
+      <textarea id="d2" name="d2"></textarea>
+      <div class="row">
+        <label><input type="checkbox" name="d3" checked /> D3: Sidebar Creative Suite order must match landing card order (after C1)</label>
+      </div>
+      <label for="d4">D4 — Other nav notes</label>
+      <textarea id="d4" name="d4"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>E — Sign-in &amp; account (landing)</legend>
+      <label for="e1">E1 — Primary button label (signed out)</label>
+      <input type="text" id="e1" name="e1" placeholder="e.g. Sign in" autocomplete="off" />
+      <div class="row">
+        <label><input type="checkbox" name="e2" checked /> E2: Show “Create account” next to primary CTA</label>
+        <label><input type="checkbox" name="e3" checked /> E3: Show email (or truncated) when signed in</label>
+      </div>
+      <label for="e4">E4 — Short trust / context line (optional)</label>
+      <textarea id="e4" name="e4" placeholder="e.g. Supabase-backed data and AI tools"></textarea>
+      <label for="e5">E5 — Placement preference</label>
+      <select id="e5" name="e5">
+        <option value="hero">Primary CTAs inside hero only</option>
+        <option value="hero_strip" selected>Hero CTAs + optional strip/card below hero</option>
+        <option value="strip">Emphasize dedicated account card below hero</option>
+      </select>
+      <label for="e6">E6 — Future: dedicated /sign-in URL? (optional)</label>
+      <textarea id="e6" name="e6" placeholder="not needed / yes later / bookmarkable login"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>F — Motion &amp; polish</legend>
+      <div class="row">
+        <label><input type="checkbox" name="f1" checked /> F1: Staggered card entrance on load</label>
+        <label><input type="checkbox" name="f2" /> F2: Aurora / soft gradient mesh behind hero</label>
+        <label><input type="checkbox" name="f3" /> F3: Film grain / noise overlay (very subtle)</label>
+        <label><input type="checkbox" name="f4_c" /> F4: Slow drift on full-page background</label>
+      </div>
+      <label for="f5">F5 — Other aesthetic notes</label>
+      <textarea id="f5" name="f5"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>G — References</legend>
+      <label for="g1">G1 — Mood links or short comparisons (optional)</label>
+      <textarea id="g1" name="g1" placeholder="URLs or names of sites whose landing feel you like"></textarea>
+    </fieldset>
+  </form>
+
+  <script>
+    (function () {
+      var form = document.getElementById("intake");
+      var status = document.getElementById("status");
+
+      function val(id) {
+        var el = document.getElementById(id);
+        return el ? String(el.value || "").trim() : "";
+      }
+      function chk(name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        return el && el.type === "checkbox" ? el.checked : false;
+      }
+      function sel(id) {
+        var el = document.getElementById(id);
+        if (!el || el.tagName !== "SELECT") return "";
+        var opt = el.options[el.selectedIndex];
+        return opt ? String(opt.value || "") + " (" + (opt.text || "") + ")" : "";
+      }
+
+      function buildMarkdown() {
+        var parts = [
+          "## Landing page UI — submitted answers",
+          "",
+          "### A — Hero copy",
+          "- A1 headline line 1: " + (val("a1") || "(empty)"),
+          "- A2 headline accent line: " + (val("a2") || "(empty)"),
+          "- A3 subline: " + (val("a3") || "(empty)"),
+          "- A4 keep version badge: " + (chk("a4") ? "yes" : "no"),
+          "- A5 tone notes: " + (val("a5") || "(empty)"),
+          "",
+          "### B — Hero visuals",
+          "- B1 hero image: " + (val("b1") || "(empty / default)"),
+          "- B2 gradient: " + sel("b2"),
+          "- B3 ambient motion: " + sel("b3"),
+          "- B4 notes: " + (val("b4") || "(empty)"),
+          "",
+          "### C — Portal grid",
+          "- C1 order:",
+          (val("c1") || "(empty)"),
+          "- C2 label overrides: " + (val("c2") || "(empty)"),
+          "- C3 hide cards: " + (val("c3") || "(empty)"),
+          "",
+          "### D — Sidebar",
+          "- D1 overview label: " + (val("d1") || "(empty)"),
+          "- D2 section headers: " + (val("d2") || "(empty)"),
+          "- D3 match grid order: " + (chk("d3") ? "yes" : "no"),
+          "- D4 other: " + (val("d4") || "(empty)"),
+          "",
+          "### E — Sign-in & account",
+          "- E1 primary CTA label: " + (val("e1") || "(empty)"),
+          "- E2 show create account: " + (chk("e2") ? "yes" : "no"),
+          "- E3 show email when signed in: " + (chk("e3") ? "yes" : "no"),
+          "- E4 trust line: " + (val("e4") || "(empty)"),
+          "- E5 placement: " + sel("e5"),
+          "- E6 /sign-in URL later: " + (val("e6") || "(empty)"),
+          "",
+          "### F — Motion & polish",
+          "- F1 stagger cards: " + (chk("f1") ? "yes" : "no"),
+          "- F2 aurora/mesh: " + (chk("f2") ? "yes" : "no"),
+          "- F3 grain: " + (chk("f3") ? "yes" : "no"),
+          "- F4 page bg drift: " + (chk("f4_c") ? "yes" : "no"),
+          "- F5 other: " + (val("f5") || "(empty)"),
+          "",
+          "### G — References",
+          "- G1: " + (val("g1") || "(empty)"),
+          ""
+        ];
+        return parts.join("\n");
+      }
+
+      document.getElementById("btnCopy").addEventListener("click", function () {
+        var md = buildMarkdown();
+        navigator.clipboard.writeText(md).then(
+          function () {
+            status.textContent = "Copied. Paste into your Cursor chat for the assistant.";
+          },
+          function () {
+            status.textContent = "Clipboard failed — alert shows markdown to copy manually.";
+            alert(md);
+          }
+        );
+      });
+
+      document.getElementById("btnClear").addEventListener("click", function () {
+        if (!confirm("Clear all fields?")) return;
+        form.reset();
+        var boxes = form.querySelectorAll('input[type="checkbox"]');
+        for (var i = 0; i < boxes.length; i++) {
+          var c = boxes[i];
+          if (c.name === "a4" || c.name === "d3" || c.name === "e2" || c.name === "e3" || c.name === "f1") c.checked = true;
+        }
+        status.textContent = "Cleared.";
+      });
+    })();
+  </script>
+</body>
+</html>

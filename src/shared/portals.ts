@@ -9,4 +9,5 @@ export type Portal =
   | 'lab'
   | 'comic'
   | 'assets'
-  | 'writer';
+  | 'writer'
+  | 'wiki';

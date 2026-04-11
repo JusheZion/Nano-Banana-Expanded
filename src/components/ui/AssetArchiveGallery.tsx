@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { getAssetsGroupedByCollection } from '@/shared/api/arcsArchive';
 import type { AssetArchiveItem } from '@/shared/api/arcsArchive';
+import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 
 /** Amethyst accent for asset archive (match Assets Studio). */
 const AMETHYST = '#8B5CF6';
@@ -74,7 +75,7 @@ export const AssetArchiveGallery: React.FC = () => {
                                                 onMouseEnter={() => setHoveredKey(cardKey)}
                                                 onMouseLeave={() => setHoveredKey(null)}
                                             >
-                                                <img
+                                                <ArcsStorageImg
                                                     src={item.image_url}
                                                     alt={displayName}
                                                     className={`

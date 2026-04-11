@@ -3,6 +3,15 @@
 @tailwind utilities;
 
 :root {
+  /* iOS / PWA safe areas (mirror env() for use where calc isn’t needed) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* Dynamic viewport — stable height when mobile browser chrome shows/hides */
+  --app-vh: 100dvh;
+  --app-vh-fallback: 100vh;
+
   /* Jewel-Tone Palette */
   --color-crimson: #893741;
   --color-teal: #37615D;
@@ -25,7 +34,26 @@
   --gem-amethyst: #8b5cf6;
 }
 
+/* Mobile web / PWA — fill viewport reliably (iOS Safari, notched devices) */
+html {
+  height: 100%;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS: extend paint height so body can grow past collapsed dynamic toolbar */
+@supports (-webkit-touch-callout: none) {
+  html {
+    height: -webkit-fill-available;
+  }
+}
+
 body {
+  margin: 0;
+  min-height: 100%;
+  min-height: var(--app-vh-fallback);
+  min-height: var(--app-vh);
   background-color: #0F0F12;
   /* Cinematic Jewel-Tone Gradient with Gold Highlights */
   background-image:
@@ -42,12 +70,48 @@ body {
   background-size: cover;
   background-attachment: fixed;
   background-position: center;
-  /* Deep Charcoal/Black */
   color: #ffffff;
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
+
+#root {
+  isolation: isolate;
+  min-height: 100%;
+  min-height: var(--app-vh-fallback);
+  min-height: var(--app-vh);
+}
+
+@supports (-webkit-touch-callout: none) {
+  #root {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* background-attachment: fixed is unreliable on iOS (jank, wrong paint); use scroll on narrow screens */
+@media (max-width: 767px) {
+  body:not(.theme-wiki) {
+    background-attachment: scroll;
+  }
+}
+
+/* Portals Wiki: calm flat field + soft vignette (no full jewel gradient behind glass panels). */
+body.theme-wiki {
+  background-color: #2a1535;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% 20%, rgba(217, 70, 163, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 90% 60% at 80% 100%, rgba(15, 6, 24, 0.5) 0%, transparent 45%),
+    linear-gradient(180deg, #2a1535 0%, #1a0f22 100%);
+  background-size: auto, auto, auto;
+  background-attachment: scroll;
 }
 
 /* Glassmorphism Utilities */
@@ -104,4 +168,155 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out;
+}
+
+/* Landing hero — soft color wash over imagery (pairs with hero parallax image) */
+.landing-hero-aurora {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(0, 255, 194, 0.12), transparent 55%),
+    radial-gradient(ellipse 65% 55% at 85% 15%, rgba(191, 90, 242, 0.1), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 15% 30%, rgba(212, 175, 55, 0.08), transparent 45%);
+}
+
+/* Portals Wiki — markdown body (scoped; avoids pulling @tailwindcss/typography). */
+.wiki-prose {
+  color: rgba(253, 244, 255, 0.92);
+  line-height: 1.65;
+  font-size: 0.9375rem;
+}
+
+.wiki-prose h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+  color: #fcf6ba;
+  letter-spacing: -0.02em;
+}
+
+.wiki-prose h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #fde68a;
+  scroll-margin-top: 1rem;
+}
+
+.wiki-prose h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1.1rem;
+  color: rgba(253, 244, 255, 0.95);
+}
+
+.wiki-prose p {
+  margin: 0.5rem 0;
+}
+
+.wiki-prose a {
+  color: #fbcfe8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wiki-prose a:hover {
+  color: #fdf2f8;
+}
+
+.wiki-prose strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.wiki-prose code {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.12em 0.4em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wiki-prose pre {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.wiki-prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.82rem;
+}
+
+.wiki-prose ul,
+.wiki-prose ol {
+  margin: 0.5rem 0;
+  padding-left: 1.35rem;
+}
+
+.wiki-prose ul {
+  list-style: disc;
+}
+
+.wiki-prose ol {
+  list-style: decimal;
+}
+
+.wiki-prose li {
+  margin: 0.25rem 0;
+}
+
+.wiki-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 0.75rem 0;
+}
+
+.wiki-prose hr {
+  border: 0;
+  border-top: 1px solid rgba(212, 175, 55, 0.25);
+  margin: 1.25rem 0;
+}
+
+.wiki-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.75rem 0;
+}
+
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+.wiki-prose th {
+  background: rgba(0, 0, 0, 0.25);
+  color: #fde68a;
+}
+
+/* Utilities: safe horizontal inset (notch / home indicator in landscape) */
+.app-safe-x {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* Full viewport block height — use when escaping nested %-height chains */
+.min-h-app-viewport {
+  min-height: var(--app-vh-fallback);
+  min-height: var(--app-vh);
+}
+
+@supports (-webkit-touch-callout: none) {
+  .min-h-app-viewport {
+    min-height: -webkit-fill-available;
+  }
 }
