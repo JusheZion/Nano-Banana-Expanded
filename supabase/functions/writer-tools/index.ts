@@ -250,6 +250,11 @@ function buildOutlineUserPrompt(args: {
     '  "notes": string (optional)',
     '}',
     'Each page_beats entry must include a non-empty "summary".',
+    args.targetPages
+      ? `Coverage rule: when target_page_count is ${args.targetPages}, include page_beats that cover the full 1..${args.targetPages} progression. Prefer one beat per page (or as close as possible) with distinct plot advancement.`
+      : 'Coverage rule: provide enough page_beats to map the issue from opening through ending, not just a handful of broad beats.',
+    'Do not leave middle pages as implicit blanks. If exact page numbers are uncertain, still provide sequential page_target values that span the issue.',
+    'Avoid repeated summaries across adjacent page_beats; each beat must introduce a new development, escalation, reveal, or consequence.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -274,24 +279,67 @@ async function loadIssueRow(supabase: SupabaseAdmin, issueId: string): Promise<I
   };
 }
 
-function extractOutlineBeatForPage(outlineJson: unknown, pageNumber: number): string {
+type OutlinePageBeat = {
+  page_target?: number;
+  summary?: string;
+  scene?: string;
+  emotional_turn?: string;
+};
+
+function extractOutlineBeatContextForPage(outlineJson: unknown, pageNumber: number): string {
   if (!outlineJson || typeof outlineJson !== 'object') return '(no issue outline saved yet)';
   const o = outlineJson as {
-    page_beats?: Array<{
-      page_target?: number;
-      summary?: string;
-      scene?: string;
-      emotional_turn?: string;
-    }>;
+    page_beats?: OutlinePageBeat[];
   };
   const arr = o.page_beats;
   if (!Array.isArray(arr) || arr.length === 0) {
     return `Outline has no page_beats array. Outline keys: ${Object.keys(o as object).join(', ')}`;
   }
+
   const match = arr.find((b) => b.page_target === pageNumber);
-  if (match) return JSON.stringify(match, null, 2);
-  if (arr[pageNumber - 1]) return JSON.stringify(arr[pageNumber - 1], null, 2);
-  return `No outline beat for page ${pageNumber}. Sample: ${JSON.stringify(arr[0], null, 2)}`;
+  if (match) {
+    return `Exact outline beat for this page:\n${JSON.stringify(match, null, 2)}`;
+  }
+
+  const withTargets = arr
+    .filter((b): b is OutlinePageBeat & { page_target: number } => typeof b.page_target === 'number')
+    .sort((a, b) => a.page_target - b.page_target);
+  if (withTargets.length > 0) {
+    const prev = [...withTargets].reverse().find((b) => b.page_target < pageNumber);
+    const next = withTargets.find((b) => b.page_target > pageNumber);
+    if (prev && next) {
+      return [
+        `No exact outline beat for page ${pageNumber}. Bridge between these outline beats without repeating prior pages:`,
+        `Previous (${prev.page_target}): ${JSON.stringify(prev, null, 2)}`,
+        `Next (${next.page_target}): ${JSON.stringify(next, null, 2)}`,
+      ].join('\n');
+    }
+    if (prev) {
+      return [
+        `No exact outline beat for page ${pageNumber}. Continue progression beyond the nearest prior beat:`,
+        `Previous (${prev.page_target}): ${JSON.stringify(prev, null, 2)}`,
+      ].join('\n');
+    }
+    if (next) {
+      return [
+        `No exact outline beat for page ${pageNumber}. Build toward the nearest upcoming beat:`,
+        `Next (${next.page_target}): ${JSON.stringify(next, null, 2)}`,
+      ].join('\n');
+    }
+  }
+
+  const mappedIndex = Math.min(arr.length - 1, Math.max(0, pageNumber - 1));
+  const mappedBeat = arr[mappedIndex];
+  const previousBeat = mappedIndex > 0 ? arr[mappedIndex - 1] : null;
+  const nextBeat = mappedIndex < arr.length - 1 ? arr[mappedIndex + 1] : null;
+  return [
+    `Outline page_beats are sparse or missing page_target values. Use this sequence window for page ${pageNumber}:`,
+    `Mapped beat (index ${mappedIndex + 1}/${arr.length}): ${JSON.stringify(mappedBeat, null, 2)}`,
+    previousBeat ? `Previous beat: ${JSON.stringify(previousBeat, null, 2)}` : '',
+    nextBeat ? `Next beat: ${JSON.stringify(nextBeat, null, 2)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildPageBeatsUserPrompt(args: {
@@ -303,7 +351,7 @@ function buildPageBeatsUserPrompt(args: {
   latestOutline: unknown;
   priorPagesDigest: string;
 }): string {
-  const outlineBeat = extractOutlineBeatForPage(args.latestOutline, args.page.page_number);
+  const outlineBeatContext = extractOutlineBeatContextForPage(args.latestOutline, args.page.page_number);
   return [
     `Create panel-by-panel beats for ONE comic book page as JSON.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
@@ -312,7 +360,7 @@ function buildPageBeatsUserPrompt(args: {
     `Prior pages context (most recent first; do NOT repeat):\n${args.priorPagesDigest || '(none)'}`,
     `Existing beats_json (may be null): ${JSON.stringify(args.page.beats_json ?? null)}`,
     `Existing script_text preview: ${(args.page.script_text ?? '').slice(0, 500) || '(none)'}`,
-    `Issue outline context for this page:\n${outlineBeat}`,
+    `Issue outline context for this page:\n${outlineBeatContext}`,
     `Cast:\n${JSON.stringify(args.cast, null, 2)}`,
     `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
@@ -321,6 +369,7 @@ function buildPageBeatsUserPrompt(args: {
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
     'Must have at least one panel; every panel needs non-empty "action".',
     'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
+    'Do not reuse key actions from prior pages. If outline context is sparse, infer the next logical development from the nearest outline beats plus prior-page digest.',
   ].join('\n');
 }
 
@@ -352,6 +401,19 @@ function buildDraftDialogueUserPrompt(args: {
   ].join('\n');
 }
 
+function summarizePageBeatActions(beatsJson: unknown): string {
+  const panels = (beatsJson as { panels?: unknown } | null)?.panels;
+  if (!Array.isArray(panels) || panels.length === 0) return '(no panel beats)';
+  const actions = panels
+    .map((p) => {
+      const action = (p as { action?: unknown } | null)?.action;
+      return typeof action === 'string' ? action.trim() : '';
+    })
+    .filter(Boolean);
+  if (actions.length === 0) return '(panel actions missing)';
+  return actions.slice(0, 4).join(' | ');
+}
+
 function buildPagesDigest(
   pages: Array<{ page_number: number; beats_json: unknown; script_text: string | null }>,
 ): string {
@@ -361,6 +423,7 @@ function buildPagesDigest(
       panel_count: Array.isArray((p.beats_json as { panels?: unknown })?.panels)
         ? ((p.beats_json as { panels: unknown[] }).panels.length)
         : null,
+      beat_preview: summarizePageBeatActions(p.beats_json),
       script_preview: (p.script_text ?? '').slice(0, 280),
     })),
     null,
@@ -398,7 +461,7 @@ async function executeSinglePageBeats(
       .eq('issue_id', page.issue_id)
       .lt('page_number', page.page_number)
       .order('page_number', { ascending: false })
-      .limit(2),
+      .limit(5),
   ]);
   const system =
     'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
