@@ -93,8 +93,8 @@ function getOutlinePageBeatsCount(outlineJson: unknown): number {
   return Array.isArray(arr) ? arr.length : 0;
 }
 
-function buildCoverageBoostArcBrief(baseArcBrief: string, targetPageCount: number): string {
-  const trimmed = baseArcBrief.trim();
+function buildCoverageBoostOutlineSupplement(baseSupplement: string, targetPageCount: number): string {
+  const trimmed = baseSupplement.trim();
   const boostLine = `Coverage boost: map this issue to about ${targetPageCount} pages with sequential per-page beats from opening to ending.`;
   if (!trimmed) return boostLine;
   if (trimmed.includes('Coverage boost:')) return trimmed;
@@ -164,9 +164,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
   const [syncPagesBusy, setSyncPagesBusy] = useState(false);
   const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
-  const [arcBriefDraft, setArcBriefDraft] = useState('');
-  const [arcIssueCountDraft, setArcIssueCountDraft] = useState<number>(3);
-  const [outlineAllBusy, setOutlineAllBusy] = useState(false);
+  const [arcSelectedIssueIds, setArcSelectedIssueIds] = useState<string[]>([]);
+  const [arcBatchBusy, setArcBatchBusy] = useState(false);
+  const [arcBatchLabel, setArcBatchLabel] = useState('');
+  const [arcBatchMode, setArcBatchMode] = useState<'pacing_review' | 'canon_check' | null>(null);
+  const prevWorkspaceTabRef = useRef<WriterWorkspaceTabId>(activeTab);
   const [dialogueLoading, setDialogueLoading] = useState(false);
   const [dialogueError, setDialogueError] = useState<string | null>(null);
   const [dialogueStyle, setDialogueStyle] = useState<'comic_script' | 'screenplay_light'>('comic_script');
@@ -186,6 +188,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
   const [issueSynopsisDraft, setIssueSynopsisDraft] = useState('');
+  /** Optional text sent only with Generate outline / coverage boost (not saved on the issue row). */
+  const [outlineSupplementDraft, setOutlineSupplementDraft] = useState('');
   const [seriesTitleDraft, setSeriesTitleDraft] = useState('');
   const [seriesLoglineDraft, setSeriesLoglineDraft] = useState('');
   const [contextSaveLoading, setContextSaveLoading] = useState(false);
@@ -223,6 +227,34 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const rows = await listWriterIssues(selectedSeriesId);
     setIssues(rows);
   }, [selectedSeriesId]);
+
+  const sortedIssuesForArc = useMemo(
+    () => [...issues].sort((a, b) => a.issue_number - b.issue_number),
+    [issues],
+  );
+
+  const arcBatchIssueIdsOrdered = useMemo(() => {
+    const valid = new Set(issues.map((i) => i.id));
+    const sel = new Set(arcSelectedIssueIds.filter((id) => valid.has(id)));
+    return sortedIssuesForArc.filter((iss) => sel.has(iss.id)).map((iss) => iss.id);
+  }, [issues, arcSelectedIssueIds, sortedIssuesForArc]);
+
+  useEffect(() => {
+    setArcSelectedIssueIds([]);
+  }, [selectedSeriesId]);
+
+  useEffect(() => {
+    const prev = prevWorkspaceTabRef.current;
+    prevWorkspaceTabRef.current = activeTab;
+    if (activeTab !== 'arc' || prev === 'arc') return;
+    if (!selectedIssueId) return;
+    const valid = new Set(issues.map((i) => i.id));
+    setArcSelectedIssueIds((cur) => {
+      const kept = cur.filter((id) => valid.has(id));
+      if (kept.length > 0) return kept;
+      return valid.has(selectedIssueId) ? [selectedIssueId] : [];
+    });
+  }, [activeTab, selectedIssueId, issues]);
 
   const handleCreateSeries = useCallback(async () => {
     setBootstrapError(null);
@@ -530,92 +562,77 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
 
-  const runOutlineGenerate = useCallback(async (opts?: { coverageBoost?: boolean }) => {
-    if (!selectedIssueId) return;
-    setOutlineGenError(null);
-    setOutlineGenLoading(true);
-    const arcBriefTrim = opts?.coverageBoost
-      ? buildCoverageBoostArcBrief(arcBriefDraft, targetPageCount).trim()
-      : arcBriefDraft.trim();
-    const res = await invokeWriterTools({
-      mode: 'outline_issue',
-      issue_id: selectedIssueId,
-      target_page_count: targetPageCount,
-      ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
-      ...(arcBriefTrim && arcIssueCountDraft >= 1
-        ? { arc_issue_count: Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft))) }
-        : {}),
-    });
-    setOutlineGenLoading(false);
-    if (res.success) {
-      if (opts?.coverageBoost) {
-        setArcBriefDraft(arcBriefTrim);
+  const runArcToolBatch = useCallback(
+    async (mode: 'pacing_review' | 'canon_check') => {
+      if (arcBatchIssueIdsOrdered.length === 0 || !supabaseOk) return;
+      setPacingError(null);
+      setCanonError(null);
+      setArcBatchBusy(true);
+      setArcBatchMode(mode);
+      try {
+        for (let i = 0; i < arcBatchIssueIdsOrdered.length; i++) {
+          setArcBatchLabel(`${i + 1}/${arcBatchIssueIdsOrdered.length}`);
+          const id = arcBatchIssueIdsOrdered[i]!;
+          const res = await invokeWriterTools({ mode, issue_id: id });
+          if (!res.success) {
+            const msg = toolErrorMessage(res);
+            if (mode === 'pacing_review') setPacingError(msg);
+            else setCanonError(msg);
+            pushHistory(`error: ${mode} batch — ${msg}`);
+            return;
+          }
+          const iss = sortedIssuesForArc.find((x) => x.id === id);
+          pushHistory(
+            `${mode === 'pacing_review' ? 'pacing review' : 'canon check'} saved — issue #${iss?.issue_number ?? '?'}`,
+          );
+        }
+        await refreshIssuesForSeries();
+        pushHistory(
+          `${mode === 'pacing_review' ? 'Pacing' : 'Canon'} batch complete (${arcBatchIssueIdsOrdered.length} issue(s))`,
+        );
+      } finally {
+        setArcBatchBusy(false);
+        setArcBatchLabel('');
+        setArcBatchMode(null);
       }
-      pushHistory(`outline v${res.version ?? '?'} saved`);
-      const rows = await listWriterOutlinesForIssue(selectedIssueId);
-      setOutlines(rows);
-    } else {
-      const msg = toolErrorMessage(res);
-      setOutlineGenError(msg);
-      pushHistory(`error: ${msg}`);
-    }
-  }, [selectedIssueId, targetPageCount, arcBriefDraft, arcIssueCountDraft]);
+    },
+    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries],
+  );
+
+  const runOutlineGenerate = useCallback(
+    async (opts?: { coverageBoost?: boolean }) => {
+      if (!selectedIssueId) return;
+      setOutlineGenError(null);
+      setOutlineGenLoading(true);
+      const supplementTrim = opts?.coverageBoost
+        ? buildCoverageBoostOutlineSupplement(outlineSupplementDraft, targetPageCount).trim()
+        : outlineSupplementDraft.trim();
+      const res = await invokeWriterTools({
+        mode: 'outline_issue',
+        issue_id: selectedIssueId,
+        target_page_count: targetPageCount,
+        ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
+      });
+      setOutlineGenLoading(false);
+      if (res.success) {
+        if (opts?.coverageBoost) {
+          setOutlineSupplementDraft(supplementTrim);
+        }
+        pushHistory(`outline v${res.version ?? '?'} saved`);
+        const rows = await listWriterOutlinesForIssue(selectedIssueId);
+        setOutlines(rows);
+      } else {
+        const msg = toolErrorMessage(res);
+        setOutlineGenError(msg);
+        pushHistory(`error: ${msg}`);
+      }
+    },
+    [selectedIssueId, targetPageCount, outlineSupplementDraft],
+  );
 
   const runOutlineGenerateCoverageBoost = useCallback(async () => {
     await runOutlineGenerate({ coverageBoost: true });
   }, [runOutlineGenerate]);
-
-  const runOutlineGenerateAllIssues = useCallback(async () => {
-    if (!selectedSeriesId || issues.length === 0) return;
-    const n = issues.length;
-    if (
-      !window.confirm(
-        `Generate an outline for all ${n} issue(s) in this series? This runs one AI call per issue.`,
-      )
-    ) {
-      return;
-    }
-    setOutlineGenError(null);
-    setOutlineAllBusy(true);
-    const arcBriefTrim = arcBriefDraft.trim();
-    const arcCount =
-      arcBriefTrim && arcIssueCountDraft >= 1
-        ? Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft)))
-        : undefined;
-    try {
-      const sorted = [...issues].sort((a, b) => a.issue_number - b.issue_number);
-      for (const iss of sorted) {
-        const res = await invokeWriterTools({
-          mode: 'outline_issue',
-          issue_id: iss.id,
-          target_page_count: targetPageCount,
-          ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
-          ...(arcCount != null ? { arc_issue_count: arcCount } : {}),
-        });
-        if (!res.success) {
-          const msg = toolErrorMessage(res);
-          setOutlineGenError(`Issue #${iss.issue_number}: ${msg}`);
-          pushHistory(`error: outline all — issue #${iss.issue_number}`);
-          return;
-        }
-        pushHistory(`outline v${res.version ?? '?'} — issue #${iss.issue_number}`);
-      }
-      if (selectedIssueId) {
-        const rows = await listWriterOutlinesForIssue(selectedIssueId);
-        setOutlines(rows);
-      }
-      pushHistory('outline all issues complete');
-    } finally {
-      setOutlineAllBusy(false);
-    }
-  }, [
-    selectedSeriesId,
-    selectedIssueId,
-    issues,
-    targetPageCount,
-    arcBriefDraft,
-    arcIssueCountDraft,
-  ]);
 
   const runSyncPagesToTarget = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -892,15 +909,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     beatsLoading ||
     dialogueLoading ||
     shotsLoading ||
-    (activeTab === 'arc' && pacingLoading) ||
+    (activeTab === 'arc' && (pacingLoading || arcBatchBusy)) ||
     (activeTab === 'beats' && beatsBatchBusy);
 
   const quickGenerateDisabled =
     !supabaseOk ||
     !selectedIssueId ||
-    (activeTab === 'outline' && outlineAllBusy) ||
     (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
-    (activeTab === 'dialogue' && !selectedPageId);
+    (activeTab === 'dialogue' && !selectedPageId) ||
+    (activeTab === 'arc' && arcBatchBusy);
 
   useWriterHotkeys({
     onWorkspaceTab: setActiveTab,
@@ -1336,8 +1353,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onRunPacing={runPacingFromRibbon}
         onRunCanon={runCanonFromRibbon}
         canRunReview={Boolean(supabaseOk && selectedIssueId)}
-        pacingLoading={pacingLoading}
-        canonLoading={canonLoading}
+        pacingLoading={pacingLoading || arcBatchBusy}
+        canonLoading={canonLoading || arcBatchBusy}
         onQuickGenerate={() => void quickGenerate()}
         quickGenerateLabel={quickGenerateLabel}
         quickGenerateDisabled={quickGenerateDisabled}
@@ -1569,6 +1586,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       </div>
                     )}
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                    <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-outline-supplement">
+                      <span className="inline-flex items-center gap-1.5">
+                        Outline instructions for AI (optional)
+                        <WriterSectionTip tipKey="outlineInstructionsOptional" label="About outline instructions" />
+                      </span>
+                      <textarea
+                        id="writer-outline-supplement"
+                        name="writer-outline-supplement"
+                        value={outlineSupplementDraft}
+                        onChange={(e) => setOutlineSupplementDraft(e.target.value)}
+                        rows={3}
+                        disabled={!selectedIssueId}
+                        className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder={
+                          selectedIssueId
+                            ? 'Optional: pacing, tone, act breaks, or “more pages per beat”. Sent only with Generate outline — not saved to the issue row.'
+                            : 'Select an issue…'
+                        }
+                      />
+                    </label>
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-target-pages">
                         Target pages
@@ -1585,12 +1622,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       </label>
                       <button
                         type="button"
-                        disabled={
-                          !supabaseOk ||
-                          !selectedIssueId ||
-                          outlineGenLoading ||
-                          outlineAllBusy
-                        }
+                        disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
                         onClick={() => void runOutlineGenerate()}
                         className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         style={{ background: ACCENT_GOLD_GRADIENT }}
@@ -1600,7 +1632,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       {outlineCoverageWarning && (
                         <button
                           type="button"
-                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading || outlineAllBusy}
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
                           onClick={() => void runOutlineGenerateCoverageBoost()}
                           className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-700/35 bg-amber-100/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         >
@@ -1623,86 +1655,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {syncPagesError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{syncPagesError}</p>
                     )}
-                    <div className="space-y-2 pt-1 border-t border-black/10">
-                      <div className="flex items-center gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                          Multi-issue arc (optional)
-                        </p>
-                        <WriterSectionTip tipKey="arcBriefOutline" label="About arc brief" />
-                      </div>
-                      <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-arc-brief">
-                        Arc spine / notes
-                        <textarea
-                          id="writer-arc-brief"
-                          name="writer-arc-brief"
-                          rows={3}
-                          value={arcBriefDraft}
-                          onChange={(e) => setArcBriefDraft(e.target.value)}
-                          disabled={!selectedIssueId}
-                          placeholder="Full arc in your words. Label beats per issue if you can (e.g. Issue 1: … Issue 2: …). Each outline call is told which part of the arc it covers."
-                          className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
-                        />
-                      </label>
-                      <div className="space-y-1 max-w-md">
-                        <div className="flex items-center gap-1.5">
-                          <label
-                            className="text-[11px] font-semibold text-black/70"
-                            htmlFor="writer-arc-issue-count"
-                          >
-                            Arc length (for AI)
-                          </label>
-                          <WriterSectionTip tipKey="arcIssueCountHint" label="About arc length" />
-                        </div>
-                        <input
-                          id="writer-arc-issue-count"
-                          name="writer-arc-issue-count"
-                          type="number"
-                          min={1}
-                          max={48}
-                          value={arcIssueCountDraft}
-                          onChange={(e) => setArcIssueCountDraft(Number(e.target.value) || 1)}
-                          disabled={!selectedIssueId}
-                          className="max-w-[8rem] rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                        />
-                        <p className="text-[10px] text-black/55 leading-snug">
-                          Batch outline uses{' '}
-                          <span className="font-semibold text-black/70">{issues.length}</span> issue
-                          {issues.length === 1 ? '' : 's'} in the right-hand Library (Issues list)—not this
-                          number.{' '}
-                          <button
-                            type="button"
-                            className="font-semibold text-black/75 underline decoration-black/25 underline-offset-2 hover:text-black hover:decoration-black/50"
-                            onClick={() => {
-                              setDockCollapsed(false);
-                              setDockTab('library');
-                            }}
-                          >
-                            Open Library → Issues
-                          </button>
-                          {selectedSeriesId && supabaseOk
-                            ? ' — use “Add issue” at the top of that list.'
-                            : ''}
-                        </p>
-                      </div>
-                      <Tooltip content={WRITER_UI_TIPS.outlineAllIssues} side="bottom">
-                        <button
-                          type="button"
-                          disabled={
-                            !supabaseOk ||
-                            !selectedSeriesId ||
-                            issues.length === 0 ||
-                            outlineGenLoading ||
-                            outlineAllBusy
-                          }
-                          onClick={() => void runOutlineGenerateAllIssues()}
-                          className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                        >
-                          {outlineAllBusy
-                            ? 'Outlining series…'
-                            : `Outline all in series (${issues.length} in Library)`}
-                        </button>
-                      </Tooltip>
-                    </div>
                     {outlineGenError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
                     )}
@@ -1715,7 +1667,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </p>
                         <button
                           type="button"
-                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading || outlineAllBusy}
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
                           onClick={() => void runOutlineGenerateCoverageBoost()}
                           className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         >
@@ -2018,28 +1970,117 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <WriterSectionTip tipKey="arcTab" label="About pacing and canon" />
                     </div>
                     {issues.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Issue spine</p>
-                        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 -mx-1 px-1">
-                          {[...issues]
-                            .sort((a, b) => a.issue_number - b.issue_number)
-                            .map((iss) => (
+                      <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Batch arc tools
+                            </p>
+                            <WriterSectionTip tipKey="arcMultiIssueBatch" label="About batch arc tools" />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || arcBatchBusy}
+                              onClick={() => setArcSelectedIssueIds(sortedIssuesForArc.map((i) => i.id))}
+                              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                            >
+                              Select all
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || arcBatchBusy}
+                              onClick={() => setArcSelectedIssueIds([])}
+                              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                            >
+                              Clear
+                            </button>
+                            {selectedIssueId ? (
                               <button
-                                key={iss.id}
                                 type="button"
-                                onClick={() => setSelectedIssueId(iss.id)}
-                                className={`flex-shrink-0 max-w-[200px] truncate rounded-lg border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
-                                  selectedIssueId === iss.id
-                                    ? 'border-black/30 bg-black/15 text-black ring-1 ring-black/15'
-                                    : 'border-black/15 bg-white/60 text-black/75 hover:bg-white/90'
-                                }`}
-                                title={iss.title ?? undefined}
+                                disabled={!supabaseOk || arcBatchBusy}
+                                onClick={() => setArcSelectedIssueIds([selectedIssueId])}
+                                className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
                               >
-                                #{iss.issue_number}
-                                {iss.title ? ` — ${iss.title}` : ''}
+                                Library issue only
                               </button>
-                            ))}
+                            ) : null}
+                          </div>
                         </div>
+                        <ul className="space-y-1.5 max-h-[min(220px,32vh)] overflow-y-auto custom-scrollbar -mx-1 px-1">
+                          {sortedIssuesForArc.map((iss) => (
+                            <li key={iss.id} className="flex items-start gap-2 text-[11px]">
+                              <input
+                                type="checkbox"
+                                id={`writer-arc-batch-${iss.id}`}
+                                checked={arcSelectedIssueIds.includes(iss.id)}
+                                onChange={() => {
+                                  setArcSelectedIssueIds((prev) =>
+                                    prev.includes(iss.id)
+                                      ? prev.filter((x) => x !== iss.id)
+                                      : [...prev, iss.id],
+                                  );
+                                }}
+                                disabled={!supabaseOk || arcBatchBusy}
+                                className="mt-0.5 rounded border-black/25"
+                              />
+                              <label
+                                htmlFor={`writer-arc-batch-${iss.id}`}
+                                className="cursor-pointer flex-1 min-w-0 leading-snug"
+                              >
+                                <span className="font-semibold text-black">#{iss.issue_number}</span>
+                                {iss.title ? (
+                                  <span className="text-black/75"> — {iss.title}</span>
+                                ) : null}
+                              </label>
+                              <button
+                                type="button"
+                                className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
+                                onClick={() => setSelectedIssueId(iss.id)}
+                              >
+                                Library
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk ||
+                              arcBatchIssueIdsOrdered.length === 0 ||
+                              arcBatchBusy ||
+                              pacingLoading ||
+                              canonLoading
+                            }
+                            onClick={() => void runArcToolBatch('pacing_review')}
+                            className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {arcBatchBusy && arcBatchMode === 'pacing_review'
+                              ? `Pacing ${arcBatchLabel || '…'}`
+                              : `Run pacing on selected (${arcBatchIssueIdsOrdered.length})`}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk ||
+                              arcBatchIssueIdsOrdered.length === 0 ||
+                              arcBatchBusy ||
+                              pacingLoading ||
+                              canonLoading
+                            }
+                            onClick={() => void runArcToolBatch('canon_check')}
+                            className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {arcBatchBusy && arcBatchMode === 'canon_check'
+                              ? `Canon ${arcBatchLabel || '…'}`
+                              : `Run canon on selected (${arcBatchIssueIdsOrdered.length})`}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-black/50 leading-snug">
+                          Check issues, then run pacing or canon once per selected row (in issue order). Results save on
+                          each issue; use Library to focus an issue and read combined output below.
+                        </p>
                       </div>
                     )}
                     {!selectedIssueId && (
@@ -2049,7 +2090,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Pacing review</p>
                       <button
                         type="button"
-                        disabled={!supabaseOk || !selectedIssueId || pacingLoading}
+                        disabled={!supabaseOk || !selectedIssueId || pacingLoading || arcBatchBusy}
                         onClick={async () => {
                           if (!selectedIssueId) return;
                           setPacingError(null);
@@ -2085,7 +2126,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Canon check</p>
                       <button
                         type="button"
-                        disabled={!supabaseOk || !selectedIssueId || canonLoading}
+                        disabled={!supabaseOk || !selectedIssueId || canonLoading || arcBatchBusy}
                         onClick={async () => {
                           if (!selectedIssueId) return;
                           setCanonError(null);

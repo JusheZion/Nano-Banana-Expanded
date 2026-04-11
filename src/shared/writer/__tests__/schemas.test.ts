@@ -40,19 +40,15 @@ describe('writerToolsRequestSchema', () => {
     expect(r).toMatchObject({ mode: 'outline_issue', target_page_count: 22 });
   });
 
-  it('parses outline_issue with arc_brief and arc_issue_count', () => {
-    const id = '550e8400-e29b-41d4-a716-446655440000';
+  it('parses outline_issue with outline_supplement', () => {
     const r = writerToolsRequestSchema.parse({
       mode: 'outline_issue',
-      issue_id: id,
-      target_page_count: 12,
-      arc_brief: 'Three-issue redemption arc.',
-      arc_issue_count: 3,
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
     });
     expect(r).toMatchObject({
       mode: 'outline_issue',
-      arc_brief: 'Three-issue redemption arc.',
-      arc_issue_count: 3,
+      outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
     });
   });
 

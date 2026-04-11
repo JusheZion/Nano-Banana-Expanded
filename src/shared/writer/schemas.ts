@@ -28,8 +28,8 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
-  arc_brief: z.string().max(8000).optional(),
-  arc_issue_count: z.number().int().min(1).max(48).optional(),
+  /** Optional author notes appended to the outline prompt (e.g. coverage boost). Not stored on the issue row. */
+  outline_supplement: z.string().max(8000).optional(),
 });
 
 const pageBeatPanelSchema = z.object({
