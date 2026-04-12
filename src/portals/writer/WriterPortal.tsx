@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import {
+  clearWriterPagesBeatsJson,
+  clearWriterPagesScriptText,
   createWriterIssue,
   createWriterPage,
   createWriterSeries,
+  deleteWriterPages,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -11,7 +14,11 @@ import {
   listWriterSeries,
   listWriterShotPlansForIssue,
   updateWriterIssue,
+  updateWriterIssueOutlineJson,
+  updateWriterPageBeatsJson,
+  updateWriterPageScriptText,
   updateWriterSeries,
+  updateWriterVideoShotPlanJson,
   type WriterIssueOutlineRow,
   type WriterIssueRow,
   type WriterPageRow,
@@ -45,6 +52,13 @@ import {
   WRITER_WORKSPACE_TAB_LABELS,
   WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
+import {
+  buildSynopsisDocumentFromParts,
+  EMPTY_SYNOPSIS_HELPER_PARTS,
+  mergeSynopsisHelperIntoNotes,
+  readSynopsisHelperFromNotes,
+  type SynopsisHelperParts,
+} from '@/portals/writer/writerSynopsisHelper';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import {
@@ -70,6 +84,8 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
 
+const MAX_PAGE_MULTI_SELECT = 5;
+
 function pageRowHasPanelBeats(p: WriterPageRow | null | undefined): boolean {
   const panels = (p?.beats_json as { panels?: unknown } | null)?.panels;
   return Array.isArray(panels) && panels.length > 0;
@@ -80,6 +96,20 @@ function readWriterToolCache(notes: Record<string, unknown> | undefined): Record
   const c = notes.writer_tool_cache;
   if (c && typeof c === 'object' && !Array.isArray(c)) return c as Record<string, unknown>;
   return undefined;
+}
+
+function getOutlinePageBeatsCount(outlineJson: unknown): number {
+  if (!outlineJson || typeof outlineJson !== 'object') return 0;
+  const arr = (outlineJson as { page_beats?: unknown }).page_beats;
+  return Array.isArray(arr) ? arr.length : 0;
+}
+
+function buildCoverageBoostOutlineSupplement(baseSupplement: string, targetPageCount: number): string {
+  const trimmed = baseSupplement.trim();
+  const boostLine = `Coverage boost: map this issue to about ${targetPageCount} pages with sequential per-page beats from opening to ending.`;
+  if (!trimmed) return boostLine;
+  if (trimmed.includes('Coverage boost:')) return trimmed;
+  return `${trimmed}\n\n${boostLine}`;
 }
 
 function downloadJsonFile(filename: string, data: unknown) {
@@ -138,14 +168,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
+  const [beatsDirectorNotesDraft, setBeatsDirectorNotesDraft] = useState('');
+  const [selectedPageIdsForBatch, setSelectedPageIdsForBatch] = useState<string[]>([]);
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
   const [syncPagesBusy, setSyncPagesBusy] = useState(false);
   const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
-  const [arcBriefDraft, setArcBriefDraft] = useState('');
-  const [arcIssueCountDraft, setArcIssueCountDraft] = useState<number>(3);
-  const [outlineAllBusy, setOutlineAllBusy] = useState(false);
+  const [arcSelectedIssueIds, setArcSelectedIssueIds] = useState<string[]>([]);
+  const [arcBatchBusy, setArcBatchBusy] = useState(false);
+  const [arcBatchLabel, setArcBatchLabel] = useState('');
+  const [arcBatchMode, setArcBatchMode] = useState<'pacing_review' | 'canon_check' | null>(null);
+  const prevWorkspaceTabRef = useRef<WriterWorkspaceTabId>(activeTab);
   const [dialogueLoading, setDialogueLoading] = useState(false);
   const [dialogueError, setDialogueError] = useState<string | null>(null);
   const [dialogueStyle, setDialogueStyle] = useState<'comic_script' | 'screenplay_light'>('comic_script');
@@ -165,14 +199,47 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
   const [issueSynopsisDraft, setIssueSynopsisDraft] = useState('');
+  /** Optional text sent only with Generate outline / coverage boost (not saved on the issue row). */
+  const [outlineSupplementDraft, setOutlineSupplementDraft] = useState('');
   const [seriesTitleDraft, setSeriesTitleDraft] = useState('');
   const [seriesLoglineDraft, setSeriesLoglineDraft] = useState('');
   const [contextSaveLoading, setContextSaveLoading] = useState(false);
   const [contextSaveError, setContextSaveError] = useState<string | null>(null);
+  const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
+    ...EMPTY_SYNOPSIS_HELPER_PARTS,
+  });
+  type ScriptsEditorTab = 'synopsis' | 'outline' | 'beats' | 'dialogue' | 'video';
+  const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
+  const [outlineEditDraft, setOutlineEditDraft] = useState('');
+  const [beatsEditDraft, setBeatsEditDraft] = useState('');
+  const [dialogueEditDraft, setDialogueEditDraft] = useState('');
+  const [shotEditDraft, setShotEditDraft] = useState('');
+  const [scriptsBusy, setScriptsBusy] = useState(false);
+  const [scriptsError, setScriptsError] = useState<string | null>(null);
 
   const pushHistory = (line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
   };
+
+  const refreshPagesForIssue = useCallback(async () => {
+    if (!selectedIssueId) return;
+    const pageRows = await listWriterPages(selectedIssueId);
+    setPages(pageRows);
+    setSelectedPageId((prev) => {
+      if (prev && pageRows.some((p) => p.id === prev)) return prev;
+      return pageRows[0]?.id ?? null;
+    });
+  }, [selectedIssueId]);
+
+  const togglePageBatchSelect = useCallback((pageId: string) => {
+    setSelectedPageIdsForBatch((prev) => {
+      if (prev.includes(pageId)) return prev.filter((x) => x !== pageId);
+      if (prev.length >= MAX_PAGE_MULTI_SELECT) return prev;
+      return [...prev, pageId];
+    });
+  }, []);
+
+  const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
     'details' in res && res.details ? `${res.error}: ${res.details}` : res.error;
@@ -182,6 +249,34 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const rows = await listWriterIssues(selectedSeriesId);
     setIssues(rows);
   }, [selectedSeriesId]);
+
+  const sortedIssuesForArc = useMemo(
+    () => [...issues].sort((a, b) => a.issue_number - b.issue_number),
+    [issues],
+  );
+
+  const arcBatchIssueIdsOrdered = useMemo(() => {
+    const valid = new Set(issues.map((i) => i.id));
+    const sel = new Set(arcSelectedIssueIds.filter((id) => valid.has(id)));
+    return sortedIssuesForArc.filter((iss) => sel.has(iss.id)).map((iss) => iss.id);
+  }, [issues, arcSelectedIssueIds, sortedIssuesForArc]);
+
+  useEffect(() => {
+    setArcSelectedIssueIds([]);
+  }, [selectedSeriesId]);
+
+  useEffect(() => {
+    const prev = prevWorkspaceTabRef.current;
+    prevWorkspaceTabRef.current = activeTab;
+    if (activeTab !== 'arc' || prev === 'arc') return;
+    if (!selectedIssueId) return;
+    const valid = new Set(issues.map((i) => i.id));
+    setArcSelectedIssueIds((cur) => {
+      const kept = cur.filter((id) => valid.has(id));
+      if (kept.length > 0) return kept;
+      return valid.has(selectedIssueId) ? [selectedIssueId] : [];
+    });
+  }, [activeTab, selectedIssueId, issues]);
 
   const handleCreateSeries = useCallback(async () => {
     setBootstrapError(null);
@@ -301,13 +396,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId]);
 
   useEffect(() => {
+    setSelectedPageIdsForBatch((prev) => prev.filter((id) => pages.some((p) => p.id === id)));
+  }, [pages]);
+
+  useEffect(() => {
     const row = issues.find((x) => x.id === selectedIssueId);
     if (row) {
       setIssueTitleDraft(row.title ?? '');
       setIssueSynopsisDraft(row.synopsis ?? '');
+      setSynopsisHelperParts(readSynopsisHelperFromNotes(row.notes));
     } else {
       setIssueTitleDraft('');
       setIssueSynopsisDraft('');
+      setSynopsisHelperParts({ ...EMPTY_SYNOPSIS_HELPER_PARTS });
     }
   }, [selectedIssueId, issues]);
 
@@ -328,6 +429,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const sortedPages = useMemo(
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
     [pages],
+  );
+
+  const selectedPagesForBatchExport = useMemo(
+    () => sortedPages.filter((p) => selectedPageIdsForBatch.includes(p.id)),
+    [sortedPages, selectedPageIdsForBatch],
   );
 
   const pagesWithBeatsCount = useMemo(
@@ -364,6 +470,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => getWriterQuickGenerateNextHint(activeTab, nextStepCtx),
     [activeTab, nextStepCtx],
   );
+
+  const outlinePageBeatsCount = useMemo(
+    () => getOutlinePageBeatsCount(latestOutline?.outline_json),
+    [latestOutline],
+  );
+  const outlineCoverageGap = Math.max(0, targetPageCount - outlinePageBeatsCount);
+  const outlineCoverageWarning =
+    Boolean(latestOutline) && targetPageCount > 0 && outlineCoverageGap >= 2;
 
   const nextPageNumber = useMemo(() => {
     if (sortedPages.length === 0) return 1;
@@ -472,83 +586,77 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [selectedIssueId, refreshIssuesForSeries]);
 
-  const runOutlineGenerate = useCallback(async () => {
-    if (!selectedIssueId) return;
-    setOutlineGenError(null);
-    setOutlineGenLoading(true);
-    const arcBriefTrim = arcBriefDraft.trim();
-    const res = await invokeWriterTools({
-      mode: 'outline_issue',
-      issue_id: selectedIssueId,
-      target_page_count: targetPageCount,
-      ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
-      ...(arcBriefTrim && arcIssueCountDraft >= 1
-        ? { arc_issue_count: Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft))) }
-        : {}),
-    });
-    setOutlineGenLoading(false);
-    if (res.success) {
-      pushHistory(`outline v${res.version ?? '?'} saved`);
-      const rows = await listWriterOutlinesForIssue(selectedIssueId);
-      setOutlines(rows);
-    } else {
-      const msg = toolErrorMessage(res);
-      setOutlineGenError(msg);
-      pushHistory(`error: ${msg}`);
-    }
-  }, [selectedIssueId, targetPageCount, arcBriefDraft, arcIssueCountDraft]);
-
-  const runOutlineGenerateAllIssues = useCallback(async () => {
-    if (!selectedSeriesId || issues.length === 0) return;
-    const n = issues.length;
-    if (
-      !window.confirm(
-        `Generate an outline for all ${n} issue(s) in this series? This runs one AI call per issue.`,
-      )
-    ) {
-      return;
-    }
-    setOutlineGenError(null);
-    setOutlineAllBusy(true);
-    const arcBriefTrim = arcBriefDraft.trim();
-    const arcCount =
-      arcBriefTrim && arcIssueCountDraft >= 1
-        ? Math.min(48, Math.max(1, Math.floor(arcIssueCountDraft)))
-        : undefined;
-    try {
-      const sorted = [...issues].sort((a, b) => a.issue_number - b.issue_number);
-      for (const iss of sorted) {
-        const res = await invokeWriterTools({
-          mode: 'outline_issue',
-          issue_id: iss.id,
-          target_page_count: targetPageCount,
-          ...(arcBriefTrim ? { arc_brief: arcBriefTrim } : {}),
-          ...(arcCount != null ? { arc_issue_count: arcCount } : {}),
-        });
-        if (!res.success) {
-          const msg = toolErrorMessage(res);
-          setOutlineGenError(`Issue #${iss.issue_number}: ${msg}`);
-          pushHistory(`error: outline all — issue #${iss.issue_number}`);
-          return;
+  const runArcToolBatch = useCallback(
+    async (mode: 'pacing_review' | 'canon_check') => {
+      if (arcBatchIssueIdsOrdered.length === 0 || !supabaseOk) return;
+      setPacingError(null);
+      setCanonError(null);
+      setArcBatchBusy(true);
+      setArcBatchMode(mode);
+      try {
+        for (let i = 0; i < arcBatchIssueIdsOrdered.length; i++) {
+          setArcBatchLabel(`${i + 1}/${arcBatchIssueIdsOrdered.length}`);
+          const id = arcBatchIssueIdsOrdered[i]!;
+          const res = await invokeWriterTools({ mode, issue_id: id });
+          if (!res.success) {
+            const msg = toolErrorMessage(res);
+            if (mode === 'pacing_review') setPacingError(msg);
+            else setCanonError(msg);
+            pushHistory(`error: ${mode} batch — ${msg}`);
+            return;
+          }
+          const iss = sortedIssuesForArc.find((x) => x.id === id);
+          pushHistory(
+            `${mode === 'pacing_review' ? 'pacing review' : 'canon check'} saved — issue #${iss?.issue_number ?? '?'}`,
+          );
         }
-        pushHistory(`outline v${res.version ?? '?'} — issue #${iss.issue_number}`);
+        await refreshIssuesForSeries();
+        pushHistory(
+          `${mode === 'pacing_review' ? 'Pacing' : 'Canon'} batch complete (${arcBatchIssueIdsOrdered.length} issue(s))`,
+        );
+      } finally {
+        setArcBatchBusy(false);
+        setArcBatchLabel('');
+        setArcBatchMode(null);
       }
-      if (selectedIssueId) {
+    },
+    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries],
+  );
+
+  const runOutlineGenerate = useCallback(
+    async (opts?: { coverageBoost?: boolean }) => {
+      if (!selectedIssueId) return;
+      setOutlineGenError(null);
+      setOutlineGenLoading(true);
+      const supplementTrim = opts?.coverageBoost
+        ? buildCoverageBoostOutlineSupplement(outlineSupplementDraft, targetPageCount).trim()
+        : outlineSupplementDraft.trim();
+      const res = await invokeWriterTools({
+        mode: 'outline_issue',
+        issue_id: selectedIssueId,
+        target_page_count: targetPageCount,
+        ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
+      });
+      setOutlineGenLoading(false);
+      if (res.success) {
+        if (opts?.coverageBoost) {
+          setOutlineSupplementDraft(supplementTrim);
+        }
+        pushHistory(`outline v${res.version ?? '?'} saved`);
         const rows = await listWriterOutlinesForIssue(selectedIssueId);
         setOutlines(rows);
+      } else {
+        const msg = toolErrorMessage(res);
+        setOutlineGenError(msg);
+        pushHistory(`error: ${msg}`);
       }
-      pushHistory('outline all issues complete');
-    } finally {
-      setOutlineAllBusy(false);
-    }
-  }, [
-    selectedSeriesId,
-    selectedIssueId,
-    issues,
-    targetPageCount,
-    arcBriefDraft,
-    arcIssueCountDraft,
-  ]);
+    },
+    [selectedIssueId, targetPageCount, outlineSupplementDraft],
+  );
+
+  const runOutlineGenerateCoverageBoost = useCallback(async () => {
+    await runOutlineGenerate({ coverageBoost: true });
+  }, [runOutlineGenerate]);
 
   const runSyncPagesToTarget = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -568,6 +676,116 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     );
   }, [selectedIssueId, targetPageCount]);
 
+  const runLibraryDeleteSelectedPages = useCallback(async () => {
+    if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedPageIdsForBatch.length} page row(s) from the database? Page numbers may leave gaps (e.g. 1,2,4). This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setLibraryPagesBusy(true);
+    const ok = await deleteWriterPages(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: delete pages');
+      return;
+    }
+    const deleted = new Set(selectedPageIdsForBatch);
+    setSelectedPageIdsForBatch([]);
+    await refreshPagesForIssue();
+    pushHistory(`deleted ${deleted.size} page(s)`);
+  }, [selectedIssueId, selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const runLibraryClearBeatsSelected = useCallback(async () => {
+    if (selectedPageIdsForBatch.length === 0) return;
+    if (!window.confirm(`Clear panel beats on ${selectedPageIdsForBatch.length} page(s)?`)) return;
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesBeatsJson(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: clear beats');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory(`cleared beats on ${selectedPageIdsForBatch.length} page(s)`);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const runLibraryClearDialogueSelected = useCallback(async () => {
+    if (selectedPageIdsForBatch.length === 0) return;
+    if (!window.confirm(`Clear dialogue/script on ${selectedPageIdsForBatch.length} page(s)?`)) return;
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesScriptText(selectedPageIdsForBatch);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      pushHistory('error: clear dialogue');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory(`cleared dialogue on ${selectedPageIdsForBatch.length} page(s)`);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+
+  const downloadSelectedBeatsBundle = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    downloadJsonFile(`writer-beats-pages-${sorted.map((p) => p.page_number).join('-')}.json`, {
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      pages: sorted.map((p) => ({
+        page_number: p.page_number,
+        beats_json: p.beats_json,
+      })),
+    });
+    pushHistory(`downloaded beats bundle (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport]);
+
+  const downloadSelectedDialogueBundle = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    downloadJsonFile(`writer-dialogue-pages-${sorted.map((p) => p.page_number).join('-')}.json`, {
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      pages: sorted.map((p) => ({
+        page_number: p.page_number,
+        script_text: p.script_text,
+      })),
+    });
+    pushHistory(`downloaded dialogue bundle (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport]);
+
+  const clearBeatsForSelectedPage = useCallback(async () => {
+    if (!selectedPageId) return;
+    if (!window.confirm('Clear panel beats for this page?')) return;
+    setBeatsError(null);
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesBeatsJson([selectedPageId]);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      setBeatsError('Could not clear beats.');
+      pushHistory('error: clear beats (page)');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory('cleared beats (selected page)');
+  }, [selectedPageId, refreshPagesForIssue]);
+
+  const clearDialogueForSelectedPage = useCallback(async () => {
+    if (!selectedPageId) return;
+    if (!window.confirm('Clear dialogue/script for this page?')) return;
+    setDialogueError(null);
+    setLibraryPagesBusy(true);
+    const ok = await clearWriterPagesScriptText([selectedPageId]);
+    setLibraryPagesBusy(false);
+    if (!ok) {
+      setDialogueError('Could not clear dialogue.');
+      pushHistory('error: clear dialogue (page)');
+      return;
+    }
+    await refreshPagesForIssue();
+    pushHistory('cleared dialogue (selected page)');
+  }, [selectedPageId, refreshPagesForIssue]);
+
   const runBatchPageBeats = useCallback(async () => {
     if (!selectedIssueId) return;
     beatsBatchAbortRef.current = new AbortController();
@@ -581,11 +799,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           pushHistory('batch beats cancelled');
           break;
         }
+        const notesTrim = beatsDirectorNotesDraft.trim();
         const res = await invokeWriterTools({
           mode: 'page_beats_issue',
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
           batch_limit: 8,
+          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
         });
         if (!res.success) {
           setBeatsError(toolErrorMessage(res));
@@ -615,9 +835,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchLabel('');
       beatsBatchAbortRef.current = null;
     }
-  }, [selectedIssueId, beatsSkipExisting]);
+  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft]);
 
   const quickGenerate = useCallback(async () => {
+    if (activeTab === 'scripts') return;
     if (activeTab === 'outline' && selectedIssueId) {
       await runOutlineGenerate();
       return;
@@ -625,7 +846,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (activeTab === 'beats' && selectedPageId && selectedIssueId) {
       setBeatsError(null);
       setBeatsLoading(true);
-      const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
+      const notesTrim = beatsDirectorNotesDraft.trim();
+      const res = await invokeWriterTools({
+        mode: 'page_beats',
+        page_id: selectedPageId,
+        ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+      });
       setBeatsLoading(false);
       if (res.success) {
         pushHistory('page beats saved (page)');
@@ -685,6 +911,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab,
     selectedIssueId,
     selectedPageId,
+    beatsDirectorNotesDraft,
     dialogueStyle,
     shotsBrief,
     runPacingFromRibbon,
@@ -692,30 +919,33 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ]);
 
   const quickGenerateLabel =
-    activeTab === 'arc'
-      ? 'Run pacing review'
-      : activeTab === 'outline'
-        ? 'Generate outline'
-        : activeTab === 'beats'
-          ? 'Generate page beats'
-          : activeTab === 'dialogue'
-            ? 'Draft dialogue'
-            : 'Generate shot plan';
+    activeTab === 'scripts'
+      ? '—'
+      : activeTab === 'arc'
+        ? 'Run pacing review'
+        : activeTab === 'outline'
+          ? 'Generate outline'
+          : activeTab === 'beats'
+            ? 'Generate page beats'
+            : activeTab === 'dialogue'
+              ? 'Draft dialogue'
+              : 'Generate shot plan';
 
   const quickGenerateLoading =
     outlineGenLoading ||
     beatsLoading ||
     dialogueLoading ||
     shotsLoading ||
-    (activeTab === 'arc' && pacingLoading) ||
+    (activeTab === 'arc' && (pacingLoading || arcBatchBusy)) ||
     (activeTab === 'beats' && beatsBatchBusy);
 
   const quickGenerateDisabled =
+    activeTab === 'scripts' ||
     !supabaseOk ||
     !selectedIssueId ||
-    (activeTab === 'outline' && outlineAllBusy) ||
     (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
-    (activeTab === 'dialogue' && !selectedPageId);
+    (activeTab === 'dialogue' && !selectedPageId) ||
+    (activeTab === 'arc' && arcBatchBusy);
 
   useWriterHotkeys({
     onWorkspaceTab: setActiveTab,
@@ -741,6 +971,215 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => formatArcReviewPlainText(pacingSaved, canonSaved),
     [pacingSaved, canonSaved],
   );
+
+  const issuePackObject = useMemo(
+    () => ({
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      series: selectedSeriesId
+        ? {
+            title: seriesList.find((s) => s.id === selectedSeriesId)?.title ?? null,
+            logline: seriesList.find((s) => s.id === selectedSeriesId)?.logline ?? null,
+          }
+        : null,
+      issue: selectedIssue
+        ? {
+            issue_number: selectedIssue.issue_number,
+            title: selectedIssue.title,
+            synopsis: selectedIssue.synopsis,
+          }
+        : null,
+      outline: latestOutline
+        ? { version: latestOutline.version, outline_json: latestOutline.outline_json }
+        : null,
+      shot_plan: latestShotPlan
+        ? { version: latestShotPlan.version, shot_plan_json: latestShotPlan.shot_plan_json }
+        : null,
+      arc_review: {
+        pacing_review: pacingSaved ?? null,
+        canon_check: canonSaved ?? null,
+      },
+      pages: sortedPages.map((p) => ({
+        page_number: p.page_number,
+        beats_json: p.beats_json,
+        script_text: p.script_text,
+      })),
+    }),
+    [
+      selectedIssueId,
+      selectedSeriesId,
+      seriesList,
+      selectedIssue,
+      latestOutline,
+      latestShotPlan,
+      pacingSaved,
+      canonSaved,
+      sortedPages,
+    ],
+  );
+
+  useEffect(() => {
+    if (!latestOutline) {
+      setOutlineEditDraft('');
+      return;
+    }
+    setOutlineEditDraft(JSON.stringify(latestOutline.outline_json, null, 2));
+  }, [latestOutline?.id, latestOutline?.outline_json]);
+
+  useEffect(() => {
+    if (!selectedPage) {
+      setBeatsEditDraft('');
+      setDialogueEditDraft('');
+      return;
+    }
+    setBeatsEditDraft(
+      selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
+    );
+    setDialogueEditDraft(selectedPage.script_text ?? '');
+  }, [selectedPage?.id, selectedPage?.beats_json, selectedPage?.script_text]);
+
+  useEffect(() => {
+    if (!latestShotPlan) {
+      setShotEditDraft('');
+      return;
+    }
+    setShotEditDraft(JSON.stringify(latestShotPlan.shot_plan_json, null, 2));
+  }, [latestShotPlan?.id, latestShotPlan?.shot_plan_json]);
+
+  const copyIssuePackJson = useCallback(() => {
+    void navigator.clipboard.writeText(JSON.stringify(issuePackObject, null, 2));
+  }, [issuePackObject]);
+
+  const saveSynopsisHelperToNotes = useCallback(async () => {
+    if (!selectedIssueId || !selectedIssue) return;
+    setScriptsError(null);
+    setScriptsBusy(true);
+    const merged = mergeSynopsisHelperIntoNotes(selectedIssue.notes, synopsisHelperParts);
+    const ok = await updateWriterIssue(selectedIssueId, { notes: merged });
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save synopsis helper. Check Supabase.');
+      return;
+    }
+    await refreshIssuesForSeries();
+    pushHistory('saved synopsis helper fields to issue notes');
+  }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries]);
+
+  const applyBuiltSynopsis = useCallback(() => {
+    const doc = buildSynopsisDocumentFromParts(synopsisHelperParts);
+    if (!doc) {
+      setScriptsError('Fill at least one synopsis helper field to build.');
+      return;
+    }
+    setScriptsError(null);
+    setIssueSynopsisDraft(doc);
+    pushHistory('built synopsis from helper (review in Issue Outline → Save story context)');
+  }, [synopsisHelperParts]);
+
+  const saveOutlineEdit = useCallback(async () => {
+    if (!latestOutline) return;
+    setScriptsError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(outlineEditDraft || '{}');
+    } catch {
+      setScriptsError('Outline JSON is invalid.');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setScriptsError('Outline must be a JSON object.');
+      return;
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterIssueOutlineJson(latestOutline.id, parsed as Record<string, unknown>);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save outline. Check Supabase / permissions.');
+      return;
+    }
+    const rows = await listWriterOutlinesForIssue(latestOutline.issue_id);
+    setOutlines(rows);
+    pushHistory(`saved edited outline v${latestOutline.version}`);
+  }, [latestOutline, outlineEditDraft]);
+
+  const saveBeatsEdit = useCallback(async () => {
+    if (!selectedPageId || !selectedPage) return;
+    setScriptsError(null);
+    let parsed: Record<string, unknown> | null = null;
+    const raw = beatsEditDraft.trim();
+    if (raw) {
+      try {
+        const v = JSON.parse(raw);
+        if (!v || typeof v !== 'object' || Array.isArray(v)) {
+          setScriptsError('Beats must be a JSON object.');
+          return;
+        }
+        parsed = v as Record<string, unknown>;
+      } catch {
+        setScriptsError('Beats JSON is invalid.');
+        return;
+      }
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterPageBeatsJson(selectedPageId, parsed);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save beats. Check Supabase.');
+      return;
+    }
+    if (selectedIssueId) {
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    }
+    pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
+  }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId]);
+
+  const saveDialogueEdit = useCallback(async () => {
+    if (!selectedPageId || !selectedPage) return;
+    setScriptsError(null);
+    setScriptsBusy(true);
+    const text = dialogueEditDraft.trim() ? dialogueEditDraft : null;
+    const ok = await updateWriterPageScriptText(selectedPageId, text);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save dialogue. Check Supabase.');
+      return;
+    }
+    if (selectedIssueId) {
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    }
+    pushHistory(`saved edited dialogue (page ${selectedPage.page_number})`);
+  }, [selectedPageId, selectedPage, dialogueEditDraft, selectedIssueId]);
+
+  const saveShotPlanEdit = useCallback(async () => {
+    if (!latestShotPlan) return;
+    setScriptsError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(shotEditDraft || '{}');
+    } catch {
+      setScriptsError('Shot plan JSON is invalid.');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setScriptsError('Shot plan must be a JSON object.');
+      return;
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterVideoShotPlanJson(
+      latestShotPlan.id,
+      parsed as Record<string, unknown>,
+    );
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save shot plan. Check Supabase.');
+      return;
+    }
+    const rows = await listWriterShotPlansForIssue(latestShotPlan.issue_id);
+    setShotPlans(rows);
+    pushHistory(`saved edited shot plan v${latestShotPlan.version}`);
+  }, [latestShotPlan, shotEditDraft]);
 
   const libraryPanel = (
     <div className="flex flex-col gap-3 min-h-0 text-black/80">
@@ -902,22 +1341,95 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ) : supabaseOk ? (
           <p className="text-[10px] text-black/45 mb-1.5 leading-snug">Select an issue to add pages.</p>
         ) : null}
+        <p className="text-[9px] text-black/50 leading-snug">
+          Multi-select up to {MAX_PAGE_MULTI_SELECT} for batch delete, clear, or download bundles.
+        </p>
+        {selectedPageIdsForBatch.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mb-1">
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryDeleteSelectedPages()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900 bg-red-100/90 border border-red-300/70 disabled:opacity-45"
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryClearBeatsSelected()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Clear beats
+            </button>
+            <button
+              type="button"
+              disabled={libraryPagesBusy || !supabaseOk}
+              onClick={() => void runLibraryClearDialogueSelected()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Clear dialogue
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedBeatsBundle()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Download beats
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedDialogueBundle()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Download dialogue
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedPageIdsForBatch([])}
+              className="rounded-md px-2 py-1 text-[10px] font-semibold text-black/70 hover:bg-black/10"
+            >
+              Clear selection
+            </button>
+          </div>
+        ) : null}
         <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1">
-          {sortedPages.map((p) => (
-            <Tooltip key={p.id} content={`Page ${p.page_number}`} side="left">
-              <button
-                type="button"
-                onClick={() => setSelectedPageId(p.id)}
-                className={`w-full text-left rounded-lg px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                  selectedPageId === p.id
-                    ? 'bg-black/15 text-black ring-1 ring-black/20'
-                    : 'text-black/65 hover:bg-black/10 bg-white/40'
+          {sortedPages.map((p) => {
+            const batchOn = selectedPageIdsForBatch.includes(p.id);
+            const primaryOn = selectedPageId === p.id;
+            return (
+              <div
+                key={p.id}
+                className={`flex items-center gap-1.5 rounded-lg px-1 py-0.5 ${
+                  primaryOn ? 'bg-black/10 ring-1 ring-black/15' : 'bg-white/30'
                 }`}
               >
-                Page {p.page_number}
-              </button>
-            </Tooltip>
-          ))}
+                <input
+                  type="checkbox"
+                  checked={batchOn}
+                  disabled={!supabaseOk || (!batchOn && selectedPageIdsForBatch.length >= MAX_PAGE_MULTI_SELECT)}
+                  onChange={() => togglePageBatchSelect(p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded border-black/40 shrink-0"
+                  title={`Select for batch (max ${MAX_PAGE_MULTI_SELECT})`}
+                  aria-label={`Select page ${p.page_number} for batch`}
+                />
+                <Tooltip content={`Page ${p.page_number}`} side="left">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPageId(p.id)}
+                    className={`flex-1 min-w-0 text-left rounded-md px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                      primaryOn ? 'font-bold text-black' : 'text-black/65 hover:bg-black/10'
+                    }`}
+                  >
+                    Page {p.page_number}
+                  </button>
+                </Tooltip>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -971,21 +1483,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       disabled: !latestOutline,
     },
     {
+      label: 'Download outline JSON',
+      onClick: () => {
+        if (!latestOutline) return;
+        downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json);
+        pushHistory(`downloaded outline v${latestOutline.version}`);
+      },
+      disabled: !latestOutline,
+    },
+    {
+      label: 'Copy issue pack (JSON)',
+      onClick: () => copyIssuePackJson(),
+      disabled: !selectedIssueId,
+    },
+    {
       label: 'Download issue pack',
       onClick: () => {
-        downloadJsonFile('writer-issue-pack.json', {
-          issue_id: selectedIssueId,
-          exported_at: new Date().toISOString(),
-          outline: latestOutline?.outline_json ?? null,
-          shot_plan: latestShotPlan?.shot_plan_json ?? null,
-          pages: pages.map((p) => ({
-            page_number: p.page_number,
-            beats_json: p.beats_json,
-            script_preview: (p.script_text ?? '').slice(0, 2000),
-          })),
-        });
+        downloadJsonFile('writer-issue-pack.json', issuePackObject);
       },
-      disabled: !latestOutline && !latestShotPlan && pages.length === 0,
+      disabled: !selectedIssueId,
     },
   ];
 
@@ -1051,6 +1567,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onActiveMenu={setActiveRibbonMenu}
         workspaceTab={activeTab}
         onWorkspaceTab={setActiveTab}
+        onSelectWorkspaceTabFromFile={(id) => {
+          setActiveRibbonMenu('home');
+          setActiveTab(id);
+        }}
         findQuery={findQuery}
         onFindQuery={setFindQuery}
         findInputRef={findInputRef}
@@ -1069,8 +1589,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onRunPacing={runPacingFromRibbon}
         onRunCanon={runCanonFromRibbon}
         canRunReview={Boolean(supabaseOk && selectedIssueId)}
-        pacingLoading={pacingLoading}
-        canonLoading={canonLoading}
+        pacingLoading={pacingLoading || arcBatchBusy}
+        canonLoading={canonLoading || arcBatchBusy}
         onQuickGenerate={() => void quickGenerate()}
         quickGenerateLabel={quickGenerateLabel}
         quickGenerateDisabled={quickGenerateDisabled}
@@ -1090,17 +1610,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <span className="font-bold uppercase tracking-wider text-black/50 shrink-0">Pipeline</span>
         {WRITER_WORKSPACE_TAB_ORDER.map((id) => {
           const done =
-            id === 'outline'
-              ? Boolean(latestOutline)
-              : id === 'beats'
-                ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
-                : id === 'dialogue'
-                  ? sortedPages.length > 0 && pagesWithScriptCount >= pagesWithBeatsCount && pagesWithBeatsCount > 0
-                  : id === 'video'
-                    ? Boolean(latestShotPlan)
-                    : id === 'arc'
-                      ? Boolean(pacingSaved?.result ?? canonSaved?.result)
-                      : false;
+            id === 'scripts'
+              ? false
+              : id === 'outline'
+                ? Boolean(latestOutline)
+                : id === 'beats'
+                  ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
+                  : id === 'dialogue'
+                    ? sortedPages.length > 0 &&
+                      pagesWithScriptCount >= pagesWithBeatsCount &&
+                      pagesWithBeatsCount > 0
+                    : id === 'video'
+                      ? Boolean(latestShotPlan)
+                      : id === 'arc'
+                        ? Boolean(pacingSaved?.result ?? canonSaved?.result)
+                        : false;
           return (
             <button
               key={id}
@@ -1302,6 +1826,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       </div>
                     )}
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                    <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-outline-supplement">
+                      <span className="inline-flex items-center gap-1.5">
+                        Outline instructions for AI (optional)
+                        <WriterSectionTip tipKey="outlineInstructionsOptional" label="About outline instructions" />
+                      </span>
+                      <textarea
+                        id="writer-outline-supplement"
+                        name="writer-outline-supplement"
+                        value={outlineSupplementDraft}
+                        onChange={(e) => setOutlineSupplementDraft(e.target.value)}
+                        rows={3}
+                        disabled={!selectedIssueId}
+                        className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder={
+                          selectedIssueId
+                            ? 'Optional: pacing, tone, act breaks, or “more pages per beat”. Sent only with Generate outline — not saved to the issue row.'
+                            : 'Select an issue…'
+                        }
+                      />
+                    </label>
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-target-pages">
                         Target pages
@@ -1318,18 +1862,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       </label>
                       <button
                         type="button"
-                        disabled={
-                          !supabaseOk ||
-                          !selectedIssueId ||
-                          outlineGenLoading ||
-                          outlineAllBusy
-                        }
+                        disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
                         onClick={() => void runOutlineGenerate()}
                         className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         style={{ background: ACCENT_GOLD_GRADIENT }}
                       >
                         {outlineGenLoading ? 'Generating…' : 'Generate outline'}
                       </button>
+                      {outlineCoverageWarning && (
+                        <button
+                          type="button"
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
+                          onClick={() => void runOutlineGenerateCoverageBoost()}
+                          className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-700/35 bg-amber-100/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {outlineGenLoading
+                            ? 'Regenerating with coverage boost…'
+                            : 'Regenerate with page-coverage hint'}
+                        </button>
+                      )}
                       <Tooltip content={WRITER_UI_TIPS.syncPagesToTarget} side="bottom">
                         <button
                           type="button"
@@ -1344,88 +1895,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {syncPagesError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{syncPagesError}</p>
                     )}
-                    <div className="space-y-2 pt-1 border-t border-black/10">
-                      <div className="flex items-center gap-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                          Multi-issue arc (optional)
-                        </p>
-                        <WriterSectionTip tipKey="arcBriefOutline" label="About arc brief" />
-                      </div>
-                      <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-arc-brief">
-                        Arc spine / notes
-                        <textarea
-                          id="writer-arc-brief"
-                          name="writer-arc-brief"
-                          rows={3}
-                          value={arcBriefDraft}
-                          onChange={(e) => setArcBriefDraft(e.target.value)}
-                          disabled={!selectedIssueId}
-                          placeholder="Full arc in your words. Label beats per issue if you can (e.g. Issue 1: … Issue 2: …). Each outline call is told which part of the arc it covers."
-                          className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
-                        />
-                      </label>
-                      <div className="space-y-1 max-w-md">
-                        <div className="flex items-center gap-1.5">
-                          <label
-                            className="text-[11px] font-semibold text-black/70"
-                            htmlFor="writer-arc-issue-count"
-                          >
-                            Arc length (for AI)
-                          </label>
-                          <WriterSectionTip tipKey="arcIssueCountHint" label="About arc length" />
-                        </div>
-                        <input
-                          id="writer-arc-issue-count"
-                          name="writer-arc-issue-count"
-                          type="number"
-                          min={1}
-                          max={48}
-                          value={arcIssueCountDraft}
-                          onChange={(e) => setArcIssueCountDraft(Number(e.target.value) || 1)}
-                          disabled={!selectedIssueId}
-                          className="max-w-[8rem] rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                        />
-                        <p className="text-[10px] text-black/55 leading-snug">
-                          Batch outline uses{' '}
-                          <span className="font-semibold text-black/70">{issues.length}</span> issue
-                          {issues.length === 1 ? '' : 's'} in the right-hand Library (Issues list)—not this
-                          number.{' '}
-                          <button
-                            type="button"
-                            className="font-semibold text-black/75 underline decoration-black/25 underline-offset-2 hover:text-black hover:decoration-black/50"
-                            onClick={() => {
-                              setDockCollapsed(false);
-                              setDockTab('library');
-                            }}
-                          >
-                            Open Library → Issues
-                          </button>
-                          {selectedSeriesId && supabaseOk
-                            ? ' — use “Add issue” at the top of that list.'
-                            : ''}
-                        </p>
-                      </div>
-                      <Tooltip content={WRITER_UI_TIPS.outlineAllIssues} side="bottom">
-                        <button
-                          type="button"
-                          disabled={
-                            !supabaseOk ||
-                            !selectedSeriesId ||
-                            issues.length === 0 ||
-                            outlineGenLoading ||
-                            outlineAllBusy
-                          }
-                          onClick={() => void runOutlineGenerateAllIssues()}
-                          className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                        >
-                          {outlineAllBusy
-                            ? 'Outlining series…'
-                            : `Outline all in series (${issues.length} in Library)`}
-                        </button>
-                      </Tooltip>
-                    </div>
                     {outlineGenError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
+                    )}
+                    {outlineCoverageWarning && (
+                      <div className="rounded-lg border border-amber-300/70 bg-amber-100/85 px-3 py-2 space-y-2">
+                        <p className="text-xs text-amber-900">
+                          Outline notes detected: {outlinePageBeatsCount} page beat
+                          {outlinePageBeatsCount === 1 ? '' : 's'} for target {targetPageCount} pages (gap{' '}
+                          {outlineCoverageGap}). Regenerate with coverage boost to reduce repeated mid-issue beats.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={!supabaseOk || !selectedIssueId || outlineGenLoading}
+                          onClick={() => void runOutlineGenerateCoverageBoost()}
+                          className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-black border border-amber-800/30 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {outlineGenLoading ? 'Regenerating…' : 'Regenerate with coverage boost'}
+                        </button>
+                      </div>
                     )}
                     </div>
                     </div>
@@ -1434,11 +1922,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       aria-label="Outline preview"
                     >
                       <div className={`${WRITER_GLASS_CARD} p-4 space-y-2 min-h-0`}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
                             Latest saved outline
                           </p>
-                          <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={!latestOutline}
+                              onClick={() => {
+                                if (!latestOutline) return;
+                                downloadJsonFile(
+                                  `writer-outline-v${latestOutline.version}.json`,
+                                  latestOutline.outline_json,
+                                );
+                                pushHistory(`downloaded outline v${latestOutline.version}`);
+                              }}
+                              className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-40"
+                            >
+                              Download outline
+                            </button>
+                            <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                          </div>
                         </div>
                         {latestOutline ? (
                           <pre
@@ -1507,6 +2012,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {sortedPages.length === 0 && (
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
                     )}
+                    <div className="space-y-1 max-w-2xl">
+                      <div className="flex items-center gap-1.5">
+                        <label
+                          className="text-[11px] font-semibold text-black/70"
+                          htmlFor="writer-beats-director-notes"
+                        >
+                          Director notes for beats (optional)
+                        </label>
+                        <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
+                      </div>
+                      <textarea
+                        id="writer-beats-director-notes"
+                        name="writer-beats-director-notes"
+                        rows={3}
+                        value={beatsDirectorNotesDraft}
+                        onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
+                        disabled={!selectedIssueId}
+                        placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
+                        className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
+                      />
+                    </div>
                     <button
                       type="button"
                       disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
@@ -1514,7 +2040,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         if (!selectedPageId || !selectedIssueId) return;
                         setBeatsError(null);
                         setBeatsLoading(true);
-                        const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
+                        const notesTrim = beatsDirectorNotesDraft.trim();
+                        const res = await invokeWriterTools({
+                          mode: 'page_beats',
+                          page_id: selectedPageId,
+                          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+                        });
                         setBeatsLoading(false);
                         if (res.success) {
                           pushHistory(`page beats saved (page)`);
@@ -1531,6 +2062,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     >
                       {beatsLoading ? 'Generating…' : 'Generate page beats'}
                     </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!selectedPage?.beats_json}
+                        onClick={() => {
+                          if (!selectedPage?.beats_json) return;
+                          downloadJsonFile(
+                            `writer-beats-page-${selectedPage.page_number}.json`,
+                            selectedPage.beats_json,
+                          );
+                          pushHistory(`downloaded beats page ${selectedPage.page_number}`);
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Download beats (this page)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json}
+                        onClick={() => void clearBeatsForSelectedPage()}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Clear beats (this page)
+                      </button>
+                    </div>
                     {beatsError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
                     )}
@@ -1601,6 +2157,34 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     >
                       {dialogueLoading ? 'Drafting…' : 'Draft dialogue'}
                     </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!selectedPage?.script_text?.trim()}
+                        onClick={() => {
+                          if (!selectedPage?.script_text) return;
+                          downloadTextFile(
+                            `writer-dialogue-page-${selectedPage.page_number}.txt`,
+                            selectedPage.script_text,
+                            'text/plain;charset=utf-8',
+                          );
+                          pushHistory(`downloaded dialogue page ${selectedPage.page_number}`);
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Download dialogue (this page)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          !supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.script_text?.trim()
+                        }
+                        onClick={() => void clearDialogueForSelectedPage()}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Clear dialogue (this page)
+                      </button>
+                    </div>
                     {dialogueError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{dialogueError}</p>
                     )}
@@ -1626,28 +2210,117 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <WriterSectionTip tipKey="arcTab" label="About pacing and canon" />
                     </div>
                     {issues.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Issue spine</p>
-                        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 -mx-1 px-1">
-                          {[...issues]
-                            .sort((a, b) => a.issue_number - b.issue_number)
-                            .map((iss) => (
+                      <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Batch arc tools
+                            </p>
+                            <WriterSectionTip tipKey="arcMultiIssueBatch" label="About batch arc tools" />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || arcBatchBusy}
+                              onClick={() => setArcSelectedIssueIds(sortedIssuesForArc.map((i) => i.id))}
+                              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                            >
+                              Select all
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || arcBatchBusy}
+                              onClick={() => setArcSelectedIssueIds([])}
+                              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                            >
+                              Clear
+                            </button>
+                            {selectedIssueId ? (
                               <button
-                                key={iss.id}
                                 type="button"
-                                onClick={() => setSelectedIssueId(iss.id)}
-                                className={`flex-shrink-0 max-w-[200px] truncate rounded-lg border px-3 py-2 text-left text-[11px] font-semibold transition-colors ${
-                                  selectedIssueId === iss.id
-                                    ? 'border-black/30 bg-black/15 text-black ring-1 ring-black/15'
-                                    : 'border-black/15 bg-white/60 text-black/75 hover:bg-white/90'
-                                }`}
-                                title={iss.title ?? undefined}
+                                disabled={!supabaseOk || arcBatchBusy}
+                                onClick={() => setArcSelectedIssueIds([selectedIssueId])}
+                                className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
                               >
-                                #{iss.issue_number}
-                                {iss.title ? ` — ${iss.title}` : ''}
+                                Library issue only
                               </button>
-                            ))}
+                            ) : null}
+                          </div>
                         </div>
+                        <ul className="space-y-1.5 max-h-[min(220px,32vh)] overflow-y-auto custom-scrollbar -mx-1 px-1">
+                          {sortedIssuesForArc.map((iss) => (
+                            <li key={iss.id} className="flex items-start gap-2 text-[11px]">
+                              <input
+                                type="checkbox"
+                                id={`writer-arc-batch-${iss.id}`}
+                                checked={arcSelectedIssueIds.includes(iss.id)}
+                                onChange={() => {
+                                  setArcSelectedIssueIds((prev) =>
+                                    prev.includes(iss.id)
+                                      ? prev.filter((x) => x !== iss.id)
+                                      : [...prev, iss.id],
+                                  );
+                                }}
+                                disabled={!supabaseOk || arcBatchBusy}
+                                className="mt-0.5 rounded border-black/25"
+                              />
+                              <label
+                                htmlFor={`writer-arc-batch-${iss.id}`}
+                                className="cursor-pointer flex-1 min-w-0 leading-snug"
+                              >
+                                <span className="font-semibold text-black">#{iss.issue_number}</span>
+                                {iss.title ? (
+                                  <span className="text-black/75"> — {iss.title}</span>
+                                ) : null}
+                              </label>
+                              <button
+                                type="button"
+                                className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
+                                onClick={() => setSelectedIssueId(iss.id)}
+                              >
+                                Library
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk ||
+                              arcBatchIssueIdsOrdered.length === 0 ||
+                              arcBatchBusy ||
+                              pacingLoading ||
+                              canonLoading
+                            }
+                            onClick={() => void runArcToolBatch('pacing_review')}
+                            className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {arcBatchBusy && arcBatchMode === 'pacing_review'
+                              ? `Pacing ${arcBatchLabel || '…'}`
+                              : `Run pacing on selected (${arcBatchIssueIdsOrdered.length})`}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk ||
+                              arcBatchIssueIdsOrdered.length === 0 ||
+                              arcBatchBusy ||
+                              pacingLoading ||
+                              canonLoading
+                            }
+                            onClick={() => void runArcToolBatch('canon_check')}
+                            className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {arcBatchBusy && arcBatchMode === 'canon_check'
+                              ? `Canon ${arcBatchLabel || '…'}`
+                              : `Run canon on selected (${arcBatchIssueIdsOrdered.length})`}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-black/50 leading-snug">
+                          Check issues, then run pacing or canon once per selected row (in issue order). Results save on
+                          each issue; use Library to focus an issue and read combined output below.
+                        </p>
                       </div>
                     )}
                     {!selectedIssueId && (
@@ -1657,7 +2330,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Pacing review</p>
                       <button
                         type="button"
-                        disabled={!supabaseOk || !selectedIssueId || pacingLoading}
+                        disabled={!supabaseOk || !selectedIssueId || pacingLoading || arcBatchBusy}
                         onClick={async () => {
                           if (!selectedIssueId) return;
                           setPacingError(null);
@@ -1693,7 +2366,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Canon check</p>
                       <button
                         type="button"
-                        disabled={!supabaseOk || !selectedIssueId || canonLoading}
+                        disabled={!supabaseOk || !selectedIssueId || canonLoading || arcBatchBusy}
                         onClick={async () => {
                           if (!selectedIssueId) return;
                           setCanonError(null);
@@ -1876,6 +2549,348 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Storyboard strip</p>
                       <WriterShotStoryboardStrip shotPlanJson={latestShotPlan?.shot_plan_json ?? null} />
                     </div>
+                  </div>
+                )}
+                {activeTab === 'scripts' && (
+                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-lg font-bold text-black">Scripts & exports</p>
+                      <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
+                    </div>
+                    {!selectedIssueId ? (
+                      <p className="text-sm text-black/55">Select an issue in the Library to use this tab.</p>
+                    ) : (
+                      <>
+                        {scriptsError && (
+                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
+                        )}
+                        <div className="grid gap-6 xl:grid-cols-2">
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Synopsis helper
+                            </p>
+                            <p className="text-[11px] text-black/60 leading-snug">
+                              Structured fields save under{' '}
+                              <code className="rounded bg-black/10 px-1">notes.synopsis_helper</code> on the issue row.
+                              Build a labeled synopsis into the Issue Outline draft, then{' '}
+                              <strong>Save story context</strong> there to persist it as{' '}
+                              <code className="rounded bg-black/10 px-1">synopsis</code>.
+                            </p>
+                            <div className="space-y-2 max-h-[min(480px,55vh)] overflow-y-auto custom-scrollbar pr-1">
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Logline
+                                <textarea
+                                  value={synopsisHelperParts.logline}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, logline: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="One or two sentences…"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Must-happen beats (one per line, in order)
+                                <textarea
+                                  value={synopsisHelperParts.mustHappen}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, mustHappen: e.target.value }))
+                                  }
+                                  rows={5}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y font-mono text-xs"
+                                  placeholder={'1. …\n2. …'}
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Pacing / structure
+                                <textarea
+                                  value={synopsisHelperParts.pacingNotes}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, pacingNotes: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="Act breaks, page targets, midpoint…"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Cast (this issue)
+                                <textarea
+                                  value={synopsisHelperParts.castGoals}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, castGoals: e.target.value }))
+                                  }
+                                  rows={3}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Factions / threats
+                                <textarea
+                                  value={synopsisHelperParts.factions}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, factions: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Locations / sets
+                                <textarea
+                                  value={synopsisHelperParts.locations}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, locations: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Rules for the outline
+                                <textarea
+                                  value={synopsisHelperParts.rules}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, rules: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="e.g. no repeating beats across adjacent pages…"
+                                />
+                              </label>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || scriptsBusy}
+                                onClick={() => void saveSynopsisHelperToNotes()}
+                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45"
+                              >
+                                {scriptsBusy ? 'Saving…' : 'Save helper to issue notes'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => applyBuiltSynopsis()}
+                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black shadow-sm disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                Build synopsis → Issue Outline draft
+                              </button>
+                            </div>
+                          </div>
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Copy & download
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => copyIssuePackJson()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Copy issue pack (JSON)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  downloadJsonFile('writer-issue-pack.json', issuePackObject);
+                                  pushHistory('downloaded issue pack');
+                                }}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Download issue pack
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!arcReviewPlain}
+                                onClick={() => void navigator.clipboard.writeText(arcReviewPlain)}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Copy arc review
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!arcReviewPlain}
+                                onClick={() => {
+                                  downloadTextFile(
+                                    'writer-arc-review.txt',
+                                    arcReviewPlain,
+                                    'text/plain;charset=utf-8',
+                                  );
+                                  pushHistory('downloaded arc review');
+                                }}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Download arc review
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-black/50 leading-snug">
+                              Issue pack includes synopsis, full outline &amp; shot plan JSON, all page beats and
+                              dialogue, and pacing/canon cache. For selected pages only, use Library → Pages batch
+                              actions.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Edit saved outputs
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(
+                              [
+                                ['synopsis', 'Synopsis preview'],
+                                ['outline', 'Outline JSON'],
+                                ['beats', 'Beats JSON'],
+                                ['dialogue', 'Dialogue'],
+                                ['video', 'Shot plan JSON'],
+                              ] as const
+                            ).map(([id, label]) => (
+                              <button
+                                key={id}
+                                type="button"
+                                onClick={() => setScriptsEditorTab(id)}
+                                className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase border ${
+                                  scriptsEditorTab === id
+                                    ? 'border-amber-700 bg-amber-100 text-black'
+                                    : 'border-black/15 bg-white/60 text-black/70 hover:bg-white/90'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          {scriptsEditorTab === 'synopsis' && (
+                            <div className="space-y-3">
+                              <p className="text-[11px] text-black/60">
+                                Preview of the combined document from helper fields (not yet saved as issue synopsis
+                                until you use <strong>Build synopsis</strong> and <strong>Save story context</strong> on
+                                Issue Outline).
+                              </p>
+                              <pre
+                                className={`${preShell} ${preFont} max-h-[min(240px,35vh)] text-xs whitespace-pre-wrap`}
+                              >
+                                {buildSynopsisDocumentFromParts(synopsisHelperParts) || '(helper fields empty)'}
+                              </pre>
+                              <p className="text-[10px] font-semibold text-black/55">Issue synopsis draft (Issue Outline tab)</p>
+                              <pre
+                                className={`${preShell} ${preFont} max-h-[min(200px,30vh)] text-xs whitespace-pre-wrap`}
+                              >
+                                {issueSynopsisDraft.trim() || '(empty — edit on Issue Outline)'}
+                              </pre>
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'outline' && (
+                            <div className="space-y-2">
+                              {!latestOutline ? (
+                                <p className="text-xs text-black/50">No saved outline for this issue.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Editing outline v{latestOutline.version}. Invalid JSON will not save.
+                                  </p>
+                                  <textarea
+                                    value={outlineEditDraft}
+                                    onChange={(e) => setOutlineEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveOutlineEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save outline to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'beats' && (
+                            <div className="space-y-2">
+                              {!selectedPage ? (
+                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Page {selectedPage.page_number}. Empty JSON clears beats.
+                                  </p>
+                                  <textarea
+                                    value={beatsEditDraft}
+                                    onChange={(e) => setBeatsEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveBeatsEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save beats to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'dialogue' && (
+                            <div className="space-y-2">
+                              {!selectedPage ? (
+                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">Page {selectedPage.page_number} script_text</p>
+                                  <textarea
+                                    value={dialogueEditDraft}
+                                    onChange={(e) => setDialogueEditDraft(e.target.value)}
+                                    className="w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveDialogueEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save dialogue to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'video' && (
+                            <div className="space-y-2">
+                              {!latestShotPlan ? (
+                                <p className="text-xs text-black/50">No shot plan for this issue.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Editing shot plan v{latestShotPlan.version}
+                                  </p>
+                                  <textarea
+                                    value={shotEditDraft}
+                                    onChange={(e) => setShotEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveShotPlanEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save shot plan to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

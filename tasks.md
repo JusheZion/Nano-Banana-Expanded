@@ -159,14 +159,18 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Writers' Workshop QoL — batch beats, sync pages, arc MVP, UX pipeline (2026-04-10)
 
-- [x] Edge + shared Zod: `outline_issue` + `arc_brief` / `arc_issue_count`; `page_beats_issue` with `skip_existing`, `batch_limit`; `writer-tools` sequential batch handler + `has_more`
-- [x] Client: `ensureWriterPagesToCount`; `WriterPortal` — sync pages, arc fields, outline-all, batch beats + cancel; shared tab order / hotkeys / ribbon; pipeline strip + `writerNextStep` hints
+- [x] Edge + shared Zod: `outline_issue` (issue + optional `target_page_count`); `page_beats_issue` with `skip_existing`, `batch_limit`; `writer-tools` sequential batch handler + `has_more`
+- [x] Client: `ensureWriterPagesToCount`; `WriterPortal` — sync pages, batch beats + cancel; Arc tab multi-select batch pacing/canon; shared tab order / hotkeys / ribbon; pipeline strip + `writerNextStep` hints
 - [x] Tests: `schemas.test.ts` for extended `outline_issue` and `page_beats_issue`
 - [x] Docs: `implementation_plan.md` Phase 7; this checklist; `walkthrough.md` entry
-- [x] UX: **Arc length (for AI)** vs batch count — inline hint + **`Outline all in series (N in Library)`** + **`arcIssueCountHint`** / updated tooltips (`WriterPortal`, `writerHelpRegistry`)
+- [x] UX (superseded 2026-04-11): multi-issue outline arc fields removed; **Batch arc tools** on Arc tab replaces outline-all + spine textarea
 - [x] Library → Issues: **`Add issue #N`** always when series selected (was hidden after first issue); outline panel **Open Library → Issues** link + help copy
-- [x] Edge **`outline_issue`**: arc spine prompt includes **part k of N** (ordered by issue #) + anti-hallucination rules so batch outline slices the author spine per issue
-- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after deploy (required for arc prompt fix)
+- [x] Edge **`outline_issue`**: simplified per-issue prompt (removed `arc_brief` / `arc_issue_count` and spine parsing, 2026-04-11); optional **`outline_supplement`** for author notes + coverage boost (replaces `arc_brief` in the UI)
+- [x] Writers issue quality (2026-04-11): dense `page_beats` in outline prompt; `page_beats` anti-repeat context (bridging beats + prior-page previews); UI warning when outline beat count is below target; **Regenerate with coverage boost** via `outline_supplement`
+- [x] Beats-only **Director notes for beats** + Edge **`PAGE_BEATS_PROMPT_CAPS`** / `jsonForPrompt` to avoid HTTP 546 worker limits
+- [x] Library → Pages: multi-select (max 5), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
+- [x] **Scripts** workspace tab: synopsis helper → `notes.synopsis_helper`, build synopsis into Issue Outline draft, issue pack copy/download (full beats + dialogue + arc cache), edit & save outline / beats / dialogue / shot plan JSON (`arcsWriterRoom` update helpers); **File → Scripts & exports**; workspace shortcuts **⌥⌘1–6** / **Alt+Ctrl+1–6** (avoids browser ⌘1–9)
+- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (outline supplement + prompt caps + anti-repeat)
 
 ## Writers' Workshop bugfixes (Apr 2026)
 

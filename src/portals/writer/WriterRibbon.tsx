@@ -18,6 +18,7 @@ import {
   WRITER_WORKSPACE_TAB_LABELS,
   WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
+import { workspaceTabShortcutHint } from '@/portals/writer/writerWorkspaceShortcuts';
 import {
   WRITER_HELP_CATEGORIES,
   WRITER_UI_TIPS,
@@ -81,6 +82,8 @@ type Props = {
   onOpenHelpCategory: (id: WriterHelpCategoryId) => void;
   /** Shown under the primary AI action tooltip (next step in the pipeline). */
   quickGenerateNextHint?: string;
+  /** Switch workspace tab and show Home ribbon (e.g. from File menu). */
+  onSelectWorkspaceTabFromFile?: (id: WriterWorkspaceTabId) => void;
 };
 
 export const WriterRibbon: React.FC<Props> = ({
@@ -118,6 +121,7 @@ export const WriterRibbon: React.FC<Props> = ({
   onNextPage,
   onOpenHelpCategory,
   quickGenerateNextHint,
+  onSelectWorkspaceTabFromFile,
 }) => {
   const { isPhone } = useResponsiveLayout();
 
@@ -163,7 +167,21 @@ export const WriterRibbon: React.FC<Props> = ({
           className={`flex flex-wrap items-center gap-1 min-w-0 ${isPhone ? 'w-full' : ''}`}
         >
         {activeMenu === 'file' && (
-          <div className="flex items-center px-2">
+          <div className="flex flex-wrap items-center gap-2 px-2">
+            {onSelectWorkspaceTabFromFile ? (
+              <Tooltip
+                content="Synopsis helper, issue pack copy/download, edit saved outline / beats / dialogue / shot plan"
+                side="bottom"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectWorkspaceTabFromFile('scripts')}
+                  className="rounded-md border border-amber-800/40 bg-amber-100/90 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                >
+                  Scripts & exports
+                </button>
+              </Tooltip>
+            ) : null}
             <Tooltip content={WRITER_UI_TIPS.fileRibbon} side="bottom">
               <button
                 type="button"
@@ -184,7 +202,7 @@ export const WriterRibbon: React.FC<Props> = ({
                 {WORKSPACE_TABS.map((t) => (
                   <Tooltip
                     key={t.id}
-                    content={`${t.label} (⌘${WRITER_WORKSPACE_TAB_ORDER.indexOf(t.id) + 1})`}
+                    content={`${t.label} — ${workspaceTabShortcutHint(t.id)}`}
                     side="bottom"
                   >
                     <button
