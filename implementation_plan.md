@@ -484,6 +484,50 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline per issue, Arc batch pacing/canon.
 
+### Phase 7b — Outline coverage + anti-repetition beats (done, 2026-04-11)
+
+**Problem observed:** outlines can save with sparse `page_beats` (fewer than target pages), and page-beats generation may repeat because missing pages fallback to weak outline context.
+
+**Implemented**
+
+- **Edge prompt hardening (`outline_issue`):**
+  - Require one `page_beats` entry per page when `target_page_count` is provided.
+  - Require `page_target` values spanning `1..target_page_count` (capped by schema max).
+  - Instruct model to add bridging beats instead of skipping pages when plot detail is sparse.
+- **Edge validation hardening (`outline_issue`):**
+  - Validate saved outlines cover target pages; reject sparse outlines with actionable `422` details.
+- **Page beats fallback context (`page_beats` / `page_beats_issue`):**
+  - Replace “sample first beat” fallback with nearest-anchor context (previous/next outline beats or trailing progression guidance) to avoid repeated page-1 style outputs.
+  - Expand prior-page digest to include panel action previews from previous pages for stronger anti-repetition grounding.
+- **Writer UI feedback (`WriterPortal`):**
+  - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
+  - Add a one-click **Regenerate with coverage boost** action that re-runs `outline_issue` with an appended coverage instruction in **`outline_supplement`** (optional request field; auto-persists into the Outline instructions draft after success). Multi-issue **`arc_brief`** was removed from the API (2026-04-11 simplification on `main`).
+  - **Beats-only director notes:** optional `director_notes_for_beats` on `page_beats` / `page_beats_issue` (Zod max 4000) + Beats tab textarea; not sent to `outline_issue`. Edge prompt adds layout-variation and spread guidance; outline prompt nudges distinct consecutive beats when `scene` repeats.
+
+**Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse synopsis (and optional **Outline instructions for AI**) to confirm per-page outline coverage and reduced repeated page beats.
+
+### Phase 7c — Library page multi-select, clear, delete, exports (done, 2026-04-11)
+
+**Goal:** Restore multi-select on Library → Pages (cap 5) and support batch delete pages, batch clear beats or dialogue, batch download beats/dialogue as one JSON file; single-page download/clear on Beats and Dialogue tabs; download saved outline JSON from Outline preview.
+
+**Client**
+
+- **`arcsWriterRoom.ts`:** `deleteWriterPages`, `clearWriterPagesBeatsJson`, `clearWriterPagesScriptText`.
+- **`WriterPortal.tsx`:** checkboxes + toolbar actions; Outline **Download outline**; per-tab actions for current page.
+- **`writerHelpRegistry.tsx`:** `pagesLibrary` tip mentions multi-select and batch actions.
+
+**Verify:** `npm run test -- --run`, `npm run build`; manual — select pages, batch clear/download, delete with confirm.
+
+### Phase 7d — Merge `main` (2026-04-11)
+
+**Reconciled:** Arc tab **batch pacing/canon** from `main` with feature-branch Library exports, coverage UI, director notes, and Edge anti-repeat + **`jsonForPrompt` / `PAGE_BEATS_PROMPT_CAPS`**. **`outline_issue`** adds optional **`outline_supplement`** (replaces removed **`arc_brief`** for coverage boost and optional author outline hints).
+
+### Phase 7e — Scripts tab, synopsis helper, edit saved outputs (2026-04-12)
+
+**Workspace:** sixth tab **Scripts & exports** — synopsis worksheet (`notes.synopsis_helper`), build combined synopsis into Issue Outline draft (user still **Save story context** on Outline), copy/download enriched issue pack, edit latest outline / selected page beats & dialogue / latest shot plan with DB save.
+
+**Client:** `writerSynopsisHelper.ts`; `arcsWriterRoom` update helpers for outlines, pages, shot plans, and `notes` on issues.
+
 ### Verification
 
 - `npm run test -- --run`, `npm run build`

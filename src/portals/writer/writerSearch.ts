@@ -3,15 +3,16 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export type WriterWorkspaceTabId = 'arc' | 'outline' | 'beats' | 'dialogue' | 'video';
+export type WriterWorkspaceTabId = 'arc' | 'outline' | 'beats' | 'dialogue' | 'video' | 'scripts';
 
-/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc (review). Matches ⌘1–⌘5. */
+/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc → Scripts. Shortcuts: ⌥⌘1–6 (Mac) / Alt+Ctrl+1–6 — not plain ⌘1–6 (browser tabs). */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
   'outline',
   'beats',
   'dialogue',
   'video',
   'arc',
+  'scripts',
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
@@ -23,6 +24,7 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
   video: { ribbon: 'Video', heading: 'Video' },
   arc: { ribbon: 'Arc', heading: 'Arc Planner' },
+  scripts: { ribbon: 'Scripts', heading: 'Scripts & exports' },
 };
 
 export type WriterToolSaved = { at?: string; result?: unknown } | null;
@@ -76,6 +78,16 @@ export function getWriterSearchableText(ctx: WriterSearchContext): string {
       return [stringifyPreview(ctx.latestShotPlanJson)].filter(Boolean).join('\n\n');
     case 'arc':
       return formatArcReviewPlainText(ctx.pacingReview, ctx.canonCheck);
+    case 'scripts':
+      return [
+        stringifyPreview(ctx.latestOutlineJson),
+        stringifyPreview(ctx.selectedPageBeats),
+        ctx.scriptText ?? '',
+        stringifyPreview(ctx.latestShotPlanJson),
+        formatArcReviewPlainText(ctx.pacingReview, ctx.canonCheck),
+      ]
+        .filter(Boolean)
+        .join('\n\n');
     default:
       return '';
   }

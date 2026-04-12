@@ -28,6 +28,7 @@ export type WriterToolsOutlineIssuePayload = {
   mode: 'outline_issue';
   issue_id: string;
   target_page_count?: number;
+  outline_supplement?: string;
 };
 
 /** Stored in writer_pages.beats_json */
@@ -47,6 +48,7 @@ export type PageBeatsJson = {
 export type WriterToolsPageBeatsPayload = {
   mode: 'page_beats';
   page_id: string;
+  director_notes_for_beats?: string;
 };
 
 export type WriterToolsPageBeatsIssuePayload = {
@@ -54,6 +56,7 @@ export type WriterToolsPageBeatsIssuePayload = {
   issue_id: string;
   skip_existing?: boolean;
   batch_limit?: number;
+  director_notes_for_beats?: string;
 };
 
 export type WriterToolsDraftDialoguePayload = {

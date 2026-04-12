@@ -40,6 +40,18 @@ describe('writerToolsRequestSchema', () => {
     expect(r).toMatchObject({ mode: 'outline_issue', target_page_count: 22 });
   });
 
+  it('parses outline_issue with outline_supplement', () => {
+    const r = writerToolsRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
+    });
+    expect(r).toMatchObject({
+      mode: 'outline_issue',
+      outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
+    });
+  });
+
   it('outline_issue rejects invalid uuid', () => {
     expect(() =>
       writerToolsOutlineIssueRequestSchema.parse({
@@ -53,6 +65,20 @@ describe('writerToolsRequestSchema', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     const r = writerToolsRequestSchema.parse({ mode: 'page_beats', page_id: id });
     expect(r).toMatchObject({ mode: 'page_beats', page_id: id });
+  });
+
+  it('parses page_beats with director_notes_for_beats', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsRequestSchema.parse({
+      mode: 'page_beats',
+      page_id: id,
+      director_notes_for_beats: 'Pages 3–4 spread; left page only.',
+    });
+    expect(r).toMatchObject({
+      mode: 'page_beats',
+      page_id: id,
+      director_notes_for_beats: 'Pages 3–4 spread; left page only.',
+    });
   });
 
   it('parses page_beats_issue with defaults', () => {
@@ -74,6 +100,16 @@ describe('writerToolsRequestSchema', () => {
     });
     expect(r.batch_limit).toBe(12);
     expect(r.skip_existing).toBe(false);
+  });
+
+  it('parses page_beats_issue with director_notes_for_beats', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsPageBeatsIssueRequestSchema.parse({
+      mode: 'page_beats_issue',
+      issue_id: id,
+      director_notes_for_beats: 'Vary panel shapes; cinematic lighting.',
+    });
+    expect(r.director_notes_for_beats).toContain('lighting');
   });
 
   it('parses draft_dialogue', () => {
