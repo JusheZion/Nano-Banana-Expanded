@@ -74,7 +74,7 @@ export const WRITER_UI_TIPS = {
   scriptsTab:
     'Synopsis helper fields save to notes.synopsis_helper; use Build synopsis to fill the Issue Outline synopsis draft, then Save story context on Issue Outline. Copy or download a full issue pack (synopsis, outline, shot plan, all page beats & dialogue, arc cache). Edit saved outline / beats / dialogue / shot plan JSON and save to the database (valid JSON required for JSON fields).',
   fileRibbon:
-    'Use Home → workspace Scripts tab or Video tab for issue pack and exports. AI tools need a signed-in Supabase session.',
+    'Open Scripts & exports from here (or Home → workspace Scripts). Issue pack and exports live there; Video tab has shot plan files too. AI tools need a signed-in Supabase session.',
   insertRibbon: 'Snippets and templates can be added here in a future update.',
   reviewPacing:
     'Run pacing review for the selected issue. On success, the result is saved automatically to the issue notes (writer_tool_cache.pacing_review).',
@@ -83,7 +83,7 @@ export const WRITER_UI_TIPS = {
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',
   activityPanel: 'A short log of AI tool runs. Open Ribbon → Help for full workflow guides.',
   dockShortcutsBlurb:
-    '⌘1 Outline · ⌘2 Beats · ⌘3 Dialogue · ⌘4 Video · ⌘5 Arc · ⌘6 Scripts. ⌘F: Find. ⌘⇧H: show/hide panels. Esc: clear find. Full list: Ribbon → Help → Keys.',
+    'Workspace tabs: ⌥⌘1–6 (Mac) or Alt+Ctrl+1–6 (Win/Linux) — not plain ⌘1–6 (browser switches tabs). File → Scripts & exports also opens the Scripts tab. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
 } as const;
 
@@ -247,8 +247,12 @@ export function WriterHelpCategoryBody({
         <>
         <ul className="list-disc pl-4 space-y-2">
           <li>
-            <kbd className="rounded bg-black/10 px-1">⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌘6</kbd> — Outline,
-            Beats, Dialogue, Video, Arc, Scripts
+            <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘6</kbd> (Mac) or{' '}
+            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">6</kbd> — workspace:
+            Outline, Beats, Dialogue, Video, Arc, Scripts (plain ⌘1–9 is reserved by the browser)
+          </li>
+          <li>
+            <strong>File</strong> → <strong>Scripts & exports</strong> — jump to synopsis helper and issue pack
           </li>
           <li>
             <kbd className="rounded bg-black/10 px-1">⌘F</kbd> — focus Find

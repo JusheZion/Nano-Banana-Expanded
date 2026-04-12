@@ -43,7 +43,8 @@ export function useWriterHotkeys(options: {
         return;
       }
 
-      if (mod && !e.shiftKey && !e.altKey && !isTypingTarget(e.target)) {
+      // ⌘/Ctrl+1–9 switch browser tabs on macOS; use ⌥⌘ / Alt+Ctrl + digit for workspace.
+      if (mod && e.altKey && !e.shiftKey && !isTypingTarget(e.target)) {
         const n = Number(e.key);
         if (n >= 1 && n <= TAB_ORDER.length) {
           e.preventDefault();

@@ -5,7 +5,7 @@ export function escapeRegExp(s: string): string {
 
 export type WriterWorkspaceTabId = 'arc' | 'outline' | 'beats' | 'dialogue' | 'video' | 'scripts';
 
-/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc → Scripts (exports / synopsis helper). Matches ⌘1–⌘6. */
+/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc → Scripts. Shortcuts: ⌥⌘1–6 (Mac) / Alt+Ctrl+1–6 — not plain ⌘1–6 (browser tabs). */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
   'outline',
   'beats',

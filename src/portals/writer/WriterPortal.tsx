@@ -1567,6 +1567,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onActiveMenu={setActiveRibbonMenu}
         workspaceTab={activeTab}
         onWorkspaceTab={setActiveTab}
+        onSelectWorkspaceTabFromFile={(id) => {
+          setActiveRibbonMenu('home');
+          setActiveTab(id);
+        }}
         findQuery={findQuery}
         onFindQuery={setFindQuery}
         findInputRef={findInputRef}
