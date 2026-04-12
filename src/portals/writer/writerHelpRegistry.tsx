@@ -71,8 +71,10 @@ export const WRITER_UI_TIPS = {
     'Pacing review and canon check run on the whole Library issue (single-issue buttons), or use Batch arc tools to check multiple issues at once. Results save on each issue under notes.writer_tool_cache (no separate Save step).',
   videoTab:
     'Shot plans use the latest outline and page digests. Versions are stored in writer_video_shot_plans. Use the buttons below to export JSON, CSV, or a full issue pack.',
+  scriptsTab:
+    'Synopsis helper fields save to notes.synopsis_helper; use Build synopsis to fill the Issue Outline synopsis draft, then Save story context on Issue Outline. Copy or download a full issue pack (synopsis, outline, shot plan, all page beats & dialogue, arc cache). Edit saved outline / beats / dialogue / shot plan JSON and save to the database (valid JSON required for JSON fields).',
   fileRibbon:
-    'Use Home → workspace Video tab or the dock for downloads (shot plan, outline, issue pack). AI tools need a signed-in Supabase session.',
+    'Use Home → workspace Scripts tab or Video tab for issue pack and exports. AI tools need a signed-in Supabase session.',
   insertRibbon: 'Snippets and templates can be added here in a future update.',
   reviewPacing:
     'Run pacing review for the selected issue. On success, the result is saved automatically to the issue notes (writer_tool_cache.pacing_review).',
@@ -81,7 +83,7 @@ export const WRITER_UI_TIPS = {
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',
   activityPanel: 'A short log of AI tool runs. Open Ribbon → Help for full workflow guides.',
   dockShortcutsBlurb:
-    '⌘1 Outline · ⌘2 Beats · ⌘3 Dialogue · ⌘4 Video · ⌘5 Arc. ⌘F: Find. ⌘⇧H: show/hide panels. Esc: clear find. Full list: Ribbon → Help → Keys.',
+    '⌘1 Outline · ⌘2 Beats · ⌘3 Dialogue · ⌘4 Video · ⌘5 Arc · ⌘6 Scripts. ⌘F: Find. ⌘⇧H: show/hide panels. Esc: clear find. Full list: Ribbon → Help → Keys.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
 } as const;
 
@@ -245,8 +247,8 @@ export function WriterHelpCategoryBody({
         <>
         <ul className="list-disc pl-4 space-y-2">
           <li>
-            <kbd className="rounded bg-black/10 px-1">⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌘5</kbd> — Arc,
-            Outline, Beats, Dialogue, Video
+            <kbd className="rounded bg-black/10 px-1">⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌘6</kbd> — Outline,
+            Beats, Dialogue, Video, Arc, Scripts
           </li>
           <li>
             <kbd className="rounded bg-black/10 px-1">⌘F</kbd> — focus Find

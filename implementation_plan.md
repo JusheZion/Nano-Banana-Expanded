@@ -522,6 +522,12 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Reconciled:** Arc tab **batch pacing/canon** from `main` with feature-branch Library exports, coverage UI, director notes, and Edge anti-repeat + **`jsonForPrompt` / `PAGE_BEATS_PROMPT_CAPS`**. **`outline_issue`** adds optional **`outline_supplement`** (replaces removed **`arc_brief`** for coverage boost and optional author outline hints).
 
+### Phase 7e — Scripts tab, synopsis helper, edit saved outputs (2026-04-12)
+
+**Workspace:** sixth tab **Scripts & exports** — synopsis worksheet (`notes.synopsis_helper`), build combined synopsis into Issue Outline draft (user still **Save story context** on Outline), copy/download enriched issue pack, edit latest outline / selected page beats & dialogue / latest shot plan with DB save.
+
+**Client:** `writerSynopsisHelper.ts`; `arcsWriterRoom` update helpers for outlines, pages, shot plans, and `notes` on issues.
+
 ### Verification
 
 - `npm run test -- --run`, `npm run build`

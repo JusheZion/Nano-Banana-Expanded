@@ -168,6 +168,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Writers issue quality (2026-04-11): dense `page_beats` in outline prompt; `page_beats` anti-repeat context (bridging beats + prior-page previews); UI warning when outline beat count is below target; **Regenerate with coverage boost** via `outline_supplement`
 - [x] Beats-only **Director notes for beats** + Edge **`PAGE_BEATS_PROMPT_CAPS`** / `jsonForPrompt` to avoid HTTP 546 worker limits
 - [x] Library → Pages: multi-select (max 5), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
+- [x] **Scripts** workspace tab (⌘6): synopsis helper → `notes.synopsis_helper`, build synopsis into Issue Outline draft, issue pack copy/download (full beats + dialogue + arc cache), edit & save outline / beats / dialogue / shot plan JSON (`arcsWriterRoom` update helpers)
 - [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (outline supplement + prompt caps + anti-repeat)
 
 ## Writers' Workshop bugfixes (Apr 2026)

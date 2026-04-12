@@ -53,6 +53,8 @@ export type WriterIssueOutlineRow = {
   source_mode: string | null;
 };
 
+const nowUtcIso = () => new Date().toISOString();
+
 export async function listWriterSeries(): Promise<WriterSeriesRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase
@@ -123,7 +125,12 @@ export async function createWriterIssue(input: {
 
 export async function updateWriterIssue(
   issueId: string,
-  patch: { title?: string | null; synopsis?: string | null },
+  patch: {
+    title?: string | null;
+    synopsis?: string | null;
+    /** Replaces issue notes JSON when set (merge client-side if needed). */
+    notes?: Record<string, unknown>;
+  },
 ): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase
@@ -132,6 +139,52 @@ export async function updateWriterIssue(
     .eq('id', issueId);
   if (error) {
     console.warn('[arcsWriterRoom] updateWriterIssue', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Update the JSON payload of a saved outline row (manual edit in UI). */
+export async function updateWriterIssueOutlineJson(
+  outlineId: string,
+  outlineJson: Record<string, unknown>,
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_issue_outlines')
+    .update({ outline_json: outlineJson })
+    .eq('id', outlineId);
+  if (error) {
+    console.warn('[arcsWriterRoom] updateWriterIssueOutlineJson', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function updateWriterPageBeatsJson(
+  pageId: string,
+  beatsJson: Record<string, unknown> | null,
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ beats_json: beatsJson, updated_at: nowUtcIso() })
+    .eq('id', pageId);
+  if (error) {
+    console.warn('[arcsWriterRoom] updateWriterPageBeatsJson', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function updateWriterPageScriptText(pageId: string, scriptText: string | null): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ script_text: scriptText, updated_at: nowUtcIso() })
+    .eq('id', pageId);
+  if (error) {
+    console.warn('[arcsWriterRoom] updateWriterPageScriptText', error.message);
     return false;
   }
   return true;
@@ -231,8 +284,6 @@ export async function ensureWriterPagesToCount(
   return { ok: true, created };
 }
 
-const nowUtcIso = () => new Date().toISOString();
-
 /** Delete page rows by id. Returns false if Supabase is off or the delete fails. */
 export async function deleteWriterPages(pageIds: string[]): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase || pageIds.length === 0) return false;
@@ -284,6 +335,22 @@ export async function listWriterShotPlansForIssue(issueId: string): Promise<Writ
     return [];
   }
   return (data ?? []) as WriterVideoShotPlanRow[];
+}
+
+export async function updateWriterVideoShotPlanJson(
+  shotPlanId: string,
+  shotPlanJson: Record<string, unknown>,
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_video_shot_plans')
+    .update({ shot_plan_json: shotPlanJson })
+    .eq('id', shotPlanId);
+  if (error) {
+    console.warn('[arcsWriterRoom] updateWriterVideoShotPlanJson', error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function listWriterOutlinesForIssue(issueId: string): Promise<WriterIssueOutlineRow[]> {

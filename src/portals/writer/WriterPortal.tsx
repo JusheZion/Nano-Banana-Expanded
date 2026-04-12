@@ -14,7 +14,11 @@ import {
   listWriterSeries,
   listWriterShotPlansForIssue,
   updateWriterIssue,
+  updateWriterIssueOutlineJson,
+  updateWriterPageBeatsJson,
+  updateWriterPageScriptText,
   updateWriterSeries,
+  updateWriterVideoShotPlanJson,
   type WriterIssueOutlineRow,
   type WriterIssueRow,
   type WriterPageRow,
@@ -48,6 +52,13 @@ import {
   WRITER_WORKSPACE_TAB_LABELS,
   WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
+import {
+  buildSynopsisDocumentFromParts,
+  EMPTY_SYNOPSIS_HELPER_PARTS,
+  mergeSynopsisHelperIntoNotes,
+  readSynopsisHelperFromNotes,
+  type SynopsisHelperParts,
+} from '@/portals/writer/writerSynopsisHelper';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import {
@@ -194,6 +205,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [seriesLoglineDraft, setSeriesLoglineDraft] = useState('');
   const [contextSaveLoading, setContextSaveLoading] = useState(false);
   const [contextSaveError, setContextSaveError] = useState<string | null>(null);
+  const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
+    ...EMPTY_SYNOPSIS_HELPER_PARTS,
+  });
+  type ScriptsEditorTab = 'synopsis' | 'outline' | 'beats' | 'dialogue' | 'video';
+  const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
+  const [outlineEditDraft, setOutlineEditDraft] = useState('');
+  const [beatsEditDraft, setBeatsEditDraft] = useState('');
+  const [dialogueEditDraft, setDialogueEditDraft] = useState('');
+  const [shotEditDraft, setShotEditDraft] = useState('');
+  const [scriptsBusy, setScriptsBusy] = useState(false);
+  const [scriptsError, setScriptsError] = useState<string | null>(null);
 
   const pushHistory = (line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
@@ -382,9 +404,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (row) {
       setIssueTitleDraft(row.title ?? '');
       setIssueSynopsisDraft(row.synopsis ?? '');
+      setSynopsisHelperParts(readSynopsisHelperFromNotes(row.notes));
     } else {
       setIssueTitleDraft('');
       setIssueSynopsisDraft('');
+      setSynopsisHelperParts({ ...EMPTY_SYNOPSIS_HELPER_PARTS });
     }
   }, [selectedIssueId, issues]);
 
@@ -814,6 +838,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft]);
 
   const quickGenerate = useCallback(async () => {
+    if (activeTab === 'scripts') return;
     if (activeTab === 'outline' && selectedIssueId) {
       await runOutlineGenerate();
       return;
@@ -894,15 +919,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ]);
 
   const quickGenerateLabel =
-    activeTab === 'arc'
-      ? 'Run pacing review'
-      : activeTab === 'outline'
-        ? 'Generate outline'
-        : activeTab === 'beats'
-          ? 'Generate page beats'
-          : activeTab === 'dialogue'
-            ? 'Draft dialogue'
-            : 'Generate shot plan';
+    activeTab === 'scripts'
+      ? '—'
+      : activeTab === 'arc'
+        ? 'Run pacing review'
+        : activeTab === 'outline'
+          ? 'Generate outline'
+          : activeTab === 'beats'
+            ? 'Generate page beats'
+            : activeTab === 'dialogue'
+              ? 'Draft dialogue'
+              : 'Generate shot plan';
 
   const quickGenerateLoading =
     outlineGenLoading ||
@@ -913,6 +940,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     (activeTab === 'beats' && beatsBatchBusy);
 
   const quickGenerateDisabled =
+    activeTab === 'scripts' ||
     !supabaseOk ||
     !selectedIssueId ||
     (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
@@ -943,6 +971,215 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => formatArcReviewPlainText(pacingSaved, canonSaved),
     [pacingSaved, canonSaved],
   );
+
+  const issuePackObject = useMemo(
+    () => ({
+      issue_id: selectedIssueId,
+      exported_at: new Date().toISOString(),
+      series: selectedSeriesId
+        ? {
+            title: seriesList.find((s) => s.id === selectedSeriesId)?.title ?? null,
+            logline: seriesList.find((s) => s.id === selectedSeriesId)?.logline ?? null,
+          }
+        : null,
+      issue: selectedIssue
+        ? {
+            issue_number: selectedIssue.issue_number,
+            title: selectedIssue.title,
+            synopsis: selectedIssue.synopsis,
+          }
+        : null,
+      outline: latestOutline
+        ? { version: latestOutline.version, outline_json: latestOutline.outline_json }
+        : null,
+      shot_plan: latestShotPlan
+        ? { version: latestShotPlan.version, shot_plan_json: latestShotPlan.shot_plan_json }
+        : null,
+      arc_review: {
+        pacing_review: pacingSaved ?? null,
+        canon_check: canonSaved ?? null,
+      },
+      pages: sortedPages.map((p) => ({
+        page_number: p.page_number,
+        beats_json: p.beats_json,
+        script_text: p.script_text,
+      })),
+    }),
+    [
+      selectedIssueId,
+      selectedSeriesId,
+      seriesList,
+      selectedIssue,
+      latestOutline,
+      latestShotPlan,
+      pacingSaved,
+      canonSaved,
+      sortedPages,
+    ],
+  );
+
+  useEffect(() => {
+    if (!latestOutline) {
+      setOutlineEditDraft('');
+      return;
+    }
+    setOutlineEditDraft(JSON.stringify(latestOutline.outline_json, null, 2));
+  }, [latestOutline?.id, latestOutline?.outline_json]);
+
+  useEffect(() => {
+    if (!selectedPage) {
+      setBeatsEditDraft('');
+      setDialogueEditDraft('');
+      return;
+    }
+    setBeatsEditDraft(
+      selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
+    );
+    setDialogueEditDraft(selectedPage.script_text ?? '');
+  }, [selectedPage?.id, selectedPage?.beats_json, selectedPage?.script_text]);
+
+  useEffect(() => {
+    if (!latestShotPlan) {
+      setShotEditDraft('');
+      return;
+    }
+    setShotEditDraft(JSON.stringify(latestShotPlan.shot_plan_json, null, 2));
+  }, [latestShotPlan?.id, latestShotPlan?.shot_plan_json]);
+
+  const copyIssuePackJson = useCallback(() => {
+    void navigator.clipboard.writeText(JSON.stringify(issuePackObject, null, 2));
+  }, [issuePackObject]);
+
+  const saveSynopsisHelperToNotes = useCallback(async () => {
+    if (!selectedIssueId || !selectedIssue) return;
+    setScriptsError(null);
+    setScriptsBusy(true);
+    const merged = mergeSynopsisHelperIntoNotes(selectedIssue.notes, synopsisHelperParts);
+    const ok = await updateWriterIssue(selectedIssueId, { notes: merged });
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save synopsis helper. Check Supabase.');
+      return;
+    }
+    await refreshIssuesForSeries();
+    pushHistory('saved synopsis helper fields to issue notes');
+  }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries]);
+
+  const applyBuiltSynopsis = useCallback(() => {
+    const doc = buildSynopsisDocumentFromParts(synopsisHelperParts);
+    if (!doc) {
+      setScriptsError('Fill at least one synopsis helper field to build.');
+      return;
+    }
+    setScriptsError(null);
+    setIssueSynopsisDraft(doc);
+    pushHistory('built synopsis from helper (review in Issue Outline → Save story context)');
+  }, [synopsisHelperParts]);
+
+  const saveOutlineEdit = useCallback(async () => {
+    if (!latestOutline) return;
+    setScriptsError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(outlineEditDraft || '{}');
+    } catch {
+      setScriptsError('Outline JSON is invalid.');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setScriptsError('Outline must be a JSON object.');
+      return;
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterIssueOutlineJson(latestOutline.id, parsed as Record<string, unknown>);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save outline. Check Supabase / permissions.');
+      return;
+    }
+    const rows = await listWriterOutlinesForIssue(latestOutline.issue_id);
+    setOutlines(rows);
+    pushHistory(`saved edited outline v${latestOutline.version}`);
+  }, [latestOutline, outlineEditDraft]);
+
+  const saveBeatsEdit = useCallback(async () => {
+    if (!selectedPageId || !selectedPage) return;
+    setScriptsError(null);
+    let parsed: Record<string, unknown> | null = null;
+    const raw = beatsEditDraft.trim();
+    if (raw) {
+      try {
+        const v = JSON.parse(raw);
+        if (!v || typeof v !== 'object' || Array.isArray(v)) {
+          setScriptsError('Beats must be a JSON object.');
+          return;
+        }
+        parsed = v as Record<string, unknown>;
+      } catch {
+        setScriptsError('Beats JSON is invalid.');
+        return;
+      }
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterPageBeatsJson(selectedPageId, parsed);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save beats. Check Supabase.');
+      return;
+    }
+    if (selectedIssueId) {
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    }
+    pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
+  }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId]);
+
+  const saveDialogueEdit = useCallback(async () => {
+    if (!selectedPageId || !selectedPage) return;
+    setScriptsError(null);
+    setScriptsBusy(true);
+    const text = dialogueEditDraft.trim() ? dialogueEditDraft : null;
+    const ok = await updateWriterPageScriptText(selectedPageId, text);
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save dialogue. Check Supabase.');
+      return;
+    }
+    if (selectedIssueId) {
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    }
+    pushHistory(`saved edited dialogue (page ${selectedPage.page_number})`);
+  }, [selectedPageId, selectedPage, dialogueEditDraft, selectedIssueId]);
+
+  const saveShotPlanEdit = useCallback(async () => {
+    if (!latestShotPlan) return;
+    setScriptsError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(shotEditDraft || '{}');
+    } catch {
+      setScriptsError('Shot plan JSON is invalid.');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setScriptsError('Shot plan must be a JSON object.');
+      return;
+    }
+    setScriptsBusy(true);
+    const ok = await updateWriterVideoShotPlanJson(
+      latestShotPlan.id,
+      parsed as Record<string, unknown>,
+    );
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save shot plan. Check Supabase.');
+      return;
+    }
+    const rows = await listWriterShotPlansForIssue(latestShotPlan.issue_id);
+    setShotPlans(rows);
+    pushHistory(`saved edited shot plan v${latestShotPlan.version}`);
+  }, [latestShotPlan, shotEditDraft]);
 
   const libraryPanel = (
     <div className="flex flex-col gap-3 min-h-0 text-black/80">
@@ -1255,21 +1492,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       disabled: !latestOutline,
     },
     {
+      label: 'Copy issue pack (JSON)',
+      onClick: () => copyIssuePackJson(),
+      disabled: !selectedIssueId,
+    },
+    {
       label: 'Download issue pack',
       onClick: () => {
-        downloadJsonFile('writer-issue-pack.json', {
-          issue_id: selectedIssueId,
-          exported_at: new Date().toISOString(),
-          outline: latestOutline?.outline_json ?? null,
-          shot_plan: latestShotPlan?.shot_plan_json ?? null,
-          pages: pages.map((p) => ({
-            page_number: p.page_number,
-            beats_json: p.beats_json,
-            script_preview: (p.script_text ?? '').slice(0, 2000),
-          })),
-        });
+        downloadJsonFile('writer-issue-pack.json', issuePackObject);
       },
-      disabled: !latestOutline && !latestShotPlan && pages.length === 0,
+      disabled: !selectedIssueId,
     },
   ];
 
@@ -1374,17 +1606,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <span className="font-bold uppercase tracking-wider text-black/50 shrink-0">Pipeline</span>
         {WRITER_WORKSPACE_TAB_ORDER.map((id) => {
           const done =
-            id === 'outline'
-              ? Boolean(latestOutline)
-              : id === 'beats'
-                ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
-                : id === 'dialogue'
-                  ? sortedPages.length > 0 && pagesWithScriptCount >= pagesWithBeatsCount && pagesWithBeatsCount > 0
-                  : id === 'video'
-                    ? Boolean(latestShotPlan)
-                    : id === 'arc'
-                      ? Boolean(pacingSaved?.result ?? canonSaved?.result)
-                      : false;
+            id === 'scripts'
+              ? false
+              : id === 'outline'
+                ? Boolean(latestOutline)
+                : id === 'beats'
+                  ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
+                  : id === 'dialogue'
+                    ? sortedPages.length > 0 &&
+                      pagesWithScriptCount >= pagesWithBeatsCount &&
+                      pagesWithBeatsCount > 0
+                    : id === 'video'
+                      ? Boolean(latestShotPlan)
+                      : id === 'arc'
+                        ? Boolean(pacingSaved?.result ?? canonSaved?.result)
+                        : false;
           return (
             <button
               key={id}
@@ -2309,6 +2545,348 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Storyboard strip</p>
                       <WriterShotStoryboardStrip shotPlanJson={latestShotPlan?.shot_plan_json ?? null} />
                     </div>
+                  </div>
+                )}
+                {activeTab === 'scripts' && (
+                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-lg font-bold text-black">Scripts & exports</p>
+                      <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
+                    </div>
+                    {!selectedIssueId ? (
+                      <p className="text-sm text-black/55">Select an issue in the Library to use this tab.</p>
+                    ) : (
+                      <>
+                        {scriptsError && (
+                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
+                        )}
+                        <div className="grid gap-6 xl:grid-cols-2">
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Synopsis helper
+                            </p>
+                            <p className="text-[11px] text-black/60 leading-snug">
+                              Structured fields save under{' '}
+                              <code className="rounded bg-black/10 px-1">notes.synopsis_helper</code> on the issue row.
+                              Build a labeled synopsis into the Issue Outline draft, then{' '}
+                              <strong>Save story context</strong> there to persist it as{' '}
+                              <code className="rounded bg-black/10 px-1">synopsis</code>.
+                            </p>
+                            <div className="space-y-2 max-h-[min(480px,55vh)] overflow-y-auto custom-scrollbar pr-1">
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Logline
+                                <textarea
+                                  value={synopsisHelperParts.logline}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, logline: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="One or two sentences…"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Must-happen beats (one per line, in order)
+                                <textarea
+                                  value={synopsisHelperParts.mustHappen}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, mustHappen: e.target.value }))
+                                  }
+                                  rows={5}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y font-mono text-xs"
+                                  placeholder={'1. …\n2. …'}
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Pacing / structure
+                                <textarea
+                                  value={synopsisHelperParts.pacingNotes}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, pacingNotes: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="Act breaks, page targets, midpoint…"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Cast (this issue)
+                                <textarea
+                                  value={synopsisHelperParts.castGoals}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, castGoals: e.target.value }))
+                                  }
+                                  rows={3}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Factions / threats
+                                <textarea
+                                  value={synopsisHelperParts.factions}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, factions: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Locations / sets
+                                <textarea
+                                  value={synopsisHelperParts.locations}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, locations: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Rules for the outline
+                                <textarea
+                                  value={synopsisHelperParts.rules}
+                                  onChange={(e) =>
+                                    setSynopsisHelperParts((p) => ({ ...p, rules: e.target.value }))
+                                  }
+                                  rows={2}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  placeholder="e.g. no repeating beats across adjacent pages…"
+                                />
+                              </label>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || scriptsBusy}
+                                onClick={() => void saveSynopsisHelperToNotes()}
+                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45"
+                              >
+                                {scriptsBusy ? 'Saving…' : 'Save helper to issue notes'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => applyBuiltSynopsis()}
+                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black shadow-sm disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                Build synopsis → Issue Outline draft
+                              </button>
+                            </div>
+                          </div>
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Copy & download
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => copyIssuePackJson()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Copy issue pack (JSON)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  downloadJsonFile('writer-issue-pack.json', issuePackObject);
+                                  pushHistory('downloaded issue pack');
+                                }}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Download issue pack
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!arcReviewPlain}
+                                onClick={() => void navigator.clipboard.writeText(arcReviewPlain)}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Copy arc review
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!arcReviewPlain}
+                                onClick={() => {
+                                  downloadTextFile(
+                                    'writer-arc-review.txt',
+                                    arcReviewPlain,
+                                    'text/plain;charset=utf-8',
+                                  );
+                                  pushHistory('downloaded arc review');
+                                }}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Download arc review
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-black/50 leading-snug">
+                              Issue pack includes synopsis, full outline &amp; shot plan JSON, all page beats and
+                              dialogue, and pacing/canon cache. For selected pages only, use Library → Pages batch
+                              actions.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Edit saved outputs
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(
+                              [
+                                ['synopsis', 'Synopsis preview'],
+                                ['outline', 'Outline JSON'],
+                                ['beats', 'Beats JSON'],
+                                ['dialogue', 'Dialogue'],
+                                ['video', 'Shot plan JSON'],
+                              ] as const
+                            ).map(([id, label]) => (
+                              <button
+                                key={id}
+                                type="button"
+                                onClick={() => setScriptsEditorTab(id)}
+                                className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase border ${
+                                  scriptsEditorTab === id
+                                    ? 'border-amber-700 bg-amber-100 text-black'
+                                    : 'border-black/15 bg-white/60 text-black/70 hover:bg-white/90'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          {scriptsEditorTab === 'synopsis' && (
+                            <div className="space-y-3">
+                              <p className="text-[11px] text-black/60">
+                                Preview of the combined document from helper fields (not yet saved as issue synopsis
+                                until you use <strong>Build synopsis</strong> and <strong>Save story context</strong> on
+                                Issue Outline).
+                              </p>
+                              <pre
+                                className={`${preShell} ${preFont} max-h-[min(240px,35vh)] text-xs whitespace-pre-wrap`}
+                              >
+                                {buildSynopsisDocumentFromParts(synopsisHelperParts) || '(helper fields empty)'}
+                              </pre>
+                              <p className="text-[10px] font-semibold text-black/55">Issue synopsis draft (Issue Outline tab)</p>
+                              <pre
+                                className={`${preShell} ${preFont} max-h-[min(200px,30vh)] text-xs whitespace-pre-wrap`}
+                              >
+                                {issueSynopsisDraft.trim() || '(empty — edit on Issue Outline)'}
+                              </pre>
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'outline' && (
+                            <div className="space-y-2">
+                              {!latestOutline ? (
+                                <p className="text-xs text-black/50">No saved outline for this issue.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Editing outline v{latestOutline.version}. Invalid JSON will not save.
+                                  </p>
+                                  <textarea
+                                    value={outlineEditDraft}
+                                    onChange={(e) => setOutlineEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveOutlineEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save outline to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'beats' && (
+                            <div className="space-y-2">
+                              {!selectedPage ? (
+                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Page {selectedPage.page_number}. Empty JSON clears beats.
+                                  </p>
+                                  <textarea
+                                    value={beatsEditDraft}
+                                    onChange={(e) => setBeatsEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveBeatsEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save beats to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'dialogue' && (
+                            <div className="space-y-2">
+                              {!selectedPage ? (
+                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">Page {selectedPage.page_number} script_text</p>
+                                  <textarea
+                                    value={dialogueEditDraft}
+                                    onChange={(e) => setDialogueEditDraft(e.target.value)}
+                                    className="w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveDialogueEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save dialogue to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {scriptsEditorTab === 'video' && (
+                            <div className="space-y-2">
+                              {!latestShotPlan ? (
+                                <p className="text-xs text-black/50">No shot plan for this issue.</p>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-black/50">
+                                    Editing shot plan v{latestShotPlan.version}
+                                  </p>
+                                  <textarea
+                                    value={shotEditDraft}
+                                    onChange={(e) => setShotEditDraft(e.target.value)}
+                                    className={`w-full min-h-[min(360px,45vh)] rounded-lg border border-black/15 bg-white px-2 py-1.5 ${preFont} text-xs text-black resize-y`}
+                                    spellCheck={false}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy}
+                                    onClick={() => void saveShotPlanEdit()}
+                                    className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save shot plan to database'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

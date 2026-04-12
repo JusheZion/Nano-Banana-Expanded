@@ -43,9 +43,11 @@ export function getWriterQuickGenerateNextHint(
       }
       return 'Next: Video (⌘4) for shot list, or Arc (⌘5) for pacing / canon review.';
     case 'video':
-      return 'Next: Arc tab (⌘5) for pacing review and canon check on the full issue.';
+      return 'Next: Arc tab (⌘5) for pacing/canon, or Scripts (⌘6) to export or edit saved JSON.';
     case 'arc':
-      return 'Run pacing/canon on the Library issue, or batch-select issues above for multi-issue runs. ⌘1 returns to Outline.';
+      return 'Run pacing/canon on the Library issue, or batch-select issues above for multi-issue runs. Scripts (⌘6) for synopsis helper and exports.';
+    case 'scripts':
+      return 'Build synopsis from sections, copy or download the issue bundle, or edit saved outline / beats / dialogue JSON.';
     default:
       return '';
   }

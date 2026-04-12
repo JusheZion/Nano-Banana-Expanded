@@ -33,7 +33,7 @@ Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon),
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘1–⌘5 | Arc, Outline, Beats, Dialogue, Video |
+| ⌘1–⌘6 | Outline, Beats, Dialogue, Video, Arc, Scripts |
 | ⌘F | Focus Find |
 | ⌘⇧H | Show / hide Library, Activity, Shortcuts |
 | Esc | Clear find (when focused) |
