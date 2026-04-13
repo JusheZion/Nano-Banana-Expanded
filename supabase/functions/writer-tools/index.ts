@@ -839,7 +839,7 @@ Deno.serve(async (req) => {
       }
       const skip = skip_existing === true;
       const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
-      const limit = Math.min(Math.max(1, batch_limit ?? 8), 20);
+      const limit = Math.min(Math.max(1, batch_limit ?? 5), 5);
       const batch = candidates.slice(0, limit);
       const processed: number[] = [];
       const errors: { page_number: number; message: string }[] = [];

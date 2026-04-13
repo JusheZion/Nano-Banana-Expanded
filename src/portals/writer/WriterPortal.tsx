@@ -85,6 +85,8 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
 }));
 
 const MAX_PAGE_MULTI_SELECT = 5;
+/** Must match writer-tools `page_beats_issue` batch cap (shared Zod max on `batch_limit`). */
+const PAGE_BEATS_ISSUE_BATCH_LIMIT = 5;
 
 function pageRowHasPanelBeats(p: WriterPageRow | null | undefined): boolean {
   const panels = (p?.beats_json as { panels?: unknown } | null)?.panels;
@@ -804,7 +806,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           mode: 'page_beats_issue',
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
-          batch_limit: 8,
+          batch_limit: PAGE_BEATS_ISSUE_BATCH_LIMIT,
           ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
         });
         if (!res.success) {

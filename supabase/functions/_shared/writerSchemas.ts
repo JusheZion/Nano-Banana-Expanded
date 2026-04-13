@@ -62,7 +62,7 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   issue_id: z.string().uuid(),
   skip_existing: z.boolean().optional(),
   /** Pages to process per request (sequential LLM calls). Client may loop while has_more. */
-  batch_limit: z.number().int().min(1).max(20).optional(),
+  batch_limit: z.number().int().min(1).max(5).optional(),
   director_notes_for_beats: z.string().max(4000).optional(),
 });
 
