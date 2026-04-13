@@ -2009,148 +2009,166 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   </div>
                 )}
                 {activeTab === 'beats' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
-                    <div className="flex items-center justify-end">
-                      <WriterSectionTip tipKey="beatsTab" label="About page beats" />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={beatsSkipExisting}
-                          onChange={(e) => setBeatsSkipExisting(e.target.checked)}
-                          className="rounded border-black/30"
-                        />
-                        Skip pages that already have beats
-                      </label>
-                      <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                  <div className={`${WRITER_GLASS_CARD} p-4`}>
+                    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,48%)] xl:items-start xl:gap-4">
+                      <div className="min-w-0 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                            Page beats
+                          </p>
+                          <WriterSectionTip tipKey="beatsTab" label="About page beats" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={beatsSkipExisting}
+                              onChange={(e) => setBeatsSkipExisting(e.target.checked)}
+                              className="rounded border-black/30"
+                            />
+                            Skip pages that already have beats
+                          </label>
+                          <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                            <button
+                              type="button"
+                              disabled={
+                                !supabaseOk ||
+                                !selectedIssueId ||
+                                sortedPages.length === 0 ||
+                                beatsBatchBusy ||
+                                beatsLoading
+                              }
+                              onClick={() => void runBatchPageBeats()}
+                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
+                            </button>
+                          </Tooltip>
+                          {beatsBatchBusy ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                beatsBatchAbortRef.current?.abort();
+                              }}
+                              className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
+                            >
+                              Cancel after this batch
+                            </button>
+                          ) : null}
+                        </div>
+                        {!selectedPageId && sortedPages.length > 0 && (
+                          <p className="text-xs text-black/50">
+                            Select a page in the Library to preview, or use Generate all beats.
+                          </p>
+                        )}
+                        {sortedPages.length === 0 && (
+                          <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
+                        )}
+                        <div className="space-y-1 min-w-0 xl:max-w-none">
+                          <div className="flex items-center gap-1.5">
+                            <label
+                              className="text-[11px] font-semibold text-black/70"
+                              htmlFor="writer-beats-director-notes"
+                            >
+                              Director notes for beats (optional)
+                            </label>
+                            <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
+                          </div>
+                          <textarea
+                            id="writer-beats-director-notes"
+                            name="writer-beats-director-notes"
+                            rows={4}
+                            value={beatsDirectorNotesDraft}
+                            onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
+                            disabled={!selectedIssueId}
+                            placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
+                            className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[72px] disabled:opacity-50"
+                          />
+                        </div>
                         <button
                           type="button"
-                          disabled={
-                            !supabaseOk ||
-                            !selectedIssueId ||
-                            sortedPages.length === 0 ||
-                            beatsBatchBusy ||
-                            beatsLoading
-                          }
-                          onClick={() => void runBatchPageBeats()}
+                          disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
+                          onClick={async () => {
+                            if (!selectedPageId || !selectedIssueId) return;
+                            setBeatsError(null);
+                            setBeatsLoading(true);
+                            const notesTrim = beatsDirectorNotesDraft.trim();
+                            const res = await invokeWriterTools({
+                              mode: 'page_beats',
+                              page_id: selectedPageId,
+                              ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+                            });
+                            setBeatsLoading(false);
+                            if (res.success) {
+                              pushHistory(`page beats saved (page)`);
+                              const pageRows = await listWriterPages(selectedIssueId);
+                              setPages(pageRows);
+                            } else {
+                              const msg = toolErrorMessage(res);
+                              setBeatsError(msg);
+                              pushHistory(`error: ${msg}`);
+                            }
+                          }}
                           className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                           style={{ background: ACCENT_GOLD_GRADIENT }}
                         >
-                          {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
+                          {beatsLoading ? 'Generating…' : 'Generate page beats'}
                         </button>
-                      </Tooltip>
-                      {beatsBatchBusy ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            beatsBatchAbortRef.current?.abort();
-                          }}
-                          className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
-                        >
-                          Cancel after this batch
-                        </button>
-                      ) : null}
-                    </div>
-                    {!selectedPageId && sortedPages.length > 0 && (
-                      <p className="text-xs text-black/50">Select a page in the Library to preview, or use Generate all beats.</p>
-                    )}
-                    {sortedPages.length === 0 && (
-                      <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
-                    )}
-                    <div className="space-y-1 max-w-2xl">
-                      <div className="flex items-center gap-1.5">
-                        <label
-                          className="text-[11px] font-semibold text-black/70"
-                          htmlFor="writer-beats-director-notes"
-                        >
-                          Director notes for beats (optional)
-                        </label>
-                        <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!selectedPage?.beats_json}
+                            onClick={() => {
+                              if (!selectedPage?.beats_json) return;
+                              downloadJsonFile(
+                                `writer-beats-page-${selectedPage.page_number}.json`,
+                                selectedPage.beats_json,
+                              );
+                              pushHistory(`downloaded beats page ${selectedPage.page_number}`);
+                            }}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            Download beats (this page)
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json
+                            }
+                            onClick={() => void clearBeatsForSelectedPage()}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            Clear beats (this page)
+                          </button>
+                        </div>
+                        {beatsError && (
+                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
+                        )}
                       </div>
-                      <textarea
-                        id="writer-beats-director-notes"
-                        name="writer-beats-director-notes"
-                        rows={3}
-                        value={beatsDirectorNotesDraft}
-                        onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
-                        disabled={!selectedIssueId}
-                        placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
-                        className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
-                      onClick={async () => {
-                        if (!selectedPageId || !selectedIssueId) return;
-                        setBeatsError(null);
-                        setBeatsLoading(true);
-                        const notesTrim = beatsDirectorNotesDraft.trim();
-                        const res = await invokeWriterTools({
-                          mode: 'page_beats',
-                          page_id: selectedPageId,
-                          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
-                        });
-                        setBeatsLoading(false);
-                        if (res.success) {
-                          pushHistory(`page beats saved (page)`);
-                          const pageRows = await listWriterPages(selectedIssueId);
-                          setPages(pageRows);
-                        } else {
-                          const msg = toolErrorMessage(res);
-                          setBeatsError(msg);
-                          pushHistory(`error: ${msg}`);
-                        }
-                      }}
-                      className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                      style={{ background: ACCENT_GOLD_GRADIENT }}
-                    >
-                      {beatsLoading ? 'Generating…' : 'Generate page beats'}
-                    </button>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={!selectedPage?.beats_json}
-                        onClick={() => {
-                          if (!selectedPage?.beats_json) return;
-                          downloadJsonFile(
-                            `writer-beats-page-${selectedPage.page_number}.json`,
-                            selectedPage.beats_json,
-                          );
-                          pushHistory(`downloaded beats page ${selectedPage.page_number}`);
-                        }}
-                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      <aside
+                        className="min-w-0 flex flex-col xl:sticky xl:top-2 xl:max-h-[min(calc(100dvh-10rem),920px)] xl:min-h-[min(280px,40vh)]"
+                        aria-label="Beats preview"
                       >
-                        Download beats (this page)
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json}
-                        onClick={() => void clearBeatsForSelectedPage()}
-                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                      >
-                        Clear beats (this page)
-                      </button>
-                    </div>
-                    {beatsError && (
-                      <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
-                    )}
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-black/50 mb-1">
-                        Beats for selected page
-                      </p>
-                      {selectedPage?.beats_json ? (
-                        <pre className={`${preShell} ${preFont} max-h-[min(420px,50vh)]`}>
-                          <WriterHighlightedText
-                            text={beatsJsonString}
-                            query={findQuery}
-                            activeMatchIndex={findActiveIndex}
-                          />
-                        </pre>
-                      ) : (
-                        <p className="text-xs text-black/50">No beats yet for this page.</p>
-                      )}
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50 mb-1 shrink-0">
+                          Beats for selected page
+                        </p>
+                        {selectedPage?.beats_json ? (
+                          <pre
+                            className={`${preShell} ${preFont} flex-1 min-h-[min(200px,28vh)] max-h-[min(420px,50vh)] xl:min-h-[min(320px,45vh)] xl:max-h-[min(calc(100dvh-12rem),720px)]`}
+                          >
+                            <WriterHighlightedText
+                              text={beatsJsonString}
+                              query={findQuery}
+                              activeMatchIndex={findActiveIndex}
+                            />
+                          </pre>
+                        ) : (
+                          <p className="text-xs text-black/50 rounded-xl border border-white/20 bg-black/10 px-3 py-4 xl:flex-1 xl:min-h-[12rem]">
+                            No beats yet for this page.
+                          </p>
+                        )}
+                      </aside>
                     </div>
                   </div>
                 )}

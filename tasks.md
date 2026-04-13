@@ -174,6 +174,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Writers' Workshop bugfixes (Apr 2026)
 
+- [x] **Beats tab UX:** two-column layout on `xl` (controls + director notes | JSON preview); wider Library dock column
 - [x] **Generate all beats (skip off):** `page_beats_issue` with **Skip pages that already have beats** unchecked reused pages 1–5 every round (`has_more` never cleared). **Fix:** optional **`batch_offset`** + **`next_batch_offset`** in response; client tracks offset for full-regeneration passes. Library batch actions: **Select all pages**, no 5-page selection cap
 - [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
 - [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)

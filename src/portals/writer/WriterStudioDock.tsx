@@ -120,7 +120,7 @@ export const WriterStudioDock: React.FC<Props> = ({
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col border-l border-white/30 bg-white/15 backdrop-blur-md w-[min(100%,280px)] min-w-[240px] max-w-[320px] min-h-0 shadow-lg shadow-teal-900/10"
+      className="flex-shrink-0 flex flex-col border-l border-white/30 bg-white/15 backdrop-blur-md w-[min(100%,min(92vw,340px))] min-w-[260px] max-w-[380px] min-h-0 shadow-lg shadow-teal-900/10"
       role="region"
       aria-label="Workshop panels"
     >
