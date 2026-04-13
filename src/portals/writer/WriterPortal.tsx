@@ -1344,6 +1344,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <p className="text-[10px] text-black/45 mb-1.5 leading-snug">Select an issue to add pages.</p>
         ) : null}
         <p className="text-[9px] text-black/50 leading-snug">
+          <span className="inline-flex items-center gap-1.5 mr-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-600 shrink-0" aria-hidden />
+            <span>= panel beats saved</span>
+          </span>
           Multi-select up to {MAX_PAGE_MULTI_SELECT} for batch delete, clear, or download bundles.
         </p>
         {selectedPageIdsForBatch.length > 0 ? (
@@ -1422,11 +1426,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   <button
                     type="button"
                     onClick={() => setSelectedPageId(p.id)}
-                    className={`flex-1 min-w-0 text-left rounded-md px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                    className={`flex-1 min-w-0 text-left rounded-md px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 flex items-center gap-2 ${
                       primaryOn ? 'font-bold text-black' : 'text-black/65 hover:bg-black/10'
                     }`}
                   >
-                    Page {p.page_number}
+                    <span
+                      className={`shrink-0 h-2 w-2 rounded-full ${
+                        pageRowHasPanelBeats(p)
+                          ? 'bg-emerald-600 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]'
+                          : 'bg-black/10 ring-1 ring-inset ring-black/15'
+                      }`}
+                      title={
+                        pageRowHasPanelBeats(p)
+                          ? 'Has saved panel beats'
+                          : 'No panel beats yet'
+                      }
+                      aria-hidden
+                    />
+                    <span className="min-w-0 truncate">Page {p.page_number}</span>
                   </button>
                 </Tooltip>
               </div>
@@ -2566,6 +2583,56 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         {scriptsError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
                         )}
+                        {sortedPages.length > 0 ? (
+                          <div
+                            className="rounded-xl border border-black/10 bg-white/40 px-3 py-2.5 space-y-2"
+                            aria-label="Panel beats coverage for this issue"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                                Panel beats (this issue)
+                              </p>
+                              <p className="text-[11px] font-semibold text-black/70 tabular-nums">
+                                {pagesWithBeatsCount} / {sortedPages.length} pages
+                              </p>
+                            </div>
+                            <p className="text-[9px] text-black/45 leading-snug">
+                              Green dot = saved beats in the database. Click a page to open the Beats tab and select it.
+                            </p>
+                            <div className="flex flex-wrap gap-1 max-h-[4.5rem] overflow-y-auto custom-scrollbar pr-0.5">
+                              {sortedPages.map((p) => {
+                                const hasBeats = pageRowHasPanelBeats(p);
+                                return (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPageId(p.id);
+                                      setActiveTab('beats');
+                                      setDockCollapsed(false);
+                                      setDockTab('library');
+                                    }}
+                                    className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                                      selectedPageId === p.id
+                                        ? 'border-amber-700/80 bg-amber-100/90 text-black'
+                                        : 'border-black/15 bg-white/70 text-black/75 hover:bg-white'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                        hasBeats
+                                          ? 'bg-emerald-600'
+                                          : 'bg-black/12 ring-1 ring-inset ring-black/12'
+                                      }`}
+                                      aria-hidden
+                                    />
+                                    {p.page_number}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="grid gap-6 xl:grid-cols-2">
                           <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
