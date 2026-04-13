@@ -472,7 +472,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 **Backend / contract**
 
 - **`outline_issue`:** `issue_id`, optional `target_page_count` — per-issue outline only (no multi-issue spine in the API; use Arc tab batch pacing/canon for cross-issue tooling).
-- **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–5; server default 5). Edge handler loads pages in `page_number` order, runs the same logic as single-page `page_beats` sequentially for up to `batch_limit` pages per invocation, returns `{ processed, errors, has_more, batch_size }` so the client can loop until `has_more` is false.
+- **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–5; server default 5), optional `batch_offset` (0–500; **only when `skip_existing` is false** — next slice into the ordered page list so “regenerate all” advances instead of repeating pages 1–5 forever). Returns `{ processed, errors, has_more, batch_size, batch_offset?, next_batch_offset? }` so the client can loop until `has_more` is false.
 
 **Client**
 
@@ -514,7 +514,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 **Client**
 
 - **`arcsWriterRoom.ts`:** `deleteWriterPages`, `clearWriterPagesBeatsJson`, `clearWriterPagesScriptText`.
-- **`WriterPortal.tsx`:** checkboxes + toolbar actions; Outline **Download outline**; per-tab actions for current page.
+- **`WriterPortal.tsx`:** checkboxes + toolbar actions (no cap on selection; **Select all pages**); Outline **Download outline**; per-tab actions for current page.
 - **`writerHelpRegistry.tsx`:** `pagesLibrary` tip mentions multi-select and batch actions.
 
 **Verify:** `npm run test -- --run`, `npm run build`; manual — select pages, batch clear/download, delete with confirm.

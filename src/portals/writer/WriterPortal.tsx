@@ -84,7 +84,6 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
 
-const MAX_PAGE_MULTI_SELECT = 5;
 /** Must match writer-tools `page_beats_issue` batch cap (shared Zod max on `batch_limit`). */
 const PAGE_BEATS_ISSUE_BATCH_LIMIT = 5;
 
@@ -175,6 +174,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
+  /** When "Skip pages that already have beats" is off, server advances by batch_offset; client tracks it across rounds. */
+  const beatsBatchOffsetFullPassRef = useRef(0);
   const [syncPagesBusy, setSyncPagesBusy] = useState(false);
   const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
   const [arcSelectedIssueIds, setArcSelectedIssueIds] = useState<string[]>([]);
@@ -234,11 +235,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId]);
 
   const togglePageBatchSelect = useCallback((pageId: string) => {
-    setSelectedPageIdsForBatch((prev) => {
-      if (prev.includes(pageId)) return prev.filter((x) => x !== pageId);
-      if (prev.length >= MAX_PAGE_MULTI_SELECT) return prev;
-      return [...prev, pageId];
-    });
+    setSelectedPageIdsForBatch((prev) =>
+      prev.includes(pageId) ? prev.filter((x) => x !== pageId) : [...prev, pageId],
+    );
   }, []);
 
   const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
@@ -395,6 +394,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   useEffect(() => {
     setCreatePageError(null);
+  }, [selectedIssueId]);
+
+  useEffect(() => {
+    setSelectedPageIdsForBatch([]);
   }, [selectedIssueId]);
 
   useEffect(() => {
@@ -794,6 +797,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setBeatsBatchBusy(true);
     setBeatsError(null);
     setBeatsBatchLabel('Running…');
+    beatsBatchOffsetFullPassRef.current = 0;
     try {
       let round = 0;
       for (;;) {
@@ -807,6 +811,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
           batch_limit: PAGE_BEATS_ISSUE_BATCH_LIMIT,
+          ...(!beatsSkipExisting ? { batch_offset: beatsBatchOffsetFullPassRef.current } : {}),
           ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
         });
         if (!res.success) {
@@ -818,10 +823,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           processed?: number[];
           errors?: { page_number: number; message: string }[];
           has_more?: boolean;
+          batch_size?: number;
+          next_batch_offset?: number;
         };
         round += 1;
         const processed = data.processed ?? [];
         const errs = data.errors ?? [];
+        if (!beatsSkipExisting) {
+          beatsBatchOffsetFullPassRef.current =
+            typeof data.next_batch_offset === 'number'
+              ? data.next_batch_offset
+              : beatsBatchOffsetFullPassRef.current +
+                (data.batch_size ?? PAGE_BEATS_ISSUE_BATCH_LIMIT);
+        }
         setBeatsBatchLabel(
           `Round ${round}: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
         );
@@ -1348,8 +1362,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-600 shrink-0" aria-hidden />
             <span>= panel beats saved</span>
           </span>
-          Multi-select up to {MAX_PAGE_MULTI_SELECT} for batch delete, clear, or download bundles.
+          Multi-select pages for batch delete, clear beats or dialogue, or download bundles (Select all pages).
         </p>
+        {sortedPages.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mb-1">
+            <button
+              type="button"
+              disabled={!supabaseOk}
+              onClick={() => setSelectedPageIdsForBatch(sortedPages.map((p) => p.id))}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+            >
+              Select all pages
+            </button>
+            <button
+              type="button"
+              disabled={selectedPageIdsForBatch.length === 0}
+              onClick={() => setSelectedPageIdsForBatch([])}
+              className="rounded-md px-2 py-1 text-[10px] font-semibold text-black/70 border border-black/15 bg-white/50 disabled:opacity-40"
+            >
+              Clear selection
+            </button>
+          </div>
+        ) : null}
         {selectedPageIdsForBatch.length > 0 ? (
           <div className="flex flex-wrap gap-1 mb-1">
             <button
@@ -1392,13 +1426,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             >
               Download dialogue
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedPageIdsForBatch([])}
-              className="rounded-md px-2 py-1 text-[10px] font-semibold text-black/70 hover:bg-black/10"
-            >
-              Clear selection
-            </button>
           </div>
         ) : null}
         <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1">
@@ -1415,11 +1442,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 <input
                   type="checkbox"
                   checked={batchOn}
-                  disabled={!supabaseOk || (!batchOn && selectedPageIdsForBatch.length >= MAX_PAGE_MULTI_SELECT)}
+                  disabled={!supabaseOk}
                   onChange={() => togglePageBatchSelect(p.id)}
                   onClick={(e) => e.stopPropagation()}
                   className="rounded border-black/40 shrink-0"
-                  title={`Select for batch (max ${MAX_PAGE_MULTI_SELECT})`}
+                  title="Select for batch delete, clear, or download"
                   aria-label={`Select page ${p.page_number} for batch`}
                 />
                 <Tooltip content={`Page ${p.page_number}`} side="left">

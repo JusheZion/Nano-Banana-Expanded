@@ -45,11 +45,11 @@ export const WRITER_UI_TIPS = {
   issuesStoryContext:
     'With a series selected, Library → Issues always shows “Add issue #N” at the top (same idea as Add page). Each row is one comic issue; add as many as you need, then pick one to edit. After you pick an issue: Issue Outline → Story context → Save. Cast / locations / bibles: Table Editor only for now.',
   pagesLibrary:
-    'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows. Check up to 5 pages to batch delete, clear beats or dialogue, or download beats/dialogue as one JSON file; single-page download/clear is on the Beats and Dialogue tabs.',
+    'Beats and dialogue attach to a page row. Use “Sync pages to target” on Issue Outline to create rows 1…target, or Add page under Library → Pages. Generating an outline alone still does not create page rows. Multi-select any pages (Select all pages) to batch delete, clear beats or dialogue, or download beats/dialogue as one JSON file; single-page download/clear is on the Beats and Dialogue tabs.',
   syncPagesToTarget:
     'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
   batchPageBeats:
-    'Runs the page-beats model on up to 5 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
+    'Runs the page-beats model on up to 5 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. If “Skip pages that already have beats” is off (regenerate all), each batch advances through the issue in order. Each page is one model call — large issues may take several minutes.',
   arcMultiIssueBatch:
     'Check which issues to include, then run pacing or canon in one pass (one AI call per issue, in issue-number order). Each result is saved on that issue’s row. Use Library to focus an issue and read the combined review block below. “Library issue only” resets the checkboxes to the issue you’re editing.',
   storyContextSupabase:

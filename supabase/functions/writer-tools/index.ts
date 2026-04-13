@@ -821,7 +821,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'page_beats_issue') {
-      const { issue_id, skip_existing, batch_limit, director_notes_for_beats } = parsedReq.data;
+      const { issue_id, skip_existing, batch_limit, batch_offset, director_notes_for_beats } = parsedReq.data;
       const issueRow = await loadIssueRow(supabase, issue_id);
       if (!issueRow) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
@@ -857,7 +857,10 @@ Deno.serve(async (req) => {
       const skip = skip_existing === true;
       const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
       const limit = Math.min(Math.max(1, batch_limit ?? 5), 5);
-      const batch = candidates.slice(0, limit);
+      const start = skip
+        ? 0
+        : Math.min(Math.max(0, batch_offset ?? 0), candidates.length);
+      const batch = candidates.slice(start, start + limit);
       const processed: number[] = [];
       const errors: { page_number: number; message: string }[] = [];
       for (const page of batch) {
@@ -878,7 +881,7 @@ Deno.serve(async (req) => {
           }
         }
       }
-      const has_more = candidates.length > batch.length;
+      const has_more = start + batch.length < candidates.length;
       return Response.json(
         {
           success: true,
@@ -889,6 +892,8 @@ Deno.serve(async (req) => {
             errors,
             has_more,
             batch_size: batch.length,
+            batch_offset: skip ? undefined : start,
+            next_batch_offset: skip ? undefined : start + batch.length,
           },
         },
         { headers: corsHeaders },
