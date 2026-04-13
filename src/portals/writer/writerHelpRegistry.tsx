@@ -61,7 +61,7 @@ export const WRITER_UI_TIPS = {
   outlinePreview:
     'Latest saved outline JSON for this issue. Generate a new version from Issue Outline → Target pages → Generate outline.',
   beatsTab:
-    'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
+    'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Rules for the outline from Scripts (saved as notes.synopsis_helper.rules) are included on every page-beats call, including Generate all beats. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
   beatsDirectorNotes:
     'Optional text sent only when generating page beats (not outlines). Use for double-page spreads (which page is left/right), requested panel shapes (tall strip, hero panel, inset), tone, or “more environmental detail / less talking heads.” Applies to Generate page beats, Generate all beats batches, and the ribbon quick-generate on the Beats tab.',
   beatsNeedPage: 'Select an issue that has pages, then choose a page in the Library.',
@@ -72,7 +72,7 @@ export const WRITER_UI_TIPS = {
   videoTab:
     'Shot plans use the latest outline and page digests. Versions are stored in writer_video_shot_plans. Use the buttons below to export JSON, CSV, or a full issue pack.',
   scriptsTab:
-    'Synopsis helper fields save to notes.synopsis_helper; use Build synopsis to fill the Issue Outline synopsis draft, then Save story context on Issue Outline. Copy or download a full issue pack (synopsis, outline, shot plan, all page beats & dialogue, arc cache). Edit saved outline / beats / dialogue / shot plan JSON and save to the database (valid JSON required for JSON fields).',
+    'Synopsis helper fields save to notes.synopsis_helper; use Build synopsis to fill the Issue Outline synopsis draft, then Save story context on Issue Outline. Rules for the outline is sent to the page-beats model (single page, batch, ribbon) after you Save helper to issue notes — use it for constraints like “no repeating beats across adjacent pages.” Copy or download a full issue pack (synopsis, outline, shot plan, all page beats & dialogue, arc cache). Edit saved outline / beats / dialogue / shot plan JSON and save to the database (valid JSON required for JSON fields).',
   fileRibbon:
     'Open Scripts & exports from here (or Home → workspace Scripts). Issue pack and exports live there; Video tab has shot plan files too. AI tools need a signed-in Supabase session.',
   insertRibbon: 'Snippets and templates can be added here in a future update.',

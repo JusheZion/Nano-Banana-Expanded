@@ -174,6 +174,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Writers' Workshop bugfixes (Apr 2026)
 
+- [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
 - [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
 - [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
