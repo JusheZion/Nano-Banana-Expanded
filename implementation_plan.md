@@ -499,6 +499,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Page beats fallback context (`page_beats` / `page_beats_issue`):**
   - Replace “sample first beat” fallback with nearest-anchor context (previous/next outline beats or trailing progression guidance) to avoid repeated page-1 style outputs.
   - Expand prior-page digest to include panel action previews from previous pages for stronger anti-repetition grounding.
+  - **Synopsis helper rules:** `notes.synopsis_helper.rules` (Scripts → Rules for the outline, after Save helper to issue notes) is injected into the page-beats user prompt so single-page, batch, and ribbon beats honor the same author constraints as outline generation.
 - **Writer UI feedback (`WriterPortal`):**
   - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
   - Add a one-click **Regenerate with coverage boost** action that re-runs `outline_issue` with an appended coverage instruction in **`outline_supplement`** (optional request field; auto-persists into the Outline instructions draft after success). Multi-issue **`arc_brief`** was removed from the API (2026-04-11 simplification on `main`).

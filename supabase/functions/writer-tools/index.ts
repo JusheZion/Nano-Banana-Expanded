@@ -270,6 +270,19 @@ type OutlinePageBeat = {
   emotional_turn?: string;
 };
 
+/** Scripts tab → synopsis helper → "Rules for the outline" (notes.synopsis_helper.rules). */
+function extractSynopsisHelperRulesForPageBeats(notes: Record<string, unknown> | undefined): string | undefined {
+  if (!notes || typeof notes !== 'object') return undefined;
+  const helper = notes.synopsis_helper;
+  if (!helper || typeof helper !== 'object' || Array.isArray(helper)) return undefined;
+  const raw = (helper as Record<string, unknown>).rules;
+  if (typeof raw !== 'string') return undefined;
+  const t = raw.trim();
+  if (!t) return undefined;
+  const cap = 2000;
+  return t.length <= cap ? t : `${t.slice(0, cap)}\n…(truncated)`;
+}
+
 function extractOutlineBeatContextForPage(outlineJson: unknown, pageNumber: number): string {
   if (!outlineJson || typeof outlineJson !== 'object') return '(no issue outline saved yet)';
   const o = outlineJson as {
@@ -342,10 +355,14 @@ function buildPageBeatsUserPrompt(args: {
       ? outlineBeatContext
       : `${outlineBeatContext.slice(0, PAGE_BEATS_PROMPT_CAPS.outlineBeat)}\n…(truncated)`;
   const directorTrim = args.directorNotesForBeats?.trim();
+  const synopsisRules = extractSynopsisHelperRulesForPageBeats(args.issue.notes);
   return [
     `Create panel-by-panel beats for ONE comic book page as JSON.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    synopsisRules
+      ? `Author rules for this issue (from Scripts → synopsis helper, notes.synopsis_helper.rules; apply on every page-beats call including batch):\n${synopsisRules}`
+      : '',
     `This page number: ${args.page.page_number}`,
     `Prior pages context (most recent first; do NOT repeat):\n${args.priorPagesDigest || '(none)'}`,
     `Existing beats_json (may be null): ${jsonForPrompt(args.page.beats_json ?? null, PAGE_BEATS_PROMPT_CAPS.existingBeats)}`,
