@@ -168,12 +168,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Edge **`outline_issue`**: simplified per-issue prompt (removed `arc_brief` / `arc_issue_count` and spine parsing, 2026-04-11); optional **`outline_supplement`** for author notes + coverage boost (replaces `arc_brief` in the UI)
 - [x] Writers issue quality (2026-04-11): dense `page_beats` in outline prompt; `page_beats` anti-repeat context (bridging beats + prior-page previews); UI warning when outline beat count is below target; **Regenerate with coverage boost** via `outline_supplement`
 - [x] Beats-only **Director notes for beats** + Edge **`PAGE_BEATS_PROMPT_CAPS`** / `jsonForPrompt` to avoid HTTP 546 worker limits
-- [x] Library → Pages: multi-select (max 5), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
+- [x] Library → Pages: multi-select (no cap; Select all pages), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
 - [x] **Scripts** workspace tab: synopsis helper → `notes.synopsis_helper`, build synopsis into Issue Outline draft, issue pack copy/download (full beats + dialogue + arc cache), edit & save outline / beats / dialogue / shot plan JSON (`arcsWriterRoom` update helpers); **File → Scripts & exports**; workspace shortcuts **⌥⌘1–6** / **Alt+Ctrl+1–6** (avoids browser ⌘1–9)
 - [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (outline supplement + prompt caps + anti-repeat)
 
 ## Writers' Workshop bugfixes (Apr 2026)
 
+- [x] **Generate all beats (skip off):** `page_beats_issue` with **Skip pages that already have beats** unchecked reused pages 1–5 every round (`has_more` never cleared). **Fix:** optional **`batch_offset`** + **`next_batch_offset`** in response; client tracks offset for full-regeneration passes. Library batch actions: **Select all pages**, no 5-page selection cap
 - [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
 - [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)
 - [x] **Scripts + beats at a glance:** Library → Pages rows show a **green dot** when panel beats exist; Scripts tab adds **Panel beats (this issue)** strip (count + per-page dots, click opens Beats tab + selects page)

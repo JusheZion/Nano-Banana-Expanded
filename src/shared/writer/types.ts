@@ -56,6 +56,7 @@ export type WriterToolsPageBeatsIssuePayload = {
   issue_id: string;
   skip_existing?: boolean;
   batch_limit?: number;
+  batch_offset?: number;
   director_notes_for_beats?: string;
 };
 

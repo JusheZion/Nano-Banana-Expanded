@@ -113,6 +113,18 @@ describe('writerToolsRequestSchema', () => {
     ).toThrow();
   });
 
+  it('parses page_beats_issue with batch_offset for full-regeneration batches', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const r = writerToolsPageBeatsIssueRequestSchema.parse({
+      mode: 'page_beats_issue',
+      issue_id: id,
+      skip_existing: false,
+      batch_limit: 5,
+      batch_offset: 10,
+    });
+    expect(r.batch_offset).toBe(10);
+  });
+
   it('parses page_beats_issue with director_notes_for_beats', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     const r = writerToolsPageBeatsIssueRequestSchema.parse({

@@ -63,6 +63,8 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   skip_existing: z.boolean().optional(),
   /** Pages to process per request (sequential LLM calls). Client may loop while has_more. */
   batch_limit: z.number().int().min(1).max(5).optional(),
+  /** When skip_existing is false, next slice start in page_number order. Ignored when skip_existing is true. */
+  batch_offset: z.number().int().min(0).max(500).optional(),
   director_notes_for_beats: z.string().max(4000).optional(),
 });
 
