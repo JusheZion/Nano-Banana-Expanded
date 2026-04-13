@@ -174,6 +174,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Writers' Workshop bugfixes (Apr 2026)
 
+- [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
 - [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
 - [x] Issue Outline → Story context: **Series title** field + save `title` via `updateWriterSeries`; **Save story context** works with only a series selected (issue fields optional); series logline no longer requires an issue to edit

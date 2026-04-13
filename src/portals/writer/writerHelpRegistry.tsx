@@ -49,7 +49,7 @@ export const WRITER_UI_TIPS = {
   syncPagesToTarget:
     'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
   batchPageBeats:
-    'Runs the page-beats model on up to 8 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
+    'Runs the page-beats model on up to 5 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
   arcMultiIssueBatch:
     'Check which issues to include, then run pacing or canon in one pass (one AI call per issue, in issue-number order). Each result is saved on that issue’s row. Use Library to focus an issue and read the combined review block below. “Library issue only” resets the checkboxes to the issue you’re editing.',
   storyContextSupabase:

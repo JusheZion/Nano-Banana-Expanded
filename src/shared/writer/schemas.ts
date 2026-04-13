@@ -61,7 +61,7 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   mode: z.literal('page_beats_issue'),
   issue_id: z.string().uuid(),
   skip_existing: z.boolean().optional(),
-  batch_limit: z.number().int().min(1).max(20).optional(),
+  batch_limit: z.number().int().min(1).max(5).optional(),
   director_notes_for_beats: z.string().max(4000).optional(),
 });
 

@@ -96,10 +96,21 @@ describe('writerToolsRequestSchema', () => {
       mode: 'page_beats_issue',
       issue_id: id,
       skip_existing: false,
-      batch_limit: 12,
+      batch_limit: 5,
     });
-    expect(r.batch_limit).toBe(12);
+    expect(r.batch_limit).toBe(5);
     expect(r.skip_existing).toBe(false);
+  });
+
+  it('rejects page_beats_issue batch_limit above server cap', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(() =>
+      writerToolsPageBeatsIssueRequestSchema.parse({
+        mode: 'page_beats_issue',
+        issue_id: id,
+        batch_limit: 8,
+      }),
+    ).toThrow();
   });
 
   it('parses page_beats_issue with director_notes_for_beats', () => {
