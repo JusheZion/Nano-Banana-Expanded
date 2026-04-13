@@ -176,6 +176,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 - [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
 - [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)
+- [x] **Scripts + beats at a glance:** Library → Pages rows show a **green dot** when panel beats exist; Scripts tab adds **Panel beats (this issue)** strip (count + per-page dots, click opens Beats tab + selects page)
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
 - [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
 - [x] Issue Outline → Story context: **Series title** field + save `title` via `updateWriterSeries`; **Save story context** works with only a series selected (issue fields optional); series logline no longer requires an issue to edit
