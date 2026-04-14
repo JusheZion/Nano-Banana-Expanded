@@ -28,6 +28,12 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Gallery density toggle; hover zoom refs + live image; loading “Working…”; empty states
 - [ ] Image-describe API for Refine tab “NEW” (follow-up per plan §8)
 
+## Asset Studio workspace UI (2026-04-14) — COMPLETE
+
+- [x] **Asset workspace:** fixed live preview pane (`flex-none`, no internal scroll); galleries + spatial chips + bottom strips in one scroll container; removed conflicting `max-h` on middle stack
+- [x] Tooltips: reference hub **Clear all** / **Paste first empty**; **This session** thumbs; **Compact** / **Comfortable** / **Compare**
+- [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
+
 ## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
 
 - [x] DB columns + migration; localStorage `thumbnailFocus` on character generations

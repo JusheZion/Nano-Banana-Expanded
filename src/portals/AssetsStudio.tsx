@@ -838,44 +838,56 @@ export const AssetsStudio: React.FC = () => {
                     Clear
                   </button>
                 </Tooltip>
-                <button
-                  type="button"
-                  onClick={() => {
-                    store.clearAllReferenceSlots();
-                    store.setCurrentLiveImageUrl(null);
-                  }}
-                  className="px-2 py-1 rounded-md text-[10px] border border-white/20 hover:bg-white/10"
+                <Tooltip
+                  variant="asset"
+                  content="Clear every reference slot and reset the live preview."
+                  side="bottom"
                 >
-                  Clear all
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const clipItems = await navigator.clipboard.read();
-                      for (const item of clipItems) {
-                        for (const type of item.types) {
-                          if (type.startsWith('image/')) {
-                            const blob = await item.getType(type);
-                            const url = URL.createObjectURL(blob);
-                            const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
-                            const firstEmpty = slots.findIndex((u) => !u);
-                            if (firstEmpty >= 0) {
-                              store.setReferenceImageAt(firstEmpty, url);
-                              store.setCurrentLiveImageUrl(url);
+                  <button
+                    type="button"
+                    onClick={() => {
+                      store.clearAllReferenceSlots();
+                      store.setCurrentLiveImageUrl(null);
+                    }}
+                    className="px-2 py-1 rounded-md text-[10px] border border-white/20 hover:bg-white/10"
+                  >
+                    Clear all
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Paste an image from the clipboard into the first empty reference slot (browser permission required)."
+                  side="bottom"
+                >
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clipItems = await navigator.clipboard.read();
+                        for (const item of clipItems) {
+                          for (const type of item.types) {
+                            if (type.startsWith('image/')) {
+                              const blob = await item.getType(type);
+                              const url = URL.createObjectURL(blob);
+                              const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
+                              const firstEmpty = slots.findIndex((u) => !u);
+                              if (firstEmpty >= 0) {
+                                store.setReferenceImageAt(firstEmpty, url);
+                                store.setCurrentLiveImageUrl(url);
+                              }
+                              return;
                             }
-                            return;
                           }
                         }
+                      } catch {
+                        store.setGenerationStatus('error', 'Could not paste image from clipboard.');
                       }
-                    } catch {
-                      store.setGenerationStatus('error', 'Could not paste image from clipboard.');
-                    }
-                  }}
-                  className="px-2 py-1 rounded-md text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
-                >
-                  Paste first empty
-                </button>
+                    }}
+                    className="px-2 py-1 rounded-md text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
+                  >
+                    Paste first empty
+                  </button>
+                </Tooltip>
               </div>
             </div>
             <p className="text-[10px] text-white/50 mb-1 shrink-0">
@@ -1583,7 +1595,7 @@ export const AssetsStudio: React.FC = () => {
             <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2.5 pb-1.5 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
               Asset workspace
             </h2>
-            <div className="flex-1 min-h-[120px] min-w-0 flex flex-col items-center justify-center p-2 overflow-y-auto overflow-x-hidden">
+            <div className="flex-none shrink-0 min-h-0 min-w-0 flex flex-col items-center justify-center p-2 overflow-x-hidden overflow-y-hidden">
               {store.currentLiveImageUrl ? (
                 compareSplit ? (
                   <>
@@ -1722,7 +1734,8 @@ export const AssetsStudio: React.FC = () => {
               )}
             </div>
 
-            <div className="shrink-0 min-h-0 max-h-[min(36vh,300px)] flex flex-col border-t border-white/10 bg-black/20">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
+            <div className="shrink-0 flex flex-col border-t border-white/10 bg-black/20">
               <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5">
                 <p className="text-[9px] leading-snug text-violet-200/65 line-clamp-2">
                   Set <span className="text-amber-200/90">Room / Urban / Time</span>, then{' '}
@@ -1770,19 +1783,29 @@ export const AssetsStudio: React.FC = () => {
                         <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">This session</span>
                         <div className="flex flex-wrap gap-2">
                           {getCachedGenerations('asset').map((item) => (
-                            <button
+                            <Tooltip
+                              variant="asset"
                               key={item.id}
-                              type="button"
-                              onClick={() => {
-                                store.setCurrentLiveImageUrl(item.url);
-                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                              }}
-                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
-                              }`}
+                              content={
+                                item.seed != null
+                                  ? `Load this session generation (seed ${item.seed}).`
+                                  : 'Load this generation from the current session.'
+                              }
+                              side="top"
                             >
-                              <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  store.setCurrentLiveImageUrl(item.url);
+                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                                }}
+                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                                }`}
+                              >
+                                <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            </Tooltip>
                           ))}
                         </div>
                       </div>
@@ -1790,7 +1813,7 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 )}
               </div>
-              <div className="flex-1 min-h-[120px] overflow-y-auto overflow-x-hidden custom-scrollbar px-3 pb-2 space-y-3">
+              <div className="px-3 pb-3 pt-1 space-y-3">
                 <div>
                   <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Room</label>
                   <div className="flex flex-wrap gap-1.5">
@@ -1869,55 +1892,77 @@ export const AssetsStudio: React.FC = () => {
                 {!phoneCompact && (
                   <>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">Thumbnails</span>
-                <button
-                  type="button"
-                  aria-pressed={store.galleryDensity === 'compact'}
-                  onClick={() => store.setGalleryDensity('compact')}
-                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                    store.galleryDensity === 'compact'
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={
-                    store.galleryDensity === 'compact'
-                      ? { background: ACCENT_GOLD_GRADIENT }
-                      : undefined
-                  }
+                <Tooltip
+                  variant="asset"
+                  content="Smaller gallery thumbnails so more fit on screen."
+                  side="top"
                 >
-                  Compact
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={store.galleryDensity === 'comfortable'}
-                  onClick={() => store.setGalleryDensity('comfortable')}
-                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
-                    store.galleryDensity === 'comfortable'
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={
-                    store.galleryDensity === 'comfortable'
-                      ? { background: ACCENT_GOLD_GRADIENT }
-                      : undefined
-                  }
+                  <button
+                    type="button"
+                    aria-pressed={store.galleryDensity === 'compact'}
+                    onClick={() => store.setGalleryDensity('compact')}
+                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                      store.galleryDensity === 'compact'
+                        ? 'text-violet-950 border-amber-500 shadow-md'
+                        : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                    }`}
+                    style={
+                      store.galleryDensity === 'compact'
+                        ? { background: ACCENT_GOLD_GRADIENT }
+                        : undefined
+                    }
+                  >
+                    Compact
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Larger gallery thumbnails for easier scanning."
+                  side="top"
                 >
-                  Comfortable
-                </button>
+                  <button
+                    type="button"
+                    aria-pressed={store.galleryDensity === 'comfortable'}
+                    onClick={() => store.setGalleryDensity('comfortable')}
+                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                      store.galleryDensity === 'comfortable'
+                        ? 'text-violet-950 border-amber-500 shadow-md'
+                        : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                    }`}
+                    style={
+                      store.galleryDensity === 'comfortable'
+                        ? { background: ACCENT_GOLD_GRADIENT }
+                        : undefined
+                    }
+                  >
+                    Comfortable
+                  </button>
+                </Tooltip>
                   </>
                 )}
-                <button
-                  type="button"
-                  aria-pressed={compareSplit}
-                  onClick={() => setCompareSplit((v) => !v)}
-                  className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                <Tooltip
+                  variant="asset"
+                  content={
                     compareSplit
-                      ? 'text-violet-950 border-amber-500 shadow-md'
-                      : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
-                  }`}
-                  style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                      ? 'Turn off side-by-side: show only the generated preview at full width.'
+                      : 'Show the first reference slot next to the generated image for A/B review.'
+                  }
+                  side="top"
                 >
-                  Compare {compareSplit ? 'On' : 'Off'}
-                </button>
+                  <button
+                    type="button"
+                    aria-pressed={compareSplit}
+                    onClick={() => setCompareSplit((v) => !v)}
+                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                      compareSplit
+                        ? 'text-violet-950 border-amber-500 shadow-md'
+                        : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
+                    }`}
+                    style={compareSplit ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                  >
+                    Compare {compareSplit ? 'On' : 'Off'}
+                  </button>
+                </Tooltip>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -2070,6 +2115,7 @@ export const AssetsStudio: React.FC = () => {
                   </Tooltip>
                 )}
               </div>
+            </div>
             </div>
           </div>
         </div>

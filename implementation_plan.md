@@ -101,6 +101,14 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; manual at **1920×1080**, **100% zoom** — no document scroll on studio roots; **PIN** expand/collapse; **Compare** + generate; bottom panes scroll internally only.
 
+## Asset Studio — fixed workspace preview + single scroll region (2026-04-14)
+
+**Goal:** In [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx), keep the **Asset workspace** live preview (single or compare) **outside** the vertical scroll region so it stays pinned at the top of the card. Move session chips, recent/session thumbnails, spatial expansion chips, and the bottom generation/save strips into **one** `flex-1 min-h-0 overflow-y-auto` container so controls are always reachable on short viewports (no competing `max-h` middle pane vs fixed bottom bars).
+
+**Tooltips:** Wrap **Clear all** / **Paste first empty** on the reference hub; **This session** thumbnails; **Compact** / **Comfortable** / **Compare** toggles in the workspace footer.
+
+**Verify:** `npm run test -- --run`; `npm run build`; manual Asset Studio — short viewport height, **Compare** on/off — preview stays put; scroll reaches all workspace actions.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
