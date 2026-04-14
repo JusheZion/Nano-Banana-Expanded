@@ -262,10 +262,19 @@ export async function listWriterOutlinesForIssue(issueId: string): Promise<Write
 /** Removes the highest-version outline row for this issue (others unchanged). */
 export async function deleteLatestWriterOutline(issueId: string): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
-  const rows = await listWriterOutlinesForIssue(issueId);
+  // List in-function so DB errors surface; listWriterOutlinesForIssue returns [] on failure.
+  const { data, error: listError } = await supabase
+    .from('writer_issue_outlines')
+    .select('id')
+    .eq('issue_id', issueId)
+    .order('version', { ascending: false });
+  if (listError) {
+    console.warn('[arcsWriterRoom] deleteLatestWriterOutline (list)', listError.message);
+    return { ok: false, error: listError.message };
+  }
+  const rows = (data ?? []) as { id: string }[];
   if (rows.length === 0) return { ok: true };
-  const latest = rows[0]!;
-  const { error } = await supabase.from('writer_issue_outlines').delete().eq('id', latest.id);
+  const { error } = await supabase.from('writer_issue_outlines').delete().eq('id', rows[0]!.id);
   if (error) {
     console.warn('[arcsWriterRoom] deleteLatestWriterOutline', error.message);
     return { ok: false, error: error.message };
