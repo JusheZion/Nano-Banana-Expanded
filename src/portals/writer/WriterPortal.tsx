@@ -1517,7 +1517,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             : 'Generate all beats'}
                         </button>
                       </Tooltip>
-                      {beatsBatchBusy ? (
+                      {beatsBatchBusy && beatsBatchSource === 'all' ? (
                         <button
                           type="button"
                           onClick={() => {
