@@ -175,7 +175,7 @@ Checklist for current and upcoming phases. Update as work completes.
 ## Writers' Workshop bugfixes (Apr 2026)
 
 - [x] **Series lore cards:** `writer_lore_cards` table + RLS; **Lore** workspace tab (CRUD, include-in-prompt); `writer-tools` injects digest into outline + page beats (**Operator:** `supabase db push` + `supabase functions deploy writer-tools`)
-- [ ] **Lore JSON import:** Lore tab “Import JSON” tool (paste array, validate, sort by category→title, assign `sort_order`, skip duplicates by normalized `(category,title)` against existing + within payload)
+- [x] **Lore JSON import:** Lore tab “Import JSON” tool (paste array, validate, sort by category→title, assign `sort_order`, skip duplicates by normalized `(category,title)` against existing + within payload)
 - [x] **Beats tab UX:** two-column layout on `xl` (controls + director notes | JSON preview); wider Library dock column
 - [x] **Generate all beats (skip off):** `page_beats_issue` with **Skip pages that already have beats** unchecked reused pages 1–5 every round (`has_more` never cleared). **Fix:** optional **`batch_offset`** + **`next_batch_offset`** in response; client tracks offset for full-regeneration passes. Library batch actions: **Select all pages**, no 5-page selection cap
 - [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
