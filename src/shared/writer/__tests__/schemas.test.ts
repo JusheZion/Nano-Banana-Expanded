@@ -64,16 +64,52 @@ describe('writerToolsRequestSchema', () => {
     expect(r).toMatchObject({ mode: 'page_beats_issue', issue_id: id });
   });
 
-  it('parses page_beats_issue with skip_existing and batch_limit', () => {
+  it('parses page_beats_issue with skip_existing and batch_limit up to 5', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     const r = writerToolsPageBeatsIssueRequestSchema.parse({
       mode: 'page_beats_issue',
       issue_id: id,
       skip_existing: false,
-      batch_limit: 12,
+      batch_limit: 5,
     });
-    expect(r.batch_limit).toBe(12);
+    expect(r.batch_limit).toBe(5);
     expect(r.skip_existing).toBe(false);
+  });
+
+  it('rejects page_beats_issue batch_limit above 5', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    expect(() =>
+      writerToolsPageBeatsIssueRequestSchema.parse({
+        mode: 'page_beats_issue',
+        issue_id: id,
+        batch_limit: 8,
+      }),
+    ).toThrow();
+  });
+
+  it('parses page_beats_issue with page_ids', () => {
+    const issueId = '550e8400-e29b-41d4-a716-446655440000';
+    const p1 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+    const p2 = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+    const r = writerToolsPageBeatsIssueRequestSchema.parse({
+      mode: 'page_beats_issue',
+      issue_id: issueId,
+      page_ids: [p1, p2],
+      skip_existing: true,
+    });
+    expect(r.page_ids).toEqual([p1, p2]);
+  });
+
+  it('rejects page_beats_issue duplicate page_ids', () => {
+    const issueId = '550e8400-e29b-41d4-a716-446655440000';
+    const p1 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+    expect(() =>
+      writerToolsPageBeatsIssueRequestSchema.parse({
+        mode: 'page_beats_issue',
+        issue_id: issueId,
+        page_ids: [p1, p1],
+      }),
+    ).toThrow();
   });
 
   it('parses draft_dialogue', () => {

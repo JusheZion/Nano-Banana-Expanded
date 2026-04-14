@@ -54,6 +54,8 @@ export type WriterToolsPageBeatsIssuePayload = {
   issue_id: string;
   skip_existing?: boolean;
   batch_limit?: number;
+  /** Max 5; when set, only these pages run (in issue order); batch_limit ignored. */
+  page_ids?: string[];
 };
 
 export type WriterToolsDraftDialoguePayload = {

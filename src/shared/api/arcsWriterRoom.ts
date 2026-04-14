@@ -258,3 +258,45 @@ export async function listWriterOutlinesForIssue(issueId: string): Promise<Write
   }
   return (data ?? []) as WriterIssueOutlineRow[];
 }
+
+/** Removes the highest-version outline row for this issue (others unchanged). */
+export async function deleteLatestWriterOutline(issueId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const rows = await listWriterOutlinesForIssue(issueId);
+  if (rows.length === 0) return { ok: true };
+  const latest = rows[0]!;
+  const { error } = await supabase.from('writer_issue_outlines').delete().eq('id', latest.id);
+  if (error) {
+    console.warn('[arcsWriterRoom] deleteLatestWriterOutline', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+export async function clearWriterPageBeats(pageId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ beats_json: null, updated_at: now })
+    .eq('id', pageId);
+  if (error) {
+    console.warn('[arcsWriterRoom] clearWriterPageBeats', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+export async function clearWriterPageScript(pageId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('writer_pages')
+    .update({ script_text: null, updated_at: now })
+    .eq('id', pageId);
+  if (error) {
+    console.warn('[arcsWriterRoom] clearWriterPageScript', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}

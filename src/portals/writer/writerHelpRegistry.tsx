@@ -49,7 +49,15 @@ export const WRITER_UI_TIPS = {
   syncPagesToTarget:
     'Creates writer_pages rows for every number from 1 up to Target pages (skips numbers that already exist). Run this before “Generate all beats” so each page can get panel beats.',
   batchPageBeats:
-    'Runs the page-beats model on up to 8 pages per server batch (sequential for story continuity). The app repeats until all pages are done or you cancel. Each page is one model call — large issues may take several minutes.',
+    'Each server batch runs at most 5 pages (sequential LLM calls). “Generate all beats” loops until every page is done or you cancel. Pick up to 5 pages below to run only those in one batch. Each page is one model call — large issues may take several minutes.',
+  beatsMultiPick:
+    'Check up to 5 pages (issue order), then “Generate beats for selected”. Respects “Skip pages that already have beats” when checked. Use “Clear picks” to reset the checkboxes.',
+  clearLatestOutline:
+    'Deletes only the newest saved outline version for this issue. Older versions (if any) stay in the database. Does not change page rows or beats.',
+  clearPageBeats:
+    'Removes panel beats (writer_pages.beats_json) for the Library-selected page. Does not delete the page row. Regenerate beats when you are ready.',
+  clearPageDialogue:
+    'Clears script_text for the Library-selected page. Beats stay intact so you can re-run dialogue from the same panels.',
   arcMultiIssueBatch:
     'Check which issues to include, then run pacing or canon in one pass (one AI call per issue, in issue-number order). Each result is saved on that issue’s row. Use Library to focus an issue and read the combined review block below. “Library issue only” resets the checkboxes to the issue you’re editing.',
   storyContextSupabase:

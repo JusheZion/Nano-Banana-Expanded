@@ -6,6 +6,7 @@ import {
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
   shotPlanJsonSchema,
+  WRITER_PAGE_BEATS_ISSUE_MAX,
   writerToolsRequestSchema,
 } from '../_shared/writerSchemas.ts';
 
@@ -714,7 +715,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'page_beats_issue') {
-      const { issue_id, skip_existing, batch_limit } = parsedReq.data;
+      const { issue_id, skip_existing, batch_limit, page_ids } = parsedReq.data;
       const issueRow = await loadIssueRow(supabase, issue_id);
       if (!issueRow) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
@@ -748,9 +749,44 @@ Deno.serve(async (req) => {
         );
       }
       const skip = skip_existing === true;
-      const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
-      const limit = Math.min(Math.max(1, batch_limit ?? 8), 20);
-      const batch = candidates.slice(0, limit);
+      let batch: typeof rows;
+      let has_more: boolean;
+      if (page_ids && page_ids.length > 0) {
+        const unique = [...new Set(page_ids)];
+        if (unique.length > WRITER_PAGE_BEATS_ISSUE_MAX) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Too many page_ids',
+              details: `At most ${WRITER_PAGE_BEATS_ISSUE_MAX} pages per request.`,
+            },
+            { status: 400, headers: corsHeaders },
+          );
+        }
+        const idSet = new Set(unique);
+        const selected = rows.filter((p) => idSet.has(p.id));
+        if (selected.length !== unique.length) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Invalid page_ids',
+              details: 'Every id must belong to this issue.',
+            },
+            { status: 400, headers: corsHeaders },
+          );
+        }
+        selected.sort((a, b) => a.page_number - b.page_number);
+        batch = selected.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
+        has_more = false;
+      } else {
+        const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
+        const limit = Math.min(
+          Math.max(1, batch_limit ?? WRITER_PAGE_BEATS_ISSUE_MAX),
+          WRITER_PAGE_BEATS_ISSUE_MAX,
+        );
+        batch = candidates.slice(0, limit);
+        has_more = candidates.length > batch.length;
+      }
       const processed: number[] = [];
       const errors: { page_number: number; message: string }[] = [];
       for (const page of batch) {
@@ -764,7 +800,6 @@ Deno.serve(async (req) => {
           }
         }
       }
-      const has_more = candidates.length > batch.length;
       return Response.json(
         {
           success: true,

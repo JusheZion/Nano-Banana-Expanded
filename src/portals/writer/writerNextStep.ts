@@ -26,7 +26,7 @@ export function getWriterQuickGenerateNextHint(
       if (ctx.pageCount < ctx.targetPageCount) {
         return 'Next: use “Sync pages to target” so every page row exists, then Page Beats (⌘2).';
       }
-      return 'Next: open Page Beats (⌘2) and generate panel beats per page or run “Generate all beats”.';
+      return 'Next: Page Beats (⌘2) — pick up to 5 pages or run “Generate all beats” (5 pages per server round).';
     case 'beats':
       if (ctx.pageCount === 0) {
         return 'Next: sync pages from Issue Outline (target pages) or add pages in the Library.';

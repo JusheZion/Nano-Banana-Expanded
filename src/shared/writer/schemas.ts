@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Max pages per `page_beats_issue` call (Edge worker / Gemini limits; aligns with HTTP 546 mitigation). */
+export const WRITER_PAGE_BEATS_ISSUE_MAX = 5;
+
 const issueOutlineActSchema = z.object({
   name: z.string().optional(),
   goal: z.string().optional(),
@@ -53,11 +56,21 @@ export const writerToolsPageBeatsRequestSchema = z.object({
   page_id: z.string().uuid(),
 });
 
+/** Refine on the array (not the object) so the request stays a ZodObject for discriminatedUnion. */
+const writerToolsPageBeatsIssuePageIdsSchema = z
+  .array(z.string().uuid())
+  .max(WRITER_PAGE_BEATS_ISSUE_MAX)
+  .refine((ids) => ids.length === 0 || new Set(ids).size === ids.length, {
+    message: 'page_ids must not contain duplicates',
+  });
+
 export const writerToolsPageBeatsIssueRequestSchema = z.object({
   mode: z.literal('page_beats_issue'),
   issue_id: z.string().uuid(),
   skip_existing: z.boolean().optional(),
-  batch_limit: z.number().int().min(1).max(20).optional(),
+  batch_limit: z.number().int().min(1).max(WRITER_PAGE_BEATS_ISSUE_MAX).optional(),
+  /** When set, process only these pages (issue order), max WRITER_PAGE_BEATS_ISSUE_MAX; batch_limit ignored. */
+  page_ids: writerToolsPageBeatsIssuePageIdsSchema.optional(),
 });
 
 export const draftDialogueResultSchema = z

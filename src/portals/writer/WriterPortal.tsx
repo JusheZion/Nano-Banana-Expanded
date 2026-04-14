@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import {
+  clearWriterPageBeats,
+  clearWriterPageScript,
   createWriterIssue,
   createWriterPage,
   createWriterSeries,
+  deleteLatestWriterOutline,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -53,6 +56,7 @@ import {
   WRITERS_TIFFANY_TEXT,
   WRITERS_WORKSHOP_BG,
 } from '@/shared/theme/Phase12DesignTokens';
+import { WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
 
 const titleTextStyle: React.CSSProperties = {
   background: WRITERS_TIFFANY_TEXT,
@@ -134,12 +138,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [targetPageCount, setTargetPageCount] = useState(22);
   const [outlineGenLoading, setOutlineGenLoading] = useState(false);
   const [outlineGenError, setOutlineGenError] = useState<string | null>(null);
+  const [outlineDeleteBusy, setOutlineDeleteBusy] = useState(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
+  const [beatsPickPageIds, setBeatsPickPageIds] = useState<string[]>([]);
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
+  const [beatsBatchSource, setBeatsBatchSource] = useState<'all' | 'picked' | null>(null);
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
   const [syncPagesBusy, setSyncPagesBusy] = useState(false);
   const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
@@ -150,6 +157,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const prevWorkspaceTabRef = useRef<WriterWorkspaceTabId>(activeTab);
   const [dialogueLoading, setDialogueLoading] = useState(false);
   const [dialogueError, setDialogueError] = useState<string | null>(null);
+  const [clearPageFieldBusy, setClearPageFieldBusy] = useState<'beats' | 'script' | null>(null);
   const [dialogueStyle, setDialogueStyle] = useState<'comic_script' | 'screenplay_light'>('comic_script');
   const [shotPlans, setShotPlans] = useState<WriterVideoShotPlanRow[]>([]);
   const [shotsBrief, setShotsBrief] = useState('');
@@ -327,6 +335,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId]);
 
   useEffect(() => {
+    setBeatsPickPageIds([]);
+  }, [selectedIssueId]);
+
+  useEffect(() => {
+    const valid = new Set(pages.map((p) => p.id));
+    setBeatsPickPageIds((cur) => cur.filter((id) => valid.has(id)));
+  }, [pages]);
+
+  useEffect(() => {
     setCreatePageError(null);
   }, [selectedIssueId]);
 
@@ -359,6 +376,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
     [pages],
   );
+
+  const beatsPickOrdered = useMemo(() => {
+    const sel = new Set(beatsPickPageIds);
+    return sortedPages.filter((p) => sel.has(p.id)).map((p) => p.id);
+  }, [sortedPages, beatsPickPageIds]);
 
   const pagesWithBeatsCount = useMemo(
     () => sortedPages.filter((p) => pageRowHasPanelBeats(p)).length,
@@ -582,6 +604,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!selectedIssueId) return;
     beatsBatchAbortRef.current = new AbortController();
     setBeatsBatchBusy(true);
+    setBeatsBatchSource('all');
     setBeatsError(null);
     setBeatsBatchLabel('Running…');
     try {
@@ -595,7 +618,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           mode: 'page_beats_issue',
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
-          batch_limit: 8,
+          batch_limit: WRITER_PAGE_BEATS_ISSUE_MAX,
         });
         if (!res.success) {
           setBeatsError(toolErrorMessage(res));
@@ -623,9 +646,47 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     } finally {
       setBeatsBatchBusy(false);
       setBeatsBatchLabel('');
+      setBeatsBatchSource(null);
       beatsBatchAbortRef.current = null;
     }
   }, [selectedIssueId, beatsSkipExisting]);
+
+  const runSelectedBatchPageBeats = useCallback(async () => {
+    if (!selectedIssueId || beatsPickOrdered.length === 0) return;
+    setBeatsBatchBusy(true);
+    setBeatsBatchSource('picked');
+    setBeatsError(null);
+    setBeatsBatchLabel('Selected…');
+    try {
+      const res = await invokeWriterTools({
+        mode: 'page_beats_issue',
+        issue_id: selectedIssueId,
+        page_ids: beatsPickOrdered,
+        skip_existing: beatsSkipExisting,
+      });
+      if (!res.success) {
+        setBeatsError(toolErrorMessage(res));
+        pushHistory('error: batch beats (selected pages)');
+        return;
+      }
+      const data = res.data as {
+        processed?: number[];
+        errors?: { page_number: number; message: string }[];
+      };
+      const processed = data.processed ?? [];
+      const errs = data.errors ?? [];
+      setBeatsBatchLabel(
+        `Done: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
+      );
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+      pushHistory(`batch beats (selected): ${processed.length} page(s)`);
+    } finally {
+      setBeatsBatchBusy(false);
+      setBeatsBatchLabel('');
+      setBeatsBatchSource(null);
+    }
+  }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'outline' && selectedIssueId) {
@@ -1359,11 +1420,51 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       aria-label="Outline preview"
                     >
                       <div className={`${WRITER_GLASS_CARD} p-4 space-y-2 min-h-0`}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
                             Latest saved outline
                           </p>
-                          <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <WriterSectionTip tipKey="outlinePreview" label="About outline preview" />
+                            {latestOutline ? (
+                              <Tooltip content={WRITER_UI_TIPS.clearLatestOutline} side="bottom">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !supabaseOk ||
+                                    !selectedIssueId ||
+                                    outlineDeleteBusy ||
+                                    outlineGenLoading
+                                  }
+                                  onClick={async () => {
+                                    if (!selectedIssueId || !latestOutline) return;
+                                    if (
+                                      !window.confirm(
+                                        'Delete the latest saved outline version for this issue? Older versions (if any) are kept.',
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    setOutlineGenError(null);
+                                    setOutlineDeleteBusy(true);
+                                    const r = await deleteLatestWriterOutline(selectedIssueId);
+                                    setOutlineDeleteBusy(false);
+                                    if (!r.ok) {
+                                      setOutlineGenError(r.error ?? 'Could not delete outline');
+                                      pushHistory('error: delete outline');
+                                      return;
+                                    }
+                                    const rows = await listWriterOutlinesForIssue(selectedIssueId);
+                                    setOutlines(rows);
+                                    pushHistory('deleted latest outline');
+                                  }}
+                                  className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900/90 border border-red-900/30 bg-red-50/90 hover:bg-red-50 disabled:opacity-45"
+                                >
+                                  {outlineDeleteBusy ? 'Deleting…' : 'Delete latest outline'}
+                                </button>
+                              </Tooltip>
+                            ) : null}
+                          </div>
                         </div>
                         {latestOutline ? (
                           <pre
@@ -1411,7 +1512,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                           style={{ background: ACCENT_GOLD_GRADIENT }}
                         >
-                          {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
+                          {beatsBatchBusy && beatsBatchSource === 'all'
+                            ? beatsBatchLabel || 'Batch…'
+                            : 'Generate all beats'}
                         </button>
                       </Tooltip>
                       {beatsBatchBusy ? (
@@ -1426,36 +1529,155 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </button>
                       ) : null}
                     </div>
+                    {sortedPages.length > 0 ? (
+                      <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Pick pages for one batch (max {WRITER_PAGE_BEATS_ISSUE_MAX})
+                            </p>
+                            <WriterSectionTip tipKey="beatsMultiPick" label="About multi-select beats" />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!supabaseOk || beatsBatchBusy || beatsPickPageIds.length === 0}
+                            onClick={() => setBeatsPickPageIds([])}
+                            className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                          >
+                            Clear picks
+                          </button>
+                        </div>
+                        <ul className="space-y-1.5 max-h-[min(200px,28vh)] overflow-y-auto custom-scrollbar -mx-1 px-1">
+                          {sortedPages.map((p) => {
+                            const checked = beatsPickPageIds.includes(p.id);
+                            const atCap = beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX && !checked;
+                            return (
+                              <li key={p.id} className="flex items-start gap-2 text-[11px]">
+                                <input
+                                  type="checkbox"
+                                  id={`writer-beats-pick-${p.id}`}
+                                  checked={checked}
+                                  onChange={() => {
+                                    setBeatsPickPageIds((prev) => {
+                                      if (prev.includes(p.id)) return prev.filter((x) => x !== p.id);
+                                      if (prev.length >= WRITER_PAGE_BEATS_ISSUE_MAX) return prev;
+                                      return [...prev, p.id];
+                                    });
+                                  }}
+                                  disabled={!supabaseOk || beatsBatchBusy || atCap}
+                                  className="mt-0.5 rounded border-black/25"
+                                />
+                                <label
+                                  htmlFor={`writer-beats-pick-${p.id}`}
+                                  className={`cursor-pointer flex-1 min-w-0 leading-snug ${atCap ? 'opacity-50' : ''}`}
+                                >
+                                  <span className="font-semibold text-black">Page {p.page_number}</span>
+                                  {pageRowHasPanelBeats(p) ? (
+                                    <span className="text-black/55"> — has beats</span>
+                                  ) : null}
+                                </label>
+                                <button
+                                  type="button"
+                                  className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
+                                  onClick={() => setSelectedPageId(p.id)}
+                                >
+                                  Library
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk ||
+                              !selectedIssueId ||
+                              beatsPickOrdered.length === 0 ||
+                              beatsBatchBusy ||
+                              beatsLoading
+                            }
+                            onClick={() => void runSelectedBatchPageBeats()}
+                            className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {beatsBatchBusy && beatsBatchSource === 'picked'
+                              ? beatsBatchLabel || 'Batch…'
+                              : `Generate beats for selected (${beatsPickOrdered.length})`}
+                          </button>
+                        </Tooltip>
+                        {beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX ? (
+                          <p className="text-[10px] text-black/50">
+                            Maximum {WRITER_PAGE_BEATS_ISSUE_MAX} pages per batch. Clear a pick to choose another.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {!selectedPageId && sortedPages.length > 0 && (
-                      <p className="text-xs text-black/50">Select a page in the Library to preview, or use Generate all beats.</p>
+                      <p className="text-xs text-black/50">
+                        Select a page in the Library to preview, use picks above, or Generate all beats (
+                        {WRITER_PAGE_BEATS_ISSUE_MAX} pages per server round).
+                      </p>
                     )}
                     {sortedPages.length === 0 && (
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
                     )}
-                    <button
-                      type="button"
-                      disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
-                      onClick={async () => {
-                        if (!selectedPageId || !selectedIssueId) return;
-                        setBeatsError(null);
-                        setBeatsLoading(true);
-                        const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
-                        setBeatsLoading(false);
-                        if (res.success) {
-                          pushHistory(`page beats saved (page)`);
-                          const pageRows = await listWriterPages(selectedIssueId);
-                          setPages(pageRows);
-                        } else {
-                          const msg = toolErrorMessage(res);
-                          setBeatsError(msg);
-                          pushHistory(`error: ${msg}`);
-                        }
-                      }}
-                      className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                      style={{ background: ACCENT_GOLD_GRADIENT }}
-                    >
-                      {beatsLoading ? 'Generating…' : 'Generate page beats'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
+                        onClick={async () => {
+                          if (!selectedPageId || !selectedIssueId) return;
+                          setBeatsError(null);
+                          setBeatsLoading(true);
+                          const res = await invokeWriterTools({ mode: 'page_beats', page_id: selectedPageId });
+                          setBeatsLoading(false);
+                          if (res.success) {
+                            pushHistory(`page beats saved (page)`);
+                            const pageRows = await listWriterPages(selectedIssueId);
+                            setPages(pageRows);
+                          } else {
+                            const msg = toolErrorMessage(res);
+                            setBeatsError(msg);
+                            pushHistory(`error: ${msg}`);
+                          }
+                        }}
+                        className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                      >
+                        {beatsLoading ? 'Generating…' : 'Generate page beats'}
+                      </button>
+                      <Tooltip content={WRITER_UI_TIPS.clearPageBeats} side="bottom">
+                        <button
+                          type="button"
+                          disabled={
+                            !supabaseOk ||
+                            !selectedPageId ||
+                            clearPageFieldBusy !== null ||
+                            beatsLoading ||
+                            beatsBatchBusy
+                          }
+                          onClick={async () => {
+                            if (!selectedPageId || !selectedIssueId) return;
+                            if (!window.confirm('Clear panel beats for the Library-selected page?')) return;
+                            setBeatsError(null);
+                            setClearPageFieldBusy('beats');
+                            const r = await clearWriterPageBeats(selectedPageId);
+                            setClearPageFieldBusy(null);
+                            if (!r.ok) {
+                              setBeatsError(r.error ?? 'Could not clear beats');
+                              pushHistory('error: clear beats');
+                              return;
+                            }
+                            const pageRows = await listWriterPages(selectedIssueId);
+                            setPages(pageRows);
+                            pushHistory('cleared page beats');
+                          }}
+                          className="rounded-lg px-3 py-2 text-xs font-bold text-red-900/90 border border-red-900/25 bg-red-50/85 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {clearPageFieldBusy === 'beats' ? 'Clearing…' : 'Clear beats'}
+                        </button>
+                      </Tooltip>
+                    </div>
                     {beatsError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
                     )}
@@ -1498,34 +1720,71 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {!selectedPageId && (
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
                     )}
-                    <button
-                      type="button"
-                      disabled={!supabaseOk || !selectedPageId || dialogueLoading}
-                      onClick={async () => {
-                        if (!selectedPageId || !selectedIssueId) return;
-                        setDialogueError(null);
-                        setDialogueLoading(true);
-                        const res = await invokeWriterTools({
-                          mode: 'draft_dialogue',
-                          page_id: selectedPageId,
-                          style: dialogueStyle,
-                        });
-                        setDialogueLoading(false);
-                        if (res.success) {
-                          pushHistory('dialogue draft saved');
-                          const pageRows = await listWriterPages(selectedIssueId);
-                          setPages(pageRows);
-                        } else {
-                          const msg = toolErrorMessage(res);
-                          setDialogueError(msg);
-                          pushHistory(`error: ${msg}`);
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          !supabaseOk ||
+                          !selectedPageId ||
+                          dialogueLoading ||
+                          clearPageFieldBusy !== null
                         }
-                      }}
-                      className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                      style={{ background: ACCENT_GOLD_GRADIENT }}
-                    >
-                      {dialogueLoading ? 'Drafting…' : 'Draft dialogue'}
-                    </button>
+                        onClick={async () => {
+                          if (!selectedPageId || !selectedIssueId) return;
+                          setDialogueError(null);
+                          setDialogueLoading(true);
+                          const res = await invokeWriterTools({
+                            mode: 'draft_dialogue',
+                            page_id: selectedPageId,
+                            style: dialogueStyle,
+                          });
+                          setDialogueLoading(false);
+                          if (res.success) {
+                            pushHistory('dialogue draft saved');
+                            const pageRows = await listWriterPages(selectedIssueId);
+                            setPages(pageRows);
+                          } else {
+                            const msg = toolErrorMessage(res);
+                            setDialogueError(msg);
+                            pushHistory(`error: ${msg}`);
+                          }
+                        }}
+                        className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                      >
+                        {dialogueLoading ? 'Drafting…' : 'Draft dialogue'}
+                      </button>
+                      <Tooltip content={WRITER_UI_TIPS.clearPageDialogue} side="bottom">
+                        <button
+                          type="button"
+                          disabled={
+                            !supabaseOk ||
+                            !selectedPageId ||
+                            dialogueLoading ||
+                            clearPageFieldBusy !== null
+                          }
+                          onClick={async () => {
+                            if (!selectedPageId || !selectedIssueId) return;
+                            if (!window.confirm('Clear dialogue (script_text) for the Library-selected page?')) return;
+                            setDialogueError(null);
+                            setClearPageFieldBusy('script');
+                            const r = await clearWriterPageScript(selectedPageId);
+                            setClearPageFieldBusy(null);
+                            if (!r.ok) {
+                              setDialogueError(r.error ?? 'Could not clear dialogue');
+                              pushHistory('error: clear dialogue');
+                              return;
+                            }
+                            const pageRows = await listWriterPages(selectedIssueId);
+                            setPages(pageRows);
+                            pushHistory('cleared page dialogue');
+                          }}
+                          className="rounded-lg px-3 py-2 text-xs font-bold text-red-900/90 border border-red-900/25 bg-red-50/85 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                        >
+                          {clearPageFieldBusy === 'script' ? 'Clearing…' : 'Clear dialogue'}
+                        </button>
+                      </Tooltip>
+                    </div>
                     {dialogueError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{dialogueError}</p>
                     )}
