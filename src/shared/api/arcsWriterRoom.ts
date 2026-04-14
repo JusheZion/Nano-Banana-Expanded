@@ -53,6 +53,19 @@ export type WriterIssueOutlineRow = {
   source_mode: string | null;
 };
 
+/** Series lore / worldbuilding cards (injected into writer-tools prompts when include_in_prompt is true). */
+export type WriterLoreCardRow = {
+  id: string;
+  series_id: string;
+  title: string;
+  category: string;
+  body: string;
+  include_in_prompt: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 const nowUtcIso = () => new Date().toISOString();
 
 export async function listWriterSeries(): Promise<WriterSeriesRow[]> {
@@ -416,4 +429,83 @@ export async function clearWriterPageScript(pageId: string): Promise<{ ok: boole
     return { ok: false, error: error.message };
   }
   return { ok: true };
+}
+
+export async function listWriterLoreCards(seriesId: string): Promise<WriterLoreCardRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from('writer_lore_cards')
+    .select(
+      'id, series_id, title, category, body, include_in_prompt, sort_order, created_at, updated_at',
+    )
+    .eq('series_id', seriesId)
+    .order('sort_order', { ascending: true })
+    .order('title', { ascending: true });
+  if (error) {
+    console.warn('[arcsWriterRoom] listWriterLoreCards', error.message);
+    return [];
+  }
+  return (data ?? []) as WriterLoreCardRow[];
+}
+
+export async function createWriterLoreCard(input: {
+  series_id: string;
+  title: string;
+  category?: string;
+  body?: string;
+  include_in_prompt?: boolean;
+  sort_order?: number;
+}): Promise<WriterLoreCardRow | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from('writer_lore_cards')
+    .insert({
+      series_id: input.series_id,
+      title: input.title.trim() || 'Untitled',
+      category: (input.category ?? 'world').trim() || 'world',
+      body: input.body ?? '',
+      include_in_prompt: input.include_in_prompt ?? true,
+      sort_order: input.sort_order ?? 0,
+    })
+    .select(
+      'id, series_id, title, category, body, include_in_prompt, sort_order, created_at, updated_at',
+    )
+    .single();
+  if (error) {
+    console.warn('[arcsWriterRoom] createWriterLoreCard', error.message);
+    return null;
+  }
+  return data as WriterLoreCardRow;
+}
+
+export async function updateWriterLoreCard(
+  id: string,
+  patch: {
+    title?: string;
+    category?: string;
+    body?: string;
+    include_in_prompt?: boolean;
+    sort_order?: number;
+  },
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_lore_cards')
+    .update({ ...patch, updated_at: nowUtcIso() })
+    .eq('id', id);
+  if (error) {
+    console.warn('[arcsWriterRoom] updateWriterLoreCard', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteWriterLoreCard(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from('writer_lore_cards').delete().eq('id', id);
+  if (error) {
+    console.warn('[arcsWriterRoom] deleteWriterLoreCard', error.message);
+    return false;
+  }
+  return true;
 }

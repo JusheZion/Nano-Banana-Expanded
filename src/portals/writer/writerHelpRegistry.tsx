@@ -68,6 +68,8 @@ export const WRITER_UI_TIPS = {
     'Optional. Sent only when you click Generate outline or Regenerate with coverage boost. Not saved to the database. Use for pacing, tone, structure, or coverage hints (the coverage boost button appends a page-mapping line here after a successful run).',
   outlinePreview:
     'Latest saved outline JSON for this issue. Generate a new version from Issue Outline → Target pages → Generate outline.',
+  loreTab:
+    'Series-scoped lore cards (world, characters, places, rules). Cards marked “Include in AI prompts” are loaded into Generate outline and page beats (writer-tools) as reference text — stay under large bibles or the digest truncates. Requires Supabase migration writer_lore_cards.',
   beatsTab:
     'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Rules for the outline from Scripts (saved as notes.synopsis_helper.rules) are included on every page-beats call, including Generate all beats. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
   beatsDirectorNotes:
@@ -91,7 +93,7 @@ export const WRITER_UI_TIPS = {
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',
   activityPanel: 'A short log of AI tool runs. Open Ribbon → Help for full workflow guides.',
   dockShortcutsBlurb:
-    'Workspace tabs: ⌥⌘1–6 (Mac) or Alt+Ctrl+1–6 (Win/Linux) — not plain ⌘1–6 (browser switches tabs). File → Scripts & exports also opens the Scripts tab. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
+    'Workspace tabs: ⌥⌘1–7 (Mac) or Alt+Ctrl+1–7 (Win/Linux) — not plain ⌘1–7 (browser switches tabs). File → Scripts & exports also opens the Scripts tab. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
 } as const;
 
@@ -255,9 +257,9 @@ export function WriterHelpCategoryBody({
         <>
         <ul className="list-disc pl-4 space-y-2">
           <li>
-            <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘6</kbd> (Mac) or{' '}
-            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">6</kbd> — workspace:
-            Outline, Beats, Dialogue, Video, Arc, Scripts (plain ⌘1–9 is reserved by the browser)
+            <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘7</kbd> (Mac) or{' '}
+            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">7</kbd> — workspace:
+            Outline, Lore, Beats, Dialogue, Video, Arc, Scripts (plain ⌘1–9 is reserved by the browser)
           </li>
           <li>
             <strong>File</strong> → <strong>Scripts & exports</strong> — jump to synopsis helper and issue pack

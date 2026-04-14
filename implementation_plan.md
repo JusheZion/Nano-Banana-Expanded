@@ -471,6 +471,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 **Backend / contract**
 
+- **`writer_lore_cards`:** `series_id`, `title`, `category`, `body`, `include_in_prompt`, `sort_order` — series worldbuilding; Edge loads rows with `include_in_prompt` for `outline_issue` and `page_beats` (digest capped ~12k chars).
 - **`outline_issue`:** `issue_id`, optional `target_page_count` — per-issue outline only (no multi-issue spine in the API; use Arc tab batch pacing/canon for cross-issue tooling).
 - **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–5; server default 5), optional `batch_offset` (0–500; **when `skip_existing` is false and `page_ids` omitted** — next slice for “regenerate all”). Optional `page_ids` (1–5 UUIDs, unique, issue-scoped): process only those pages in `page_number` order; `has_more` false; `batch_offset` ignored. Optional `director_notes_for_beats`. Response `{ processed, errors, has_more, batch_size, batch_offset?, next_batch_offset? }` (offset fields omitted when using `page_ids`).
 
@@ -478,7 +479,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 - **`ensureWriterPagesToCount(issueId, targetCount)`** in `arcsWriterRoom.ts` — inserts missing `writer_pages` rows for 1…N (cap 500).
 - **`WriterPortal`:** Issue Outline — **Sync pages to target**, **Generate outline**, **Download outline**, **Delete latest outline**. Beats tab — **Pick pages (max 5)** + **Generate beats for selected**, **Director notes for beats**, **Skip pages that already have beats**, **Generate all beats** (batch 5 + `batch_offset` when not skipping existing), **Cancel after this batch** (multi-round “all” only); **xl** two-column layout (controls | sticky beats preview); per-page **Download / Clear beats**. Dialogue — **Download / Clear dialogue** per page. **Arc tab** — batch arc tools as before; **WriterStudioDock** slightly wider on desktop.
-- **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌘1–5): **Outline → Beats → Dialogue → Video → Arc**.
+- **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌥⌘1–7): **Outline → Lore → Beats → Dialogue → Video → Arc → Scripts**.
 - **`writerNextStep.ts`:** `getWriterQuickGenerateNextHint` for ribbon AI quick-generate tooltip; **Pipeline** strip under ribbon with per-tab completion heuristics + same hint on wide screens.
 - **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc batch multi-select; keyboard blurb matches new tab order.
 

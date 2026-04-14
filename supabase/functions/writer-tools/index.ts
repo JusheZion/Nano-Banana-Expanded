@@ -183,12 +183,39 @@ async function callGeminiJson(args: {
   throw new Error(lastErr || 'Gemini request failed');
 }
 
+const LORE_CARDS_PROMPT_CAP = 12_000;
+
+/** Series lore cards (writer_lore_cards) for outline / page_beats context. */
+async function fetchLoreCardsDigest(supabase: SupabaseAdmin, seriesId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('writer_lore_cards')
+    .select('title, category, body, sort_order')
+    .eq('series_id', seriesId)
+    .eq('include_in_prompt', true)
+    .order('sort_order', { ascending: true })
+    .order('title', { ascending: true });
+  if (error || !data?.length) return '';
+  const rows = data as Array<{ title?: string; category?: string; body?: string; sort_order?: number }>;
+  const blocks = rows.map((r) => {
+    const t = (r.title ?? '').trim() || '(untitled)';
+    const cat = (r.category ?? '').trim() || 'general';
+    const b = (r.body ?? '').trim();
+    return b ? `### ${t} (${cat})\n${b}` : `### ${t} (${cat})\n(no body)`;
+  });
+  let s = `Series lore cards (reference — stay consistent; do not contradict without story reason):\n\n${blocks.join('\n\n')}`;
+  if (s.length > LORE_CARDS_PROMPT_CAP) {
+    s = `${s.slice(0, LORE_CARDS_PROMPT_CAP)}\n\n…(truncated; add or shorten lore cards in Workshop → Lore)`;
+  }
+  return s;
+}
+
 function buildOutlineUserPrompt(args: {
   issue: IssueRow;
   targetPages?: number;
   cast: unknown[];
   locations: unknown[];
   styleBibles: unknown[];
+  loreCardsDigest?: string;
   /** Optional author instructions appended after synopsis (coverage boost, tone, etc.). */
   supplement?: string;
 }): string {
@@ -223,6 +250,7 @@ function buildOutlineUserPrompt(args: {
     `Writer cast (reference):\n${JSON.stringify(args.cast, null, 2)}`,
     `Locations:\n${JSON.stringify(args.locations, null, 2)}`,
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
+    args.loreCardsDigest?.trim() ? `${args.loreCardsDigest.trim()}\n` : '',
     '',
     'Return JSON matching this shape:',
     '{',
@@ -349,6 +377,7 @@ function buildPageBeatsUserPrompt(args: {
   latestOutline: unknown;
   priorPagesDigest: string;
   directorNotesForBeats?: string;
+  loreCardsDigest?: string;
 }): string {
   const outlineBeatContext = extractOutlineBeatContextForPage(args.latestOutline, args.page.page_number);
   const outlineBeat =
@@ -375,6 +404,9 @@ function buildPageBeatsUserPrompt(args: {
     `Cast:\n${jsonForPrompt(args.cast, PAGE_BEATS_PROMPT_CAPS.cast)}`,
     `Locations:\n${jsonForPrompt(args.locations, PAGE_BEATS_PROMPT_CAPS.locations)}`,
     `Style bibles:\n${jsonForPrompt(args.styleBibles, PAGE_BEATS_PROMPT_CAPS.styleBibles)}`,
+    args.loreCardsDigest?.trim()
+      ? `Series lore cards (reference only; use for texture and consistency):\n${args.loreCardsDigest.trim()}`
+      : '',
     '',
     'Return JSON:',
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
@@ -481,7 +513,7 @@ async function executeSinglePageBeats(
   directorNotesForBeats?: string,
 ): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
   const sid = issueRow.series_id;
-  const [castRes, locRes, bibleRes, outlineRes, priorPagesRes] = await Promise.all([
+  const [castRes, locRes, bibleRes, outlineRes, priorPagesRes, loreDigest] = await Promise.all([
     supabase.from('writer_cast').select('*').eq('series_id', sid),
     supabase.from('writer_locations').select('*').eq('series_id', sid),
     supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
@@ -499,6 +531,7 @@ async function executeSinglePageBeats(
       .lt('page_number', page.page_number)
       .order('page_number', { ascending: false })
       .limit(5),
+    fetchLoreCardsDigest(supabase, sid),
   ]);
   const system =
     'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
@@ -512,6 +545,7 @@ async function executeSinglePageBeats(
     latestOutline: outlineRes.data?.outline_json ?? null,
     priorPagesDigest,
     directorNotesForBeats,
+    loreCardsDigest: loreDigest,
   });
   let beatsJson: unknown;
   try {
@@ -697,10 +731,11 @@ Deno.serve(async (req) => {
       }
       const seriesId = row.series_id;
 
-      const [castRes, locRes, bibleRes] = await Promise.all([
+      const [castRes, locRes, bibleRes, loreDigest] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', seriesId),
         supabase.from('writer_locations').select('*').eq('series_id', seriesId),
         supabase.from('writer_style_bibles').select('*').eq('series_id', seriesId),
+        fetchLoreCardsDigest(supabase, seriesId),
       ]);
 
       const system =
@@ -712,6 +747,7 @@ Deno.serve(async (req) => {
         cast: castRes.data ?? [],
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
+        loreCardsDigest: loreDigest,
         supplement: outline_supplement,
       });
 
