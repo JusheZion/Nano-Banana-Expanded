@@ -31,6 +31,8 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
+  /** Optional author notes appended to the outline prompt (e.g. coverage boost). Not stored on the issue row. */
+  outline_supplement: z.string().max(8000).optional(),
 });
 
 const pageBeatPanelSchema = z.object({
@@ -54,6 +56,8 @@ export const pageBeatsJsonSchema = z
 export const writerToolsPageBeatsRequestSchema = z.object({
   mode: z.literal('page_beats'),
   page_id: z.string().uuid(),
+  /** Optional; only sent to page_beats — not outline_issue. Layout / spread / pacing notes for the artist. */
+  director_notes_for_beats: z.string().max(4000).optional(),
 });
 
 /** Refine on the array (not the object) so the request stays a ZodObject for discriminatedUnion. */
@@ -69,7 +73,10 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   issue_id: z.string().uuid(),
   skip_existing: z.boolean().optional(),
   batch_limit: z.number().int().min(1).max(WRITER_PAGE_BEATS_ISSUE_MAX).optional(),
-  /** When set, process only these pages (issue order), max WRITER_PAGE_BEATS_ISSUE_MAX; batch_limit ignored. */
+  /** When skip_existing is false, next slice into the ordered page list (regenerate-all). Ignored when skip_existing is true or when page_ids is set. */
+  batch_offset: z.number().int().min(0).max(500).optional(),
+  director_notes_for_beats: z.string().max(4000).optional(),
+  /** When set, process only these pages (issue order), max WRITER_PAGE_BEATS_ISSUE_MAX; batch_limit / batch_offset ignored. */
   page_ids: writerToolsPageBeatsIssuePageIdsSchema.optional(),
 });
 

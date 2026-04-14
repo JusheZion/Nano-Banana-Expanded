@@ -472,17 +472,62 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 **Backend / contract**
 
 - **`outline_issue`:** `issue_id`, optional `target_page_count` — per-issue outline only (no multi-issue spine in the API; use Arc tab batch pacing/canon for cross-issue tooling).
-- **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–5; server default 5). Optional `page_ids` (1–5 UUIDs, unique, all must belong to the issue): process only those pages in `page_number` order; `has_more` is false. Otherwise loads pages in order and runs up to `batch_limit` per call; client loops while `has_more`.
+- **`page_beats_issue`:** `issue_id`, optional `skip_existing`, optional `batch_limit` (1–5; server default 5), optional `batch_offset` (0–500; **when `skip_existing` is false and `page_ids` omitted** — next slice for “regenerate all”). Optional `page_ids` (1–5 UUIDs, unique, issue-scoped): process only those pages in `page_number` order; `has_more` false; `batch_offset` ignored. Optional `director_notes_for_beats`. Response `{ processed, errors, has_more, batch_size, batch_offset?, next_batch_offset? }` (offset fields omitted when using `page_ids`).
 
 **Client**
 
 - **`ensureWriterPagesToCount(issueId, targetCount)`** in `arcsWriterRoom.ts` — inserts missing `writer_pages` rows for 1…N (cap 500).
-- **`WriterPortal`:** Issue Outline — **Sync pages to target**, **Generate outline**, **Delete latest outline**. Beats tab — **Pick pages (max 5)** + **Generate beats for selected**, **Skip pages that already have beats**, **Generate all beats** (loops with batch 5), **Clear beats** for Library page, **Cancel after this batch**. Dialogue tab — **Clear dialogue**. **Arc tab** — batch arc tools as before.
+- **`WriterPortal`:** Issue Outline — **Sync pages to target**, **Generate outline**, **Download outline**, **Delete latest outline**. Beats tab — **Pick pages (max 5)** + **Generate beats for selected**, **Director notes for beats**, **Skip pages that already have beats**, **Generate all beats** (batch 5 + `batch_offset` when not skipping existing), **Cancel after this batch** (multi-round “all” only); **xl** two-column layout (controls | sticky beats preview); per-page **Download / Clear beats**. Dialogue — **Download / Clear dialogue** per page. **Arc tab** — batch arc tools as before; **WriterStudioDock** slightly wider on desktop.
 - **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌘1–5): **Outline → Beats → Dialogue → Video → Arc**.
 - **`writerNextStep.ts`:** `getWriterQuickGenerateNextHint` for ribbon AI quick-generate tooltip; **Pipeline** strip under ribbon with per-tab completion heuristics + same hint on wide screens.
 - **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc batch multi-select; keyboard blurb matches new tab order.
 
 **Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline per issue, Arc batch pacing/canon.
+
+### Phase 7b — Outline coverage + anti-repetition beats (done, 2026-04-11)
+
+**Problem observed:** outlines can save with sparse `page_beats` (fewer than target pages), and page-beats generation may repeat because missing pages fallback to weak outline context.
+
+**Implemented**
+
+- **Edge prompt hardening (`outline_issue`):**
+  - Require one `page_beats` entry per page when `target_page_count` is provided.
+  - Require `page_target` values spanning `1..target_page_count` (capped by schema max).
+  - Instruct model to add bridging beats instead of skipping pages when plot detail is sparse.
+- **Edge validation hardening (`outline_issue`):**
+  - Validate saved outlines cover target pages; reject sparse outlines with actionable `422` details.
+- **Page beats fallback context (`page_beats` / `page_beats_issue`):**
+  - Replace “sample first beat” fallback with nearest-anchor context (previous/next outline beats or trailing progression guidance) to avoid repeated page-1 style outputs.
+  - Expand prior-page digest to include panel action previews from previous pages for stronger anti-repetition grounding.
+  - **Synopsis helper rules:** `notes.synopsis_helper.rules` (Scripts → Rules for the outline, after Save helper to issue notes) is injected into the page-beats user prompt so single-page, batch, and ribbon beats honor the same author constraints as outline generation.
+- **Writer UI feedback (`WriterPortal`):**
+  - Add an inline warning in Outline tab when latest saved outline has materially fewer `page_beats` than target pages (gap >= 2), with guidance to regenerate outline or provide a fuller arc brief.
+  - Add a one-click **Regenerate with coverage boost** action that re-runs `outline_issue` with an appended coverage instruction in **`outline_supplement`** (optional request field; auto-persists into the Outline instructions draft after success). Multi-issue **`arc_brief`** was removed from the API (2026-04-11 simplification on `main`).
+  - **Beats-only director notes:** optional `director_notes_for_beats` on `page_beats` / `page_beats_issue` (Zod max 4000) + Beats tab textarea; not sent to `outline_issue`. Edge prompt adds layout-variation and spread guidance; outline prompt nudges distinct consecutive beats when `scene` repeats.
+
+**Verify:** `npm run test -- --run`, `npm run build`; manual writer flow with a sparse synopsis (and optional **Outline instructions for AI**) to confirm per-page outline coverage and reduced repeated page beats.
+
+### Phase 7c — Library page multi-select, clear, delete, exports (done, 2026-04-11)
+
+**Goal:** Restore multi-select on Library → Pages (cap 5) and support batch delete pages, batch clear beats or dialogue, batch download beats/dialogue as one JSON file; single-page download/clear on Beats and Dialogue tabs; download saved outline JSON from Outline preview.
+
+**Client**
+
+- **`arcsWriterRoom.ts`:** `deleteWriterPages`, `clearWriterPagesBeatsJson`, `clearWriterPagesScriptText`.
+- **`WriterPortal.tsx`:** checkboxes + toolbar actions (no cap on selection; **Select all pages**); Outline **Download outline**; per-tab actions for current page.
+- **`writerHelpRegistry.tsx`:** `pagesLibrary` tip mentions multi-select and batch actions.
+
+**Verify:** `npm run test -- --run`, `npm run build`; manual — select pages, batch clear/download, delete with confirm.
+
+### Phase 7d — Merge `main` (2026-04-11)
+
+**Reconciled:** Arc tab **batch pacing/canon** from `main` with feature-branch Library exports, coverage UI, director notes, and Edge anti-repeat + **`jsonForPrompt` / `PAGE_BEATS_PROMPT_CAPS`**. **`outline_issue`** adds optional **`outline_supplement`** (replaces removed **`arc_brief`** for coverage boost and optional author outline hints).
+
+### Phase 7e — Scripts tab, synopsis helper, edit saved outputs (2026-04-12)
+
+**Workspace:** sixth tab **Scripts & exports** — synopsis worksheet (`notes.synopsis_helper`), build combined synopsis into Issue Outline draft (user still **Save story context** on Outline), copy/download enriched issue pack, edit latest outline / selected page beats & dialogue / latest shot plan with DB save.
+
+**Client:** `writerSynopsisHelper.ts`; `arcsWriterRoom` update helpers for outlines, pages, shot plans, and `notes` on issues.
 
 ### Verification
 
@@ -525,6 +570,7 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 
 - **Build:** `npm run build` → output directory **`dist`**. Pages dashboard: build command `npm run build`, output `dist`, root `/`.
 - **CI guardrail:** **`package.json` must be valid JSON**. A bad merge can append a second copy of the manifest (duplicate keys) and break **`npm ci`** / install with **`EJSONPARSE`** or misleading errors; fix the file, run **`npm install`**, commit **`package-lock.json`**. Repo keeps **`wrangler.jsonc`**, **`wrangler`** + **`@cloudflare/vite-plugin`**, and **`preview` / `deploy`** scripts aligned with the Cloudflare Workers + Vite integration.
+- **Cursor Cloud Agent VM:** [`.cursor/environment.json`](.cursor/environment.json) runs **`npm ci`** when the cloud workspace is provisioned so **`node_modules`** is present before agents open a shell. That matches the Vite / ESLint / Vitest / TypeScript toolchain in **`package-lock.json`**; agents can run **`npm run lint`**, **`npm run test`**, and **`npm run build`** without a manual **`npm install`** first (same as a clean checkout with a valid lockfile).
 - **Wrangler static assets:** [`wrangler.jsonc`](wrangler.jsonc) **`assets.directory`** = **`dist`** (Vite output) and **`not_found_handling`**: **`single-page-application`**. Cloudflare builds that run **`wrangler versions upload`** after **`npm ci`** must also run **`npm run build`** in the build phase so **`dist/`** exists before deploy.
 - Optional: set Cloudflare **environment variable** `NODE_VERSION` = `20` (or `22`) if the default Node fails the build.
 

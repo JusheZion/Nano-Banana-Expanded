@@ -150,6 +150,7 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **2026-04-04:** **`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`** — troubleshooting row for **`npm ci`** “no **package-lock.json**”: set Pages **Root directory** to repo root (empty/`/`) so install runs where **`package-lock.json`** lives; confirm lockfile exists on the built commit
 - [x] **2026-04-04:** **Cloudflare CI** — repaired **merge-corrupted `package.json`** on branch (invalid JSON / duplicated content), restored **Wrangler** tooling (`wrangler.jsonc`, `wrangler` + `@cloudflare/vite-plugin`, `vite.config` plugin, `preview`/`deploy` scripts), regenerated **`package-lock.json`**
 - [x] **2026-04-05:** **package-lock.json** was again **merge-corrupted** (invalid JSON mid-file); **`npm ci`** failed on Cloudflare and locally. Regenerated lockfile (**`rm package-lock.json && npm install`**); verified **`npm ci`** + **`npm run build`**. Documented in checklist + walkthrough; commit + push **`main`** for CI.
+- [x] **2026-04-11:** **Cursor cloud environment** — added [`.cursor/environment.json`](.cursor/environment.json) with **`install`**: **`npm ci`** so cloud agents get **`node_modules`** (Vite, ESLint, Vitest, TypeScript, Wrangler) without running **`npm install`** manually; verified **`npm run lint`**, **`npm run test`**, **`npm run build`** after **`npm ci`**.
 - [x] **2026-04-05:** **Wrangler deploy** — removed **`public/_redirects`** (`/* /index.html 200`) to fix Cloudflare API **10021** (infinite loop) when **`not_found_handling`**: **`single-page-application`** is set; docs updated for Workers vs Pages.
 - [x] **2026-04-04:** **Wrangler deploy** — [`wrangler.jsonc`](wrangler.jsonc) **`assets.directory`** = **`dist`** (fixes *missing required `directory` property* on **`wrangler versions upload`**); deduped **`package.json`** again if merge reintroduced duplicate root; checklist **D4b** + troubleshooting for **build before Wrangler**
 - [x] **2026-04-04:** **Merge-corruption cleanup** — WriterPortal / writerTools / writerHelpRegistry / vite.config / writerTools.test repaired; **`npm run build`** passes
@@ -164,11 +165,20 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Docs: `implementation_plan.md` Phase 7; this checklist; `walkthrough.md` entry
 - [x] UX (superseded 2026-04-11): multi-issue outline arc fields removed; **Batch arc tools** on Arc tab replaces outline-all + spine textarea
 - [x] Library → Issues: **`Add issue #N`** always when series selected (was hidden after first issue); outline panel **Open Library → Issues** link + help copy
-- [x] Edge **`outline_issue`**: simplified per-issue prompt (removed `arc_brief` / `arc_issue_count` and spine parsing, 2026-04-11)
-- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (required for outline contract change)
+- [x] Edge **`outline_issue`**: simplified per-issue prompt (removed `arc_brief` / `arc_issue_count` and spine parsing, 2026-04-11); optional **`outline_supplement`** for author notes + coverage boost (replaces `arc_brief` in the UI)
+- [x] Writers issue quality (2026-04-11): dense `page_beats` in outline prompt; `page_beats` anti-repeat context (bridging beats + prior-page previews); UI warning when outline beat count is below target; **Regenerate with coverage boost** via `outline_supplement`
+- [x] Beats-only **Director notes for beats** + Edge **`PAGE_BEATS_PROMPT_CAPS`** / `jsonForPrompt` to avoid HTTP 546 worker limits
+- [x] Library → Pages: multi-select (no cap; Select all pages), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
+- [x] **Scripts** workspace tab: synopsis helper → `notes.synopsis_helper`, build synopsis into Issue Outline draft, issue pack copy/download (full beats + dialogue + arc cache), edit & save outline / beats / dialogue / shot plan JSON (`arcsWriterRoom` update helpers); **File → Scripts & exports**; workspace shortcuts **⌥⌘1–6** / **Alt+Ctrl+1–6** (avoids browser ⌘1–9)
+- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (outline supplement + prompt caps + anti-repeat)
 
 ## Writers' Workshop bugfixes (Apr 2026)
 
+- [x] **Beats tab UX:** two-column layout on `xl` (controls + director notes | JSON preview); wider Library dock column
+- [x] **Generate all beats (skip off):** `page_beats_issue` with **Skip pages that already have beats** unchecked reused pages 1–5 every round (`has_more` never cleared). **Fix:** optional **`batch_offset`** + **`next_batch_offset`** in response; client tracks offset for full-regeneration passes. Library batch actions: **Select all pages**, no 5-page selection cap
+- [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
+- [x] **Generate all beats:** align client `batch_limit` with Edge Zod cap (**5** per request); tooltip/docs now say 5 per batch (fixes “Invalid request … max 5” when UI sent 8)
+- [x] **Scripts + beats at a glance:** Library → Pages rows show a **green dot** when panel beats exist; Scripts tab adds **Panel beats (this issue)** strip (count + per-page dots, click opens Beats tab + selects page)
 - [x] Fix stale `selectedSeriesId` in ribbon pacing/canon: `refreshIssuesForSeries` is `useCallback` keyed on `selectedSeriesId`; `runPacingFromRibbon` / `runCanonFromRibbon` depend on it
 - [x] Library: **+ Add series** when you already have at least one series (was only “Create first series” on empty list)
 - [x] Issue Outline → Story context: **Series title** field + save `title` via `updateWriterSeries`; **Save story context** works with only a series selected (issue fields optional); series logline no longer requires an issue to edit

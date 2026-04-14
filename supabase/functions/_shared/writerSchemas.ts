@@ -33,6 +33,7 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
+  outline_supplement: z.string().max(8000).optional(),
 });
 
 const pageBeatPanelSchema = z.object({
@@ -55,6 +56,8 @@ export const pageBeatsJsonSchema = z
 export const writerToolsPageBeatsRequestSchema = z.object({
   mode: z.literal('page_beats'),
   page_id: z.string().uuid(),
+  /** Optional; only used for page_beats — layout, spreads, tone. */
+  director_notes_for_beats: z.string().max(4000).optional(),
 });
 
 /** Refine on the array (not the object) so the request stays a ZodObject for discriminatedUnion. */
@@ -71,6 +74,9 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   skip_existing: z.boolean().optional(),
   /** Pages per request when not using page_ids. Max 5 — keep low for worker limits. */
   batch_limit: z.number().int().min(1).max(WRITER_PAGE_BEATS_ISSUE_MAX).optional(),
+  /** When skip_existing is false, next slice start in page_number order. Ignored when skip_existing is true or page_ids is set. */
+  batch_offset: z.number().int().min(0).max(500).optional(),
+  director_notes_for_beats: z.string().max(4000).optional(),
   page_ids: writerToolsPageBeatsIssuePageIdsSchema.optional(),
 });
 
