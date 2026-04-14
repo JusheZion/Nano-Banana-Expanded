@@ -5,13 +5,16 @@ import {
   clearWriterPagesScriptText,
   createWriterIssue,
   createWriterPage,
+  createWriterLoreCard,
   createWriterSeries,
   deleteLatestWriterOutline,
+  deleteWriterLoreCard,
   deleteWriterPages,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
   listWriterPages,
+  listWriterLoreCards,
   listWriterSeries,
   listWriterShotPlansForIssue,
   updateWriterIssue,
@@ -19,10 +22,12 @@ import {
   updateWriterPageBeatsJson,
   updateWriterPageScriptText,
   updateWriterSeries,
+  updateWriterLoreCard,
   updateWriterVideoShotPlanJson,
   type WriterIssueOutlineRow,
   type WriterIssueRow,
   type WriterPageRow,
+  type WriterLoreCardRow,
   type WriterSeriesRow,
   type WriterVideoShotPlanRow,
 } from '@/shared/api/arcsWriterRoom';
@@ -221,6 +226,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [shotEditDraft, setShotEditDraft] = useState('');
   const [scriptsBusy, setScriptsBusy] = useState(false);
   const [scriptsError, setScriptsError] = useState<string | null>(null);
+  const [loreCards, setLoreCards] = useState<WriterLoreCardRow[]>([]);
+  const [loreBusy, setLoreBusy] = useState(false);
+  const [loreDraftTitle, setLoreDraftTitle] = useState('');
+  const [loreDraftCategory, setLoreDraftCategory] = useState('world');
+  const [loreDraftBody, setLoreDraftBody] = useState('');
+  const [loreDraftInclude, setLoreDraftInclude] = useState(true);
+  const [loreDraftSort, setLoreDraftSort] = useState(0);
+  const [loreEditingId, setLoreEditingId] = useState<string | null>(null);
 
   const pushHistory = (line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
@@ -411,6 +424,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setSelectedPageIdsForBatch([]);
   }, [selectedIssueId]);
 
+  const reloadLoreCards = useCallback(async () => {
+    if (!selectedSeriesId) {
+      setLoreCards([]);
+      return;
+    }
+    setLoreBusy(true);
+    const rows = await listWriterLoreCards(selectedSeriesId);
+    setLoreCards(rows);
+    setLoreBusy(false);
+  }, [selectedSeriesId]);
+
+  useEffect(() => {
+    void reloadLoreCards();
+  }, [reloadLoreCards]);
+
+  useEffect(() => {
+    setLoreEditingId(null);
+    setLoreDraftTitle('');
+    setLoreDraftCategory('world');
+    setLoreDraftBody('');
+    setLoreDraftInclude(true);
+    setLoreDraftSort(0);
+  }, [selectedSeriesId]);
+
   useEffect(() => {
     setSelectedPageIdsForBatch((prev) => prev.filter((id) => pages.some((p) => p.id === id)));
   }, [pages]);
@@ -505,6 +542,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     return Math.max(...sortedPages.map((p) => p.page_number)) + 1;
   }, [sortedPages]);
 
+  const loreCardsFindText = useMemo(
+    () =>
+      loreCards
+        .map((c) => [c.title, c.category, c.body].filter(Boolean).join('\n'))
+        .join('\n\n'),
+    [loreCards],
+  );
+
   const searchableCtx = useMemo(
     () => ({
       activeTab,
@@ -514,8 +559,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       scriptText: selectedPage?.script_text ?? null,
       pacingReview: pacingSaved,
       canonCheck: canonSaved,
+      loreCardsFindText,
     }),
-    [activeTab, latestOutline, latestShotPlan, selectedPage, pacingSaved, canonSaved],
+    [activeTab, latestOutline, latestShotPlan, selectedPage, pacingSaved, canonSaved, loreCardsFindText],
   );
 
   const searchableText = useMemo(() => getWriterSearchableText(searchableCtx), [searchableCtx]);
@@ -911,7 +957,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting, beatsDirectorNotesDraft]);
 
   const quickGenerate = useCallback(async () => {
-    if (activeTab === 'scripts') return;
+    if (activeTab === 'scripts' || activeTab === 'lore') return;
     if (activeTab === 'outline' && selectedIssueId) {
       await runOutlineGenerate();
       return;
@@ -992,7 +1038,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ]);
 
   const quickGenerateLabel =
-    activeTab === 'scripts'
+    activeTab === 'scripts' || activeTab === 'lore'
       ? '—'
       : activeTab === 'arc'
         ? 'Run pacing review'
@@ -1014,6 +1060,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const quickGenerateDisabled =
     activeTab === 'scripts' ||
+    activeTab === 'lore' ||
     !supabaseOk ||
     !selectedIssueId ||
     (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
@@ -1717,6 +1764,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               ? false
               : id === 'outline'
                 ? Boolean(latestOutline)
+                : id === 'lore'
+                  ? loreCards.length > 0
                 : id === 'beats'
                   ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
                   : id === 'dialogue'
@@ -2101,6 +2150,230 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         )}
                       </div>
                     </aside>
+                  </div>
+                )}
+                {activeTab === 'lore' && (
+                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                        Series lore cards
+                      </p>
+                      <WriterSectionTip tipKey="loreTab" label="About lore cards" />
+                    </div>
+                    {!selectedSeriesId ? (
+                      <p className="text-xs text-black/50">{WRITER_UI_TIPS.seriesLibrary}</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-black/65 leading-snug max-w-3xl">
+                          Store worldbuilding, character facts, and locations for this series. Cards checked
+                          below are included in <strong>Generate outline</strong> and <strong>page beats</strong>{' '}
+                          prompts (truncated if very large).
+                        </p>
+                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            {loreEditingId ? 'Edit card' : 'New card'}
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                              Title
+                              <input
+                                type="text"
+                                value={loreDraftTitle}
+                                onChange={(e) => setLoreDraftTitle(e.target.value)}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
+                                placeholder="e.g. The Silver Compact"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                              Category
+                              <input
+                                type="text"
+                                value={loreDraftCategory}
+                                onChange={(e) => setLoreDraftCategory(e.target.value)}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
+                                placeholder="world · character · place · rule · timeline"
+                              />
+                            </label>
+                          </div>
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                            Body
+                            <textarea
+                              value={loreDraftBody}
+                              onChange={(e) => setLoreDraftBody(e.target.value)}
+                              rows={5}
+                              className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[100px]"
+                              placeholder="Facts, tone, relationships, geography — what the AI should remember."
+                            />
+                          </label>
+                          <div className="flex flex-wrap items-center gap-4">
+                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={loreDraftInclude}
+                                onChange={(e) => setLoreDraftInclude(e.target.checked)}
+                                className="rounded border-black/30"
+                              />
+                              Include in AI prompts
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/70">
+                              Sort order
+                              <input
+                                type="number"
+                                value={loreDraftSort}
+                                onChange={(e) => setLoreDraftSort(Number(e.target.value) || 0)}
+                                className="w-20 rounded-lg border border-black/15 bg-white px-2 py-1 text-sm text-black"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || loreBusy || !loreDraftTitle.trim()}
+                              onClick={async () => {
+                                if (!selectedSeriesId || !loreDraftTitle.trim()) return;
+                                setLoreBusy(true);
+                                if (loreEditingId) {
+                                  const ok = await updateWriterLoreCard(loreEditingId, {
+                                    title: loreDraftTitle.trim(),
+                                    category: loreDraftCategory.trim() || 'general',
+                                    body: loreDraftBody,
+                                    include_in_prompt: loreDraftInclude,
+                                    sort_order: loreDraftSort,
+                                  });
+                                  setLoreBusy(false);
+                                  if (!ok) {
+                                    pushHistory('error: save lore card');
+                                    return;
+                                  }
+                                  pushHistory('updated lore card');
+                                } else {
+                                  const row = await createWriterLoreCard({
+                                    series_id: selectedSeriesId,
+                                    title: loreDraftTitle.trim(),
+                                    category: loreDraftCategory.trim() || 'world',
+                                    body: loreDraftBody,
+                                    include_in_prompt: loreDraftInclude,
+                                    sort_order: loreDraftSort,
+                                  });
+                                  setLoreBusy(false);
+                                  if (!row) {
+                                    pushHistory('error: create lore card');
+                                    return;
+                                  }
+                                  pushHistory('created lore card');
+                                }
+                                setLoreEditingId(null);
+                                setLoreDraftTitle('');
+                                setLoreDraftCategory('world');
+                                setLoreDraftBody('');
+                                setLoreDraftInclude(true);
+                                setLoreDraftSort(0);
+                                await reloadLoreCards();
+                              }}
+                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {loreEditingId ? 'Save changes' : 'Add card'}
+                            </button>
+                            {loreEditingId ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLoreEditingId(null);
+                                  setLoreDraftTitle('');
+                                  setLoreDraftCategory('world');
+                                  setLoreDraftBody('');
+                                  setLoreDraftInclude(true);
+                                  setLoreDraftSort(0);
+                                }}
+                                className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80"
+                              >
+                                Cancel edit
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Cards ({loreCards.length})
+                          </p>
+                          {loreBusy && loreCards.length === 0 ? (
+                            <p className="text-xs text-black/50">Loading…</p>
+                          ) : loreCards.length === 0 ? (
+                            <p className="text-xs text-black/50">No lore cards yet. Add one above.</p>
+                          ) : (
+                            <ul className="space-y-2 max-w-4xl">
+                              {loreCards.map((c) => (
+                                <li
+                                  key={c.id}
+                                  className="rounded-xl border border-black/10 bg-white/35 p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-black truncate">
+                                      {c.title || 'Untitled'}
+                                      <span className="font-normal text-black/55 text-xs ml-2">
+                                        ({c.category})
+                                      </span>
+                                      {!c.include_in_prompt ? (
+                                        <span className="ml-2 text-[10px] font-bold uppercase text-amber-900/80">
+                                          excluded from AI
+                                        </span>
+                                      ) : null}
+                                    </p>
+                                    <p className="text-xs text-black/75 whitespace-pre-wrap mt-1">
+                                      {c.body || '(empty body)'}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLoreEditingId(c.id);
+                                        setLoreDraftTitle(c.title);
+                                        setLoreDraftCategory(c.category);
+                                        setLoreDraftBody(c.body);
+                                        setLoreDraftInclude(c.include_in_prompt);
+                                        setLoreDraftSort(c.sort_order);
+                                      }}
+                                      className="rounded-md px-2 py-1 text-[10px] font-bold border border-black/20 bg-white/80"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={loreBusy}
+                                      onClick={async () => {
+                                        if (!window.confirm('Delete this lore card?')) return;
+                                        setLoreBusy(true);
+                                        const ok = await deleteWriterLoreCard(c.id);
+                                        setLoreBusy(false);
+                                        if (!ok) {
+                                          pushHistory('error: delete lore card');
+                                          return;
+                                        }
+                                        if (loreEditingId === c.id) {
+                                          setLoreEditingId(null);
+                                          setLoreDraftTitle('');
+                                          setLoreDraftCategory('world');
+                                          setLoreDraftBody('');
+                                          setLoreDraftInclude(true);
+                                          setLoreDraftSort(0);
+                                        }
+                                        pushHistory('deleted lore card');
+                                        await reloadLoreCards();
+                                      }}
+                                      className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900 border border-red-300/70 bg-red-50/90"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
                 {activeTab === 'beats' && (

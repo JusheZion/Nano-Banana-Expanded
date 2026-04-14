@@ -3,11 +3,12 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export type WriterWorkspaceTabId = 'arc' | 'outline' | 'beats' | 'dialogue' | 'video' | 'scripts';
+export type WriterWorkspaceTabId = 'arc' | 'outline' | 'lore' | 'beats' | 'dialogue' | 'video' | 'scripts';
 
-/** Narrative pipeline order: Outline → Beats → Dialogue → Video → Arc → Scripts. Shortcuts: ⌥⌘1–6 (Mac) / Alt+Ctrl+1–6 — not plain ⌘1–6 (browser tabs). */
+/** Narrative pipeline order: Outline → Lore → Beats → … Shortcuts: ⌥⌘1–7 (Mac) / Alt+Ctrl+1–7 — not plain ⌘1–7 (browser tabs). */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
   'outline',
+  'lore',
   'beats',
   'dialogue',
   'video',
@@ -20,6 +21,7 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   { ribbon: string; heading: string }
 > = {
   outline: { ribbon: 'Outline', heading: 'Issue Outline' },
+  lore: { ribbon: 'Lore', heading: 'Series lore' },
   beats: { ribbon: 'Beats', heading: 'Page Beats' },
   dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
   video: { ribbon: 'Video', heading: 'Video' },
@@ -37,6 +39,8 @@ export type WriterSearchContext = {
   scriptText: string | null;
   pacingReview: WriterToolSaved | undefined;
   canonCheck: WriterToolSaved | undefined;
+  /** Plain text of lore cards for Find on Lore tab */
+  loreCardsFindText?: string;
 };
 
 /** Labeled arc output; same string used for Find and the Arc tab preview. */
@@ -70,6 +74,8 @@ export function getWriterSearchableText(ctx: WriterSearchContext): string {
   switch (ctx.activeTab) {
     case 'outline':
       return stringifyPreview(ctx.latestOutlineJson);
+    case 'lore':
+      return ctx.loreCardsFindText ?? '';
     case 'beats':
       return stringifyPreview(ctx.selectedPageBeats);
     case 'dialogue':
@@ -81,6 +87,7 @@ export function getWriterSearchableText(ctx: WriterSearchContext): string {
     case 'scripts':
       return [
         stringifyPreview(ctx.latestOutlineJson),
+        ctx.loreCardsFindText ?? '',
         stringifyPreview(ctx.selectedPageBeats),
         ctx.scriptText ?? '',
         stringifyPreview(ctx.latestShotPlanJson),
