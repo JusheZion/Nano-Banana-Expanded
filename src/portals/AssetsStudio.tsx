@@ -112,7 +112,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`group px-3 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 border ${active ? 'text-black hover:text-violet-300 border-amber-600/80 shadow-[0_0_10px_rgba(191,149,63,0.4)]' : chipInactive}`}
+      className={`group px-3.5 py-2 rounded-full text-sm font-medium tracking-wide transition-all duration-200 border ${active ? 'text-black hover:text-violet-300 border-amber-600/80 shadow-[0_0_10px_rgba(191,149,63,0.4)]' : chipInactive}`}
       style={active ? { background: ACCENT_GOLD_GRADIENT } : undefined}
     >
       {active ? (
@@ -215,7 +215,7 @@ function SectionAddToLibrary({
       <select
         value={categoryId}
         onChange={(e) => setCategoryId(e.target.value)}
-        className="bg-black/40 text-white border border-white/20 rounded px-2 py-1.5 text-xs min-w-0 flex-1 basis-24"
+        className="bg-black/40 text-white border border-white/20 rounded px-2 py-2 text-sm min-w-0 flex-1 basis-24"
       >
         {categories.map((c) => (
           <option key={c.id} value={c.id}>{c.label}</option>
@@ -226,12 +226,12 @@ function SectionAddToLibrary({
         value={input}
         onChange={(e) => setInput(e.target.value)}
         placeholder="Add custom..."
-        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
+        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-2 rounded text-sm border border-white/10"
       />
       <button
         type="button"
         onClick={handleSave}
-        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
+        className="px-3 py-2.5 rounded-lg text-black text-sm font-bold border border-amber-600/50"
         style={{ background: ACCENT_GOLD_GRADIENT }}
       >
         Save as Tag
@@ -259,7 +259,7 @@ function SetDressingRow({
   const label = category.replace(/([A-Z])/g, ' $1').trim();
   return (
     <div>
-      <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{label}</h3>
+      <h3 className="text-sm mb-2 inline-block font-semibold" style={goldTextStyle}>{label}</h3>
       <div className="flex flex-wrap gap-2">
         {allOptions.map((opt) => (
           <ChipWithOptionalRemove
@@ -786,7 +786,7 @@ export const AssetsStudio: React.FC = () => {
               }}
             />
             <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-2">
-              <div className="text-[10px] text-white/85 min-w-0 flex-1 basis-[140px]">
+              <div className="text-sm text-white/85 min-w-0 flex-1 basis-[140px]">
                 <span className="font-bold text-amber-200/90">
                   Slot {focusedReferenceSlotIndex + 1}
                 </span>
@@ -797,7 +797,7 @@ export const AssetsStudio: React.FC = () => {
                 <Tooltip variant="asset" content="Upload an image into the focused slot" side="bottom">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
                     onClick={() => {
                       uploadSlotIndexRef.current = focusedReferenceSlotIndex;
                       uploadInputRef.current?.click();
@@ -810,7 +810,7 @@ export const AssetsStudio: React.FC = () => {
                 <Tooltip variant="asset" content="Choose from archive for the focused slot" side="bottom">
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
                     onClick={() => setRecallSlotIndex(focusedReferenceSlotIndex)}
                   >
                     <Archive className="w-3.5 h-3.5 shrink-0" aria-hidden />
@@ -821,7 +821,7 @@ export const AssetsStudio: React.FC = () => {
                   <button
                     type="button"
                     disabled={!store.referenceImageUrls[focusedReferenceSlotIndex]}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border border-white/20 text-white/80 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium border border-white/20 text-white/80 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none"
                     onClick={() => {
                       const i = focusedReferenceSlotIndex;
                       const url = store.referenceImageUrls[i];
@@ -849,7 +849,7 @@ export const AssetsStudio: React.FC = () => {
                       store.clearAllReferenceSlots();
                       store.setCurrentLiveImageUrl(null);
                     }}
-                    className="px-2 py-1 rounded-md text-[10px] border border-white/20 hover:bg-white/10"
+                    className="px-2.5 py-1.5 rounded-md text-sm border border-white/20 hover:bg-white/10"
                   >
                     Clear all
                   </button>
@@ -883,14 +883,14 @@ export const AssetsStudio: React.FC = () => {
                         store.setGenerationStatus('error', 'Could not paste image from clipboard.');
                       }
                     }}
-                    className="px-2 py-1 rounded-md text-[10px] border border-amber-500/40 hover:bg-amber-500/10"
+                    className="px-2.5 py-1.5 rounded-md text-sm border border-amber-500/40 hover:bg-amber-500/10"
                   >
                     Paste first empty
                   </button>
                 </Tooltip>
               </div>
             </div>
-            <p className="text-[10px] text-white/50 mb-1 shrink-0">
+            <p className="text-sm text-white/50 mb-1 shrink-0">
               Click a thumbnail to focus a slot. Labels show slot role in the API stack.
             </p>
             <div className="mt-1 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
@@ -941,7 +941,7 @@ export const AssetsStudio: React.FC = () => {
                           {url ? (
                             <ArcsStorageImg src={url} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-[8px] text-white/40">{i + 1}</span>
+                            <span className="text-xs text-white/45 tabular-nums">{i + 1}</span>
                           )}
                         </button>
                         {url ? (
@@ -958,7 +958,7 @@ export const AssetsStudio: React.FC = () => {
                                 store.setCurrentLiveImageUrl(still[0] ?? null);
                               }
                             }}
-                            className="absolute -top-0.5 -right-0.5 z-10 w-3.5 h-3.5 rounded-full bg-black/85 text-white text-[9px] leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
+                            className="absolute -top-0.5 -right-0.5 z-10 w-3.5 h-3.5 rounded-full bg-black/85 text-white text-xs leading-none flex items-center justify-center opacity-0 group-hover/slot:opacity-100 hover:!opacity-100 focus:opacity-100 pointer-events-auto border border-white/20"
                             aria-label={`Remove slot ${i + 1}`}
                           >
                             ×
@@ -1211,7 +1211,7 @@ export const AssetsStudio: React.FC = () => {
               <div className="space-y-4">
                 {(Object.keys(CINEMATIC_OPTIONS) as AssetCinematicKey[]).map((key) => (
                   <div key={key}>
-                    <h3 className="text-xs mb-2 inline-block" style={goldTextStyle}>{key}</h3>
+                    <h3 className="text-sm mb-2 inline-block font-semibold" style={goldTextStyle}>{key}</h3>
                     <div className="flex flex-wrap gap-2">
                       {[...CINEMATIC_OPTIONS[key], ...(store.cinematicLibraries[key] ?? [])].map((opt) => (
                         <ChipWithOptionalRemove
@@ -1261,7 +1261,7 @@ export const AssetsStudio: React.FC = () => {
             </div>
             {!promptPinned ? (
               <p
-                className="text-[11px] font-mono text-violet-100/85 truncate border border-white/10 rounded-lg px-2 py-1.5 bg-black/50 min-h-[2rem]"
+                className="text-sm font-mono text-violet-100/90 truncate border border-white/10 rounded-lg px-3 py-2 bg-black/50 min-h-[2.5rem]"
                 title={displayPrompt || undefined}
               >
                 {(displayPrompt || '// Pin to expand — full prompt, tabs, and Architectural Lock').split('\n')[0].slice(0, 140)}
@@ -1365,7 +1365,7 @@ export const AssetsStudio: React.FC = () => {
                       {store.promptSnippets.map((s) => (
                         <span
                           key={s.id}
-                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-white/10"
+                          className="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-white/10"
                         >
                           {s.name}
                           <button
@@ -1463,7 +1463,7 @@ export const AssetsStudio: React.FC = () => {
                     store.setVaultPromptOverride('');
                     store.setRefinementPromptOverride('');
                   }}
-                  className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
+                  className="px-2 py-1 rounded-full text-sm border border-amber-500/40 hover:bg-amber-500/20"
                 >
                   Refresh
                 </button>
@@ -1475,7 +1475,7 @@ export const AssetsStudio: React.FC = () => {
                   store.setVaultPromptOverride('');
                   store.setRefinementPromptOverride('');
                 }}
-                className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
+                className="px-2 py-1 rounded-full text-sm border border-amber-500/40 hover:bg-amber-500/20"
               >
                 Reset to tags
               </button>
@@ -1484,7 +1484,7 @@ export const AssetsStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setPromptPinned((p) => !p)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border border-amber-500/40 text-amber-200/90 hover:bg-amber-500/10"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-bold border border-amber-500/40 text-amber-200/90 hover:bg-amber-500/10"
                 aria-pressed={promptPinned}
               >
                 {promptPinned ? <Pin className="w-3 h-3 shrink-0" aria-hidden /> : <PinOff className="w-3 h-3 shrink-0" aria-hidden />}
@@ -1503,23 +1503,23 @@ export const AssetsStudio: React.FC = () => {
                     );
                     setPromptPanelTab('refine');
                   }}
-                  className="text-[10px] px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200/90 hover:bg-violet-500/10 truncate max-w-[120px]"
+                  className="text-sm px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200/90 hover:bg-violet-500/10 truncate max-w-[120px]"
                   title="Copy full prompt to clipboard; append summary to Refine tab"
                 >
                   Last prompt
                 </button>
               ) : null}
-              <span className="text-[9px] text-white/55 uppercase tracking-wider">Model</span>
+              <span className="text-xs text-white/55 uppercase tracking-wider">Model</span>
               <select
                 value={store.selectedOnyxModelId}
                 onChange={(e) => store.setSelectedOnyxModelId(e.target.value as 'flash' | 'pro')}
-                className="max-w-[9.5rem] bg-black/55 text-white border border-amber-500/25 rounded-md px-1.5 py-0.5 text-[10px]"
+                className="max-w-[9.5rem] bg-black/55 text-white border border-amber-500/25 rounded-md px-1.5 py-0.5 text-sm"
               >
                 <option value="flash">Nano Banana 2</option>
                 <option value="pro">Nano Banana Pro</option>
               </select>
               <label className="flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded-full border border-amber-500/30 bg-black/20 hover:border-amber-500/60 transition-all ml-auto">
-                <span className="text-[9px] font-bold tracking-wide inline-block max-w-[5.5rem] leading-tight" style={goldTextStyle}>
+                <span className="text-xs font-bold tracking-wide inline-block max-w-[5.5rem] leading-tight" style={goldTextStyle}>
                   Architectural lock
                 </span>
                 <div
@@ -1559,14 +1559,14 @@ export const AssetsStudio: React.FC = () => {
                 role="tab"
                 aria-selected={leftModule === id}
                 onClick={() => setLeftModule(id)}
-                className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-2 rounded-md text-[9px] font-bold uppercase tracking-wide border transition-colors min-w-0 ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-md text-sm font-bold uppercase tracking-wide border transition-colors min-w-0 ${
                   leftModule === id
                     ? 'text-black border-amber-500/60 shadow-sm'
                     : 'border-transparent text-violet-200/75 hover:bg-white/10'
                 }`}
                 style={leftModule === id ? { background: ACCENT_GOLD_GRADIENT } : undefined}
               >
-                <Icon className="w-3.5 h-3.5 shrink-0 opacity-90" aria-hidden />
+                <Icon className="w-4 h-4 shrink-0 opacity-90" aria-hidden />
                 <span className="truncate">{label}</span>
               </button>
             ))}
@@ -1580,7 +1580,7 @@ export const AssetsStudio: React.FC = () => {
             className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
             data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
           >
-            <span className="text-xs font-mono truncate" style={goldTextStyle}>
+            <span className="text-sm font-mono truncate" style={goldTextStyle}>
               {store.generationStatus === 'safety_blocked'
                 ? 'Prompt restricted by safety filters. Please adjust and try again'
                 : store.generationStatus === 'error' && store.generationStatusMessage
@@ -1592,7 +1592,7 @@ export const AssetsStudio: React.FC = () => {
           </div>
 
           <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md flex flex-col overflow-hidden shadow-lg shadow-black/15">
-            <h2 className="text-sm font-bold uppercase tracking-widest px-3 pt-2.5 pb-1.5 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
+            <h2 className="text-base font-bold uppercase tracking-widest px-3 pt-3 pb-2 flex-shrink-0 border-b border-white/10" style={goldTextStyle}>
               Asset workspace
             </h2>
             <div className="flex-none shrink-0 min-h-0 min-w-0 flex flex-col items-center justify-center p-2 overflow-x-hidden overflow-y-hidden">
@@ -1605,7 +1605,7 @@ export const AssetsStudio: React.FC = () => {
                           className="group/ref relative mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/20 bg-black/55 shadow-inner"
                           style={previewFrameCompare}
                         >
-                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-sm font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
                             Reference
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
@@ -1628,7 +1628,7 @@ export const AssetsStudio: React.FC = () => {
                           className="group/live relative mx-auto cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
                           style={previewFrameCompare}
                         >
-                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
+                          <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-sm font-bold border border-amber-500/30 bg-black/50 text-violet-200/90">
                             Generated
                           </div>
                           <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
@@ -1665,7 +1665,7 @@ export const AssetsStudio: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <p className="mt-2 max-w-xl text-center text-[10px] text-violet-200/60">
+                    <p className="mt-2 max-w-xl text-center text-sm text-violet-200/60">
                       Compare on — hover either panel to zoom in place ({effectiveAspectRatio}). Turn Compare off for one large preview.
                     </p>
                   </>
@@ -1707,7 +1707,7 @@ export const AssetsStudio: React.FC = () => {
                         </Tooltip>
                       </div>
                     </div>
-                    <p className="mt-2 max-w-md text-center text-[10px] text-violet-200/60">
+                    <p className="mt-2 max-w-md text-center text-sm text-violet-200/60">
                       {effectiveAspectRatio} output
                       {effectiveAspectRatio !== store.aspectRatio
                         ? ` (effective ${effectiveAspectRatio}; chip ${store.aspectRatio})`
@@ -1736,8 +1736,8 @@ export const AssetsStudio: React.FC = () => {
 
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
             <div className="shrink-0 flex flex-col border-t border-white/10 bg-black/20">
-              <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5">
-                <p className="text-[9px] leading-snug text-violet-200/65 line-clamp-2">
+              <div className="px-3 pt-3 pb-2 shrink-0 space-y-2 rounded-b-lg">
+                <p className="text-xs leading-snug text-violet-200/65 line-clamp-2">
                   Set <span className="text-amber-200/90">Room / Urban / Time</span>, then{' '}
                   <span className="text-amber-200/90">Expand Setting</span> or{' '}
                   <span className="text-amber-200/90">Generate Asset</span> (full prompt + refs).
@@ -1746,7 +1746,7 @@ export const AssetsStudio: React.FC = () => {
                   {assetSessionChips.map(({ key, label }) => (
                     <span
                       key={key}
-                      className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/80"
+                      className="inline-flex items-center rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-sm text-white/80"
                     >
                       {label}
                     </span>
@@ -1757,7 +1757,7 @@ export const AssetsStudio: React.FC = () => {
                   <div className="rounded-lg border border-white/10 bg-black/25 p-2 space-y-2">
                     {recentAssets.length > 0 && (
                       <div>
-                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
+                        <span className="text-sm uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
                         <div className="flex flex-wrap gap-2">
                           {recentAssets.map((item) => (
                             <Tooltip variant="asset" key={item.id} content={item.displayName ?? item.collectionName ?? 'Asset'}>
@@ -1768,7 +1768,7 @@ export const AssetsStudio: React.FC = () => {
                                   if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
                                 }}
                                 className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                                  store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
                                 }`}
                               >
                                 <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -1780,7 +1780,7 @@ export const AssetsStudio: React.FC = () => {
                     )}
                     {getCachedGenerations('asset').length > 0 && (
                       <div>
-                        <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">This session</span>
+                        <span className="text-sm uppercase tracking-wider text-white/60 block mb-1">This session</span>
                         <div className="flex flex-wrap gap-2">
                           {getCachedGenerations('asset').map((item) => (
                             <Tooltip
@@ -1800,7 +1800,7 @@ export const AssetsStudio: React.FC = () => {
                                   if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
                                 }}
                                 className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                                  store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
                                 }`}
                               >
                                 <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
@@ -1813,9 +1813,9 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 )}
               </div>
-              <div className="px-3 pb-3 pt-1 space-y-3">
+              <div className="mx-3 mb-3 rounded-xl border border-white/10 bg-black/25 px-3 py-3 space-y-4">
                 <div>
-                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Room</label>
+                  <label className="text-sm block mb-1.5 inline-block font-semibold" style={goldTextStyle}>Room</label>
                   <div className="flex flex-wrap gap-1.5">
                     {SPATIAL_ROOM_OPTIONS.map((opt) => (
                       <Chip
@@ -1829,7 +1829,7 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Urban</label>
+                  <label className="text-sm block mb-1.5 inline-block font-semibold" style={goldTextStyle}>Urban</label>
                   <div className="flex flex-wrap gap-1.5">
                     {SPATIAL_URBAN_OPTIONS.map((opt) => (
                       <Chip
@@ -1843,7 +1843,7 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Time / season</label>
+                  <label className="text-sm block mb-1.5 inline-block font-semibold" style={goldTextStyle}>Time / season</label>
                   <div className="flex flex-wrap gap-1.5">
                     {TIME_SEASON_OPTIONS.map((opt) => (
                       <Chip
@@ -1857,7 +1857,7 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Aspect</label>
+                  <label className="text-sm block mb-1.5 inline-block font-semibold" style={goldTextStyle}>Aspect</label>
                   <div className="flex flex-wrap gap-1.5">
                     {(['9:16', '1:1', '21:9'] as AspectRatioId[]).map((ratio) => (
                       <Chip
@@ -1871,7 +1871,7 @@ export const AssetsStudio: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10px] block mb-1.5 inline-block" style={goldTextStyle}>Camera</label>
+                  <label className="text-sm block mb-1.5 inline-block font-semibold" style={goldTextStyle}>Camera</label>
                   <div className="flex flex-wrap gap-1.5">
                     {SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS.map((opt) => (
                       <Chip
@@ -1887,11 +1887,11 @@ export const AssetsStudio: React.FC = () => {
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-white/10 bg-black/35 p-2 space-y-2">
+            <div className="shrink-0 border-t border-white/10 bg-black/35 px-3 py-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 {!phoneCompact && (
                   <>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-violet-200/90">Thumbnails</span>
+                <span className="text-sm font-bold uppercase tracking-wider text-violet-200/90">Thumbnails</span>
                 <Tooltip
                   variant="asset"
                   content="Smaller gallery thumbnails so more fit on screen."
@@ -1901,7 +1901,7 @@ export const AssetsStudio: React.FC = () => {
                     type="button"
                     aria-pressed={store.galleryDensity === 'compact'}
                     onClick={() => store.setGalleryDensity('compact')}
-                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    className={`text-sm px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
                       store.galleryDensity === 'compact'
                         ? 'text-violet-950 border-amber-500 shadow-md'
                         : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
@@ -1924,7 +1924,7 @@ export const AssetsStudio: React.FC = () => {
                     type="button"
                     aria-pressed={store.galleryDensity === 'comfortable'}
                     onClick={() => store.setGalleryDensity('comfortable')}
-                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    className={`text-sm px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
                       store.galleryDensity === 'comfortable'
                         ? 'text-violet-950 border-amber-500 shadow-md'
                         : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
@@ -1953,7 +1953,7 @@ export const AssetsStudio: React.FC = () => {
                     type="button"
                     aria-pressed={compareSplit}
                     onClick={() => setCompareSplit((v) => !v)}
-                    className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
+                    className={`text-sm px-2 py-0.5 rounded-md font-bold uppercase tracking-wide border-2 transition-all ${
                       compareSplit
                         ? 'text-violet-950 border-amber-500 shadow-md'
                         : 'text-violet-200/80 border-violet-600/50 hover:border-amber-500/60 bg-black/30'
@@ -1967,12 +1967,12 @@ export const AssetsStudio: React.FC = () => {
 
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-[9px] uppercase tracking-wider text-violet-200/60">Seed</span>
+                  <span className="text-xs uppercase tracking-wider text-violet-200/60">Seed</span>
                   <Tooltip variant="asset" content="Use a new random seed on each generation (more variation)." side="top">
                     <button
                       type="button"
                       onClick={() => store.setSeedMode('randomized')}
-                      className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
+                      className={`px-2.5 py-1.5 rounded-full text-sm font-medium border ${
                         (store.seedMode ?? 'randomized') === 'randomized'
                           ? 'border-violet-500/60 bg-violet-500/15 text-violet-200'
                           : 'border-white/20 text-violet-200/70 hover:bg-white/10'
@@ -1985,7 +1985,7 @@ export const AssetsStudio: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => store.setSeedMode('locked')}
-                      className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
+                      className={`px-2.5 py-1.5 rounded-full text-sm font-medium border ${
                         store.seedMode === 'locked'
                           ? 'border-amber-500/60 bg-amber-500/15'
                           : 'border-white/20 text-violet-200/70 hover:bg-white/10'
@@ -2004,7 +2004,7 @@ export const AssetsStudio: React.FC = () => {
                     type="button"
                     onClick={handleGenerateAsset}
                     disabled={store.generationStatus === 'pending'}
-                    className="px-2.5 py-1 rounded-full text-[10px] font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
+                    className="px-2.5 py-1 rounded-full text-sm font-medium text-black border border-amber-600/50 hover:text-violet-300 transition-colors disabled:opacity-90 disabled:cursor-wait"
                     style={
                       store.generationStatus === 'pending'
                         ? { background: GEM_AMETHYST, boxShadow: `0 0 16px ${GEM_AMETHYST}` }
@@ -2031,7 +2031,7 @@ export const AssetsStudio: React.FC = () => {
                       type="button"
                       onClick={() => void handleGenerateAsset()}
                       disabled={store.generationStatus === 'pending'}
-                      className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
+                      className="px-2.5 py-1 rounded-full text-sm font-medium border border-violet-500/40 hover:bg-violet-500/10 disabled:opacity-50"
                     >
                       <span className="text-violet-200/90">Again</span>
                     </button>
@@ -2048,7 +2048,7 @@ export const AssetsStudio: React.FC = () => {
                         store.setCurrentGenerationSeed(store.previousGenerationSeed);
                         store.setPreviousLiveSnapshot(null, null);
                       }}
-                      className="px-2.5 py-1 rounded-full text-[10px] font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
+                      className="px-2.5 py-1 rounded-full text-sm font-medium border border-white/25 hover:bg-white/10 disabled:opacity-40"
                     >
                       Undo
                     </button>
@@ -2060,7 +2060,7 @@ export const AssetsStudio: React.FC = () => {
                       type="button"
                       onClick={() => openSaveAssetModal('new')}
                       disabled={!store.currentLiveImageUrl}
-                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="inline-block" style={goldTextStyle}>Save new</span>
                     </button>
@@ -2074,7 +2074,7 @@ export const AssetsStudio: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleExpandSetting}
-                    className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px]"
+                    className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-sm"
                   >
                     <span className="inline-block" style={goldTextStyle}>Expand</span>
                   </button>
@@ -2085,7 +2085,7 @@ export const AssetsStudio: React.FC = () => {
                       type="button"
                       onClick={() => openSaveAssetModal('library')}
                       disabled={!store.currentLiveImageUrl}
-                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2.5 py-1 rounded-full border border-amber-500/50 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="inline-block" style={goldTextStyle}>Library</span>
                     </button>
@@ -2107,7 +2107,7 @@ export const AssetsStudio: React.FC = () => {
                       <button
                         type="button"
                         disabled
-                        className="px-2.5 py-1 rounded-full border border-white/20 font-medium text-[10px] cursor-not-allowed opacity-60"
+                        className="px-2.5 py-1 rounded-full border border-white/20 font-medium text-sm cursor-not-allowed opacity-60"
                       >
                         <span className="inline-block" style={goldTextStyle}>Cast</span>
                       </button>
@@ -2164,7 +2164,7 @@ export const AssetsStudio: React.FC = () => {
               </datalist>
             )}
             {saveAssetMode === 'library' && (
-              <p className="text-[11px] text-white/55 -mt-2 mb-3">
+              <p className="text-sm text-white/55 -mt-2 mb-3">
                 {vaultCollectionLoading
                   ? 'Loading collections…'
                   : vaultCollectionOptions.length === 0

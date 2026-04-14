@@ -34,6 +34,12 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Tooltips: reference hub **Clear all** / **Paste first empty**; **This session** thumbs; **Compact** / **Comfortable** / **Compare**
 - [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
 
+## Asset Studio readability polish (2026-04-14) — COMPLETE
+
+- [x] Typography: replace micro `text-[9px]`/`text-[10px]` with `text-xs`/`text-sm`; larger Chips, labels, and primary actions
+- [x] Visual grouping: spatial expansion block in rounded card; more padding on workspace action bar; larger gallery thumbs (compact/comfortable)
+- [x] Verify: `npm run test -- --run`, `npm run build`
+
 ## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
 
 - [x] DB columns + migration; localStorage `thumbnailFocus` on character generations

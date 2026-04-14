@@ -109,6 +109,14 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; manual Asset Studio — short viewport height, **Compare** on/off — preview stays put; scroll reaches all workspace actions.
 
+## Asset Studio — readability and polish pass (2026-04-14)
+
+**Goal:** Reduce “tiny UI” fatigue: replace pervasive `text-[9px]` / `text-[10px]` with Tailwind `text-xs` / `text-sm` where appropriate; enlarge **Chip** controls; group **Room / Urban / Time / Aspect / Camera** in a bordered card; slightly larger **Recent / This session** thumbnails; improve **Refs / Build / Look** module tabs and **generation status** line legibility; slightly larger hub toolbar buttons.
+
+**Files:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx)
+
+**Verify:** `npm run test -- --run`; `npm run build`; spot-check Asset Studio at 100% zoom.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
