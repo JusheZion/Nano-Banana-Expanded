@@ -123,6 +123,19 @@ export const AssetStudioReferencesPanel: React.FC<Props> = ({
           </Tooltip>
           <Tooltip
             variant="asset"
+            content="Clear all reference slots but keep the current live preview image."
+            side="bottom"
+          >
+            <button
+              type="button"
+              onClick={() => store.clearReferenceSlotsKeepLive()}
+              className="px-2.5 py-1.5 rounded-md text-sm border border-amber-500/35 text-amber-200/95 hover:bg-amber-500/15"
+            >
+              Clear slots
+            </button>
+          </Tooltip>
+          <Tooltip
+            variant="asset"
             content="Paste an image from the clipboard into the first empty reference slot (browser permission required)."
             side="bottom"
           >

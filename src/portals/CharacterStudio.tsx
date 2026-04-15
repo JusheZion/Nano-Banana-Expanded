@@ -862,9 +862,24 @@ export const CharacterStudio: React.FC = () => {
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
             {leftModule === 'hub' && (
             <>
-            <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
-              Reference images
-            </h2>
+            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-amber-500/20 pb-1 mb-2 shrink-0">
+              <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
+                Reference images
+              </h2>
+              <Tooltip
+                variant="character"
+                content="Clear every reference slot but keep the current live preview image."
+                side="left"
+              >
+                <button
+                  type="button"
+                  onClick={() => store.clearReferenceSlotsKeepLive()}
+                  className="px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15"
+                >
+                  Clear slots
+                </button>
+              </Tooltip>
+            </div>
             <input
               ref={uploadInputRef}
               type="file"
@@ -1075,6 +1090,20 @@ export const CharacterStudio: React.FC = () => {
 
             {leftModule === 'dna' && (
             <>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-black/25 px-2 py-1.5 mb-2 shrink-0">
+              <span className="text-[10px] text-white/65 uppercase tracking-wide">DNA tab</span>
+              <button
+                type="button"
+                onClick={() => {
+                  store.clearDnaModuleSelections();
+                  setPromptPanelTab('auto');
+                }}
+                className="px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15"
+                title="Clear heritage, gender, expression, and physical selections; turn off DNA lock; reset age and Diversify Likeness."
+              >
+                Clear DNA tab
+              </button>
+            </div>
             {/* DNA Engine */}
             <section
               className={dnaAndPhysicalDisabled ? 'opacity-50 pointer-events-none' : ''}
@@ -1222,6 +1251,20 @@ export const CharacterStudio: React.FC = () => {
 
             {leftModule === 'style' && (
             <>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-black/25 px-2 py-1.5 mb-2 shrink-0">
+              <span className="text-[10px] text-white/65 uppercase tracking-wide">Style tab</span>
+              <button
+                type="button"
+                onClick={() => {
+                  store.clearStyleModuleSelections();
+                  setPromptPanelTab('auto');
+                }}
+                className="px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15"
+                title="Reset art style, wardrobe, cinematic suite, and active pose selection (saved poses list kept)."
+              >
+                Clear Style tab
+              </button>
+            </div>
             {/* Art Style Engine */}
             <section>
               <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
@@ -1391,9 +1434,22 @@ export const CharacterStudio: React.FC = () => {
 
             {/* Tag bar */}
             <section>
-              <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-                Prompt Tags
-              </h2>
+              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-amber-500/20 pb-1 mb-3">
+                <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
+                  Prompt Tags
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.clearPromptTagsOnly();
+                    setPromptPanelTab('auto');
+                  }}
+                  className="px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15 shrink-0"
+                  title="Reset tag chips to defaults (portrait + cinematic-lighting)."
+                >
+                  Reset tags
+                </button>
+              </div>
               <HybridTagBar
                 tags={store.tags}
                 setTags={store.setTags}
@@ -1405,10 +1461,23 @@ export const CharacterStudio: React.FC = () => {
           </div>
 
           <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(42vh,360px)] overflow-hidden">
-            <div className="mb-1 shrink-0">
+            <div className="mb-1 shrink-0 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
                 Live Prompt
               </h2>
+              {!phoneCompact && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.clearLivePromptOverridesOnly();
+                    setPromptPanelTab('auto');
+                  }}
+                  className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border border-white/20 text-white/75 hover:bg-white/10"
+                  title="Clear Edit override and Refine text only. Keeps tags and compiled prompt."
+                >
+                  Clear overrides
+                </button>
+              )}
             </div>
             {!promptPinned ? (
               <p
@@ -1655,8 +1724,7 @@ export const CharacterStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    store.setVaultPromptOverride('');
-                    store.setRefinementPromptOverride('');
+                    store.clearLivePromptOverridesOnly();
                     setPromptPanelTab('auto');
                   }}
                   className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
@@ -1668,8 +1736,7 @@ export const CharacterStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  store.setVaultPromptOverride('');
-                  store.setRefinementPromptOverride('');
+                  store.clearLivePromptOverridesOnly();
                   setPromptPanelTab('auto');
                 }}
                 className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"

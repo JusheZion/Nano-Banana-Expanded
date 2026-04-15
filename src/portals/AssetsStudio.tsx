@@ -142,6 +142,32 @@ export const AssetsStudio: React.FC = () => {
     if (leftModule === 'hub') setLeftModule('structural');
   }, [phoneCompact, store.workspaceMode, leftModule]);
 
+  // #region agent log
+  useEffect(() => {
+    const emptyRefsPanel =
+      store.workspaceMode === 'references' && leftModule !== 'hub';
+    fetch('http://127.0.0.1:7621/ingest/38906f41-21ab-4611-a211-2685b306cf1c', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '27e2cf',
+      },
+      body: JSON.stringify({
+        sessionId: '27e2cf',
+        location: 'AssetsStudio.tsx:workspace-leftModule-sync',
+        message: 'workspaceMode vs leftModule (References empty if leftModule not hub)',
+        data: {
+          workspaceMode: store.workspaceMode,
+          leftModule,
+          emptyReferencesPanel: emptyRefsPanel,
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'A',
+      }),
+    }).catch(() => {});
+  }, [store.workspaceMode, leftModule]);
+  // #endregion
+
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
 
   useEffect(() => {

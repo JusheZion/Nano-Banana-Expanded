@@ -198,6 +198,15 @@ export interface AssetStudioState {
   removePromptSnippet: (id: string) => void;
   setGalleryDensity: (d: GalleryDensity) => void;
   clearAllReferenceSlots: () => void;
+  /** Empty all reference slots without changing the live preview image. */
+  clearReferenceSlotsKeepLive: () => void;
+  /** Reset Prompt Tags chip list to defaults (environment + cinematic-lighting). */
+  clearPromptTagsOnly: () => void;
+  clearLivePromptOverridesOnly: () => void;
+  /** Build tab: era/location/arch/set dressing, spatial, time, architectural lock, modifiers. */
+  clearStructuralSelections: () => void;
+  /** Look tab: art style to flagship, cinematic cleared. */
+  clearLookSelections: () => void;
   setWorkspaceMode: (mode: AssetStudioWorkspaceMode) => void;
   setBuildDisclosure: (mode: AssetStudioBuildDisclosure) => void;
   /** Tags, style selections, refs, prompt overrides — not live image, seed, or session/recents. */
@@ -472,6 +481,28 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       setGalleryDensity: (d) => set({ galleryDensity: d }),
       clearAllReferenceSlots: () =>
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      clearReferenceSlotsKeepLive: () =>
+        set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      clearPromptTagsOnly: () => set({ tags: defaultAssetTags() }),
+      clearLivePromptOverridesOnly: () =>
+        set({ vaultPromptOverride: '', refinementPromptOverride: '' }),
+      clearStructuralSelections: () =>
+        set({
+          eraStyleSelection: [],
+          locationTypeSelection: [],
+          architecturalDetailSelection: [],
+          setDressingSelections: emptySetDressingSelections(),
+          spatialRoomOption: null,
+          spatialUrbanOption: null,
+          timeSeason: null,
+          architecturalLock: false,
+          assetModifiers: defaultAssetModifiers(),
+        }),
+      clearLookSelections: () =>
+        set({
+          artStyleId: 'flagship',
+          cinematic: emptyCinematic(),
+        }),
       setWorkspaceMode: (mode) => set({ workspaceMode: mode }),
       setBuildDisclosure: (mode) => set({ buildDisclosure: mode }),
       resetWorkspaceFreshSlate: () =>

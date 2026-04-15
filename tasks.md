@@ -291,4 +291,4 @@ Checklist for current and upcoming phases. Update as work completes.
 
 - [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
 - [x] **Clear workspace:** `resetWorkspaceFreshSlate` on `characterStudioStore` + `assetStudioStore` (tags → defaults, style selections empty, refs cleared, overrides cleared; keeps live image, seed, libraries, session/recents).
-- [ ] **Section-level clears** (References only, Prompt Tags only, etc.): not implemented — optional follow-up.
+- [x] **Section-level clears:** store APIs (`clearReferenceSlotsKeepLive`, `clearPromptTagsOnly`, `clearLivePromptOverridesOnly`, `clearDnaModuleSelections`, `clearStyleModuleSelections` / Asset: `clearStructuralSelections`, `clearLookSelections`) + UI on Refs / DNA & Style tabs / Live Prompt / Asset Build & Look / Prompt Tags.

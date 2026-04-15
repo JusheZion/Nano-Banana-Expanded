@@ -232,6 +232,16 @@ export interface CharacterStudioState {
   removePromptSnippet: (id: string) => void;
   setGalleryDensity: (d: GalleryDensity) => void;
   clearAllReferenceSlots: () => void;
+  /** Empty all reference slots without changing the live preview image. */
+  clearReferenceSlotsKeepLive: () => void;
+  /** Reset Prompt Tags chip list to defaults (portrait + cinematic-lighting). */
+  clearPromptTagsOnly: () => void;
+  /** Clear vault + refine override text only. */
+  clearLivePromptOverridesOnly: () => void;
+  /** DNA tab: heritage/gender/facial/physical selections, DNA lock off, age & diversify defaults. */
+  clearDnaModuleSelections: () => void;
+  /** Style tab: art style, wardrobe, cinematic selections; pose selection cleared (saved poses kept). */
+  clearStyleModuleSelections: () => void;
   /** Tags, style selections, refs, prompt overrides — not live image, seed, or session/recents. */
   resetWorkspaceFreshSlate: () => void;
 }
@@ -563,6 +573,35 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       setGalleryDensity: (d) => set({ galleryDensity: d }),
       clearAllReferenceSlots: () =>
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      clearReferenceSlotsKeepLive: () =>
+        set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      clearPromptTagsOnly: () => set({ tags: defaultCharacterTags() }),
+      clearLivePromptOverridesOnly: () =>
+        set({ vaultPromptOverride: '', refinementPromptOverride: '' }),
+      clearDnaModuleSelections: () =>
+        set({
+          heritageSelection: [],
+          genderSelection: [],
+          facialExpressionSelection: [],
+          physicalSelections: {},
+          dnaLock: false,
+          ageModifier: 0,
+          diversifyLikeness: false,
+        }),
+      clearStyleModuleSelections: () =>
+        set({
+          artStyleId: 'flagship',
+          wardrobeSelections: Object.keys(WARDROBE_PRESETS).reduce(
+            (acc, k) => {
+              acc[k as WardrobeCategory] = [];
+              return acc;
+            },
+            {} as Record<WardrobeCategory, string[]>
+          ),
+          wardrobeModifiers: defaultWardrobeModifiers(),
+          cinematic: emptyCinematic(),
+          selectedPoseId: null,
+        }),
       resetWorkspaceFreshSlate: () =>
         set((s) => ({
           ...s,

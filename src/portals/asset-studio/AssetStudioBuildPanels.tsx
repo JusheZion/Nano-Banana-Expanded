@@ -48,6 +48,17 @@ export const AssetStudioStructuralPanel: React.FC<Props> = ({
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-black/25 px-2 py-1.5 mb-2 shrink-0">
+        <span className="text-xs text-white/65 uppercase tracking-wide">Build tab</span>
+        <button
+          type="button"
+          onClick={() => store.clearStructuralSelections()}
+          className="px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15"
+          title="Clear era, location, architectural detail, scene props, spatial/time, architectural lock, and material ribbons."
+        >
+          Clear Build
+        </button>
+      </div>
       <section
         className={settingAndLocationDisabled ? 'opacity-50 pointer-events-none' : ''}
         aria-disabled={settingAndLocationDisabled}
@@ -227,6 +238,17 @@ export const AssetStudioMaterialPanel: React.FC<MaterialProps> = ({
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-black/25 px-2 py-1.5 mb-2 shrink-0">
+        <span className="text-xs text-white/65 uppercase tracking-wide">Look tab</span>
+        <button
+          type="button"
+          onClick={() => store.clearLookSelections()}
+          className="px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15"
+          title="Reset art style to flagship and clear cinematic suite selections."
+        >
+          Clear Look
+        </button>
+      </div>
       <section>
         <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
           Art Style
@@ -343,9 +365,19 @@ export const AssetStudioMaterialPanel: React.FC<MaterialProps> = ({
       </section>
 
       <section>
-        <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-3" style={goldTextStyle}>
-          Prompt Tags
-        </h2>
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-amber-500/20 pb-1 mb-3">
+          <h2 className="text-base font-bold uppercase tracking-widest" style={goldTextStyle}>
+            Prompt Tags
+          </h2>
+          <button
+            type="button"
+            onClick={() => store.clearPromptTagsOnly()}
+            className="px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide border border-amber-500/35 text-amber-200/90 hover:bg-amber-500/15 shrink-0"
+            title="Reset tag chips to defaults (environment + cinematic-lighting)."
+          >
+            Reset tags
+          </button>
+        </div>
         <HybridTagBar tags={store.tags} setTags={store.setTags} variant="amethyst" />
       </section>
     </>

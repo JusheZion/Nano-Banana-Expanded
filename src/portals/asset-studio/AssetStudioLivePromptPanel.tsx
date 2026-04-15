@@ -51,10 +51,23 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
           : 'shrink-0 max-h-[min(52vh,480px)] md:min-h-[min(42vh,420px)] md:flex-1 md:max-h-none'
       }`}
     >
-      <div className="mb-1 shrink-0">
+      <div className="mb-1 shrink-0 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
           Live Prompt
         </h2>
+        {!phoneCompact && (
+          <button
+            type="button"
+            onClick={() => {
+              store.clearLivePromptOverridesOnly();
+              setPromptPanelTab('auto');
+            }}
+            className="px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border border-white/20 text-white/75 hover:bg-white/10"
+            title="Clear Edit override and Refine text only."
+          >
+            Clear overrides
+          </button>
+        )}
       </div>
       {!promptPinned ? (
         <p
@@ -257,8 +270,7 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => {
-              store.setVaultPromptOverride('');
-              store.setRefinementPromptOverride('');
+              store.clearLivePromptOverridesOnly();
               setPromptPanelTab('auto');
             }}
             className="px-2 py-1 rounded-full text-sm border border-amber-500/40 hover:bg-amber-500/20"
@@ -270,8 +282,7 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => {
-              store.setVaultPromptOverride('');
-              store.setRefinementPromptOverride('');
+              store.clearLivePromptOverridesOnly();
               setPromptPanelTab('auto');
             }}
             className="px-2 py-1 rounded-full text-sm border border-amber-500/40 hover:bg-amber-500/20"
