@@ -101,6 +101,32 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; manual at **1920×1080**, **100% zoom** — no document scroll on studio roots; **PIN** expand/collapse; **Compare** + generate; bottom panes scroll internally only.
 
+## Asset Studio — fixed workspace preview + single scroll region (2026-04-14)
+
+**Goal:** In [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx), keep the **Asset workspace** live preview (single or compare) **outside** the vertical scroll region so it stays pinned at the top of the card. Move session chips, recent/session thumbnails, spatial expansion chips, and the bottom generation/save strips into **one** `flex-1 min-h-0 overflow-y-auto` container so controls are always reachable on short viewports (no competing `max-h` middle pane vs fixed bottom bars).
+
+**Tooltips:** Wrap **Clear all** / **Paste first empty** on the reference hub; **This session** thumbnails; **Compact** / **Comfortable** / **Compare** toggles in the workspace footer.
+
+**Verify:** `npm run test -- --run`; `npm run build`; manual Asset Studio — short viewport height, **Compare** on/off — preview stays put; scroll reaches all workspace actions.
+
+## Asset Studio — readability and polish pass (2026-04-14)
+
+**Goal:** Reduce “tiny UI” fatigue: replace pervasive `text-[9px]` / `text-[10px]` with Tailwind `text-xs` / `text-sm` where appropriate; enlarge **Chip** controls; group **Room / Urban / Time / Aspect / Camera** in a bordered card; slightly larger **Recent / This session** thumbnails; improve **Refs / Build / Look** module tabs and **generation status** line legibility; slightly larger hub toolbar buttons.
+
+**Files:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx)
+
+**Verify:** `npm run test -- --run`; `npm run build`; spot-check Asset Studio at 100% zoom.
+
+## Asset Studio 2.0 — workspace modes (Phase 1, 2026-04-14)
+
+**State:** [`assetStudioStore`](src/stores/assetStudioStore.ts) — `AssetStudioWorkspaceMode` (`references` | `build` | `prompt` | `output`), `workspaceMode`, `setWorkspaceMode` (persisted in the store’s `partialize`).
+
+**UI:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) — desktop left column: tab strip **References / Build / Prompt / Output**; panel bodies show **reference hub** (References), **Refs / Build / Look** sections (Build, with existing sub-tabs), **Live Prompt** card (Prompt), and a short **Output** hint card (preview and actions stay in the wide right column). **Phone:** `workspaceMode` is set to **prompt** so the stacked flow stays usable.
+
+**Layout:** Left / right split on `md+` is approximately **42% / 58%** (was 60/40).
+
+**Verify:** `npm run test -- --run`; `npm run build`; desktop — switch modes and confirm Build sub-tabs only when Build is active.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
