@@ -281,7 +281,7 @@
 
 ## D) Feature: Reset UX — Character Studio + Asset Studio (2026-04-15)
 
-**Status (2026-04-15):** **Done:** `resetWorkspaceFreshSlate` on both stores; **Clear workspace** + **Reset to tags** / **Refresh** also `setPromptPanelTab('auto')` so Live Prompt updates. **Not done:** section-level clears (refs-only, tags-only, style subsections only).
+**Status (2026-04-15):** **Done:** `resetWorkspaceFreshSlate` on both stores; **Clear workspace** + **Reset to tags** / **Refresh** also `setPromptPanelTab('auto')`. **Section clears:** Character — `clearReferenceSlotsKeepLive`, `clearPromptTagsOnly`, `clearLivePromptOverridesOnly`, `clearDnaModuleSelections`, `clearStyleModuleSelections` + tab toolbars; Asset — `clearStructuralSelections`, `clearLookSelections`, refs/prompt/tags panels; **Reset to tags** / **Refresh** call `clearLivePromptOverridesOnly`.
 
 ### Goals
 - Make “Refresh / Reset to tags” (or equivalent) **visibly** update the Live Prompt output as intended.
