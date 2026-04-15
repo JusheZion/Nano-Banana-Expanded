@@ -273,3 +273,22 @@ Checklist for current and upcoming phases. Update as work completes.
 - Optional: Supabase Storage bucket `arcs-generations` creation and RLS if not already present.
 - [ ] Phase 1d: Beat reference strength (none/light/strict) to control how strongly cast/assets constrain generation.
 - [x] Phase 1d: Generic Image Lab panel (upload refs + prompt + AI prompt helper + generate + import into storyline beats).
+
+## Storyline Image Lab + reference fetch bugfixes (2026-04-15) — PLANNED
+
+- [ ] **Bugfix:** Asset/Character/Storyline generation fails with “failed to fetch reference image (400)” when a **stale signed URL** is reused as a reference. Fix with **just-in-time re-sign** before encoding refs + **retry once on 400**.
+- [ ] **UX:** Storyline **Image Lab** reference helpers should not feel “dead”:
+  - [ ] “Use Character Studio refs” shows a clear empty-state if no refs exist
+  - [ ] Add “Add Character refs” / “Add Asset refs” (fill first-empty) so both types can be used at the same time (current behavior replaces refs)
+  - [ ] Keep explicit “Replace with … refs” for the current behavior
+
+## Image Vault — high-quality downloads (2026-04-15) — PLANNED
+
+- [ ] **Download HQ (single):** per-image action downloads original-quality blob (resolves signed URL just-in-time if needed).
+- [ ] **Download .zip (selected/all):** album modal multi-select + zip bundling (selected and whole album) with progress + partial-failure reporting.
+
+## Studios — reset UX (Character + Asset) (2026-04-15) — PLANNED
+
+- [ ] Fix existing **Reset to tags / Refresh** so it visibly updates the Live Prompt output.
+- [ ] Add **Clear everything (fresh slate)** (clears tags, style selections, refs, prompt overrides; does NOT change live image, seed, recents).
+- [ ] Add **section-level clears** (References, Prompt Tags, major style sections, Live Prompt overrides) in both studios.

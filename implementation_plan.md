@@ -158,6 +158,169 @@
 
 ---
 
+# Proposed work: Storyline Studio navigation bug + Image Vault downloads (2026-04-15)
+
+## A) Bug: “Open in Character/Assets Studio” buttons do nothing
+
+### Goal
+- In `StorylineStudio`, clicking **Open in Character Studio** or **Open in Assets Studio** reliably switches portals and injects the selected beat image into the target studio (as a reference image and/or as the “live” image depending on existing studio import behavior).
+
+### Likely flow (expected)
+- `StorylineStudio.tsx` calls `useStudioImportBridge().requestOpenInStudio(target, imageUrl, hint?)`.
+- `App.tsx` watches `portalToOpen` and navigates to `studio`/`assets`, then clears the portal request.
+- The destination studio (`CharacterStudio.tsx` / `AssetsStudio.tsx`) consumes `consumeImportForTarget(target)` on mount and applies `imageUrl` (+ optional `promptHint`).
+
+### Investigation plan (no edits)
+- Reproduce in browser with console open:
+  - Verify the buttons are enabled (a beat with `imageUrl` is selected).
+  - Click **Open in Character Studio** / **Open in Assets Studio**.
+  - Check for console errors and confirm whether `portalToOpen` changes.
+- If `portalToOpen` changes but navigation does not:
+  - Inspect `AppShell` portal navigation + any guards that could prevent switching.
+- If navigation happens but the image does not appear in the destination studio:
+  - Inspect `CharacterStudio.tsx` / `AssetsStudio.tsx` import-consume effect and ensure the imported image is applied to the correct place (reference slot, live preview, etc.).
+
+### Fix plan (small edits, incremental tests)
+- Make the smallest change that restores:
+  - **Portal switch** on click
+  - **Imported image application** in the destination studio
+- After each edit:
+  - Mechanical verify (view edited region)
+  - Lint/type check for touched files
+  - Browser retest the click flow immediately
+
+### Acceptance criteria
+- From Storyline Studio, selecting a beat that has an image and clicking:
+  - **Open in Character Studio**: navigates to Character Studio and the beat image is present (imported) with no console errors.
+  - **Open in Assets Studio**: navigates to Assets Studio and the beat image is present (imported) with no console errors.
+
+## A2) Storyline Image Lab: reference helper buttons + mixed refs
+
+### User-observed behavior (current)
+- In Storyline **Image Lab**:
+  - **Use Assets Studio refs** immediately fills the 14 reference tiles from whatever is currently loaded in **Asset Studio** reference slots (no choice UI).
+  - **Use Character Studio refs** may appear to do nothing when the Character Studio store has no reference URLs set.
+- The above behavior is consistent with the current implementation: it reads `referenceImageUrls` directly from the studio stores and replaces the lab refs array.
+
+### Goals
+- Make the buttons **explicit** about what they do and why “nothing happened”:
+  - If there are **0** refs in the source studio, show a compact message like “No references in Character Studio yet” + a hint to add refs there (or use Vault picker in future).
+- Allow mixing **both** kinds of references:
+  - Add **Add Character refs** and **Add Asset refs** actions that **fill first-empty** lab slots without overwriting existing refs.
+  - Keep current actions as **Replace with Character refs** / **Replace with Asset refs** (or keep existing labels but add a secondary “Add” row).
+- Keep `context` (Character vs Asset) as an explicit toggle for labeling/intent; mixed refs are allowed regardless of context.
+
+### Acceptance criteria
+- Clicking Character/Asset helper buttons always produces visible feedback:
+  - Either refs are inserted/replaced, or a clear empty-state message appears.
+- User can press **Add Character refs** then **Add Asset refs** and end up with both in the lab references array.
+
+## B) Feature: Image Vault downloads (single / selection / whole album)
+
+### Goal
+- In Image Vault (Characters + Assets), allow downloading **high-quality image files**:
+  - **Single image** (from grid/card)
+  - **Selected images** (multi-select within album modal)
+  - **All images in album** (one action)
+
+### Constraints / assumptions
+- When Supabase Storage is used (`arcs-generations` private bucket), displayed URLs may be **signed** and expire; downloads must use the **resolved** URL (or re-sign on demand).
+- For “download many”, browsers require either:
+  - multiple user-initiated downloads, or
+  - bundling into a `.zip` client-side (preferred UX) using a small zip library.
+
+### Proposed approach (implementation-level)
+- **Naming & formats**
+  - **Default format**: preserve original if known (prefer `.png` when source is `data:image/png`, else `.jpg`).
+  - **Filename template**:
+    - Characters (profile modal): `characters/<profile_name>/<id>_<seed?>_<aspect?>.<ext>`
+    - Assets (collection modal): `assets/<collection_name>/<id>_<seed?>_<aspect?>.<ext>`
+    - Sanitization: replace `/\:*?"<>|` and trim; fallback to `Unnamed`.
+- **Single download**
+  - Per-image card action **Download HQ**:
+    - Resolve to a **fresh fetchable URL** (signed if `arcs-generations`).
+    - `fetch` → `Blob` → `URL.createObjectURL(blob)` → `<a download>` click.
+- **Multi-download (selected/all)**
+  - In each album modal, add lightweight selection state:
+    - Toggle select per image; toolbar buttons: **Select all**, **Clear selection**.
+    - Actions: **Download selected (.zip)**, **Download all (.zip)**.
+  - Zip bundling:
+    - Prefer a small client zip library (e.g. `fflate`) to build the `.zip` in-browser.
+    - Build zip entries from fetched `Uint8Array` per image with the filename template above.
+    - Download as `<album-name>.zip`.
+  - UX: show progress line `Zipping (3/18)…`; disable buttons while busy; surface per-image failures in a compact list (but still download partial zip when possible).
+
+### Acceptance criteria
+- Single-image downloads save an image file (not a low-res thumbnail) and match what’s displayed.
+- Selected/all downloads produce a zip with correct counts and filenames.
+- Works both when images are public URLs and when they require signed URL resolution.
+
+## C) Bug: “Failed to fetch reference image” when generating with archived/vault refs
+
+### Symptom
+- In **Asset Studio**, selecting an archived/vault image into a reference slot can succeed visually, but when generating, the API returns an error like **“failed to fetch reference image”**.
+
+### Likely root cause
+- Supabase Storage signed URLs are **time-limited**. A reference slot can hold a previously-signed URL (or a display URL that was signed earlier) whose token is now stale, resulting in HTTP **400** on fetch during reference encoding.
+
+### Fix plan
+- **Core rule:** Never rely on previously-copied signed URLs for generation. Keep **canonical/stable identifiers** in state/DB; signed URLs are ephemeral.
+- **Just-in-time signing:**
+  - When encoding reference images, if a ref URL is an `arcs-generations` object URL, always resolve it to a **fresh signed URL** immediately before fetch/base64.
+- **Retry-on-400 (once):**
+  - If the fetch for a reference image returns **400**, re-sign (fresh token) and retry fetch+base64 **one** time before failing that request.
+  - Do not log signed URL tokens.
+- **Where it applies:** any Gemini image generation entrypoint that encodes refs (Asset Studio, Character Studio, Storyline Image Lab, and any shared helper that calls `urlToBase64WithMime`).
+
+### Acceptance criteria
+- With an archived/vault image set as a reference in Asset Studio:
+  - Generation succeeds (no “failed to fetch reference image”)
+  - No console errors
+
+## D) Feature: Reset UX — Character Studio + Asset Studio (2026-04-15)
+
+### Goals
+- Make “Refresh / Reset to tags” (or equivalent) **visibly** update the Live Prompt output as intended.
+- Add **Clear everything (fresh slate)** and **section-level clears** in BOTH studios.
+
+### “Clear everything (fresh slate)” must clear
+- tags (all selected tag chips / structured tag sections)
+- all style selections (including libraries/snippets if they count as “style selections”)
+- all 14 reference image slots
+- prompt overrides (Live Prompt manual override / refinement drafts / any pinned prompt override text)
+
+### “Clear everything” must NOT change
+- live image
+- seed
+- recents / “This session” / history strips
+
+### Proposed store API (both stores)
+- **Fresh slate** action: `clearEverythingFreshSlate()` that resets only the allowed fields.
+- **Section clears** (minimum set):
+  - References: `clearAllReferenceSlots()`
+  - Prompt tags: `clearAllPromptTags()` (or per-section clears + “clear all tags”)
+  - Major style sections: `clearStyleSelections()` (and optionally per-subsection clears where UI is split into multiple cards)
+  - Live Prompt overrides: `clearPromptOverrides()` (manual override + refine drafts)
+- Ensure existing “Reset to tags”:
+  - sets override text to empty (if that’s the meaning) and
+  - triggers recomputation so the visible prompt changes immediately (no stale memoization / derived state).
+
+### UI placement
+- In each studio’s left column:
+  - a compact **Reset** row near the Live Prompt panel header or workspace tab strip:
+    - **Reset to tags**
+    - **Clear everything**
+  - section-level clears as small buttons in the relevant section headers (Refs, Tags, Build/Look/DNA sections, Live Prompt overrides).
+
+### Verification
+- Manual (browser):
+  - Set tags + override + refs → verify prompt changes.
+  - Click **Reset to tags** → prompt visibly reverts to tag-built output.
+  - Click **Clear everything** → tags/styles/refs/overrides cleared; live image + seed + recents unchanged.
+  - Section clears only affect their section.
+
+---
+
 # Character Vault Foundation (Ruby & Gold Edition) (2026-03-18)
 
 ## Asset Reference Studio alignment (Mar 2026)

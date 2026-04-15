@@ -7,6 +7,8 @@
 
 import type { AssetReferenceSlotRole, ReferenceSlotRole } from '@/shared/constants/referenceSlots';
 import { getSlotRole } from '@/shared/constants/referenceSlots';
+import { isSupabaseConfigured, supabase } from '@/shared/lib/supabase';
+import { resolveArcsGenerationsDisplayUrl } from '@/shared/lib/arcsGenerationsUrls';
 
 const CHARACTER_ROLE_LABELS: Record<ReferenceSlotRole, string> = {
   identity:
@@ -211,6 +213,12 @@ export type GenerateImageResult =
   | { ok: false; blocked: true; reason: 'safety' }
   | { ok: false; error: string };
 
+async function resolveReferenceUrlForFetch(url: string): Promise<string> {
+  if (!url) return url;
+  if (!isSupabaseConfigured() || !supabase) return url;
+  return await resolveArcsGenerationsDisplayUrl(supabase, url);
+}
+
 function isRateLimitResponse(res: Response): boolean {
   return res.status === 429;
 }
@@ -260,8 +268,9 @@ export async function generateImage(
         parts.push({ text: label + '\n' });
         lastRole = role;
       }
-      const b64 = await urlToBase64(refUrl);
-      parts.push({ inlineData: { mimeType: 'image/png', data: b64 } });
+      const fetchable = await resolveReferenceUrlForFetch(refUrl);
+      const { base64, mimeType } = await urlToBase64WithMime(fetchable);
+      parts.push({ inlineData: { mimeType, data: base64 } });
     }
   } catch (e) {
     return {

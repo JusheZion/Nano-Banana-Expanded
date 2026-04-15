@@ -52,6 +52,7 @@ export function GenericImageLabPanel({
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
@@ -65,19 +66,53 @@ export function GenericImageLabPanel({
     const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? '');
     setRefs(next);
     setContext(nextContext);
+    setNotice(null);
   }, []);
 
-  const fillFromStudio = useCallback(
+  const getStudioRefs = useCallback((source: 'character' | 'asset'): string[] => {
+    if (source === 'character') return useCharacterStudioStore.getState().referenceImageUrls;
+    return useAssetStudioStore.getState().referenceImageUrls;
+  }, []);
+
+  const replaceFromStudio = useCallback(
     (source: 'character' | 'asset') => {
-      if (source === 'character') {
-        const urls = useCharacterStudioStore.getState().referenceImageUrls;
-        applyRefs(urls, 'character');
-      } else {
-        const urls = useAssetStudioStore.getState().referenceImageUrls;
-        applyRefs(urls, 'asset');
+      const urls = getStudioRefs(source);
+      if (!urls.some(Boolean)) {
+        setNotice(
+          source === 'character'
+            ? 'No references in Character Studio yet. Add refs there first, then try again.'
+            : 'No references in Assets Studio yet. Add refs there first, then try again.'
+        );
+        return;
       }
+      applyRefs(urls, source === 'character' ? 'character' : 'asset');
     },
-    [applyRefs]
+    [applyRefs, getStudioRefs]
+  );
+
+  const addFromStudio = useCallback(
+    (source: 'character' | 'asset') => {
+      const urls = getStudioRefs(source).filter(Boolean);
+      if (urls.length === 0) {
+        setNotice(
+          source === 'character'
+            ? 'No references in Character Studio yet. Add refs there first, then try again.'
+            : 'No references in Assets Studio yet. Add refs there first, then try again.'
+        );
+        return;
+      }
+      setNotice(null);
+      setRefs((prev) => {
+        const next = Array.from({ length: 14 }, (_, i) => prev[i] ?? '');
+        for (const u of urls) {
+          const idx = next.findIndex((x) => !x);
+          if (idx < 0) break;
+          next[idx] = u;
+        }
+        return next;
+      });
+    },
+    [getStudioRefs]
   );
 
   const fillFromSelectedBeat = useCallback(() => {
@@ -233,16 +268,30 @@ export function GenericImageLabPanel({
         <button
           type="button"
           className="px-2 py-1 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
-          onClick={() => fillFromStudio('character')}
+          onClick={() => replaceFromStudio('character')}
         >
-          Use Character Studio refs
+          Replace with Character refs
         </button>
         <button
           type="button"
           className="px-2 py-1 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
-          onClick={() => fillFromStudio('asset')}
+          onClick={() => replaceFromStudio('asset')}
         >
-          Use Assets Studio refs
+          Replace with Asset refs
+        </button>
+        <button
+          type="button"
+          className="px-2 py-1 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
+          onClick={() => addFromStudio('character')}
+        >
+          Add Character refs
+        </button>
+        <button
+          type="button"
+          className="px-2 py-1 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
+          onClick={() => addFromStudio('asset')}
+        >
+          Add Asset refs
         </button>
         <button
           type="button"
@@ -253,6 +302,11 @@ export function GenericImageLabPanel({
           Use selected beat refs
         </button>
       </div>
+      {notice && (
+        <p className="text-[11px] text-amber-200/90 border border-amber-500/30 bg-amber-950/20 rounded-lg px-2 py-1">
+          {notice}
+        </p>
+      )}
 
       <div className="mt-3">
         <div className="flex items-center justify-between gap-2 mb-1">
