@@ -47,6 +47,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Layout: ~42% / 58% split on `md+`
 - [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
 
+## Asset Studio 2.0 — panels + Simple/Advanced (Phases 3–4, 2026-04-14) — COMPLETE
+
+- [x] Extract: `src/portals/asset-studio/*` (shared chips, References, Build panels, Live Prompt, Output hint); slim `AssetsStudio.tsx`
+- [x] Store: `buildDisclosure` simple | advanced + persist; **Build detail** toggle (desktop Build mode)
+- [x] Simple mode: fewer set-dressing categories, angle-only cinematic, no per-section Save-as-tag / custom style extras where trimmed
+- [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
+
 ## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
 
 - [x] DB columns + migration; localStorage `thumbnailFocus` on character generations

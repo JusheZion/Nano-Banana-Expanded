@@ -35,6 +35,9 @@ export type GalleryDensity = 'compact' | 'comfortable';
 /** Top-level Asset Studio workspace (left column on desktop). */
 export type AssetStudioWorkspaceMode = 'references' | 'build' | 'prompt' | 'output';
 
+/** Build tab: show fewer sections (Simple) or full taxonomy + libraries (Advanced). */
+export type AssetStudioBuildDisclosure = 'simple' | 'advanced';
+
 export interface PromptSnippet {
   id: string;
   name: string;
@@ -140,6 +143,8 @@ export interface AssetStudioState {
   galleryDensity: GalleryDensity;
   /** Which primary panel is shown in the left column (References / Build / Prompt / Output). */
   workspaceMode: AssetStudioWorkspaceMode;
+  /** Build workspace: progressive disclosure (Simple vs Advanced). */
+  buildDisclosure: AssetStudioBuildDisclosure;
   assetModifiers: Record<
     AssetModifierCategory,
     { color: string; material: 'matte' | 'gloss' | 'glow' }
@@ -194,6 +199,7 @@ export interface AssetStudioState {
   setGalleryDensity: (d: GalleryDensity) => void;
   clearAllReferenceSlots: () => void;
   setWorkspaceMode: (mode: AssetStudioWorkspaceMode) => void;
+  setBuildDisclosure: (mode: AssetStudioBuildDisclosure) => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -237,6 +243,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       galleryDensity: 'comfortable',
       assetModifiers: defaultAssetModifiers(),
       workspaceMode: 'references',
+      buildDisclosure: 'simple',
 
       setTags: (payload) =>
         set((s) => ({
@@ -457,6 +464,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       clearAllReferenceSlots: () =>
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
       setWorkspaceMode: (mode) => set({ workspaceMode: mode }),
+      setBuildDisclosure: (mode) => set({ buildDisclosure: mode }),
     }),
     {
       name: STORAGE_KEY,
@@ -504,6 +512,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         promptSnippets: state.promptSnippets,
         galleryDensity: state.galleryDensity,
         workspaceMode: state.workspaceMode,
+        buildDisclosure: state.buildDisclosure,
       }),
     }
   )
