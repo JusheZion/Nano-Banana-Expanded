@@ -40,6 +40,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Visual grouping: spatial expansion block in rounded card; more padding on workspace action bar; larger gallery thumbs (compact/comfortable)
 - [x] Verify: `npm run test -- --run`, `npm run build`
 
+## Asset Studio 2.0 — workspace modes (Phase 1, 2026-04-14) — COMPLETE
+
+- [x] Store: `workspaceMode` + `setWorkspaceMode` + persist; type `AssetStudioWorkspaceMode`
+- [x] UI: References / Build / Prompt / Output tabs (desktop); gated content; Live Prompt in Prompt mode; Build sub-tabs (Refs / Build / Look) only in Build mode; Output hint card; phone → Prompt mode
+- [x] Layout: ~42% / 58% split on `md+`
+- [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
+
 ## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
 
 - [x] DB columns + migration; localStorage `thumbnailFocus` on character generations

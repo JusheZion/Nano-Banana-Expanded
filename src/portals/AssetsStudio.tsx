@@ -4,7 +4,9 @@ import {
   Archive,
   Boxes,
   Expand,
+  Image as ImageIconLucide,
   LayoutGrid,
+  MessageSquare,
   Paintbrush,
   Pin,
   PinOff,
@@ -334,6 +336,17 @@ export const AssetsStudio: React.FC = () => {
     setPromptPanelTab('edit');
     setPromptPinned(true);
   }, [phoneCompact]);
+
+  useEffect(() => {
+    if (!phoneCompact) return;
+    useAssetStudioStore.getState().setWorkspaceMode('prompt');
+  }, [phoneCompact]);
+
+  useEffect(() => {
+    if (phoneCompact) return;
+    if (store.workspaceMode !== 'build') return;
+    if (leftModule === 'hub') setLeftModule('structural');
+  }, [phoneCompact, store.workspaceMode, leftModule]);
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
 
@@ -760,9 +773,44 @@ export const AssetsStudio: React.FC = () => {
       </header>
 
       <div className="flex flex-col md:flex-row gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
-        <div className="w-full md:flex-[0_0_60%] md:max-w-[60%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
+        <div className="w-full md:flex-[0_0_42%] md:max-w-[42%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
           <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
+            {!phoneCompact && (
+              <div
+                className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/35 p-1 shrink-0"
+                role="tablist"
+                aria-label="Workspace"
+              >
+                {(
+                  [
+                    { id: 'references' as const, label: 'References', Icon: LayoutGrid },
+                    { id: 'build' as const, label: 'Build', Icon: Boxes },
+                    { id: 'prompt' as const, label: 'Prompt', Icon: MessageSquare },
+                    { id: 'output' as const, label: 'Output', Icon: ImageIconLucide },
+                  ] as const
+                ).map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={store.workspaceMode === id}
+                    onClick={() => store.setWorkspaceMode(id)}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide border transition-colors sm:text-sm ${
+                      store.workspaceMode === id
+                        ? 'border-amber-500/60 text-black shadow-sm'
+                        : 'border-transparent text-violet-200/80 hover:bg-white/10'
+                    }`}
+                    style={store.workspaceMode === id ? { background: ACCENT_GOLD_GRADIENT } : undefined}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                    <span className="truncate">{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {(phoneCompact || store.workspaceMode === 'references') && (
+            <>
             {leftModule === 'hub' && (
             <>
             <h2 className="text-base font-bold uppercase tracking-widest border-b border-amber-500/20 pb-1 mb-2 shrink-0" style={goldTextStyle}>
@@ -976,6 +1024,11 @@ export const AssetsStudio: React.FC = () => {
             </>
             )}
 
+            </>
+            )}
+
+            {(phoneCompact || store.workspaceMode === 'build') && (
+            <>
             {leftModule === 'structural' && (
             <>
             {/* Era / Style */}
@@ -1251,9 +1304,13 @@ export const AssetsStudio: React.FC = () => {
             </section>
             </>
             )}
+            </>
+            )}
+
             </div>
 
-          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(42vh,360px)] overflow-hidden">
+          {(phoneCompact || store.workspaceMode === 'prompt') && (
+          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(52vh,480px)] overflow-hidden md:min-h-[min(42vh,420px)] md:flex-1 md:max-h-none">
             <div className="mb-1 shrink-0">
               <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
                 Live Prompt
@@ -1539,12 +1596,13 @@ export const AssetsStudio: React.FC = () => {
               </label>
             </div>
           </div>
+          )}
 
-          {!phoneCompact && (
+          {!phoneCompact && store.workspaceMode === 'build' && (
           <div
             className="shrink-0 flex rounded-lg border border-white/15 bg-black/45 p-1 gap-0.5"
             role="tablist"
-            aria-label="Studio modules"
+            aria-label="Build sections"
           >
             {(
               [
@@ -1573,9 +1631,17 @@ export const AssetsStudio: React.FC = () => {
           </div>
           )}
         </div>
+        {!phoneCompact && store.workspaceMode === 'output' && (
+          <div className="rounded-xl border border-amber-500/25 bg-black/40 px-4 py-3 text-sm text-violet-100/85">
+            <p className="font-semibold text-amber-200/95">Output workspace</p>
+            <p className="mt-1 text-white/70">
+              Preview, compare, recents, and generate are in the wide column on the right. Switch here when you want a focused left column.
+            </p>
+          </div>
+        )}
         </div>
 
-        <div className="w-full min-w-0 min-h-[min(42vh,360px)] md:min-h-0 flex flex-1 flex-col gap-2 overflow-hidden overflow-x-hidden md:flex-[0_0_40%] md:max-w-[40%]">
+        <div className="w-full min-w-0 min-h-[min(42vh,360px)] md:min-h-0 flex flex-1 flex-col gap-2 overflow-hidden overflow-x-hidden md:flex-[0_0_58%] md:max-w-[58%]">
           <div
             className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
             data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
@@ -2120,6 +2186,7 @@ export const AssetsStudio: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
 
       <ArchiveRecallModal
         open={recallSlotIndex !== null}
@@ -2281,7 +2348,6 @@ export const AssetsStudio: React.FC = () => {
         </div>
       )}
 
-    </div>
     {refHoverPreview &&
       typeof document !== 'undefined' &&
       createPortal(

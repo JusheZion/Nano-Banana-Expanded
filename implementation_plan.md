@@ -117,6 +117,16 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; spot-check Asset Studio at 100% zoom.
 
+## Asset Studio 2.0 — workspace modes (Phase 1, 2026-04-14)
+
+**State:** [`assetStudioStore`](src/stores/assetStudioStore.ts) — `AssetStudioWorkspaceMode` (`references` | `build` | `prompt` | `output`), `workspaceMode`, `setWorkspaceMode` (persisted in the store’s `partialize`).
+
+**UI:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) — desktop left column: tab strip **References / Build / Prompt / Output**; panel bodies show **reference hub** (References), **Refs / Build / Look** sections (Build, with existing sub-tabs), **Live Prompt** card (Prompt), and a short **Output** hint card (preview and actions stay in the wide right column). **Phone:** `workspaceMode` is set to **prompt** so the stacked flow stays usable.
+
+**Layout:** Left / right split on `md+` is approximately **42% / 58%** (was 60/40).
+
+**Verify:** `npm run test -- --run`; `npm run build`; desktop — switch modes and confirm Build sub-tabs only when Build is active.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
