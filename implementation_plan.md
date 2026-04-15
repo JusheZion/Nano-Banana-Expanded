@@ -101,6 +101,32 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; manual at **1920×1080**, **100% zoom** — no document scroll on studio roots; **PIN** expand/collapse; **Compare** + generate; bottom panes scroll internally only.
 
+## Asset Studio — fixed workspace preview + single scroll region (2026-04-14)
+
+**Goal:** In [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx), keep the **Asset workspace** live preview (single or compare) **outside** the vertical scroll region so it stays pinned at the top of the card. Move session chips, recent/session thumbnails, spatial expansion chips, and the bottom generation/save strips into **one** `flex-1 min-h-0 overflow-y-auto` container so controls are always reachable on short viewports (no competing `max-h` middle pane vs fixed bottom bars).
+
+**Tooltips:** Wrap **Clear all** / **Paste first empty** on the reference hub; **This session** thumbnails; **Compact** / **Comfortable** / **Compare** toggles in the workspace footer.
+
+**Verify:** `npm run test -- --run`; `npm run build`; manual Asset Studio — short viewport height, **Compare** on/off — preview stays put; scroll reaches all workspace actions.
+
+## Asset Studio — readability and polish pass (2026-04-14)
+
+**Goal:** Reduce “tiny UI” fatigue: replace pervasive `text-[9px]` / `text-[10px]` with Tailwind `text-xs` / `text-sm` where appropriate; enlarge **Chip** controls; group **Room / Urban / Time / Aspect / Camera** in a bordered card; slightly larger **Recent / This session** thumbnails; improve **Refs / Build / Look** module tabs and **generation status** line legibility; slightly larger hub toolbar buttons.
+
+**Files:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx)
+
+**Verify:** `npm run test -- --run`; `npm run build`; spot-check Asset Studio at 100% zoom.
+
+## Asset Studio 2.0 — workspace modes (Phase 1, 2026-04-14)
+
+**State:** [`assetStudioStore`](src/stores/assetStudioStore.ts) — `AssetStudioWorkspaceMode` (`references` | `build` | `prompt` | `output`), `workspaceMode`, `setWorkspaceMode` (persisted in the store’s `partialize`).
+
+**UI:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) — desktop left column: tab strip **References / Build / Prompt / Output**; panel bodies show **reference hub** (References), **Refs / Build / Look** sections (Build, with existing sub-tabs), **Live Prompt** card (Prompt), and a short **Output** hint card (preview and actions stay in the wide right column). **Phone:** `workspaceMode` is set to **prompt** so the stacked flow stays usable.
+
+**Layout:** Left / right split on `md+` is approximately **42% / 58%** (was 60/40).
+
+**Verify:** `npm run test -- --run`; `npm run build`; desktop — switch modes and confirm Build sub-tabs only when Build is active.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.
@@ -484,6 +510,40 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 - **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc batch multi-select; keyboard blurb matches new tab order.
 
 **Verify:** `npm run test -- --run`, `npm run build`; redeploy **`writer-tools`** after pull; manual — sync pages, batch beats, outline per issue, Arc batch pacing/canon.
+
+### Writers — Lore JSON import (planned)
+
+**Goal:** In the **Lore** workspace tab, add a small “Import JSON” tool to bulk-create `writer_lore_cards` from a pasted JSON array, while safely skipping duplicates and assigning deterministic sort order.
+
+**Input format**
+
+- Accept a pasted **JSON array** of objects; each object maps to one lore card.
+- Supported keys (tolerant parsing): `title` (required), `category` (optional), `body` (optional), `include_in_prompt` (optional), `sort_order` (ignored on import; re-assigned).
+- Whitespace-only strings are treated as empty; `title` must have a non-empty trimmed value.
+
+**Validation + feedback**
+
+- Parse errors show a clear, single-line message and do not write to Supabase.
+- Per-card validation errors (e.g. missing title) are collected and shown as a compact summary; invalid rows are skipped.
+- Import is disabled when Supabase is not configured or no series is selected.
+
+**Duplicate-skip semantics**
+
+- Define a normalized key: `normalize(category) + '|' + normalize(title)` where normalize = `trim → lower-case → collapse internal whitespace`.
+- Skip importing cards whose normalized key already exists among **existing cards in the selected series** (regardless of `include_in_prompt`).
+- Also skip duplicates **within the pasted payload** (first wins, subsequent skipped).
+
+**Sorting + `sort_order` assignment**
+
+- The imported set is sorted **by** `category` (normalized) then `title` (normalized) before insertion.
+- Assign `sort_order` sequentially as `10, 20, 30, …` starting at `maxExistingSortOrderRoundedUpTo10 + 10` so imported cards append after existing cards.
+- After import, refresh lore list (which is already ordered by `sort_order`, then `title`).
+
+**UI / UX**
+
+- Add an “Import JSON” collapsible panel in the Lore tab under the “New card” editor.
+- Fields: large textarea for JSON; “Dry run”/Preview stats (optional), and “Import” button.
+- On completion, show counts: imported, skipped-duplicate (existing), skipped-duplicate (payload), invalid.
 
 ### Phase 7b — Outline coverage + anti-repetition beats (done, 2026-04-11)
 

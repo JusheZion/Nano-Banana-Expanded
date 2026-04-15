@@ -91,6 +91,26 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
 
+function normalizeLoreKeyPart(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  return v
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function buildLoreDedupKey(input: { category: unknown; title: unknown }): string {
+  const categoryNorm = normalizeLoreKeyPart(input.category) || 'world';
+  const titleNorm = normalizeLoreKeyPart(input.title);
+  return `${categoryNorm}|${titleNorm}`;
+}
+
+function startLoreSortOrder(existing: WriterLoreCardRow[]): number {
+  const max = existing.reduce((m, c) => Math.max(m, Number.isFinite(c.sort_order) ? c.sort_order : 0), 0);
+  const roundedUpTo10 = Math.ceil(max / 10) * 10;
+  return roundedUpTo10 + 10;
+}
+
 function pageRowHasPanelBeats(p: WriterPageRow | null | undefined): boolean {
   const panels = (p?.beats_json as { panels?: unknown } | null)?.panels;
   return Array.isArray(panels) && panels.length > 0;
@@ -234,6 +254,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [loreDraftInclude, setLoreDraftInclude] = useState(true);
   const [loreDraftSort, setLoreDraftSort] = useState(0);
   const [loreEditingId, setLoreEditingId] = useState<string | null>(null);
+  const [loreImportOpen, setLoreImportOpen] = useState(false);
+  const [loreImportJsonDraft, setLoreImportJsonDraft] = useState('');
+  const [loreImportBusy, setLoreImportBusy] = useState(false);
+  const [loreImportError, setLoreImportError] = useState<string | null>(null);
+  const [loreImportResult, setLoreImportResult] = useState<{
+    imported: number;
+    skippedExisting: number;
+    skippedPayload: number;
+    invalid: number;
+  } | null>(null);
 
   const pushHistory = (line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
@@ -435,6 +465,95 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setLoreBusy(false);
   }, [selectedSeriesId]);
 
+  const runLoreJsonImport = useCallback(async () => {
+    if (!selectedSeriesId) return;
+    setLoreImportError(null);
+    setLoreImportResult(null);
+    setLoreImportBusy(true);
+    try {
+      const parsed = JSON.parse(loreImportJsonDraft);
+      if (!Array.isArray(parsed)) {
+        setLoreImportError('JSON must be an array of objects.');
+        return;
+      }
+
+      const existingKeys = new Set(
+        loreCards.map((c) => buildLoreDedupKey({ category: c.category, title: c.title })),
+      );
+      const payloadKeys = new Set<string>();
+      const validRows: Array<{
+        title: string;
+        category: string;
+        body: string;
+        include_in_prompt: boolean;
+        key: string;
+      }> = [];
+      let skippedExisting = 0;
+      let skippedPayload = 0;
+      let invalid = 0;
+
+      for (const row of parsed) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) {
+          invalid += 1;
+          continue;
+        }
+        const r = row as Record<string, unknown>;
+        const title = typeof r.title === 'string' ? r.title.trim() : '';
+        if (!title) {
+          invalid += 1;
+          continue;
+        }
+        const category = typeof r.category === 'string' ? r.category.trim() : 'world';
+        const key = buildLoreDedupKey({ category, title });
+        if (existingKeys.has(key)) {
+          skippedExisting += 1;
+          continue;
+        }
+        if (payloadKeys.has(key)) {
+          skippedPayload += 1;
+          continue;
+        }
+        payloadKeys.add(key);
+        validRows.push({
+          title,
+          category: category.trim() || 'world',
+          body: typeof r.body === 'string' ? r.body : '',
+          include_in_prompt: typeof r.include_in_prompt === 'boolean' ? r.include_in_prompt : true,
+          key,
+        });
+      }
+
+      validRows.sort((a, b) => {
+        if (a.key < b.key) return -1;
+        if (a.key > b.key) return 1;
+        return 0;
+      });
+
+      let sortOrder = startLoreSortOrder(loreCards);
+      let imported = 0;
+      for (const r of validRows) {
+        const created = await createWriterLoreCard({
+          series_id: selectedSeriesId,
+          title: r.title,
+          category: r.category,
+          body: r.body,
+          include_in_prompt: r.include_in_prompt,
+          sort_order: sortOrder,
+        });
+        sortOrder += 10;
+        if (created) imported += 1;
+      }
+
+      setLoreImportResult({ imported, skippedExisting, skippedPayload, invalid });
+      pushHistory(`imported lore cards: ${imported}`);
+      await reloadLoreCards();
+    } catch (e) {
+      setLoreImportError(e instanceof Error ? e.message : 'Invalid JSON.');
+    } finally {
+      setLoreImportBusy(false);
+    }
+  }, [loreCards, loreImportJsonDraft, reloadLoreCards, selectedSeriesId]);
+
   useEffect(() => {
     void reloadLoreCards();
   }, [reloadLoreCards]);
@@ -446,6 +565,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setLoreDraftBody('');
     setLoreDraftInclude(true);
     setLoreDraftSort(0);
+  }, [selectedSeriesId]);
+
+  useEffect(() => {
+    setLoreImportError(null);
+    setLoreImportResult(null);
   }, [selectedSeriesId]);
 
   useEffect(() => {
@@ -2292,6 +2416,67 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </button>
                             ) : null}
                           </div>
+                        </div>
+                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
+                          <button
+                            type="button"
+                            onClick={() => setLoreImportOpen((v) => !v)}
+                            className="w-full flex items-center justify-between gap-2 text-left"
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Import JSON
+                            </span>
+                            <span className="text-[10px] font-bold text-black/50">{loreImportOpen ? 'Hide' : 'Show'}</span>
+                          </button>
+                          {loreImportOpen ? (
+                            <div className="space-y-2">
+                              <p className="text-xs text-black/60 leading-snug">
+                                Paste a JSON array of objects with <strong>title</strong> (required) and optional{' '}
+                                <strong>category</strong>, <strong>body</strong>, <strong>include_in_prompt</strong>.
+                                Duplicates are skipped by normalized (category,title).
+                              </p>
+                              <textarea
+                                value={loreImportJsonDraft}
+                                onChange={(e) => setLoreImportJsonDraft(e.target.value)}
+                                rows={8}
+                                className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-xs text-black font-mono resize-y min-h-[140px]"
+                                placeholder='[\n  {"title":"The Silver Compact","category":"world","body":"...","include_in_prompt":true}\n]'
+                              />
+                              {loreImportError ? (
+                                <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{loreImportError}</p>
+                              ) : null}
+                              {loreImportResult ? (
+                                <p className="text-xs text-emerald-900 bg-emerald-100/70 rounded-lg px-3 py-2">
+                                  Imported {loreImportResult.imported}. Skipped duplicates (existing):{' '}
+                                  {loreImportResult.skippedExisting}. Skipped duplicates (payload):{' '}
+                                  {loreImportResult.skippedPayload}. Invalid: {loreImportResult.invalid}.
+                                </p>
+                              ) : null}
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || loreImportBusy || !loreImportJsonDraft.trim()}
+                                  onClick={() => void runLoreJsonImport()}
+                                  className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                                >
+                                  {loreImportBusy ? 'Importing…' : 'Import'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={loreImportBusy}
+                                  onClick={() => {
+                                    setLoreImportJsonDraft('');
+                                    setLoreImportError(null);
+                                    setLoreImportResult(null);
+                                  }}
+                                  className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80 disabled:opacity-45"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">

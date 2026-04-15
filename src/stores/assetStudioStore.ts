@@ -32,6 +32,9 @@ export type GenerationStatus = 'idle' | 'pending' | 'safety_blocked' | 'error';
 export type OnyxModelId = 'flash' | 'pro';
 export type GalleryDensity = 'compact' | 'comfortable';
 
+/** Top-level Asset Studio workspace (left column on desktop). */
+export type AssetStudioWorkspaceMode = 'references' | 'build' | 'prompt' | 'output';
+
 export interface PromptSnippet {
   id: string;
   name: string;
@@ -135,6 +138,8 @@ export interface AssetStudioState {
   lastUsedPrompt: string;
   promptSnippets: PromptSnippet[];
   galleryDensity: GalleryDensity;
+  /** Which primary panel is shown in the left column (References / Build / Prompt / Output). */
+  workspaceMode: AssetStudioWorkspaceMode;
   assetModifiers: Record<
     AssetModifierCategory,
     { color: string; material: 'matte' | 'gloss' | 'glow' }
@@ -188,6 +193,7 @@ export interface AssetStudioState {
   removePromptSnippet: (id: string) => void;
   setGalleryDensity: (d: GalleryDensity) => void;
   clearAllReferenceSlots: () => void;
+  setWorkspaceMode: (mode: AssetStudioWorkspaceMode) => void;
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -230,6 +236,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       promptSnippets: [],
       galleryDensity: 'comfortable',
       assetModifiers: defaultAssetModifiers(),
+      workspaceMode: 'references',
 
       setTags: (payload) =>
         set((s) => ({
@@ -449,6 +456,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
       setGalleryDensity: (d) => set({ galleryDensity: d }),
       clearAllReferenceSlots: () =>
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      setWorkspaceMode: (mode) => set({ workspaceMode: mode }),
     }),
     {
       name: STORAGE_KEY,
@@ -495,6 +503,7 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         lastUsedPrompt: state.lastUsedPrompt,
         promptSnippets: state.promptSnippets,
         galleryDensity: state.galleryDensity,
+        workspaceMode: state.workspaceMode,
       }),
     }
   )

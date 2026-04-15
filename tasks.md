@@ -28,6 +28,25 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Gallery density toggle; hover zoom refs + live image; loading “Working…”; empty states
 - [ ] Image-describe API for Refine tab “NEW” (follow-up per plan §8)
 
+## Asset Studio workspace UI (2026-04-14) — COMPLETE
+
+- [x] **Asset workspace:** fixed live preview pane (`flex-none`, no internal scroll); galleries + spatial chips + bottom strips in one scroll container; removed conflicting `max-h` on middle stack
+- [x] Tooltips: reference hub **Clear all** / **Paste first empty**; **This session** thumbs; **Compact** / **Comfortable** / **Compare**
+- [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
+
+## Asset Studio readability polish (2026-04-14) — COMPLETE
+
+- [x] Typography: replace micro `text-[9px]`/`text-[10px]` with `text-xs`/`text-sm`; larger Chips, labels, and primary actions
+- [x] Visual grouping: spatial expansion block in rounded card; more padding on workspace action bar; larger gallery thumbs (compact/comfortable)
+- [x] Verify: `npm run test -- --run`, `npm run build`
+
+## Asset Studio 2.0 — workspace modes (Phase 1, 2026-04-14) — COMPLETE
+
+- [x] Store: `workspaceMode` + `setWorkspaceMode` + persist; type `AssetStudioWorkspaceMode`
+- [x] UI: References / Build / Prompt / Output tabs (desktop); gated content; Live Prompt in Prompt mode; Build sub-tabs (Refs / Build / Look) only in Build mode; Output hint card; phone → Prompt mode
+- [x] Layout: ~42% / 58% split on `md+`
+- [x] Verify: `npm run lint` (warnings only), `npm run test -- --run`, `npm run build`
+
 ## Character Archive thumbnail framing (Mar 16, 2026) — COMPLETE
 
 - [x] DB columns + migration; localStorage `thumbnailFocus` on character generations
@@ -175,6 +194,7 @@ Checklist for current and upcoming phases. Update as work completes.
 ## Writers' Workshop bugfixes (Apr 2026)
 
 - [x] **Series lore cards:** `writer_lore_cards` table + RLS; **Lore** workspace tab (CRUD, include-in-prompt); `writer-tools` injects digest into outline + page beats (**Operator:** `supabase db push` + `supabase functions deploy writer-tools`)
+- [x] **Lore JSON import:** Lore tab “Import JSON” tool (paste array, validate, sort by category→title, assign `sort_order`, skip duplicates by normalized `(category,title)` against existing + within payload)
 - [x] **Beats tab UX:** two-column layout on `xl` (controls + director notes | JSON preview); wider Library dock column
 - [x] **Generate all beats (skip off):** `page_beats_issue` with **Skip pages that already have beats** unchecked reused pages 1–5 every round (`has_more` never cleared). **Fix:** optional **`batch_offset`** + **`next_batch_offset`** in response; client tracks offset for full-regeneration passes. Library batch actions: **Select all pages**, no 5-page selection cap
 - [x] **Page beats + synopsis helper:** Edge `page_beats` / `page_beats_issue` now inject **notes.synopsis_helper.rules** (Scripts → Rules for the outline) into the prompt so batch generation honors the same anti-repeat / outline rules as after Save helper to issue notes
