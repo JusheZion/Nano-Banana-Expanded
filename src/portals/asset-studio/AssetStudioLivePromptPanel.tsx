@@ -44,7 +44,13 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
   const store = useAssetStudioStore();
 
   return (
-    <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(52vh,480px)] overflow-hidden md:min-h-[min(42vh,420px)] md:flex-1 md:max-h-none">
+    <div
+      className={`rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 overflow-hidden ${
+        phoneCompact
+          ? 'flex-1 min-h-[min(50vh,420px)] max-h-none'
+          : 'shrink-0 max-h-[min(52vh,480px)] md:min-h-[min(42vh,420px)] md:flex-1 md:max-h-none'
+      }`}
+    >
       <div className="mb-1 shrink-0">
         <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
           Live Prompt

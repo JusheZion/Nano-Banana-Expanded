@@ -137,6 +137,21 @@
 
 **Verify:** `npm run test -- --run`; `npm run build`; toggle **Simple / Advanced** in Build and spot-check Refs / Build / Look sub-tabs.
 
+## Asset Studio 2.0 — phone layout (Phase 5, 2026-04-14)
+
+**Goal:** Narrow viewports: preview first, one workspace panel at a time, larger tap targets, no stacked “everything at once” left column.
+
+**Behavior:**
+- **Phone default** `workspaceMode`: **output** (preview + workspace actions first) instead of forcing **prompt**.
+- **Workspace tabs** (References / Build / Prompt / Output) visible on **all** breakpoints; each mode shows **only** its panel (no `(phoneCompact || …)` stacking).
+- **Output** hint card shows on phone when Output is selected (same copy as desktop).
+- **Build** on phone: **Build detail** (Simple/Advanced) + **Refs / Build / Look** sub-tabs match desktop.
+- **Column order:** `md+` unchanged; below `md`, **Asset workspace** column is **order-first** (`order-1`), controls column **order-2** so preview leads.
+- **Touch:** workspace tab buttons, build sub-tab buttons, and Simple/Advanced use **min-height 44px** on small screens (`sm:` resets for desktop density).
+- **Live Prompt** panel on phone uses **flex-1** and drops the tight `max-h` cap so the edit flow can use more vertical space.
+
+**Verify:** `npm run test -- --run`; `npm run build`; narrow viewport or device toolbar — switch workspace tabs; confirm only one left panel; preview above controls.
+
 ## Verify
 
 - `npm run test -- --run`; `npm run build`; manual: Storyline Studio → Script Doctor → Plan beats → cast from vault → generate beat → Save to Vault (Supabase) → Open in Character Studio from beat.

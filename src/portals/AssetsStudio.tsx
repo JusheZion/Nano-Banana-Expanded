@@ -133,7 +133,7 @@ export const AssetsStudio: React.FC = () => {
 
   useEffect(() => {
     if (!phoneCompact) return;
-    useAssetStudioStore.getState().setWorkspaceMode('prompt');
+    useAssetStudioStore.getState().setWorkspaceMode('output');
   }, [phoneCompact]);
 
   useEffect(() => {
@@ -567,15 +567,14 @@ export const AssetsStudio: React.FC = () => {
       </header>
 
       <div className="flex flex-col md:flex-row gap-3 w-full flex-1 min-h-0 min-w-0 overflow-hidden">
-        <div className="w-full md:flex-[0_0_42%] md:max-w-[42%] min-w-0 flex flex-col gap-2 flex-shrink-0 min-h-0 overflow-hidden">
+        <div className="order-2 flex w-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden md:order-none md:flex-[0_0_42%] md:max-w-[42%] md:shrink-0">
           <div className="rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md flex flex-1 min-h-0 flex-col overflow-hidden shadow-lg shadow-black/20">
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-4">
-            {!phoneCompact && (
-              <div
-                className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/35 p-1 shrink-0"
-                role="tablist"
-                aria-label="Workspace"
-              >
+            <div
+              className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/35 p-1 shrink-0"
+              role="tablist"
+              aria-label="Workspace"
+            >
                 {(
                   [
                     { id: 'references' as const, label: 'References', Icon: LayoutGrid },
@@ -590,7 +589,7 @@ export const AssetsStudio: React.FC = () => {
                     role="tab"
                     aria-selected={store.workspaceMode === id}
                     onClick={() => store.setWorkspaceMode(id)}
-                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide border transition-colors sm:text-sm ${
+                    className={`flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors sm:min-h-0 sm:py-2 sm:text-sm ${
                       store.workspaceMode === id
                         ? 'border-amber-500/60 text-black shadow-sm'
                         : 'border-transparent text-violet-200/80 hover:bg-white/10'
@@ -602,15 +601,14 @@ export const AssetsStudio: React.FC = () => {
                   </button>
                 ))}
               </div>
-            )}
-{!phoneCompact && store.workspaceMode === 'build' && (
+{store.workspaceMode === 'build' && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/30 px-2 py-2 shrink-0">
                 <span className="text-xs font-semibold uppercase tracking-wide text-violet-200/80">Build detail</span>
                 <div className="flex rounded-md border border-white/15 bg-black/40 p-0.5" role="group" aria-label="Simple or advanced build controls">
                   <button
                     type="button"
                     onClick={() => store.setBuildDisclosure('simple')}
-                    className={`rounded px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                    className={`rounded px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors min-h-[44px] sm:min-h-0 sm:px-2.5 sm:py-1.5 ${
                       store.buildDisclosure === 'simple'
                         ? 'text-black'
                         : 'text-violet-200/75 hover:bg-white/10'
@@ -622,7 +620,7 @@ export const AssetsStudio: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => store.setBuildDisclosure('advanced')}
-                    className={`rounded px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                    className={`rounded px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors min-h-[44px] sm:min-h-0 sm:px-2.5 sm:py-1.5 ${
                       store.buildDisclosure === 'advanced'
                         ? 'text-black'
                         : 'text-violet-200/75 hover:bg-white/10'
@@ -634,7 +632,7 @@ export const AssetsStudio: React.FC = () => {
                 </div>
               </div>
             )}
-            {(phoneCompact || store.workspaceMode === 'references') && (
+            {store.workspaceMode === 'references' && (
             <>
             {leftModule === 'hub' && (
             <>
@@ -652,7 +650,7 @@ export const AssetsStudio: React.FC = () => {
             </>
             )}
 
-            {(phoneCompact || store.workspaceMode === 'build') && (
+            {store.workspaceMode === 'build' && (
             <>
             {leftModule === 'structural' && (
             <>
@@ -683,7 +681,7 @@ export const AssetsStudio: React.FC = () => {
 
             </div>
 
-          {(phoneCompact || store.workspaceMode === 'prompt') && (
+          {store.workspaceMode === 'prompt' && (
           <AssetStudioLivePromptPanel
             phoneCompact={phoneCompact}
             displayPrompt={displayPrompt}
@@ -699,7 +697,7 @@ export const AssetsStudio: React.FC = () => {
           />
           )}
 
-          {!phoneCompact && store.workspaceMode === 'build' && (
+          {store.workspaceMode === 'build' && (
           <div
             className="shrink-0 flex rounded-lg border border-white/15 bg-black/45 p-1 gap-0.5"
             role="tablist"
@@ -718,7 +716,7 @@ export const AssetsStudio: React.FC = () => {
                 role="tab"
                 aria-selected={leftModule === id}
                 onClick={() => setLeftModule(id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-md text-sm font-bold uppercase tracking-wide border transition-colors min-w-0 ${
+                className={`flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-2.5 text-sm font-bold uppercase tracking-wide transition-colors sm:min-h-0 ${
                   leftModule === id
                     ? 'text-black border-amber-500/60 shadow-sm'
                     : 'border-transparent text-violet-200/75 hover:bg-white/10'
@@ -732,12 +730,12 @@ export const AssetsStudio: React.FC = () => {
           </div>
           )}
         </div>
-        {!phoneCompact && store.workspaceMode === 'output' && (
+        {store.workspaceMode === 'output' && (
           <AssetStudioOutputHint />
         )}
         </div>
 
-        <div className="w-full min-w-0 min-h-[min(42vh,360px)] md:min-h-0 flex flex-1 flex-col gap-2 overflow-hidden overflow-x-hidden md:flex-[0_0_58%] md:max-w-[58%]">
+        <div className="order-1 flex min-h-[min(42vh,360px)] w-full min-w-0 flex-1 flex-col gap-2 overflow-hidden overflow-x-hidden md:order-none md:min-h-0 md:flex-[0_0_58%] md:max-w-[58%]">
           <div
             className="flex-shrink-0 rounded-lg border border-white/10 bg-black/30 px-3 py-2 min-h-[2.5rem] flex items-center"
             data-status={store.generationStatus === 'pending' ? STATUS_BREADCRUMBS[statusStep].replace(/\s+/g, '-').toLowerCase() : undefined}
