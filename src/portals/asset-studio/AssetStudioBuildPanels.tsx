@@ -30,8 +30,6 @@ type Props = {
   toggleArchitectural: (value: string) => void;
   toggleSetDressing: (category: SetDressingCategory, value: string) => void;
   simpleMode: boolean;
-  customStyleInput: string;
-  setCustomStyleInput: (v: string) => void;
 };
 
 export const AssetStudioStructuralPanel: React.FC<Props> = ({

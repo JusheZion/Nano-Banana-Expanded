@@ -142,6 +142,11 @@ export const AssetsStudio: React.FC = () => {
     if (leftModule === 'hub') setLeftModule('structural');
   }, [phoneCompact, store.workspaceMode, leftModule]);
 
+  useEffect(() => {
+    if (store.workspaceMode !== 'references') return;
+    if (leftModule !== 'hub') setLeftModule('hub');
+  }, [store.workspaceMode, leftModule]);
+
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
 
   useEffect(() => {
@@ -661,8 +666,6 @@ export const AssetsStudio: React.FC = () => {
               toggleArchitectural={toggleArchitectural}
               toggleSetDressing={toggleSetDressing}
               simpleMode={simpleMode}
-              customStyleInput={customStyleInput}
-              setCustomStyleInput={setCustomStyleInput}
             />
             </>
             )}
