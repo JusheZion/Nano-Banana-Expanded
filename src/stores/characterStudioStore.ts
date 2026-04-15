@@ -232,6 +232,15 @@ export interface CharacterStudioState {
   removePromptSnippet: (id: string) => void;
   setGalleryDensity: (d: GalleryDensity) => void;
   clearAllReferenceSlots: () => void;
+  /** Tags, style selections, refs, prompt overrides — not live image, seed, or session/recents. */
+  resetWorkspaceFreshSlate: () => void;
+}
+
+function defaultCharacterTags(): ChipTag[] {
+  return [
+    { id: '1', text: 'portrait', polarity: 'positive' },
+    { id: '2', text: 'cinematic-lighting', polarity: 'positive' },
+  ];
 }
 
 export const useCharacterStudioStore = create<CharacterStudioState>()(
@@ -554,6 +563,34 @@ export const useCharacterStudioStore = create<CharacterStudioState>()(
       setGalleryDensity: (d) => set({ galleryDensity: d }),
       clearAllReferenceSlots: () =>
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
+      resetWorkspaceFreshSlate: () =>
+        set((s) => ({
+          ...s,
+          tags: defaultCharacterTags(),
+          dnaLock: false,
+          artStyleId: 'flagship',
+          wardrobeSelections: Object.keys(WARDROBE_PRESETS).reduce(
+            (acc, k) => {
+              acc[k as WardrobeCategory] = [];
+              return acc;
+            },
+            {} as Record<WardrobeCategory, string[]>
+          ),
+          wardrobeModifiers: defaultWardrobeModifiers(),
+          cinematic: emptyCinematic(),
+          vaultPromptOverride: '',
+          refinementPromptOverride: '',
+          referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => ''),
+          physicalSelections: {},
+          heritageSelection: [],
+          genderSelection: [],
+          facialExpressionSelection: [],
+          selectedPoseId: null,
+          ageModifier: 0,
+          diversifyLikeness: false,
+          generationStatus: 'idle',
+          generationStatusMessage: null,
+        })),
     }),
     {
       name: STORAGE_KEY,

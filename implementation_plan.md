@@ -217,6 +217,8 @@
 
 ## B) Feature: Image Vault downloads (single / selection / whole album)
 
+**Status (2026-04-15):** Implemented — [`vaultImageDownload.ts`](src/shared/lib/vaultImageDownload.ts), modals above, `fflate` in `package.json`. Progress/partial-failure UX from the plan was not implemented (minimal zip + single download).
+
 ### Goal
 - In Image Vault (Characters + Assets), allow downloading **high-quality image files**:
   - **Single image** (from grid/card)
@@ -278,6 +280,8 @@
   - No console errors
 
 ## D) Feature: Reset UX — Character Studio + Asset Studio (2026-04-15)
+
+**Status (2026-04-15):** **Done:** `resetWorkspaceFreshSlate` on both stores; **Clear workspace** + **Reset to tags** / **Refresh** also `setPromptPanelTab('auto')` so Live Prompt updates. **Not done:** section-level clears (refs-only, tags-only, style subsections only).
 
 ### Goals
 - Make “Refresh / Reset to tags” (or equivalent) **visibly** update the Live Prompt output as intended.

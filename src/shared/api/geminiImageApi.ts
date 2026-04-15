@@ -7,8 +7,10 @@
 
 import type { AssetReferenceSlotRole, ReferenceSlotRole } from '@/shared/constants/referenceSlots';
 import { getSlotRole } from '@/shared/constants/referenceSlots';
-import { isSupabaseConfigured, supabase } from '@/shared/lib/supabase';
-import { resolveArcsGenerationsDisplayUrl } from '@/shared/lib/arcsGenerationsUrls';
+import {
+  createFreshSignedArcsUrl,
+  isArcsGenerationsStorageUrl,
+} from '@/shared/lib/arcsGenerationsUrls';
 
 const CHARACTER_ROLE_LABELS: Record<ReferenceSlotRole, string> = {
   identity:
@@ -213,10 +215,23 @@ export type GenerateImageResult =
   | { ok: false; blocked: true; reason: 'safety' }
   | { ok: false; error: string };
 
-async function resolveReferenceUrlForFetch(url: string): Promise<string> {
-  if (!url) return url;
-  if (!isSupabaseConfigured() || !supabase) return url;
-  return await resolveArcsGenerationsDisplayUrl(supabase, url);
+async function referenceUrlToBase64WithMimeRetry(
+  url: string
+): Promise<{ base64: string; mimeType: string }> {
+  if (!isArcsGenerationsStorageUrl(url)) {
+    return urlToBase64WithMime(url);
+  }
+
+  const signed1 = await createFreshSignedArcsUrl(url);
+  try {
+    return await urlToBase64WithMime(signed1);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes('(400)')) throw e;
+  }
+
+  const signed2 = await createFreshSignedArcsUrl(url);
+  return await urlToBase64WithMime(signed2);
 }
 
 function isRateLimitResponse(res: Response): boolean {
@@ -268,8 +283,7 @@ export async function generateImage(
         parts.push({ text: label + '\n' });
         lastRole = role;
       }
-      const fetchable = await resolveReferenceUrlForFetch(refUrl);
-      const { base64, mimeType } = await urlToBase64WithMime(fetchable);
+      const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(refUrl);
       parts.push({ inlineData: { mimeType, data: base64 } });
     }
   } catch (e) {

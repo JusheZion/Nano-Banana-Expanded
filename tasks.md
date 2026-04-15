@@ -282,13 +282,13 @@ Checklist for current and upcoming phases. Update as work completes.
   - [ ] Add “Add Character refs” / “Add Asset refs” (fill first-empty) so both types can be used at the same time (current behavior replaces refs)
   - [ ] Keep explicit “Replace with … refs” for the current behavior
 
-## Image Vault — high-quality downloads (2026-04-15) — PLANNED
+## Image Vault — high-quality downloads (2026-04-15) — COMPLETE
 
-- [ ] **Download HQ (single):** per-image action downloads original-quality blob (resolves signed URL just-in-time if needed).
-- [ ] **Download .zip (selected/all):** album modal multi-select + zip bundling (selected and whole album) with progress + partial-failure reporting.
+- [x] **Download HQ (single):** per-card action; `fetchVaultImageBlob` + `createFreshSignedArcsUrl` in `arcsGenerationsUrls.ts`, 400 retry; `ProfileVaultModal` + `CollectionVaultModal`.
+- [x] **Download .zip (selected/all):** ZIP checkboxes + **Download all** / **Selected (N)**; client zip via `fflate` in `vaultImageDownload.ts`.
 
-## Studios — reset UX (Character + Asset) (2026-04-15) — PLANNED
+## Studios — reset UX (Character + Asset) (2026-04-15) — MOSTLY COMPLETE
 
-- [ ] Fix existing **Reset to tags / Refresh** so it visibly updates the Live Prompt output.
-- [ ] Add **Clear everything (fresh slate)** (clears tags, style selections, refs, prompt overrides; does NOT change live image, seed, recents).
-- [ ] Add **section-level clears** (References, Prompt Tags, major style sections, Live Prompt overrides) in both studios.
+- [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
+- [x] **Clear workspace:** `resetWorkspaceFreshSlate` on `characterStudioStore` + `assetStudioStore` (tags → defaults, style selections empty, refs cleared, overrides cleared; keeps live image, seed, libraries, session/recents).
+- [ ] **Section-level clears** (References only, Prompt Tags only, etc.): not implemented — optional follow-up.
