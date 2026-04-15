@@ -273,3 +273,22 @@ Checklist for current and upcoming phases. Update as work completes.
 - Optional: Supabase Storage bucket `arcs-generations` creation and RLS if not already present.
 - [ ] Phase 1d: Beat reference strength (none/light/strict) to control how strongly cast/assets constrain generation.
 - [x] Phase 1d: Generic Image Lab panel (upload refs + prompt + AI prompt helper + generate + import into storyline beats).
+
+## Storyline Image Lab + reference fetch bugfixes (2026-04-15) — PLANNED
+
+- [ ] **Bugfix:** Asset/Character/Storyline generation fails with “failed to fetch reference image (400)” when a **stale signed URL** is reused as a reference. Fix with **just-in-time re-sign** before encoding refs + **retry once on 400**.
+- [ ] **UX:** Storyline **Image Lab** reference helpers should not feel “dead”:
+  - [ ] “Use Character Studio refs” shows a clear empty-state if no refs exist
+  - [ ] Add “Add Character refs” / “Add Asset refs” (fill first-empty) so both types can be used at the same time (current behavior replaces refs)
+  - [ ] Keep explicit “Replace with … refs” for the current behavior
+
+## Image Vault — high-quality downloads (2026-04-15) — COMPLETE
+
+- [x] **Download HQ (single):** per-card action; `fetchVaultImageBlob` + `createFreshSignedArcsUrl` in `arcsGenerationsUrls.ts`, 400 retry; `ProfileVaultModal` + `CollectionVaultModal`.
+- [x] **Download .zip (selected/all):** ZIP checkboxes + **Download all** / **Selected (N)**; client zip via `fflate` in `vaultImageDownload.ts`.
+
+## Studios — reset UX (Character + Asset) (2026-04-15) — MOSTLY COMPLETE
+
+- [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
+- [x] **Clear workspace:** `resetWorkspaceFreshSlate` on `characterStudioStore` + `assetStudioStore` (tags → defaults, style selections empty, refs cleared, overrides cleared; keeps live image, seed, libraries, session/recents).
+- [ ] **Section-level clears** (References only, Prompt Tags only, etc.): not implemented — optional follow-up.

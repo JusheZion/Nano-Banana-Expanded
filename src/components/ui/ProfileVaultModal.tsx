@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Download,
   FolderInput,
   Pencil,
   RefreshCw,
@@ -20,6 +21,14 @@ import {
   vaultMergeConfirmSkipped,
   setVaultMergeConfirmSkipped,
 } from '@/shared/api/arcsVault';
+import {
+  buildVaultImageFilenameWithBlob,
+  buildVaultImagesZip,
+  fetchVaultImageBlob,
+  sanitizeFilenameBase,
+  triggerBrowserDownload,
+  type VaultZipItem,
+} from '@/shared/lib/vaultImageDownload';
 
 function RubyEncrustedStar(props: { active: boolean; className?: string }) {
   const { active, className } = props;
@@ -103,6 +112,17 @@ export function ProfileVaultModal(props: {
     target: string;
   } | null>(null);
 
+  const [zipSelectedIds, setZipSelectedIds] = useState<Set<string>>(() => new Set());
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setZipSelectedIds(new Set());
+      setDownloadError(null);
+    }
+  }, [open]);
+
   const sorted = useMemo(() => {
     return [...items].sort((a, b) => {
       const at = a.created_at ? Date.parse(a.created_at) : 0;
@@ -110,6 +130,71 @@ export function ProfileVaultModal(props: {
       return bt - at;
     });
   }, [items]);
+
+  const toZipItem = (item: VaultCharacterItem): VaultZipItem => ({
+    rawUrl: item.image_url,
+    title: item.cast_name || item.name || 'Visual_Reference',
+    id: item.id,
+    seed: item.seed,
+  });
+
+  const toggleZipSelect = (id: string) => {
+    setZipSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const runDownloadOne = async (item: VaultCharacterItem) => {
+    setDownloadBusy(true);
+    setDownloadError(null);
+    try {
+      const blob = await fetchVaultImageBlob(item.image_url);
+      const title = item.cast_name || item.name || 'Visual_Reference';
+      const fn = buildVaultImageFilenameWithBlob(
+        { title, id: item.id, seed: item.seed },
+        blob
+      );
+      triggerBrowserDownload(blob, fn);
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : 'Download failed');
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
+  const runDownloadAllZip = async () => {
+    if (sorted.length === 0) return;
+    setDownloadBusy(true);
+    setDownloadError(null);
+    try {
+      const zip = await buildVaultImagesZip(sorted.map(toZipItem));
+      const safe = sanitizeFilenameBase(profileName, 'album');
+      triggerBrowserDownload(zip, `${safe}_vault.zip`);
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : 'Zip failed');
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
+  const runDownloadSelectedZip = async () => {
+    const sel = sorted.filter((i) => zipSelectedIds.has(i.id));
+    if (sel.length === 0) return;
+    setDownloadBusy(true);
+    setDownloadError(null);
+    try {
+      const zip = await buildVaultImagesZip(sel.map(toZipItem));
+      const safe = sanitizeFilenameBase(profileName, 'album');
+      triggerBrowserDownload(zip, `${safe}_selected.zip`);
+    } catch (e) {
+      setDownloadError(e instanceof Error ? e.message : 'Zip failed');
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
 
   const executeMove = async (id: string, targetRaw: string) => {
     const target = targetRaw.trim() || 'Unnamed';
@@ -229,7 +314,8 @@ export function ProfileVaultModal(props: {
                   {profileName}
                 </div>
                 <div className="mt-2 text-sm text-[#D4AF37]/70">
-                  Star sets cover. Toolbar: rename profile, move images, or delete.
+                  Star sets cover. Use checkboxes to select images, then download selected as ZIP, or
+                  download all. Per-image HQ download is on each card.
                 </div>
               </div>
 
@@ -257,6 +343,26 @@ export function ProfileVaultModal(props: {
                 </button>
                 <button
                   type="button"
+                  disabled={busy || downloadBusy || sorted.length === 0}
+                  onClick={() => void runDownloadAllZip()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40 disabled:opacity-40"
+                  title="Download all images as a ZIP"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download all
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || downloadBusy || zipSelectedIds.size === 0}
+                  onClick={() => void runDownloadSelectedZip()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40 disabled:opacity-40"
+                  title="Download selected images as a ZIP"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Selected ({zipSelectedIds.size})
+                </button>
+                <button
+                  type="button"
                   disabled={busy}
                   onClick={() => onVaultChanged()}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40"
@@ -275,14 +381,18 @@ export function ProfileVaultModal(props: {
               </div>
             </div>
 
-            {(savingId || saveError || busy) && (
+            {(savingId || saveError || busy || downloadBusy || downloadError) && (
               <div className="mt-4 rounded-xl border border-[#D4AF37]/25 bg-black/25 px-4 py-3 text-sm">
-                {saveError ? (
+                {downloadError ? (
+                  <div className="text-[#FBBF24] font-medium">{downloadError}</div>
+                ) : saveError ? (
                   <div className="text-[#FBBF24] font-medium">{saveError}</div>
                 ) : savingId ? (
                   <div className="text-[#FBF5D4]/90">
                     Saving… <span className="text-[#D4AF37]/70 font-mono text-xs">{savingId}</span>
                   </div>
+                ) : downloadBusy ? (
+                  <div className="text-[#FBF5D4]/70">Preparing download…</div>
                 ) : (
                   <div className="text-[#FBF5D4]/70">Working…</div>
                 )}
@@ -492,6 +602,19 @@ export function ProfileVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
+                        <label
+                          className="absolute left-2 top-2 z-[25] flex items-center gap-1.5 rounded-lg border border-[#D4AF37]/40 bg-black/70 px-2 py-1 text-[10px] text-[#FBF5D4] cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={zipSelectedIds.has(item.id)}
+                            disabled={downloadBusy}
+                            onChange={() => toggleZipSelect(item.id)}
+                            className="rounded border-[#D4AF37]/50"
+                          />
+                          ZIP
+                        </label>
                         <div
                           className={[
                             'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
@@ -502,6 +625,15 @@ export function ProfileVaultModal(props: {
                           ].join(' ')}
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <button
+                            type="button"
+                            disabled={Boolean(savingId) || busy || downloadBusy}
+                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            title="Download HQ image"
+                            onClick={() => void runDownloadOne(item)}
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             disabled={Boolean(savingId) || busy}

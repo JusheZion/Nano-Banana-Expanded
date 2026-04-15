@@ -17,6 +17,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/supabase-js": "^2.99.1",
+    "fflate": "^0.8.2",
     "github-slugger": "^2.0.0",
     "jspdf": "^4.2.0",
     "konva": "^10.2.0",

@@ -3,6 +3,7 @@
  * DB rows keep the stable object/public URL shape; display uses signing.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isSupabaseConfigured, supabase } from '@/shared/lib/supabase';
 
 export const ARCS_GENERATIONS_BUCKET = 'arcs-generations';
 
@@ -112,4 +113,28 @@ export async function resolveArcsGenerationsDisplayUrls(
 /** Test-only: clear in-memory signed URL cache. */
 export function __clearArcsGenerationsUrlCacheForTests(): void {
   urlCache.clear();
+}
+
+/**
+ * New signed URL for fetch/download — bypasses display cache so HQ pulls are not stale.
+ * Used by Gemini reference encode and vault HQ download.
+ */
+export async function createFreshSignedArcsUrl(inputUrl: string): Promise<string> {
+  if (!isSupabaseConfigured() || !supabase) return inputUrl;
+  const path = extractArcsGenerationsObjectPath(inputUrl);
+  if (!path) return inputUrl;
+
+  const first = await supabase.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(path, SIGNED_TTL_SEC);
+  if (first.data?.signedUrl && !first.error) return first.data.signedUrl;
+
+  if (path.includes('/')) return inputUrl;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return inputUrl;
+
+  const nested = `${uid}/${path}`;
+  const second = await supabase.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(nested, SIGNED_TTL_SEC);
+  if (second.data?.signedUrl && !second.error) return second.data.signedUrl;
+
+  return inputUrl;
 }

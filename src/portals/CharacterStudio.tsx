@@ -1657,6 +1657,7 @@ export const CharacterStudio: React.FC = () => {
                   onClick={() => {
                     store.setVaultPromptOverride('');
                     store.setRefinementPromptOverride('');
+                    setPromptPanelTab('auto');
                   }}
                   className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
                 >
@@ -1669,11 +1670,25 @@ export const CharacterStudio: React.FC = () => {
                 onClick={() => {
                   store.setVaultPromptOverride('');
                   store.setRefinementPromptOverride('');
+                  setPromptPanelTab('auto');
                 }}
                 className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20"
               >
                 Reset to tags
               </button>
+              )}
+              {!phoneCompact && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.resetWorkspaceFreshSlate();
+                    setPromptPanelTab('auto');
+                  }}
+                  className="px-2 py-1 rounded-full text-[10px] border border-rose-500/45 text-rose-200/90 hover:bg-rose-500/15"
+                  title="Clear tags, refs, style selections, and prompt overrides. Keeps live image, seed, and session history."
+                >
+                  Clear workspace
+                </button>
               )}
               {!phoneCompact && (
               <button

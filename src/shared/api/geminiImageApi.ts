@@ -7,6 +7,10 @@
 
 import type { AssetReferenceSlotRole, ReferenceSlotRole } from '@/shared/constants/referenceSlots';
 import { getSlotRole } from '@/shared/constants/referenceSlots';
+import {
+  createFreshSignedArcsUrl,
+  isArcsGenerationsStorageUrl,
+} from '@/shared/lib/arcsGenerationsUrls';
 
 const CHARACTER_ROLE_LABELS: Record<ReferenceSlotRole, string> = {
   identity:
@@ -211,6 +215,25 @@ export type GenerateImageResult =
   | { ok: false; blocked: true; reason: 'safety' }
   | { ok: false; error: string };
 
+async function referenceUrlToBase64WithMimeRetry(
+  url: string
+): Promise<{ base64: string; mimeType: string }> {
+  if (!isArcsGenerationsStorageUrl(url)) {
+    return urlToBase64WithMime(url);
+  }
+
+  const signed1 = await createFreshSignedArcsUrl(url);
+  try {
+    return await urlToBase64WithMime(signed1);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes('(400)')) throw e;
+  }
+
+  const signed2 = await createFreshSignedArcsUrl(url);
+  return await urlToBase64WithMime(signed2);
+}
+
 function isRateLimitResponse(res: Response): boolean {
   return res.status === 429;
 }
@@ -260,8 +283,8 @@ export async function generateImage(
         parts.push({ text: label + '\n' });
         lastRole = role;
       }
-      const b64 = await urlToBase64(refUrl);
-      parts.push({ inlineData: { mimeType: 'image/png', data: b64 } });
+      const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(refUrl);
+      parts.push({ inlineData: { mimeType, data: base64 } });
     }
   } catch (e) {
     return {

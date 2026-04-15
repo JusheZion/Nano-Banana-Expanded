@@ -200,6 +200,15 @@ export interface AssetStudioState {
   clearAllReferenceSlots: () => void;
   setWorkspaceMode: (mode: AssetStudioWorkspaceMode) => void;
   setBuildDisclosure: (mode: AssetStudioBuildDisclosure) => void;
+  /** Tags, style selections, refs, prompt overrides — not live image, seed, or session/recents. */
+  resetWorkspaceFreshSlate: () => void;
+}
+
+function defaultAssetTags(): ChipTag[] {
+  return [
+    { id: '1', text: 'environment', polarity: 'positive' },
+    { id: '2', text: 'cinematic-lighting', polarity: 'positive' },
+  ];
 }
 
 export const useAssetStudioStore = create<AssetStudioState>()(
@@ -465,6 +474,27 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         set({ referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => '') }),
       setWorkspaceMode: (mode) => set({ workspaceMode: mode }),
       setBuildDisclosure: (mode) => set({ buildDisclosure: mode }),
+      resetWorkspaceFreshSlate: () =>
+        set((s) => ({
+          ...s,
+          tags: defaultAssetTags(),
+          artStyleId: 'flagship',
+          eraStyleSelection: [],
+          locationTypeSelection: [],
+          architecturalDetailSelection: [],
+          setDressingSelections: emptySetDressingSelections(),
+          cinematic: emptyCinematic(),
+          vaultPromptOverride: '',
+          refinementPromptOverride: '',
+          referenceImageUrls: Array.from({ length: REFERENCE_IMAGE_SLOTS }, () => ''),
+          architecturalLock: false,
+          spatialRoomOption: null,
+          spatialUrbanOption: null,
+          timeSeason: null,
+          assetModifiers: defaultAssetModifiers(),
+          generationStatus: 'idle',
+          generationStatusMessage: null,
+        })),
     }),
     {
       name: STORAGE_KEY,
