@@ -33,6 +33,39 @@ function isFreshSignedArcsUrl(url: string): boolean {
   return /\/object\/sign\/arcs-generations\//.test(url) && url.includes('token=');
 }
 
+function isObjectNotFoundStorageError(err: { message?: string } | null | undefined): boolean {
+  const m = (err?.message ?? '').toLowerCase();
+  return m.includes('not found') || m.includes('does not exist');
+}
+
+/**
+ * Some legacy DB rows store `getPublicUrl` paths without the `{auth.uid()}/` prefix used at upload time.
+ * Objects actually live at `{uid}/{filename}`; retry signing with that prefix when the flat path 404s.
+ */
+async function createSignedUrlWithUserFolderFallback(
+  client: SupabaseClient,
+  path: string
+): Promise<{ data: { signedUrl: string } | null; error: { message: string } | null }> {
+  const first = await client.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(path, SIGNED_TTL_SEC);
+  if (first.data?.signedUrl && !first.error) {
+    return { data: first.data, error: null };
+  }
+  if (!isObjectNotFoundStorageError(first.error) || path.includes('/')) {
+    return { data: first.data, error: first.error };
+  }
+  const { data: auth } = await client.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) {
+    return { data: first.data, error: first.error };
+  }
+  const nested = `${uid}/${path}`;
+  const second = await client.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(nested, SIGNED_TTL_SEC);
+  if (second.data?.signedUrl && !second.error) {
+    return { data: second.data, error: null };
+  }
+  return { data: second.data, error: second.error ?? first.error };
+}
+
 /**
  * Returns a URL suitable for <img src> — signed when the input targets our private bucket.
  */
@@ -50,9 +83,7 @@ export async function resolveArcsGenerationsDisplayUrl(
   const hit = urlCache.get(imageUrl);
   if (hit && hit.expiresAt > now) return hit.url;
 
-  const { data, error } = await client.storage
-    .from(ARCS_GENERATIONS_BUCKET)
-    .createSignedUrl(path, SIGNED_TTL_SEC);
+  const { data, error } = await createSignedUrlWithUserFolderFallback(client, path);
 
   if (error || !data?.signedUrl) return imageUrl;
 

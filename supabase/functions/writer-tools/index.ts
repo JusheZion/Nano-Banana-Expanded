@@ -322,14 +322,40 @@ function extractOutlineBeatContextForPage(outlineJson: unknown, pageNumber: numb
     return `Outline has no page_beats array. Outline keys: ${Object.keys(o as object).join(', ')}`;
   }
 
-  const match = arr.find((b) => b.page_target === pageNumber);
-  if (match) {
-    return `Exact outline beat for this page:\n${JSON.stringify(match, null, 2)}`;
-  }
-
   const withTargets = arr
     .filter((b): b is OutlinePageBeat & { page_target: number } => typeof b.page_target === 'number')
     .sort((a, b) => a.page_target - b.page_target);
+
+  const match = arr.find((b) => b.page_target === pageNumber);
+  if (match) {
+    const parts: string[] = [];
+
+    const prevSequential = [...withTargets].reverse().find((b) => b.page_target === pageNumber - 1);
+    if (prevSequential) {
+      parts.push(
+        [
+          `Continuity (page ${prevSequential.page_target} — already happened; do not repeat its key actions or restage the same story beat on this page):`,
+          JSON.stringify(prevSequential, null, 2),
+        ].join('\n'),
+      );
+    }
+
+    parts.push(`Exact outline beat for this page:\n${JSON.stringify(match, null, 2)}`);
+
+    const nextSequential = withTargets.find((b) => b.page_target === pageNumber + 1);
+    if (nextSequential) {
+      parts.push(
+        [
+          `CRITICAL — Reserved for page ${nextSequential.page_target} only. Do not depict, resolve, or foreclose the following beat in these panels (no full beat, no closing beat, no character exits that belong here):`,
+          JSON.stringify(nextSequential, null, 2),
+          `End this page after the beat above is complete; leave the reserved beat's story moves for page ${nextSequential.page_target}.`,
+        ].join('\n'),
+      );
+    }
+
+    return parts.join('\n\n');
+  }
+
   if (withTargets.length > 0) {
     const prev = [...withTargets].reverse().find((b) => b.page_target < pageNumber);
     const next = withTargets.find((b) => b.page_target > pageNumber);
@@ -412,6 +438,8 @@ function buildPageBeatsUserPrompt(args: {
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
     'Must have at least one panel; every panel needs non-empty "action".',
     'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
+    'When the outline context includes "Reserved for page N only", those events must not appear in this page\'s panels — stop one beat earlier.',
+    'When the outline context includes "Continuity (page P — already happened)", do not repeat that beat\'s key actions; depict only the current page\'s outline beat.',
     'Do not reuse key actions from prior pages. If outline context is sparse, infer the next logical development from the nearest outline beats plus prior-page digest.',
     'Flesh out concrete visual specifics in each panel (props, blocking, lighting, background detail, character business) — not generic talking-head repeats when the scene continues across pages.',
     'Vary layout across panels on this page: mix wide, medium, close-up, unusual crops, Dutch angle, silhouette, over-shoulder, POV, inset panels, or asymmetric grid when it serves the beat. State approximate panel shape in composition when helpful (e.g. "tall narrow strip", "full-width horizontal band", "large hero panel + small reaction strip").',
