@@ -297,6 +297,11 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **Section-level clears:** store APIs (`clearReferenceSlotsKeepLive`, `clearPromptTagsOnly`, `clearLivePromptOverridesOnly`, `clearDnaModuleSelections`, `clearStyleModuleSelections` / Asset: `clearStructuralSelections`, `clearLookSelections`) + UI on Refs / DNA & Style tabs / Live Prompt / Asset Build & Look / Prompt Tags.
 - [x] **Post–PR #17 polish:** additional Character + Asset studio / vault-adjacent panel + store refinements merged to **`main`** (see `walkthrough.md` Git + Image Vault entries).
 
+## Cloudflare Workers Builds — Version / Deploy commands (2026-04-16) — OPERATOR DASHBOARD
+
+- [x] **Repo:** [`package.json`](package.json) — **`deploy`** / **`preview`** use **`--config ./wrangler.jsonc`**; **`cf:versions-upload`** for CI. Docs: [`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md) **D4e**. **Verify:** `npm run build`, `npm run cf:versions-upload` (passes locally).
+- [ ] **Operator:** In Cloudflare **Workers** project **Settings → Build**: set **Deploy command** to **`npx wrangler deploy --config ./wrangler.jsonc`** and **Version command** to **`npm run cf:versions-upload`**. Push/retry the branch build after pulling these changes.
+
 ## Git + Cloudflare deploy alignment (2026-04-15) — COMPLETE
 
 - [x] Local **`main`** fast-forwarded to **`origin/main`**; studio follow-up commit merged; **`AssetsStudio.tsx`** conflict resolved (production **`references` → hub** sync; no localhost debug ingest).
