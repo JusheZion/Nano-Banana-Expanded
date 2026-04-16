@@ -4,6 +4,7 @@ import { useProject } from '@/shared/context/ProjectContext';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import type { Portal } from '@/shared/portals';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
+import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
 
@@ -31,6 +32,8 @@ function App() {
 
   const portalToOpen = useStudioImportBridge((s) => s.portalToOpen);
   const clearPortalRequest = useStudioImportBridge((s) => s.clearPortalRequest);
+  const imageWorkshopPortalToOpen = useImageWorkshopBridge((s) => s.portalToOpen);
+  const clearImageWorkshopPortalRequest = useImageWorkshopBridge((s) => s.clearPortalRequest);
   const isPhoneRef = useRef(isPhone);
   isPhoneRef.current = isPhone;
 
@@ -56,6 +59,13 @@ function App() {
       clearPortalRequest();
     }
   }, [portalToOpen, clearPortalRequest, navigatePortal]);
+
+  useEffect(() => {
+    if (imageWorkshopPortalToOpen) {
+      navigatePortal(imageWorkshopPortalToOpen);
+      clearImageWorkshopPortalRequest();
+    }
+  }, [imageWorkshopPortalToOpen, clearImageWorkshopPortalRequest, navigatePortal]);
 
   useEffect(() => {
     if (isPhone && (activePortal === 'comic' || activePortal === 'lab')) {

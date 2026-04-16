@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function formatGeminiClientError(message: string): string {
   if (message.includes('VITE_GEMINI_API_KEY')) {
@@ -30,6 +30,8 @@ export function GenericImageLabPanel({
   productionAssets,
   onUseAsSelectedBeat,
   onCreateNewBeat,
+  seedPrompt,
+  onSeedPromptConsumed,
 }: {
   selectedBeat: StoryBeat | null;
   productionCast: ProductionCastMember[];
@@ -46,6 +48,8 @@ export function GenericImageLabPanel({
     aspectRatio: StoryBeatAspectRatio;
     visualPrompt: string;
   }) => void;
+  seedPrompt?: string | null;
+  onSeedPromptConsumed?: () => void;
 }) {
   const [refs, setRefs] = useState<string[]>(() => Array.from({ length: 14 }, () => ''));
   const [context, setContext] = useState<LabContext>('character');
@@ -64,6 +68,16 @@ export function GenericImageLabPanel({
 
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
+
+  useEffect(() => {
+    const next = seedPrompt?.trim();
+    if (!next) return;
+    setPromptRaw(next);
+    setUseRefinedPrompt(false);
+    setError(null);
+    setNotice('Visual Prep seeded Image Lab with the selected prompt.');
+    onSeedPromptConsumed?.();
+  }, [seedPrompt, onSeedPromptConsumed]);
 
   const stableRefs = useMemo(
     () => Array.from({ length: 14 }, (_, i) => refs[i] ?? ''),

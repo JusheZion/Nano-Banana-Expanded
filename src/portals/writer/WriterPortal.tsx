@@ -65,8 +65,12 @@ import {
   readSynopsisHelperFromNotes,
   type SynopsisHelperParts,
 } from '@/portals/writer/writerSynopsisHelper';
+import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
+import { getCharacterAlbums } from '@/shared/api/arcsVault';
+import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
+import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 import {
   ACCENT_GOLD_GRADIENT,
   WRITERS_GOLD_SLANT,
@@ -74,6 +78,7 @@ import {
   WRITERS_WORKSHOP_BG,
 } from '@/shared/theme/Phase12DesignTokens';
 import { WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
+import type { PageBeatsJson } from '@/shared/writer/types';
 
 const titleTextStyle: React.CSSProperties = {
   background: WRITERS_TIFFANY_TEXT,
@@ -200,6 +205,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsBatchBusy, setBeatsBatchBusy] = useState(false);
   const [beatsBatchLabel, setBeatsBatchLabel] = useState('');
   const [beatsBatchSource, setBeatsBatchSource] = useState<'all' | 'picked' | null>(null);
+  const [imageWorkshopBusy, setImageWorkshopBusy] = useState(false);
+  const [imageWorkshopError, setImageWorkshopError] = useState<string | null>(null);
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
   /** When "Skip pages that already have beats" is off, server advances by batch_offset; client tracks it across rounds. */
   const beatsBatchOffsetFullPassRef = useRef(0);
@@ -286,6 +293,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, []);
 
   const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
+  const requestWriterHandoff = useImageWorkshopBridge((s) => s.requestWriterHandoff);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
     'details' in res && res.details ? `${res.error}: ${res.details}` : res.error;
@@ -602,6 +610,100 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
   const selectedPage = pages.find((p) => p.id === selectedPageId) ?? null;
+
+  const openImageWorkshopFromWriter = useCallback(
+    async (mode: 'outline' | 'page' | 'shot-plan') => {
+      if (!selectedIssue) return;
+      setImageWorkshopBusy(true);
+      setImageWorkshopError(null);
+      try {
+        const [characterAlbums, assetAlbums] = await Promise.all([
+          getCharacterAlbums(),
+          getAssetAlbums(),
+        ]);
+        const outlineJson = latestOutline?.outline_json as
+          | { page_beats?: Array<{ page_target?: number; summary?: string }> }
+          | null
+          | undefined;
+        const shotPlanJson = latestShotPlan?.shot_plan_json as
+          | { title?: string; shots?: Array<{ description: string; shot_type?: string }> }
+          | null
+          | undefined;
+        const outlinePageBeat =
+          mode === 'page' && selectedPage?.page_number && outlineJson?.page_beats
+            ? outlineJson.page_beats.find((beat) => beat.page_target === selectedPage.page_number)
+            : null;
+        const shotPlanPageBeats: PageBeatsJson | null =
+          mode === 'shot-plan' && shotPlanJson?.shots
+            ? {
+                one_line_hook:
+                  typeof shotPlanJson.title === 'string'
+                    ? shotPlanJson.title
+                    : selectedIssue.title ?? undefined,
+                panels: shotPlanJson.shots.map((shot, index) => ({
+                  index: index + 1,
+                  action: shot.description,
+                  composition: shot.shot_type,
+                })),
+              }
+            : null;
+
+        const draft = buildImageWorkshopDraftFromWriterSelection({
+          source: {
+            sourceLabel:
+              mode === 'page'
+                ? `Issue #${selectedIssue.issue_number} · Page ${selectedPage?.page_number ?? 'selected'}`
+                : mode === 'shot-plan'
+                  ? `Issue #${selectedIssue.issue_number} · Shot plan`
+                  : `Issue #${selectedIssue.issue_number} · Outline`,
+            issueTitle: selectedIssue.title ?? undefined,
+            issueSynopsis: selectedIssue.synopsis ?? undefined,
+            pageId: selectedPage?.id ?? null,
+            pageNumber: selectedPage?.page_number ?? null,
+            issueId: selectedIssue.id,
+            seriesId: selectedSeriesId,
+            shotPlanId: mode === 'shot-plan' ? latestShotPlan?.id ?? null : null,
+          },
+          pageBeats:
+            mode === 'page'
+              ? ((selectedPage?.beats_json as PageBeatsJson | null) ?? {
+                  one_line_hook: outlinePageBeat?.summary,
+                  panels: outlinePageBeat?.summary ? [{ action: outlinePageBeat.summary }] : [],
+                })
+              : shotPlanPageBeats,
+          scriptText: mode === 'page' ? selectedPage?.script_text ?? null : null,
+          loreCards,
+          characterAlbums,
+          assetAlbums,
+        });
+
+        requestWriterHandoff(draft);
+        pushHistory(
+          mode === 'page'
+            ? 'sent page to Image Workshop'
+            : mode === 'shot-plan'
+              ? 'sent shot plan to Image Workshop'
+              : 'sent outline to Image Workshop',
+        );
+      } catch (error) {
+        setImageWorkshopError(
+          error instanceof Error ? error.message : 'Could not prepare Image Workshop handoff.',
+        );
+      } finally {
+        setImageWorkshopBusy(false);
+      }
+    },
+    [
+      latestOutline,
+      latestShotPlan,
+      loreCards,
+      pushHistory,
+      requestWriterHandoff,
+      selectedIssue,
+      selectedPage,
+      selectedSeriesId,
+    ],
+  );
 
   const sortedPages = useMemo(
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
@@ -1957,6 +2059,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {TABS.find((x) => x.id === activeTab)?.label}
                   </h2>
                 </div>
+                {imageWorkshopError ? (
+                  <p className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">
+                    {imageWorkshopError}
+                  </p>
+                ) : null}
                 {activeTab === 'outline' && (
                   <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(300px,40%)] xl:items-start xl:gap-4">
                     <div className="min-w-0 space-y-4">
@@ -2144,6 +2251,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         style={{ background: ACCENT_GOLD_GRADIENT }}
                       >
                         {outlineGenLoading ? 'Generating…' : 'Generate outline'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!selectedIssueId || imageWorkshopBusy}
+                        onClick={() => void openImageWorkshopFromWriter('outline')}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-2 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        {imageWorkshopBusy ? 'Opening…' : 'Open in Image Workshop'}
                       </button>
                       {outlineCoverageWarning && (
                         <button
@@ -2757,6 +2872,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </button>
                           <button
                             type="button"
+                            disabled={!selectedPageId || imageWorkshopBusy}
+                            onClick={() => void openImageWorkshopFromWriter('page')}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            {imageWorkshopBusy ? 'Opening…' : 'Send page to Image Workshop'}
+                          </button>
+                          <button
+                            type="button"
                             disabled={!selectedPage?.beats_json}
                             onClick={() => {
                               if (!selectedPage?.beats_json) return;
@@ -3164,6 +3287,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       style={{ background: ACCENT_GOLD_GRADIENT }}
                     >
                       {shotsLoading ? 'Planning…' : 'Generate shot plan'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedIssueId || !latestShotPlan || imageWorkshopBusy}
+                      onClick={() => void openImageWorkshopFromWriter('shot-plan')}
+                      className="rounded-lg border border-black/20 bg-white/80 px-3 py-2 text-[11px] font-semibold text-black disabled:opacity-40"
+                    >
+                      {imageWorkshopBusy ? 'Opening…' : 'Send shot plan to Image Workshop'}
                     </button>
                     {shotsError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{shotsError}</p>

@@ -17,7 +17,7 @@ The **Overview** portal is the ARCS landing page: hero, version badge, and quick
 | Reference Character Studio | `studio` |
 | Image Vault | `reference` |
 | Asset Studio | `assets` |
-| Storyline Studio | `lab` |
+| Image Workshop | `lab` |
 | Comic Studio | `comic` |
 | Writers' Workshop | `writer` |
 

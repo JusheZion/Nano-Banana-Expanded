@@ -1,5 +1,26 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Image Workshop orchestration state (2026-04-16)
+
+- **Portal framing:** UI copy now treats portal `lab` as **Image Workshop** rather than Storyline Studio. It is the visual orchestration layer between Writers' Workshop, Image Vault, Character Studio, Asset Studio, and Generic Image Lab.
+- **Writer handoff:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) can open Image Workshop from the current outline, selected page, or latest shot plan. [`imageWorkshopBridge.ts`](src/stores/imageWorkshopBridge.ts) carries the handoff into portal `lab`.
+- **Routing model:** [`imageWorkshopPlanning.ts`](src/portals/storyline/imageWorkshopPlanning.ts) inspects Writer context + lore cards and deterministically groups items into `matched`, `quick_ref`, and `needs_studio`.
+- **Visual Prep:** [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx) renders the `Visual Prep` queue with actions to:
+  - add matched vault refs into `Production cast` / `Production assets`
+  - seed Image Lab for quick refs
+  - open Character Studio / Asset Studio for precision work
+- **Return loop:** [`studioImportBridge.ts`](src/stores/studioImportBridge.ts) now preserves source metadata and can navigate back to Image Workshop after Character / Asset Studio saves. When the source was a beat, the returned image updates that beat automatically.
+- **Vault taxonomy framing:** [`ReferenceAlbum.tsx`](src/portals/ReferenceAlbum.tsx) now exposes `Supporting / Reference` as the third Image Vault lane in product copy, with storage/promotion mechanics to continue incrementally.
+
+## Proposed next task — warning remediation pass (2026-04-16)
+
+- **Goal:** Audit the current repo-wide lint warning set, fix warnings that represent real low-risk issues, and explicitly document every intentionally retained warning in a new repo-root reference file such as `warning_remediation_notes.md`.
+- **Primary focus:** Start with the warning categories already identified in the latest verification pass: `react-hooks/exhaustive-deps`, `@typescript-eslint/no-unused-vars`, `prefer-const`, `Unused eslint-disable directive`, and `@typescript-eslint/no-explicit-any`.
+- **Touched UI priority:** Resolve or explicitly justify the hook dependency warnings in [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx), [`CharacterStudio.tsx`](src/portals/CharacterStudio.tsx), [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx), and [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) first, because those files were part of the Image Workshop implementation wave.
+- **Execution strategy:** Work in small batches, re-running lint after each logical fix group so the source of any regression stays obvious. Avoid mechanical cleanups that could silently alter runtime behavior; if a warning is intentional or a safe fix is unclear, retain it and document the rationale instead of forcing a change.
+- **Documentation output:** Create `warning_remediation_notes.md` with one entry per current warning, including file path, warning type, disposition (`fixed` or `intentionally retained`), rationale for retained warnings, and any follow-up recommendation.
+- **Acceptance target:** `npm run lint` continues to report **0 errors**; warning count decreases where safe; every remaining warning is documented; the touched Image Workshop UI hook warnings are either fixed or explicitly justified.
+
 ## Operational state — Git, Cloudflare, Supabase (2026-04-15)
 
 - **GitHub:** Canonical app branch is **`main`** (`https://github.com/JusheZion/Nano-Banana-Expanded`). Feature work merges via PR; after PR #17 the remote **`cursor/asset-studio-workspace-ui-32da`** branch was removed—local follow-up commits were merged to **`main`** (`6a23bb8` area) and pushed.
@@ -12,11 +33,11 @@
 - **“Missing key” confusion:** UI error was **`Missing VITE_GEMINI_API_KEY`** (Gemini env for browser). Image + text both use `import.meta.env.VITE_GEMINI_API_KEY`; if the AI prompt helper shows this, the **same** key must be in `.env` at dev-server start. **Copy** in Image Lab maps this to a full sentence (not “beat key”).
 - **Portal trim:** Removed **Storyline** textarea, **Script Doctor**, **Plan beats**, **Beat length**, **Director settings** from [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx). Header **IMAGE WORKSHOP**; row 1 is **Production cast** + **Production assets** only. Beat timeline, preview, beat detail, Image Lab retained.
 
-## Planned — Image Workshop reimagining (backlog)
+## Planned — Image Workshop reimagining (backlog, after current bridge)
 
-- **Writer integration:** Pipe beats/dialogue from **Writer’s Workshop** into this portal as prompts or pinned context for image generation.
-- **Vault:** Third **supporting / reference** library (not cast, not production assets) for one-off reference images; optional auto-save from Image Lab.
-- **Production links:** Wire cast/asset rows to faster “use in Image Lab” / beat linking (partially exists via checkboxes + ref slots).
+- **Writer integration:** deeper per-beat / per-shot extraction beyond the first handoff buttons now shipped.
+- **Vault:** persist the third **supporting / reference** library as first-class storage, not just framed UI.
+- **Production links:** tighten promotion/demotion flows between supporting refs and long-lived Character / Asset records.
 
 ## Summary
 

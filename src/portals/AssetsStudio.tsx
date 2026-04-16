@@ -148,14 +148,16 @@ export const AssetsStudio: React.FC = () => {
   }, [store.workspaceMode]);
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
+  const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
 
   useEffect(() => {
     const chunk = consumeImportForTarget('assets');
-    if (chunk?.imageUrl) {
+    if (!chunk) return;
+    if (chunk.imageUrl) {
       useAssetStudioStore.getState().setCurrentLiveImageUrl(chunk.imageUrl);
-      if (chunk.promptHint?.trim()) {
-        useAssetStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
-      }
+    }
+    if (chunk.promptHint?.trim()) {
+      useAssetStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
     }
   }, [consumeImportForTarget]);
 
@@ -436,6 +438,7 @@ export const AssetsStudio: React.FC = () => {
       });
       setRecentAssets(getRecentAssets());
       setShowSaveAssetModal(false);
+      requestReturnToSourceIfNeeded('assets', result.imageUrl, assetName);
     } else if (!result.ok && result.error === 'Supabase not configured') {
       saveGeneration('asset', url, store.currentGenerationSeed ?? undefined, {
         collectionName: collectionNameForDb,
@@ -443,6 +446,7 @@ export const AssetsStudio: React.FC = () => {
       });
       addCachedGeneration('asset', { url, seed: store.currentGenerationSeed ?? undefined });
       setShowSaveAssetModal(false);
+      requestReturnToSourceIfNeeded('assets', url, assetName);
     } else {
       if (result.error && result.error !== 'Supabase not configured') {
         store.setGenerationStatus('error', result.error);

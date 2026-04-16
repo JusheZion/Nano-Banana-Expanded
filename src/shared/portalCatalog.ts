@@ -79,9 +79,9 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
   {
     portal: 'lab',
     theme: 'gold',
-    navLabel: 'Storyline Studio',
-    cardTitle: 'Storyline Studio',
-    cardSubtitle: 'Create Sequences of Images for Videos or Comic Panels',
+    navLabel: 'Image Workshop',
+    cardTitle: 'Image Workshop',
+    cardSubtitle: 'Turn writer context into matched refs, quick refs, and studio-ready visuals',
     accentHex: '#991b1b',
     Icon: ScrollText,
     cardImageUrl: '/assets/images/Aquarius%20Sphere.jpg',

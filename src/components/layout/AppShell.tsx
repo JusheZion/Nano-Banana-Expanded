@@ -469,7 +469,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
                     </button>
                   ) : null}
                   <p className="mt-2 text-[9px] text-white/45 leading-snug">
-                    Comic Studio and Storyline Studio are optimized for larger screens — use a tablet or desktop.
+                    Comic Studio and Image Workshop are optimized for larger screens — use a tablet or desktop.
                   </p>
                 </div>
               )}

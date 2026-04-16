@@ -291,14 +291,16 @@ export const CharacterStudio: React.FC = () => {
   }, [phoneCompact]);
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
+  const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
 
   useEffect(() => {
     const chunk = consumeImportForTarget('studio');
-    if (chunk?.imageUrl) {
+    if (!chunk) return;
+    if (chunk.imageUrl) {
       useCharacterStudioStore.getState().setCurrentLiveImageUrl(chunk.imageUrl);
-      if (chunk.promptHint?.trim()) {
-        useCharacterStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
-      }
+    }
+    if (chunk.promptHint?.trim()) {
+      useCharacterStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
     }
   }, [consumeImportForTarget]);
 
@@ -717,6 +719,7 @@ export const CharacterStudio: React.FC = () => {
         setRecentCharacters(getRecentCharacters());
         setSaveCharacterError(null);
         setShowSaveCharacterModal(false);
+        requestReturnToSourceIfNeeded('studio', result.imageUrl, castName);
       } else if (!result.ok && result.error === 'Supabase not configured') {
         if (saveCharacterIsEditProfile && store.selectedPoseId) {
           store.updatePose(store.selectedPoseId, { imageUrl: url });
@@ -727,6 +730,7 @@ export const CharacterStudio: React.FC = () => {
         addCachedGeneration('character', { url, seed: store.currentGenerationSeed ?? undefined });
         setSaveCharacterError('Supabase not configured — saved in this browser only (will not sync).');
         setShowSaveCharacterModal(false);
+        requestReturnToSourceIfNeeded('studio', url, castName);
       } else if (result.ok) {
         setSaveCharacterError(null);
         setShowSaveCharacterModal(false);

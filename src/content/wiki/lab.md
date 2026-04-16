@@ -1,22 +1,23 @@
-# Storyline Studio
+# Image Workshop
 
 _Last reviewed: 2026-04-05_
 
-> **Note:** In code and types this portal is `lab`. In the sidebar it appears as **Storyline Studio**.
+> **Note:** In code and types this portal is still `lab`. In the UI it now appears as **Image Workshop**.
 
-Master Director workflow: story text, **beats** timeline, per-beat images, cast/production links, and **Generic Image Lab** tooling.
+Image Workshop is the visual orchestration layer between Writers' Workshop, Image Vault, Character Studio, Asset Studio, and Generic Image Lab.
 
 ## Navigation map
 
-- **Rows / panes**: story + director libraries | timeline + preview | beat detail ∥ Image Lab (layout varies by viewport).
+- **Rows / panes**: Visual Prep + production libraries | timeline + preview | beat detail ∥ Image Lab (layout varies by viewport).
 - **Magenta–violet** shell tokens (`STORYLINE_DIRECTOR_BG` family) distinguish this mode inside the app.
 
 ## Tools & functions
 
-- **Script Doctor / beat planning** — text-side AI helpers (Gemini stack).
+- **Visual Prep** — takes Writer context, groups matched refs / quick refs / studio escalations.
 - **Per-beat generation** — aspect ratio, reference strength, cast/asset links.
 - **Save to Asset vault** — persists sequences when configured.
-- **Open in Character / Assets Studio** — uses the studio import bridge.
+- **Open in Character / Assets Studio** — uses the studio import bridge with return-to-origin metadata.
+- **Supporting / Reference lane** — one-off refs stay separate from long-lived production characters/assets.
 
 ## Customization
 
@@ -25,4 +26,4 @@ Master Director workflow: story text, **beats** timeline, per-beat images, cast/
 
 ## Screenshot
 
-![Storyline Studio placeholder](/wiki/screenshots/lab/lab-placeholder.svg)
+![Image Workshop placeholder](/wiki/screenshots/lab/lab-placeholder.svg)

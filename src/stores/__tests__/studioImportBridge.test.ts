@@ -10,12 +10,25 @@ beforeEach(() => {
 
 describe('useStudioImportBridge', () => {
   it('requestOpenInStudio sets portal and payload', () => {
-    useStudioImportBridge.getState().requestOpenInStudio('studio', 'https://img', 'hint');
+    useStudioImportBridge.getState().requestOpenInStudio('studio', 'https://img', 'hint', {
+      origin: {
+        sourcePortal: 'lab',
+        sourceLabel: 'Beat 3',
+        selectedBeatId: 'beat-3',
+      },
+      returnToPortal: 'lab',
+    });
     expect(useStudioImportBridge.getState().portalToOpen).toBe('studio');
-    expect(useStudioImportBridge.getState().importPayload).toEqual({
+    expect(useStudioImportBridge.getState().importPayload).toMatchObject({
       target: 'studio',
       imageUrl: 'https://img',
       promptHint: 'hint',
+      returnToPortal: 'lab',
+      origin: {
+        sourcePortal: 'lab',
+        sourceLabel: 'Beat 3',
+        selectedBeatId: 'beat-3',
+      },
     });
   });
 
@@ -42,5 +55,29 @@ describe('useStudioImportBridge', () => {
     useStudioImportBridge.getState().clearPortalRequest();
     expect(useStudioImportBridge.getState().portalToOpen).toBeNull();
     expect(useStudioImportBridge.getState().importPayload).not.toBeNull();
+  });
+
+  it('can request a return to the source portal after a studio save', () => {
+    useStudioImportBridge.getState().requestOpenInStudio('studio', 'https://img', 'hint', {
+      origin: {
+        sourcePortal: 'lab',
+        sourceLabel: 'Beat 2',
+        selectedBeatId: 'beat-2',
+      },
+      returnToPortal: 'lab',
+    });
+
+    useStudioImportBridge.getState().consumeImportForTarget('studio');
+    useStudioImportBridge.getState().requestReturnToSourceIfNeeded('studio', 'https://saved');
+
+    expect(useStudioImportBridge.getState().portalToOpen).toBe('lab');
+    const returned = useStudioImportBridge.getState().consumeReturnPayloadForPortal('lab');
+    expect(returned).toMatchObject({
+      target: 'studio',
+      imageUrl: 'https://saved',
+      origin: {
+        selectedBeatId: 'beat-2',
+      },
+    });
   });
 });

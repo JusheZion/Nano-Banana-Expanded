@@ -33,6 +33,7 @@ import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { addCachedGeneration } from '@/shared/utils/generationSessionCache';
 import { addRecentFromAsset } from '@/shared/utils/recentGenerations';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
+import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 import {
   ACCENT_GOLD_GRADIENT,
   STORYLINE_DIRECTOR_BG,
@@ -112,9 +113,14 @@ export const StorylineStudio: React.FC = () => {
   const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
   const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
   const [saveVaultPending, setSaveVaultPending] = useState(false);
+  const [labSeedPrompt, setLabSeedPrompt] = useState<string | null>(null);
+  const [returnNotice, setReturnNotice] = useState<string | null>(null);
 
   const store = useStorylineStudioStore();
   const requestOpenInStudio = useStudioImportBridge((s) => s.requestOpenInStudio);
+  const consumeReturnPayloadForPortal = useStudioImportBridge((s) => s.consumeReturnPayloadForPortal);
+  const imageWorkshopDraft = useImageWorkshopBridge((s) => s.draft);
+  const clearImageWorkshopDraft = useImageWorkshopBridge((s) => s.clearDraft);
 
   const getMatchedExistingCollection = useCallback((typed: string): string | null => {
     const q = typed.trim();
@@ -210,6 +216,30 @@ export const StorylineStudio: React.FC = () => {
     [store.beats, store.selectedBeatId]
   );
 
+  useEffect(() => {
+    const returned = consumeReturnPayloadForPortal('lab');
+    if (!returned) return;
+    if (returned.origin?.selectedBeatId) {
+      store.updateBeat(returned.origin.selectedBeatId, {
+        imageUrl: returned.imageUrl,
+        generationStatus: 'idle',
+        generationMessage: null,
+      });
+      store.setSelectedBeatId(returned.origin.selectedBeatId);
+      setReturnNotice(
+        returned.target === 'studio'
+          ? 'Returned from Character Studio and updated the originating beat.'
+          : 'Returned from Asset Studio and updated the originating beat.',
+      );
+      return;
+    }
+    setReturnNotice(
+      returned.target === 'studio'
+        ? 'Returned from Character Studio. The saved result is ready to link inside Image Workshop.'
+        : 'Returned from Asset Studio. The saved result is ready to link inside Image Workshop.',
+    );
+  }, [consumeReturnPayloadForPortal, store]);
+
   const handleLabUseAsSelectedBeat = useCallback(
     (args: { imageUrl: string; seed: number | null; aspectRatio: StoryBeatAspectRatio; visualPrompt: string }) => {
       if (!selectedBeat) return;
@@ -243,6 +273,63 @@ export const StorylineStudio: React.FC = () => {
       });
     },
     [store]
+  );
+
+  const handleSeedLabFromDraft = useCallback((prompt: string) => {
+    setLabSeedPrompt(prompt);
+  }, []);
+
+  const handleUseMatchedDraftItem = useCallback(
+    (item: NonNullable<typeof imageWorkshopDraft>['items'][number]) => {
+      if (item.entityKind === 'character' && item.matchedCharacterAlbum) {
+        const cover =
+          item.matchedCharacterAlbum.items.find((entry) => entry.id === item.matchedCharacterId) ??
+          item.matchedCharacterAlbum.items[0];
+        if (!cover?.image_url) return;
+        store.addProductionCastMember({
+          vaultCharacterId: cover.id,
+          profileName: item.matchedCharacterAlbum.profileName,
+          castName: cover.cast_name ?? null,
+          displayName: cover.cast_name || cover.name || item.matchedCharacterAlbum.profileName,
+          imageUrl: cover.image_url,
+          tagSummary: '',
+        });
+        setReturnNotice(`${item.label} added to Production cast from Image Vault.`);
+        return;
+      }
+
+      if (item.matchedAssetAlbum) {
+        const cover =
+          item.matchedAssetAlbum.items.find((entry) => entry.id === item.matchedAssetId) ??
+          item.matchedAssetAlbum.items[0];
+        if (!cover?.image_url) return;
+        store.addProductionAssetMember({
+          vaultAssetId: cover.id,
+          collectionName: item.matchedAssetAlbum.collectionName,
+          assetName: cover.asset_name || cover.name || item.matchedAssetAlbum.collectionName,
+          imageUrl: cover.image_url,
+        });
+        setReturnNotice(`${item.label} added to Production assets from Image Vault.`);
+      }
+    },
+    [imageWorkshopDraft, store],
+  );
+
+  const handleOpenStudioFromDraft = useCallback(
+    (
+      target: 'studio' | 'assets',
+      prompt: string,
+      label: string,
+    ) => {
+      requestOpenInStudio(target, '', prompt, {
+        origin: {
+          sourcePortal: 'writer',
+          sourceLabel: label,
+        },
+        returnToPortal: 'lab',
+      });
+    },
+    [requestOpenInStudio],
   );
 
   const openVault = useCallback(async () => {
@@ -474,7 +561,126 @@ export const StorylineStudio: React.FC = () => {
         </div>
       )}
 
+      {returnNotice ? (
+        <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-emerald-950/70 border border-emerald-400/35 text-sm text-emerald-100">
+          {returnNotice}
+          <button
+            type="button"
+            className="ml-2 underline text-white/90"
+            onClick={() => setReturnNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+        {imageWorkshopDraft ? (
+          <div className="shrink-0 rounded-xl border border-fuchsia-400/20 bg-black/30 p-4 backdrop-blur-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-fuchsia-200/80">
+                  Visual Prep
+                </p>
+                <h2 className="mt-1 text-sm font-semibold text-white">{imageWorkshopDraft.source.sourceLabel}</h2>
+                <p className="mt-1 text-xs text-white/60">
+                  Writers&apos; Workshop handed off context for Image Workshop to match vault refs, seed quick refs,
+                  or escalate into Character Studio / Asset Studio.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => clearImageWorkshopDraft()}
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              >
+                Clear Visual Prep
+              </button>
+            </div>
+            {imageWorkshopDraft.moodboardPrompts.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {imageWorkshopDraft.moodboardPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => handleSeedLabFromDraft(prompt)}
+                    className="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] text-fuchsia-100 hover:bg-fuchsia-500/20"
+                  >
+                    Seed Image Lab: {prompt.slice(0, 80)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {(['matched', 'quick_ref', 'needs_studio'] as const).map((group) => {
+                const groupItems = imageWorkshopDraft.items.filter((item) => item.group === group);
+                const heading =
+                  group === 'matched'
+                    ? 'Matched from vault'
+                    : group === 'quick_ref'
+                      ? 'Quick refs'
+                      : 'Needs studio';
+                return (
+                  <section key={group} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">{heading}</h3>
+                    <div className="mt-3 space-y-2">
+                      {groupItems.length === 0 ? (
+                        <p className="text-xs text-white/35 italic">Nothing queued.</p>
+                      ) : null}
+                      {groupItems.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-white/10 bg-black/25 p-3">
+                          <p className="text-xs font-semibold text-white">{item.label}</p>
+                          <p className="mt-1 text-[11px] text-white/45">
+                            {item.reason} · {item.entityKind.replace('_', ' ')}
+                          </p>
+                          <p className="mt-2 text-[11px] text-white/70 line-clamp-3">{item.sourceText}</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {item.recommendedAction === 'match_existing' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUseMatchedDraftItem(item)}
+                                className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                              >
+                                {item.entityKind === 'character' ? 'Add to Production cast' : 'Add to Production assets'}
+                              </button>
+                            ) : null}
+                            {item.recommendedAction === 'quick_ref' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleSeedLabFromDraft(item.sourceText)}
+                                className="rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20"
+                              >
+                                Generate Quick Ref
+                              </button>
+                            ) : null}
+                            {item.recommendedAction === 'open_character_studio' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStudioFromDraft('studio', item.sourceText, item.label)}
+                                className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-50 hover:bg-amber-500/20"
+                              >
+                                Open in Character Studio
+                              </button>
+                            ) : null}
+                            {item.recommendedAction === 'open_asset_studio' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStudioFromDraft('assets', item.sourceText, item.label)}
+                                className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-100 hover:bg-violet-500/20"
+                              >
+                                Open in Asset Studio
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {/* Row 1 — Production libraries (vault-linked cast & assets for refs) */}
         <div className="shrink-0 rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -959,7 +1165,14 @@ export const StorylineStudio: React.FC = () => {
                           .filter(Boolean)
                           .join('\n\n')
                           .slice(0, 4000);
-                        requestOpenInStudio('studio', selectedBeat.imageUrl, hint || undefined);
+                        requestOpenInStudio('studio', selectedBeat.imageUrl, hint || undefined, {
+                          origin: {
+                            sourcePortal: 'lab',
+                            sourceLabel: selectedBeat.text || 'Selected beat',
+                            selectedBeatId: selectedBeat.id,
+                          },
+                          returnToPortal: 'lab',
+                        });
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs border border-white/25 hover:bg-white/10 disabled:opacity-40"
                     >
@@ -977,7 +1190,14 @@ export const StorylineStudio: React.FC = () => {
                           .filter(Boolean)
                           .join('\n\n')
                           .slice(0, 4000);
-                        requestOpenInStudio('assets', selectedBeat.imageUrl, hint || undefined);
+                        requestOpenInStudio('assets', selectedBeat.imageUrl, hint || undefined, {
+                          origin: {
+                            sourcePortal: 'lab',
+                            sourceLabel: selectedBeat.text || 'Selected beat',
+                            selectedBeatId: selectedBeat.id,
+                          },
+                          returnToPortal: 'lab',
+                        });
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs border border-white/25 hover:bg-white/10 disabled:opacity-40"
                     >
@@ -997,6 +1217,8 @@ export const StorylineStudio: React.FC = () => {
               productionAssets={store.productionAssets}
               onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
               onCreateNewBeat={handleLabCreateNewBeat}
+              seedPrompt={labSeedPrompt}
+              onSeedPromptConsumed={() => setLabSeedPrompt(null)}
             />
           </aside>
         </div>

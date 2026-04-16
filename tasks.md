@@ -2,6 +2,16 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Image Workshop — Writer handoff + Visual Prep routing (2026-04-16) — COMPLETE
+
+- [x] Writers' Workshop entry points: open Image Workshop from outline, selected page beats, and latest shot plan
+- [x] Deterministic Visual Prep routing helper: match existing vault refs, seed quick refs, or escalate to Character / Asset Studio
+- [x] Image Workshop `Visual Prep` queue UI: grouped `Matched from vault` / `Quick refs` / `Needs studio`
+- [x] Generic Image Lab prompt seeding from Visual Prep
+- [x] Studio import bridge extended with source metadata + return-to-origin flow
+- [x] Character / Asset Studio save flow can return to Image Workshop and restore the originating beat when applicable
+- [x] Product framing copy aligned around `Image Workshop` and `Supporting / Reference`
+
 ## ARCS Universal API Bridge & Data Persistence (Mar 2026) — COMPLETE
 
 - [x] Semantic ID util + DB schema + Supabase client

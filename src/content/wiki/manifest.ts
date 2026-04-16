@@ -39,8 +39,8 @@ export const WIKI_CHAPTERS: WikiChapterMeta[] = [
   },
   {
     id: 'lab',
-    title: 'Storyline Studio',
-    subtitle: 'Beats, Director, Image Lab (portal id: lab)',
+    title: 'Image Workshop',
+    subtitle: 'Writer handoff, vault matching, quick refs, and Image Lab (portal id: lab)',
     lastReviewed: '2026-04-05',
   },
   {
