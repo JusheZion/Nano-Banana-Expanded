@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "preview": "npm run build && wrangler dev --config ./wrangler.jsonc",
+    "deploy": "npm run build && wrangler deploy --config ./wrangler.jsonc",
+    "cf:versions-upload": "wrangler versions upload --config ./wrangler.jsonc"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

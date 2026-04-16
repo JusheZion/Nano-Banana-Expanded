@@ -60,8 +60,13 @@ Complete these so you are not hunting mid-setup.
 
 - [x] **D4d. Workers + Git (dashboard like “Build command / Deploy command”):** If Cloudflare shows **Workers** connected to **GitHub** (not Pages), the dashboard has a **Build command** and a **Deploy command**. For this Vite repo, **`Build command` must not be `None`**. Wrangler reads **`assets.directory`**: **`dist`** in [`wrangler.jsonc`](wrangler.jsonc) — that folder is **created only** by **`npm run build`**. Recommended settings (repo root **`/`**):
   - **Build command:** **`npm ci && npm run build`** (or **`npm install && npm run build`** if **`npm ci`** fails without a lockfile).
-  - **Deploy command:** **`npx wrangler deploy`** (matches [`package.json`](package.json) **`deploy`** script’s second half).
+  - **Deploy command:** **`npx wrangler deploy --config ./wrangler.jsonc`** (same as [`package.json`](package.json) **`deploy`** — explicit config avoids “missing entry-point / assets” when autodiscovery fails in CI).
   - **Production branch:** **`main`** (must match where you push).
+
+- [x] **D4e. Workers Builds — Version command (preview / branch builds):** Cloudflare runs **`Version command`** for many non-production Git builds (log line: *Executing user deploy command: npx wrangler versions upload*). If **`npx wrangler versions upload`** alone fails with *Missing entry-point to Worker script or to assets directory*, Wrangler did not pick up [`wrangler.jsonc`](wrangler.jsonc) in that environment. Set **Version command** to:
+  - **`npm run cf:versions-upload`** (recommended — uses [`package.json`](package.json) script: `wrangler versions upload --config ./wrangler.jsonc`), **or**
+  - **`npx wrangler versions upload --config ./wrangler.jsonc`**
+  Do **not** rely on bare **`npx wrangler versions upload`** for CI if you see that error.
   If **Build command** stays **`None`**, the checkout has **no `dist/`**, deploy fails or stays stale, and the UI shows **“Your last build failed.”**  
   **Static assets only** on the Worker is **expected** for this SPA — there is no Worker script, only uploaded **`dist/`** files. **`VITE_*`** values are baked in at **build** time; add them under the **build / CI environment variables** for this Worker’s Git builds (Cloudflare’s UI may label this **Variables** on the **Build** configuration, not “Worker secrets”). Without them, the app may build but show blank / missing Supabase in production.
 
@@ -78,7 +83,8 @@ Complete these so you are not hunting mid-setup.
   - [ ] **Install command:** If the build skipped `npm ci`, set **Environment variable** or build setting so dependencies install (often automatic for `npm run build`).
   - [ ] **Wrong output folder:** Confirm output is **`dist`**, not `build` or `public`.
   - [ ] **Wrangler `assets.directory`:** If the log shows Wrangler after **`npm ci`** only, set **build command** to **`npm run build`** (or ensure a separate build step runs before **`wrangler versions upload`**). Confirm **`wrangler.jsonc`** includes **`assets.directory`**: **`dist`**.
-  - [ ] **Local: `wrangler` not found:** Use **`npm run deploy`** or **`npx wrangler deploy`** from the repo root (see **D4c**). The Cloudflare log phrase **`wrangler versions upload`** means run **`npx wrangler versions upload`**, not **`versions upload`** alone.
+  - [ ] **Version command / missing entry-point:** If the log shows *Missing entry-point to Worker script or to assets directory* on **`npx wrangler versions upload`**, set **Version command** to **`npm run cf:versions-upload`** or **`npx wrangler versions upload --config ./wrangler.jsonc`** (see **D4e**).
+  - [ ] **Local: `wrangler` not found:** Use **`npm run deploy`** or **`npx wrangler deploy --config ./wrangler.jsonc`** from the repo root (see **D4c**). The Cloudflare log phrase **`wrangler versions upload`** means run **`npx wrangler versions upload`**, not **`versions upload`** alone.
 
 - [ ] **E3.** Build is now **Success** and I have a **`.pages.dev` URL** (e.g. `https://my-app.pages.dev`).
 
