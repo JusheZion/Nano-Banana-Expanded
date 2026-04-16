@@ -1,13 +1,31 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Operational state — Git, Cloudflare, Supabase (2026-04-15)
+
+- **GitHub:** Canonical app branch is **`main`** (`https://github.com/JusheZion/Nano-Banana-Expanded`). Feature work merges via PR; after PR #17 the remote **`cursor/asset-studio-workspace-ui-32da`** branch was removed—local follow-up commits were merged to **`main`** (`6a23bb8` area) and pushed.
+- **Cloudflare:** Production static assets are served by the **Workers** project configured in [`wrangler.jsonc`](wrangler.jsonc) (**`name`**: **`asset-reference-comics-studio`**). Publishing: **`npm run deploy`** (= **`npm run build`** then **`wrangler deploy`**). There is **no** required GitHub Actions deploy in-repo; confirm dashboard build pipelines separately if used. Full checklist: [`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md).
+- **Supabase:** Schema and Edge changes deploy with **`supabase db push`** / **`supabase functions deploy …`** when **`supabase/migrations`** or **`supabase/functions`** change. The 2026-04-15 **`main`** alignment commits were **client + Zustand** only—no Supabase deploy required for that wave.
+
+## Image Workshop — shipped fixes (2026-04-15)
+
+- **Image Lab bug:** `useRefinedPrompt` defaulted to **on** while **`promptRefined`** started empty, so **Generate** used an empty string and showed “enter a prompt” even when the textarea had text. **Fix:** default refined toggle **off**; **`effectivePrompt`** = refined when (toggle on and refined non-empty), else raw, else refined fallback.
+- **“Missing key” confusion:** UI error was **`Missing VITE_GEMINI_API_KEY`** (Gemini env for browser). Image + text both use `import.meta.env.VITE_GEMINI_API_KEY`; if the AI prompt helper shows this, the **same** key must be in `.env` at dev-server start. **Copy** in Image Lab maps this to a full sentence (not “beat key”).
+- **Portal trim:** Removed **Storyline** textarea, **Script Doctor**, **Plan beats**, **Beat length**, **Director settings** from [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx). Header **IMAGE WORKSHOP**; row 1 is **Production cast** + **Production assets** only. Beat timeline, preview, beat detail, Image Lab retained.
+
+## Planned — Image Workshop reimagining (backlog)
+
+- **Writer integration:** Pipe beats/dialogue from **Writer’s Workshop** into this portal as prompts or pinned context for image generation.
+- **Vault:** Third **supporting / reference** library (not cast, not production assets) for one-off reference images; optional auto-save from Image Lab.
+- **Production links:** Wire cast/asset rows to faster “use in Image Lab” / beat linking (partially exists via checkboxes + ref slots).
+
 ## Summary
 
-- **Replace** mock [`PhotoLab.tsx`](src/portals/PhotoLab.tsx) with [`StorylineStudio`](src/portals/storyline/StorylineStudio.tsx): **row-based** ARCS Office layout (story + director + production libraries | beat timeline + **selected-frame preview** | beat detail ∥ Image Lab), magenta–violet shell via [`STORYLINE_DIRECTOR_BG`](src/shared/theme/Phase12DesignTokens.ts), gold chrome.
+- **Replace** mock [`PhotoLab.tsx`](src/portals/PhotoLab.tsx) with [`StorylineStudio`](src/portals/storyline/StorylineStudio.tsx): **row-based** ARCS Office layout (**production cast + assets** | beat timeline + **selected-frame preview** | beat detail ∥ Image Lab); 2026-04-15 removed in-portal storyline/script-doctor/plan-beats row (Writer owns prose). Magenta–violet shell via [`STORYLINE_DIRECTOR_BG`](src/shared/theme/Phase12DesignTokens.ts), gold chrome.
 - **State:** [`storylineStudioStore`](src/stores/storylineStudioStore.ts) (Zustand + persist `arcs-storyline-studio`); beats omit `data:`/`blob:` images from persist (http(s) only).
-- **AI text:** [`geminiTextApi`](src/shared/api/geminiTextApi.ts) (Gemini **3** preview stack: `gemini-3-flash-preview` → `gemini-3.1-flash-lite-preview` → `gemini-3.1-pro-preview`, JSON mode) + [`storylineDirectorPrompts`](src/data/storylineDirectorPrompts.ts) — Script Doctor, Plan beats, post-gen interpolation.
+- **AI text:** [`geminiTextApi`](src/shared/api/geminiTextApi.ts) (Gemini **3** preview stack, JSON mode) + [`storylineDirectorPrompts`](src/data/storylineDirectorPrompts.ts) — **post-gen beat interpolation** still uses text API; Script Doctor / Plan beats **UI removed** from portal (2026-04-15).
 - **AI image:** Per-beat [`generateImage`](src/shared/api/geminiImageApi.ts) with [`buildStorylineReferenceSlots`](src/portals/storyline/buildStorylineReferenceSlots.ts); [`compileVisualPromptForBeat`](src/portals/storyline/compileBeatPrompt.ts) for wardrobe lock.
 - **Cast:** Production cast from [`getCharacterAlbums`](src/shared/api/arcsVault.ts); [`linkCastNamesToBeats`](src/portals/storyline/linkCastToBeats.ts) for name detection.
-- **UX:** Tooltips (default Radix), ⌘/Ctrl+Enter (story field → Script Doctor; else generate selected beat), Esc closes vault/B-roll menu, timeline keyboard nav when focused.
+- **UX:** Tooltips (default Radix), ⌘/Ctrl+Enter (**generate selected beat** when a beat is selected), Esc closes vault/B-roll menu, timeline keyboard nav when focused.
 - **Character Studio neutrality:** [`systemPrompts.ts`](src/data/systemPrompts.ts) + [`characterStudioPrompt.ts`](src/shared/utils/characterStudioPrompt.ts); heritage labels in [`character_studio_spec.ts`](src/data/character_studio_spec.ts) (`African American`, `Black Latino`); persist merge in [`characterStudioStore`](src/stores/characterStudioStore.ts) for legacy labels.
 
 ## Phase 1b — Asset vault save + studio promote

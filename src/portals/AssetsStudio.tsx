@@ -144,8 +144,8 @@ export const AssetsStudio: React.FC = () => {
 
   useEffect(() => {
     if (store.workspaceMode !== 'references') return;
-    if (leftModule !== 'hub') setLeftModule('hub');
-  }, [store.workspaceMode, leftModule]);
+    setLeftModule('hub');
+  }, [store.workspaceMode]);
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
 

@@ -8,7 +8,6 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
-  Wand2,
   Download,
   RefreshCw,
   Box,
@@ -18,18 +17,11 @@ import { Tooltip } from '@/shared/components/Tooltip';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage } from '@/shared/api/geminiImageApi';
-import {
-  STORYLINE_DIRECTOR_SYSTEM,
-  buildBeatPlannerUserPrompt,
-  buildDirectorModifierLines,
-  buildInterpolationUserPrompt,
-  buildScriptDoctorUserPrompt,
-} from '@/data/storylineDirectorPrompts';
+import { STORYLINE_DIRECTOR_SYSTEM, buildInterpolationUserPrompt } from '@/data/storylineDirectorPrompts';
 import { parseJsonFromModel } from '@/portals/storyline/parseDirectorJson';
-import { linkCastNamesToBeats } from '@/portals/storyline/linkCastToBeats';
 import { buildStorylineReferenceSlots } from '@/portals/storyline/buildStorylineReferenceSlots';
 import { compileVisualPromptForBeat } from '@/portals/storyline/compileBeatPrompt';
-import type { StoryBeat, StoryBeatAspectRatio } from '@/portals/storyline/storylineTypes';
+import type { StoryBeatAspectRatio } from '@/portals/storyline/storylineTypes';
 import { GenericImageLabPanel } from '@/portals/storyline/GenericImageLabPanel';
 import { useStorylineStudioStore } from '@/stores/storylineStudioStore';
 import { getCharacterAlbums, type VaultCharacterItem } from '@/shared/api/arcsVault';
@@ -85,43 +77,6 @@ function beatAspectBoxClass(ratio: StoryBeatAspectRatio): string {
     default:
       return 'aspect-[9/16]';
   }
-}
-
-function newBeatFromPlanner(b: {
-  text?: string;
-  durationSec?: number;
-  visualPrompt?: string;
-  camera?: { shot?: string; angle?: string; movement?: string };
-  tone?: string;
-  audio?: { dialogue?: string; sfx?: string };
-  tags?: string[];
-}): StoryBeat {
-  return {
-    id: `beat_${crypto.randomUUID().slice(0, 8)}`,
-    kind: 'narrative',
-    text: typeof b.text === 'string' ? b.text : '',
-    durationSec: typeof b.durationSec === 'number' ? b.durationSec : 5,
-    visualPrompt: typeof b.visualPrompt === 'string' ? b.visualPrompt : '',
-    camera: {
-      shot: b.camera?.shot ?? '',
-      angle: b.camera?.angle ?? '',
-      movement: b.camera?.movement ?? '',
-    },
-    tone: typeof b.tone === 'string' ? b.tone : '',
-    audio: {
-      dialogue: b.audio?.dialogue ?? '',
-      sfx: b.audio?.sfx ?? '',
-    },
-    linkedVaultCharacterIds: [],
-    linkedVaultAssetIds: [],
-    tags: Array.isArray(b.tags) ? b.tags.map(String) : [],
-    imageUrl: null,
-    interpolation: null,
-    generationStatus: 'idle',
-    generationMessage: null,
-    seed: null,
-    aspectRatio: '9:16',
-  };
 }
 
 function displayNameForVaultItem(it: VaultCharacterItem, profileName: string): string {
@@ -318,76 +273,6 @@ export const StorylineStudio: React.FC = () => {
     }
   }, []);
 
-  const runScriptDoctor = useCallback(async () => {
-    if (!store.rawStoryline.trim()) {
-      store.setLastError('Write a storyline first.');
-      return;
-    }
-    store.setLastError(null);
-    store.setAiBusy('script');
-    const user = buildScriptDoctorUserPrompt(store.rawStoryline);
-    const res = await generateGeminiText({
-      systemPrompt: STORYLINE_DIRECTOR_SYSTEM,
-      userPrompt: user,
-      jsonMode: true,
-    });
-    store.setAiBusy('idle');
-    if (!res.ok) {
-      store.setLastError(res.error);
-      return;
-    }
-    const parsed = parseJsonFromModel<{ cleanedText?: string }>(res.text);
-    const cleaned = parsed?.cleanedText?.trim();
-    if (!cleaned) {
-      store.setLastError('Could not parse script doctor response.');
-      return;
-    }
-    store.setCleanedStoryline(cleaned);
-  }, [store]);
-
-  const runBeatPlanner = useCallback(async () => {
-    const base = store.cleanedStoryline.trim() || store.rawStoryline.trim();
-    if (!base) {
-      store.setLastError('Need storyline text (run Script Doctor or paste story).');
-      return;
-    }
-    store.setLastError(null);
-    store.setAiBusy('beats');
-    const castSummaries = store.productionCast
-      .map((c) => `${c.displayName}${c.tagSummary ? `: ${c.tagSummary}` : ''}`)
-      .join('\n');
-    const directorModifiers = buildDirectorModifierLines({
-      highFashionTechwear: store.directorSettings.highFashionTechwear,
-      yugiOhComplexity: store.directorSettings.yugiOhComplexity,
-    });
-    const user = buildBeatPlannerUserPrompt({
-      cleanedText: base,
-      intervalSec: store.beatIntervalSec,
-      castSummaries,
-      directorModifiers,
-    });
-    const res = await generateGeminiText({
-      systemPrompt: STORYLINE_DIRECTOR_SYSTEM,
-      userPrompt: user,
-      jsonMode: true,
-    });
-    store.setAiBusy('idle');
-    if (!res.ok) {
-      store.setLastError(res.error);
-      return;
-    }
-    const parsed = parseJsonFromModel<{ beats?: unknown[] }>(res.text);
-    const rawBeats = parsed?.beats;
-    if (!Array.isArray(rawBeats) || rawBeats.length === 0) {
-      store.setLastError('Could not parse beats from director.');
-      return;
-    }
-    let next = rawBeats.map((x) => newBeatFromPlanner(x as Parameters<typeof newBeatFromPlanner>[0]));
-    next = linkCastNamesToBeats(next, store.productionCast);
-    store.setBeats(next);
-    store.setSelectedBeatId(next[0]?.id ?? null);
-  }, [store]);
-
   const runGenerateBeat = useCallback(
     async (beatId: string) => {
       const beat = store.beats.find((b) => b.id === beatId);
@@ -492,16 +377,10 @@ export const StorylineStudio: React.FC = () => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === 'Enter') {
-        const el = document.activeElement;
-        if (el && el.getAttribute('data-storyline-story') === 'true') {
+        const sid = useStorylineStudioStore.getState().selectedBeatId;
+        if (sid) {
           e.preventDefault();
-          void runScriptDoctor();
-        } else {
-          const sid = useStorylineStudioStore.getState().selectedBeatId;
-          if (sid) {
-            e.preventDefault();
-            void runGenerateBeat(sid);
-          }
+          void runGenerateBeat(sid);
         }
       }
       if (e.key === 'Escape') {
@@ -529,7 +408,7 @@ export const StorylineStudio: React.FC = () => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [runScriptDoctor, runGenerateBeat]);
+  }, [runGenerateBeat]);
 
   return (
     <div
@@ -544,8 +423,9 @@ export const StorylineStudio: React.FC = () => {
           <Clapperboard className="w-6 h-6 shrink-0 text-black/80" aria-hidden />
           <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-wide truncate" style={magentaTitleStyle}>
-              STORYLINE STUDIO / MASTER DIRECTOR
+              IMAGE WORKSHOP
             </h1>
+            <p className="text-[10px] text-black/60 mt-0.5">Beats, production libraries & Image Lab</p>
             <input
               className="bg-black/10 border border-black/20 rounded px-2 py-0.5 text-xs text-black w-full max-w-md mt-1"
               value={store.storyTitle}
@@ -595,107 +475,10 @@ export const StorylineStudio: React.FC = () => {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
-        {/* Row 1 — Story, director, production libraries */}
+        {/* Row 1 — Production libraries (vault-linked cast & assets for refs) */}
         <div className="shrink-0 rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-            <div className="xl:col-span-5 space-y-3 min-w-0">
-              <section>
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">
-                  Storyline
-                </h2>
-                <textarea
-                  data-storyline-story="true"
-                  className="w-full min-h-[160px] rounded-lg bg-black/30 border border-white/15 p-3 text-sm text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/50"
-                  placeholder="Write or paste your story…"
-                  value={store.rawStoryline}
-                  onChange={(e) => store.setRawStoryline(e.target.value)}
-                />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <Tooltip content="Rewrite and structure (⌘/Ctrl+Enter when this field is focused)" side="top">
-                    <button
-                      type="button"
-                      disabled={store.aiBusy !== 'idle'}
-                      onClick={() => void runScriptDoctor()}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-500/50 text-black disabled:opacity-50"
-                      style={{ background: ACCENT_GOLD_GRADIENT }}
-                    >
-                      {store.aiBusy === 'script' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: GEM_MAGENTA }} />
-                      ) : (
-                        <Wand2 className="w-3.5 h-3.5" />
-                      )}
-                      Script Doctor
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Split into timed beats with technical prompts" side="top">
-                    <button
-                      type="button"
-                      disabled={store.aiBusy !== 'idle'}
-                      onClick={() => void runBeatPlanner()}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/20 bg-white/5 hover:bg-white/10 disabled:opacity-50"
-                    >
-                      {store.aiBusy === 'beats' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-fuchsia-300" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5 text-fuchsia-200" />
-                      )}
-                      Plan beats
-                    </button>
-                  </Tooltip>
-                </div>
-                {store.cleanedStoryline ? (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">
-                      Cleaned story (Script Doctor)
-                    </p>
-                    <p className="text-xs text-white/65 whitespace-pre-wrap max-h-36 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-2 leading-relaxed">
-                      {store.cleanedStoryline}
-                    </p>
-                  </div>
-                ) : null}
-              </section>
-
-              <section>
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 block mb-1">
-                  Beat length (sec)
-                </label>
-                <input
-                  type="number"
-                  min={2}
-                  max={120}
-                  className="w-full max-w-xs rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-sm"
-                  value={store.beatIntervalSec}
-                  onChange={(e) => store.setBeatIntervalSec(Number(e.target.value) || 10)}
-                />
-              </section>
-
-              <section>
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 mb-2">
-                  Director settings
-                </h2>
-                <div className="space-y-2">
-                  {(
-                    [
-                      ['highFashionTechwear', 'High-fashion tech-wear'],
-                      ['yugiOhComplexity', 'Ornate / card-anime complexity'],
-                      ['strictWardrobeLock', 'Strict wardrobe lock (prompt)'],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2 text-xs text-white/80 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-white/30"
-                        checked={store.directorSettings[key]}
-                        onChange={(e) => store.setDirectorSettings({ [key]: e.target.checked })}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            <section className="xl:col-span-3 flex flex-col min-h-0 min-w-0 max-h-[320px] xl:max-h-[380px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="flex flex-col min-h-0 min-w-0 max-h-[320px] md:max-h-[380px]">
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                   Production cast
@@ -744,7 +527,7 @@ export const StorylineStudio: React.FC = () => {
               </ul>
             </section>
 
-            <section className="xl:col-span-4 flex flex-col min-h-0 min-w-0 max-h-[320px] xl:max-h-[380px]">
+            <section className="flex flex-col min-h-0 min-w-0 max-h-[320px] md:max-h-[380px]">
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                   Production assets
@@ -813,7 +596,7 @@ export const StorylineStudio: React.FC = () => {
             >
               {store.beats.length === 0 ? (
                 <div className="flex items-center justify-center w-full text-sm text-white/40 px-4 text-center">
-                  Plan beats or add a B-roll slot with + between cards.
+                  Add a B-roll slot with + between cards, or generate in Image Lab and use &quot;Create new B-roll beat&quot;.
                 </div>
               ) : (
                 store.beats.map((b, i) => (

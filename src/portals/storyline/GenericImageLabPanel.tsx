@@ -1,4 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
+
+function formatGeminiClientError(message: string): string {
+  if (message.includes('VITE_GEMINI_API_KEY')) {
+    return 'Gemini API key is not available in this build. Add VITE_GEMINI_API_KEY to your .env file and restart the dev server (same variable Character and Asset studios use).';
+  }
+  return message;
+}
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage, type OnyxModelId } from '@/shared/api/geminiImageApi';
 import { Tooltip } from '@/shared/components/Tooltip';
@@ -47,7 +54,8 @@ export function GenericImageLabPanel({
 
   const [promptRaw, setPromptRaw] = useState('');
   const [promptRefined, setPromptRefined] = useState('');
-  const [useRefinedPrompt, setUseRefinedPrompt] = useState(true);
+  /** After a successful AI refine, this can be turned on; default false so raw textarea drives generation. */
+  const [useRefinedPrompt, setUseRefinedPrompt] = useState(false);
 
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
@@ -61,6 +69,15 @@ export function GenericImageLabPanel({
     () => Array.from({ length: 14 }, (_, i) => refs[i] ?? ''),
     [refs]
   );
+
+  /** Prefer refined text when enabled and present; otherwise use raw (avoids empty refined + default toggle blocking generation). */
+  const effectivePrompt = useMemo(() => {
+    const raw = promptRaw.trim();
+    const refined = promptRefined.trim();
+    if (useRefinedPrompt && refined) return refined;
+    if (raw) return raw;
+    return refined;
+  }, [promptRaw, promptRefined, useRefinedPrompt]);
 
   const applyRefs = useCallback((incoming: string[], nextContext: LabContext) => {
     const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? '');
@@ -197,7 +214,7 @@ export function GenericImageLabPanel({
         jsonMode: true,
       });
       if (!res.ok) {
-        setError(res.error);
+        setError(formatGeminiClientError(res.error));
         return;
       }
       const parsed = parseJsonFromModel<{ refinedPrompt?: string }>(res.text);
@@ -214,7 +231,7 @@ export function GenericImageLabPanel({
   }, [promptRaw]);
 
   const generate = useCallback(async () => {
-    const basePrompt = (useRefinedPrompt ? promptRefined : promptRaw).trim();
+    const basePrompt = effectivePrompt;
     if (!basePrompt) {
       setError('Enter a prompt before generating.');
       return;
@@ -233,7 +250,7 @@ export function GenericImageLabPanel({
       });
       if (!res.ok) {
         if ('blocked' in res && res.blocked) setError('Blocked by safety filters.');
-        else if ('error' in res) setError(res.error);
+        else if ('error' in res) setError(formatGeminiClientError(res.error));
         else setError('Failed to generate image.');
         return;
       }
@@ -242,7 +259,7 @@ export function GenericImageLabPanel({
     } finally {
       setGenBusy(false);
     }
-  }, [aspectRatio, context, modelId, promptRaw, promptRefined, stableRefs, useRefinedPrompt]);
+  }, [aspectRatio, context, effectivePrompt, modelId, stableRefs]);
 
   const downloadDataUrl = useCallback((dataUrl: string, fileName: string) => {
     const a = document.createElement('a');
@@ -448,7 +465,7 @@ export function GenericImageLabPanel({
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={genBusy || !promptRaw.trim()}
+          disabled={genBusy || !effectivePrompt}
           onClick={() => void generate()}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
           style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
@@ -511,7 +528,7 @@ export function GenericImageLabPanel({
                     imageUrl: lastImageUrl,
                     seed: lastSeed,
                     aspectRatio,
-                    visualPrompt: (useRefinedPrompt ? promptRefined : promptRaw).trim(),
+                    visualPrompt: effectivePrompt,
                   })
                 }
                 className="px-3 py-2 rounded-full text-xs border border-white/20 hover:bg-white/10 disabled:opacity-50"
@@ -526,7 +543,7 @@ export function GenericImageLabPanel({
                     imageUrl: lastImageUrl,
                     seed: lastSeed,
                     aspectRatio,
-                    visualPrompt: (useRefinedPrompt ? promptRefined : promptRaw).trim(),
+                    visualPrompt: effectivePrompt,
                   })
                 }
                 className="px-3 py-2 rounded-full text-xs border border-white/20 hover:bg-white/10 disabled:opacity-50"

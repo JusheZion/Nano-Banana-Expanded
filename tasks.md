@@ -28,6 +28,12 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Gallery density toggle; hover zoom refs + live image; loading “Working…”; empty states
 - [ ] Image-describe API for Refine tab “NEW” (follow-up per plan §8)
 
+## Image Workshop — Image Lab + Storyline UI trim (2026-04-15) — COMPLETE
+
+- [x] [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx): `effectivePrompt`, default `useRefinedPrompt` false, Generate button uses effective text; clearer `VITE_GEMINI_API_KEY` message
+- [x] [`StorylineStudio.tsx`](src/portals/storyline/StorylineStudio.tsx): remove storyline column, Script Doctor, Plan beats, director settings, beat interval; **IMAGE WORKSHOP** header; timeline empty-state copy
+- [x] Verify: `npm run build`
+
 ## Asset Studio workspace UI (2026-04-14) — COMPLETE
 
 - [x] **Asset workspace:** fixed live preview pane (`flex-none`, no internal scroll); galleries + spatial chips + bottom strips in one scroll container; removed conflicting `max-h` on middle stack
@@ -274,21 +280,26 @@ Checklist for current and upcoming phases. Update as work completes.
 - [ ] Phase 1d: Beat reference strength (none/light/strict) to control how strongly cast/assets constrain generation.
 - [x] Phase 1d: Generic Image Lab panel (upload refs + prompt + AI prompt helper + generate + import into storyline beats).
 
-## Storyline Image Lab + reference fetch bugfixes (2026-04-15) — PLANNED
+## Storyline Image Lab + reference fetch bugfixes (2026-04-15) — COMPLETE
 
-- [ ] **Bugfix:** Asset/Character/Storyline generation fails with “failed to fetch reference image (400)” when a **stale signed URL** is reused as a reference. Fix with **just-in-time re-sign** before encoding refs + **retry once on 400**.
-- [ ] **UX:** Storyline **Image Lab** reference helpers should not feel “dead”:
-  - [ ] “Use Character Studio refs” shows a clear empty-state if no refs exist
-  - [ ] Add “Add Character refs” / “Add Asset refs” (fill first-empty) so both types can be used at the same time (current behavior replaces refs)
-  - [ ] Keep explicit “Replace with … refs” for the current behavior
+- [x] **Bugfix:** Stale **`arcs-generations`** signed URLs as Gemini refs — **just-in-time re-sign** via `resolveReferenceUrlForFetch` → `resolveArcsGenerationsDisplayUrl` before `urlToBase64WithMime` ([`geminiImageApi.ts`](src/shared/api/geminiImageApi.ts)).
+- [x] **UX:** [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx) — **Replace with** vs **Add** Character/Asset refs; empty-state notice when a studio has no refs.
 
 ## Image Vault — high-quality downloads (2026-04-15) — COMPLETE
 
 - [x] **Download HQ (single):** per-card action; `fetchVaultImageBlob` + `createFreshSignedArcsUrl` in `arcsGenerationsUrls.ts`, 400 retry; `ProfileVaultModal` + `CollectionVaultModal`.
 - [x] **Download .zip (selected/all):** ZIP checkboxes + **Download all** / **Selected (N)**; client zip via `fflate` in `vaultImageDownload.ts`.
 
-## Studios — reset UX (Character + Asset) (2026-04-15) — MOSTLY COMPLETE
+## Studios — reset UX (Character + Asset) (2026-04-15) — COMPLETE
 
 - [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
 - [x] **Clear workspace:** `resetWorkspaceFreshSlate` on `characterStudioStore` + `assetStudioStore` (tags → defaults, style selections empty, refs cleared, overrides cleared; keeps live image, seed, libraries, session/recents).
 - [x] **Section-level clears:** store APIs (`clearReferenceSlotsKeepLive`, `clearPromptTagsOnly`, `clearLivePromptOverridesOnly`, `clearDnaModuleSelections`, `clearStyleModuleSelections` / Asset: `clearStructuralSelections`, `clearLookSelections`) + UI on Refs / DNA & Style tabs / Live Prompt / Asset Build & Look / Prompt Tags.
+- [x] **Post–PR #17 polish:** additional Character + Asset studio / vault-adjacent panel + store refinements merged to **`main`** (see `walkthrough.md` Git + Image Vault entries).
+
+## Git + Cloudflare deploy alignment (2026-04-15) — COMPLETE
+
+- [x] Local **`main`** fast-forwarded to **`origin/main`**; studio follow-up commit merged; **`AssetsStudio.tsx`** conflict resolved (production **`references` → hub** sync; no localhost debug ingest).
+- [x] Pushed **`origin/main`**; **`walkthrough.md`** documents sync + deploy expectations.
+- [x] **Operator — Cloudflare:** **`npm run deploy`** (2026-04-15) — Worker **`asset-reference-comics-studio`** updated; live URL in **`walkthrough.md`**.
+- [x] **Supabase:** no **`supabase db push`** / **`supabase functions deploy`** required for this alignment (no migration or Edge diffs in those commits).
