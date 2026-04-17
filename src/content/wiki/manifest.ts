@@ -39,7 +39,7 @@ export const WIKI_CHAPTERS: WikiChapterMeta[] = [
   },
   {
     id: 'lab',
-    title: 'Image Workshop',
+    title: 'Illustrator’s Imageshop',
     subtitle: 'Writer handoff, vault matching, quick refs, and Image Lab (portal id: lab)',
     lastReviewed: '2026-04-05',
   },

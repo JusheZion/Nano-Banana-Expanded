@@ -235,8 +235,8 @@ export const StorylineStudio: React.FC = () => {
     }
     setReturnNotice(
       returned.target === 'studio'
-        ? 'Returned from Character Studio. The saved result is ready to link inside Image Workshop.'
-        : 'Returned from Asset Studio. The saved result is ready to link inside Image Workshop.',
+        ? 'Returned from Character Studio. The saved result is ready to link inside Illustrator’s Imageshop.'
+        : 'Returned from Asset Studio. The saved result is ready to link inside Illustrator’s Imageshop.',
     );
   }, [consumeReturnPayloadForPortal, store]);
 
@@ -584,8 +584,8 @@ export const StorylineStudio: React.FC = () => {
                 </p>
                 <h2 className="mt-1 text-sm font-semibold text-white">{imageWorkshopDraft.source.sourceLabel}</h2>
                 <p className="mt-1 text-xs text-white/60">
-                  Writers&apos; Workshop handed off context for Image Workshop to match vault refs, seed quick refs,
-                  or escalate into Character Studio / Asset Studio.
+                  Writers&apos; Workshop handed off context for Illustrator’s Imageshop to match vault refs, seed quick
+                  refs, or escalate into Character Studio / Asset Studio.
                 </p>
               </div>
               <button
@@ -832,6 +832,22 @@ export const StorylineStudio: React.FC = () => {
                         }`}
                       >
                         <div className={`${beatAspectBoxClass(b.aspectRatio)} bg-black/40 relative w-full`}>
+                          <div className="absolute top-1 right-1 z-10">
+                            <Tooltip content="Delete beat" side="left">
+                              <button
+                                type="button"
+                                className="p-1 rounded-md bg-black/40 border border-white/10 text-white/65 hover:text-red-200 hover:border-red-400/40 hover:bg-red-950/40"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  store.removeBeat(b.id);
+                                }}
+                                aria-label="Delete beat"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </Tooltip>
+                          </div>
                           {b.imageUrl ? (
                             <Tooltip
                               content={

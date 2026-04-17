@@ -216,7 +216,7 @@ export function buildImageWorkshopDraftFromWriterSelection(
       recurrence: 'one_off',
       group: 'quick_ref',
       recommendedAction: 'quick_ref',
-      reason: 'No explicit lore match was found, so Image Workshop should generate a quick supporting scene ref.',
+      reason: 'No explicit lore match was found, so Illustrator’s Imageshop should generate a quick supporting scene ref.',
       sourceText: fallbackText,
       saveTarget: 'supporting_reference',
     });

@@ -48,7 +48,7 @@ export const ReferenceAlbum: React.FC = () => {
                             : 'border-white/20 text-white/70 hover:border-white/40 hover:text-white/90'
                     }`}
                 >
-                    Supporting / Reference
+                    NPC Vault
                 </button>
             </div>
             {tab === 'character' ? (
@@ -58,18 +58,18 @@ export const ReferenceAlbum: React.FC = () => {
             ) : (
                 <div className="mx-auto w-full max-w-4xl rounded-2xl border border-white/10 bg-black/25 p-6 text-white/80">
                     <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-fuchsia-200/70">
-                        Image Workshop lane
+                        Illustrator’s Imageshop lane
                     </p>
-                    <h2 className="mt-2 text-lg font-semibold text-white">Supporting / Reference</h2>
+                    <h2 className="mt-2 text-lg font-semibold text-white">NPC Vault</h2>
                     <p className="mt-2 text-sm leading-relaxed text-white/70">
-                        This lane is reserved for quick refs coming out of Image Workshop: one-off NPCs, cameo
-                        characters, exploratory environments, and mood-board images that should stay separate from
-                        long-lived Character and Asset vault records.
+                        This vault holds quick refs coming out of Illustrator’s Imageshop: one-off NPCs, cameo characters,
+                        exploratory environments, and mood-board images that should stay separate from long-lived
+                        Character and Asset vault records.
                     </p>
                     <p className="mt-3 text-sm leading-relaxed text-white/60">
-                        Storage and promotion flows are being wired incrementally. Until then, use Image Workshop to
-                        generate supporting refs and promote only the images that need full Character Studio or Asset
-                        Studio continuity.
+                        Storage and promotion flows are being wired incrementally. Until then, use Illustrator’s Imageshop
+                        to generate NPC refs and promote only the images that need full Character Studio or Asset Studio
+                        continuity.
                     </p>
                 </div>
             )}

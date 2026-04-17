@@ -23,6 +23,50 @@
 - **Documentation output:** Create `warning_remediation_notes.md` with one entry per current warning, including file path, warning type, disposition (`fixed` or `intentionally retained`), rationale for retained warnings, and any follow-up recommendation.
 - **Acceptance target:** `npm run lint` continues to report **0 errors**; warning count decreases where safe; every remaining warning is documented; the touched Image Workshop UI hook warnings are either fixed or explicitly justified.
 
+## Proposed next task — Illustrator’s Imageshop workflow + UX polish (2026-04-16)
+
+- **Goal:** Make the Image Workshop portal read and behave like a coherent end-to-end workflow by renaming it, tightening layout affordances, improving discoverability (tooltips + nearby controls), and addressing image-aspect preview needs.
+
+### A) Naming + navigation consistency
+- **Portal rename (UI copy):** rename the portal from **Image Workshop** to **Illustrator’s Imageshop** anywhere it appears in nav/headers/wiki framing for portal `lab`.
+- **Vault rename:** rename **Supporting Resources Vault** to **NPC Vault** in UI copy.
+
+### B) Supporting/NPC Vault parity
+- **Add missing action buttons:** wherever Character Vault and Asset Vault have “add/use” buttons in Imageshop, add the same button pattern for the NPC Vault so users can add NPC refs without hunting.
+- **Rationale:** users need a predictable “3 vaults, 3 identical affordances” mental model.
+
+### C) Production panel + overall layout density
+- **Tighten icon spacing:** in the Production cast/assets/NPC panels, move vault action icons closer to the text they apply to (reduce whitespace and align controls inline).
+- **Optimize vertical space:** reduce unhelpful padding/margins across Imageshop panels so Beat Timeline, Beat Detail, and Image Lab can coexist without forcing constant scroll-to-top context switches.
+- **Guardrails:** keep touch targets usable on phone; avoid removing spacing that aids scanning.
+
+### D) Discoverability: tooltips + “what do I do here”
+- **Tooltips:** add lightweight tooltips to key panel headers and icon buttons so users know what each panel does and what the primary action is.
+- **Writer handoff clarity:** when the user opens Imageshop from **outline** vs **page beats**, ensure the generated “buttons/wiki entries” either:
+  - trigger meaningful actions, or
+  - present as clearly “reference-only” (readable without implying click-to-act).
+
+### E) Beat Timeline affordances
+- **Delete beat:** ensure there is a discoverable delete action for a beat (button and tooltip), and document its location via tooltip or header action grouping.
+
+### F) Image Lab: landscape preview support
+- **Add landscape preview panel:** augment the Image Lab UI so landscape aspect ratios (e.g. 21:9) have a dedicated, usable preview region (portrait-only preview should not be the default for landscape).
+
+### G) Beat Detail input ergonomics
+- **Dropdown options:** for Beat Detail fields that currently force typing (and show confusing “boxes”/chips), add dropdown/select helpers for common choices while still allowing free-text.
+
+### H) Camera angle consistency guidance (workflow)
+- **UX intent:** make it easier to request “same image, different point of view” without accidentally changing identity/style.
+- **Approach:** expose a clearer workflow hint (and/or preset) that encourages using consistent reference + minimal delta prompt, and avoid implying that angle tags alone will preserve everything.
+
+### Acceptance criteria
+- Portal header and navigation reflect **Illustrator’s Imageshop**.
+- Supporting vault is labeled **NPC Vault** and has the same “add/use” button affordances as the other vaults.
+- Production panel icons are visually associated with the text they act on (no “controls floating far away”).
+- Beat Timeline has an obvious delete affordance with tooltip.
+- Imageshop panels have tooltips for first-time guidance.
+- Image Lab has a usable landscape preview path.
+
 ## Operational state — Git, Cloudflare, Supabase (2026-04-15)
 
 - **GitHub:** Canonical app branch is **`main`** (`https://github.com/JusheZion/Nano-Banana-Expanded`). Feature work merges via PR; after PR #17 the remote **`cursor/asset-studio-workspace-ui-32da`** branch was removed—local follow-up commits were merged to **`main`** (`6a23bb8` area) and pushed.

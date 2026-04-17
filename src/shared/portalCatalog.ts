@@ -79,8 +79,8 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
   {
     portal: 'lab',
     theme: 'gold',
-    navLabel: 'Image Workshop',
-    cardTitle: 'Image Workshop',
+    navLabel: "Illustrator’s Imageshop",
+    cardTitle: "Illustrator’s Imageshop",
     cardSubtitle: 'Turn writer context into matched refs, quick refs, and studio-ready visuals',
     accentHex: '#991b1b',
     Icon: ScrollText,

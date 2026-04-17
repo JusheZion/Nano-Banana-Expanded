@@ -1,10 +1,10 @@
-# Image Workshop
+# Illustrator’s Imageshop
 
 _Last reviewed: 2026-04-05_
 
-> **Note:** In code and types this portal is still `lab`. In the UI it now appears as **Image Workshop**.
+> **Note:** In code and types this portal is still `lab`. In the UI it now appears as **Illustrator’s Imageshop**.
 
-Image Workshop is the visual orchestration layer between Writers' Workshop, Image Vault, Character Studio, Asset Studio, and Generic Image Lab.
+Illustrator’s Imageshop is the visual orchestration layer between Writers' Workshop, Image Vault, Character Studio, Asset Studio, and Generic Image Lab.
 
 ## Navigation map
 
@@ -17,7 +17,7 @@ Image Workshop is the visual orchestration layer between Writers' Workshop, Imag
 - **Per-beat generation** — aspect ratio, reference strength, cast/asset links.
 - **Save to Asset vault** — persists sequences when configured.
 - **Open in Character / Assets Studio** — uses the studio import bridge with return-to-origin metadata.
-- **Supporting / Reference lane** — one-off refs stay separate from long-lived production characters/assets.
+- **NPC Vault lane** — one-off refs stay separate from long-lived production characters/assets.
 
 ## Customization
 
@@ -26,4 +26,4 @@ Image Workshop is the visual orchestration layer between Writers' Workshop, Imag
 
 ## Screenshot
 
-![Image Workshop placeholder](/wiki/screenshots/lab/lab-placeholder.svg)
+![Illustrator’s Imageshop placeholder](/wiki/screenshots/lab/lab-placeholder.svg)

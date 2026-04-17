@@ -701,14 +701,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         requestWriterHandoff(draft);
         pushHistory(
           mode === 'page'
-            ? 'sent page to Image Workshop'
+            ? 'sent page to Illustrator’s Imageshop'
             : mode === 'shot-plan'
-              ? 'sent shot plan to Image Workshop'
-              : 'sent outline to Image Workshop',
+              ? 'sent shot plan to Illustrator’s Imageshop'
+              : 'sent outline to Illustrator’s Imageshop',
         );
       } catch (error) {
         setImageWorkshopError(
-          error instanceof Error ? error.message : 'Could not prepare Image Workshop handoff.',
+          error instanceof Error ? error.message : 'Could not prepare Illustrator’s Imageshop handoff.',
         );
       } finally {
         setImageWorkshopBusy(false);
@@ -2282,7 +2282,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         onClick={() => void openImageWorkshopFromWriter('outline')}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-2 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
-                        {imageWorkshopBusy ? 'Opening…' : 'Open in Image Workshop'}
+                        {imageWorkshopBusy ? 'Opening…' : 'Open in Illustrator’s Imageshop'}
                       </button>
                       {outlineCoverageWarning && (
                         <button
@@ -2900,7 +2900,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             onClick={() => void openImageWorkshopFromWriter('page')}
                             className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                           >
-                            {imageWorkshopBusy ? 'Opening…' : 'Send page to Image Workshop'}
+                            {imageWorkshopBusy ? 'Opening…' : 'Send page to Illustrator’s Imageshop'}
                           </button>
                           <button
                             type="button"
@@ -3318,7 +3318,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       onClick={() => void openImageWorkshopFromWriter('shot-plan')}
                       className="rounded-lg border border-black/20 bg-white/80 px-3 py-2 text-[11px] font-semibold text-black disabled:opacity-40"
                     >
-                      {imageWorkshopBusy ? 'Opening…' : 'Send shot plan to Image Workshop'}
+                      {imageWorkshopBusy ? 'Opening…' : 'Send shot plan to Illustrator’s Imageshop'}
                     </button>
                     {shotsError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{shotsError}</p>
