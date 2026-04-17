@@ -1404,7 +1404,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
     );
     setDialogueEditDraft(selectedPage.script_text ?? '');
-  }, [selectedPage]);
+    // Sync when the logical row fields change, not when `pages` replaces row object identity (e.g. batch `setPages`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedPage omitted on purpose; see above.
+  }, [selectedPage?.id, selectedPage?.beats_json, selectedPage?.script_text]);
 
   useEffect(() => {
     if (!latestShotPlan) {

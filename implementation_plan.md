@@ -2,6 +2,8 @@
 
 ## Image Workshop orchestration state (2026-04-16)
 
+- **WriterPortal draft stability (2026-04-16):** The selected-page effect that initializes `beatsEditDraft` / `dialogueEditDraft` must depend on `selectedPage?.id`, `beats_json`, and `script_text`, not the whole `selectedPage` object, so `setPages` batch updates do not reset in-progress edits when row references change but fields do not.
+
 - **Portal framing:** UI copy now treats portal `lab` as **Image Workshop** rather than Storyline Studio. It is the visual orchestration layer between Writers' Workshop, Image Vault, Character Studio, Asset Studio, and Generic Image Lab.
 - **Writer handoff:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) can open Image Workshop from the current outline, selected page, or latest shot plan. [`imageWorkshopBridge.ts`](src/stores/imageWorkshopBridge.ts) carries the handoff into portal `lab`.
 - **Routing model:** [`imageWorkshopPlanning.ts`](src/portals/storyline/imageWorkshopPlanning.ts) inspects Writer context + lore cards and deterministically groups items into `matched`, `quick_ref`, and `needs_studio`.

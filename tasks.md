@@ -2,6 +2,10 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## WriterPortal — page edit draft stability (2026-04-16) — COMPLETE
+
+- [x] Restore granular `useEffect` deps for beats/dialogue drafts (`id`, `beats_json`, `script_text`) so `setPages` reference churn does not wipe unsaved edits
+
 ## Image Workshop — Writer handoff + Visual Prep routing (2026-04-16) — COMPLETE
 
 - [x] Removed session debug ingest (`7621` / `edc323`) from `StorylineStudio`, `WriterPortal`, `studioImportBridge`
