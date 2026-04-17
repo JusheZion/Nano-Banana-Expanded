@@ -29,7 +29,7 @@ import { getAssetAlbums, type VaultAssetItem } from '@/shared/api/arcsAssetVault
 import { saveStorySequenceToAssetsVault } from '@/shared/api/arcsPersistence';
 import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { firstStoryCoverImageUrl } from '@/shared/utils/storySequencePayload';
-import { saveGeneration } from '@/shared/utils/generationOutputRouter';
+import { getGenerations, saveGeneration, type StoredGeneration } from '@/shared/utils/generationOutputRouter';
 import { addCachedGeneration } from '@/shared/utils/generationSessionCache';
 import { addRecentFromAsset } from '@/shared/utils/recentGenerations';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
@@ -55,6 +55,17 @@ const BROLL_PRESETS: { label: string; text: string }[] = [
   { label: 'Ambient', text: 'Mood B-roll: texture, weather, environment only.' },
 ];
 const STORY_BEAT_ASPECTS: StoryBeatAspectRatio[] = ['9:16', '1:1', '21:9'];
+const CAMERA_SHOT_SUGGESTIONS = [
+  'Wide',
+  'Medium',
+  'Close-up',
+  'Extreme close-up',
+  'Over-the-shoulder',
+  'Establishing',
+  'Insert',
+];
+const CAMERA_ANGLE_SUGGESTIONS = ['Eye level', 'High angle', 'Low angle', 'POV', 'Dutch tilt'];
+const CAMERA_MOVEMENT_SUGGESTIONS = ['Static', 'Pan', 'Tilt', 'Dolly in', 'Dolly out', 'Handheld', 'Crane'];
 
 function timelineCardWidthClass(ratio: StoryBeatAspectRatio): string {
   switch (ratio) {
@@ -105,6 +116,8 @@ export const StorylineStudio: React.FC = () => {
   const [assetVaultRows, setAssetVaultRows] = useState<
     { item: VaultAssetItem; collectionName: string }[]
   >([]);
+  const [supportingVaultOpen, setSupportingVaultOpen] = useState(false);
+  const [supportingVaultRows, setSupportingVaultRows] = useState<StoredGeneration[]>([]);
   const [brollMenuIndex, setBrollMenuIndex] = useState<number | null>(null);
   const [showSaveVaultModal, setShowSaveVaultModal] = useState(false);
   const [saveVaultCollectionName, setSaveVaultCollectionName] = useState('');
@@ -121,6 +134,12 @@ export const StorylineStudio: React.FC = () => {
   const consumeReturnPayloadForPortal = useStudioImportBridge((s) => s.consumeReturnPayloadForPortal);
   const imageWorkshopDraft = useImageWorkshopBridge((s) => s.draft);
   const clearImageWorkshopDraft = useImageWorkshopBridge((s) => s.clearDraft);
+
+  const openSupportingVault = useCallback(() => {
+    setSupportingVaultOpen(true);
+    const list = getGenerations('supporting_reference');
+    setSupportingVaultRows([...list].sort((a, b) => b.createdAt - a.createdAt));
+  }, []);
 
   const getMatchedExistingCollection = useCallback((typed: string): string | null => {
     const q = typed.trim();
@@ -373,12 +392,15 @@ export const StorylineStudio: React.FC = () => {
       const linkedCast = store.productionCast.filter((c) =>
         beat.linkedVaultCharacterIds.includes(c.vaultCharacterId)
       );
+      const linkedSupporting = store.productionSupportingRefs.filter((r) =>
+        beat.linkedSupportingRefIds.includes(r.supportingRefId)
+      );
       const linkedAssets = store.productionAssets.filter((a) =>
         beat.linkedVaultAssetIds.includes(a.vaultAssetId)
       );
 
       const prompt = compileVisualPromptForBeat(beat, store.productionCast, store.directorSettings);
-      const refUrls = buildStorylineReferenceSlots(linkedCast, linkedAssets);
+      const refUrls = buildStorylineReferenceSlots(linkedCast, linkedSupporting, linkedAssets);
       const seed = pickGenerationSeed('randomized', null);
 
       const img = await generateImage({
@@ -450,6 +472,8 @@ export const StorylineStudio: React.FC = () => {
       beatIntervalSec: store.beatIntervalSec,
       directorSettings: store.directorSettings,
       productionCast: store.productionCast,
+      productionAssets: store.productionAssets,
+      productionSupportingRefs: store.productionSupportingRefs,
       beats: store.beats,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -510,7 +534,7 @@ export const StorylineStudio: React.FC = () => {
           <Clapperboard className="w-6 h-6 shrink-0 text-black/80" aria-hidden />
           <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-wide truncate" style={magentaTitleStyle}>
-              IMAGE WORKSHOP
+              Illustrator’s Imageshop
             </h1>
             <p className="text-[10px] text-black/60 mt-0.5">Beats, production libraries & Image Lab</p>
             <input
@@ -635,40 +659,62 @@ export const StorylineStudio: React.FC = () => {
                           <p className="mt-2 text-[11px] text-white/70 line-clamp-3">{item.sourceText}</p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             {item.recommendedAction === 'match_existing' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleUseMatchedDraftItem(item)}
-                                className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                              <Tooltip
+                                content="Adds the matched vault item to the production library in this workspace."
+                                side="top"
                               >
-                                {item.entityKind === 'character' ? 'Add to Production cast' : 'Add to Production assets'}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUseMatchedDraftItem(item)}
+                                  className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                                >
+                                  {item.entityKind === 'character'
+                                    ? 'Add to Production cast'
+                                    : 'Add to Production assets'}
+                                </button>
+                              </Tooltip>
                             ) : null}
                             {item.recommendedAction === 'quick_ref' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleSeedLabFromDraft(item.sourceText)}
-                                className="rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20"
+                              <Tooltip
+                                content="Seeds Image Lab with this text so you can generate a quick reference image."
+                                side="top"
                               >
-                                Generate Quick Ref
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSeedLabFromDraft(item.sourceText)}
+                                  className="rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20"
+                                >
+                                  Generate Quick Ref
+                                </button>
+                              </Tooltip>
                             ) : null}
                             {item.recommendedAction === 'open_character_studio' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudioFromDraft('studio', item.sourceText, item.label)}
-                                className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-50 hover:bg-amber-500/20"
+                              <Tooltip
+                                content="Opens Character Studio with the drafted prompt from Writers’ Workshop."
+                                side="top"
                               >
-                                Open in Character Studio
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudioFromDraft('studio', item.sourceText, item.label)}
+                                  className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-50 hover:bg-amber-500/20"
+                                >
+                                  Open in Character Studio
+                                </button>
+                              </Tooltip>
                             ) : null}
                             {item.recommendedAction === 'open_asset_studio' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudioFromDraft('assets', item.sourceText, item.label)}
-                                className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-100 hover:bg-violet-500/20"
+                              <Tooltip
+                                content="Opens Asset Studio with the drafted prompt from Writers’ Workshop."
+                                side="top"
                               >
-                                Open in Asset Studio
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudioFromDraft('assets', item.sourceText, item.label)}
+                                  className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-100 hover:bg-violet-500/20"
+                                >
+                                  Open in Asset Studio
+                                </button>
+                              </Tooltip>
                             ) : null}
                           </div>
                         </div>
@@ -681,9 +727,9 @@ export const StorylineStudio: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Row 1 — Production libraries (vault-linked cast & assets for refs) */}
+        {/* Row 1 — Production libraries (vault-linked cast, assets, and NPC refs for generation refs) */}
         <div className="shrink-0 rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <section className="flex flex-col min-h-0 min-w-0 max-h-[320px] md:max-h-[380px]">
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
@@ -769,6 +815,49 @@ export const StorylineStudio: React.FC = () => {
                         className="p-1 text-white/50 hover:text-red-300"
                         onClick={() => store.removeProductionAssetMember(a.vaultAssetId)}
                         aria-label={`Remove ${a.assetName}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="flex flex-col min-h-0 min-w-0 max-h-[320px] md:max-h-[380px]">
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">NPC Vault</h2>
+                <Tooltip content="Add an NPC / cameo / quick ref from NPC Vault" side="left">
+                  <button
+                    type="button"
+                    onClick={() => openSupportingVault()}
+                    className="p-1.5 rounded-lg border border-white/20 hover:bg-white/10"
+                    aria-label="Add NPC ref from vault"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+              </div>
+              <ul className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-0.5">
+                {store.productionSupportingRefs.length === 0 && (
+                  <li className="text-xs text-white/40 italic">No NPC refs yet — add from NPC Vault.</li>
+                )}
+                {store.productionSupportingRefs.map((r) => (
+                  <li
+                    key={r.supportingRefId}
+                    className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2"
+                  >
+                    <ArcsStorageImg src={r.imageUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{r.label || 'NPC ref'}</p>
+                      <p className="text-[10px] text-white/45 truncate">Saved {new Date(r.createdAt).toLocaleString()}</p>
+                    </div>
+                    <Tooltip content="Remove from NPC refs" side="left">
+                      <button
+                        type="button"
+                        className="p-1 text-white/50 hover:text-red-300"
+                        onClick={() => store.removeProductionSupportingRef(r.supportingRefId)}
+                        aria-label={`Remove ${r.label || 'NPC ref'}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1029,6 +1118,46 @@ export const StorylineStudio: React.FC = () => {
                 </section>
                 <section className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
                   <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-[10px] text-white/45 uppercase">NPC links for this beat</p>
+                    <p className="text-[10px] text-white/40">
+                      {selectedBeat.linkedSupportingRefIds.length > 0
+                        ? `${selectedBeat.linkedSupportingRefIds.length} linked`
+                        : 'No linked NPC refs'}
+                    </p>
+                  </div>
+                  {store.productionSupportingRefs.length === 0 ? (
+                    <p className="text-[11px] text-white/40 italic">
+                      Add NPC refs in the row above first.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {store.productionSupportingRefs.map((r) => {
+                        const checked = selectedBeat.linkedSupportingRefIds.includes(r.supportingRefId);
+                        return (
+                          <label
+                            key={r.supportingRefId}
+                            className="flex items-center gap-2 text-[11px] text-white/80 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              className="rounded border-white/30"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...selectedBeat.linkedSupportingRefIds, r.supportingRefId]
+                                  : selectedBeat.linkedSupportingRefIds.filter((id) => id !== r.supportingRefId);
+                                store.updateBeat(selectedBeat.id, { linkedSupportingRefIds: next });
+                              }}
+                            />
+                            <span className="truncate">{r.label || 'NPC ref'}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+                <section className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="flex items-center justify-between gap-2 mb-1">
                     <p className="text-[10px] text-white/45 uppercase">Asset links for this beat</p>
                     <p className="text-[10px] text-white/40">
                       {selectedBeat.linkedVaultAssetIds.length > 0
@@ -1093,11 +1222,33 @@ export const StorylineStudio: React.FC = () => {
                   </div>
                 </section>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <datalist id="camera-shot-options">
+                    {CAMERA_SHOT_SUGGESTIONS.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                  <datalist id="camera-angle-options">
+                    {CAMERA_ANGLE_SUGGESTIONS.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                  <datalist id="camera-movement-options">
+                    {CAMERA_MOVEMENT_SUGGESTIONS.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
                   {(['shot', 'angle', 'movement'] as const).map((k) => (
                     <label key={k} className="text-[10px] text-white/45 uppercase col-span-1">
                       {k}
                       <input
                         className="w-full mt-0.5 rounded bg-black/30 border border-white/15 px-1 py-1 text-[11px]"
+                        list={
+                          k === 'shot'
+                            ? 'camera-shot-options'
+                            : k === 'angle'
+                              ? 'camera-angle-options'
+                              : 'camera-movement-options'
+                        }
                         value={selectedBeat.camera[k]}
                         onChange={(e) =>
                           store.updateBeat(selectedBeat.id, {
@@ -1107,6 +1258,27 @@ export const StorylineStudio: React.FC = () => {
                       />
                     </label>
                   ))}
+                </div>
+                <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                  <p className="text-[10px] text-white/45 uppercase">POV-only workflow hint</p>
+                  <p className="mt-1 text-[11px] text-white/65 leading-relaxed">
+                    If you want “the same image, different viewpoint”, keep identity/style references the same and change
+                    only the camera POV. Don’t rely on angle tags alone—use explicit “no other changes” language.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
+                      onClick={() => {
+                        const existing = selectedBeat.visualPrompt ?? '';
+                        if (existing.includes('POV-only variation:')) return;
+                        const next = `${existing.trim()}\n\nPOV-only variation: keep identity, wardrobe, art style, and scene unchanged; change only point-of-view and camera placement.`.trim();
+                        store.updateBeat(selectedBeat.id, { visualPrompt: next });
+                      }}
+                    >
+                      Insert POV-only preset
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                   <label className="text-[10px] text-white/45 uppercase">
@@ -1158,6 +1330,23 @@ export const StorylineStudio: React.FC = () => {
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       Generate
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Save the selected beat image into NPC Vault for reuse later" side="top">
+                    <button
+                      type="button"
+                      disabled={!selectedBeat.imageUrl}
+                      onClick={() => {
+                        if (!selectedBeat.imageUrl) return;
+                        saveGeneration('supporting_reference', selectedBeat.imageUrl, selectedBeat.seed ?? undefined, {
+                          supportingLabel: selectedBeat.text.trim().slice(0, 80) || 'NPC ref',
+                        });
+                        openSupportingVault();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs border border-fuchsia-400/30 text-fuchsia-100 hover:bg-fuchsia-500/15 disabled:opacity-50"
+                    >
+                      <Box className="w-3.5 h-3.5" />
+                      Save to NPC Vault
                     </button>
                   </Tooltip>
                   <Tooltip content="Re-run generation" side="top">
@@ -1243,6 +1432,7 @@ export const StorylineStudio: React.FC = () => {
               selectedBeat={selectedBeat}
               productionCast={store.productionCast}
               productionAssets={store.productionAssets}
+              productionSupportingRefs={store.productionSupportingRefs}
               onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
               onCreateNewBeat={handleLabCreateNewBeat}
               seedPrompt={labSeedPrompt}
@@ -1454,6 +1644,63 @@ export const StorylineStudio: React.FC = () => {
                         <ArcsStorageImg src={item.image_url} alt="" className="w-full aspect-square object-cover" />
                         <p className="text-[10px] p-1 truncate">
                           {(item.asset_name || item.name || 'Asset').trim() || 'Asset'}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {supportingVaultOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pick supporting reference from NPC Vault"
+        >
+          <div className="w-full max-w-lg max-h-[70vh] rounded-xl border border-white/20 bg-zinc-900 shadow-2xl flex flex-col">
+            <div className="p-3 border-b border-white/10 flex justify-between items-center">
+              <span className="text-sm font-semibold">NPC Vault — pick ref</span>
+              <button
+                type="button"
+                className="text-white/60 hover:text-white text-sm"
+                onClick={() => setSupportingVaultOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {supportingVaultRows.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-white/60">No NPC Vault refs yet.</p>
+                  <p className="mt-2 text-xs text-white/40">
+                    Save a generated image to NPC Vault, then add it here.
+                  </p>
+                </div>
+              ) : (
+                <ul className="grid grid-cols-2 gap-2">
+                  {supportingVaultRows.map((g) => (
+                    <li key={g.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-lg border border-white/10 overflow-hidden text-left hover:border-fuchsia-500/50"
+                        onClick={() => {
+                          store.addProductionSupportingRef({
+                            supportingRefId: g.id,
+                            label: g.supportingLabel?.trim() ? g.supportingLabel : 'NPC ref',
+                            imageUrl: g.url,
+                            createdAt: g.createdAt,
+                          });
+                          setSupportingVaultOpen(false);
+                        }}
+                      >
+                        <ArcsStorageImg src={g.url} alt="" className="w-full aspect-square object-cover" />
+                        <p className="text-[10px] p-1 truncate">
+                          {g.supportingLabel?.trim() ? g.supportingLabel : 'NPC ref'}
                         </p>
                       </button>
                     </li>

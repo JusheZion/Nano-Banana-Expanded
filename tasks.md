@@ -26,16 +26,16 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Illustrator’s Imageshop workflow + UX polish (2026-04-16) — IN PROGRESS
 
-- [ ] Rename portal `lab` in nav/headers/wiki framing: **Image Workshop** → **Illustrator’s Imageshop**
-- [ ] Rename Supporting Resources Vault label to **NPC Vault**
-- [ ] NPC Vault button parity: add the same add/use affordances as the other two vault lanes
-- [ ] Production panel density: tighten action icon spacing so controls sit next to the labels they affect
-- [ ] Tooltips for key panel headers + icon buttons (first-time guidance)
-- [ ] Beat Timeline: make **Delete beat** obvious (button + tooltip)
-- [ ] Image Lab: add landscape-friendly preview region for wide ratios (e.g. 21:9)
-- [ ] Beat Detail: add dropdown/select helpers for common choices while keeping free-text
-- [ ] Writer → Imageshop handoff: make outline/wiki-like entries either actionable or clearly reference-only
-- [ ] Camera angle workflow hint/preset: encourage “same image, POV-only change” without identity drift
+- [x] Rename portal `lab` in nav/headers/wiki framing: **Image Workshop** → **Illustrator’s Imageshop**
+- [x] Rename Supporting Resources Vault label to **NPC Vault**
+- [x] NPC Vault button parity: add the same add/use affordances as the other two vault lanes
+- [x] Production panel density: tighten action icon spacing so controls sit next to the labels they affect
+- [x] Tooltips for key panel headers + icon buttons (first-time guidance)
+- [x] Beat Timeline: make **Delete beat** obvious (button + tooltip)
+- [x] Image Lab: add landscape-friendly preview region for wide ratios (e.g. 21:9)
+- [x] Beat Detail: add dropdown/select helpers for common choices while keeping free-text
+- [x] Writer → Imageshop handoff: make outline/wiki-like entries either actionable or clearly reference-only
+- [x] Camera angle workflow hint/preset: encourage “same image, POV-only change” without identity drift
 - [ ] Verify: `npm run lint` (0 errors) + targeted browser smoke test in Imageshop
 - [ ] Update `walkthrough.md` with changes + verification notes
 

@@ -7,6 +7,7 @@ import type {
   DirectorSettings,
   ProductionAssetMember,
   ProductionCastMember,
+  ProductionSupportingRefMember,
   StoryBeat,
   StoryBeatKind,
 } from '@/portals/storyline/storylineTypes';
@@ -35,6 +36,7 @@ export interface StorylineStudioState {
   beats: StoryBeat[];
   productionCast: ProductionCastMember[];
   productionAssets: ProductionAssetMember[];
+  productionSupportingRefs: ProductionSupportingRefMember[];
   directorSettings: DirectorSettings;
   selectedBeatId: string | null;
   aiBusy: 'idle' | 'script' | 'beats' | 'interpolation';
@@ -54,6 +56,8 @@ export interface StorylineStudioState {
   removeProductionCastMember: (vaultCharacterId: string) => void;
   addProductionAssetMember: (m: ProductionAssetMember) => void;
   removeProductionAssetMember: (vaultAssetId: string) => void;
+  addProductionSupportingRef: (m: ProductionSupportingRefMember) => void;
+  removeProductionSupportingRef: (supportingRefId: string) => void;
 
   updateBeat: (id: string, partial: Partial<StoryBeat>) => void;
   insertBeatAfter: (afterIndex: number, kind: StoryBeatKind, text?: string) => void;
@@ -75,6 +79,7 @@ function createDefaultBeat(kind: StoryBeatKind, text = ''): StoryBeat {
     audio: emptyAudio(),
     linkedVaultCharacterIds: [],
     linkedVaultAssetIds: [],
+    linkedSupportingRefIds: [],
     tags: [],
     imageUrl: null,
     interpolation: null,
@@ -100,6 +105,7 @@ const initialState = {
   beats: [] as StoryBeat[],
   productionCast: [] as ProductionCastMember[],
   productionAssets: [] as ProductionAssetMember[],
+  productionSupportingRefs: [] as ProductionSupportingRefMember[],
   directorSettings: { ...defaultDirector },
   selectedBeatId: null as string | null,
   aiBusy: 'idle' as const,
@@ -158,6 +164,21 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
           })),
         })),
 
+      addProductionSupportingRef: (m) =>
+        set((s) => {
+          if (s.productionSupportingRefs.some((r) => r.supportingRefId === m.supportingRefId)) return s;
+          return { productionSupportingRefs: [...s.productionSupportingRefs, m] };
+        }),
+
+      removeProductionSupportingRef: (supportingRefId) =>
+        set((s) => ({
+          productionSupportingRefs: s.productionSupportingRefs.filter((r) => r.supportingRefId !== supportingRefId),
+          beats: s.beats.map((b) => ({
+            ...b,
+            linkedSupportingRefIds: b.linkedSupportingRefIds.filter((id) => id !== supportingRefId),
+          })),
+        })),
+
       updateBeat: (id, partial) =>
         set((s) => ({
           beats: s.beats.map((b) => (b.id === id ? { ...b, ...partial } : b)),
@@ -205,6 +226,7 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
         beats: state.beats.map((b) => ({
           ...b,
           linkedVaultAssetIds: Array.isArray(b.linkedVaultAssetIds) ? b.linkedVaultAssetIds : [],
+          linkedSupportingRefIds: Array.isArray(b.linkedSupportingRefIds) ? b.linkedSupportingRefIds : [],
           aspectRatio:
             b.aspectRatio === '1:1' || b.aspectRatio === '21:9' || b.aspectRatio === '9:16'
               ? b.aspectRatio
@@ -219,6 +241,7 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
         })),
         productionCast: state.productionCast,
         productionAssets: state.productionAssets,
+        productionSupportingRefs: state.productionSupportingRefs,
         directorSettings: state.directorSettings,
       }),
       merge: (persisted, current) => {
@@ -232,6 +255,9 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
                 linkedVaultAssetIds: Array.isArray(b.linkedVaultAssetIds)
                   ? b.linkedVaultAssetIds
                   : [],
+                linkedSupportingRefIds: Array.isArray(b.linkedSupportingRefIds)
+                  ? b.linkedSupportingRefIds
+                  : [],
                 aspectRatio:
                   b.aspectRatio === '1:1' || b.aspectRatio === '21:9' || b.aspectRatio === '9:16'
                     ? b.aspectRatio
@@ -242,6 +268,9 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
           productionAssets: Array.isArray(p.productionAssets)
             ? p.productionAssets
             : current.productionAssets,
+          productionSupportingRefs: Array.isArray(p.productionSupportingRefs)
+            ? p.productionSupportingRefs
+            : current.productionSupportingRefs,
           directorSettings: p.directorSettings
             ? { ...defaultDirector, ...p.directorSettings }
             : current.directorSettings,

@@ -18,6 +18,7 @@ function beat(over: Partial<StoryBeat> = {}): StoryBeat {
     audio: { dialogue: '', sfx: '' },
     linkedVaultCharacterIds: [],
     linkedVaultAssetIds: [],
+    linkedSupportingRefIds: [],
     tags: [],
     imageUrl: null,
     interpolation: null,
