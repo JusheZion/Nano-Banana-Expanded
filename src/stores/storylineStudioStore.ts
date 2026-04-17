@@ -255,6 +255,9 @@ export const useStorylineStudioStore = create<StorylineStudioState>()(
                 linkedVaultAssetIds: Array.isArray(b.linkedVaultAssetIds)
                   ? b.linkedVaultAssetIds
                   : [],
+                linkedSupportingRefIds: Array.isArray(b.linkedSupportingRefIds)
+                  ? b.linkedSupportingRefIds
+                  : [],
                 aspectRatio:
                   b.aspectRatio === '1:1' || b.aspectRatio === '21:9' || b.aspectRatio === '9:16'
                     ? b.aspectRatio

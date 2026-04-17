@@ -11,7 +11,13 @@ import { generateImage, type OnyxModelId } from '@/shared/api/geminiImageApi';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { parseJsonFromModel } from '@/portals/storyline/parseDirectorJson';
-import type { ProductionAssetMember, ProductionCastMember, StoryBeat, StoryBeatAspectRatio } from '@/portals/storyline/storylineTypes';
+import type {
+  ProductionAssetMember,
+  ProductionCastMember,
+  ProductionSupportingRefMember,
+  StoryBeat,
+  StoryBeatAspectRatio,
+} from '@/portals/storyline/storylineTypes';
 import { buildStorylineReferenceSlots } from '@/portals/storyline/buildStorylineReferenceSlots';
 import { useCharacterStudioStore } from '@/stores/characterStudioStore';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
@@ -28,6 +34,7 @@ export function GenericImageLabPanel({
   selectedBeat,
   productionCast,
   productionAssets,
+  productionSupportingRefs,
   onUseAsSelectedBeat,
   onCreateNewBeat,
   seedPrompt,
@@ -36,6 +43,7 @@ export function GenericImageLabPanel({
   selectedBeat: StoryBeat | null;
   productionCast: ProductionCastMember[];
   productionAssets: ProductionAssetMember[];
+  productionSupportingRefs: ProductionSupportingRefMember[];
   onUseAsSelectedBeat: (args: {
     imageUrl: string;
     seed: number | null;
@@ -151,13 +159,16 @@ export function GenericImageLabPanel({
     const linkedCast = productionCast.filter((c) =>
       selectedBeat.linkedVaultCharacterIds.includes(c.vaultCharacterId)
     );
+    const linkedSupporting = productionSupportingRefs.filter((r) =>
+      selectedBeat.linkedSupportingRefIds.includes(r.supportingRefId)
+    );
     const linkedAssets = productionAssets.filter((a) =>
       selectedBeat.linkedVaultAssetIds.includes(a.vaultAssetId)
     );
-    const packed = buildStorylineReferenceSlots(linkedCast, [], linkedAssets);
+    const packed = buildStorylineReferenceSlots(linkedCast, linkedSupporting, linkedAssets);
     setRefs(packed);
     setContext('character');
-  }, [productionAssets, productionCast, selectedBeat]);
+  }, [productionAssets, productionCast, productionSupportingRefs, selectedBeat]);
 
   const clearRefs = useCallback(() => {
     setRefs(Array.from({ length: 14 }, () => ''));

@@ -1432,6 +1432,7 @@ export const StorylineStudio: React.FC = () => {
               selectedBeat={selectedBeat}
               productionCast={store.productionCast}
               productionAssets={store.productionAssets}
+              productionSupportingRefs={store.productionSupportingRefs}
               onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
               onCreateNewBeat={handleLabCreateNewBeat}
               seedPrompt={labSeedPrompt}
