@@ -154,7 +154,7 @@ export function GenericImageLabPanel({
     const linkedAssets = productionAssets.filter((a) =>
       selectedBeat.linkedVaultAssetIds.includes(a.vaultAssetId)
     );
-    const packed = buildStorylineReferenceSlots(linkedCast, linkedAssets);
+    const packed = buildStorylineReferenceSlots(linkedCast, [], linkedAssets);
     setRefs(packed);
     setContext('character');
   }, [productionAssets, productionCast, selectedBeat]);
@@ -288,6 +288,8 @@ export function GenericImageLabPanel({
   const canUseSelectedBeat = Boolean(selectedBeat && lastImageUrl);
   const labPreviewAspectCss = studioPreviewAspectCss(aspectRatio as StudioPreviewAspectId);
   const labPreviewMaxH = studioPreviewMaxHeightCss(aspectRatio as StudioPreviewAspectId);
+  const isCinematic = aspectRatio === '21:9';
+  const previewMaxH = isCinematic ? 'min(56vh, 520px)' : labPreviewMaxH;
 
   return (
     <section className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
@@ -522,10 +524,10 @@ export function GenericImageLabPanel({
                 className="relative w-full max-w-full flex items-center justify-center overflow-hidden rounded-md border border-fuchsia-500/25 bg-black/40"
                 style={{
                   aspectRatio: labPreviewAspectCss,
-                  height: labPreviewMaxH,
-                  maxHeight: labPreviewMaxH,
-                  width: 'auto',
-                  maxWidth: '100%',
+                  height: previewMaxH,
+                  maxHeight: previewMaxH,
+                  width: isCinematic ? '100%' : 'auto',
+                  maxWidth: isCinematic ? 'min(100%, 980px)' : '100%',
                 }}
               >
                 <ArcsStorageImg src={lastImageUrl} alt="" className="h-full w-full object-contain object-center" />

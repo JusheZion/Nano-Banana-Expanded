@@ -618,6 +618,53 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Illustrator’s Imageshop workflow + UX polish (2026-04-17)
+
+### What changed
+
+- **Portal header naming**: `StorylineStudio` header now reads **Illustrator’s Imageshop** (instead of “IMAGE WORKSHOP”).
+- **NPC Vault (real)**:
+  - Added a new local archive context `supporting_reference` (system prompts + localStorage routing).
+  - Implemented `NpcVault` UI and wired it into Image Vault’s third tab (now truly browsable/usable).
+  - Added an **NPC Vault** production lane inside Imageshop and per-beat **NPC links** (alongside cast/assets).
+  - Added **Save to NPC Vault** from Beat Detail to persist a selected beat image for later reuse.
+- **Discoverability**:
+  - Added tooltips for Visual Prep actions to reduce “dead affordance” confusion.
+- **Image Lab landscape preview**:
+  - Cinematic (21:9) preview sizing adjusted so wide frames are more usable.
+- **Beat Detail ergonomics**:
+  - Added `datalist` suggestions for camera `shot/angle/movement` while preserving free-text typing.
+- **Camera POV guidance**:
+  - Added a “POV-only workflow hint” plus a one-click preset inserter to reduce identity/style drift.
+
+### Files touched
+
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/stores/storylineStudioStore.ts`
+- `src/portals/storyline/storylineTypes.ts`
+- `src/portals/storyline/buildStorylineReferenceSlots.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/data/systemPrompts.ts`
+- `src/shared/utils/generationOutputRouter.ts`
+- `src/shared/utils/generationSessionCache.ts`
+- `src/components/ui/NpcVault.tsx` (new)
+- `src/portals/ReferenceAlbum.tsx`
+- Tests:
+  - `src/portals/storyline/__tests__/storylineHelpers.test.ts`
+  - `src/shared/utils/__tests__/storySequencePayload.test.ts`
+
+### Verification evidence
+
+- **Lint**: `npm run lint` → **0 errors** (warnings baseline unchanged).
+- **Build**: `npm run build` → **PASS**.
+
+### Manual smoke test (recommended)
+
+- Open **Illustrator’s Imageshop** (lab portal):
+  - Add cast + assets + NPC refs.
+  - Link NPC refs to a beat and generate.
+  - Save a beat image to NPC Vault, then open **Image Vault → NPC Vault** and confirm it appears.
+
 ## How to Use These Docs
 
 | File | Use |

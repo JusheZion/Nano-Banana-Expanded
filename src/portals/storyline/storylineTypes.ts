@@ -32,6 +32,8 @@ export interface StoryBeat {
   linkedVaultCharacterIds: string[];
   /** Vault asset row ids linked for environment/props references */
   linkedVaultAssetIds: string[];
+  /** Local NPC Vault generation ids linked for one-off reference likeness/continuity */
+  linkedSupportingRefIds: string[];
   tags: string[];
   imageUrl: string | null;
   interpolation: StoryBeatInterpolation | null;
@@ -56,6 +58,13 @@ export interface ProductionAssetMember {
   collectionName: string;
   assetName: string;
   imageUrl: string;
+}
+
+export interface ProductionSupportingRefMember {
+  supportingRefId: string;
+  label: string;
+  imageUrl: string;
+  createdAt: number;
 }
 
 export interface DirectorSettings {

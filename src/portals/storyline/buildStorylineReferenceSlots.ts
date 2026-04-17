@@ -1,5 +1,9 @@
 import { REFERENCE_SLOT_COUNT } from '@/shared/constants/referenceSlots';
-import type { ProductionAssetMember, ProductionCastMember } from '@/portals/storyline/storylineTypes';
+import type {
+  ProductionAssetMember,
+  ProductionCastMember,
+  ProductionSupportingRefMember,
+} from '@/portals/storyline/storylineTypes';
 
 /**
  * Pack linked cast + linked asset URLs into 14 reference slots.
@@ -7,6 +11,7 @@ import type { ProductionAssetMember, ProductionCastMember } from '@/portals/stor
  */
 export function buildStorylineReferenceSlots(
   cast: ProductionCastMember[],
+  supportingRefs: ProductionSupportingRefMember[] = [],
   assets: ProductionAssetMember[] = []
 ): string[] {
   // Gemini image API role labeling when `context: 'character'`:
@@ -18,12 +23,14 @@ export function buildStorylineReferenceSlots(
   // - asset images as composition/background (slots 10-13)
   const out = Array.from({ length: REFERENCE_SLOT_COUNT }, () => '');
   const castUrls = cast.map((c) => c.imageUrl).filter(Boolean);
+  const supportUrls = supportingRefs.map((r) => r.imageUrl).filter(Boolean);
   const assetUrls = assets.map((a) => a.imageUrl).filter(Boolean);
+  const identityStyleUrls = [...castUrls, ...supportUrls];
 
   // Fill identity+style slots first.
   const identityStyleSlotCount = 10; // indices 0..9
-  for (let i = 0; i < Math.min(castUrls.length, identityStyleSlotCount); i++) {
-    out[i] = castUrls[i]!;
+  for (let i = 0; i < Math.min(identityStyleUrls.length, identityStyleSlotCount); i++) {
+    out[i] = identityStyleUrls[i]!;
   }
 
   // Fill composition/background slots with assets first.
@@ -38,7 +45,7 @@ export function buildStorylineReferenceSlots(
     const idx = compositionStart + k;
     if (out[idx]) continue;
     const castIdx = identityStyleSlotCount + k;
-    if (castIdx < castUrls.length) out[idx] = castUrls[castIdx]!;
+    if (castIdx < identityStyleUrls.length) out[idx] = identityStyleUrls[castIdx]!;
   }
 
   return out;

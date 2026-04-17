@@ -16,6 +16,7 @@ function beat(id: string, text: string, visual = ''): StoryBeat {
     audio: { dialogue: '', sfx: '' },
     linkedVaultCharacterIds: [],
     linkedVaultAssetIds: [],
+    linkedSupportingRefIds: [],
     tags: [],
     imageUrl: null,
     interpolation: null,
@@ -102,7 +103,7 @@ describe('buildStorylineReferenceSlots', () => {
         imageUrl: 'https://asset-1',
       },
     ];
-    const slots = buildStorylineReferenceSlots(cast, assets);
+    const slots = buildStorylineReferenceSlots(cast, [], assets);
     expect(slots[0]).toBe('https://cast-1');
     // Asset refs should land in composition/background slots (10..13).
     expect(slots[10]).toBe('https://asset-1');

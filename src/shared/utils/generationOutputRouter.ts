@@ -8,6 +8,7 @@ import type { GenerationContextType } from '@/data/systemPrompts';
 
 const STORAGE_KEY_CHARACTER = 'arcs_generations_character';
 const STORAGE_KEY_ASSET = 'arcs_generations_asset';
+const STORAGE_KEY_SUPPORTING = 'arcs_generations_supporting_reference';
 
 /** Archive card crop (Character Archive); optional per saved generation. */
 export type ThumbnailFocus = { x: number; y: number; scale: number };
@@ -22,11 +23,15 @@ export interface StoredGeneration {
   collectionName?: string; // asset: album grouping when Supabase not used
   /** Local-only asset card title (Supabase uses asset_name). */
   assetName?: string;
+  /** Local-only NPC Vault label (supporting references). */
+  supportingLabel?: string;
   thumbnailFocus?: ThumbnailFocus;
 }
 
 function getStorageKey(contextType: GenerationContextType): string {
-  return contextType === 'character' ? STORAGE_KEY_CHARACTER : STORAGE_KEY_ASSET;
+  if (contextType === 'character') return STORAGE_KEY_CHARACTER;
+  if (contextType === 'asset') return STORAGE_KEY_ASSET;
+  return STORAGE_KEY_SUPPORTING;
 }
 
 export function saveGeneration(
@@ -38,6 +43,7 @@ export function saveGeneration(
     collectionName?: string;
     assetName?: string;
     castName?: string;
+    supportingLabel?: string;
   }
 ): void {
   const key = getStorageKey(contextType);
@@ -59,6 +65,9 @@ export function saveGeneration(
       ...(contextType === 'asset' &&
         options?.assetName != null &&
         options.assetName.trim() !== '' && { assetName: options.assetName.trim() }),
+      ...(contextType === 'supporting_reference' &&
+        options?.supportingLabel != null &&
+        options.supportingLabel.trim() !== '' && { supportingLabel: options.supportingLabel.trim() }),
     });
     localStorage.setItem(key, JSON.stringify(list));
   } catch {
@@ -268,4 +277,12 @@ export function deleteAssetCollectionLocal(collectionDisplay: string): number {
   const n = list.length - next.length;
   if (n > 0) writeList('asset', next);
   return n;
+}
+
+export function deleteSupportingReferenceGenerationLocal(id: string): boolean {
+  const prev = getGenerations('supporting_reference');
+  const list = prev.filter((g) => g.id !== id);
+  if (list.length === prev.length) return false;
+  writeList('supporting_reference', list);
+  return true;
 }

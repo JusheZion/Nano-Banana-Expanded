@@ -16,6 +16,7 @@ interface CachedItem {
 const cache: Record<GenerationContextType, CachedItem[]> = {
   character: [],
   asset: [],
+  supporting_reference: [],
 };
 
 export function getCachedGenerations(contextType: GenerationContextType): CachedItem[] {
