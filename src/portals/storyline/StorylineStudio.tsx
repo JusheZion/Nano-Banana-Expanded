@@ -312,7 +312,7 @@ export const StorylineStudio: React.FC = () => {
         setReturnNotice(`${item.label} added to Production assets from Image Vault.`);
       }
     },
-    [imageWorkshopDraft, store],
+    [store],
   );
 
   const handleOpenStudioFromDraft = useCallback(
@@ -323,7 +323,7 @@ export const StorylineStudio: React.FC = () => {
     ) => {
       requestOpenInStudio(target, '', prompt, {
         origin: {
-          sourcePortal: 'writer',
+          sourcePortal: 'lab',
           sourceLabel: label,
         },
         returnToPortal: 'lab',
@@ -801,8 +801,20 @@ export const StorylineStudio: React.FC = () => {
               aria-activedescendant={store.selectedBeatId ?? undefined}
             >
               {store.beats.length === 0 ? (
-                <div className="flex items-center justify-center w-full text-sm text-white/40 px-4 text-center">
-                  Add a B-roll slot with + between cards, or generate in Image Lab and use &quot;Create new B-roll beat&quot;.
+                <div className="flex flex-col items-center justify-center gap-3 w-full px-4 py-6 text-center">
+                  <p className="text-sm text-white/45 max-w-md">
+                    No beats yet. Use the button below to create your first slot, or scroll to{' '}
+                    <span className="text-white/70">Image Lab</span>, generate an image, then use{' '}
+                    <span className="text-white/70">Create new B-roll beat</span> under the large preview (it appears
+                    after a successful generation).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => store.insertBeatAfter(-1, 'broll', '')}
+                    className="rounded-full border border-fuchsia-400/40 bg-fuchsia-500/15 px-4 py-2 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-500/25"
+                  >
+                    Add first B-roll beat
+                  </button>
                 </div>
               ) : (
                 store.beats.map((b, i) => (

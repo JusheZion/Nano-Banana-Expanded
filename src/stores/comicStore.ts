@@ -1212,8 +1212,8 @@ export const useComicStore = create<ComicState>()(
 
                     if (direction === 'vertical') {
                         // Vertical cut creates left and right panels
-                        let top_x = (p0.x + p1.x) / 2 + slant;
-                        let bot_x = (p3.x + p2.x) / 2 - slant;
+                        const top_x = (p0.x + p1.x) / 2 + slant;
+                        const bot_x = (p3.x + p2.x) / 2 - slant;
 
                         const cut_top_left = { x: top_x - gap / 2, y: lerpY(p0, p1, top_x - gap / 2) };
                         const cut_bot_left = { x: bot_x - gap / 2, y: lerpY(p3, p2, bot_x - gap / 2) };
@@ -1224,8 +1224,8 @@ export const useComicStore = create<ComicState>()(
                         rightPoints = [cut_top_right, p1, p2, cut_bot_right];
                     } else {
                         // Horizontal cut creates top and bottom panels
-                        let left_y = (p0.y + p3.y) / 2 + slant;
-                        let right_y = (p1.y + p2.y) / 2 - slant;
+                        const left_y = (p0.y + p3.y) / 2 + slant;
+                        const right_y = (p1.y + p2.y) / 2 - slant;
 
                         const cut_left_top = { x: lerpX(p0, p3, left_y - gap / 2), y: left_y - gap / 2 };
                         const cut_right_top = { x: lerpX(p1, p2, right_y - gap / 2), y: right_y - gap / 2 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
@@ -292,6 +292,13 @@ export const CharacterStudio: React.FC = () => {
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
   const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
+  const clearActiveImportForTarget = useStudioImportBridge((s) => s.clearActiveImportForTarget);
+
+  useEffect(() => {
+    return () => {
+      clearActiveImportForTarget('studio', 'unmount');
+    };
+  }, [clearActiveImportForTarget]);
 
   useEffect(() => {
     const chunk = consumeImportForTarget('studio');
@@ -314,7 +321,7 @@ export const CharacterStudio: React.FC = () => {
       setStatusStep((s) => (s + 1) % STATUS_BREADCRUMBS.length);
     }, 2500);
     return () => clearInterval(id);
-  }, [store.generationStatus]);
+  }, [store.generationStatus, STATUS_BREADCRUMBS.length]);
 
   useEffect(() => {
     setAiReferencePrompt('');
@@ -467,12 +474,12 @@ export const CharacterStudio: React.FC = () => {
     store.setCurrentLiveImageUrl(null);
   };
 
-  const getMatchedExistingProfile = (typed: string): string | null => {
+  const getMatchedExistingProfile = useCallback((typed: string): string | null => {
     const q = typed.trim();
     if (!q) return null;
     const lower = q.toLowerCase();
     return vaultProfileOptions.find((p) => p.toLowerCase() === lower) ?? null;
-  };
+  }, [vaultProfileOptions]);
 
   const handleGenerateCharacter = async () => {
     try {
@@ -796,6 +803,7 @@ export const CharacterStudio: React.FC = () => {
     saveCharacterProfileName,
     vaultProfileLoading,
     vaultProfileOptions,
+    getMatchedExistingProfile,
   ]);
 
   const handleSaveNewPose = () => {

@@ -149,6 +149,13 @@ export const AssetsStudio: React.FC = () => {
 
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
   const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
+  const clearActiveImportForTarget = useStudioImportBridge((s) => s.clearActiveImportForTarget);
+
+  useEffect(() => {
+    return () => {
+      clearActiveImportForTarget('assets', 'unmount');
+    };
+  }, [clearActiveImportForTarget]);
 
   useEffect(() => {
     const chunk = consumeImportForTarget('assets');
@@ -171,7 +178,7 @@ export const AssetsStudio: React.FC = () => {
       setStatusStep((s) => (s + 1) % STATUS_BREADCRUMBS.length);
     }, 2500);
     return () => clearInterval(id);
-  }, [store.generationStatus]);
+  }, [store.generationStatus, STATUS_BREADCRUMBS.length]);
 
   const effectiveAspectRatio = useMemo(
     () =>

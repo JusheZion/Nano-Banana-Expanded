@@ -4,6 +4,7 @@ Checklist for current and upcoming phases. Update as work completes.
 
 ## Image Workshop — Writer handoff + Visual Prep routing (2026-04-16) — COMPLETE
 
+- [x] Removed session debug ingest (`7621` / `edc323`) from `StorylineStudio`, `WriterPortal`, `studioImportBridge`
 - [x] Writers' Workshop entry points: open Image Workshop from outline, selected page beats, and latest shot plan
 - [x] Deterministic Visual Prep routing helper: match existing vault refs, seed quick refs, or escalate to Character / Asset Studio
 - [x] Image Workshop `Visual Prep` queue UI: grouped `Matched from vault` / `Quick refs` / `Needs studio`
@@ -11,6 +12,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Studio import bridge extended with source metadata + return-to-origin flow
 - [x] Character / Asset Studio save flow can return to Image Workshop and restore the originating beat when applicable
 - [x] Product framing copy aligned around `Image Workshop` and `Supporting / Reference`
+
+## Warning remediation pass (2026-04-16) — COMPLETE
+
+- [x] Audit the current 79 lint warnings and classify each as safe-to-fix or intentionally retained
+- [x] Resolve or explicitly justify hook dependency warnings in touched Image Workshop UI files
+- [x] Create `warning_remediation_notes.md` with one entry per warning and disposition/rationale
+- [x] Re-run `npm run lint` and confirm 0 errors with reduced-or-documented warnings
 
 ## ARCS Universal API Bridge & Data Persistence (Mar 2026) — COMPLETE
 

@@ -272,9 +272,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     invalid: number;
   } | null>(null);
 
-  const pushHistory = (line: string) => {
+  const pushHistory = useCallback((line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
-  };
+  }, []);
 
   const refreshPagesForIssue = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -349,7 +349,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setSelectedIssueId(null);
     setDockTab('library');
     pushHistory(`created series “${row.title || 'Untitled'}”`);
-  }, []);
+  }, [pushHistory]);
 
   useEffect(() => {
     if (authUser) setAiAuthBannerDismissed(false);
@@ -396,7 +396,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setDockTab('library');
     setDockCollapsed(false);
     pushHistory(`created issue #${row.issue_number}`);
-  }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries]);
+  }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries, pushHistory]);
 
   useEffect(() => {
     if (!selectedSeriesId) {
@@ -560,7 +560,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     } finally {
       setLoreImportBusy(false);
     }
-  }, [loreCards, loreImportJsonDraft, reloadLoreCards, selectedSeriesId]);
+  }, [loreCards, loreImportJsonDraft, reloadLoreCards, selectedSeriesId, pushHistory]);
 
   useEffect(() => {
     void reloadLoreCards();
@@ -633,6 +633,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           mode === 'page' && selectedPage?.page_number && outlineJson?.page_beats
             ? outlineJson.page_beats.find((beat) => beat.page_target === selectedPage.page_number)
             : null;
+        const outlinePageBeats: PageBeatsJson | null =
+          mode === 'outline' && outlineJson?.page_beats
+            ? {
+                one_line_hook: selectedIssue.title ?? undefined,
+                panels: outlineJson.page_beats
+                  .filter(
+                    (
+                      beat,
+                    ): beat is { page_target?: number; summary: string } =>
+                      typeof beat?.summary === 'string' && beat.summary.trim().length > 0,
+                  )
+                  .map((beat) => ({
+                    index: typeof beat.page_target === 'number' ? beat.page_target : undefined,
+                    action: beat.summary.trim(),
+                  })),
+              }
+            : null;
         const shotPlanPageBeats: PageBeatsJson | null =
           mode === 'shot-plan' && shotPlanJson?.shots
             ? {
@@ -647,6 +664,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 })),
               }
             : null;
+
+        const pageBeatsToSend =
+          mode === 'page'
+            ? ((selectedPage?.beats_json as PageBeatsJson | null) ?? {
+                one_line_hook: outlinePageBeat?.summary,
+                panels: outlinePageBeat?.summary ? [{ action: outlinePageBeat.summary }] : [],
+              })
+            : mode === 'shot-plan'
+              ? shotPlanPageBeats
+              : outlinePageBeats;
 
         const draft = buildImageWorkshopDraftFromWriterSelection({
           source: {
@@ -664,13 +691,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             seriesId: selectedSeriesId,
             shotPlanId: mode === 'shot-plan' ? latestShotPlan?.id ?? null : null,
           },
-          pageBeats:
-            mode === 'page'
-              ? ((selectedPage?.beats_json as PageBeatsJson | null) ?? {
-                  one_line_hook: outlinePageBeat?.summary,
-                  panels: outlinePageBeat?.summary ? [{ action: outlinePageBeat.summary }] : [],
-                })
-              : shotPlanPageBeats,
+          pageBeats: pageBeatsToSend,
           scriptText: mode === 'page' ? selectedPage?.script_text ?? null : null,
           loreCards,
           characterAlbums,
@@ -861,7 +882,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPacingError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId, refreshIssuesForSeries]);
+  }, [selectedIssueId, refreshIssuesForSeries, pushHistory]);
 
   const runCanonFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -877,7 +898,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setCanonError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId, refreshIssuesForSeries]);
+  }, [selectedIssueId, refreshIssuesForSeries, pushHistory]);
 
   const runArcToolBatch = useCallback(
     async (mode: 'pacing_review' | 'canon_check') => {
@@ -913,7 +934,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         setArcBatchMode(null);
       }
     },
-    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries],
+    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries, pushHistory],
   );
 
   const runOutlineGenerate = useCallback(
@@ -944,7 +965,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         pushHistory(`error: ${msg}`);
       }
     },
-    [selectedIssueId, targetPageCount, outlineSupplementDraft],
+    [selectedIssueId, targetPageCount, outlineSupplementDraft, pushHistory],
   );
 
   const runOutlineGenerateCoverageBoost = useCallback(async () => {
@@ -967,7 +988,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory(
       r.created > 0 ? `synced pages (+${r.created} new, ${pageRows.length} total)` : 'pages already match target',
     );
-  }, [selectedIssueId, targetPageCount]);
+  }, [selectedIssueId, targetPageCount, pushHistory]);
 
   const runLibraryDeleteSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
@@ -989,7 +1010,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setSelectedPageIdsForBatch([]);
     await refreshPagesForIssue();
     pushHistory(`deleted ${deleted.size} page(s)`);
-  }, [selectedIssueId, selectedPageIdsForBatch, refreshPagesForIssue]);
+  }, [selectedIssueId, selectedPageIdsForBatch, refreshPagesForIssue, pushHistory]);
 
   const runLibraryClearBeatsSelected = useCallback(async () => {
     if (selectedPageIdsForBatch.length === 0) return;
@@ -1003,7 +1024,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     await refreshPagesForIssue();
     pushHistory(`cleared beats on ${selectedPageIdsForBatch.length} page(s)`);
-  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue, pushHistory]);
 
   const runLibraryClearDialogueSelected = useCallback(async () => {
     if (selectedPageIdsForBatch.length === 0) return;
@@ -1017,7 +1038,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     await refreshPagesForIssue();
     pushHistory(`cleared dialogue on ${selectedPageIdsForBatch.length} page(s)`);
-  }, [selectedPageIdsForBatch, refreshPagesForIssue]);
+  }, [selectedPageIdsForBatch, refreshPagesForIssue, pushHistory]);
 
   const downloadSelectedBeatsBundle = useCallback(() => {
     if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
@@ -1031,7 +1052,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       })),
     });
     pushHistory(`downloaded beats bundle (${sorted.length} page(s))`);
-  }, [selectedIssueId, selectedPagesForBatchExport]);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
 
   const downloadSelectedDialogueBundle = useCallback(() => {
     if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
@@ -1045,7 +1066,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       })),
     });
     pushHistory(`downloaded dialogue bundle (${sorted.length} page(s))`);
-  }, [selectedIssueId, selectedPagesForBatchExport]);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
 
   const clearBeatsForSelectedPage = useCallback(async () => {
     if (!selectedPageId) return;
@@ -1061,7 +1082,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     await refreshPagesForIssue();
     pushHistory('cleared beats (selected page)');
-  }, [selectedPageId, refreshPagesForIssue]);
+  }, [selectedPageId, refreshPagesForIssue, pushHistory]);
 
   const clearDialogueForSelectedPage = useCallback(async () => {
     if (!selectedPageId) return;
@@ -1077,7 +1098,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     await refreshPagesForIssue();
     pushHistory('cleared dialogue (selected page)');
-  }, [selectedPageId, refreshPagesForIssue]);
+  }, [selectedPageId, refreshPagesForIssue, pushHistory]);
 
   const runBatchPageBeats = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -1141,7 +1162,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchSource(null);
       beatsBatchAbortRef.current = null;
     }
-  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft]);
+  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft, pushHistory]);
 
   const runSelectedBatchPageBeats = useCallback(async () => {
     if (!selectedIssueId || beatsPickOrdered.length === 0) return;
@@ -1180,7 +1201,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchLabel('');
       setBeatsBatchSource(null);
     }
-  }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting, beatsDirectorNotesDraft]);
+  }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting, beatsDirectorNotesDraft, pushHistory]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'scripts' || activeTab === 'lore') return;
@@ -1261,6 +1282,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     shotsBrief,
     runPacingFromRibbon,
     runOutlineGenerate,
+    pushHistory,
   ]);
 
   const quickGenerateLabel =
@@ -1370,7 +1392,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     setOutlineEditDraft(JSON.stringify(latestOutline.outline_json, null, 2));
-  }, [latestOutline?.id, latestOutline?.outline_json]);
+  }, [latestOutline]);
 
   useEffect(() => {
     if (!selectedPage) {
@@ -1382,7 +1404,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
     );
     setDialogueEditDraft(selectedPage.script_text ?? '');
-  }, [selectedPage?.id, selectedPage?.beats_json, selectedPage?.script_text]);
+  }, [selectedPage]);
 
   useEffect(() => {
     if (!latestShotPlan) {
@@ -1390,7 +1412,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     setShotEditDraft(JSON.stringify(latestShotPlan.shot_plan_json, null, 2));
-  }, [latestShotPlan?.id, latestShotPlan?.shot_plan_json]);
+  }, [latestShotPlan]);
 
   const copyIssuePackJson = useCallback(() => {
     void navigator.clipboard.writeText(JSON.stringify(issuePackObject, null, 2));
@@ -1409,7 +1431,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     await refreshIssuesForSeries();
     pushHistory('saved synopsis helper fields to issue notes');
-  }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries]);
+  }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries, pushHistory]);
 
   const applyBuiltSynopsis = useCallback(() => {
     const doc = buildSynopsisDocumentFromParts(synopsisHelperParts);
@@ -1420,7 +1442,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setScriptsError(null);
     setIssueSynopsisDraft(doc);
     pushHistory('built synopsis from helper (review in Issue Outline → Save story context)');
-  }, [synopsisHelperParts]);
+  }, [synopsisHelperParts, pushHistory]);
 
   const saveOutlineEdit = useCallback(async () => {
     if (!latestOutline) return;
@@ -1446,7 +1468,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const rows = await listWriterOutlinesForIssue(latestOutline.issue_id);
     setOutlines(rows);
     pushHistory(`saved edited outline v${latestOutline.version}`);
-  }, [latestOutline, outlineEditDraft]);
+  }, [latestOutline, outlineEditDraft, pushHistory]);
 
   const saveBeatsEdit = useCallback(async () => {
     if (!selectedPageId || !selectedPage) return;
@@ -1478,7 +1500,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPages(pageRows);
     }
     pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
-  }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId]);
+  }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId, pushHistory]);
 
   const saveDialogueEdit = useCallback(async () => {
     if (!selectedPageId || !selectedPage) return;
@@ -1496,7 +1518,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPages(pageRows);
     }
     pushHistory(`saved edited dialogue (page ${selectedPage.page_number})`);
-  }, [selectedPageId, selectedPage, dialogueEditDraft, selectedIssueId]);
+  }, [selectedPageId, selectedPage, dialogueEditDraft, selectedIssueId, pushHistory]);
 
   const saveShotPlanEdit = useCallback(async () => {
     if (!latestShotPlan) return;
@@ -1525,7 +1547,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const rows = await listWriterShotPlansForIssue(latestShotPlan.issue_id);
     setShotPlans(rows);
     pushHistory(`saved edited shot plan v${latestShotPlan.version}`);
-  }, [latestShotPlan, shotEditDraft]);
+  }, [latestShotPlan, shotEditDraft, pushHistory]);
 
   const libraryPanel = (
     <div className="flex flex-col gap-3 min-h-0 text-black/80">

@@ -365,8 +365,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     } else {
                         let nx = node.x();
                         let ny = node.y();
-                        let nw = Math.max(20, panel.width * Math.abs(scaleX));
-                        let nh = Math.max(20, panel.height * Math.abs(scaleY));
+                        const nw = Math.max(20, panel.width * Math.abs(scaleX));
+                        const nh = Math.max(20, panel.height * Math.abs(scaleY));
                         if (isHalfCircle) {
                             const visibleH = nh / 2;
                             nx = Math.max(0, Math.min(PAGE_W - nw, nx));

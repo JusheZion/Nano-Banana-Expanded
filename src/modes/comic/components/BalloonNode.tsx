@@ -392,7 +392,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         pass: 'shadow' | 'glow' | 'base' | 'texture',
         isTail: boolean
     ) => {
-        let baseProps: any = {
+        const baseProps: any = {
             listening: pass === 'base',
             perfectDrawEnabled: false,
             opacity: pass === 'texture' ? (balloon.textureOpacity ?? 0.5) : 1,

@@ -101,7 +101,7 @@ export function buildCharacterStudioPromptForApi(
 
   // ---- reference slots -> API 14-slot + prompt base rules ----
   /** Merge live preview when it is not already in the 14 slots (selected gallery pose, last gen, etc.). */
-  let workingRefs = Array.from({ length: 14 }, (_, i) => referenceImageUrls[i] ?? '');
+  const workingRefs = Array.from({ length: 14 }, (_, i) => referenceImageUrls[i] ?? '');
   if (liveTrim && !workingRefs.some((u) => u === liveTrim)) {
     const emptyIdx = workingRefs.findIndex((u) => !u);
     if (emptyIdx >= 0) {

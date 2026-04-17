@@ -48,6 +48,7 @@ interface StudioImportBridgeState {
   consumeImportForTarget: (
     target: StudioImportTarget
   ) => { imageUrl: string; promptHint?: string } | null;
+  clearActiveImportForTarget: (target: StudioImportTarget, reason?: string) => void;
   requestReturnToSourceIfNeeded: (
     target: StudioImportTarget,
     imageUrl: string,
@@ -91,6 +92,14 @@ export const useStudioImportBridge = create<StudioImportBridgeState>((set, get) 
     // Defer clear so React Strict Mode's double mount both see the same payload.
     queueMicrotask(() => set({ importPayload: null }));
     return out;
+  },
+
+  clearActiveImportForTarget: (target, _reason) => {
+    set((state) => ({
+      activeImports: Object.fromEntries(
+        Object.entries(state.activeImports).filter(([key]) => key !== target),
+      ) as Partial<Record<StudioImportTarget, StudioImportPayload>>,
+    }));
   },
 
   requestReturnToSourceIfNeeded: (target, imageUrl, promptHint) => {
