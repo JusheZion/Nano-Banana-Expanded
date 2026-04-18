@@ -38,6 +38,9 @@ export const LOCATION_TYPE_TAGS = [
   'Industrial district',
   'Coastal waterfront',
   'High-tech campus',
+  'Suburban',
+  'Rural',
+  'Desert',
 ] as const;
 
 /** Architectural vocabulary for shell and interior read. */
@@ -61,6 +64,7 @@ export const ROOM_TYPE_TAGS = [
   'Dining Room',
   'Foyer',
   'Garage',
+  'Gym',
   'Hallway',
   'Kitchen',
   'Living Room',
@@ -68,6 +72,8 @@ export const ROOM_TYPE_TAGS = [
   'Office',
   'Patio',
   'Studio',
+  'Sunroom',
+  'Walk-in Closet',
 ] as const;
 
 /** Set Dressing & Props (Scene Setting & Props section) */
@@ -109,10 +115,39 @@ export const SET_DRESSING_PRESETS = {
 
 export type SetDressingCategory = keyof typeof SET_DRESSING_PRESETS;
 
-/** Cinematic: Angle + Tone only (per spec). Angle includes Reference Gallery options (Bird's Eye, Dutch). */
+/**
+ * Single source for Asset cinematic angles and Spatial Expansion gallery camera chips.
+ * Includes classic coverage (eye level, OTS, POV) plus existing framing vocabulary.
+ */
+export const STUDIO_CAMERA_ANGLE_OPTIONS = [
+  'Eye level',
+  'Low',
+  'High',
+  'Wide-angle',
+  'Over-the-shoulder',
+  'Macro',
+  "Bird's Eye",
+  'Dutch',
+  'POV',
+] as const;
+
+export type StudioCameraAngleId = (typeof STUDIO_CAMERA_ANGLE_OPTIONS)[number];
+
+/** Spatial Expansion Gallery right panel — same vocabulary as cinematic angles (parity). */
+export const SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS = STUDIO_CAMERA_ANGLE_OPTIONS;
+
+/** Cinematic: Angle + Tone only (per spec). Angle is unified with `STUDIO_CAMERA_ANGLE_OPTIONS`. */
 export const CINEMATIC_OPTIONS = {
-  angle: ['Low', 'High', 'Wide-angle', 'Macro', "Bird's Eye", 'Dutch'] as const,
-  tone: ['Melancholic', 'Heroic', 'Suspenseful', 'Gritty'] as const,
+  angle: STUDIO_CAMERA_ANGLE_OPTIONS,
+  tone: [
+    'Melancholic',
+    'Heroic',
+    'Suspenseful',
+    'Gritty',
+    'Dreamy',
+    'Documentary',
+    'Noir',
+  ] as const,
 } as const;
 
 export type AssetCinematicKey = keyof typeof CINEMATIC_OPTIONS;
@@ -138,9 +173,12 @@ export const SPATIAL_URBAN_OPTIONS = [
 /** Time/Season quick toggles (alphabetized) */
 export const TIME_SEASON_OPTIONS = [
   'Autumn',
+  'Blue Hour',
   'Dawn',
   'Dusk',
+  'Fog',
   'Golden Hour',
+  'Midday',
   'Night',
   'Noon',
   'Overcast',
@@ -153,12 +191,3 @@ export type TimeSeasonId = (typeof TIME_SEASON_OPTIONS)[number];
 
 /** Aspect Ratio for Spatial Expansion Gallery (parity with Reference Character Studio) */
 export type AspectRatioId = '9:16' | '1:1' | '21:9';
-
-/** Camera Angle options for Spatial Expansion Gallery right panel (includes Wide-angle for parity with Cinematic Suite). */
-export const SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS = [
-  'Low',
-  'High',
-  'Wide-angle',
-  "Bird's Eye",
-  'Dutch',
-] as const;

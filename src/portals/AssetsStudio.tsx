@@ -1227,6 +1227,22 @@ export const AssetsStudio: React.FC = () => {
                     </button>
                   </span>
                 </Tooltip>
+                <Tooltip
+                  variant="asset"
+                  content="Clear tags, refs, style selections, and prompt overrides. Keeps live image, seed, and session history."
+                  side="top"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      store.resetWorkspaceFreshSlate();
+                      setPromptPanelTab('auto');
+                    }}
+                    className="px-2.5 py-1 rounded-full text-sm font-medium border border-rose-500/45 text-rose-200/90 hover:bg-rose-500/15"
+                  >
+                    Clear workspace
+                  </button>
+                </Tooltip>
                 <Tooltip variant="asset" content="Save this image as a new standalone asset." side="top">
                   <span className="inline-flex">
                     <button

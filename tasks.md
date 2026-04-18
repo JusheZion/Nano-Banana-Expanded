@@ -2,6 +2,13 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Studio tags + Asset Clear workspace (2026-04-18) — COMPLETE
+
+- [x] **Phase A:** `STUDIO_CAMERA_ANGLE_OPTIONS` in [`asset_studio_spec.ts`](src/data/asset_studio_spec.ts); unify cinematic angle + spatial gallery chips; mirror in [`character_studio_spec.ts`](src/data/character_studio_spec.ts) via import
+- [x] **Phase B:** Curated extras — tone / time-season / location / room types; character lighting + tone + location
+- [x] **Phase C:** Always-visible **Clear workspace** on Asset Studio preview action strip ([`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx))
+- [x] Verify: `npm run build`, `npm run test -- --run`; update `walkthrough.md`
+
 ## Vault save — searchable profile/collection dropdown (2026-04-17) — COMPLETE
 
 - [x] Add shared [`SearchableVaultSelect`](src/shared/components/SearchableVaultSelect.tsx) (type-to-filter + click row + keyboard)

@@ -1,5 +1,11 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Completed — Studio tags + Asset Clear workspace (2026-04-18)
+
+- **Camera angles:** [`STUDIO_CAMERA_ANGLE_OPTIONS`](src/data/asset_studio_spec.ts) is the single source for Asset **Cinematic** angle chips and **Spatial Expansion** camera chips (`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`). Character Studio [`CINEMATIC_OPTIONS.angle`](src/data/character_studio_spec.ts) imports the same tuple so both studios stay aligned.
+- **Curated lists:** Asset — extra **tone** presets; **TIME_SEASON**, **LOCATION_TYPE**, **ROOM_TYPE** entries. Character — additional **lighting**, **tone**, and **location** tags.
+- **UX:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) preview row includes **Clear workspace** (not only under Live Prompt when `workspaceMode === 'prompt'`): calls `resetWorkspaceFreshSlate()` and `setPromptPanelTab('auto')`.
+
 ## Completed — Vault save: searchable profile/collection picker (2026-04-17)
 
 - **Shared UI:** [`SearchableVaultSelect.tsx`](src/shared/components/SearchableVaultSelect.tsx) — combobox pattern: filter existing names as you type, click a row to commit, arrow keys + Enter to pick, `mousedown` on options so blur does not swallow selection.

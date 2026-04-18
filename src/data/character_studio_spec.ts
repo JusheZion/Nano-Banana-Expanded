@@ -3,6 +3,8 @@
  * Single source for Art Style, DNA (Heritage/Gender), Surgical Physical, Wardrobe, Cinematic.
  */
 
+import { STUDIO_CAMERA_ANGLE_OPTIONS } from './asset_studio_spec';
+
 export const ART_STYLE_FLAGSHIP = 'Smooth Animated 3D/CGI Render';
 
 export const ART_STYLE_LIBRARY = [
@@ -268,18 +270,33 @@ export const WARDROBE_PRESETS = {
 export type WardrobeCategory = keyof typeof WARDROBE_PRESETS;
 
 export const CINEMATIC_OPTIONS = {
-  angle: ['Low', 'High', "Bird's Eye", 'Dutch'] as const,
+  angle: STUDIO_CAMERA_ANGLE_OPTIONS,
   lighting: [
     'Three-point softbox',
     'Golden Hour',
     'Neon',
     'Chiaroscuro',
+    'Rim light',
+    'Soft window',
+    'Studio key',
+    'Silhouette',
   ] as const,
-  tone: ['Melancholic', 'Heroic', 'Suspenseful', 'Gritty'] as const,
+  tone: [
+    'Melancholic',
+    'Heroic',
+    'Suspenseful',
+    'Gritty',
+    'Dreamy',
+    'Documentary',
+    'Noir',
+  ] as const,
   location: [
     'Cyberpunk Slum',
     'High-Tech Lab',
     'Ancient Temple',
+    'Suburban street',
+    'Desert outpost',
+    'Coastal pier',
   ] as const,
 } as const;
 
