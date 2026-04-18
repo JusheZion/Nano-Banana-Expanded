@@ -2,6 +2,21 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Vault save — searchable profile/collection dropdown (2026-04-17) — COMPLETE
+
+- [x] Add shared [`SearchableVaultSelect`](src/shared/components/SearchableVaultSelect.tsx) (type-to-filter + click row + keyboard)
+- [x] Character Studio save modal: profile field + load albums on open (new + edit)
+- [x] Asset Studio: collection field (hybrid: **Save new asset** + **Add to library**; albums load on every save open)
+- [x] Storyline / Imageshop: **Save story to Asset Vault** — both **New** and **Existing collection** tabs use the picker; preload on open
+- [x] Verify: `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+
+## Character Studio UI — Refine tab + Reference workspace + preview row (2026-04-17) — COMPLETE
+
+- [x] Refine tab: always-visible **NEW / Refine / snippet** row; bounded chip scroller; flex textarea; flex wrapper for pinned tab bodies; raised Live Prompt `max-h`
+- [x] Reference workspace: compare hover **`pointer-events-none`** on image wrappers; **`pointer-events-auto`** on Expand cluster; fullscreen modal fit-to-viewport math + sticky toolbar + **Fit** + top-aligned scroll
+- [x] Remove third preview column (second pose slot); **More poses** `slice(1)` / threshold `> 1`; **dualSlotFrameStyle** 280×497; copy updates
+- [x] Verify: `npm run test -- --run`, `npm run build`; update `walkthrough.md` + `implementation_plan.md`
+
 ## WriterPortal — page edit draft stability (2026-04-16) — COMPLETE
 
 - [x] Restore granular `useEffect` deps for beats/dialogue drafts (`id`, `beats_json`, `script_text`) so `setPages` reference churn does not wipe unsaved edits

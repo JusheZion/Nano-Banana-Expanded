@@ -1,5 +1,18 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Completed — Vault save: searchable profile/collection picker (2026-04-17)
+
+- **Shared UI:** [`SearchableVaultSelect.tsx`](src/shared/components/SearchableVaultSelect.tsx) — combobox pattern: filter existing names as you type, click a row to commit, arrow keys + Enter to pick, `mousedown` on options so blur does not swallow selection.
+- **Character Studio:** Save modal always loads `getCharacterAlbums()`; profile field uses the shared picker for both flows — **Save new character** is hybrid (new name or pick existing); **Save edited profile** still requires an exact existing profile for Save.
+- **Asset Studio:** Collection field always uses the picker; **Add to library** still requires an exact existing collection; **Save new asset** allows any non-empty name while still offering existing collections to click (hybrid create-or-pick). Albums load whenever the save modal opens.
+- **Illustrator’s Imageshop:** Same hybrid pattern for **New collection** and **Existing collection**; `openSaveVaultModal` preloads `getAssetAlbums()` so the list is available in both tabs.
+
+## Completed — Character Studio UI adjustments (2026-04-17)
+
+- **Live Prompt / Refine:** Actions visible without scrolling past a huge textarea; chips bounded; outer prompt card height cap increased.
+- **Reference workspace:** Hover layers no longer steal pointer events from **Expand**; fullscreen image opens **fitted** to the viewport with zoom relative to fit, **Fit** control, and scroll aligned from the **top**.
+- **Preview tiles:** **Live + one pose** primary row; additional poses in horizontal strip; **dualSlotFrameStyle** **280×497** for the two tiles.
+
 ## Image Workshop orchestration state (2026-04-16)
 
 - **WriterPortal draft stability (2026-04-16):** The selected-page effect that initializes `beatsEditDraft` / `dialogueEditDraft` must depend on `selectedPage?.id`, `beats_json`, and `script_text`, not the whole `selectedPage` object, so `setPages` batch updates do not reset in-progress edits when row references change but fields do not.

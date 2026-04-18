@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
@@ -22,6 +22,7 @@ import { useTheme } from '@/shared/context/ThemeContext';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { HybridTagBar } from '@/components/HybridTagBar';
 import { CopyButton } from '@/shared/components/CopyButton';
+import { SearchableVaultSelect } from '@/shared/components/SearchableVaultSelect';
 import { Tooltip, PinnedHelpTooltip } from '@/shared/components/Tooltip';
 import {
   useCharacterStudioStore,
@@ -234,7 +235,10 @@ export const CharacterStudio: React.FC = () => {
   const [facialExpressionCustomInput, setFacialExpressionCustomInput] = useState('');
   const [statusStep, setStatusStep] = useState(0);
   const [showZoomModal, setShowZoomModal] = useState(false);
+  /** 1 = fit-to-viewport baseline; lower zooms out, higher zooms in (fullscreen modal). */
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomModalNatural, setZoomModalNatural] = useState<{ w: number; h: number } | null>(null);
+  const [zoomModalViewport, setZoomModalViewport] = useState({ w: 0, h: 0 });
   const [compareSplit, setCompareSplit] = useState(false);
   const [recallSlotIndex, setRecallSlotIndex] = useState<number | null>(null);
   /** Single focused slot drives the shared Upload / Archive / Clear toolbar. */
@@ -394,10 +398,10 @@ export const CharacterStudio: React.FC = () => {
         : 'Square 1:1';
   const previewAspectId = store.aspectRatio as StudioPreviewAspectId;
   const previewFrameCompare = studioPreviewFrameStyle(previewAspectId, 'stageCompare');
-  /** Live + Pose 1/2 tiles — target ~231×409 (portrait), wrap on narrow panes */
-  const tripleSlotFrameStyle: React.CSSProperties = {
-    width: 231,
-    height: 409,
+  /** Live + one pose tile — larger portrait box now that a third column was removed */
+  const dualSlotFrameStyle: React.CSSProperties = {
+    width: 280,
+    height: 497,
     maxWidth: '100%',
     flexShrink: 0,
     boxSizing: 'border-box',
@@ -668,13 +672,11 @@ export const CharacterStudio: React.FC = () => {
     setSaveCharacterError(null);
     setShowSaveCharacterModal(true);
 
-    if (isEditProfile) {
-      setVaultProfileLoading(true);
-      getCharacterAlbums()
-        .then((albums) => setVaultProfileOptions(albums.map((a) => a.profileName)))
-        .catch(() => setVaultProfileOptions([]))
-        .finally(() => setVaultProfileLoading(false));
-    }
+    setVaultProfileLoading(true);
+    getCharacterAlbums()
+      .then((albums) => setVaultProfileOptions(albums.map((a) => a.profileName)))
+      .catch(() => setVaultProfileOptions([]))
+      .finally(() => setVaultProfileLoading(false));
   };
 
   const handleSaveCharacterModalConfirm = async () => {
@@ -686,7 +688,7 @@ export const CharacterStudio: React.FC = () => {
     if (saveCharacterIsEditProfile) {
       const matched = getMatchedExistingProfile(typedProfileDisplay);
       if (!matched) {
-        setSaveCharacterError('Select an existing profile from the dropdown. Use “Save New Character” to create a new one.');
+        setSaveCharacterError('Select an existing profile from the list. Use “Save new character” to create a new one.');
         return;
       }
     }
@@ -805,6 +807,31 @@ export const CharacterStudio: React.FC = () => {
     vaultProfileOptions,
     getMatchedExistingProfile,
   ]);
+
+  useEffect(() => {
+    if (!showZoomModal) {
+      setZoomModalNatural(null);
+      return;
+    }
+    const measure = () =>
+      setZoomModalViewport({ w: window.innerWidth, h: window.innerHeight });
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [showZoomModal]);
+
+  const zoomModalLayout = useMemo(() => {
+    const vw = zoomModalViewport.w || (typeof window !== 'undefined' ? window.innerWidth : 1200);
+    const vh = zoomModalViewport.h || (typeof window !== 'undefined' ? window.innerHeight : 800);
+    const maxW = Math.max(160, vw - 32);
+    const maxH = Math.max(160, vh - 100);
+    if (!zoomModalNatural?.w || !zoomModalNatural?.h) {
+      return { fit: 1, displayW: null as number | null };
+    }
+    const fit = Math.min(1, maxW / zoomModalNatural.w, maxH / zoomModalNatural.h);
+    const displayW = Math.max(1, Math.round(zoomModalNatural.w * fit * zoomLevel));
+    return { fit, displayW };
+  }, [zoomModalNatural, zoomModalViewport.w, zoomModalViewport.h, zoomLevel]);
 
   const handleSaveNewPose = () => {
     const url = store.currentLiveImageUrl;
@@ -1472,7 +1499,7 @@ export const CharacterStudio: React.FC = () => {
             </div>
           </div>
 
-          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(42vh,360px)] overflow-hidden">
+          <div className="shrink-0 rounded-xl border border-white/10 bg-black/30 p-2 flex flex-col min-h-0 max-h-[min(48vh,420px)] overflow-hidden">
             <div className="mb-1 shrink-0 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-bold uppercase tracking-widest" style={goldTextStyle}>
                 Live Prompt
@@ -1501,6 +1528,7 @@ export const CharacterStudio: React.FC = () => {
               </p>
             ) : (
             <>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {!phoneCompact && (
             <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2 mb-2 shrink-0">
               {(
@@ -1653,40 +1681,16 @@ export const CharacterStudio: React.FC = () => {
               </div>
             )}
             {!phoneCompact && promptPanelTab === 'refine' && (
-              <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto">
+              <div className="flex min-h-[80px] flex-1 flex-col gap-2 overflow-hidden">
                 {!store.currentLiveImageUrl ? (
                   <p className="text-sm text-amber-200/80">Generate or load an image first, then describe refinements here.</p>
                 ) : (
                   <>
-                    <textarea
-                      value={store.refinementPromptOverride}
-                      onChange={(e) => store.setRefinementPromptOverride(e.target.value)}
-                      placeholder="Type a refinement or use Suggest chips below."
-                      className="w-full flex-1 min-h-[160px] bg-black/60 text-white/90 p-3 rounded-lg border border-amber-500/20 text-sm resize-y"
-                    />
-                    <div className="flex flex-wrap gap-1">
-                      {REFINE_SUGGEST_CHIPS.map((chip) => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() =>
-                            store.setRefinementPromptOverride(
-                              store.refinementPromptOverride
-                                ? `${store.refinementPromptOverride}, ${chip}`
-                                : chip
-                            )
-                          }
-                          className="text-xs px-2 py-1 rounded-full border border-white/20 hover:border-amber-500/50"
-                        >
-                          {chip}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 pb-2">
                       <button
                         type="button"
                         disabled
-                        className="px-3 py-1.5 rounded-lg text-xs border border-white/20 opacity-50 cursor-not-allowed"
+                        className="rounded-lg border border-white/20 px-3 py-1.5 text-xs opacity-50 cursor-not-allowed"
                         title="Image describe API — coming soon"
                       >
                         NEW
@@ -1698,13 +1702,13 @@ export const CharacterStudio: React.FC = () => {
                           store.generationStatus === 'pending' ||
                           !store.refinementPromptOverride.trim()
                         }
-                        className="px-4 py-1.5 rounded-lg text-xs font-bold text-black border border-amber-600/50 disabled:opacity-50"
+                        className="rounded-lg border border-amber-600/50 px-4 py-1.5 text-xs font-bold text-black disabled:opacity-50"
                         style={{ background: ACCENT_GOLD_GRADIENT }}
                       >
                         Refine
                       </button>
                       <select
-                        className="bg-black/50 text-white text-xs rounded border border-white/20 px-2 py-1"
+                        className="rounded border border-white/20 bg-black/50 px-2 py-1 text-xs text-white"
                         defaultValue=""
                         onChange={(e) => {
                           const s = store.promptSnippets.find((x) => x.id === e.target.value);
@@ -1724,10 +1728,40 @@ export const CharacterStudio: React.FC = () => {
                         ))}
                       </select>
                     </div>
+                    <p className="shrink-0 text-[10px] text-white/45">
+                      Suggest chips — scroll if the list is long.
+                    </p>
+                    <div className="max-h-[5.5rem] min-h-0 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-black/40 p-1.5 custom-scrollbar">
+                      <div className="flex flex-wrap gap-1">
+                        {REFINE_SUGGEST_CHIPS.map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() =>
+                              store.setRefinementPromptOverride(
+                                store.refinementPromptOverride
+                                  ? `${store.refinementPromptOverride}, ${chip}`
+                                  : chip
+                              )
+                            }
+                            className="rounded-full border border-white/20 px-2 py-1 text-xs hover:border-amber-500/50"
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea
+                      value={store.refinementPromptOverride}
+                      onChange={(e) => store.setRefinementPromptOverride(e.target.value)}
+                      placeholder="Type a refinement or tap Suggest chips above."
+                      className="min-h-[96px] w-full flex-1 resize-y bg-black/60 p-3 text-sm text-white/90 placeholder:text-white/40 border border-amber-500/20 rounded-lg"
+                    />
                   </>
                 )}
               </div>
             )}
+            </div>
             </>
             )}
             <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
@@ -1882,7 +1916,7 @@ export const CharacterStudio: React.FC = () => {
                           <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
                             Reference
                           </div>
-                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/ref:scale-[1.08] group-hover/ref:z-10">
                             {activeReferenceForCompare ? (
                               <ArcsStorageImg
                                 src={activeReferenceForCompare}
@@ -1905,7 +1939,7 @@ export const CharacterStudio: React.FC = () => {
                           <div className="pointer-events-none absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-black/50 text-amber-200/90">
                             Generated
                           </div>
-                          <div className="absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-2 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.08] group-hover/live:z-10">
                             <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
@@ -1935,11 +1969,12 @@ export const CharacterStudio: React.FC = () => {
                               )}
                             </div>
                           )}
-                          <div className="absolute bottom-2 right-2 z-30 flex items-center gap-1">
+                          <div className="pointer-events-auto absolute bottom-2 right-2 z-30 flex items-center gap-1">
                             <Tooltip variant="character" content="View full size with zoom" side="left">
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setZoomModalNatural(null);
                                   setZoomLevel(1);
                                   setShowZoomModal(true);
                                 }}
@@ -1969,7 +2004,7 @@ export const CharacterStudio: React.FC = () => {
                       </div>
                     </div>
                     <p className="mt-2 max-w-xl text-center text-[10px] text-emerald-200/60">
-                      Compare on — hover either panel to zoom ({aspectSessionLabel}). Turn Compare off for Live + pose slots.
+                      Compare on — hover either panel to zoom ({aspectSessionLabel}). Turn Compare off for Live + pose slot.
                     </p>
                   </>
               ) : (
@@ -1978,13 +2013,13 @@ export const CharacterStudio: React.FC = () => {
                     <div className="flex flex-col items-center gap-0.5 shrink-0">
                       <div
                         className="group/live relative cursor-zoom-in overflow-hidden rounded-xl border border-amber-500/35 bg-black/55 shadow-inner"
-                        style={tripleSlotFrameStyle}
+                        style={dualSlotFrameStyle}
                       >
                         <div className="pointer-events-none absolute top-1 left-1 z-20 rounded-full border border-amber-500/30 bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-amber-200/90">
                           Live
                         </div>
                         {store.currentLiveImageUrl ? (
-                          <div className="absolute inset-0 z-[1] flex items-center justify-center p-1.5 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.06] group-hover/live:z-10">
+                          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center p-1.5 transition-transform duration-300 ease-out will-change-transform origin-center group-hover/live:scale-[1.06] group-hover/live:z-10">
                             <ArcsStorageImg
                               src={store.currentLiveImageUrl}
                               alt="Live character"
@@ -2020,11 +2055,12 @@ export const CharacterStudio: React.FC = () => {
                           </div>
                         )}
                         {store.currentLiveImageUrl ? (
-                          <div className="absolute bottom-1 right-1 z-30 flex items-center gap-0.5">
+                          <div className="pointer-events-auto absolute bottom-1 right-1 z-30 flex items-center gap-0.5">
                             <Tooltip variant="character" content="View full size" side="left">
                               <button
                                 type="button"
                                 onClick={() => {
+                                  setZoomModalNatural(null);
                                   setZoomLevel(1);
                                   setShowZoomModal(true);
                                 }}
@@ -2047,7 +2083,7 @@ export const CharacterStudio: React.FC = () => {
                         ) : null}
                       </div>
                     </div>
-                    {([0, 1] as const).map((poseSlotIdx) => {
+                    {([0] as const).map((poseSlotIdx) => {
                       const pose = store.poses[poseSlotIdx];
                       const selected = Boolean(pose && store.selectedPoseId === pose.id);
                       return (
@@ -2056,7 +2092,7 @@ export const CharacterStudio: React.FC = () => {
                             className={`relative overflow-hidden rounded-xl border bg-black/50 shadow-inner ${
                               selected ? 'border-amber-500 ring-2 ring-amber-500/40' : 'border-white/20'
                             }`}
-                            style={tripleSlotFrameStyle}
+                            style={dualSlotFrameStyle}
                           >
                             <div className="pointer-events-none absolute top-1 left-1 z-20 rounded-full border border-amber-500/30 bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-amber-200/90">
                               Pose {poseSlotIdx + 1}
@@ -2175,13 +2211,13 @@ export const CharacterStudio: React.FC = () => {
                       );
                     })}
                   </div>
-                  {store.poses.length > 2 ? (
+                  {store.poses.length > 1 ? (
                     <div className="mt-1 w-full shrink-0 border-t border-white/10 px-1 pt-1.5">
                       <span className="mb-1 block px-1 text-[8px] uppercase tracking-wider text-white/45">
-                        More poses ({store.poses.length - 2})
+                        More poses ({store.poses.length - 1})
                       </span>
                       <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                        {store.poses.slice(2).map((pose) => (
+                        {store.poses.slice(1).map((pose) => (
                           <div
                             key={pose.id}
                             className={`relative h-[106px] w-[60px] shrink-0 overflow-hidden rounded-md border ${
@@ -2210,8 +2246,8 @@ export const CharacterStudio: React.FC = () => {
                       </div>
                     </div>
                   ) : null}
-                  <p className="mt-1 max-w-[14rem] px-2 text-center text-[9px] text-emerald-200/55">
-                    {aspectSessionLabel} — Live + two pose slots; extra poses in the strip below when present. Hover Live to zoom.
+                    <p className="mt-1 max-w-[14rem] px-2 text-center text-[9px] text-emerald-200/55">
+                    {aspectSessionLabel} — Live + one pose slot; extra poses in the strip below when present. Hover Live to zoom.
                   </p>
                 </>
               )}
@@ -2584,15 +2620,23 @@ export const CharacterStudio: React.FC = () => {
               Press Enter in a field to save, or focus the dialog (click the heading) and press Enter when Save is enabled.
               Escape cancels.
             </p>
-            <label className="block text-sm font-medium text-white/80 mb-1">Profile name (required)</label>
-            <input
-              type="text"
+            <SearchableVaultSelect
+              id="save-character-profile"
+              label="Profile name (required)"
               value={saveCharacterProfileName}
-              onChange={(e) => {
-                setSaveCharacterProfileName(e.target.value);
+              onChange={(v) => {
+                setSaveCharacterProfileName(v);
                 if (saveCharacterError) setSaveCharacterError(null);
               }}
-              onKeyDown={(e) => {
+              options={vaultProfileOptions}
+              loading={vaultProfileLoading}
+              placeholder={
+                saveCharacterIsEditProfile
+                  ? 'Search existing profiles…'
+                  : 'New profile name, or pick an existing one…'
+              }
+              autoFocus
+              onEnterPress={(e) => {
                 if (e.key !== 'Enter') return;
                 e.preventDefault();
                 const dis =
@@ -2601,30 +2645,23 @@ export const CharacterStudio: React.FC = () => {
                     : !saveCharacterProfileName.trim();
                 if (!dis) void handleSaveCharacterModalConfirm();
               }}
-              placeholder="e.g. Detective Mara"
-              list={saveCharacterIsEditProfile ? 'vault-profile-options' : undefined}
-              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
-              autoFocus
+              helperSlot={
+                <p className="text-[11px] text-white/55">
+                  {vaultProfileLoading
+                    ? 'Loading profiles…'
+                    : vaultProfileOptions.length === 0
+                      ? saveCharacterIsEditProfile
+                        ? 'No existing profiles found. Use “Save new character” with a typed name, or create a profile elsewhere first.'
+                        : 'No existing profiles yet — enter a new profile name.'
+                      : saveCharacterIsEditProfile
+                        ? saveCharacterProfileName.trim() &&
+                            !getMatchedExistingProfile(saveCharacterProfileName)
+                          ? 'Choose an existing profile from the list (or type until it matches exactly). “Save new character” creates a new profile.'
+                          : '\u00A0'
+                        : 'Click a row to pick an existing profile, or type a new profile name.'}
+                </p>
+              }
             />
-            {saveCharacterIsEditProfile && (
-              <datalist id="vault-profile-options">
-                {vaultProfileOptions.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            )}
-            {saveCharacterIsEditProfile && (
-              <p className="text-[11px] text-white/55 -mt-2 mb-3">
-                {vaultProfileLoading
-                  ? 'Loading profiles…'
-                  : vaultProfileOptions.length === 0
-                    ? 'No existing profiles found. Use “Save New Character”.'
-                    : saveCharacterProfileName.trim() &&
-                        !getMatchedExistingProfile(saveCharacterProfileName)
-                      ? 'Type to search, but Save only enables on an exact existing profile.'
-                      : '\u00A0'}
-              </p>
-            )}
             <label className="block text-sm font-medium text-white/80 mb-1">Cast name (optional)</label>
             <input
               type="text"
@@ -2673,7 +2710,7 @@ export const CharacterStudio: React.FC = () => {
         </div>
       )}
 
-      {/* Full-size image modal with zoom */}
+      {/* Full-size image modal — fit-to-viewport baseline, zoom relative to fit, top-aligned scroll */}
       {showZoomModal && store.currentLiveImageUrl && (
         <div
           className="fixed inset-0 z-50 flex flex-col bg-black/95"
@@ -2681,18 +2718,18 @@ export const CharacterStudio: React.FC = () => {
           aria-modal="true"
           aria-label="View image full size"
         >
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/10">
-            <div className="flex items-center gap-2">
+          <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-black/95 px-4 py-2 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
+                onClick={() => setZoomLevel((z) => Math.max(0.15, z - 0.25))}
                 className="p-2 rounded-lg border border-amber-500/40 hover:bg-amber-500/20"
                 aria-label="Zoom out"
               >
                 <ZoomOut className="w-5 h-5" style={{ color: 'var(--color-gold, #fcf6ba)' }} />
               </button>
-              <span className="text-sm tabular-nums min-w-[4rem]" style={goldTextStyle}>
-                {Math.round(zoomLevel * 100)}%
+              <span className="min-w-[4rem] text-sm tabular-nums" style={goldTextStyle}>
+                {Math.round(zoomLevel * 100)}% of fit
               </span>
               <button
                 type="button"
@@ -2705,9 +2742,11 @@ export const CharacterStudio: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setZoomLevel(1)}
-                className="px-2 py-1 text-xs rounded border border-white/20 hover:bg-white/10"
+                className="rounded border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
               >
-                <span className="inline-block" style={goldTextStyle}>Reset</span>
+                <span className="inline-block" style={goldTextStyle}>
+                  Fit
+                </span>
               </button>
             </div>
             <div className="flex items-center gap-1">
@@ -2734,12 +2773,29 @@ export const CharacterStudio: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-4">
+          <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto p-4">
             <ArcsStorageImg
               src={store.currentLiveImageUrl}
               alt="Full size character reference"
-              className="max-w-none transition-transform origin-center"
-              style={{ transform: `scale(${zoomLevel})` }}
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                  setZoomModalNatural({ w: el.naturalWidth, h: el.naturalHeight });
+                }
+              }}
+              className="h-auto w-auto rounded object-contain shadow-lg"
+              style={
+                zoomModalLayout.displayW != null
+                  ? {
+                      width: zoomModalLayout.displayW,
+                      maxWidth: 'min(calc(100vw - 1.5rem), 100%)',
+                      height: 'auto',
+                    }
+                  : {
+                      maxHeight: 'calc(100dvh - 6rem)',
+                      maxWidth: 'min(calc(100vw - 1.5rem), 100%)',
+                    }
+              }
             />
           </div>
         </div>

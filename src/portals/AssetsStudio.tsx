@@ -15,6 +15,7 @@ import {
 import { useTheme } from '@/shared/context/ThemeContext';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { SearchableVaultSelect } from '@/shared/components/SearchableVaultSelect';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
@@ -397,13 +398,11 @@ export const AssetsStudio: React.FC = () => {
     setSaveAssetMode(mode);
     setShowSaveAssetModal(true);
 
-    if (mode === 'library') {
-      setVaultCollectionLoading(true);
-      getAssetAlbums()
-        .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
-        .catch(() => setVaultCollectionOptions([]))
-        .finally(() => setVaultCollectionLoading(false));
-    }
+    setVaultCollectionLoading(true);
+    getAssetAlbums()
+      .then((albums) => setVaultCollectionOptions(albums.map((a) => a.collectionName)))
+      .catch(() => setVaultCollectionOptions([]))
+      .finally(() => setVaultCollectionLoading(false));
   };
 
   const handleSaveAssetModalConfirm = async () => {
@@ -1321,35 +1320,49 @@ export const AssetsStudio: React.FC = () => {
             <h3 className="text-lg font-bold mb-4" style={goldTextStyle}>
               {saveAssetMode === 'new' ? 'Save new asset' : 'Add to library'}
             </h3>
-            <label className="block text-sm font-medium text-white/80 mb-1">Collection name (required)</label>
-            <input
-              type="text"
+            <SearchableVaultSelect
+              id="save-asset-collection"
+              label="Collection name (required)"
               value={saveAssetCollectionName}
-              onChange={(e) => setSaveAssetCollectionName(e.target.value)}
-              placeholder="e.g. City exteriors"
-              list={saveAssetMode === 'library' ? 'vault-collection-options' : undefined}
-              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-3 text-sm placeholder-white/40"
+              onChange={(v) => setSaveAssetCollectionName(v)}
+              options={vaultCollectionOptions}
+              loading={vaultCollectionLoading}
+              placeholder={
+                saveAssetMode === 'library'
+                  ? 'Search existing collections…'
+                  : 'New collection name, or pick an existing one…'
+              }
               autoFocus
+              onEnterPress={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const trimmed = saveAssetCollectionName.trim();
+                if (!trimmed) return;
+                if (saveAssetMode === 'library') {
+                  if (!vaultCollectionLoading && getMatchedExistingCollection(saveAssetCollectionName)) {
+                    void handleSaveAssetModalConfirm();
+                  }
+                } else {
+                  void handleSaveAssetModalConfirm();
+                }
+              }}
+              helperSlot={
+                <p className="text-sm text-white/55">
+                  {vaultCollectionLoading
+                    ? 'Loading collections…'
+                    : saveAssetMode === 'library'
+                      ? vaultCollectionOptions.length === 0
+                        ? 'No existing collections found. Use “Save new asset” to type a new collection name.'
+                        : saveAssetCollectionName.trim() &&
+                            !getMatchedExistingCollection(saveAssetCollectionName)
+                          ? 'Pick a collection from the list (search filters it). Save only enables on an exact existing collection.'
+                          : '\u00A0'
+                      : vaultCollectionOptions.length === 0
+                        ? 'No existing collections yet — enter a new collection name.'
+                        : 'Type a new collection name, or click a row to reuse an existing collection.'}
+                </p>
+              }
             />
-            {saveAssetMode === 'library' && (
-              <datalist id="vault-collection-options">
-                {vaultCollectionOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            )}
-            {saveAssetMode === 'library' && (
-              <p className="text-sm text-white/55 -mt-2 mb-3">
-                {vaultCollectionLoading
-                  ? 'Loading collections…'
-                  : vaultCollectionOptions.length === 0
-                    ? 'No existing collections found. Use “Save New Asset”.'
-                    : saveAssetCollectionName.trim() &&
-                        !getMatchedExistingCollection(saveAssetCollectionName)
-                      ? 'Type to search, but Save only enables on an exact existing collection.'
-                      : '\u00A0'}
-              </p>
-            )}
             <label className="block text-sm font-medium text-white/80 mb-1">Asset name (optional)</label>
             <input
               type="text"

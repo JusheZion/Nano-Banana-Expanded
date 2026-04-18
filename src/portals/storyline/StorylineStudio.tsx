@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/shared/context/ThemeContext';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { SearchableVaultSelect } from '@/shared/components/SearchableVaultSelect';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage } from '@/shared/api/geminiImageApi';
@@ -160,9 +161,9 @@ export const StorylineStudio: React.FC = () => {
     setSaveVaultCollectionName('');
     setSaveVaultAssetName(store.storyTitle.trim());
     setSaveVaultMode('new');
-    setVaultCollectionOptions([]);
     setShowSaveVaultModal(true);
-  }, [store.storyTitle]);
+    void loadVaultCollections();
+  }, [store.storyTitle, loadVaultCollections]);
 
   const handleSaveVaultConfirm = useCallback(async () => {
     const cover = firstStoryCoverImageUrl(store.beats);
@@ -1482,31 +1483,51 @@ export const StorylineStudio: React.FC = () => {
                 Existing collection
               </button>
             </div>
-            <label className="block text-xs text-white/60 mb-1">Collection name</label>
-            <input
-              type="text"
+            <SearchableVaultSelect
+              id="storyline-save-vault-collection"
+              wrapClassName="relative mb-2"
+              labelClassName="block text-xs text-white/60 mb-1"
+              label="Collection name"
               value={saveVaultCollectionName}
-              onChange={(e) => setSaveVaultCollectionName(e.target.value)}
-              list={saveVaultMode === 'library' ? 'storyline-vault-collections' : undefined}
-              placeholder={saveVaultMode === 'library' ? 'Type exact existing name' : 'e.g. My storyboards'}
-              className="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 mb-2 text-sm"
+              onChange={(v) => setSaveVaultCollectionName(v)}
+              options={vaultCollectionOptions}
+              loading={vaultCollectionLoading}
+              autoFocus
+              placeholder={
+                saveVaultMode === 'library'
+                  ? 'Search existing collections…'
+                  : 'New collection name, or pick an existing one…'
+              }
+              inputClassName="w-full bg-black/40 text-white border border-white/20 rounded-lg px-3 py-2 text-sm placeholder-white/40"
+              onEnterPress={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                if (saveVaultPending || !saveVaultCollectionName.trim()) return;
+                if (saveVaultMode === 'library') {
+                  if (!vaultCollectionLoading && getMatchedExistingCollection(saveVaultCollectionName)) {
+                    void handleSaveVaultConfirm();
+                  }
+                } else {
+                  void handleSaveVaultConfirm();
+                }
+              }}
+              helperSlot={
+                <p className="text-[10px] text-white/45">
+                  {vaultCollectionLoading
+                    ? 'Loading collections…'
+                    : saveVaultMode === 'library'
+                      ? vaultCollectionOptions.length === 0
+                        ? 'No existing collections found. Switch to “New collection” to type a name.'
+                        : saveVaultCollectionName.trim() &&
+                            !getMatchedExistingCollection(saveVaultCollectionName)
+                          ? 'Pick a collection from the list. Save enables only on an exact existing collection.'
+                          : '\u00A0'
+                      : vaultCollectionOptions.length === 0
+                        ? 'No existing collections yet — enter a new collection name.'
+                        : 'Type a new collection name, or click a row to reuse an existing collection.'}
+                </p>
+              }
             />
-            {saveVaultMode === 'library' && (
-              <datalist id="storyline-vault-collections">
-                {vaultCollectionOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            )}
-            {saveVaultMode === 'library' && (
-              <p className="text-[10px] text-white/45 mb-2">
-                {vaultCollectionLoading
-                  ? 'Loading collections…'
-                  : !getMatchedExistingCollection(saveVaultCollectionName)
-                    ? 'Save enables only when the name matches an existing collection exactly.'
-                    : '\u00A0'}
-              </p>
-            )}
             <label className="block text-xs text-white/60 mb-1">Asset / story label (optional)</label>
             <input
               type="text"
