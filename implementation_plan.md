@@ -3,8 +3,8 @@
 ## Completed — Studio tags + Asset Clear workspace (2026-04-18)
 
 - **Camera angles:** [`STUDIO_CAMERA_ANGLE_OPTIONS`](src/data/asset_studio_spec.ts) is the single source for Asset **Cinematic** angle chips and **Spatial Expansion** camera chips (`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`). Character Studio [`CINEMATIC_OPTIONS.angle`](src/data/character_studio_spec.ts) imports the same tuple so both studios stay aligned.
-- **Curated lists:** Asset — extra **tone** presets; **TIME_SEASON**, **LOCATION_TYPE**, **ROOM_TYPE** entries. Character — additional **lighting**, **tone**, and **location** tags.
-- **UX:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) preview row includes **Clear workspace** (not only under Live Prompt when `workspaceMode === 'prompt'`): calls `resetWorkspaceFreshSlate()` and `setPromptPanelTab('auto')`.
+- **Curated lists:** Asset — **tone** (Neutral, Ominous, Tense, …); **TIME_SEASON** includes **Fog / mist**; **LOCATION_TYPE** (transit, warehouse, rural/countryside); **ROOM_TYPE** (Lobby, Stairwell, Classroom, Corridor). Character — **lighting** (Practicals, Soft natural); **tone** aligned with Asset.
+- **UX:** [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) **`CAMERA_ANGLE_CHIP_TOOLTIP`** (angle vs shot scale); preview row **Clear workspace** + phone **Clear** + `aria-label`; [`assetStudioStore`](src/stores/assetStudioStore.ts) persist merge upgrades legacy **Fog** / **Rural** labels.
 
 ## Completed — Vault save: searchable profile/collection picker (2026-04-17)
 

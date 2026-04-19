@@ -541,6 +541,17 @@ export const useAssetStudioStore = create<AssetStudioState>()(
         if (Array.isArray(p.referenceImageUrls)) {
           merged.referenceImageUrls = sanitizeReferenceUrlsForPersist(p.referenceImageUrls);
         }
+        if ((merged.timeSeason as string | null) === 'Fog') {
+          merged.timeSeason = 'Fog / mist';
+        }
+        const mapRural = (arr: string[] | undefined) =>
+          arr?.map((v) => (v === 'Rural' ? 'Rural / countryside' : v));
+        if (merged.locationTypeSelection?.length) {
+          merged.locationTypeSelection = mapRural(merged.locationTypeSelection) ?? [];
+        }
+        if (merged.locationTypeLibrary?.length) {
+          merged.locationTypeLibrary = mapRural(merged.locationTypeLibrary) ?? [];
+        }
         return merged;
       },
       partialize: (state) => ({

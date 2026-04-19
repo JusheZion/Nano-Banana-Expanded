@@ -77,7 +77,7 @@ const ASPECT_RATIO_CHIP_TOOLTIP =
   'Output aspect for the next Generate Asset or Expand Setting.';
 
 const CAMERA_ANGLE_CHIP_TOOLTIP =
-  'Lens / framing style for the prompt; may combine with aspect for the effective render ratio.';
+  'Camera angle (height, tilt, subjective framing). Shot scale (wide / close-up) is a separate axis from angle.';
 
 export const AssetsStudio: React.FC = () => {
   const { setTheme } = useTheme();
@@ -1234,13 +1234,14 @@ export const AssetsStudio: React.FC = () => {
                 >
                   <button
                     type="button"
+                    aria-label="Clear workspace"
                     onClick={() => {
                       store.resetWorkspaceFreshSlate();
                       setPromptPanelTab('auto');
                     }}
                     className="px-2.5 py-1 rounded-full text-sm font-medium border border-rose-500/45 text-rose-200/90 hover:bg-rose-500/15"
                   >
-                    Clear workspace
+                    {phoneCompact ? 'Clear' : 'Clear workspace'}
                   </button>
                 </Tooltip>
                 <Tooltip variant="asset" content="Save this image as a new standalone asset." side="top">
