@@ -224,6 +224,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [shotsBrief, setShotsBrief] = useState('');
   const [pacingLoading, setPacingLoading] = useState(false);
   const [pacingError, setPacingError] = useState<string | null>(null);
+  /** Arc tab: hypothetical total pages for density explorer (slider). Resets when the Library issue or counts change. */
+  const [pacingExplorePages, setPacingExplorePages] = useState(22);
   const [canonLoading, setCanonLoading] = useState(false);
   const [canonError, setCanonError] = useState<string | null>(null);
   const [shotsLoading, setShotsLoading] = useState(false);
@@ -611,6 +613,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
   const selectedPage = pages.find((p) => p.id === selectedPageId) ?? null;
 
+  const pacingLengthAlignment = useMemo(() => {
+    const r = pacingSaved?.result;
+    if (!r || typeof r !== 'object' || r === null) return null;
+    const la = (r as Record<string, unknown>).length_alignment;
+    if (!la || typeof la !== 'object') return null;
+    return la as {
+      target_pages?: number;
+      script_pages: number;
+      outline_beats: number;
+      suggested_page_delta: number;
+      suggested_beat_delta?: number;
+      rationale: string;
+    };
+  }, [pacingSaved?.result]);
+
   const openImageWorkshopFromWriter = useCallback(
     async (mode: 'outline' | 'page' | 'shot-plan') => {
       if (!selectedIssue) return;
@@ -784,6 +801,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const outlineCoverageWarning =
     Boolean(latestOutline) && targetPageCount > 0 && outlineCoverageGap >= 2;
 
+  const arcPacingExploreMax = useMemo(
+    () => Math.max(64, sortedPages.length + 20, targetPageCount, outlinePageBeatsCount, 1),
+    [sortedPages.length, targetPageCount, outlinePageBeatsCount],
+  );
+
+  const lastArcExploreIssueRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedIssueId) return;
+    const hi = arcPacingExploreMax;
+    if (lastArcExploreIssueRef.current !== selectedIssueId) {
+      lastArcExploreIssueRef.current = selectedIssueId;
+      const base = Math.max(1, targetPageCount, sortedPages.length || 1);
+      setPacingExplorePages(Math.min(Math.max(base, 1), hi));
+    } else {
+      setPacingExplorePages((p) => Math.min(Math.max(p, 1), hi));
+    }
+  }, [selectedIssueId, targetPageCount, sortedPages.length, arcPacingExploreMax]);
+
   const nextPageNumber = useMemo(() => {
     if (sortedPages.length === 0) return 1;
     return Math.max(...sortedPages.map((p) => p.page_number)) + 1;
@@ -872,7 +907,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!selectedIssueId) return;
     setPacingError(null);
     setPacingLoading(true);
-    const res = await invokeWriterTools({ mode: 'pacing_review', issue_id: selectedIssueId });
+    const res = await invokeWriterTools({
+      mode: 'pacing_review',
+      issue_id: selectedIssueId,
+      target_page_count: targetPageCount,
+    });
     setPacingLoading(false);
     if (res.success) {
       pushHistory('pacing review saved');
@@ -882,7 +921,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPacingError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId, refreshIssuesForSeries, pushHistory]);
+  }, [selectedIssueId, targetPageCount, refreshIssuesForSeries, pushHistory]);
 
   const runCanonFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -911,7 +950,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         for (let i = 0; i < arcBatchIssueIdsOrdered.length; i++) {
           setArcBatchLabel(`${i + 1}/${arcBatchIssueIdsOrdered.length}`);
           const id = arcBatchIssueIdsOrdered[i]!;
-          const res = await invokeWriterTools({ mode, issue_id: id });
+          const res = await invokeWriterTools(
+            mode === 'pacing_review'
+              ? { mode: 'pacing_review', issue_id: id, target_page_count: targetPageCount }
+              : { mode, issue_id: id },
+          );
           if (!res.success) {
             const msg = toolErrorMessage(res);
             if (mode === 'pacing_review') setPacingError(msg);
@@ -934,7 +977,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         setArcBatchMode(null);
       }
     },
-    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries, pushHistory],
+    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries, pushHistory, targetPageCount],
   );
 
   const runOutlineGenerate = useCallback(
@@ -3178,6 +3221,127 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {!selectedIssueId && (
                       <p className="text-xs text-black/50">Select an issue in the Library panel.</p>
                     )}
+                    {selectedIssueId ? (
+                      <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Length explorer
+                          </p>
+                          <WriterSectionTip tipKey="arcLengthExplore" label="About length explorer" />
+                        </div>
+                        <p className="text-[10px] text-black/50 leading-snug">
+                          Outline target: {targetPageCount} pages · Script: {sortedPages.length} page
+                          {sortedPages.length === 1 ? '' : 's'} · Outline beats: {outlinePageBeatsCount}
+                        </p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] text-black/60">
+                            <span>Hypothetical length: {pacingExplorePages} pages</span>
+                            <span className="tabular-nums">
+                              Beats/page:{' '}
+                              {(outlinePageBeatsCount / Math.max(1, pacingExplorePages)).toFixed(2)}
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={1}
+                            max={arcPacingExploreMax}
+                            value={Math.min(pacingExplorePages, arcPacingExploreMax)}
+                            onChange={(e) =>
+                              setPacingExplorePages(
+                                Math.max(1, Math.min(arcPacingExploreMax, Number(e.target.value) || 1)),
+                              )
+                            }
+                            className="w-full accent-amber-700"
+                            aria-label="Hypothetical issue page count for pacing density"
+                          />
+                          <div className="flex justify-between text-[9px] text-black/45">
+                            <span>1</span>
+                            <span>max {arcPacingExploreMax}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-black/10 bg-white/40 px-2 py-1.5 text-[10px] text-black/75 space-y-1">
+                          <p className="tabular-nums">
+                            vs script: {pacingExplorePages >= sortedPages.length ? '+' : ''}
+                            {pacingExplorePages - sortedPages.length} pages
+                          </p>
+                          <p className="tabular-nums">
+                            vs outline target: {pacingExplorePages >= targetPageCount ? '+' : ''}
+                            {pacingExplorePages - targetPageCount} pages
+                          </p>
+                          <p className="text-black/60 pt-0.5">
+                            {pacingExplorePages < sortedPages.length
+                              ? 'Structural hint: fewer pages than your script — compress or trim panels/beats to raise density.'
+                              : pacingExplorePages > sortedPages.length
+                                ? 'Structural hint: more pages than your script — room to spread moments for breathing room.'
+                                : 'Structural hint: matches current script length.'}
+                          </p>
+                        </div>
+                        <div
+                          className="relative h-2 rounded-full bg-gradient-to-r from-teal-700/35 via-white/50 to-amber-700/40 border border-black/10"
+                          aria-hidden
+                        >
+                          {(() => {
+                            const max = Math.max(1, arcPacingExploreMax - 1);
+                            const scriptPct = ((Math.min(sortedPages.length, arcPacingExploreMax) - 1) / max) * 100;
+                            const explorePct = ((Math.min(pacingExplorePages, arcPacingExploreMax) - 1) / max) * 100;
+                            return (
+                              <>
+                                <span
+                                  className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-black/55"
+                                  style={{ left: `clamp(0%, ${scriptPct}%, 100%)` }}
+                                  title="Script pages"
+                                />
+                                <span
+                                  className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded bg-amber-700"
+                                  style={{ left: `clamp(0%, ${explorePct}%, 100%)` }}
+                                  title="Explorer"
+                                />
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <p className="text-[9px] text-black/45">
+                          Bar: black tick = script length · amber = explorer · compress → expand (cosmetic only).
+                        </p>
+                        <button
+                          type="button"
+                          className="rounded-md border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black hover:bg-white disabled:opacity-40"
+                          onClick={() => setTargetPageCount(pacingExplorePages)}
+                        >
+                          Use {pacingExplorePages} as outline target
+                        </button>
+                      </div>
+                    ) : null}
+                    {pacingLengthAlignment ? (
+                      <div className="space-y-2 rounded-xl border border-amber-800/25 bg-amber-50/80 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-950/90">
+                          Length alignment (last pacing run)
+                        </p>
+                        <p className="text-[10px] text-black/55">
+                          Editorial estimate toward strong pacing — not a guarantee of a &quot;10&quot; score.
+                        </p>
+                        <ul className="text-[11px] text-black/85 space-y-1 list-disc list-inside">
+                          {pacingLengthAlignment.target_pages != null ? (
+                            <li>Target (planning): {pacingLengthAlignment.target_pages} pages</li>
+                          ) : null}
+                          <li>Script pages (measured): {pacingLengthAlignment.script_pages}</li>
+                          <li>Outline beats (measured): {pacingLengthAlignment.outline_beats}</li>
+                          <li>
+                            Suggested page delta:{' '}
+                            {pacingLengthAlignment.suggested_page_delta >= 0 ? '+' : ''}
+                            {pacingLengthAlignment.suggested_page_delta} pages
+                          </li>
+                          {pacingLengthAlignment.suggested_beat_delta != null ? (
+                            <li>
+                              Suggested beat delta:{' '}
+                              {pacingLengthAlignment.suggested_beat_delta >= 0 ? '+' : ''}
+                              {pacingLengthAlignment.suggested_beat_delta} beats
+                            </li>
+                          ) : null}
+                        </ul>
+                        <p className="text-[11px] text-black/80 leading-snug">{pacingLengthAlignment.rationale}</p>
+                      </div>
+                    ) : null}
                     <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Pacing review</p>
                       <button
@@ -3187,7 +3351,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           if (!selectedIssueId) return;
                           setPacingError(null);
                           setPacingLoading(true);
-                          const res = await invokeWriterTools({ mode: 'pacing_review', issue_id: selectedIssueId });
+                          const res = await invokeWriterTools({
+                            mode: 'pacing_review',
+                            issue_id: selectedIssueId,
+                            target_page_count: targetPageCount,
+                          });
                           setPacingLoading(false);
                           if (res.success) {
                             pushHistory('pacing review saved');

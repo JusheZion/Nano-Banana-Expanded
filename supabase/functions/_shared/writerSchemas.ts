@@ -92,6 +92,17 @@ export const writerToolsDraftDialogueRequestSchema = z.object({
   style: z.enum(['comic_script', 'screenplay_light']).optional(),
 });
 
+export const pacingLengthAlignmentSchema = z
+  .object({
+    target_pages: z.number().int().min(0).max(500).optional(),
+    script_pages: z.number().int().min(0).max(500),
+    outline_beats: z.number().int().min(0).max(500),
+    suggested_page_delta: z.number().int().min(-200).max(200),
+    suggested_beat_delta: z.number().int().min(-200).max(200).optional(),
+    rationale: z.string().max(2000),
+  })
+  .passthrough();
+
 export const pacingReviewResultSchema = z
   .object({
     overall_pacing: z.string(),
@@ -108,12 +119,14 @@ export const pacingReviewResultSchema = z
       .max(200)
       .optional(),
     suggestions: z.array(z.string()).max(24).optional(),
+    length_alignment: pacingLengthAlignmentSchema.optional(),
   })
   .passthrough();
 
 export const writerToolsPacingReviewRequestSchema = z.object({
   mode: z.literal('pacing_review'),
   issue_id: z.string().uuid(),
+  target_page_count: z.number().int().min(1).max(500).optional(),
 });
 
 export const canonCheckResultSchema = z

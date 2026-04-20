@@ -602,17 +602,40 @@ async function executeSinglePageBeats(
   return { ok: true, data: beatsParsed.data };
 }
 
+function getOutlinePageBeatsCount(outlineJson: unknown): number {
+  if (!outlineJson || typeof outlineJson !== 'object') return 0;
+  const arr = (outlineJson as { page_beats?: unknown }).page_beats;
+  return Array.isArray(arr) ? arr.length : 0;
+}
+
 function buildPacingReviewUserPrompt(args: {
   issue: IssueRow;
   outlineJson: unknown;
   pages: Array<{ page_number: number; beats_json: unknown; script_text: string | null }>;
+  scriptPages: number;
+  outlineBeats: number;
+  /** Author planning target from client (Outline tab); omit when not sent. */
+  targetPages: number | null;
 }): string {
+  const targetLine =
+    args.targetPages != null
+      ? `Author planning target (Outline tab): ${args.targetPages} pages.`
+      : 'Author planning target: not provided — treat script length as the baseline unless the outline implies a different intended length.';
+
   return [
     `Analyze comic issue pacing. Output JSON only (no markdown).`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    '',
+    'Measured counts (trust these exact numbers — echo them in length_alignment):',
+    `- script_pages: ${args.scriptPages} (rows in this issue’s script/page table)`,
+    `- outline_beats: ${args.outlineBeats} (entries in outline page_beats array, if any)`,
+    `- ${targetLine}`,
+    '',
     `Latest outline JSON:\n${JSON.stringify(args.outlineJson ?? {}, null, 2).slice(0, 12000)}`,
     `Per-page digest (panel counts + script previews):\n${buildPagesDigest(args.pages)}`,
+    '',
+    'Reconcile the three lengths: planning target (if any), outline beat map, and actual script pages. Editorial judgment — aim for strong pacing (score 10) as a goal, not a formula.',
     '',
     'Return JSON shape:',
     '{',
@@ -622,7 +645,16 @@ function buildPacingReviewUserPrompt(args: {
     '  "risks"?: string[],',
     '  "page_level_notes"?: [ { "page_number": number, "note": string } ],',
     '  "suggestions"?: string[]',
+    '  "length_alignment"?: {',
+    '      "target_pages"?: number,',
+    '      "script_pages": number (must match measured script_pages),',
+    '      "outline_beats": number (must match measured outline_beats),',
+    '      "suggested_page_delta": number (signed: positive = add pages, negative = trim pages; estimate toward score-10 pacing),',
+    '      "suggested_beat_delta"?: number (optional, same sign convention for outline beats),',
+    '      "rationale": string (short — why these deltas help pacing)',
+    '    }',
     '}',
+    'Include length_alignment on every run. Use the measured script_pages and outline_beats exactly.',
   ].join('\n');
 }
 
@@ -1082,7 +1114,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'pacing_review') {
-      const { issue_id } = parsedReq.data;
+      const { issue_id, target_page_count: clientTargetPages } = parsedReq.data;
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
@@ -1099,11 +1131,21 @@ Deno.serve(async (req) => {
         .order('version', { ascending: false })
         .limit(1)
         .maybeSingle();
+      const outlineJson = outlineRow?.outline_json ?? null;
+      const scriptPages = pageRows?.length ?? 0;
+      const outlineBeats = getOutlinePageBeatsCount(outlineJson);
+      const targetPages =
+        typeof clientTargetPages === 'number' && clientTargetPages >= 1 && clientTargetPages <= 500
+          ? clientTargetPages
+          : null;
       const system = 'You are a comics editor focused on pacing and readability. Output only valid JSON. No markdown fences.';
       const userPrompt = buildPacingReviewUserPrompt({
         issue: row,
-        outlineJson: outlineRow?.outline_json ?? null,
+        outlineJson,
         pages: pageRows ?? [],
+        scriptPages,
+        outlineBeats,
+        targetPages,
       });
       let pacingJson: unknown;
       try {

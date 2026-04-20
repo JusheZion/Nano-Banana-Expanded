@@ -1,5 +1,12 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Completed — WriterPortal pacing arc: explicit length + length explorer (2026-04-19)
+
+- **Contract:** Shared Zod schemas — pacing review request may include `target_page_count`; result may include `length_alignment` (echo `target_pages` / `script_pages` / `outline_beats`, editorial `suggested_page_delta`, optional `suggested_beat_delta`, `rationale`). Duplicated in [`supabase/functions/_shared/writerSchemas.ts`](supabase/functions/_shared/writerSchemas.ts).
+- **Edge:** [`writer-tools`](supabase/functions/writer-tools/index.ts) computes script page count and outline beat count from storage; merges optional client target into the user prompt; model instructed to return `length_alignment` when counts are supplied.
+- **Client:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) passes `target_page_count` on every pacing call; batch pacing uses the same outline-target value for all issues in the run (per-issue target would require persisting outline target — future work).
+- **Arc UX:** Hypothetical page slider with deterministic density and delta readouts; optional one-click sync to `targetPageCount`; displays structured alignment from the last saved pacing result; help copy stresses editorial estimates vs math.
+
 ## Completed — Studio tags + Asset Clear workspace (2026-04-18)
 
 - **Camera angles:** [`STUDIO_CAMERA_ANGLE_OPTIONS`](src/data/asset_studio_spec.ts) is the single source for Asset **Cinematic** angle chips and **Spatial Expansion** camera chips (`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`). Character Studio [`CINEMATIC_OPTIONS.angle`](src/data/character_studio_spec.ts) imports the same tuple so both studios stay aligned.

@@ -2,6 +2,14 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## WriterPortal — Pacing arc: length advice + length explorer (2026-04-19) — COMPLETE
+
+- [x] **Schema:** `length_alignment` on `pacingReviewResultSchema`; optional `target_page_count` on pacing request; mirror `supabase/functions/_shared/writerSchemas.ts`; types + `schemas.test.ts`
+- [x] **Edge:** `writer-tools` — `buildPacingReviewUserPrompt` with script/outline/target counts; `pacing_review` computes counts from DB + latest outline
+- [x] **Client:** All `pacing_review` `invokeWriterTools` calls pass `target_page_count: targetPageCount` (ribbon, Arc single-issue, batch — batch uses one UI target for every issue)
+- [x] **Arc UI:** Length explorer slider + density/delta readouts + gradient meter; **Length alignment** card from saved result; **Use N as outline target**; help registry copy
+- [x] Verify: `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+
 ## Studio tags + Asset Clear workspace (2026-04-18) — COMPLETE
 
 - [x] **Phase A:** `STUDIO_CAMERA_ANGLE_OPTIONS` in [`asset_studio_spec.ts`](src/data/asset_studio_spec.ts); unify cinematic angle + spatial gallery chips; mirror in [`character_studio_spec.ts`](src/data/character_studio_spec.ts) via import

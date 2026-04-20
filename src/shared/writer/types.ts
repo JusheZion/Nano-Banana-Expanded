@@ -72,6 +72,8 @@ export type WriterToolsDraftDialoguePayload = {
 export type WriterToolsPacingReviewPayload = {
   mode: 'pacing_review';
   issue_id: string;
+  /** Optional; matches Outline tab target. Batch pacing uses the same value for every issue. */
+  target_page_count?: number;
 };
 
 export type WriterToolsCanonCheckPayload = {

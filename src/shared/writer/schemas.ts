@@ -92,6 +92,19 @@ export const writerToolsDraftDialogueRequestSchema = z.object({
   style: z.enum(['comic_script', 'screenplay_light']).optional(),
 });
 
+/** Editorial length advice vs planning target and script (optional LLM output). */
+export const pacingLengthAlignmentSchema = z
+  .object({
+    target_pages: z.number().int().min(0).max(500).optional(),
+    script_pages: z.number().int().min(0).max(500),
+    outline_beats: z.number().int().min(0).max(500),
+    /** Positive = add pages; negative = trim pages (estimate toward strong pacing / score 10). */
+    suggested_page_delta: z.number().int().min(-200).max(200),
+    suggested_beat_delta: z.number().int().min(-200).max(200).optional(),
+    rationale: z.string().max(2000),
+  })
+  .passthrough();
+
 /** LLM output merged into writer_issues.notes.writer_tool_cache.pacing_review */
 export const pacingReviewResultSchema = z
   .object({
@@ -109,12 +122,15 @@ export const pacingReviewResultSchema = z
       .max(200)
       .optional(),
     suggestions: z.array(z.string()).max(24).optional(),
+    length_alignment: pacingLengthAlignmentSchema.optional(),
   })
   .passthrough();
 
 export const writerToolsPacingReviewRequestSchema = z.object({
   mode: z.literal('pacing_review'),
   issue_id: z.string().uuid(),
+  /** Planning target from Outline tab; server also computes script/outline counts from DB. */
+  target_page_count: z.number().int().min(1).max(500).optional(),
 });
 
 /** LLM output merged into writer_issues.notes.writer_tool_cache.canon_check */

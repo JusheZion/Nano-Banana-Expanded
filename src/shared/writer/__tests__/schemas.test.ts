@@ -183,6 +183,9 @@ describe('writerToolsRequestSchema', () => {
       mode: 'pacing_review',
       issue_id: id,
     });
+    expect(
+      writerToolsRequestSchema.parse({ mode: 'pacing_review', issue_id: id, target_page_count: 24 }),
+    ).toMatchObject({ target_page_count: 24 });
   });
 
   it('parses canon_check request', () => {
@@ -206,6 +209,21 @@ describe('writerToolsRequestSchema', () => {
   it('pacingReviewResultSchema requires overall_pacing', () => {
     const r = pacingReviewResultSchema.parse({ overall_pacing: 'Steady climb; act 2 sags slightly.' });
     expect(r.overall_pacing).toContain('Steady');
+  });
+
+  it('pacingReviewResultSchema accepts length_alignment', () => {
+    const r = pacingReviewResultSchema.parse({
+      overall_pacing: 'Tight.',
+      length_alignment: {
+        target_pages: 22,
+        script_pages: 20,
+        outline_beats: 18,
+        suggested_page_delta: 2,
+        suggested_beat_delta: 0,
+        rationale: 'Add two pages for act-two breathing room toward a 10.',
+      },
+    });
+    expect(r.length_alignment?.suggested_page_delta).toBe(2);
   });
 
   it('shotPlanJsonSchema requires shots', () => {
