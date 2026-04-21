@@ -2,13 +2,26 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
-## WriterPortal — Pacing arc: length advice + length explorer (2026-04-19) — COMPLETE
+## WriterPortal — Pacing review: always recommend ideal length (2026-04-21) — COMPLETE
+
+- [x] **Schema:** `length_alignment` now required in `pacingReviewResultSchema`; expanded to include `recommended_pages` (exact or min/max), optional `recommended_action`, and optional `cut_suggestions`/`add_suggestions`/`assumptions` (mirrored in `supabase/functions/_shared/writerSchemas.ts` + tests)
+- [x] **Edge:** `writer-tools` — `buildPacingReviewUserPrompt` now requires `length_alignment` and instructs the model to always provide an editorial page count/range and concrete fit-to-target suggestions
+- [x] **Client:** Arc tab removed the non-AI “Length explorer”; Arc now displays the saved `length_alignment` recommendation fields when present; help copy updated
+- [x] Verify: `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+
+## WriterPortal — Pacing arc: length advice + length explorer (2026-04-19) — SUPERSEDED
 
 - [x] **Schema:** `length_alignment` on `pacingReviewResultSchema`; optional `target_page_count` on pacing request; mirror `supabase/functions/_shared/writerSchemas.ts`; types + `schemas.test.ts`
 - [x] **Edge:** `writer-tools` — `buildPacingReviewUserPrompt` with script/outline/target counts; `pacing_review` computes counts from DB + latest outline
 - [x] **Client:** All `pacing_review` `invokeWriterTools` calls pass `target_page_count: targetPageCount` (ribbon, Arc single-issue, batch — batch uses one UI target for every issue)
 - [x] **Arc UI:** Length explorer slider + density/delta readouts + gradient meter; **Length alignment** card from saved result; **Use N as outline target**; help registry copy
 - [x] Verify: `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+
+## WriterPortal — batch dialogue + text exports (2026-04-21) — IN PROGRESS
+
+- [x] **Batch dialogue:** Library → Pages selection action **Generate dialogue (batch)** runs selected pages in chunks of 5; default **skip existing dialogue**; progress label; cancel after current chunk
+- [x] **Exports:** Outline `.txt` + `.md`; beats bundle `.txt` + `.md`; dialogue bundle `.txt` + `.fountain`
+- [ ] **Manual verify:** batch dialogue on selected/all pages; export each format; no console errors
 
 ## Studio tags + Asset Clear workspace (2026-04-18) — COMPLETE
 

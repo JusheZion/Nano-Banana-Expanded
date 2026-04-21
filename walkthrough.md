@@ -1,6 +1,6 @@
 # ARCS: Walkthrough & Roadmap
 
-**WriterPortal — Pacing arc length + explorer (2026-04-19):** [`src/shared/writer/schemas.ts`](src/shared/writer/schemas.ts) — optional `target_page_count` on pacing requests; optional structured `length_alignment` (echo counts + `suggested_page_delta` / optional beat delta + `rationale`) on pacing results. [`supabase/functions/writer-tools/index.ts`](supabase/functions/writer-tools/index.ts) — pacing prompt includes measured script pages, outline beats, and planning target; validates merged JSON. [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) — Arc tab **Length explorer** (range 1…max(64, script+20, …)), beats/page and vs-script / vs-target deltas, compress/expand structural hints, cosmetic gradient bar; **Length alignment** surfaces last saved pacing block; **Use N as outline target** syncs outline `targetPageCount`; all pacing invocations pass `target_page_count` (batch uses single UI target for all selected issues). [`writerHelpRegistry.tsx`](src/portals/writer/writerHelpRegistry.tsx) — Arc / pacing help text updated. **Verify:** `npm run test -- --run`, `npm run build`; manual: set outline target → Run pacing → combined output includes `length_alignment` when model returns it.
+**WriterPortal — Pacing review: always recommend ideal length (2026-04-21):** Updated `length_alignment` from “optional deltas” into a **required** editorial length recommendation. [`src/shared/writer/schemas.ts`](src/shared/writer/schemas.ts) and [`supabase/functions/_shared/writerSchemas.ts`](supabase/functions/_shared/writerSchemas.ts) now require `length_alignment` on `pacingReviewResultSchema` and expand it with `recommended_pages` (exact or `min/max`), optional `recommended_action` when a target is provided, plus optional `cut_suggestions` / `add_suggestions` and `assumptions`, alongside existing measured counts and suggested deltas. [`supabase/functions/writer-tools/index.ts`](supabase/functions/writer-tools/index.ts) — pacing prompt and contract updated so the model must always return `length_alignment` and provide a concrete recommendation (and fit-to-target guidance when targets differ); validation will fail the tool call if missing. [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) — removed Arc tab **Length explorer** UI; the Arc panel now displays the saved **Length recommendation** block (recommended pages + action + cut/add suggestions when present). [`writerHelpRegistry.tsx`](src/portals/writer/writerHelpRegistry.tsx) — removed length explorer tips; updated pacing copy to reflect required recommendation output. **Verify:** `npm run test -- --run`, `npm run build`.
 
 **Studio tags + Asset “Clear workspace” strip (2026-04-18):** Shared camera vocabulary in [`asset_studio_spec.ts`](src/data/asset_studio_spec.ts): **`STUDIO_CAMERA_ANGLE_OPTIONS`** (Eye level, Low, High, Wide-angle, Over-the-shoulder, Macro, Bird's Eye, Dutch, POV) powers both **`CINEMATIC_OPTIONS.angle`** and **`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`** (single source). Asset **tone** presets expanded (Neutral, Ominous, Tense, etc.); **location** adds transit/warehouse/rural-countryside; **room** adds Classroom, Corridor, Lobby, Stairwell; time/season **`Fog / mist`** (persist migrates legacy **`Fog`**). [`character_studio_spec.ts`](src/data/character_studio_spec.ts) imports the same angles; **lighting** adds Practicals and Soft natural; tone aligned with Asset. [`AssetsStudio.tsx`](src/portals/AssetsStudio.tsx) — **`CAMERA_ANGLE_CHIP_TOOLTIP`** explains angle vs shot scale; always-visible **Clear workspace** on the preview row (`resetWorkspaceFreshSlate` + `setPromptPanelTab('auto')`); on phone, compact **Clear** label + **`aria-label`**. [`assetStudioStore.ts`](src/stores/assetStudioStore.ts) persist **merge** maps old **`Fog`** → **`Fog / mist`** and **`Rural`** → **`Rural / countryside`** in location lists. **Verify:** `npm run build`, `npm run test -- --run`.
 
@@ -672,6 +672,37 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
   - Add cast + assets + NPC refs.
   - Link NPC refs to a beat and generate.
   - Save a beat image to NPC Vault, then open **Image Vault → NPC Vault** and confirm it appears.
+
+---
+
+## Writers’ Workshop — batch dialogue + text exports (2026-04-21)
+
+### What changed
+
+- **Batch dialogue (chunks of 5):** In Writers’ Workshop Library → Pages multi-select actions, added **Generate dialogue (batch)** which processes the selected pages in **chunks of 5**, defaulting to **skip pages that already have dialogue**. Includes a progress label and **Cancel after this chunk**.
+- **Text exports:** Added deterministic “standard text format” exports alongside JSON:
+  - Outline: `.txt` and `.md`
+  - Beats bundle (selected pages): `.txt` and `.md`
+  - Dialogue bundle (selected pages): `.txt` and `.fountain`
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerExportFormats.ts` (new)
+
+### Verification evidence
+
+- **Tests**: `npm run test -- --run` → **PASS**
+- **Build**: `npm run build` → **PASS**
+
+### Manual verification (still required)
+
+- Writers’ Workshop:
+  - Select all pages → run **Generate dialogue (batch)** → confirm it runs 5 at a time, and Cancel stops scheduling further chunks
+  - Export Outline `.txt` + `.md`
+  - Export selected beats `.txt` + `.md`
+  - Export selected dialogue `.txt` + `.fountain`
+  - Confirm no console errors
 
 ## How to Use These Docs
 

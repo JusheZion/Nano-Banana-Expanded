@@ -7,6 +7,72 @@
 - **Client:** [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) passes `target_page_count` on every pacing call; batch pacing uses the same outline-target value for all issues in the run (per-issue target would require persisting outline target — future work).
 - **Arc UX:** Hypothetical page slider with deterministic density and delta readouts; optional one-click sync to `targetPageCount`; displays structured alignment from the last saved pacing result; help copy stresses editorial estimates vs math.
 
+## Proposed update — Pacing review: always recommend ideal length (and remove Length Explorer) (2026-04-21)
+
+### Goal
+
+When you run **Pacing review**, the AI should **always** give an editorial length recommendation derived from the outline (recommended page count or range), and if the user’s target differs, recommend either:
+
+- change the target page count to match the outline’s needs, **or**
+- keep the target and explicitly **cut/add beats** (and where) to fit.
+
+The existing **Length Explorer** slider is removed.
+
+### Contract changes (shared Zod schemas)
+
+- Update `pacingReviewResultSchema` so length guidance is **always present** when an outline exists:
+  - Prefer a single structured field like `length_recommendation` (new) or make `length_alignment` required and expand it.
+  - Proposed shape (deterministic, editorial):
+    - `recommended_pages`: `{ min: number; max: number }` (or `{ exact: number }` when confident)
+    - `assumptions`: short list of what the model assumed about panels/page, scene complexity, etc.
+    - `if_target_pages`: when `target_page_count` is provided:
+      - `recommended_action`: `'change_target' | 'cut_beats' | 'add_beats'`
+      - `suggested_page_delta`: number (still useful for UI summaries)
+      - `suggested_beat_delta`: optional number
+      - `cut_suggestions` / `add_suggestions`: bullet list referencing specific outline beats/pages when possible
+    - `rationale`: paragraph summary
+
+Mirror these updates in:
+
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+
+### Edge function: prompt + validation
+
+In `supabase/functions/writer-tools/index.ts`:
+
+- Update the pacing review prompt so the model **must** output the recommendation object.
+- Include:
+  - outline beats (and optionally a short digest of the beats themselves, not just counts)
+  - script page count
+  - target page count (optional)
+- Validation:
+  - Fail the tool call if the required recommendation field is missing (so the UI never “silently” lacks length guidance).
+
+### Client/UI changes
+
+In `src/portals/writer/WriterPortal.tsx`:
+
+- Remove the **Length explorer** UI block (slider + meter + “Use N as outline target”).
+- Keep/expand the card that shows the model’s length guidance (rename to **Length recommendation**).
+- Ensure pacing results display:
+  - recommended pages (range/exact)
+  - recommended action when target is present
+  - cut/add suggestions
+
+Update help copy in `src/portals/writer/writerHelpRegistry.tsx` to remove explorer references and clarify that pacing review always includes an editorial length recommendation.
+
+## Completed — WriterPortal batch dialogue + text exports (2026-04-21)
+
+- **Batch dialogue (client-orchestrated):** In [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx), added a **Generate dialogue (batch)** action that processes selected pages in **chunks of 5** using `Promise.allSettled`, with default **skip existing `script_text`**, progress label, and **Cancel after this chunk** via `AbortController`.
+- **Text exports:** Added deterministic export formatters in [`writerExportFormats.ts`](src/portals/writer/writerExportFormats.ts) and wired new downloads:
+  - **Outline:** `.txt` and `.md` (alongside JSON)
+  - **Beats bundle:** `.txt` and `.md` (alongside JSON bundle)
+  - **Dialogue bundle:** `.txt` and `.fountain` (alongside JSON bundle)
+- **Verification evidence:** `npm run test -- --run` and `npm run build` both pass (2026-04-21).
+
 ## Completed — Studio tags + Asset Clear workspace (2026-04-18)
 
 - **Camera angles:** [`STUDIO_CAMERA_ANGLE_OPTIONS`](src/data/asset_studio_spec.ts) is the single source for Asset **Cinematic** angle chips and **Spatial Expansion** camera chips (`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`). Character Studio [`CINEMATIC_OPTIONS.angle`](src/data/character_studio_spec.ts) imports the same tuple so both studios stay aligned.

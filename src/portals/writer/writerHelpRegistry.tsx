@@ -78,9 +78,7 @@ export const WRITER_UI_TIPS = {
   dialogueTab:
     'Draft dialogue from the page’s beats and outline. Pick comic script or screenplay style, then run on the selected page. Saves to writer_pages.script_text.',
   arcTab:
-    'Pacing review and canon check run on the whole Library issue (single-issue buttons), or use Batch arc tools to check multiple issues at once. Results save on each issue under notes.writer_tool_cache (no separate Save step). Use the length explorer to try a hypothetical page total and see outline-beat density vs your script and outline target.',
-  arcLengthExplore:
-    'Drag to try a hypothetical issue length. Readouts update instantly (beats per page, vs script vs outline target). This does not call the AI — run Pacing review to save an editorial length_alignment estimate. A “10” pacing score is judgment, not a formula.',
+    'Pacing review and canon check run on the whole Library issue (single-issue buttons), or use Batch arc tools to check multiple issues at once. Results save on each issue under notes.writer_tool_cache (no separate Save step).',
   videoTab:
     'Shot plans use the latest outline and page digests. Versions are stored in writer_video_shot_plans. Use the buttons below to export JSON, CSV, or a full issue pack.',
   scriptsTab:
@@ -89,7 +87,7 @@ export const WRITER_UI_TIPS = {
     'Open Scripts & exports from here (or Home → workspace Scripts). Issue pack and exports live there; Video tab has shot plan files too. AI tools need a signed-in Supabase session.',
   insertRibbon: 'Snippets and templates can be added here in a future update.',
   reviewPacing:
-    'Run pacing review for the selected issue. Uses the Issue Outline target page count (Outline tab) so the model can compare plan vs script length. On success, the result is saved to issue notes (writer_tool_cache.pacing_review), including optional length_alignment (page/beat delta estimates toward strong pacing — editorial, not a formula).',
+    'Run pacing review for the selected issue. Uses the Issue Outline target page count (Outline tab) so the model can compare plan vs script length. On success, the result is saved to issue notes (writer_tool_cache.pacing_review), including required length_alignment with an editorial recommended page count/range and concrete cut/add suggestions when the target differs.',
   reviewCanon:
     'Run canon / continuity check for the selected issue. On success, the result is saved automatically to the issue notes (writer_tool_cache.canon_check).',
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',

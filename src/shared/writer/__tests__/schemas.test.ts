@@ -207,7 +207,17 @@ describe('writerToolsRequestSchema', () => {
   });
 
   it('pacingReviewResultSchema requires overall_pacing', () => {
-    const r = pacingReviewResultSchema.parse({ overall_pacing: 'Steady climb; act 2 sags slightly.' });
+    const r = pacingReviewResultSchema.parse({
+      overall_pacing: 'Steady climb; act 2 sags slightly.',
+      length_alignment: {
+        script_pages: 20,
+        outline_beats: 18,
+        recommended_pages: { exact: 22 },
+        suggested_page_delta: 2,
+        suggested_beat_delta: 0,
+        rationale: 'Recommend 22 pages for stronger act-two breathing room.',
+      },
+    });
     expect(r.overall_pacing).toContain('Steady');
   });
 
@@ -218,6 +228,8 @@ describe('writerToolsRequestSchema', () => {
         target_pages: 22,
         script_pages: 20,
         outline_beats: 18,
+        recommended_pages: { min: 21, max: 23 },
+        recommended_action: 'keep_target',
         suggested_page_delta: 2,
         suggested_beat_delta: 0,
         rationale: 'Add two pages for act-two breathing room toward a 10.',

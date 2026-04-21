@@ -94,12 +94,37 @@ export const writerToolsDraftDialogueRequestSchema = z.object({
 
 export const pacingLengthAlignmentSchema = z
   .object({
+    /** Echo of the planning target provided by the user (if any). */
     target_pages: z.number().int().min(0).max(500).optional(),
+    /** Echo of current DB page rows count. */
     script_pages: z.number().int().min(0).max(500),
+    /** Echo of outline beat count derived from the latest outline. */
     outline_beats: z.number().int().min(0).max(500),
+
+    /**
+     * Editorial recommendation derived from the outline: either a tight range
+     * (min/max) or a single exact page count (exact).
+     */
+    recommended_pages: z.union([
+      z.object({ exact: z.number().int().min(1).max(500) }),
+      z.object({ min: z.number().int().min(1).max(500), max: z.number().int().min(1).max(500) }),
+    ]),
+
+    /** High-level guidance when a target was provided. */
+    recommended_action: z.enum(['change_target', 'cut_beats', 'add_beats', 'keep_target']).optional(),
+
+    /** Positive = add pages; negative = trim pages (estimate toward strong pacing / score 10). */
     suggested_page_delta: z.number().int().min(-200).max(200),
     suggested_beat_delta: z.number().int().min(-200).max(200).optional(),
-    rationale: z.string().max(2000),
+
+    /** Concrete suggestions for fitting target: plain-text, deterministic bullets. */
+    cut_suggestions: z.array(z.string()).max(24).optional(),
+    add_suggestions: z.array(z.string()).max(24).optional(),
+
+    /** Optional assumptions the model used (panel density, spread moments, etc.). */
+    assumptions: z.array(z.string()).max(24).optional(),
+
+    rationale: z.string().max(4000),
   })
   .passthrough();
 
@@ -119,7 +144,7 @@ export const pacingReviewResultSchema = z
       .max(200)
       .optional(),
     suggestions: z.array(z.string()).max(24).optional(),
-    length_alignment: pacingLengthAlignmentSchema.optional(),
+    length_alignment: pacingLengthAlignmentSchema,
   })
   .passthrough();
 
