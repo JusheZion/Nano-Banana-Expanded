@@ -203,6 +203,31 @@ export const writerToolsPlanShotsRequestSchema = z.object({
   creative_brief: z.string().max(4000).optional(),
 });
 
+/** LLM output for `idea_assist` (non-persisted brainstorming / analysis). */
+export const ideaAssistResultSchema = z
+  .object({
+    answer_markdown: z.string().max(24_000),
+    title: z.string().max(200).optional(),
+    bullets: z.array(z.string().max(2000)).max(48).optional(),
+    next_steps: z.array(z.string().max(2000)).max(24).optional(),
+    risks: z.array(z.string().max(2000)).max(24).optional(),
+  })
+  .passthrough();
+
+export const writerToolsIdeaAssistRequestSchema = z.object({
+  mode: z.literal('idea_assist'),
+  issue_id: z.string().uuid(),
+  prompt: z.string().min(1).max(12_000),
+  include_left: z.boolean().optional(),
+  include_middle: z.boolean().optional(),
+  include_right: z.boolean().optional(),
+  context_left: z.string().max(16_000).optional(),
+  context_middle: z.string().max(16_000).optional(),
+  context_right: z.string().max(16_000).optional(),
+  /** Optional: focus page for prompts that should anchor on a specific page row */
+  page_id: z.string().uuid().optional(),
+});
+
 export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
@@ -211,6 +236,7 @@ export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsPacingReviewRequestSchema,
   writerToolsCanonCheckRequestSchema,
   writerToolsPlanShotsRequestSchema,
+  writerToolsIdeaAssistRequestSchema,
 ]);
 
 const writerToolsSuccessSchema = z.object({

@@ -23,6 +23,15 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **Exports:** Outline `.txt` + `.md`; beats bundle `.txt` + `.md`; dialogue bundle `.txt` + `.fountain`
 - [ ] **Manual verify:** batch dialogue on selected/all pages; export each format; no console errors
 
+## Writers’ Workshop — 3-column Workspace + AI Idea Assist (2026-04-21) — COMPLETE
+
+- [x] **Plan/UI:** Add new Writers workspace tab showing three columns; each column can select a view (outline/beats/dialogue/arc/etc.); add hideable AI prompt bar across top
+- [x] **Context digests:** Deterministic, size-capped extraction for each column view to send as AI context
+- [x] **Edge tool:** Add `idea_assist` writer-tools mode (schemas + edge handler + client invocation) returning `answer`
+- [x] **Output actions:** Copy + safe insert into drafts (dialogue/beats/outline supplement) with non-destructive defaults
+- [x] **Verify (automated):** `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+- [ ] **Optional manual:** browser smoke (Cockpit column views, collapse Idea assist, run idea assist, Find, append/copy; no console errors)
+
 ## Studio tags + Asset Clear workspace (2026-04-18) — COMPLETE
 
 - [x] **Phase A:** `STUDIO_CAMERA_ANGLE_OPTIONS` in [`asset_studio_spec.ts`](src/data/asset_studio_spec.ts); unify cinematic angle + spatial gallery chips; mirror in [`character_studio_spec.ts`](src/data/character_studio_spec.ts) via import

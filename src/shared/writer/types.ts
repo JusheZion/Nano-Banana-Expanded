@@ -87,6 +87,19 @@ export type WriterToolsPlanShotsPayload = {
   creative_brief?: string;
 };
 
+export type WriterToolsIdeaAssistPayload = {
+  mode: 'idea_assist';
+  issue_id: string;
+  prompt: string;
+  include_left?: boolean;
+  include_middle?: boolean;
+  include_right?: boolean;
+  context_left?: string;
+  context_middle?: string;
+  context_right?: string;
+  page_id?: string;
+};
+
 export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsPageBeatsPayload
@@ -94,7 +107,8 @@ export type WriterToolsRequest =
   | WriterToolsDraftDialoguePayload
   | WriterToolsPacingReviewPayload
   | WriterToolsCanonCheckPayload
-  | WriterToolsPlanShotsPayload;
+  | WriterToolsPlanShotsPayload
+  | WriterToolsIdeaAssistPayload;
 
 export type WriterToolsSuccessResponse = {
   success: true;

@@ -3,10 +3,19 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export type WriterWorkspaceTabId = 'arc' | 'outline' | 'lore' | 'beats' | 'dialogue' | 'video' | 'scripts';
+export type WriterWorkspaceTabId =
+  | 'cockpit'
+  | 'arc'
+  | 'outline'
+  | 'lore'
+  | 'beats'
+  | 'dialogue'
+  | 'video'
+  | 'scripts';
 
-/** Narrative pipeline order: Outline → Lore → Beats → … Shortcuts: ⌥⌘1–7 (Mac) / Alt+Ctrl+1–7 — not plain ⌘1–7 (browser tabs). */
+/** Narrative pipeline order: Cockpit → Outline → Lore → Beats → … Shortcuts: ⌥⌘1–8 (Mac) / Alt+Ctrl+1–8 — not plain ⌘1–7 (browser tabs). */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
+  'cockpit',
   'outline',
   'lore',
   'beats',
@@ -20,6 +29,7 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   WriterWorkspaceTabId,
   { ribbon: string; heading: string }
 > = {
+  cockpit: { ribbon: 'Cockpit', heading: 'Writers’ cockpit' },
   outline: { ribbon: 'Outline', heading: 'Issue Outline' },
   lore: { ribbon: 'Lore', heading: 'Series lore' },
   beats: { ribbon: 'Beats', heading: 'Page Beats' },
@@ -41,6 +51,8 @@ export type WriterSearchContext = {
   canonCheck: WriterToolSaved | undefined;
   /** Plain text of lore cards for Find on Lore tab */
   loreCardsFindText?: string;
+  /** Plain text for Find on Cockpit tab (3-column preview surface) */
+  cockpitFindText?: string;
 };
 
 /** Labeled arc output; same string used for Find and the Arc tab preview. */
@@ -72,6 +84,8 @@ function stringifyPreview(v: unknown): string {
 /** Plain text for in-viewport Find (current tab surface only). */
 export function getWriterSearchableText(ctx: WriterSearchContext): string {
   switch (ctx.activeTab) {
+    case 'cockpit':
+      return ctx.cockpitFindText ?? '';
     case 'outline':
       return stringifyPreview(ctx.latestOutlineJson);
     case 'lore':

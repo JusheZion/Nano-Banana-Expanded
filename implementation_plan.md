@@ -73,6 +73,58 @@ Update help copy in `src/portals/writer/writerHelpRegistry.tsx` to remove explor
   - **Dialogue bundle:** `.txt` and `.fountain` (alongside JSON bundle)
 - **Verification evidence:** `npm run test -- --run` and `npm run build` both pass (2026-04-21).
 
+## Completed — Writers’ Workshop 3‑column Workspace + AI Idea Assist (2026-04-21)
+
+### Goal
+
+Create a new Writers’ Workshop workspace tab that shows **three viewable columns** at once (each column can display Outline / Beats / Dialogue / Arc review / etc.), with a **hideable AI prompt bar** across the top that can pull context from any of the three columns to help with:
+
+- reframing plot via a character POV
+- dialogue variants based on beats
+- alternate ways to convey a plot device
+- backstory for a person/location/event
+- intersecting arcs between characters so the intersection feels motivated
+
+This is primarily a **layout + context-selection** improvement. Existing Writer tools remain available; the new workspace is the “cockpit”.
+
+### UI proposal
+
+- New workspace tab: **Cockpit** (`WriterWorkspaceTabId = 'cockpit'`, ribbon label **Cockpit**)
+- Each column has:
+  - view selector (Outline / Beats / Dialogue / Arc review / Lore / Shot plan / Exports)
+  - page-scoped views follow **Library → Pages** selection (same `selectedPageId` as other tabs)
+  - Find uses a concatenated digest of the three column previews (`cockpitFindText`)
+- Top AI bar (collapsible):
+  - prompt input
+  - context toggles: Include Left / Middle / Right (default: all on)
+  - optional quick templates (POV reframe, backstory, intersect arcs) as prompt presets (later)
+- AI output renders under the prompt with actions:
+  - Copy
+  - Append to local drafts: outline supplement / beats edit draft / dialogue edit draft (non-destructive; user saves elsewhere)
+
+### Edge/tooling proposal (minimal-risk first)
+
+Add a new Writer tool mode, initially **one general mode**:
+
+- `mode: "idea_assist"`
+- payload includes: `issue_id`, `prompt`, booleans `include_left|include_middle|include_right`, and optional capped string digests `context_left|context_middle|context_right` (computed client-side)
+- response returns structured JSON validated by `ideaAssistResultSchema` (at minimum `answer_markdown`; optional bullets/next steps)
+
+Keep this separate from existing generation modes so it can iterate quickly without destabilizing outline/beats/dialogue generation.
+
+### Files likely touched
+
+- UI: [`src/portals/writer/WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) (or extracted child components for the 3-column workspace)
+- Shared schemas: [`src/shared/writer/schemas.ts`](src/shared/writer/schemas.ts) + mirror [`supabase/functions/_shared/writerSchemas.ts`](supabase/functions/_shared/writerSchemas.ts)
+- Edge: [`supabase/functions/writer-tools/index.ts`](supabase/functions/writer-tools/index.ts)
+
+### Verification
+
+- `ReadLints` on touched files after substantive edits
+- `npm run test -- --run` (2026-04-21 — **98** tests passed)
+- `npm run build` (2026-04-21 — passed)
+- Optional manual browser smoke: switch each column view, toggle AI bar, run an `idea_assist` prompt with left-only and all-columns context, confirm no console errors (operator)
+
 ## Completed — Studio tags + Asset Clear workspace (2026-04-18)
 
 - **Camera angles:** [`STUDIO_CAMERA_ANGLE_OPTIONS`](src/data/asset_studio_spec.ts) is the single source for Asset **Cinematic** angle chips and **Spatial Expansion** camera chips (`SPATIAL_GALLERY_CAMERA_ANGLE_OPTIONS`). Character Studio [`CINEMATIC_OPTIONS.angle`](src/data/character_studio_spec.ts) imports the same tuple so both studios stay aligned.
@@ -874,7 +926,7 @@ IDs are stable even if image URLs change (e.g. storage migrations) and avoid dup
 
 - **`ensureWriterPagesToCount(issueId, targetCount)`** in `arcsWriterRoom.ts` — inserts missing `writer_pages` rows for 1…N (cap 500).
 - **`WriterPortal`:** Issue Outline — **Sync pages to target**, **Generate outline**, **Download outline**, **Delete latest outline**. Beats tab — **Pick pages (max 5)** + **Generate beats for selected**, **Director notes for beats**, **Skip pages that already have beats**, **Generate all beats** (batch 5 + `batch_offset` when not skipping existing), **Cancel after this batch** (multi-round “all” only); **xl** two-column layout (controls | sticky beats preview); per-page **Download / Clear beats**. Dialogue — **Download / Clear dialogue** per page. **Arc tab** — batch arc tools as before; **WriterStudioDock** slightly wider on desktop.
-- **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌥⌘1–7): **Outline → Lore → Beats → Dialogue → Video → Arc → Scripts**.
+- **Tab order (single source):** `WRITER_WORKSPACE_TAB_ORDER` + `WRITER_WORKSPACE_TAB_LABELS` in `writerSearch.ts`; consumed by `WriterPortal` headings, `WriterRibbon`, and `useWriterHotkeys` (⌥⌘1–8): **Cockpit → Outline → Lore → Beats → Dialogue → Video → Arc → Scripts**.
 - **`writerNextStep.ts`:** `getWriterQuickGenerateNextHint` for ribbon AI quick-generate tooltip; **Pipeline** strip under ribbon with per-tab completion heuristics + same hint on wide screens.
 - **Help:** `WRITER_UI_TIPS` entries for sync, batch beats, arc batch multi-select; keyboard blurb matches new tab order.
 

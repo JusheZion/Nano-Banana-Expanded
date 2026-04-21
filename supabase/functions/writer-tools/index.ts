@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import {
   canonCheckResultSchema,
   draftDialogueResultSchema,
+  ideaAssistResultSchema,
   issueOutlineSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
@@ -727,6 +728,70 @@ function buildShotPlanUserPrompt(args: {
   ].join('\n');
 }
 
+function buildIdeaAssistUserPrompt(args: {
+  issue: IssueRow;
+  prompt: string;
+  includeLeft: boolean;
+  includeMiddle: boolean;
+  includeRight: boolean;
+  contextLeft?: string;
+  contextMiddle?: string;
+  contextRight?: string;
+  pageNumber?: number | null;
+}): string {
+  const s = args.issue.writer_series;
+  const seriesBlock = s
+    ? JSON.stringify(
+        {
+          title: s.title,
+          logline: s.logline,
+          genre: s.genre,
+          tone: s.tone,
+          target_demographic: s.target_demographic,
+        },
+        null,
+        2,
+      )
+    : '{}';
+
+  const blocks: string[] = [];
+  if (args.includeLeft && args.contextLeft?.trim()) {
+    blocks.push(`LEFT COLUMN DIGEST:\n${args.contextLeft.trim()}`);
+  }
+  if (args.includeMiddle && args.contextMiddle?.trim()) {
+    blocks.push(`MIDDLE COLUMN DIGEST:\n${args.contextMiddle.trim()}`);
+  }
+  if (args.includeRight && args.contextRight?.trim()) {
+    blocks.push(`RIGHT COLUMN DIGEST:\n${args.contextRight.trim()}`);
+  }
+
+  return [
+    `You are a senior comics story editor + writers' room partner.`,
+    `Help the author with brainstorming, rewrites, continuity checks, and craft — but do not claim database facts that are not in the provided context.`,
+    '',
+    `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
+    `Status: ${args.issue.status}`,
+    `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    args.pageNumber != null ? `Focused page number (if provided): ${args.pageNumber}` : '',
+    `Series context:\n${seriesBlock}`,
+    '',
+    `Author request:\n${args.prompt.trim()}`,
+    '',
+    blocks.length ? `Context (may be partial/truncated on the client):\n\n${blocks.join('\n\n')}` : 'Context: (none provided)',
+    '',
+    'Output JSON only (no markdown fences). Return keys:',
+    '{',
+    '  "answer_markdown": string (required; Markdown is OK inside the string),',
+    '  "title"?: string,',
+    '  "bullets"?: string[],',
+    '  "next_steps"?: string[],',
+    '  "risks"?: string[]',
+    '}',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -1345,6 +1410,98 @@ Deno.serve(async (req) => {
           issue_id,
           shot_plan_id: insertedShot.id,
           version: insertedShot.version,
+        },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'idea_assist') {
+      const {
+        issue_id,
+        prompt,
+        include_left: includeLeftIn,
+        include_middle: includeMiddleIn,
+        include_right: includeRightIn,
+        context_left,
+        context_middle,
+        context_right,
+        page_id: pageId,
+      } = parsedReq.data;
+
+      const includeLeft = includeLeftIn !== false;
+      const includeMiddle = includeMiddleIn !== false;
+      const includeRight = includeRightIn !== false;
+
+      const row = await loadIssueRow(supabase, issue_id);
+      if (!row) {
+        return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
+      }
+
+      let focusPageNumber: number | null | undefined = undefined;
+      if (pageId) {
+        const { data: pageRow, error: pageErr } = await supabase
+          .from('writer_pages')
+          .select('id, issue_id, page_number')
+          .eq('id', pageId)
+          .maybeSingle();
+        if (pageErr) {
+          return Response.json(
+            { success: false, error: 'Failed to load page', details: pageErr.message },
+            { status: 500, headers: corsHeaders },
+          );
+        }
+        if (!pageRow || pageRow.issue_id !== issue_id) {
+          return Response.json(
+            { success: false, error: 'Invalid page_id for this issue' },
+            { status: 400, headers: corsHeaders },
+          );
+        }
+        focusPageNumber = typeof pageRow.page_number === 'number' ? pageRow.page_number : null;
+      }
+
+      const system =
+        'You are a comics writers’ room assistant. Output only valid JSON. No markdown fences. Be specific and actionable.';
+      const userPrompt = buildIdeaAssistUserPrompt({
+        issue: row,
+        prompt,
+        includeLeft,
+        includeMiddle,
+        includeRight,
+        contextLeft: context_left,
+        contextMiddle: context_middle,
+        contextRight: context_right,
+        pageNumber: focusPageNumber,
+      });
+
+      let ideaJson: unknown;
+      try {
+        ideaJson = await callGeminiJson({
+          system,
+          user: userPrompt,
+          preferredModel: geminiModel,
+          apiKey: geminiKey,
+          temperature: 0.55,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return llmFailureResponse(msg);
+      }
+
+      const ideaParsed = ideaAssistResultSchema.safeParse(ideaJson);
+      if (!ideaParsed.success) {
+        return Response.json(
+          { success: false, error: 'Idea assist failed validation', details: ideaParsed.error.message },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+
+      return Response.json(
+        {
+          success: true,
+          mode: 'idea_assist',
+          data: ideaParsed.data,
+          issue_id,
+          ...(pageId ? { page_id: pageId } : {}),
         },
         { headers: corsHeaders },
       );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ideaAssistResultSchema,
   issueOutlineSchema,
   pageBeatsJsonSchema,
   pacingReviewResultSchema,
@@ -204,6 +205,36 @@ describe('writerToolsRequestSchema', () => {
         creative_brief: 'Trailer tone',
       }),
     ).toMatchObject({ mode: 'plan_shots_from_issue', creative_brief: 'Trailer tone' });
+  });
+
+  it('parses idea_assist request', () => {
+    const issueId = '550e8400-e29b-41d4-a716-446655440000';
+    const pageId = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+    const r = writerToolsRequestSchema.parse({
+      mode: 'idea_assist',
+      issue_id: issueId,
+      page_id: pageId,
+      prompt: 'Give 3 dialogue variants grounded in beats.',
+      include_left: true,
+      include_middle: false,
+      include_right: true,
+      context_left: 'LEFT',
+      context_right: 'RIGHT',
+    });
+    expect(r).toMatchObject({
+      mode: 'idea_assist',
+      issue_id: issueId,
+      page_id: pageId,
+      include_middle: false,
+    });
+  });
+
+  it('ideaAssistResultSchema requires answer_markdown', () => {
+    const r = ideaAssistResultSchema.parse({
+      answer_markdown: 'Here is the answer.',
+      bullets: ['A', 'B'],
+    });
+    expect(r.answer_markdown).toContain('answer');
   });
 
   it('pacingReviewResultSchema requires overall_pacing', () => {

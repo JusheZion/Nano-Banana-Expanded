@@ -85,7 +85,7 @@ import {
   WRITERS_TIFFANY_TEXT,
   WRITERS_WORKSHOP_BG,
 } from '@/shared/theme/Phase12DesignTokens';
-import { WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
+import { ideaAssistResultSchema, WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
 import type { PageBeatsJson } from '@/shared/writer/types';
 
 const titleTextStyle: React.CSSProperties = {
@@ -103,6 +103,107 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   id,
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
+
+type WriterCockpitPanelView =
+  | 'outline'
+  | 'beats'
+  | 'dialogue'
+  | 'arc'
+  | 'lore'
+  | 'video'
+  | 'scripts';
+
+const COCKPIT_VIEW_OPTIONS: { id: WriterCockpitPanelView; label: string }[] = [
+  { id: 'outline', label: 'Outline' },
+  { id: 'beats', label: 'Beats' },
+  { id: 'dialogue', label: 'Dialogue' },
+  { id: 'arc', label: 'Arc review' },
+  { id: 'lore', label: 'Lore' },
+  { id: 'video', label: 'Shot plan' },
+  { id: 'scripts', label: 'Synopsis helper' },
+];
+
+const WRITER_COCKPIT_DIGEST_CAP = 12_000;
+
+function truncateWriterPromptText(raw: string, cap: number): string {
+  const t = raw.trim();
+  if (!t) return '';
+  if (t.length <= cap) return t;
+  return `${t.slice(0, cap)}\n\n…(truncated)`;
+}
+
+type WriterCockpitDigestContext = {
+  view: WriterCockpitPanelView;
+  outlineJson: unknown | null;
+  selectedPage: WriterPageRow | null;
+  pacingSaved: { at?: string; result?: unknown } | undefined;
+  canonSaved: { at?: string; result?: unknown } | undefined;
+  loreCards: WriterLoreCardRow[];
+  latestShotPlanJson: unknown | null;
+  shotsBrief: string;
+  synopsisParts: SynopsisHelperParts;
+};
+
+function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
+  const cap = WRITER_COCKPIT_DIGEST_CAP;
+
+  switch (ctx.view) {
+    case 'outline': {
+      if (!ctx.outlineJson) return '(No outline yet for this issue.)';
+      const text = formatOutlineAsText(ctx.outlineJson);
+      return truncateWriterPromptText(text, cap);
+    }
+    case 'beats': {
+      if (!ctx.selectedPage) return '(No page selected in Library — pick a page to preview beats.)';
+      const text = formatBeatsBundleAsText([{ page_number: ctx.selectedPage.page_number, beats_json: ctx.selectedPage.beats_json }]);
+      const header = `FOCUS: Page ${ctx.selectedPage.page_number} (Library selection)\n\n`;
+      return truncateWriterPromptText(`${header}${text}`, cap);
+    }
+    case 'dialogue': {
+      if (!ctx.selectedPage) return '(No page selected in Library — pick a page to preview dialogue.)';
+      const text = formatDialogueBundleAsText([
+        { page_number: ctx.selectedPage.page_number, script_text: ctx.selectedPage.script_text },
+      ]);
+      const header = `FOCUS: Page ${ctx.selectedPage.page_number} (Library selection)\n\n`;
+      return truncateWriterPromptText(`${header}${text}`, cap);
+    }
+    case 'arc': {
+      const text = formatArcReviewPlainText(ctx.pacingSaved, ctx.canonSaved);
+      return truncateWriterPromptText(text || '(No pacing/canon runs saved for this issue yet.)', cap);
+    }
+    case 'lore': {
+      if (ctx.loreCards.length === 0) return '(No lore cards for this series yet.)';
+      const lines = ctx.loreCards.map((c) => {
+        const title = typeof c.title === 'string' ? c.title.trim() : '';
+        const category = typeof c.category === 'string' ? c.category.trim() : 'world';
+        const body = typeof c.body === 'string' ? c.body.trim() : '';
+        const inc = c.include_in_prompt ? 'include' : 'exclude';
+        return [`## ${title || '(untitled)'} (${category}) [${inc}]`, body].filter(Boolean).join('\n\n');
+      });
+      return truncateWriterPromptText(lines.join('\n\n'), cap);
+    }
+    case 'video': {
+      const brief = ctx.shotsBrief.trim();
+      const shotJson = ctx.latestShotPlanJson;
+      const parts: string[] = [];
+      parts.push('VIDEO / SHOT PLAN DIGEST');
+      if (brief) parts.push('', 'Director / creative brief (Video tab):', brief);
+      if (shotJson) {
+        parts.push('', 'Latest saved shot plan JSON:', JSON.stringify(shotJson, null, 2));
+      } else {
+        parts.push('', '(No saved shot plan yet for this issue.)');
+      }
+      return truncateWriterPromptText(parts.join('\n'), cap);
+    }
+    case 'scripts': {
+      const doc = buildSynopsisDocumentFromParts(ctx.synopsisParts).trim();
+      return truncateWriterPromptText(doc || '(Synopsis helper is empty — open Scripts & exports to fill sections.)', cap);
+    }
+    default: {
+      return '';
+    }
+  }
+}
 
 function normalizeLoreKeyPart(v: unknown): string {
   if (typeof v !== 'string') return '';
@@ -240,6 +341,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [canonError, setCanonError] = useState<string | null>(null);
   const [shotsLoading, setShotsLoading] = useState(false);
   const [shotsError, setShotsError] = useState<string | null>(null);
+  const [cockpitLeftView, setCockpitLeftView] = useState<WriterCockpitPanelView>('outline');
+  const [cockpitMiddleView, setCockpitMiddleView] = useState<WriterCockpitPanelView>('beats');
+  const [cockpitRightView, setCockpitRightView] = useState<WriterCockpitPanelView>('dialogue');
+  const [cockpitAiBarCollapsed, setCockpitAiBarCollapsed] = useState(false);
+  const [cockpitIdeaPromptDraft, setCockpitIdeaPromptDraft] = useState('');
+  const [cockpitIncludeLeft, setCockpitIncludeLeft] = useState(true);
+  const [cockpitIncludeMiddle, setCockpitIncludeMiddle] = useState(true);
+  const [cockpitIncludeRight, setCockpitIncludeRight] = useState(true);
+  const [cockpitIdeaFocus, setCockpitIdeaFocus] = useState<'left' | 'middle' | 'right'>('left');
+  const [cockpitIdeaLoading, setCockpitIdeaLoading] = useState(false);
+  const [cockpitIdeaError, setCockpitIdeaError] = useState<string | null>(null);
+  const [cockpitIdeaOutput, setCockpitIdeaOutput] = useState('');
   const [aiHistory, setAiHistory] = useState<string[]>([]);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [createSeriesBusy, setCreateSeriesBusy] = useState(false);
@@ -829,6 +942,148 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [loreCards],
   );
 
+  const cockpitDigestBase = useMemo(
+    () =>
+      ({
+        outlineJson: latestOutline?.outline_json ?? null,
+        selectedPage,
+        pacingSaved,
+        canonSaved,
+        loreCards,
+        latestShotPlanJson: latestShotPlan?.shot_plan_json ?? null,
+        shotsBrief,
+        synopsisParts: synopsisHelperParts,
+      }) satisfies Omit<WriterCockpitDigestContext, 'view'>,
+    [latestOutline, selectedPage, pacingSaved, canonSaved, loreCards, latestShotPlan, shotsBrief, synopsisHelperParts],
+  );
+
+  const cockpitFindText = useMemo(() => {
+    const hdr = (name: string, view: WriterCockpitPanelView) =>
+      `${name} — ${COCKPIT_VIEW_OPTIONS.find((o) => o.id === view)?.label ?? view}`;
+    const left = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitLeftView });
+    const mid = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitMiddleView });
+    const right = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitRightView });
+    return [
+      hdr('Left', cockpitLeftView),
+      left,
+      '',
+      hdr('Middle', cockpitMiddleView),
+      mid,
+      '',
+      hdr('Right', cockpitRightView),
+      right,
+      '',
+      'Idea assist prompt:',
+      cockpitIdeaPromptDraft,
+      '',
+      'Idea assist output:',
+      cockpitIdeaOutput,
+    ].join('\n');
+  }, [
+    cockpitLeftView,
+    cockpitMiddleView,
+    cockpitRightView,
+    latestOutline,
+    selectedPage,
+    pacingSaved,
+    canonSaved,
+    loreCards,
+    latestShotPlan,
+    shotsBrief,
+    synopsisHelperParts,
+    cockpitIdeaPromptDraft,
+    cockpitIdeaOutput,
+    cockpitDigestBase,
+  ]);
+
+  const runCockpitIdeaAssist = useCallback(async () => {
+    if (!selectedIssueId) return;
+    const prompt = cockpitIdeaPromptDraft.trim();
+    if (!prompt) return;
+
+    setCockpitIdeaLoading(true);
+    setCockpitIdeaError(null);
+
+    const leftRaw = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitLeftView });
+    const midRaw = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitMiddleView });
+    const rightRaw = buildWriterCockpitViewDigest({ ...cockpitDigestBase, view: cockpitRightView });
+
+    const left = truncateWriterPromptText(leftRaw, 16_000);
+    const middle = truncateWriterPromptText(midRaw, 16_000);
+    const right = truncateWriterPromptText(rightRaw, 16_000);
+
+    const pageScopedViews: WriterCockpitPanelView[] = ['beats', 'dialogue'];
+    const focusView =
+      cockpitIdeaFocus === 'left'
+        ? cockpitLeftView
+        : cockpitIdeaFocus === 'middle'
+          ? cockpitMiddleView
+          : cockpitRightView;
+    const pageIdForAssist =
+      selectedPageId && pageScopedViews.includes(focusView) ? selectedPageId : undefined;
+
+    const res = await invokeWriterTools({
+      mode: 'idea_assist',
+      issue_id: selectedIssueId,
+      prompt,
+      include_left: cockpitIncludeLeft,
+      include_middle: cockpitIncludeMiddle,
+      include_right: cockpitIncludeRight,
+      ...(left ? { context_left: left } : {}),
+      ...(middle ? { context_middle: middle } : {}),
+      ...(right ? { context_right: right } : {}),
+      ...(pageIdForAssist ? { page_id: pageIdForAssist } : {}),
+    });
+
+    setCockpitIdeaLoading(false);
+
+    if (!res.success) {
+      const msg = toolErrorMessage(res);
+      setCockpitIdeaError(msg);
+      pushHistory(`error: idea assist — ${msg}`);
+      return;
+    }
+
+    const parsed = ideaAssistResultSchema.safeParse(res.data);
+    if (!parsed.success) {
+      const msg = 'Idea assist returned unexpected JSON';
+      setCockpitIdeaError(msg);
+      pushHistory(`error: ${msg}`);
+      return;
+    }
+
+    const d = parsed.data;
+    const pieces: string[] = [];
+    if (d.title?.trim()) pieces.push(`# ${d.title.trim()}`);
+    pieces.push(d.answer_markdown.trim());
+    if (d.bullets?.length) {
+      pieces.push('', '## Notes', ...d.bullets.map((b) => `- ${b}`));
+    }
+    if (d.next_steps?.length) {
+      pieces.push('', '## Next steps', ...d.next_steps.map((b) => `- ${b}`));
+    }
+    if (d.risks?.length) {
+      pieces.push('', '## Risks', ...d.risks.map((b) => `- ${b}`));
+    }
+
+    const out = pieces.filter(Boolean).join('\n\n').trim();
+    setCockpitIdeaOutput(out);
+    pushHistory('idea assist — ok');
+  }, [
+    selectedIssueId,
+    cockpitIdeaPromptDraft,
+    cockpitIncludeLeft,
+    cockpitIncludeMiddle,
+    cockpitIncludeRight,
+    cockpitLeftView,
+    cockpitMiddleView,
+    cockpitRightView,
+    cockpitIdeaFocus,
+    selectedPageId,
+    cockpitDigestBase,
+    pushHistory,
+  ]);
+
   const searchableCtx = useMemo(
     () => ({
       activeTab,
@@ -839,8 +1094,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pacingReview: pacingSaved,
       canonCheck: canonSaved,
       loreCardsFindText,
+      cockpitFindText,
     }),
-    [activeTab, latestOutline, latestShotPlan, selectedPage, pacingSaved, canonSaved, loreCardsFindText],
+    [
+      activeTab,
+      latestOutline,
+      latestShotPlan,
+      selectedPage,
+      pacingSaved,
+      canonSaved,
+      loreCardsFindText,
+      cockpitFindText,
+    ],
   );
 
   const searchableText = useMemo(() => getWriterSearchableText(searchableCtx), [searchableCtx]);
@@ -1377,6 +1642,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'scripts' || activeTab === 'lore') return;
+    if (activeTab === 'cockpit' && selectedIssueId) {
+      await runCockpitIdeaAssist();
+      return;
+    }
     if (activeTab === 'outline' && selectedIssueId) {
       await runOutlineGenerate();
       return;
@@ -1454,12 +1723,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     shotsBrief,
     runPacingFromRibbon,
     runOutlineGenerate,
+    runCockpitIdeaAssist,
     pushHistory,
   ]);
 
   const quickGenerateLabel =
     activeTab === 'scripts' || activeTab === 'lore'
       ? '—'
+      : activeTab === 'cockpit'
+        ? cockpitIdeaPromptDraft.trim()
+          ? 'Run Idea assist'
+          : '—'
       : activeTab === 'arc'
         ? 'Run pacing review'
         : activeTab === 'outline'
@@ -1475,6 +1749,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     beatsLoading ||
     dialogueLoading ||
     shotsLoading ||
+    (activeTab === 'cockpit' && cockpitIdeaLoading) ||
     (activeTab === 'arc' && (pacingLoading || arcBatchBusy)) ||
     (activeTab === 'beats' && beatsBatchBusy);
 
@@ -1483,6 +1758,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab === 'lore' ||
     !supabaseOk ||
     !selectedIssueId ||
+    (activeTab === 'cockpit' && (!cockpitIdeaPromptDraft.trim() || cockpitIdeaLoading)) ||
     (activeTab === 'beats' && (!selectedPageId || beatsBatchBusy)) ||
     (activeTab === 'dialogue' && !selectedPageId) ||
     (activeTab === 'arc' && arcBatchBusy);
@@ -2155,6 +2431,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const preShell = `${textScaleClass} leading-relaxed whitespace-pre-wrap break-words rounded-xl bg-black/15 border border-white/25 backdrop-blur-sm p-3 overflow-y-auto min-h-0 custom-scrollbar`;
 
+  const appendTextToField = useCallback((setter: React.Dispatch<React.SetStateAction<string>>, chunk: string) => {
+    const next = chunk.trim();
+    if (!next) return;
+    setter((prev) => {
+      const base = prev.trim();
+      if (!base) return `${next}\n`;
+      return `${base}\n\n${next}\n`;
+    });
+  }, []);
+
+  const cockpitColumnPreview = (view: WriterCockpitPanelView) =>
+    buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
+
   return (
     <div
       className="flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
@@ -2260,6 +2549,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           const done =
             id === 'scripts'
               ? false
+              : id === 'cockpit'
+                ? Boolean(
+                    latestOutline &&
+                      sortedPages.length > 0 &&
+                      pagesWithBeatsCount >= sortedPages.length &&
+                      pagesWithBeatsCount > 0 &&
+                      pagesWithScriptCount >= pagesWithBeatsCount &&
+                      loreCards.length > 0 &&
+                      latestShotPlan &&
+                      (pacingSaved?.result ?? canonSaved?.result),
+                  )
               : id === 'outline'
                 ? Boolean(latestOutline)
                 : id === 'lore'
@@ -2336,6 +2636,257 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {imageWorkshopError}
                   </p>
                 ) : null}
+                {activeTab === 'cockpit' && (
+                  <div className="space-y-4">
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                            Writers&apos; cockpit
+                          </p>
+                          <p className="text-xs text-black/70 leading-snug max-w-3xl">
+                            Compare up to three read-only views side-by-side. Beats/Dialogue/Shot plan digests follow your{' '}
+                            <strong className="text-black/80">Library → selected page</strong>. Use{' '}
+                            <strong className="text-black/80">Idea assist</strong> for non-destructive brainstorming — then copy
+                            or append into drafts on other tabs.
+                          </p>
+                          {!selectedIssueId ? (
+                            <p className="text-xs text-amber-900/90 bg-amber-50/80 border border-amber-200/70 rounded-lg px-3 py-2">
+                              Select an issue in Library to load story context.
+                            </p>
+                          ) : null}
+                          {!selectedPageId ? (
+                            <p className="text-xs text-black/55">
+                              Tip: select a page in Library for page-scoped previews (beats/dialogue).
+                            </p>
+                          ) : (
+                            <p className="text-xs text-black/55">
+                              Selected page:{' '}
+                              <span className="font-bold text-black/75">
+                                Page {selectedPage?.page_number ?? '?'}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        <WriterSectionTip tipKey="cockpitTab" label="About the cockpit" />
+                      </div>
+                    </div>
+
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">Idea assist</p>
+                        <button
+                          type="button"
+                          className="text-[10px] font-bold uppercase tracking-wide rounded-full border border-black/15 bg-white/40 px-3 py-1 hover:bg-white/70"
+                          onClick={() => setCockpitAiBarCollapsed((c) => !c)}
+                        >
+                          {cockpitAiBarCollapsed ? 'Show' : 'Hide'}
+                        </button>
+                      </div>
+
+                      {!cockpitAiBarCollapsed ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-black/70">
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={cockpitIncludeLeft}
+                                onChange={(e) => setCockpitIncludeLeft(e.target.checked)}
+                              />
+                              Include left digest
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={cockpitIncludeMiddle}
+                                onChange={(e) => setCockpitIncludeMiddle(e.target.checked)}
+                              />
+                              Include middle digest
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={cockpitIncludeRight}
+                                onChange={(e) => setCockpitIncludeRight(e.target.checked)}
+                              />
+                              Include right digest
+                            </label>
+                          </div>
+
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-cockpit-idea-prompt">
+                            Prompt
+                            <textarea
+                              id="writer-cockpit-idea-prompt"
+                              value={cockpitIdeaPromptDraft}
+                              onChange={(e) => setCockpitIdeaPromptDraft(e.target.value)}
+                              rows={4}
+                              disabled={!supabaseOk || !selectedIssueId}
+                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[96px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder="Ask for alternates, tighten a scene beat, check continuity, brainstorm covers…"
+                            />
+                          </label>
+
+                          <div className="flex flex-wrap gap-2 text-[10px] text-black/55">
+                            <span className="font-bold text-black/45 uppercase tracking-wide">Focus for page_id</span>
+                            <button
+                              type="button"
+                              className={`rounded-full px-2 py-0.5 border ${
+                                cockpitIdeaFocus === 'left'
+                                  ? 'border-amber-700 bg-amber-100 text-black'
+                                  : 'border-black/10 bg-white/40 text-black/70 hover:bg-white/70'
+                              }`}
+                              onClick={() => setCockpitIdeaFocus('left')}
+                            >
+                              Left
+                            </button>
+                            <button
+                              type="button"
+                              className={`rounded-full px-2 py-0.5 border ${
+                                cockpitIdeaFocus === 'middle'
+                                  ? 'border-amber-700 bg-amber-100 text-black'
+                                  : 'border-black/10 bg-white/40 text-black/70 hover:bg-white/70'
+                              }`}
+                              onClick={() => setCockpitIdeaFocus('middle')}
+                            >
+                              Middle
+                            </button>
+                            <button
+                              type="button"
+                              className={`rounded-full px-2 py-0.5 border ${
+                                cockpitIdeaFocus === 'right'
+                                  ? 'border-amber-700 bg-amber-100 text-black'
+                                  : 'border-black/10 bg-white/40 text-black/70 hover:bg-white/70'
+                              }`}
+                              onClick={() => setCockpitIdeaFocus('right')}
+                            >
+                              Right
+                            </button>
+                            <span className="text-black/45">
+                              (Used when the focused column is Beats or Dialogue — sends optional <code className="font-mono">page_id</code>
+                              )
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!cockpitIdeaOutput.trim()}
+                              onClick={() => void navigator.clipboard.writeText(cockpitIdeaOutput)}
+                              className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
+                            >
+                              Copy output
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!cockpitIdeaOutput.trim()}
+                              onClick={() => appendTextToField(setOutlineSupplementDraft, cockpitIdeaOutput)}
+                              className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
+                            >
+                              Append to outline supplement draft
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!cockpitIdeaOutput.trim() || !selectedPageId}
+                              onClick={() => appendTextToField(setBeatsEditDraft, cockpitIdeaOutput)}
+                              className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
+                            >
+                              Append to beats JSON draft
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!cockpitIdeaOutput.trim() || !selectedPageId}
+                              onClick={() => appendTextToField(setDialogueEditDraft, cockpitIdeaOutput)}
+                              className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
+                            >
+                              Append to dialogue draft
+                            </button>
+                          </div>
+
+                          {cockpitIdeaError ? (
+                            <p className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{cockpitIdeaError}</p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-black/55">Idea assist bar hidden — use ribbon <strong>Run Idea assist</strong> (⌥⌘1) when ready.</p>
+                      )}
+                    </div>
+
+                    <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+                      {(
+                        [
+                          {
+                            key: 'left' as const,
+                            label: 'Left',
+                            view: cockpitLeftView,
+                            setView: setCockpitLeftView,
+                          },
+                          {
+                            key: 'middle' as const,
+                            label: 'Middle',
+                            view: cockpitMiddleView,
+                            setView: setCockpitMiddleView,
+                          },
+                          {
+                            key: 'right' as const,
+                            label: 'Right',
+                            view: cockpitRightView,
+                            setView: setCockpitRightView,
+                          },
+                        ] as const
+                      ).map((col) => (
+                        <div key={col.key} className={`${WRITER_GLASS_CARD} p-3 space-y-2 min-h-[260px] flex flex-col`}>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                              {col.label}
+                              <select
+                                value={col.view}
+                                onChange={(e) => col.setView(e.target.value as WriterCockpitPanelView)}
+                                className="ml-2 rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] font-bold text-black"
+                              >
+                                {COCKPIT_VIEW_OPTIONS.map((o) => (
+                                  <option key={o.id} value={o.id}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              className={`text-[10px] font-bold rounded-full px-2 py-0.5 border ${
+                                cockpitIdeaFocus === col.key
+                                  ? 'border-amber-700 bg-amber-100 text-black'
+                                  : 'border-black/10 bg-white/40 text-black/70 hover:bg-white/70'
+                              }`}
+                              onClick={() => setCockpitIdeaFocus(col.key)}
+                            >
+                              Focus
+                            </button>
+                          </div>
+                          <pre className={`${preShell} ${preFont} flex-1 min-h-[200px] max-h-[min(520px,55vh)]`}>
+                            <WriterHighlightedText
+                              text={cockpitColumnPreview(col.view)}
+                              query={findQuery}
+                              activeMatchIndex={findActiveIndex}
+                            />
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+
+                    {cockpitIdeaOutput.trim() ? (
+                      <div className={`${WRITER_GLASS_CARD} p-4 space-y-2`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">Idea assist output</p>
+                        <pre className={`${preShell} ${preFont} max-h-[min(520px,55vh)]`}>
+                          <WriterHighlightedText
+                            text={cockpitIdeaOutput}
+                            query={findQuery}
+                            activeMatchIndex={findActiveIndex}
+                          />
+                        </pre>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
                 {activeTab === 'outline' && (
                   <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(300px,40%)] xl:items-start xl:gap-4">
                     <div className="min-w-0 space-y-4">

@@ -1,6 +1,6 @@
 # Writers' Workshop
 
-_Last reviewed: 2026-04-05_
+_Last reviewed: 2026-04-21_
 
 Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon), and **shot plans**. This article is the **long-form** companion to the in-app **Ribbon → Help** modal.
 
@@ -33,7 +33,7 @@ Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon),
 
 | Shortcut | Action |
 |----------|--------|
-| ⌥⌘1–7 (Mac) / Alt+Ctrl+1–7 | Outline, Lore, Beats, Dialogue, Video, Arc, Scripts (not ⌘1–7 — browser tabs) |
+| ⌥⌘1–8 (Mac) / Alt+Ctrl+1–8 | Cockpit, Outline, Lore, Beats, Dialogue, Video, Arc, Scripts (not ⌘1–9 — browser tabs) |
 | File → Scripts & exports | Open Scripts tab from any ribbon |
 | ⌘F | Focus Find |
 | ⌘⇧H | Show / hide Library, Activity, Shortcuts |
