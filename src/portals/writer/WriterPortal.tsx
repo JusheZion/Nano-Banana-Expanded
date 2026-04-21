@@ -51,6 +51,14 @@ import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterS
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import {
+  formatBeatsBundleAsMarkdown,
+  formatBeatsBundleAsText,
+  formatDialogueBundleAsFountain,
+  formatDialogueBundleAsText,
+  formatOutlineAsMarkdown,
+  formatOutlineAsText,
+} from '@/portals/writer/writerExportFormats';
+import {
   countFindMatches,
   formatArcReviewPlainText,
   getWriterSearchableText,
@@ -220,6 +228,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [dialogueLoading, setDialogueLoading] = useState(false);
   const [dialogueError, setDialogueError] = useState<string | null>(null);
   const [dialogueStyle, setDialogueStyle] = useState<'comic_script' | 'screenplay_light'>('comic_script');
+  const [dialogueSkipExisting, setDialogueSkipExisting] = useState(true);
+  const [dialogueBatchBusy, setDialogueBatchBusy] = useState(false);
+  const [dialogueBatchLabel, setDialogueBatchLabel] = useState('');
+  const dialogueBatchAbortRef = useRef<AbortController | null>(null);
   const [shotPlans, setShotPlans] = useState<WriterVideoShotPlanRow[]>([]);
   const [shotsBrief, setShotsBrief] = useState('');
   const [pacingLoading, setPacingLoading] = useState(false);
@@ -1097,6 +1109,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory(`downloaded beats bundle (${sorted.length} page(s))`);
   }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
 
+  const downloadSelectedBeatsBundleText = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    const body = formatBeatsBundleAsText(sorted.map((p) => ({ page_number: p.page_number, beats_json: p.beats_json })));
+    downloadTextFile(
+      `writer-beats-pages-${sorted.map((p) => p.page_number).join('-')}.txt`,
+      body,
+      'text/plain;charset=utf-8',
+    );
+    pushHistory(`downloaded beats bundle (text) (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
+
+  const downloadSelectedBeatsBundleMarkdown = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    const body = formatBeatsBundleAsMarkdown(
+      sorted.map((p) => ({ page_number: p.page_number, beats_json: p.beats_json })),
+    );
+    downloadTextFile(
+      `writer-beats-pages-${sorted.map((p) => p.page_number).join('-')}.md`,
+      body,
+      'text/markdown;charset=utf-8',
+    );
+    pushHistory(`downloaded beats bundle (md) (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
+
   const downloadSelectedDialogueBundle = useCallback(() => {
     if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
     const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
@@ -1109,6 +1147,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       })),
     });
     pushHistory(`downloaded dialogue bundle (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
+
+  const downloadSelectedDialogueBundleText = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    const body = formatDialogueBundleAsText(sorted.map((p) => ({ page_number: p.page_number, script_text: p.script_text })));
+    downloadTextFile(
+      `writer-dialogue-pages-${sorted.map((p) => p.page_number).join('-')}.txt`,
+      body,
+      'text/plain;charset=utf-8',
+    );
+    pushHistory(`downloaded dialogue bundle (text) (${sorted.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
+
+  const downloadSelectedDialogueBundleFountain = useCallback(() => {
+    if (!selectedIssueId || selectedPagesForBatchExport.length === 0) return;
+    const sorted = [...selectedPagesForBatchExport].sort((a, b) => a.page_number - b.page_number);
+    const body = formatDialogueBundleAsFountain(
+      sorted.map((p) => ({ page_number: p.page_number, script_text: p.script_text })),
+    );
+    downloadTextFile(
+      `writer-dialogue-pages-${sorted.map((p) => p.page_number).join('-')}.fountain`,
+      body,
+      'text/plain;charset=utf-8',
+    );
+    pushHistory(`downloaded dialogue bundle (fountain) (${sorted.length} page(s))`);
   }, [selectedIssueId, selectedPagesForBatchExport, pushHistory]);
 
   const clearBeatsForSelectedPage = useCallback(async () => {
@@ -1245,6 +1309,86 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchSource(null);
     }
   }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting, beatsDirectorNotesDraft, pushHistory]);
+
+  const runBatchDialogueForSelectedPages = useCallback(async () => {
+    if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
+    if (dialogueBatchBusy) return;
+
+    dialogueBatchAbortRef.current = new AbortController();
+    setDialogueBatchBusy(true);
+    setDialogueBatchLabel('Queued…');
+    setDialogueError(null);
+
+    try {
+      const ordered = sortedPages.filter((p) => selectedPageIdsForBatch.includes(p.id));
+      const candidates = ordered.filter((p) => {
+        if (!dialogueSkipExisting) return true;
+        return (p.script_text ?? '').trim().length === 0;
+      });
+
+      const skippedCount = ordered.length - candidates.length;
+      const chunkSize = 5;
+      const chunks: WriterPageRow[][] = [];
+      for (let i = 0; i < candidates.length; i += chunkSize) {
+        chunks.push(candidates.slice(i, i + chunkSize));
+      }
+
+      let okCount = 0;
+      let errCount = 0;
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        if (dialogueBatchAbortRef.current?.signal.aborted) {
+          pushHistory('batch dialogue cancelled');
+          break;
+        }
+
+        const chunk = chunks[chunkIndex]!;
+        setDialogueBatchLabel(
+          `Batch dialogue: ${okCount}/${candidates.length} (ok ${okCount}${skippedCount ? ` · skipped ${skippedCount}` : ''}${errCount ? ` · errors ${errCount}` : ''})`,
+        );
+
+        const settled = await Promise.allSettled(
+          chunk.map(async (p) => {
+            const res = await invokeWriterTools({
+              mode: 'draft_dialogue',
+              page_id: p.id,
+              style: dialogueStyle,
+            });
+            return res.success;
+          }),
+        );
+
+        for (const r of settled) {
+          if (r.status === 'fulfilled') {
+            if (r.value) okCount += 1;
+            else errCount += 1;
+          } else {
+            errCount += 1;
+          }
+        }
+
+        const pageRows = await listWriterPages(selectedIssueId);
+        setPages(pageRows);
+      }
+
+      setDialogueBatchLabel(
+        `Done: ok ${okCount}${skippedCount ? ` · skipped ${skippedCount}` : ''}${errCount ? ` · errors ${errCount}` : ''}`,
+      );
+      pushHistory(
+        `batch dialogue finished (${okCount} ok${skippedCount ? `, ${skippedCount} skipped` : ''}${errCount ? `, ${errCount} errors` : ''})`,
+      );
+    } finally {
+      setDialogueBatchBusy(false);
+      dialogueBatchAbortRef.current = null;
+    }
+  }, [
+    selectedIssueId,
+    selectedPageIdsForBatch,
+    dialogueBatchBusy,
+    dialogueSkipExisting,
+    sortedPages,
+    dialogueStyle,
+    pushHistory,
+  ]);
 
   const quickGenerate = useCallback(async () => {
     if (activeTab === 'scripts' || activeTab === 'lore') return;
@@ -1783,6 +1927,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ) : null}
         {selectedPageIdsForBatch.length > 0 ? (
           <div className="flex flex-wrap gap-1 mb-1">
+            <label className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-[10px] font-semibold text-black/75 border border-black/15 bg-white/50">
+              <input
+                type="checkbox"
+                checked={dialogueSkipExisting}
+                onChange={(e) => setDialogueSkipExisting(e.target.checked)}
+                disabled={dialogueBatchBusy}
+                className="rounded border-black/30"
+              />
+              Skip pages that already have dialogue
+            </label>
             <button
               type="button"
               disabled={libraryPagesBusy || !supabaseOk}
@@ -1818,12 +1972,78 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <button
               type="button"
               disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedBeatsBundleText()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
+              title="Download selected beats as plain text"
+            >
+              Beats .txt
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedBeatsBundleMarkdown()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
+              title="Download selected beats as Markdown"
+            >
+              Beats .md
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
               onClick={() => downloadSelectedDialogueBundle()}
               className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
             >
               Download dialogue
             </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedDialogueBundleText()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
+              title="Download selected dialogue as plain text"
+            >
+              Dialogue .txt
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || selectedPagesForBatchExport.length === 0}
+              onClick={() => downloadSelectedDialogueBundleFountain()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
+              title="Download selected dialogue as Fountain"
+            >
+              Dialogue .fountain
+            </button>
+            <button
+              type="button"
+              disabled={
+                !supabaseOk ||
+                !selectedIssueId ||
+                selectedPageIdsForBatch.length === 0 ||
+                dialogueBatchBusy ||
+                dialogueLoading ||
+                libraryPagesBusy
+              }
+              onClick={() => void runBatchDialogueForSelectedPages()}
+              className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80 disabled:opacity-45"
+              title="Generate dialogue for selected pages in chunks of 5"
+            >
+              {dialogueBatchBusy ? 'Generating…' : 'Generate dialogue (batch)'}
+            </button>
+            {dialogueBatchBusy ? (
+              <button
+                type="button"
+                onClick={() => {
+                  dialogueBatchAbortRef.current?.abort();
+                }}
+                className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/20 bg-white/80"
+              >
+                Cancel after this chunk
+              </button>
+            ) : null}
           </div>
+        ) : null}
+        {selectedPageIdsForBatch.length > 0 && dialogueBatchLabel ? (
+          <p className="text-[10px] text-black/50 leading-snug mb-1">{dialogueBatchLabel}</p>
         ) : null}
         <div className="max-h-36 overflow-y-auto custom-scrollbar space-y-1">
           {sortedPages.map((p) => {
@@ -3535,6 +3755,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
                         Download outline JSON
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!latestOutline}
+                        onClick={() => {
+                          if (!latestOutline) return;
+                          const body = formatOutlineAsText(latestOutline.outline_json);
+                          downloadTextFile(
+                            `writer-outline-v${latestOutline.version}.txt`,
+                            body,
+                            'text/plain;charset=utf-8',
+                          );
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Outline .txt
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!latestOutline}
+                        onClick={() => {
+                          if (!latestOutline) return;
+                          const body = formatOutlineAsMarkdown(latestOutline.outline_json);
+                          downloadTextFile(
+                            `writer-outline-v${latestOutline.version}.md`,
+                            body,
+                            'text/markdown;charset=utf-8',
+                          );
+                        }}
+                        className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                      >
+                        Outline .md
                       </button>
                       <button
                         type="button"
