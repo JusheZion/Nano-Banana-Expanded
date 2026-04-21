@@ -286,6 +286,128 @@ export async function saveAssetToDb(
   return { ok: true, id, imageUrl: finalImageUrl };
 }
 
+/** `metadata_tags.source` for rows created from Imageshop import + process (no full studio state). */
+export const IMAGESHOP_IMPORT_METADATA_SOURCE = 'imageshop_import' as const;
+
+/**
+ * Save a processed import image to `characters` without hydrating Character Studio state.
+ * Uses minimal `metadata_tags` (source + optional `processing` payload).
+ */
+export async function saveImportedImageToCharacterVault(args: {
+  imageUrl: string;
+  baseName?: string;
+  profileName?: string;
+  castName?: string;
+  seed?: number | null;
+  processing?: Record<string, unknown>;
+}): Promise<SaveCharacterResult> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const imageUrl = args.imageUrl.trim();
+  if (!imageUrl) return { ok: false, error: 'No image to save' };
+
+  const base =
+    args.baseName?.trim() ||
+    args.profileName?.trim() ||
+    args.castName?.trim() ||
+    'import';
+
+  const { data: rows } = await supabase.from('characters').select('id').limit(5000);
+  const existingIds = (rows ?? []).map((r) => r.id);
+  const id = generateSemanticId('CHAR', base, existingIds);
+
+  const finalImageUrl = await ensurePersistentImageUrl(imageUrl);
+  if (isBlobUrl(finalImageUrl)) {
+    return {
+      ok: false,
+      error: `Could not upload this image to Supabase Storage, so it would break after refresh. ${STORAGE_UPLOAD_HINT}`,
+    };
+  }
+
+  const metadataTags: Record<string, unknown> = {
+    source: IMAGESHOP_IMPORT_METADATA_SOURCE,
+    ...(args.processing && Object.keys(args.processing).length > 0
+      ? { processing: args.processing }
+      : {}),
+  };
+
+  const seed = args.seed != null ? Number(args.seed) : null;
+
+  const { error } = await supabase.from('characters').insert({
+    id,
+    metadata_tags: metadataTags,
+    seed,
+    image_url: finalImageUrl,
+    name: args.castName ?? args.profileName ?? (base !== 'character' ? base : null),
+    profile_name: args.profileName ?? null,
+    cast_name: args.castName ?? null,
+  });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, id, imageUrl: finalImageUrl };
+}
+
+/**
+ * Save a processed import image to `assets` without hydrating Asset Studio state.
+ */
+export async function saveImportedImageToAssetVault(args: {
+  imageUrl: string;
+  baseName?: string;
+  collectionName?: string;
+  assetName?: string;
+  seed?: number | null;
+  processing?: Record<string, unknown>;
+}): Promise<SaveAssetResult> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const imageUrl = args.imageUrl.trim();
+  if (!imageUrl) return { ok: false, error: 'No image to save' };
+
+  const base =
+    args.baseName?.trim() ||
+    args.collectionName?.trim() ||
+    args.assetName?.trim() ||
+    'import';
+
+  const { data: rows } = await supabase.from('assets').select('id').limit(5000);
+  const existingIds = (rows ?? []).map((r) => r.id);
+  const id = generateSemanticId('ASST', base, existingIds);
+
+  const finalImageUrl = await ensurePersistentImageUrl(imageUrl);
+  if (isBlobUrl(finalImageUrl)) {
+    return {
+      ok: false,
+      error: `Could not upload this image to Supabase Storage, so it would break after refresh. ${STORAGE_UPLOAD_HINT}`,
+    };
+  }
+
+  const metadataTags: Record<string, unknown> = {
+    source: IMAGESHOP_IMPORT_METADATA_SOURCE,
+    ...(args.processing && Object.keys(args.processing).length > 0
+      ? { processing: args.processing }
+      : {}),
+  };
+
+  const seed = args.seed != null ? Number(args.seed) : null;
+
+  const { error } = await supabase.from('assets').insert({
+    id,
+    metadata_tags: metadataTags,
+    seed,
+    image_url: finalImageUrl,
+    name: args.assetName ?? args.collectionName ?? (base !== 'asset' ? base : null),
+    collection_name: args.collectionName ?? null,
+    asset_name: args.assetName ?? null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id, imageUrl: finalImageUrl };
+}
+
 export interface SaveStorySequenceResult {
   ok: boolean;
   id?: string;

@@ -27,6 +27,7 @@ import {
   studioPreviewMaxHeightCss,
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
+import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
 
 type LabContext = 'character' | 'asset';
 
@@ -305,6 +306,8 @@ export function GenericImageLabPanel({
   return (
     <section className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
       <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Image Lab</h3>
+
+      <ImageshopImportPanel />
 
       <div className="mt-3 flex flex-col lg:flex-row lg:items-stretch gap-4 lg:gap-5 min-h-0">
       <div className="flex-1 min-w-0 lg:max-w-[min(100%,440px)] space-y-3">

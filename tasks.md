@@ -2,6 +2,13 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
+
+- [x] **Prompt helper:** [`imageshopImportPrompt.ts`](src/portals/storyline/imageshopImportPrompt.ts) — `buildImageshopImportPrompt` (retouch / optional `ART_STYLE_LIBRARY` / notes); [`imageshopImportPrompt.test.ts`](src/portals/storyline/__tests__/imageshopImportPrompt.test.ts)
+- [x] **UI:** [`ImageshopImportPanel.tsx`](src/portals/storyline/ImageshopImportPanel.tsx) embedded in [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx) — file pick (size cap), Process via `generateImage` (import as ref slot 0), before/after preview, vault target NPC / Character / Asset + save
+- [x] **Persistence:** [`saveImportedImageToCharacterVault`](src/shared/api/arcsPersistence.ts) / [`saveImportedImageToAssetVault`](src/shared/api/arcsPersistence.ts) with `metadata_tags.source` **`imageshop_import`**; NPC via [`saveGeneration`](src/shared/utils/generationOutputRouter.ts)(`supporting_reference`); local fallback when Supabase unavailable; recent cache via [`addRecentFromCharacter`](src/shared/utils/recentGenerations.ts) / [`addRecentFromAsset`](src/shared/utils/recentGenerations.ts) on successful DB save
+- [x] **Verify:** `npm run test -- --run`, `npm run build`; update `walkthrough.md`
+
 ## WriterPortal — Pacing review: always recommend ideal length (2026-04-21) — COMPLETE
 
 - [x] **Schema:** `length_alignment` now required in `pacingReviewResultSchema`; expanded to include `recommended_pages` (exact or min/max), optional `recommended_action`, and optional `cut_suggestions`/`add_suggestions`/`assumptions` (mirrored in `supabase/functions/_shared/writerSchemas.ts` + tests)
