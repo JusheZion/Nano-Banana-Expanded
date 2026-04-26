@@ -33,6 +33,16 @@ function formatGeminiClientError(message: string): string {
 
 type VaultTarget = 'character' | 'asset' | 'npc';
 
+/** Options that were used for the last successful `generateImage` call (paired with `importSeed`). */
+type ImageshopProcessingSnapshot = {
+  retouch: boolean;
+  stylePreset?: string;
+  styleExtra?: string;
+  aspectRatio: StoryBeatAspectRatio;
+  vaultTarget: VaultTarget;
+  userNote?: string;
+};
+
 export function ImageshopImportPanel() {
   const [importObjectUrl, setImportObjectUrl] = useState<string | null>(null);
   const [importFileName, setImportFileName] = useState<string>('');
@@ -43,6 +53,9 @@ export function ImageshopImportPanel() {
   const [importAspect, setImportAspect] = useState<StoryBeatAspectRatio>('9:16');
   const [importVaultTarget, setImportVaultTarget] = useState<VaultTarget>('npc');
   const [importProcessedUrl, setImportProcessedUrl] = useState<string | null>(null);
+  /** Metadata for `processing` in vault saves — frozen at generation time (with `importSeed`), not live UI. */
+  const [importProcessingSnapshot, setImportProcessingSnapshot] =
+    useState<ImageshopProcessingSnapshot | null>(null);
   const [importSeed, setImportSeed] = useState<number | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -81,6 +94,39 @@ export function ImageshopImportPanel() {
     }),
     [importAspect, importRetouch, importStyleExtra, importStylePreset, importVaultTarget]
   );
+
+  const processingForPersist = useMemo((): Record<string, unknown> => {
+    const s = importProcessingSnapshot;
+    if (!s) return { ...processingMeta };
+    return {
+      retouch: s.retouch,
+      ...(s.stylePreset !== undefined ? { stylePreset: s.stylePreset } : {}),
+      ...(s.styleExtra !== undefined ? { styleExtra: s.styleExtra } : {}),
+      aspectRatio: s.aspectRatio,
+      vaultTarget: s.vaultTarget,
+      ...(s.userNote ? { userNote: s.userNote } : {}),
+    };
+  }, [importProcessingSnapshot, processingMeta]);
+
+  /** True when current options match the last successful Process (pixels + prompt). Vault target can differ without reprocessing. */
+  const processOptionsMatchSnapshot = useMemo(() => {
+    if (!importProcessingSnapshot) return true;
+    const s = importProcessingSnapshot;
+    return (
+      importRetouch === s.retouch &&
+      (importStylePreset.trim() || undefined) === s.stylePreset &&
+      (importStyleExtra.trim() || undefined) === s.styleExtra &&
+      importAspect === s.aspectRatio &&
+      (importUserNote.trim() || undefined) === s.userNote
+    );
+  }, [
+    importAspect,
+    importProcessingSnapshot,
+    importRetouch,
+    importStyleExtra,
+    importStylePreset,
+    importUserNote,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -125,6 +171,7 @@ export function ImageshopImportPanel() {
       setImportError(null);
       setImportSaveError(null);
       setImportProcessedUrl(null);
+      setImportProcessingSnapshot(null);
       setImportSeed(null);
       const file = files?.[0];
       if (!file) return;
@@ -184,6 +231,14 @@ export function ImageshopImportPanel() {
       }
       setImportProcessedUrl(res.imageDataUrl);
       setImportSeed(seed);
+      setImportProcessingSnapshot({
+        retouch: importRetouch,
+        stylePreset: importStylePreset.trim() || undefined,
+        styleExtra: importStyleExtra.trim() || undefined,
+        aspectRatio: importAspect,
+        vaultTarget: importVaultTarget,
+        userNote: importUserNote.trim() || undefined,
+      });
     } finally {
       setImportBusy(false);
     }
@@ -224,6 +279,10 @@ export function ImageshopImportPanel() {
       setImportSaveError('Process an image before saving.');
       return;
     }
+    if (!processOptionsMatchSnapshot) {
+      setImportSaveError('Options changed since the last Process — run Process again before saving.');
+      return;
+    }
     setImportSaveError(null);
     setImportSavePending(true);
     try {
@@ -255,7 +314,7 @@ export function ImageshopImportPanel() {
             profileName: profileForInsert,
             castName: cast,
             seed: importSeed,
-            processing: processingMeta,
+            processing: processingForPersist,
           });
           if (!result.ok) {
             setImportSaveError(result.error ?? 'Save failed');
@@ -303,7 +362,7 @@ export function ImageshopImportPanel() {
             collectionName: collectionInsert,
             assetName: asset,
             seed: importSeed,
-            processing: processingMeta,
+            processing: processingForPersist,
           });
           if (!result.ok) {
             setImportSaveError(result.error ?? 'Save failed');
@@ -342,7 +401,8 @@ export function ImageshopImportPanel() {
     importSeed,
     importVaultTarget,
     npcLabel,
-    processingMeta,
+    processOptionsMatchSnapshot,
+    processingForPersist,
     profileName,
     supabaseReady,
   ]);
@@ -593,20 +653,41 @@ export function ImageshopImportPanel() {
             {importBusy ? 'Processing…' : 'Process'}
           </button>
         </Tooltip>
-        <button
-          type="button"
-          disabled={importSavePending || !importProcessedUrl}
-          onClick={() => void handleSave()}
-          className="px-3 py-2 rounded-full text-xs border border-amber-400/40 text-amber-100 hover:bg-amber-500/15 disabled:opacity-50"
+        <Tooltip
+          content={
+            importProcessedUrl && !processOptionsMatchSnapshot
+              ? 'Processing options changed — run Process again to update the preview, then save.'
+              : 'Save the current processed image to the selected vault'
+          }
+          side="top"
         >
-          {importSavePending ? 'Saving…' : 'Save to vault'}
-        </button>
+          <button
+            type="button"
+            disabled={importSavePending || !importProcessedUrl || !processOptionsMatchSnapshot}
+            onClick={() => void handleSave()}
+            className="px-3 py-2 rounded-full text-xs border border-amber-400/40 text-amber-100 hover:bg-amber-500/15 disabled:opacity-50"
+          >
+            {importSavePending ? 'Saving…' : 'Save to vault'}
+          </button>
+        </Tooltip>
       </div>
 
       {importProcessedUrl ? (
-        <p className="mt-2 text-[10px] text-emerald-200/80">
-          Ready to save. NPC Vault stores locally; Character/Asset use Supabase when configured and
-          signed in.
+        <p
+          className={
+            processOptionsMatchSnapshot
+              ? 'mt-2 text-[10px] text-emerald-200/80'
+              : 'mt-2 text-[10px] text-amber-200/75'
+          }
+        >
+          {processOptionsMatchSnapshot ? (
+            <>
+              Ready to save. NPC Vault stores locally; Character/Asset use Supabase when configured and
+              signed in.
+            </>
+          ) : (
+            <>Options no longer match this preview — run Process again before saving.</>
+          )}
         </p>
       ) : null}
     </div>

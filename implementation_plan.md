@@ -366,6 +366,37 @@ Keep this separate from existing generation modes so it can iterate quickly with
 
 **Verify:** `npm run test -- --run`; `npm run build`; toggle **Simple / Advanced** in Build and spot-check Refs / Build / Look sub-tabs.
 
+## Asset Studio — Live Prompt parity with Character Studio (2026-04-25)
+
+**Goal:** In Asset Studio, the **Live Prompt** panel should match Character Studio’s structure:
+
+- Tabs: **Prompt** / **Reference Prompt** / **Edit** / **Refine**
+- Add **Describe live image** (Gemini vision) to generate a reusable text prompt from the **current Live frame**
+- Keep existing Generate / Refine flows unchanged
+
+**Primary files:**
+
+- [`src/portals/AssetsStudio.tsx`](src/portals/AssetsStudio.tsx)
+- [`src/portals/asset-studio/AssetStudioLivePromptPanel.tsx`](src/portals/asset-studio/AssetStudioLivePromptPanel.tsx)
+
+**Implementation notes:**
+
+- Add state in `AssetsStudio.tsx` similar to Character Studio:
+  - `aiReferencePrompt`, `aiReferencePromptLoading`, `aiReferencePromptError`
+  - `handleGenerateAiReferencePrompt()` that:
+    - Reads `store.currentLiveImageUrl`
+    - Converts to base64 via `referenceUrlToBase64WithMimeRetry()` (handles fresh-signed `arcs-generations` URLs; avoids `(400)` failures)
+    - Calls `generateGeminiTextFromImage({ systemPrompt, userText, imageBase64, mimeType })`
+    - Populates `aiReferencePrompt` for copy/paste into prompts
+- Expand `promptPanelTab` union to include `'reference'` (and wire tab buttons + help tooltips).
+- Update `AssetStudioLivePromptPanel` to render the **Reference Prompt** tab UI (button + output box) matching Character Studio behavior and copy tone.
+
+**Verification:**
+
+- Manual (browser): in Asset Studio load a Live image (generate or click a ref that sets Live), then:
+  - Live Prompt → Reference Prompt → **Describe live image** produces text and no console errors
+- Automated: `npm run test -- --run`; `npm run build`
+
 ## Asset Studio 2.0 — phone layout (Phase 5, 2026-04-14)
 
 **Goal:** Narrow viewports: preview first, one workspace panel at a time, larger tap targets, no stacked “everything at once” left column.
@@ -1090,6 +1121,74 @@ Do this in the **same** Supabase project as `VITE_SUPABASE_URL` / anon key:
 - **Navigation:** AppShell **Docs** section; Landing card; `App.tsx` uses `navigatePortal` vs `requestPortalsWiki` for Writers’ help deep-link.
 - **Assets:** `public/wiki/screenshots/` — replace placeholders when capturing real UI.
 - **Verification:** `npm run build`.
+
+## Proposed documentation — Master instructional manual (2026-04-23)
+
+### Goal
+
+Create a single repo-root “master manual” that teaches end-users how to **navigate the app**, establish a **repeatable workflow per portal**, and understand how portals **connect** to produce **comic pages**, **images**, and **videos**.
+
+This complements (does not replace) the in-app **Portals Wiki**:
+
+- **Portals Wiki** = quick reference / browseable chapters inside the app
+- **Master manual (this doc)** = end-to-end “how to use the app” playbook with workflows and cross-portal handoffs
+
+### Proposed output file
+
+- `INSTRUCTIONAL_MANUAL.md` (repo root)
+
+### Proposed organization
+
+- **0) Overview**
+  - What each portal is for (one-liners)
+  - The “golden path” workflows (Writer → Imageshop → Vault → Studios → Outputs)
+  - Key concepts: **Image Vault** (Characters / Assets / NPC Vault), **Seeds**, **References**, **Save to vault**, **Supabase vs local fallback**
+- **1) Navigation & mental model**
+  - ARC Hub / portal switching
+  - Where “Docs” live (Portals Wiki) vs this master manual
+- **2) Writers’ Workshop**
+  - Library: Series → Issues → Pages
+  - Outline → Beats → Dialogue flow
+  - Cockpit (3-column workspace) + Idea Assist (if present)
+  - Arc + Pacing review: how to interpret results and iterate
+  - Exports: outline/beats/dialogue bundles; shot plan (Video tab)
+- **3) Illustrator’s Imageshop (Image Workshop)**
+  - Starting here vs arriving from Writers’ Workshop (handoff entry points)
+  - Production lanes: **Cast** / **Assets** / **NPC Vault**
+  - Visual Prep queue: matched vs quick refs vs needs studio
+  - Image Lab: references, prompt, aspect ratio, Process/Save workflows
+  - Saving to vault: Character / Asset / NPC Vault semantics (Supabase vs local)
+- **4) Character Studio**
+  - Building a reusable character “DNA” and keeping identity stable
+  - Reference slots + Live Prompt + Generate/Refine flows
+  - Saving to Character Vault; cover/framing (where applicable)
+- **5) Asset Studio**
+  - Building reusable locations/props/sets and consistency across scenes
+  - References + Build/Look + Live Prompt; Generate/Refine
+  - Saving to Asset Vault; collections
+- **6) Image Vault**
+  - Browsing Characters / Assets / NPC Vault
+  - Using vault images as references in studios / imageshop
+  - Downloads and album management (as supported)
+- **7) Comics portal**
+  - How to assemble pages from images (panel images vs overlay objects) if applicable
+  - Export workflow (PDF/image)
+- **8) Video workflow**
+  - Writers’ Workshop Video tab: shot plans and exports
+  - How images + shot plans become video outputs (current capabilities + recommended workflow)
+- **9) Troubleshooting & FAQs**
+  - “Why can’t I use AI tools?” (Supabase auth/JWT)
+  - “Why did my character drift?” (references, prompt deltas, seeds)
+  - “Why is Save disabled?” (missing Process / changed options)
+  - “Local vs Supabase” behaviors
+
+### Acceptance criteria
+
+- Manual is **organized by portal** with a consistent “Purpose → Where to click → Workflow → Outputs → Tips” pattern.
+- Includes at least **three** cross-portal “golden path” recipes:
+  - **Comics**: Outline → Beats → Dialogue → Imageshop → Studio refinements → assemble/export
+  - **Single illustration**: Imageshop → Studio refine → save to vault → download/export
+  - **Video planning**: Outline → shot plan → image generation pass → export plan/artifacts
 
 ## Supabase — per-user RLS (phase A, 2026-04-06)
 

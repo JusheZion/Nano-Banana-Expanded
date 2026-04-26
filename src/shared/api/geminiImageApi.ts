@@ -215,7 +215,7 @@ export type GenerateImageResult =
   | { ok: false; blocked: true; reason: 'safety' }
   | { ok: false; error: string };
 
-async function referenceUrlToBase64WithMimeRetry(
+export async function referenceUrlToBase64WithMimeRetry(
   url: string
 ): Promise<{ base64: string; mimeType: string }> {
   if (!isArcsGenerationsStorageUrl(url)) {

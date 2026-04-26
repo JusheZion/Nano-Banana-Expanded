@@ -339,6 +339,16 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] Markdown pipeline: react-markdown, remark-gfm, rehype-slug, rehype-autolink-headings (TOC / anchors)
 - [x] Writers’ Workshop: help registry wiki heading ids + `onOpenPortalsWiki` / modal footer
 - [x] Build verification: `npm run build` passes after wiki work
+- [x] **Master instructional manual:** add repo-root `INSTRUCTIONAL_MANUAL.md` (portal-by-portal workflows + cross-portal “golden paths” for comics/images/video)
+
+## Character Studio — Archive to Live (2026-04)
+
+- [x] Clicking a populated **reference slot thumbnail** sets the **Live** frame (enables “Describe live image” for Archive picks).
+- [x] Archived (disabled) **GPT Image 2 worker** POC under `archived/gpt-image-2-worker/` and removed it from `wrangler.jsonc` build config.
+
+## Asset Studio — Live Prompt parity (2026-04)
+
+- [x] Asset Studio Live Prompt now matches Character Studio: **Prompt / Reference Prompt / Edit / Refine** tabs (desktop) with **Describe live image** on Reference Prompt.
 
 ## Mobile web — iPhone / iPad (2026-04)
 

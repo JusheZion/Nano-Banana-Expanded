@@ -53,7 +53,7 @@ import {
 } from '@/data/character_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
-import { generateImage, urlToBase64WithMime } from '@/shared/api/geminiImageApi';
+import { generateImage, referenceUrlToBase64WithMimeRetry } from '@/shared/api/geminiImageApi';
 import { generateGeminiTextFromImage } from '@/shared/api/geminiTextApi';
 import { saveCharacterToDb } from '@/shared/api/arcsPersistence';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
@@ -421,7 +421,7 @@ export const CharacterStudio: React.FC = () => {
     setAiReferencePromptLoading(true);
     setAiReferencePromptError(null);
     try {
-      const { base64, mimeType } = await urlToBase64WithMime(url);
+      const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(url);
       const res = await generateGeminiTextFromImage({
         systemPrompt:
           'You write dense, generation-ready image prompts for character portrait models. Stay faithful to what is visible in the image; do not invent identity or heritage details that are not shown. Plain text only, no markdown.',
@@ -1047,7 +1047,10 @@ export const CharacterStudio: React.FC = () => {
                       <div className="relative h-[106px] w-[60px] shrink-0 mx-auto">
                         <button
                           type="button"
-                          onClick={() => setFocusedReferenceSlotIndex(i)}
+                          onClick={() => {
+                            setFocusedReferenceSlotIndex(i);
+                            if (url) store.setCurrentLiveImageUrl(url);
+                          }}
                           className={`absolute inset-0 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
                             url
                               ? 'border-2 border-amber-500/55'

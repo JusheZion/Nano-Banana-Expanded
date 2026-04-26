@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pin, PinOff } from 'lucide-react';
+import { Pin, PinOff, Sparkles } from 'lucide-react';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { PinnedHelpTooltip } from '@/shared/components/Tooltip';
+import { Tooltip } from '@/shared/components/Tooltip';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { ACCENT_GOLD_GRADIENT } from '@/shared/theme/Phase12DesignTokens';
 import { goldTextStyle } from './assetStudioShared';
@@ -19,8 +20,12 @@ type Props = {
   displayPrompt: string;
   promptPinned: boolean;
   setPromptPinned: React.Dispatch<React.SetStateAction<boolean>>;
-  promptPanelTab: 'auto' | 'edit' | 'refine';
-  setPromptPanelTab: React.Dispatch<React.SetStateAction<'auto' | 'edit' | 'refine'>>;
+  promptPanelTab: 'auto' | 'reference' | 'edit' | 'refine';
+  setPromptPanelTab: React.Dispatch<React.SetStateAction<'auto' | 'reference' | 'edit' | 'refine'>>;
+  aiReferencePrompt: string;
+  aiReferencePromptLoading: boolean;
+  aiReferencePromptError: string | null;
+  onDescribeLiveImage: () => void | Promise<void>;
   snippetNameInput: string;
   setSnippetNameInput: (v: string) => void;
   snippetTextInput: string;
@@ -35,6 +40,10 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
   setPromptPinned,
   promptPanelTab,
   setPromptPanelTab,
+  aiReferencePrompt,
+  aiReferencePromptLoading,
+  aiReferencePromptError,
+  onDescribeLiveImage,
   snippetNameInput,
   setSnippetNameInput,
   snippetTextInput,
@@ -84,6 +93,7 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
               {(
                 [
                   { id: 'auto' as const, label: 'Prompt' },
+                  { id: 'reference' as const, label: 'Reference Prompt' },
                   { id: 'edit' as const, label: 'Edit' },
                   { id: 'refine' as const, label: 'Refine' },
                 ]
@@ -102,6 +112,8 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
                   </button>
                   <PinnedHelpTooltip variant="asset" title={label}>
                     {id === 'auto' && 'Compiled prompt from tags. ⌘/Ctrl+Enter generates.'}
+                    {id === 'reference' &&
+                      'AI-generated prompt from the live frame (vision). Use Describe live image. Different from Prompt (tag-built compile).'}
                     {id === 'edit' &&
                       'Raw prompt override. Model is in the bottom bar. Overrides compiled tags when the override field is non-empty.'}
                     {id === 'refine' && 'Refine the current live image with your instructions.'}
@@ -113,6 +125,42 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
           {!phoneCompact && promptPanelTab === 'auto' && (
             <div className="bg-black/60 p-2 rounded-lg font-mono text-xs text-violet-100/85 break-words flex-1 min-h-[80px] max-h-[min(22vh,200px)] overflow-y-auto custom-scrollbar transition-opacity duration-200">
               {displayPrompt || '// Prompt is empty...'}
+            </div>
+          )}
+          {!phoneCompact && promptPanelTab === 'reference' && (
+            <div className="flex-1 flex flex-col gap-2 min-h-[80px] max-h-[min(22vh,200px)] overflow-hidden">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Tooltip
+                  variant="asset"
+                  content="Calls Gemini vision on the image currently shown in the live frame (right panel). Use after Generate or when you load a scene."
+                  side="bottom"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void onDescribeLiveImage()}
+                    disabled={
+                      aiReferencePromptLoading ||
+                      !store.currentLiveImageUrl ||
+                      store.generationStatus === 'pending'
+                    }
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-amber-500/50 text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                    {aiReferencePromptLoading ? 'Describing…' : 'Describe live image'}
+                  </button>
+                </Tooltip>
+                {aiReferencePromptError ? (
+                  <span className="text-[10px] text-red-300/95 max-w-[12rem]">
+                    {aiReferencePromptError}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex-1 min-h-[48px] overflow-y-auto rounded-lg bg-black/60 p-2 font-mono text-xs text-violet-100/85 break-words custom-scrollbar">
+                {aiReferencePrompt.trim()
+                  ? aiReferencePrompt
+                  : '// Click “Describe live image” to generate an AI reference prompt from the scene in the live frame. The Prompt tab still shows the tag-built compile for Generate.'}
+              </div>
             </div>
           )}
           {(phoneCompact || promptPanelTab === 'edit') && (

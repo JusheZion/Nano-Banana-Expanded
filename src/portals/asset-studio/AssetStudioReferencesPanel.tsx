@@ -188,7 +188,10 @@ export const AssetStudioReferencesPanel: React.FC<Props> = ({
                 <div className="relative w-full aspect-square max-h-[4.5rem]">
                   <button
                     type="button"
-                    onClick={() => setFocusedReferenceSlotIndex(i)}
+                    onClick={() => {
+                      setFocusedReferenceSlotIndex(i);
+                      if (url) store.setCurrentLiveImageUrl(url);
+                    }}
                     className={`absolute inset-0 rounded-md bg-black/40 flex items-center justify-center overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-amber-400/90 ${
                       url
                         ? 'border-2 border-amber-500/55'

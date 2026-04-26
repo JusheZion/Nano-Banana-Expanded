@@ -708,6 +708,53 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
   - Export selected dialogue `.txt` + `.fountain`
   - Confirm no console errors
 
+---
+
+## Documentation — Master instructional manual (2026-04-23)
+
+### What changed
+
+- Added a repo-root master manual: **`INSTRUCTIONAL_MANUAL.md`**.
+- Manual is organized **by portal** and includes cross-portal “golden path” workflows for:
+  - comics
+  - single illustrations
+  - video planning + image generation pass
+
+### Notes
+
+- This complements the in-app **Portals Wiki** (Docs portal): Wiki is reference; the manual is end-to-end workflow guidance.
+
+---
+
+## Character Studio — Archive → Live + GPT worker archived (2026-04-25)
+
+### What changed
+
+- **Character Studio:** Clicking a populated **reference slot** thumbnail now also sets the **Live** frame, so Archive-picked images can be sent Live and used by **Live Prompt → Reference Prompt → Describe live image**.
+- **GPT Image 2 Worker POC:** Disabled it without deleting:
+  - Moved the Worker implementation to `archived/gpt-image-2-worker/`
+  - Removed `"main": "worker/index.ts"` and the R2 bucket binding from `wrangler.jsonc`
+
+### Verification
+
+- **Unit tests:** `npm test -- --run` → PASS
+- **Build:** `npm run build` → PASS
+
+---
+
+## Asset Studio — Live Prompt parity with Character Studio (2026-04-25)
+
+### What changed
+
+- Asset Studio Live Prompt now includes:
+  - Tabs: **Prompt / Reference Prompt / Edit / Refine** (desktop)
+  - **Reference Prompt** tab with **Describe live image** (Gemini vision) using the current **Live** frame
+
+### Verification
+
+- **Unit tests:** `npm test -- --run` → PASS
+- **Build:** `npm run build` → PASS
+
 ## How to Use These Docs
 
 | File | Use |

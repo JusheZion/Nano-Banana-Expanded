@@ -42,7 +42,8 @@ import {
 } from '@/data/asset_studio_spec';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { getStoryPhotoCollections, addCharacterRefToStory } from '@/shared/utils/storyPhotoCollections';
-import { generateImage } from '@/shared/api/geminiImageApi';
+import { generateImage, referenceUrlToBase64WithMimeRetry } from '@/shared/api/geminiImageApi';
+import { generateGeminiTextFromImage } from '@/shared/api/geminiTextApi';
 import { saveAssetToDb } from '@/shared/api/arcsPersistence';
 import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import {
@@ -98,7 +99,12 @@ export const AssetsStudio: React.FC = () => {
   const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
   const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
   const [recentAssets, setRecentAssets] = useState<RecentGeneration[]>([]);
-  const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'edit' | 'refine'>('auto');
+  const [promptPanelTab, setPromptPanelTab] = useState<'auto' | 'reference' | 'edit' | 'refine'>(
+    'auto'
+  );
+  const [aiReferencePrompt, setAiReferencePrompt] = useState('');
+  const [aiReferencePromptLoading, setAiReferencePromptLoading] = useState(false);
+  const [aiReferencePromptError, setAiReferencePromptError] = useState<string | null>(null);
   const [snippetNameInput, setSnippetNameInput] = useState('');
   const [snippetTextInput, setSnippetTextInput] = useState('');
   const generateAssetRef = useRef<() => Promise<void>>(async () => {});
@@ -260,6 +266,37 @@ export const AssetsStudio: React.FC = () => {
 
   const artStyleLabel =
     store.artStyleId === 'flagship' ? ART_STYLE_FLAGSHIP : store.artStyleId;
+
+  const handleGenerateAiReferencePrompt = async () => {
+    const url = store.currentLiveImageUrl;
+    if (!url?.trim()) {
+      setAiReferencePromptError('Generate or load a live image first.');
+      return;
+    }
+    if (store.generationStatus === 'pending') return;
+    setAiReferencePromptLoading(true);
+    setAiReferencePromptError(null);
+    try {
+      const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(url);
+      const res = await generateGeminiTextFromImage({
+        systemPrompt:
+          'You write dense, generation-ready image prompts for environment and asset scenes. Stay faithful to what is visible in the image; do not invent people, animals, brands, or signage text that is not shown. Plain text only, no markdown.',
+        userText:
+          'Write one detailed text-to-image prompt describing this scene: environment, architecture, materials, props, lighting, weather/time, camera angle/framing, and rendering style. Optimize for use with Gemini / Nano Banana image generation.',
+        imageBase64: base64,
+        mimeType: mimeType || 'image/jpeg',
+      });
+      if (!res.ok) {
+        setAiReferencePromptError(res.error);
+        return;
+      }
+      setAiReferencePrompt(res.text);
+    } catch (e) {
+      setAiReferencePromptError(e instanceof Error ? e.message : 'Could not describe image.');
+    } finally {
+      setAiReferencePromptLoading(false);
+    }
+  };
 
   const discardLiveAssetImage = () => {
     const url = store.currentLiveImageUrl;
@@ -702,6 +739,10 @@ export const AssetsStudio: React.FC = () => {
             setPromptPinned={setPromptPinned}
             promptPanelTab={promptPanelTab}
             setPromptPanelTab={setPromptPanelTab}
+            aiReferencePrompt={aiReferencePrompt}
+            aiReferencePromptLoading={aiReferencePromptLoading}
+            aiReferencePromptError={aiReferencePromptError}
+            onDescribeLiveImage={handleGenerateAiReferencePrompt}
             snippetNameInput={snippetNameInput}
             setSnippetNameInput={setSnippetNameInput}
             snippetTextInput={snippetTextInput}
