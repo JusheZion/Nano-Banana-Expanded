@@ -755,6 +755,23 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - **Unit tests:** `npm test -- --run` → PASS
 - **Build:** `npm run build` → PASS
 
+---
+
+## Image Vault — album grid last-in-row tile polish (2026-04-26)
+
+### What changed
+
+- Tweaked vault album card layering so the hover/focus action strip behaves consistently across grid wraps (especially cards at the **end of a row**).
+
+### Verification
+
+- **Tests:** `npm test -- --run` → PASS
+- **Build:** `npm run build` → PASS
+
+### Manual verification (recommended)
+
+- Image Vault → open a profile/collection album with multiple images → resize until wrapping changes → confirm the **last tile in each row** still shows the **full icon action strip** and **bottom footer banner**.
+
 ## How to Use These Docs
 
 | File | Use |

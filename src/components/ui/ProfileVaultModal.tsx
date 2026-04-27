@@ -620,7 +620,7 @@ export function ProfileVaultModal(props: {
                             'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
                             'bg-gradient-to-b from-black/85 via-black/50 to-transparent',
                             'transition-opacity duration-200',
-                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
                             showTopBar && 'opacity-100 pointer-events-auto',
                           ].join(' ')}
                           onClick={(e) => e.stopPropagation()}
@@ -816,7 +816,7 @@ export function ProfileVaultModal(props: {
                         </div>
                       )}
 
-                      <div className="border-t border-white/10 bg-black/35 px-3 py-2.5">
+                      <div className="relative z-[5] border-t border-white/10 bg-black/35 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 min-w-0">
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-semibold text-[#FBF5D4] truncate">

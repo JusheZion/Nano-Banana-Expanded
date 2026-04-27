@@ -396,6 +396,10 @@ Checklist for current and upcoming phases. Update as work completes.
 - [x] **Download HQ (single):** per-card action; `fetchVaultImageBlob` + `createFreshSignedArcsUrl` in `arcsGenerationsUrls.ts`, 400 retry; `ProfileVaultModal` + `CollectionVaultModal`.
 - [x] **Download .zip (selected/all):** ZIP checkboxes + **Download all** / **Selected (N)**; client zip via `fflate` in `vaultImageDownload.ts`.
 
+## Image Vault — album grid row-end cards (2026-04-26)
+
+- [x] Fix cases where the **last image in a wrapped row** could lose the **full action strip** / **bottom banner** visibility by improving focus/hover layering (`ProfileVaultModal`, `CollectionVaultModal`).
+
 ## Studios — reset UX (Character + Asset) (2026-04-15) — COMPLETE
 
 - [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
