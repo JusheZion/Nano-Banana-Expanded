@@ -248,7 +248,7 @@ export function CollectionVaultModal(props: {
         onClick={onClose}
       />
 
-      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1080px,94vw)] max-h-[92vh] flex flex-col">
+      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1280px,96vw)] max-h-[92vh] flex flex-col">
         <div
           className="relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh] border-violet-500/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)] bg-[linear-gradient(135deg,#1e1033_0%,#0f172a_100%)]"
         >
@@ -510,7 +510,7 @@ export function CollectionVaultModal(props: {
                     <option key={c} value={c === 'Unnamed' ? '' : c} />
                   ))}
               </datalist>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 pb-4">
                 {sorted.map((item) => {
                   const title = item.asset_name || item.name || 'Asset';
                   const isSelected = selectedItemId === item.id;

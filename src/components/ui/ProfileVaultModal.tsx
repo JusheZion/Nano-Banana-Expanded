@@ -293,7 +293,7 @@ export function ProfileVaultModal(props: {
         onClick={onClose}
       />
 
-      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1080px,94vw)] max-h-[92vh] flex flex-col">
+      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1280px,96vw)] max-h-[92vh] flex flex-col">
         <div
           className={[
             'relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh]',
@@ -564,7 +564,7 @@ export function ProfileVaultModal(props: {
                     <option key={p} value={p === 'Unnamed' ? '' : p} />
                   ))}
               </datalist>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 pb-4">
                 {sorted.map((item) => {
                   const isActive = coverId === item.id;
                   const isSaving = savingId === item.id;

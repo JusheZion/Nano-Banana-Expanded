@@ -721,6 +721,34 @@ Notes:
 
 ---
 
+## Proposed work: Image Vault modal density (less scrolling) (2026-04-27)
+
+### Problem
+
+- Vault image modals (profile/collection) often require scrolling because the dialog is narrow and/or tiles are large, even on wide viewports.
+
+### Goal
+
+- Make the modal **wider** and the grid **denser** (slightly smaller tiles, tighter gap) so more images fit in-view.
+
+### Approach (CSS-only, low-risk)
+
+- **Modal width**: increase the dialog container max width and use more of the viewport (e.g. `w-[min(96vw,1200px)]` or a larger `max-w-*`), keeping a safe side margin.
+- **Grid density**: slightly reduce tile sizing by adjusting:
+  - grid column count at common breakpoints
+  - tile min sizes / aspect wrapper sizing
+  - grid `gap-*`
+- Apply in both:
+  - `src/components/ui/ProfileVaultModal.tsx`
+  - `src/components/ui/CollectionVaultModal.tsx`
+
+### Verification
+
+- Browser test: open Image Vault album → resize window until wrapping changes → confirm more tiles are visible without scrolling and controls remain usable.
+- Console: no new warnings/errors.
+
+---
+
 ## Reference studios — 60/40 shell + merged workspace (2026-03-28)
 
 - **Split:** Left column `flex-[0_0_60%] max-w-[60%]`; right `flex-[0_0_40%] max-w-[40%]` in `CharacterStudio.tsx` and `AssetsStudio.tsx`.

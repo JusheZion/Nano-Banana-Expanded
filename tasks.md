@@ -400,6 +400,10 @@ Checklist for current and upcoming phases. Update as work completes.
 
 - [x] Fix cases where the **last image in a wrapped row** could lose the **full action strip** / **bottom banner** visibility by improving focus/hover layering (`ProfileVaultModal`, `CollectionVaultModal`).
 
+## Image Vault — modal grid density (wider + smaller tiles) (2026-04-27) — IN PROGRESS
+
+- [ ] Widen `ProfileVaultModal` / `CollectionVaultModal` and densify the internal image grid so more images fit without scrolling.
+
 ## Studios — reset UX (Character + Asset) (2026-04-15) — COMPLETE
 
 - [x] **Reset to tags / Refresh:** clears overrides and switches Live Prompt tab to **Prompt** (`auto`) so compiled output is visible again (`CharacterStudio.tsx`, `AssetStudioLivePromptPanel.tsx`).
