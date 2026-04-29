@@ -93,6 +93,17 @@ type VisualReferenceState = {
   source?: ReferenceSource;
 };
 
+type PanelArtStatus = 'needs-art' | 'ready' | 'approved';
+
+type PanelArtQueueItem = {
+  id: string;
+  pageNumber: number;
+  panelNumber: number;
+  beatText: string;
+  characters: string[];
+  location: string;
+};
+
 const GENRE_OPTIONS = [
   'Superhero',
   'Fantasy',
@@ -236,7 +247,7 @@ const STEPS: GuidedComicStep[] = [
     title: 'Create or select panel artwork',
     summary: 'Move from prepared references into art selection for the pages that need images.',
     helperText: 'This step is the artwork pass: pick finished images, note gaps, and prepare panel assignments.',
-    actionLabel: 'Generate Panel Art',
+    actionLabel: 'Arrange Comic Pages',
     workflowCards: [
       {
         title: 'Art Queue',
@@ -328,6 +339,21 @@ function uniquePageCardTerms(values: string[]): string[] {
   return uniqueTerms;
 }
 
+function panelArtQueueId(pageNumber: number, panelNumber: number): string {
+  return `page-${pageNumber}-panel-${panelNumber}`;
+}
+
+function panelArtStatusLabel(status: PanelArtStatus): string {
+  switch (status) {
+    case 'approved':
+      return 'Approved';
+    case 'ready':
+      return 'Ready';
+    case 'needs-art':
+      return 'Needs art';
+  }
+}
+
 function outlineSeedForBeat(beatId: OutlineBeatId, story: StoryFormState): string {
   const characters = splitListText(story.mainCharacters);
   const locations = splitListText(story.setting);
@@ -413,8 +439,11 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const isStoryStep = activeStep.id === 'story';
   const isPagesStep = activeStep.id === 'pages';
   const isVisualPrepStep = activeStep.id === 'visual-prep';
+  const isArtStep = activeStep.id === 'art';
   const [characterReferences, setCharacterReferences] = useState<Record<string, VisualReferenceState>>({});
   const [locationReferences, setLocationReferences] = useState<Record<string, VisualReferenceState>>({});
+  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
+  const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>({});
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -497,6 +526,9 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
       [name]: { status: 'ready', source },
     }));
   };
+  const updatePanelArtStatus = (panelId: string, status: PanelArtStatus) => {
+    setPanelArtStatuses((current) => ({ ...current, [panelId]: status }));
+  };
 
   const storyCharacters = useMemo(() => splitListText(storyForm.mainCharacters), [storyForm.mainCharacters]);
   const storyLocations = useMemo(() => splitListText(storyForm.setting), [storyForm.setting]);
@@ -519,6 +551,28 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const totalVisualReferences = pageCharacters.length + pageLocations.length;
   const readyVisualReferences = readyCharacterCount + readyLocationCount;
   const missingVisualReferences = Math.max(0, totalVisualReferences - readyVisualReferences);
+  const panelArtQueue = useMemo<PanelArtQueueItem[]>(
+    () =>
+      pageCards.flatMap((page) =>
+        page.panelBeats.map((beatText, panelIndex) => {
+          const panelNumber = panelIndex + 1;
+          return {
+            id: panelArtQueueId(page.pageNumber, panelNumber),
+            pageNumber: page.pageNumber,
+            panelNumber,
+            beatText,
+            characters: splitListText(page.keyCharacters),
+            location: page.keyLocation.trim(),
+          };
+        }),
+      ),
+    [pageCards],
+  );
+  const selectedPanel =
+    panelArtQueue.find((panel) => panel.id === selectedPanelId) ?? panelArtQueue[0] ?? null;
+  const selectedPanelStatus = selectedPanel
+    ? panelArtStatuses[selectedPanel.id] ?? 'needs-art'
+    : 'needs-art';
   const workingLogline = useMemo(() => {
     const characterLead = storyCharacters[0] || 'A lead character';
     const conflict = storyForm.conflict.trim() || 'faces a defining conflict';
@@ -675,6 +729,8 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                           ? 'Edit local page cards before moving into visual reference prep.'
                           : isVisualPrepStep
                             ? 'Review references detected from page cards. These controls only update local readiness.'
+                            : isArtStep
+                              ? 'Track panel art readiness locally before moving into page arrangement.'
                       : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
                   </p>
                 </div>
@@ -1142,6 +1198,187 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                     {pageCharacters.length} characters and {pageLocations.length} locations found.{' '}
                     {readyVisualReferences} ready. {missingVisualReferences} need references before generating art.
                   </div>
+                </div>
+              ) : isArtStep ? (
+                <div className="mt-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Panel Art Queue
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">Pages and panels</h3>
+                      </div>
+                      <span className="text-xs text-white/50">{panelArtQueue.length} panels</span>
+                    </div>
+                    <div className="mt-4 max-h-[34rem] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                      {panelArtQueue.length > 0 ? (
+                        panelArtQueue.map((panel) => {
+                          const selected = selectedPanel?.id === panel.id;
+                          const status = panelArtStatuses[panel.id] ?? 'needs-art';
+                          return (
+                            <button
+                              key={panel.id}
+                              type="button"
+                              onClick={() => setSelectedPanelId(panel.id)}
+                              className="w-full rounded-lg border p-3 text-left transition hover:bg-white/10"
+                              style={{
+                                background: selected ? 'rgba(252,246,186,0.12)' : 'rgba(0,0,0,0.22)',
+                                borderColor: selected ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.12)',
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                                    Page {panel.pageNumber} / Panel {panel.panelNumber}
+                                  </p>
+                                  <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-white/85">
+                                    {panel.beatText || 'Untitled panel beat'}
+                                  </p>
+                                </div>
+                                <span
+                                  className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                                  style={{
+                                    borderColor:
+                                      status === 'approved'
+                                        ? 'rgba(134,239,172,0.45)'
+                                        : status === 'ready'
+                                          ? `${ACCENT_GOLD_SOLID}88`
+                                          : 'rgba(255,255,255,0.16)',
+                                    color:
+                                      status === 'approved'
+                                        ? 'rgb(187,247,208)'
+                                        : status === 'ready'
+                                          ? ACCENT_GOLD_LIGHT
+                                          : 'rgba(255,255,255,0.62)',
+                                  }}
+                                >
+                                  {panelArtStatusLabel(status)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
+                          Build page cards first to create a panel art queue.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    {selectedPanel ? (
+                      <>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Selected Panel
+                            </p>
+                            <h3 className="mt-1 text-2xl font-black text-white">
+                              Page {selectedPanel.pageNumber}, Panel {selectedPanel.panelNumber}
+                            </h3>
+                          </div>
+                          <span
+                            className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
+                            style={{
+                              borderColor:
+                                selectedPanelStatus === 'approved'
+                                  ? 'rgba(134,239,172,0.45)'
+                                  : selectedPanelStatus === 'ready'
+                                    ? `${ACCENT_GOLD_SOLID}88`
+                                    : 'rgba(255,255,255,0.16)',
+                              color:
+                                selectedPanelStatus === 'approved'
+                                  ? 'rgb(187,247,208)'
+                                  : selectedPanelStatus === 'ready'
+                                    ? ACCENT_GOLD_LIGHT
+                                    : 'rgba(255,255,255,0.62)',
+                            }}
+                          >
+                            {panelArtStatusLabel(selectedPanelStatus)}
+                          </span>
+                        </div>
+
+                        <div className="mt-5 min-h-[16rem] rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                            Panel beat
+                          </p>
+                          <p className="mt-3 text-lg font-semibold leading-relaxed text-white/85">
+                            {selectedPanel.beatText || 'Add a panel beat on the Pages step.'}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Characters used
+                            </p>
+                            {selectedPanel.characters.length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {selectedPanel.characters.map((character) => (
+                                  <span
+                                    key={character}
+                                    className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-[11px] text-amber-100"
+                                  >
+                                    {character}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-xs leading-relaxed text-white/45">
+                                No page characters listed.
+                              </p>
+                            )}
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Location used
+                            </p>
+                            {selectedPanel.location ? (
+                              <div className="mt-2">
+                                <span className="rounded-full border border-sky-300/25 bg-sky-300/10 px-2 py-1 text-[11px] text-sky-100">
+                                  {selectedPanel.location}
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-xs leading-relaxed text-white/45">
+                                No page location listed.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                          <button
+                            type="button"
+                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'ready')}
+                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                          >
+                            Mark ready
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'approved')}
+                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                          >
+                            Approve panel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'needs-art')}
+                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                          >
+                            Needs revision
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
+                        Build page cards first to preview panel art needs.
+                      </p>
+                    )}
+                  </section>
                 </div>
               ) : (
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
