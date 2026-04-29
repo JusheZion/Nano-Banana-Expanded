@@ -6,12 +6,10 @@ import {
   Download,
   ImagePlus,
   LayoutTemplate,
-  Lock,
   Palette,
   PanelTop,
   Rocket,
   Sparkles,
-  Unlock,
 } from 'lucide-react';
 import {
   ACCENT_BLUE_GRADIENT,
@@ -77,6 +75,16 @@ type OutlineBeat = {
   locked: boolean;
 };
 
+type PageCard = {
+  pageNumber: number;
+  summary: string;
+  panelCount: string;
+  keyCharacters: string;
+  keyLocation: string;
+  expanded: boolean;
+  panelBeats: string[];
+};
+
 const GENRE_OPTIONS = [
   'Superhero',
   'Fantasy',
@@ -107,6 +115,13 @@ const INITIAL_OUTLINE_BEATS: OutlineBeat[] = [
   { id: 'midpoint-turn', title: 'Midpoint Turn', description: '', locked: false },
   { id: 'climax', title: 'Climax', description: '', locked: false },
   { id: 'ending-beat', title: 'Ending Beat', description: '', locked: false },
+];
+
+const DEFAULT_PANEL_BEATS = [
+  'Panel 1: Establishing shot',
+  'Panel 2: Character moment',
+  'Panel 3: Conflict/dialogue',
+  'Panel 4: Transition or hook',
 ];
 
 const STEPS: GuidedComicStep[] = [
@@ -165,7 +180,7 @@ const STEPS: GuidedComicStep[] = [
     title: 'Plan pages and panel density',
     summary: 'Decide how many pages are needed and where big moments deserve more space.',
     helperText: 'This step maps story beats into pages so the comic has pacing before artwork begins.',
-    actionLabel: 'Generate Page Plan',
+    actionLabel: 'Prepare Visual References',
     workflowCards: [
       {
         title: 'Page Targets',
@@ -317,6 +332,37 @@ function outlineSeedForBeat(beatId: OutlineBeatId, story: StoryFormState): strin
   }
 }
 
+function targetPageCountFromInput(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(parsed, 60));
+}
+
+function pageSummarySeed(pageNumber: number, targetPageCount: number, outlineBeats: OutlineBeat[]): string {
+  const usableBeats = outlineBeats.filter((beat) => beat.description.trim() || beat.title.trim());
+  if (usableBeats.length === 0) return '';
+  const beatIndex = Math.min(
+    usableBeats.length - 1,
+    Math.floor(((pageNumber - 1) / Math.max(1, targetPageCount)) * usableBeats.length),
+  );
+  const beat = usableBeats[beatIndex];
+  const title = beat.title.trim() || `Beat ${beatIndex + 1}`;
+  const description = beat.description.trim();
+  return description ? `${title}: ${description}` : title;
+}
+
+function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats: OutlineBeat[]): PageCard {
+  return {
+    pageNumber,
+    summary: pageSummarySeed(pageNumber, targetPageCount, outlineBeats),
+    panelCount: '4',
+    keyCharacters: '',
+    keyLocation: '',
+    expanded: pageNumber === 1,
+    panelBeats: DEFAULT_PANEL_BEATS,
+  };
+}
+
 export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [setupForm, setSetupForm] = useState<SetupFormState>({
@@ -336,6 +382,7 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
     endingGoal: '',
   });
   const [outlineBeats, setOutlineBeats] = useState<OutlineBeat[]>(INITIAL_OUTLINE_BEATS);
+  const [pageCards, setPageCards] = useState<PageCard[]>([]);
   const activeStep = STEPS[activeIndex];
   const progress = useMemo(() => ((activeIndex + 1) / STEPS.length) * 100, [activeIndex]);
   const atStart = activeIndex === 0;
@@ -374,6 +421,20 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
     });
   }, [isPagesStep, storyForm]);
 
+  useEffect(() => {
+    if (!isPagesStep) return;
+    const targetPageCount = targetPageCountFromInput(setupForm.targetPageCount);
+    setPageCards((current) => {
+      const next: PageCard[] = [];
+      for (let index = 0; index < targetPageCount; index += 1) {
+        const pageNumber = index + 1;
+        const existing = current.find((page) => page.pageNumber === pageNumber);
+        next.push(existing ?? buildPageCard(pageNumber, targetPageCount, outlineBeats));
+      }
+      return next;
+    });
+  }, [isPagesStep, outlineBeats, setupForm.targetPageCount]);
+
   const goBack = () => setActiveIndex((index) => Math.max(0, index - 1));
   const goNext = () => setActiveIndex((index) => Math.min(STEPS.length - 1, index + 1));
   const updateSetupField = (field: keyof SetupFormState, value: string) => {
@@ -382,12 +443,21 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const updateStoryField = (field: keyof StoryFormState, value: string) => {
     setStoryForm((current) => ({ ...current, [field]: value }));
   };
-  const updateOutlineBeat = (id: OutlineBeatId, updates: Partial<Pick<OutlineBeat, 'title' | 'description'>>) => {
-    setOutlineBeats((current) => current.map((beat) => (beat.id === id ? { ...beat, ...updates } : beat)));
+  const updatePageCard = (
+    pageNumber: number,
+    updates: Partial<Pick<PageCard, 'summary' | 'panelCount' | 'keyCharacters' | 'keyLocation' | 'expanded'>>,
+  ) => {
+    setPageCards((current) => current.map((page) => (page.pageNumber === pageNumber ? { ...page, ...updates } : page)));
   };
-  const toggleOutlineBeatLock = (id: OutlineBeatId) => {
-    setOutlineBeats((current) =>
-      current.map((beat) => (beat.id === id ? { ...beat, locked: !beat.locked } : beat)),
+  const updatePagePanelBeat = (pageNumber: number, panelIndex: number, value: string) => {
+    setPageCards((current) =>
+      current.map((page) => {
+        if (page.pageNumber !== pageNumber) return page;
+        return {
+          ...page,
+          panelBeats: page.panelBeats.map((beat, index) => (index === panelIndex ? value : beat)),
+        };
+      }),
     );
   };
 
@@ -409,17 +479,17 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
     return parts.join('\n\n') || 'Add premise, conflict, and ending goal to shape the issue summary.';
   }, [storyForm.conflict, storyForm.endingGoal, storyForm.premise]);
   const outlineQualityItems = useMemo(() => {
-    const beatById = new Map(outlineBeats.map((beat) => [beat.id, beat]));
-    const opening = beatById.get('opening-hook')?.description.trim();
-    const risingConflict = beatById.get('rising-conflict')?.description.trim();
-    const ending = beatById.get('ending-beat')?.description.trim();
+    const targetPageCount = targetPageCountFromInput(setupForm.targetPageCount);
     return [
-      { label: 'Beginning is clear', complete: Boolean(opening) },
-      { label: 'Main conflict is clear', complete: Boolean(storyForm.conflict.trim() || risingConflict) },
-      { label: 'Ending beat exists', complete: Boolean(storyForm.endingGoal.trim() || ending) },
-      { label: 'Page target is set', complete: Number(setupForm.targetPageCount) > 0 },
+      { label: 'Page count matches target', complete: pageCards.length === targetPageCount },
+      { label: 'Page summaries started', complete: pageCards.some((page) => page.summary.trim()) },
+      {
+        label: 'Characters or locations noted',
+        complete: pageCards.some((page) => page.keyCharacters.trim() || page.keyLocation.trim()),
+      },
+      { label: 'Panel placeholders ready', complete: pageCards.every((page) => page.panelBeats.length >= 4) },
     ];
-  }, [outlineBeats, setupForm.targetPageCount, storyForm.conflict, storyForm.endingGoal]);
+  }, [pageCards, setupForm.targetPageCount]);
 
   return (
     <div
@@ -546,7 +616,7 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                       : isStoryStep
                         ? 'Shape the story locally here. The outline action is still parked until AI wiring is added.'
                         : isPagesStep
-                          ? 'Review and edit local outline beats before turning them into a page plan later.'
+                          ? 'Edit local page cards before moving into visual reference prep.'
                       : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
                   </p>
                 </div>
@@ -730,58 +800,111 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 </div>
               ) : isPagesStep ? (
                 <div className="mt-5 grid gap-4">
-                  {outlineBeats.map((beat, index) => {
-                    const status = beat.locked ? 'Locked' : beat.description.trim() ? 'Draft' : 'Needs detail';
+                  {pageCards.map((page) => {
+                    const status = page.summary.trim() ? 'Draft' : 'Needs summary';
                     return (
-                      <article key={beat.id} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <label className="min-w-0 flex-1 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
-                            Beat title
-                            <input
-                              type="text"
-                              value={beat.title}
-                              disabled={beat.locked}
-                              onChange={(event) => updateOutlineBeat(beat.id, { title: event.target.value })}
-                              className="mt-1.5 w-full rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none disabled:opacity-60"
-                            />
-                          </label>
+                      <article key={page.pageNumber} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Page {page.pageNumber}
+                            </p>
+                            <h3 className="mt-1 text-lg font-black text-white">Page {page.pageNumber}</h3>
+                          </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <span
                               className="rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
                               style={{
-                                borderColor: beat.locked ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
-                                color: beat.locked ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.68)',
+                                borderColor: page.summary.trim() ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
+                                color: page.summary.trim() ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.68)',
                               }}
                             >
                               {status}
                             </span>
-                            <Tooltip content={beat.locked ? 'Unlock this beat' : 'Lock this beat'}>
-                              <button
-                                type="button"
-                                onClick={() => toggleOutlineBeatLock(beat.id)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-black/25 text-white/80 transition hover:bg-white/10"
-                                aria-label={beat.locked ? `Unlock ${beat.title}` : `Lock ${beat.title}`}
-                              >
-                                {beat.locked ? (
-                                  <Lock className="h-4 w-4" aria-hidden />
-                                ) : (
-                                  <Unlock className="h-4 w-4" aria-hidden />
-                                )}
-                              </button>
-                            </Tooltip>
+                            <button
+                              type="button"
+                              onClick={() => updatePageCard(page.pageNumber, { expanded: !page.expanded })}
+                              className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10"
+                              aria-expanded={page.expanded}
+                            >
+                              {page.expanded ? 'Hide panels' : 'Show panels'}
+                            </button>
                           </div>
                         </div>
+
                         <label className="mt-3 flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
-                          Description
+                          Page summary
                           <textarea
-                            value={beat.description}
-                            disabled={beat.locked}
-                            onChange={(event) => updateOutlineBeat(beat.id, { description: event.target.value })}
+                            value={page.summary}
+                            onChange={(event) => updatePageCard(page.pageNumber, { summary: event.target.value })}
                             rows={3}
-                            placeholder={`Describe beat ${index + 1}.`}
-                            className="min-h-[6rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70 disabled:opacity-60"
+                            placeholder="What happens on this page?"
+                            className="min-h-[6rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
                           />
                         </label>
+
+                        <div className="mt-3 grid gap-3 md:grid-cols-[160px_minmax(0,1fr)_minmax(0,1fr)]">
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Panel count
+                            <select
+                              value={page.panelCount}
+                              onChange={(event) => updatePageCard(page.pageNumber, { panelCount: event.target.value })}
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
+                                <option key={count} value={String(count)}>
+                                  {count}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Key characters
+                            <input
+                              type="text"
+                              value={page.keyCharacters}
+                              onChange={(event) => updatePageCard(page.pageNumber, { keyCharacters: event.target.value })}
+                              placeholder="e.g. Flux, Aries"
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Key location
+                            <input
+                              type="text"
+                              value={page.keyLocation}
+                              onChange={(event) => updatePageCard(page.pageNumber, { keyLocation: event.target.value })}
+                              placeholder="e.g. Observatory roof"
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                            />
+                          </label>
+                        </div>
+
+                        {page.expanded ? (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Placeholder panel beats
+                            </p>
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                              {page.panelBeats.map((panelBeat, panelIndex) => (
+                                <label
+                                  key={`${page.pageNumber}-${panelIndex}`}
+                                  className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55"
+                                >
+                                  Panel {panelIndex + 1}
+                                  <input
+                                    type="text"
+                                    value={panelBeat}
+                                    onChange={(event) =>
+                                      updatePagePanelBeat(page.pageNumber, panelIndex, event.target.value)
+                                    }
+                                    className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })}
@@ -885,7 +1008,7 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
                   Quality checklist
                 </p>
-                <h3 className="mt-2 text-lg font-black text-white">Issue outline readiness</h3>
+                <h3 className="mt-2 text-lg font-black text-white">Page plan readiness</h3>
                 <div className="mt-4 space-y-2">
                   {outlineQualityItems.map((item) => (
                     <div
@@ -906,7 +1029,7 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                   ))}
                 </div>
                 <p className="mt-4 text-xs leading-relaxed text-white/55">
-                  These checks only read local Setup, Story, and outline beat values. They do not save or generate
+                  These checks only read local Setup, Story, outline, and page card values. They do not save or generate
                   anything yet.
                 </p>
               </>
