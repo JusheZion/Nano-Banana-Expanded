@@ -112,7 +112,7 @@ function App() {
       )}
       {activePortal === 'comic' && (
         <Suspense fallback={<PortalFallback />}>
-          <ComicPortal />
+          <ComicPortal onNavigatePortal={navigatePortal} />
         </Suspense>
       )}
       {activePortal === 'writer' && (

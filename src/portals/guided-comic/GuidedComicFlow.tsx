@@ -23,6 +23,7 @@ import {
   TEXT_ON_GOLD,
 } from '@/shared/theme/Phase12DesignTokens';
 import { Tooltip } from '@/shared/components/Tooltip';
+import type { Portal } from '@/shared/portals';
 
 type GuidedComicStepId =
   | 'setup'
@@ -104,6 +105,13 @@ type PanelArtQueueItem = {
   location: string;
 };
 
+type LayoutTemplateId = 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+
+type LayoutTemplateOption = {
+  id: LayoutTemplateId;
+  label: string;
+};
+
 const GENRE_OPTIONS = [
   'Superhero',
   'Fantasy',
@@ -141,6 +149,14 @@ const DEFAULT_PANEL_BEATS = [
   'Panel 2: Character moment',
   'Panel 3: Conflict/dialogue',
   'Panel 4: Transition or hook',
+];
+
+const LAYOUT_TEMPLATE_OPTIONS: LayoutTemplateOption[] = [
+  { id: 'auto', label: 'Auto layout' },
+  { id: 'three-panel', label: '3-panel page' },
+  { id: 'four-panel', label: '4-panel page' },
+  { id: 'six-panel-grid', label: '6-panel grid' },
+  { id: 'splash', label: 'Splash page' },
 ];
 
 const STEPS: GuidedComicStep[] = [
@@ -271,7 +287,7 @@ const STEPS: GuidedComicStep[] = [
     title: 'Arrange panels, balloons, and pacing',
     summary: 'Use the guided plan to enter layout work, then refine in the advanced comic editor when needed.',
     helperText: 'This step turns planned pages and prepared art into a layout checklist before precision editing.',
-    actionLabel: 'Arrange Comic Pages',
+    actionLabel: 'Export Comic',
     workflowCards: [
       {
         title: 'Layout Draft',
@@ -315,6 +331,7 @@ const STEPS: GuidedComicStep[] = [
 ];
 
 interface GuidedComicFlowProps {
+  onNavigatePortal: (portal: Portal) => void;
   onOpenAdvancedStudio: () => void;
 }
 
@@ -352,6 +369,17 @@ function panelArtStatusLabel(status: PanelArtStatus): string {
     case 'needs-art':
       return 'Needs art';
   }
+}
+
+function pagePanelArtSummary(page: PageCard, panelArtStatuses: Record<string, PanelArtStatus>): string {
+  const panelStatuses = page.panelBeats.map((_, panelIndex) => {
+    const panelNumber = panelIndex + 1;
+    return panelArtStatuses[panelArtQueueId(page.pageNumber, panelNumber)] ?? 'needs-art';
+  });
+  const approvedCount = panelStatuses.filter((status) => status === 'approved').length;
+  const readyCount = panelStatuses.filter((status) => status === 'ready').length;
+  const needsArtCount = panelStatuses.filter((status) => status === 'needs-art').length;
+  return `${approvedCount} approved / ${readyCount} ready / ${needsArtCount} needs art`;
 }
 
 function outlineSeedForBeat(beatId: OutlineBeatId, story: StoryFormState): string {
@@ -411,7 +439,7 @@ function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats
   };
 }
 
-export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) {
+export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: GuidedComicFlowProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [setupForm, setSetupForm] = useState<SetupFormState>({
     seriesTitle: '',
@@ -440,10 +468,13 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const isPagesStep = activeStep.id === 'pages';
   const isVisualPrepStep = activeStep.id === 'visual-prep';
   const isArtStep = activeStep.id === 'art';
+  const isLayoutStep = activeStep.id === 'layout';
+  const isExportStep = activeStep.id === 'export';
   const [characterReferences, setCharacterReferences] = useState<Record<string, VisualReferenceState>>({});
   const [locationReferences, setLocationReferences] = useState<Record<string, VisualReferenceState>>({});
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>({});
+  const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>({});
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -489,6 +520,20 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
     });
   }, [isPagesStep, outlineBeats, setupForm.targetPageCount]);
 
+  useEffect(() => {
+    if (!isLayoutStep) return;
+    setPageLayoutTemplates((current) => {
+      let changed = false;
+      const next = { ...current };
+      pageCards.forEach((page) => {
+        if (next[page.pageNumber]) return;
+        next[page.pageNumber] = 'auto';
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+  }, [isLayoutStep, pageCards]);
+
   const goBack = () => setActiveIndex((index) => Math.max(0, index - 1));
   const goNext = () => setActiveIndex((index) => Math.min(STEPS.length - 1, index + 1));
   const updateSetupField = (field: keyof SetupFormState, value: string) => {
@@ -528,6 +573,9 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   };
   const updatePanelArtStatus = (panelId: string, status: PanelArtStatus) => {
     setPanelArtStatuses((current) => ({ ...current, [panelId]: status }));
+  };
+  const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
+    setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
   };
 
   const storyCharacters = useMemo(() => splitListText(storyForm.mainCharacters), [storyForm.mainCharacters]);
@@ -573,6 +621,69 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const selectedPanelStatus = selectedPanel
     ? panelArtStatuses[selectedPanel.id] ?? 'needs-art'
     : 'needs-art';
+  const layoutChecklistItems = useMemo(() => {
+    const allPagesPlanned =
+      pageCards.length > 0 && pageCards.every((page) => page.summary.trim() && Number.parseInt(page.panelCount, 10) > 0);
+    const panelArtReviewed =
+      panelArtQueue.length > 0 && panelArtQueue.every((panel) => (panelArtStatuses[panel.id] ?? 'needs-art') !== 'needs-art');
+    const layoutTemplatesSelected =
+      pageCards.length > 0 && pageCards.every((page) => Boolean(pageLayoutTemplates[page.pageNumber]));
+    return [
+      { label: 'All pages planned', complete: allPagesPlanned },
+      { label: 'Panel art reviewed', complete: panelArtReviewed },
+      { label: 'Layout templates selected', complete: layoutTemplatesSelected },
+      { label: 'Ready for export', complete: allPagesPlanned && panelArtReviewed && layoutTemplatesSelected },
+    ];
+  }, [pageCards, pageLayoutTemplates, panelArtQueue, panelArtStatuses]);
+  const exportSummary = useMemo(() => {
+    const approvedArtCount = panelArtQueue.filter((panel) => panelArtStatuses[panel.id] === 'approved').length;
+    const pagesWithLayoutTemplates = pageCards.filter((page) => Boolean(pageLayoutTemplates[page.pageNumber])).length;
+    return {
+      totalPages: pageCards.length,
+      totalPanelBeats: panelArtQueue.length,
+      approvedArtCount,
+      pagesWithLayoutTemplates,
+    };
+  }, [pageCards, pageLayoutTemplates, panelArtQueue, panelArtStatuses]);
+  const exportChecklistItems = useMemo(() => {
+    const storyFoundationComplete = Boolean(
+      (setupForm.seriesTitle.trim() || setupForm.issueTitle.trim()) &&
+        setupForm.premise.trim() &&
+        storyForm.premise.trim() &&
+        storyForm.mainCharacters.trim() &&
+        storyForm.conflict.trim(),
+    );
+    const outlineBeatsDrafted = outlineBeats.every((beat) => beat.description.trim());
+    const pagesPlanned =
+      pageCards.length > 0 && pageCards.every((page) => page.summary.trim() && page.panelBeats.some((beat) => beat.trim()));
+    const visualReferencesReviewed = totalVisualReferences > 0 && missingVisualReferences === 0;
+    const panelArtReviewed =
+      panelArtQueue.length > 0 && panelArtQueue.every((panel) => (panelArtStatuses[panel.id] ?? 'needs-art') !== 'needs-art');
+    const layoutTemplatesSelected =
+      pageCards.length > 0 && pageCards.every((page) => Boolean(pageLayoutTemplates[page.pageNumber]));
+    return [
+      { label: 'Story foundation complete', complete: storyFoundationComplete },
+      { label: 'Outline beats drafted', complete: outlineBeatsDrafted },
+      { label: 'Pages planned', complete: pagesPlanned },
+      { label: 'Visual references reviewed', complete: visualReferencesReviewed },
+      { label: 'Panel art reviewed', complete: panelArtReviewed },
+      { label: 'Layout templates selected', complete: layoutTemplatesSelected },
+    ];
+  }, [
+    missingVisualReferences,
+    outlineBeats,
+    pageCards,
+    pageLayoutTemplates,
+    panelArtQueue,
+    panelArtStatuses,
+    setupForm.issueTitle,
+    setupForm.premise,
+    setupForm.seriesTitle,
+    storyForm.conflict,
+    storyForm.mainCharacters,
+    storyForm.premise,
+    totalVisualReferences,
+  ]);
   const workingLogline = useMemo(() => {
     const characterLead = storyCharacters[0] || 'A lead character';
     const conflict = storyForm.conflict.trim() || 'faces a defining conflict';
@@ -728,9 +839,13 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                         : isPagesStep
                           ? 'Edit local page cards before moving into visual reference prep.'
                           : isVisualPrepStep
-                            ? 'Review references detected from page cards. These controls only update local readiness.'
+                            ? 'Reference picking is not wired in this guided flow yet. Use Image Vault or Advanced Imageshop for real references.'
                             : isArtStep
-                              ? 'Track panel art readiness locally before moving into page arrangement.'
+                              ? 'Panel art generation is not wired here yet. Use Advanced Imageshop to generate actual images for now.'
+                              : isLayoutStep
+                                ? 'Choose page layout templates locally before the final export review.'
+                                : isExportStep
+                                  ? 'Review the local comic plan. Export actions are placeholders until file generation is wired.'
                       : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
                   </p>
                 </div>
@@ -745,16 +860,20 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 </button>
               </div>
               {isVisualPrepStep ? (
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                    onClick={() => onNavigatePortal('lab')}
+                    className="inline-flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-black text-white/90 transition hover:bg-white/15 active:scale-[0.99]"
+                    style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(252,246,186,0.10)' }}
                   >
                     Open Illustrator's Imageshop
                   </button>
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                    onClick={() => onNavigatePortal('reference')}
+                    className="inline-flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-black text-white/90 transition hover:bg-white/15 active:scale-[0.99]"
+                    style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(252,246,186,0.10)' }}
                   >
                     Open Image Vault
                   </button>
@@ -1041,6 +1160,10 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 </div>
               ) : isVisualPrepStep ? (
                 <div className="mt-5 grid gap-4">
+                  <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
+                    Reference picking is not wired in this guided flow yet. Use Image Vault or Advanced Imageshop for
+                    real references. The controls below are local planning/status controls only.
+                  </div>
                   <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                       <div>
@@ -1079,21 +1202,21 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                                   onClick={() => markCharacterReference(character, 'added')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Add reference
+                                  Mark ready: reference planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markCharacterReference(character, 'built')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Build character
+                                  Mark ready: character planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markCharacterReference(character, 'vault')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Use from vault
+                                  Mark ready: vault noted
                                 </button>
                               </div>
                             </div>
@@ -1145,21 +1268,21 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                                   onClick={() => markLocationReference(location, 'added')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Add reference
+                                  Mark ready: reference planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markLocationReference(location, 'built')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Build asset
+                                  Mark ready: asset planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markLocationReference(location, 'vault')}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Use from vault
+                                  Mark ready: vault noted
                                 </button>
                               </div>
                             </div>
@@ -1181,15 +1304,17 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
                       <button
                         type="button"
-                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                        disabled
+                        className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/35 disabled:cursor-not-allowed"
                       >
-                        Add NPC reference
+                        Add NPC reference (not connected yet)
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                        disabled
+                        className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/35 disabled:cursor-not-allowed"
                       >
-                        Add style/mood reference
+                        Add style/mood reference (not connected yet)
                       </button>
                     </div>
                   </section>
@@ -1201,6 +1326,10 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 </div>
               ) : isArtStep ? (
                 <div className="mt-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+                  <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50 xl:col-span-2">
+                    Panel art generation is not wired here yet. Use Advanced Imageshop to generate actual images for
+                    now. This queue only tracks local panel status.
+                  </div>
                   <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
                     <div className="flex items-end justify-between gap-3">
                       <div>
@@ -1355,21 +1484,21 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                             onClick={() => updatePanelArtStatus(selectedPanel.id, 'ready')}
                             className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
                           >
-                            Mark ready
+                            Mark ready (status only)
                           </button>
                           <button
                             type="button"
                             onClick={() => updatePanelArtStatus(selectedPanel.id, 'approved')}
                             className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
                           >
-                            Approve panel
+                            Approve panel (status only)
                           </button>
                           <button
                             type="button"
                             onClick={() => updatePanelArtStatus(selectedPanel.id, 'needs-art')}
                             className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
                           >
-                            Needs revision
+                            Needs revision (status only)
                           </button>
                         </div>
                       </>
@@ -1378,6 +1507,148 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                         Build page cards first to preview panel art needs.
                       </p>
                     )}
+                  </section>
+                </div>
+              ) : isLayoutStep ? (
+                <div className="mt-5 grid gap-4">
+                  {pageCards.length > 0 ? (
+                    pageCards.map((page) => (
+                      <article key={page.pageNumber} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Page {page.pageNumber}
+                            </p>
+                            <h3 className="mt-1 text-lg font-black text-white">Page {page.pageNumber} layout</h3>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-white/70">
+                              {page.summary.trim() || 'Add a page summary on the Pages step.'}
+                            </p>
+                          </div>
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Layout template
+                            <select
+                              value={pageLayoutTemplates[page.pageNumber] ?? 'auto'}
+                              onChange={(event) =>
+                                updatePageLayoutTemplate(page.pageNumber, event.target.value as LayoutTemplateId)
+                              }
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                            >
+                              {LAYOUT_TEMPLATE_OPTIONS.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Panel count
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-white/85">{page.panelCount} panels</p>
+                          </div>
+                          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Art status summary
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-white/85">
+                              {pagePanelArtSummary(page, panelArtStatuses)}
+                            </p>
+                          </div>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
+                      Build page cards first to plan page layouts.
+                    </p>
+                  )}
+                </div>
+              ) : isExportStep ? (
+                <div className="mt-5 grid gap-4">
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                      Comic Project Summary
+                    </p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {[
+                        ['Comic / series title', setupForm.seriesTitle.trim() || 'Untitled series'],
+                        ['Issue title', setupForm.issueTitle.trim() || 'Untitled issue'],
+                        ['Issue number', setupForm.issueNumber.trim() || '1'],
+                        ['Target page count', String(targetPageCountFromInput(setupForm.targetPageCount))],
+                        ['Genre', setupForm.genre],
+                        ['Tone', setupForm.tone],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">{label}</p>
+                          <p className="mt-1 text-sm font-bold text-white/85">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                      Page Readiness Summary
+                    </p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Total pages</p>
+                        <p className="mt-1 text-2xl font-black text-white">{exportSummary.totalPages}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Total panel beats
+                        </p>
+                        <p className="mt-1 text-2xl font-black text-white">{exportSummary.totalPanelBeats}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Approved art count
+                        </p>
+                        <p className="mt-1 text-2xl font-black text-white">{exportSummary.approvedArtCount}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Layouts selected
+                        </p>
+                        <p className="mt-1 text-2xl font-black text-white">
+                          {exportSummary.pagesWithLayoutTemplates}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                      Export Planning
+                    </p>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        disabled
+                        className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/35"
+                      >
+                        Export PDF
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/35"
+                      >
+                        Export PNG pages
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onOpenAdvancedStudio}
+                        className="rounded-lg border px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/10"
+                        style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
+                      >
+                        Open Advanced Comics Studio
+                      </button>
+                    </div>
                   </section>
                 </div>
               ) : (
@@ -1502,6 +1773,64 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 <p className="mt-4 text-xs leading-relaxed text-white/55">
                   These checks only read local Setup, Story, outline, and page card values. They do not save or generate
                   anything yet.
+                </p>
+              </>
+            ) : isLayoutStep ? (
+              <>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                  Layout checklist
+                </p>
+                <h3 className="mt-2 text-lg font-black text-white">Export readiness</h3>
+                <div className="mt-4 space-y-2">
+                  {layoutChecklistItems.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                    >
+                      <span className="text-sm text-white/70">{item.label}</span>
+                      <span
+                        className="rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        style={{
+                          borderColor: item.complete ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
+                          color: item.complete ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.45)',
+                        }}
+                      >
+                        {item.complete ? 'Ready' : 'Open'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs leading-relaxed text-white/55">
+                  This checklist only reads local page cards, panel art statuses, and layout template choices.
+                </p>
+              </>
+            ) : isExportStep ? (
+              <>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                  Export checklist
+                </p>
+                <h3 className="mt-2 text-lg font-black text-white">Final review</h3>
+                <div className="mt-4 space-y-2">
+                  {exportChecklistItems.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                    >
+                      <span className="text-sm text-white/70">{item.label}</span>
+                      <span
+                        className="rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]"
+                        style={{
+                          borderColor: item.complete ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
+                          color: item.complete ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.45)',
+                        }}
+                      >
+                        {item.complete ? 'Ready' : 'Open'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs leading-relaxed text-white/55">
+                  Export is still a local readiness review. PDF and PNG generation are intentionally disabled.
                 </p>
               </>
             ) : (
