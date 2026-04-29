@@ -85,6 +85,14 @@ type PageCard = {
   panelBeats: string[];
 };
 
+type ReferenceStatus = 'missing' | 'ready';
+type ReferenceSource = 'added' | 'built' | 'vault';
+
+type VisualReferenceState = {
+  status: ReferenceStatus;
+  source?: ReferenceSource;
+};
+
 const GENRE_OPTIONS = [
   'Superhero',
   'Fantasy',
@@ -204,7 +212,7 @@ const STEPS: GuidedComicStep[] = [
     title: 'Gather characters, locations, and props',
     summary: 'Review what should come from the Image Vault and what still needs reference art.',
     helperText: 'This step lines up the Image Vault, Character Studio, Asset Studio, and Imageshop before panel art.',
-    actionLabel: 'Prepare References',
+    actionLabel: 'Generate Panel Art',
     workflowCards: [
       {
         title: 'Vault Matches',
@@ -306,6 +314,20 @@ function splitListText(value: string): string[] {
     .filter(Boolean);
 }
 
+function uniquePageCardTerms(values: string[]): string[] {
+  const seen = new Set<string>();
+  const uniqueTerms: string[] = [];
+
+  values.flatMap(splitListText).forEach((term) => {
+    const normalized = term.toLowerCase();
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    uniqueTerms.push(term);
+  });
+
+  return uniqueTerms;
+}
+
 function outlineSeedForBeat(beatId: OutlineBeatId, story: StoryFormState): string {
   const characters = splitListText(story.mainCharacters);
   const locations = splitListText(story.setting);
@@ -390,6 +412,9 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
   const isSetupStep = activeStep.id === 'setup';
   const isStoryStep = activeStep.id === 'story';
   const isPagesStep = activeStep.id === 'pages';
+  const isVisualPrepStep = activeStep.id === 'visual-prep';
+  const [characterReferences, setCharacterReferences] = useState<Record<string, VisualReferenceState>>({});
+  const [locationReferences, setLocationReferences] = useState<Record<string, VisualReferenceState>>({});
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -460,9 +485,40 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
       }),
     );
   };
+  const markCharacterReference = (name: string, source: ReferenceSource) => {
+    setCharacterReferences((current) => ({
+      ...current,
+      [name]: { status: 'ready', source },
+    }));
+  };
+  const markLocationReference = (name: string, source: ReferenceSource) => {
+    setLocationReferences((current) => ({
+      ...current,
+      [name]: { status: 'ready', source },
+    }));
+  };
 
   const storyCharacters = useMemo(() => splitListText(storyForm.mainCharacters), [storyForm.mainCharacters]);
   const storyLocations = useMemo(() => splitListText(storyForm.setting), [storyForm.setting]);
+  const pageCharacters = useMemo(
+    () => uniquePageCardTerms(pageCards.map((page) => page.keyCharacters)),
+    [pageCards],
+  );
+  const pageLocations = useMemo(
+    () => uniquePageCardTerms(pageCards.map((page) => page.keyLocation)),
+    [pageCards],
+  );
+  const readyCharacterCount = useMemo(
+    () => pageCharacters.filter((character) => characterReferences[character]?.status === 'ready').length,
+    [characterReferences, pageCharacters],
+  );
+  const readyLocationCount = useMemo(
+    () => pageLocations.filter((location) => locationReferences[location]?.status === 'ready').length,
+    [locationReferences, pageLocations],
+  );
+  const totalVisualReferences = pageCharacters.length + pageLocations.length;
+  const readyVisualReferences = readyCharacterCount + readyLocationCount;
+  const missingVisualReferences = Math.max(0, totalVisualReferences - readyVisualReferences);
   const workingLogline = useMemo(() => {
     const characterLead = storyCharacters[0] || 'A lead character';
     const conflict = storyForm.conflict.trim() || 'faces a defining conflict';
@@ -617,6 +673,8 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                         ? 'Shape the story locally here. The outline action is still parked until AI wiring is added.'
                         : isPagesStep
                           ? 'Edit local page cards before moving into visual reference prep.'
+                          : isVisualPrepStep
+                            ? 'Review references detected from page cards. These controls only update local readiness.'
                       : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
                   </p>
                 </div>
@@ -630,6 +688,22 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                   {activeStep.actionLabel}
                 </button>
               </div>
+              {isVisualPrepStep ? (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                  >
+                    Open Illustrator's Imageshop
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                  >
+                    Open Image Vault
+                  </button>
+                </div>
+              ) : null}
 
               {isSetupStep ? (
                 <div className="mt-5 grid gap-4">
@@ -908,6 +982,166 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                       </article>
                     );
                   })}
+                </div>
+              ) : isVisualPrepStep ? (
+                <div className="mt-5 grid gap-4">
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Characters
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">Character references</h3>
+                      </div>
+                      <p className="text-xs text-white/50">{pageCharacters.length} found from page cards</p>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      {pageCharacters.length > 0 ? (
+                        pageCharacters.map((character) => {
+                          const reference = characterReferences[character];
+                          const ready = reference?.status === 'ready';
+                          return (
+                            <div
+                              key={character}
+                              className="grid gap-3 rounded-lg border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-white">{character}</p>
+                                <span
+                                  className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
+                                  style={{
+                                    borderColor: ready ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
+                                    color: ready ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.62)',
+                                  }}
+                                >
+                                  {ready ? 'Ready' : 'Missing reference'}
+                                </span>
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
+                                <button
+                                  type="button"
+                                  onClick={() => markCharacterReference(character, 'added')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Add reference
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => markCharacterReference(character, 'built')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Build character
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => markCharacterReference(character, 'vault')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Use from vault
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
+                          Add key characters on page cards to build this reference list.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Locations & Assets
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">Environment and asset references</h3>
+                      </div>
+                      <p className="text-xs text-white/50">{pageLocations.length} found from page cards</p>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      {pageLocations.length > 0 ? (
+                        pageLocations.map((location) => {
+                          const reference = locationReferences[location];
+                          const ready = reference?.status === 'ready';
+                          return (
+                            <div
+                              key={location}
+                              className="grid gap-3 rounded-lg border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-white">{location}</p>
+                                <span
+                                  className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
+                                  style={{
+                                    borderColor: ready ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.16)',
+                                    color: ready ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.62)',
+                                  }}
+                                >
+                                  {ready ? 'Ready' : 'Missing reference'}
+                                </span>
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
+                                <button
+                                  type="button"
+                                  onClick={() => markLocationReference(location, 'added')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Add reference
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => markLocationReference(location, 'built')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Build asset
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => markLocationReference(location, 'vault')}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                >
+                                  Use from vault
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
+                          Add key locations on page cards to build this reference list.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                      Supporting References
+                    </p>
+                    <h3 className="mt-1 text-lg font-black text-white">Extra continuity support</h3>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                      >
+                        Add NPC reference
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                      >
+                        Add style/mood reference
+                      </button>
+                    </div>
+                  </section>
+
+                  <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm font-bold text-amber-50">
+                    {pageCharacters.length} characters and {pageLocations.length} locations found.{' '}
+                    {readyVisualReferences} ready. {missingVisualReferences} need references before generating art.
+                  </div>
                 </div>
               ) : (
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
