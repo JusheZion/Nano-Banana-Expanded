@@ -39,9 +39,48 @@ type GuidedComicStep = {
   eyebrow: string;
   title: string;
   summary: string;
-  placeholder: string;
+  helperText: string;
+  actionLabel: string;
+  workflowCards: {
+    title: string;
+    body: string;
+  }[];
   Icon: React.ComponentType<{ className?: string }>;
 };
+
+type SetupFormState = {
+  seriesTitle: string;
+  issueTitle: string;
+  issueNumber: string;
+  targetPageCount: string;
+  genre: string;
+  tone: string;
+  premise: string;
+};
+
+const GENRE_OPTIONS = [
+  'Superhero',
+  'Fantasy',
+  'Sci-fi',
+  'Mystery',
+  'Slice of life',
+  'Horror',
+  'Romance',
+  'Adventure',
+  'Custom',
+];
+
+const TONE_OPTIONS = [
+  'Cinematic',
+  'Playful',
+  'Epic',
+  'Noir',
+  'Satirical',
+  'Hopeful',
+  'Dark',
+  'Wonder-filled',
+  'Custom',
+];
 
 const STEPS: GuidedComicStep[] = [
   {
@@ -50,7 +89,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Start here',
     title: 'Choose the shape of the comic',
     summary: 'Set the format, tone, audience, and working title before any panels are created.',
-    placeholder: 'Placeholder: project name, issue type, reading format, page size, and target length controls.',
+    helperText: 'This step turns a loose idea into the basic project brief ARCS can carry through the rest of the flow.',
+    actionLabel: 'Build Story Foundation',
+    workflowCards: [
+      {
+        title: 'Project Brief',
+        body: 'Working title, series or one-shot choice, issue number, audience, tone, and genre.',
+      },
+      {
+        title: 'Comic Format',
+        body: 'Choose webtoon or page spread, page size, target length, cover needs, and reading direction.',
+      },
+      {
+        title: 'Foundation Output',
+        body: 'A concise creative brief that can seed Writers Workshop, visual prep, and layout planning.',
+      },
+    ],
     Icon: Rocket,
   },
   {
@@ -59,7 +113,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Script foundation',
     title: 'Bring in the story spine',
     summary: 'Capture the synopsis, outline, page beats, or script context that will guide the rest of the workflow.',
-    placeholder: 'Placeholder: synopsis field, Writers Workshop import, page beat review, and dialogue draft handoff.',
+    helperText: 'This step is where the comic’s narrative source of truth comes together before page planning.',
+    actionLabel: 'Generate Issue Outline',
+    workflowCards: [
+      {
+        title: 'Synopsis Source',
+        body: 'Draft a synopsis here or prepare to pull issue context from Writers Workshop.',
+      },
+      {
+        title: 'Outline Shape',
+        body: 'Review act beats, page targets, key reveals, emotional turns, and dialogue needs.',
+      },
+      {
+        title: 'Story Output',
+        body: 'A usable issue outline that can feed page beats and later guide panel composition.',
+      },
+    ],
     Icon: BookOpenText,
   },
   {
@@ -68,7 +137,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Structure',
     title: 'Plan pages and panel density',
     summary: 'Decide how many pages are needed and where big moments deserve more space.',
-    placeholder: 'Placeholder: page list, spread moments, cover toggle, and panel-count suggestions.',
+    helperText: 'This step maps story beats into pages so the comic has pacing before artwork begins.',
+    actionLabel: 'Generate Page Plan',
+    workflowCards: [
+      {
+        title: 'Page Targets',
+        body: 'Define page count, cover pages, double-page spread moments, and recap or end-card needs.',
+      },
+      {
+        title: 'Panel Density',
+        body: 'Mark quiet pages, action pages, hero panels, splash moments, and dialogue-heavy pages.',
+      },
+      {
+        title: 'Page Output',
+        body: 'A page-by-page plan ready for Writers Workshop page beats or manual layout drafting.',
+      },
+    ],
     Icon: PanelTop,
   },
   {
@@ -77,7 +161,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Reference pass',
     title: 'Gather characters, locations, and props',
     summary: 'Review what should come from the Image Vault and what still needs reference art.',
-    placeholder: 'Placeholder: vault matches, missing recurring refs, quick refs, and Imageshop prep queue.',
+    helperText: 'This step lines up the Image Vault, Character Studio, Asset Studio, and Imageshop before panel art.',
+    actionLabel: 'Prepare References',
+    workflowCards: [
+      {
+        title: 'Vault Matches',
+        body: 'Identify existing character profiles, asset collections, NPC refs, and supporting images.',
+      },
+      {
+        title: 'Missing References',
+        body: 'List recurring cast, locations, props, costumes, and mood refs that still need creation.',
+      },
+      {
+        title: 'Prep Output',
+        body: 'A visual prep queue for Illustrator’s Imageshop, Character Studio, and Asset Studio.',
+      },
+    ],
     Icon: ImagePlus,
   },
   {
@@ -86,7 +185,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Image creation',
     title: 'Create or select panel artwork',
     summary: 'Move from prepared references into art selection for the pages that need images.',
-    placeholder: 'Placeholder: art checklist, generation status, selected vault images, and panel art assignments.',
+    helperText: 'This step is the artwork pass: pick finished images, note gaps, and prepare panel assignments.',
+    actionLabel: 'Generate Panel Art',
+    workflowCards: [
+      {
+        title: 'Art Queue',
+        body: 'Track panels needing new art, panels using vault images, and panels that only need placeholders.',
+      },
+      {
+        title: 'Style Continuity',
+        body: 'Carry character consistency, setting continuity, aspect ratio, camera notes, and lighting notes.',
+      },
+      {
+        title: 'Art Output',
+        body: 'Panel-ready image selections that can be placed into the advanced Comics Studio canvas.',
+      },
+    ],
     Icon: Palette,
   },
   {
@@ -95,7 +209,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Comic assembly',
     title: 'Arrange panels, balloons, and pacing',
     summary: 'Use the guided plan to enter layout work, then refine in the advanced comic editor when needed.',
-    placeholder: 'Placeholder: layout preview, panel template suggestions, balloon checklist, and advanced editor entry.',
+    helperText: 'This step turns planned pages and prepared art into a layout checklist before precision editing.',
+    actionLabel: 'Arrange Comic Pages',
+    workflowCards: [
+      {
+        title: 'Layout Draft',
+        body: 'Choose page templates, panel order, gutter rhythm, splash panels, and spread composition.',
+      },
+      {
+        title: 'Lettering Pass',
+        body: 'Plan speech balloons, captions, sound effects, reading order, and dialogue balance.',
+      },
+      {
+        title: 'Layout Output',
+        body: 'A page assembly plan for the existing advanced editor with panels, balloons, and assets in mind.',
+      },
+    ],
     Icon: LayoutTemplate,
   },
   {
@@ -104,7 +233,22 @@ const STEPS: GuidedComicStep[] = [
     eyebrow: 'Finish',
     title: 'Review and publish the issue',
     summary: 'Check pages, confirm export format, and prepare the comic for download or sharing.',
-    placeholder: 'Placeholder: review checklist, missing art warnings, PNG/PDF options, and export readiness.',
+    helperText: 'This step helps catch missing images, rough lettering, and format choices before final export.',
+    actionLabel: 'Export Comic',
+    workflowCards: [
+      {
+        title: 'Readthrough',
+        body: 'Review page order, story clarity, missing panels, unfinished balloons, and visual consistency.',
+      },
+      {
+        title: 'Export Choice',
+        body: 'Prepare PNG or PDF output, page naming, dimensions, and final quality checks.',
+      },
+      {
+        title: 'Export Output',
+        body: 'A final readiness checklist before using the advanced studio export tools.',
+      },
+    ],
     Icon: Download,
   },
 ];
@@ -115,13 +259,26 @@ interface GuidedComicFlowProps {
 
 export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [setupForm, setSetupForm] = useState<SetupFormState>({
+    seriesTitle: '',
+    issueTitle: '',
+    issueNumber: '1',
+    targetPageCount: '22',
+    genre: GENRE_OPTIONS[0],
+    tone: TONE_OPTIONS[0],
+    premise: '',
+  });
   const activeStep = STEPS[activeIndex];
   const progress = useMemo(() => ((activeIndex + 1) / STEPS.length) * 100, [activeIndex]);
   const atStart = activeIndex === 0;
   const atEnd = activeIndex === STEPS.length - 1;
+  const isSetupStep = activeStep.id === 'setup';
 
   const goBack = () => setActiveIndex((index) => Math.max(0, index - 1));
   const goNext = () => setActiveIndex((index) => Math.min(STEPS.length - 1, index + 1));
+  const updateSetupField = (field: keyof SetupFormState, value: string) => {
+    setSetupForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <div
@@ -154,8 +311,8 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
               <button
                 type="button"
                 onClick={onOpenAdvancedStudio}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
-                style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
+                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
                 <LayoutTemplate className="h-4 w-4" aria-hidden />
                 Open Advanced Comics Studio
@@ -226,6 +383,9 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
                 <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/70 md:text-base">
                   {activeStep.summary}
                 </p>
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/55">
+                  {activeStep.helperText}
+                </p>
               </div>
               <div
                 className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border shadow-lg"
@@ -236,27 +396,144 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
             </div>
 
             <div className="mt-6 rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
-              <p className="text-sm font-semibold text-white/90">{activeStep.placeholder}</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Input</p>
-                  <p className="mt-2 text-xs leading-relaxed text-white/65">
-                    Space reserved for user choices, imports, and review fields.
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white/90">{activeStep.actionLabel}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/55">
+                    {isSetupStep
+                      ? 'Complete the local brief, then continue into Story. Nothing is saved or sent yet.'
+                      : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Guidance</p>
-                  <p className="mt-2 text-xs leading-relaxed text-white/65">
-                    Space reserved for plain-language prompts and next-step suggestions.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Output</p>
-                  <p className="mt-2 text-xs leading-relaxed text-white/65">
-                    Space reserved for generated plans, checklists, and handoff summaries.
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  disabled={!isSetupStep}
+                  onClick={isSetupStep ? goNext : undefined}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg px-4 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
+                  style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                >
+                  {activeStep.actionLabel}
+                </button>
               </div>
+
+              {isSetupStep ? (
+                <div className="mt-5 grid gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Comic / series title
+                      <input
+                        type="text"
+                        value={setupForm.seriesTitle}
+                        onChange={(event) => updateSetupField('seriesTitle', event.target.value)}
+                        placeholder="e.g. The Astral City"
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Issue title
+                      <input
+                        type="text"
+                        value={setupForm.issueTitle}
+                        onChange={(event) => updateSetupField('issueTitle', event.target.value)}
+                        placeholder="e.g. Gate of the First Sun"
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Issue number
+                      <input
+                        type="number"
+                        min="1"
+                        value={setupForm.issueNumber}
+                        onChange={(event) => updateSetupField('issueNumber', event.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Target page count
+                      <input
+                        type="number"
+                        min="1"
+                        value={setupForm.targetPageCount}
+                        onChange={(event) => updateSetupField('targetPageCount', event.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Genre
+                      <select
+                        value={setupForm.genre}
+                        onChange={(event) => updateSetupField('genre', event.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                      >
+                        {GENRE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Tone
+                      <select
+                        value={setupForm.tone}
+                        onChange={(event) => updateSetupField('tone', event.target.value)}
+                        className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                      >
+                        {TONE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                    Short idea / premise
+                    <textarea
+                      value={setupForm.premise}
+                      onChange={(event) => updateSetupField('premise', event.target.value)}
+                      rows={5}
+                      placeholder="Describe the central conflict, main character, setting, or the image you want the comic to leave in the reader’s mind."
+                      className="min-h-[8rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                    />
+                  </label>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Local only</p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/65">
+                        Values stay in this guided flow while you move between steps.
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Story seed</p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/65">
+                        The next pass can use this brief to shape outline and page planning tools.
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">No write yet</p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/65">
+                        This does not call AI, Supabase, or localStorage.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {activeStep.workflowCards.map((card) => (
+                    <div key={card.title} className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">{card.title}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-white/65">{card.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -287,14 +564,25 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
 
           <aside className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-              Current pass
+              What happens next
             </p>
-            <h3 className="mt-2 text-lg font-black text-white">Low-risk shell only</h3>
+            <h3 className="mt-2 text-lg font-black text-white">
+              {isSetupStep ? 'Your brief becomes the story starting point' : `${activeStep.label} leads into the next pass`}
+            </h3>
             <ul className="mt-4 space-y-3 text-sm leading-relaxed text-white/65">
-              <li>No new portal route.</li>
-              <li>Plan first, refine later.</li>
-              <li>Steps stay lightweight.</li>
-              <li>Advanced editor remains one click away.</li>
+              {isSetupStep ? (
+                <>
+                  <li>Use the title, issue details, genre, tone, and premise to frame the Story step.</li>
+                  <li>Move forward to outline planning without saving anything outside this screen.</li>
+                  <li>Return here anytime during this session to adjust the foundation.</li>
+                </>
+              ) : (
+                <>
+                  <li>Review the guidance cards for this stage.</li>
+                  <li>Use Back or Next to move through the comic workflow.</li>
+                  <li>Open the advanced studio whenever you are ready for canvas work.</li>
+                </>
+              )}
             </ul>
             <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
               <p className="text-xs font-bold text-white/85">Ready for precision work?</p>
@@ -304,8 +592,8 @@ export function GuidedComicFlow({ onOpenAdvancedStudio }: GuidedComicFlowProps) 
               <button
                 type="button"
                 onClick={onOpenAdvancedStudio}
-                className="mt-4 w-full rounded-lg px-3 py-2 text-xs font-black"
-                style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                className="mt-4 w-full rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10"
+                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
                 Open Advanced Comics Studio
               </button>
