@@ -4,6 +4,7 @@ import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import type { VaultAssetAlbum } from '@/shared/api/arcsAssetVault';
 import { CollectionVaultModal } from '@/components/ui/CollectionVaultModal';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
+import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 
 const AMETHYST = '#8B5CF6';
 const AMETHYST_LIGHT = '#A78BFA';
@@ -22,6 +23,8 @@ export const AssetVault: React.FC = () => {
   const [albums, setAlbums] = useState<VaultAssetAlbum[]>([]);
   const [openCollection, setOpenCollection] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const guidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
+  const selectGuidedReference = useGuidedComicVaultBridge((s) => s.selectVaultReference);
 
   const selected = useMemo(() => {
     if (!openCollection) return null;
@@ -71,6 +74,17 @@ export const AssetVault: React.FC = () => {
           allCollectionNames={albums.map((a) => a.collectionName)}
           onClose={() => setOpenCollection(null)}
           onVaultChanged={() => void refresh()}
+          guidedSelectionTarget={guidedTarget?.type === 'location' ? guidedTarget : null}
+          onUseForGuidedFlow={(item) =>
+            selectGuidedReference({
+              type: 'location',
+              name: guidedTarget?.name ?? selected.collectionName,
+              referenceId: item.id,
+              imageUrl: item.image_url,
+              sourceType: 'asset',
+              sourceLabel: selected.collectionName,
+            })
+          }
         />
       )}
 

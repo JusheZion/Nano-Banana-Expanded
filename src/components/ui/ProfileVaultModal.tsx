@@ -29,6 +29,7 @@ import {
   triggerBrowserDownload,
   type VaultZipItem,
 } from '@/shared/lib/vaultImageDownload';
+import type { GuidedComicVaultTarget } from '@/stores/guidedComicVaultBridge';
 
 function RubyEncrustedStar(props: { active: boolean; className?: string }) {
   const { active, className } = props;
@@ -70,6 +71,8 @@ export function ProfileVaultModal(props: {
   onClose: () => void;
   onCoverUpdated: () => void;
   onVaultChanged: () => void;
+  guidedSelectionTarget?: GuidedComicVaultTarget | null;
+  onUseForGuidedFlow?: (item: VaultCharacterItem) => void;
 }) {
   const {
     open,
@@ -80,6 +83,8 @@ export function ProfileVaultModal(props: {
     onClose,
     onCoverUpdated,
     onVaultChanged,
+    guidedSelectionTarget,
+    onUseForGuidedFlow,
   } = props;
 
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -634,6 +639,17 @@ export function ProfileVaultModal(props: {
                           >
                             <Download className="w-4 h-4" />
                           </button>
+                          {guidedSelectionTarget && onUseForGuidedFlow ? (
+                            <button
+                              type="button"
+                              disabled={Boolean(savingId) || busy}
+                              className="rounded-lg border border-emerald-300/45 bg-emerald-300/15 px-2 py-1.5 text-[11px] font-bold text-emerald-50 hover:bg-emerald-300/25"
+                              title={`Use this image for ${guidedSelectionTarget.name}`}
+                              onClick={() => onUseForGuidedFlow(item)}
+                            >
+                              Use for guided flow
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             disabled={Boolean(savingId) || busy}

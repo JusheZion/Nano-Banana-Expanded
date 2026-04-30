@@ -5,6 +5,7 @@ import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import type { Portal } from '@/shared/portals';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
 
@@ -34,6 +35,8 @@ function App() {
   const clearPortalRequest = useStudioImportBridge((s) => s.clearPortalRequest);
   const imageWorkshopPortalToOpen = useImageWorkshopBridge((s) => s.portalToOpen);
   const clearImageWorkshopPortalRequest = useImageWorkshopBridge((s) => s.clearPortalRequest);
+  const guidedComicVaultPortalToOpen = useGuidedComicVaultBridge((s) => s.portalToOpen);
+  const clearGuidedComicVaultPortalRequest = useGuidedComicVaultBridge((s) => s.clearPortalRequest);
   const isPhoneRef = useRef(isPhone);
   isPhoneRef.current = isPhone;
 
@@ -66,6 +69,13 @@ function App() {
       clearImageWorkshopPortalRequest();
     }
   }, [imageWorkshopPortalToOpen, clearImageWorkshopPortalRequest, navigatePortal]);
+
+  useEffect(() => {
+    if (guidedComicVaultPortalToOpen) {
+      navigatePortal(guidedComicVaultPortalToOpen);
+      clearGuidedComicVaultPortalRequest();
+    }
+  }, [guidedComicVaultPortalToOpen, clearGuidedComicVaultPortalRequest, navigatePortal]);
 
   useEffect(() => {
     if (isPhone && (activePortal === 'comic' || activePortal === 'lab')) {

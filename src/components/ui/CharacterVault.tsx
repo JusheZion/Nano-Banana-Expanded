@@ -4,6 +4,7 @@ import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import type { VaultCharacterAlbum } from '@/shared/api/arcsVault';
 import { ProfileVaultModal } from '@/components/ui/ProfileVaultModal';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
+import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 
 function getCoverItem(album: VaultCharacterAlbum) {
   if (!album.coverId) return album.items[0] ?? null;
@@ -16,6 +17,8 @@ export const CharacterVault: React.FC = () => {
   const [albums, setAlbums] = useState<VaultCharacterAlbum[]>([]);
   const [openProfile, setOpenProfile] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const guidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
+  const selectGuidedReference = useGuidedComicVaultBridge((s) => s.selectVaultReference);
 
   const selectedAlbum = useMemo(() => {
     if (!openProfile) return null;
@@ -69,6 +72,17 @@ export const CharacterVault: React.FC = () => {
           onVaultChanged={() => {
             void refresh();
           }}
+          guidedSelectionTarget={guidedTarget?.type === 'character' ? guidedTarget : null}
+          onUseForGuidedFlow={(item) =>
+            selectGuidedReference({
+              type: 'character',
+              name: guidedTarget?.name ?? selectedAlbum.profileName,
+              referenceId: item.id,
+              imageUrl: item.image_url,
+              sourceType: 'character',
+              sourceLabel: selectedAlbum.profileName,
+            })
+          }
         />
       )}
 
@@ -218,4 +232,3 @@ export const CharacterVault: React.FC = () => {
     </div>
   );
 };
-

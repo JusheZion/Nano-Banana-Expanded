@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpenText,
   ChevronLeft,
@@ -23,7 +23,9 @@ import {
   TEXT_ON_GOLD,
 } from '@/shared/theme/Phase12DesignTokens';
 import { Tooltip } from '@/shared/components/Tooltip';
+import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import type { Portal } from '@/shared/portals';
+import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 
 type GuidedComicStepId =
   | 'setup'
@@ -92,6 +94,9 @@ type ReferenceSource = 'added' | 'built' | 'vault';
 type VisualReferenceState = {
   status: ReferenceStatus;
   source?: ReferenceSource;
+  referenceId?: string;
+  imageUrl?: string;
+  sourceLabel?: string;
 };
 
 type PanelArtStatus = 'needs-art' | 'ready' | 'approved';
@@ -111,6 +116,23 @@ type LayoutTemplateOption = {
   id: LayoutTemplateId;
   label: string;
 };
+
+type GuidedComicDraftState = {
+  version: 1;
+  savedAt: string;
+  activeIndex: number;
+  setupForm: SetupFormState;
+  storyForm: StoryFormState;
+  outlineBeats: OutlineBeat[];
+  pageCards: PageCard[];
+  characterReferences: Record<string, VisualReferenceState>;
+  locationReferences: Record<string, VisualReferenceState>;
+  selectedPanelId: string | null;
+  panelArtStatuses: Record<string, PanelArtStatus>;
+  pageLayoutTemplates: Record<number, LayoutTemplateId>;
+};
+
+const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
 
 const GENRE_OPTIONS = [
   'Superhero',
@@ -135,6 +157,24 @@ const TONE_OPTIONS = [
   'Wonder-filled',
   'Custom',
 ];
+
+const DEFAULT_SETUP_FORM: SetupFormState = {
+  seriesTitle: '',
+  issueTitle: '',
+  issueNumber: '1',
+  targetPageCount: '22',
+  genre: GENRE_OPTIONS[0],
+  tone: TONE_OPTIONS[0],
+  premise: '',
+};
+
+const DEFAULT_STORY_FORM: StoryFormState = {
+  premise: '',
+  mainCharacters: '',
+  conflict: '',
+  setting: '',
+  endingGoal: '',
+};
 
 const INITIAL_OUTLINE_BEATS: OutlineBeat[] = [
   { id: 'opening-hook', title: 'Opening Hook', description: '', locked: false },
@@ -356,6 +396,55 @@ function uniquePageCardTerms(values: string[]): string[] {
   return uniqueTerms;
 }
 
+function cloneInitialOutlineBeats(): OutlineBeat[] {
+  return INITIAL_OUTLINE_BEATS.map((beat) => ({ ...beat }));
+}
+
+function safeActiveIndex(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value)
+    ? Math.max(0, Math.min(value, STEPS.length - 1))
+    : 0;
+}
+
+function readGuidedComicDraft(): GuidedComicDraftState | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const rawDraft = window.localStorage.getItem(GUIDED_COMIC_DRAFT_STORAGE_KEY);
+    if (!rawDraft) return null;
+
+    const parsed = JSON.parse(rawDraft) as Partial<GuidedComicDraftState>;
+    if (parsed.version !== 1) return null;
+
+    return {
+      version: 1,
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+      activeIndex: safeActiveIndex(parsed.activeIndex),
+      setupForm: { ...DEFAULT_SETUP_FORM, ...parsed.setupForm },
+      storyForm: { ...DEFAULT_STORY_FORM, ...parsed.storyForm },
+      outlineBeats: Array.isArray(parsed.outlineBeats) ? (parsed.outlineBeats as OutlineBeat[]) : cloneInitialOutlineBeats(),
+      pageCards: Array.isArray(parsed.pageCards) ? (parsed.pageCards as PageCard[]) : [],
+      characterReferences: parsed.characterReferences ?? {},
+      locationReferences: parsed.locationReferences ?? {},
+      selectedPanelId: typeof parsed.selectedPanelId === 'string' ? parsed.selectedPanelId : null,
+      panelArtStatuses: parsed.panelArtStatuses ?? {},
+      pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function removeGuidedComicDraft() {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.removeItem(GUIDED_COMIC_DRAFT_STORAGE_KEY);
+  } catch {
+    // Browsers can deny localStorage access; the in-memory flow can still continue.
+  }
+}
+
 function panelArtQueueId(pageNumber: number, panelNumber: number): string {
   return `page-${pageNumber}-panel-${panelNumber}`;
 }
@@ -440,25 +529,15 @@ function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats
 }
 
 export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: GuidedComicFlowProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [setupForm, setSetupForm] = useState<SetupFormState>({
-    seriesTitle: '',
-    issueTitle: '',
-    issueNumber: '1',
-    targetPageCount: '22',
-    genre: GENRE_OPTIONS[0],
-    tone: TONE_OPTIONS[0],
-    premise: '',
-  });
-  const [storyForm, setStoryForm] = useState<StoryFormState>({
-    premise: '',
-    mainCharacters: '',
-    conflict: '',
-    setting: '',
-    endingGoal: '',
-  });
-  const [outlineBeats, setOutlineBeats] = useState<OutlineBeat[]>(INITIAL_OUTLINE_BEATS);
-  const [pageCards, setPageCards] = useState<PageCard[]>([]);
+  const skipNextDraftSaveRef = useRef(false);
+  const requestVaultSelection = useGuidedComicVaultBridge((s) => s.requestVaultSelection);
+  const consumeVaultSelection = useGuidedComicVaultBridge((s) => s.consumeSelection);
+  const restoredDraft = useMemo(() => readGuidedComicDraft(), []);
+  const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
+  const [setupForm, setSetupForm] = useState<SetupFormState>(() => restoredDraft?.setupForm ?? DEFAULT_SETUP_FORM);
+  const [storyForm, setStoryForm] = useState<StoryFormState>(() => restoredDraft?.storyForm ?? DEFAULT_STORY_FORM);
+  const [outlineBeats, setOutlineBeats] = useState<OutlineBeat[]>(() => restoredDraft?.outlineBeats ?? cloneInitialOutlineBeats());
+  const [pageCards, setPageCards] = useState<PageCard[]>(() => restoredDraft?.pageCards ?? []);
   const activeStep = STEPS[activeIndex];
   const progress = useMemo(() => ((activeIndex + 1) / STEPS.length) * 100, [activeIndex]);
   const atStart = activeIndex === 0;
@@ -470,11 +549,82 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const isArtStep = activeStep.id === 'art';
   const isLayoutStep = activeStep.id === 'layout';
   const isExportStep = activeStep.id === 'export';
-  const [characterReferences, setCharacterReferences] = useState<Record<string, VisualReferenceState>>({});
-  const [locationReferences, setLocationReferences] = useState<Record<string, VisualReferenceState>>({});
-  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
-  const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>({});
-  const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>({});
+  const [characterReferences, setCharacterReferences] = useState<Record<string, VisualReferenceState>>(
+    () => restoredDraft?.characterReferences ?? {},
+  );
+  const [locationReferences, setLocationReferences] = useState<Record<string, VisualReferenceState>>(
+    () => restoredDraft?.locationReferences ?? {},
+  );
+  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(() => restoredDraft?.selectedPanelId ?? null);
+  const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>(
+    () => restoredDraft?.panelArtStatuses ?? {},
+  );
+  const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>(
+    () => restoredDraft?.pageLayoutTemplates ?? {},
+  );
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(() => restoredDraft?.savedAt ?? null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (skipNextDraftSaveRef.current) {
+      skipNextDraftSaveRef.current = false;
+      return;
+    }
+
+    const draft: GuidedComicDraftState = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      activeIndex,
+      setupForm,
+      storyForm,
+      outlineBeats,
+      pageCards,
+      characterReferences,
+      locationReferences,
+      selectedPanelId,
+      panelArtStatuses,
+      pageLayoutTemplates,
+    };
+
+    try {
+      window.localStorage.setItem(GUIDED_COMIC_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      setDraftSavedAt(draft.savedAt);
+    } catch {
+      setDraftSavedAt(null);
+    }
+  }, [
+    activeIndex,
+    characterReferences,
+    locationReferences,
+    outlineBeats,
+    pageCards,
+    pageLayoutTemplates,
+    panelArtStatuses,
+    selectedPanelId,
+    setupForm,
+    storyForm,
+  ]);
+
+  useEffect(() => {
+    const selection = consumeVaultSelection();
+    if (!selection) return;
+
+    setActiveIndex(STEPS.findIndex((step) => step.id === 'visual-prep'));
+    const reference: VisualReferenceState = {
+      status: 'ready',
+      source: 'vault',
+      referenceId: selection.referenceId,
+      imageUrl: selection.imageUrl,
+      sourceLabel: selection.sourceLabel,
+    };
+
+    if (selection.type === 'character') {
+      setCharacterReferences((current) => ({ ...current, [selection.name]: reference }));
+      return;
+    }
+
+    setLocationReferences((current) => ({ ...current, [selection.name]: reference }));
+  }, [consumeVaultSelection]);
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -571,11 +721,35 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       [name]: { status: 'ready', source },
     }));
   };
+  const requestCharacterVaultReference = (name: string) => {
+    requestVaultSelection({ type: 'character', name });
+  };
+  const requestLocationVaultReference = (name: string) => {
+    requestVaultSelection({ type: 'location', name });
+  };
   const updatePanelArtStatus = (panelId: string, status: PanelArtStatus) => {
     setPanelArtStatuses((current) => ({ ...current, [panelId]: status }));
   };
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
+  };
+  const clearGuidedDraft = () => {
+    const confirmed = window.confirm('Clear the saved guided comic draft from this browser? This resets the guided flow.');
+    if (!confirmed) return;
+
+    skipNextDraftSaveRef.current = true;
+    removeGuidedComicDraft();
+    setActiveIndex(0);
+    setSetupForm(DEFAULT_SETUP_FORM);
+    setStoryForm(DEFAULT_STORY_FORM);
+    setOutlineBeats(cloneInitialOutlineBeats());
+    setPageCards([]);
+    setCharacterReferences({});
+    setLocationReferences({});
+    setSelectedPanelId(null);
+    setPanelArtStatuses({});
+    setPageLayoutTemplates({});
+    setDraftSavedAt(null);
   };
 
   const storyCharacters = useMemo(() => splitListText(storyForm.mainCharacters), [storyForm.mainCharacters]);
@@ -739,17 +913,31 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 full comic canvas.
               </p>
             </div>
-            <Tooltip content="Open the current full Comics Studio editor">
-              <button
-                type="button"
-                onClick={onOpenAdvancedStudio}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
-                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-              >
-                <LayoutTemplate className="h-4 w-4" aria-hidden />
-                Open Advanced Comics Studio
-              </button>
-            </Tooltip>
+            <div className="flex shrink-0 flex-col gap-3 sm:items-end">
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1.5 text-xs font-bold text-emerald-100">
+                  {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
+                </span>
+                <button
+                  type="button"
+                  onClick={clearGuidedDraft}
+                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70 transition hover:bg-white/10"
+                >
+                  Clear guided draft
+                </button>
+              </div>
+              <Tooltip content="Open the current full Comics Studio editor">
+                <button
+                  type="button"
+                  onClick={onOpenAdvancedStudio}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
+                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
+                >
+                  <LayoutTemplate className="h-4 w-4" aria-hidden />
+                  Open Advanced Comics Studio
+                </button>
+              </Tooltip>
+            </div>
           </div>
           <div className="h-1.5 w-full bg-black/35">
             <div
@@ -833,13 +1021,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                   <p className="text-sm font-semibold text-white/90">{activeStep.actionLabel}</p>
                   <p className="mt-1 text-xs leading-relaxed text-white/55">
                     {isSetupStep
-                      ? 'Complete the local brief, then continue into Story. Nothing is saved or sent yet.'
+                      ? 'Complete the local brief, then continue into Story. Your draft is saved locally in this browser.'
                       : isStoryStep
                         ? 'Shape the story locally here. The outline action is still parked until AI wiring is added.'
                         : isPagesStep
                           ? 'Edit local page cards before moving into visual reference prep.'
                           : isVisualPrepStep
-                            ? 'Reference picking is not wired in this guided flow yet. Use Image Vault or Advanced Imageshop for real references.'
+                            ? 'Use Image Vault to attach real references to character and location rows. Advanced Imageshop still handles image generation.'
                             : isArtStep
                               ? 'Panel art generation is not wired here yet. Use Advanced Imageshop to generate actual images for now.'
                               : isLayoutStep
@@ -971,7 +1159,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                     <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Local only</p>
                       <p className="mt-2 text-xs leading-relaxed text-white/65">
-                        Values stay in this guided flow while you move between steps.
+                        Values stay in this browser and restore when you return to Comic Creator.
                       </p>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
@@ -981,9 +1169,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                       </p>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">No write yet</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Local draft</p>
                       <p className="mt-2 text-xs leading-relaxed text-white/65">
-                        This does not call AI, Supabase, or localStorage.
+                        This saves to this browser only. It does not call AI or Supabase.
                       </p>
                     </div>
                   </div>
@@ -1161,8 +1349,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
               ) : isVisualPrepStep ? (
                 <div className="mt-5 grid gap-4">
                   <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
-                    Reference picking is not wired in this guided flow yet. Use Image Vault or Advanced Imageshop for
-                    real references. The controls below are local planning/status controls only.
+                    Image Vault selection is wired for character and location rows. Use Advanced Imageshop for actual
+                    image generation; the other controls below remain local planning/status controls only.
                   </div>
                   <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -1195,6 +1383,22 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 >
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
+                                {reference?.imageUrl ? (
+                                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2">
+                                    <VaultImageWithFallback
+                                      src={reference.imageUrl}
+                                      alt={`${character} vault reference`}
+                                      frameClassName="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/35"
+                                      imgClassName="h-14 w-14 object-cover"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
+                                      <p className="truncate text-[11px] text-white/55">
+                                        {reference.sourceLabel ?? reference.referenceId}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
                                 <button
@@ -1213,10 +1417,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => markCharacterReference(character, 'vault')}
+                                  onClick={() => requestCharacterVaultReference(character)}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Mark ready: vault noted
+                                  Use from vault
                                 </button>
                               </div>
                             </div>
@@ -1261,6 +1465,22 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 >
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
+                                {reference?.imageUrl ? (
+                                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2">
+                                    <VaultImageWithFallback
+                                      src={reference.imageUrl}
+                                      alt={`${location} vault reference`}
+                                      frameClassName="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/35"
+                                      imgClassName="h-14 w-14 object-cover"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
+                                      <p className="truncate text-[11px] text-white/55">
+                                        {reference.sourceLabel ?? reference.referenceId}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
                                 <button
@@ -1279,10 +1499,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => markLocationReference(location, 'vault')}
+                                  onClick={() => requestLocationVaultReference(location)}
                                   className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
                                 >
-                                  Mark ready: vault noted
+                                  Use from vault
                                 </button>
                               </div>
                             </div>

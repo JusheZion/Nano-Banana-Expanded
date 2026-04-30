@@ -30,6 +30,7 @@ import {
   triggerBrowserDownload,
   type VaultZipItem,
 } from '@/shared/lib/vaultImageDownload';
+import type { GuidedComicVaultTarget } from '@/stores/guidedComicVaultBridge';
 
 const AMETHYST = '#8B5CF6';
 const AMETHYST_LIGHT = '#A78BFA';
@@ -41,6 +42,8 @@ export function CollectionVaultModal(props: {
   allCollectionNames: string[];
   onClose: () => void;
   onVaultChanged: () => void;
+  guidedSelectionTarget?: GuidedComicVaultTarget | null;
+  onUseForGuidedFlow?: (item: VaultAssetItem) => void;
 }) {
   const {
     open,
@@ -49,6 +52,8 @@ export function CollectionVaultModal(props: {
     allCollectionNames,
     onClose,
     onVaultChanged,
+    guidedSelectionTarget,
+    onUseForGuidedFlow,
   } = props;
 
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -567,6 +572,17 @@ export function CollectionVaultModal(props: {
                           >
                             <Download className="w-4 h-4" />
                           </button>
+                          {guidedSelectionTarget && onUseForGuidedFlow ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg border border-emerald-300/45 bg-emerald-300/15 px-2 py-1.5 text-[11px] font-bold text-emerald-50 hover:bg-emerald-300/25"
+                              title={`Use this image for ${guidedSelectionTarget.name}`}
+                              onClick={() => onUseForGuidedFlow(item)}
+                            >
+                              Use for guided flow
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
