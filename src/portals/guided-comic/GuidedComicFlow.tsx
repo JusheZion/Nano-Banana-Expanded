@@ -891,7 +891,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       className="min-h-full w-full overflow-y-auto custom-scrollbar text-white"
       style={{ background: PRIMARY_BG }}
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-6 lg:px-8 xl:pr-64">
         <header
           className="overflow-hidden rounded-2xl border shadow-2xl"
           style={{
@@ -948,8 +948,79 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
           </div>
         </header>
 
+        <aside
+          className="fixed bottom-6 right-6 top-24 z-20 hidden w-56 flex-col rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl xl:flex"
+          aria-label="Persistent guided comic steps"
+        >
+          <div className="mb-3 px-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+              Guided steps
+            </p>
+            <p className="mt-1 text-xs text-white/45">{activeIndex + 1} of {STEPS.length}</p>
+          </div>
+          <nav className="flex min-h-0 flex-1 flex-col gap-2">
+            {STEPS.map((step, index) => {
+              const selected = index === activeIndex;
+              const complete = index < activeIndex;
+              const StepIcon = step.Icon;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-white/10"
+                  style={{
+                    background: selected ? ACCENT_BLUE_GRADIENT : complete ? 'rgba(252,246,186,0.08)' : 'transparent',
+                    borderColor: selected ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.12)',
+                    color: selected ? TEXT_ON_BLUE : 'rgba(255,255,255,0.76)',
+                  }}
+                  aria-current={selected ? 'step' : undefined}
+                >
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
+                    style={{
+                      background: selected || complete ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.06)',
+                      borderColor: selected || complete ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.16)',
+                      color: selected || complete ? TEXT_ON_GOLD : 'rgba(255,255,255,0.8)',
+                    }}
+                  >
+                    <StepIcon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black">{step.label}</span>
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.14em] opacity-65">
+                      Step {index + 1}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={atStart}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={atEnd}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </aside>
+
         <nav
-          className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-2 shadow-xl backdrop-blur-sm md:grid-cols-7"
+          className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-2 shadow-xl backdrop-blur-sm md:grid-cols-7 xl:hidden"
           aria-label="Guided comic steps"
         >
           {STEPS.map((step, index) => {
@@ -1384,14 +1455,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
                                 {reference?.imageUrl ? (
-                                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2">
+                                  <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-2.5">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
                                       alt={`${character} vault reference`}
-                                      frameClassName="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/35"
-                                      imgClassName="h-14 w-14 object-cover"
+                                      frameClassName="flex h-36 w-full items-center justify-center overflow-hidden rounded-lg bg-black/35"
+                                      imgClassName="max-h-36 w-full object-contain"
                                     />
-                                    <div className="min-w-0">
+                                    <div className="mt-2 min-w-0">
                                       <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
                                       <p className="truncate text-[11px] text-white/55">
                                         {reference.sourceLabel ?? reference.referenceId}
@@ -1466,14 +1537,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
                                 {reference?.imageUrl ? (
-                                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-2">
+                                  <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-2.5">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
                                       alt={`${location} vault reference`}
-                                      frameClassName="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/35"
-                                      imgClassName="h-14 w-14 object-cover"
+                                      frameClassName="flex h-36 w-full items-center justify-center overflow-hidden rounded-lg bg-black/35"
+                                      imgClassName="max-h-36 w-full object-contain"
                                     />
-                                    <div className="min-w-0">
+                                    <div className="mt-2 min-w-0">
                                       <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
                                       <p className="truncate text-[11px] text-white/55">
                                         {reference.sourceLabel ?? reference.referenceId}

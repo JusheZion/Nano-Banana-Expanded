@@ -10,7 +10,7 @@ type ArchiveTab = 'character' | 'asset' | 'supporting';
 export const ReferenceAlbum: React.FC = () => {
     const { setTheme } = useTheme();
     const pendingGuidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
-    const clearPendingGuidedTarget = useGuidedComicVaultBridge((s) => s.clearPendingTarget);
+    const cancelAndReturnToComic = useGuidedComicVaultBridge((s) => s.cancelAndReturnToComic);
     const [tab, setTab] = useState<ArchiveTab>('character');
 
     useEffect(() => {
@@ -23,21 +23,26 @@ export const ReferenceAlbum: React.FC = () => {
     }, [pendingGuidedTarget]);
 
     return (
-        <div className="min-h-screen text-white pt-20 pb-12">
+        <div className="min-h-screen text-white pt-20 pb-12 bg-[linear-gradient(135deg,#050816_0%,#0b1024_52%,#050816_100%)]">
             {pendingGuidedTarget ? (
-                <div className="mx-auto mb-4 flex max-w-5xl flex-col gap-3 rounded-xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-amber-50 sm:flex-row sm:items-center sm:justify-between">
+                <div className="sticky top-4 z-30 mx-auto mb-6 flex max-w-6xl flex-col gap-3 rounded-2xl border border-amber-300/35 bg-[#07101f]/95 px-5 py-4 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p className="text-sm font-bold">Pick a vault image for {pendingGuidedTarget.name}</p>
-                        <p className="mt-1 text-xs text-amber-100/75">
-                            Open a {pendingGuidedTarget.type === 'character' ? 'character profile' : 'asset collection'} and choose “Use for guided flow.”
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-200/70">
+                            Guided Comic Flow reference pick
+                        </p>
+                        <p className="mt-1 text-base font-black">
+                            Select a vault image for {pendingGuidedTarget.type === 'character' ? 'character' : 'location / asset'}: {pendingGuidedTarget.name}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-100/75">
+                            Open a {pendingGuidedTarget.type === 'character' ? 'character profile' : 'asset collection'}, then use the highlighted button in the card details panel.
                         </p>
                     </div>
                     <button
                         type="button"
-                        onClick={clearPendingGuidedTarget}
-                        className="rounded-lg border border-amber-200/35 bg-black/20 px-3 py-2 text-xs font-bold text-amber-50 transition hover:bg-black/35"
+                        onClick={cancelAndReturnToComic}
+                        className="rounded-xl border border-amber-200/40 bg-amber-300/15 px-4 py-2.5 text-xs font-black text-amber-50 transition hover:bg-amber-300/25"
                     >
-                        Cancel guided pick
+                        Cancel and return
                     </button>
                 </div>
             ) : null}

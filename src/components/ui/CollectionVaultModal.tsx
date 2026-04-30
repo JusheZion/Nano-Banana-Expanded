@@ -33,7 +33,6 @@ import {
 import type { GuidedComicVaultTarget } from '@/stores/guidedComicVaultBridge';
 
 const AMETHYST = '#8B5CF6';
-const AMETHYST_LIGHT = '#A78BFA';
 
 export function CollectionVaultModal(props: {
   open: boolean;
@@ -255,24 +254,24 @@ export function CollectionVaultModal(props: {
 
       <div className="absolute inset-x-0 top-6 mx-auto w-[min(1280px,96vw)] max-h-[92vh] flex flex-col">
         <div
-          className="relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh] border-violet-500/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)] bg-[linear-gradient(135deg,#1e1033_0%,#0f172a_100%)]"
+          className="relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh] border-[#D4AF37]/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)] bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]"
         >
           <div className="relative p-5 sm:p-7 flex flex-col min-h-0 flex-1 overflow-hidden">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
                 <div
                   className="text-xs uppercase tracking-[0.35em]"
-                  style={{ color: `${AMETHYST_LIGHT}cc` }}
+                  style={{ color: '#D4AF37cc' }}
                 >
                   Asset collection
                 </div>
                 <div
                   className="mt-1 text-2xl sm:text-3xl font-semibold tracking-wide text-white break-words"
-                  style={{ color: AMETHYST_LIGHT }}
+                  style={{ color: '#FBF5D4' }}
                 >
                   {collectionName}
                 </div>
-                <p className="mt-2 text-sm text-violet-200/70">
+                <p className="mt-2 text-sm text-[#D4AF37]/70">
                   Check images for ZIP batches, or use Download all. HQ single download is on each
                   card. Rename, move, or delete; merge into existing collections is confirmed once
                   (unless skipped).
@@ -286,7 +285,7 @@ export function CollectionVaultModal(props: {
                     setRenameValue(collectionName === 'Unnamed' ? '' : collectionName);
                     setShowRename(true);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-black/30 px-3 py-2 text-xs text-violet-100 hover:bg-black/40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                   Rename collection
@@ -304,7 +303,7 @@ export function CollectionVaultModal(props: {
                   type="button"
                   disabled={busy || downloadBusy || sorted.length === 0}
                   onClick={() => void runDownloadAllZip()}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-black/30 px-3 py-2 text-xs text-violet-100 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] disabled:opacity-40"
                   title="Download all images as a ZIP"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -314,7 +313,7 @@ export function CollectionVaultModal(props: {
                   type="button"
                   disabled={busy || downloadBusy || zipSelectedIds.size === 0}
                   onClick={() => void runDownloadSelectedZip()}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-black/30 px-3 py-2 text-xs text-violet-100 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] disabled:opacity-40"
                   title="Download selected images as a ZIP"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -324,7 +323,7 @@ export function CollectionVaultModal(props: {
                   type="button"
                   disabled={busy}
                   onClick={() => onVaultChanged()}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/40 bg-black/30 px-3 py-2 text-xs text-violet-100"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4]"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Refresh
@@ -332,7 +331,7 @@ export function CollectionVaultModal(props: {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="inline-flex items-center justify-center rounded-xl border border-violet-500/40 bg-black/30 w-10 h-10 text-violet-100"
+                  className="inline-flex items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-black/30 w-10 h-10 text-[#FBF5D4]"
                   aria-label="Close"
                 >
                   <X className="w-5 h-5" />
@@ -519,12 +518,13 @@ export function CollectionVaultModal(props: {
                 {sorted.map((item) => {
                   const title = item.asset_name || item.name || 'Asset';
                   const isSelected = selectedItemId === item.id;
-                  const showTopBar =
-                    isSelected || nameEditId === item.id || moveItemId === item.id;
                   return (
                     <div
                       key={item.id}
-                      className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                      className={[
+                        'group relative flex flex-col overflow-hidden rounded-2xl border bg-black/20 transition',
+                        isSelected ? 'border-[#FBBF24]/55' : 'border-white/10 hover:border-[#D4AF37]/35',
+                      ].join(' ')}
                     >
                       <div
                         role="button"
@@ -540,63 +540,78 @@ export function CollectionVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
-                        <label
-                          className="absolute left-2 top-2 z-[25] flex items-center gap-1.5 rounded-lg border border-violet-500/50 bg-black/70 px-2 py-1 text-[10px] text-violet-100 cursor-pointer"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={zipSelectedIds.has(item.id)}
-                            disabled={downloadBusy}
-                            onChange={() => toggleZipSelect(item.id)}
-                            className="rounded border-violet-400/50"
+                        <div className="flex w-full items-center justify-center bg-black/25 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                          <VaultImageWithFallback
+                            src={item.image_url}
+                            alt={title}
+                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
+                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain"
+                            imgStyle={{
+                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                              transform: `scale(${item.thumbnail_scale ?? 1})`,
+                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                            }}
                           />
-                          ZIP
-                        </label>
-                        <div
-                          className={[
-                            'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
-                            'bg-gradient-to-b from-black/85 via-black/50 to-transparent',
-                            'transition-opacity duration-200',
-                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
-                            showTopBar && 'opacity-100 pointer-events-auto',
-                          ].join(' ')}
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        </div>
+                      </div>
+
+                      <div
+                        className="border-t border-white/10 bg-[#07101f]/95 p-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-[#FBF5D4]">{title}</p>
+                            <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">Vault asset</p>
+                          </div>
+                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#D4AF37]/35 bg-black/30 px-2 py-1 text-[10px] font-bold text-[#FBF5D4]">
+                            <input
+                              type="checkbox"
+                              checked={zipSelectedIds.has(item.id)}
+                              disabled={downloadBusy}
+                              onChange={() => toggleZipSelect(item.id)}
+                              className="rounded border-[#D4AF37]/50"
+                            />
+                            ZIP
+                          </label>
+                        </div>
+
+                        {guidedSelectionTarget && onUseForGuidedFlow ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="mt-3 w-full rounded-xl border border-emerald-300/45 bg-emerald-300/15 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-300/25 disabled:opacity-50"
+                            title={`Use this image for ${guidedSelectionTarget.name}`}
+                            onClick={() => onUseForGuidedFlow(item)}
+                          >
+                            Use for guided flow: {guidedSelectionTarget.name}
+                          </button>
+                        ) : null}
+
+                        <div className="mt-3 grid grid-cols-5 gap-1.5">
                           <button
                             type="button"
                             disabled={busy || downloadBusy}
-                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
                             title="Download HQ image"
                             onClick={() => void runDownloadOne(item)}
                           >
-                            <Download className="w-4 h-4" />
+                            <Download className="mx-auto h-4 w-4" />
                           </button>
-                          {guidedSelectionTarget && onUseForGuidedFlow ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="rounded-lg border border-emerald-300/45 bg-emerald-300/15 px-2 py-1.5 text-[11px] font-bold text-emerald-50 hover:bg-emerald-300/25"
-                              title={`Use this image for ${guidedSelectionTarget.name}`}
-                              onClick={() => onUseForGuidedFlow(item)}
-                            >
-                              Use for guided flow
-                            </button>
-                          ) : null}
                           <button
                             type="button"
-                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Framing"
                             onClick={() => {
                               setFocusEditItem(item);
                               setSelectedItemId(null);
                             }}
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Edit asset name"
                             onClick={() => {
                               setNameEditId(item.id);
@@ -604,11 +619,11 @@ export function CollectionVaultModal(props: {
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <Tag className="w-4 h-4" />
+                            <Tag className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-violet-500/50 bg-black/40 p-1.5 text-violet-100 hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Move to collection"
                             onClick={() => {
                               setMoveItemId(item.id);
@@ -616,12 +631,12 @@ export function CollectionVaultModal(props: {
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <FolderInput className="w-4 h-4" />
+                            <FolderInput className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-lg border border-red-500/40 bg-black/40 p-1.5 text-red-200 hover:bg-red-950/40"
+                            className="rounded-lg border border-red-500/35 bg-black/30 p-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
                             title="Delete asset"
                             onClick={async () => {
                               if (!confirm('Delete this asset?')) return;
@@ -636,22 +651,8 @@ export function CollectionVaultModal(props: {
                               }
                             }}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="mx-auto h-4 w-4" />
                           </button>
-                        </div>
-
-                        <div className="flex w-full items-center justify-center bg-black/25 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
-                          <VaultImageWithFallback
-                            src={item.image_url}
-                            alt={title}
-                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
-                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain"
-                            imgStyle={{
-                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                              transform: `scale(${item.thumbnail_scale ?? 1})`,
-                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                            }}
-                          />
                         </div>
                       </div>
 

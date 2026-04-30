@@ -53,10 +53,9 @@ export const CharacterVault: React.FC = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-5rem)] px-8 py-10">
-      {/* Ruby canvas */}
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(135deg,#8b0000_0%,#4a0000_100%)]" />
-      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_20%_15%,rgba(251,191,36,0.25),transparent_52%)]" />
-      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_70%_55%,rgba(224,17,95,0.20),transparent_55%)]" />
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]" />
+      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_18%_12%,rgba(251,191,36,0.20),transparent_50%)]" />
+      <div className="absolute inset-0 -z-10 opacity-50 bg-[radial-gradient(circle_at_76%_58%,rgba(59,130,246,0.18),transparent_55%)]" />
 
       {selectedAlbum && (
         <ProfileVaultModal
@@ -91,14 +90,14 @@ export const CharacterVault: React.FC = () => {
         <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-black/25 px-4 py-2">
           <Sparkles className="w-4 h-4 text-[#FBBF24]" />
           <span className="text-xs uppercase tracking-[0.35em] text-[#FBF5D4]/85">
-            Ruby Vault
+            ARCS Image Vault
           </span>
         </div>
 
         <h1 className="mt-5 text-5xl sm:text-6xl font-extralight tracking-widest text-[#D4AF37] drop-shadow-lg leading-none">
           CHARACTER
           <br />
-          <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-[#e0115f] tracking-[0.2em]">
+          <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-sky-200 tracking-[0.2em]">
             VAULT
           </span>
         </h1>

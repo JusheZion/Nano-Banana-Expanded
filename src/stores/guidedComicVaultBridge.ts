@@ -25,6 +25,7 @@ interface GuidedComicVaultBridgeState {
   selectVaultReference: (selection: GuidedComicVaultSelection) => void;
   consumeSelection: () => GuidedComicVaultSelection | null;
   clearPendingTarget: () => void;
+  cancelAndReturnToComic: () => void;
 }
 
 export const useGuidedComicVaultBridge = create<GuidedComicVaultBridgeState>((set, get) => ({
@@ -58,4 +59,6 @@ export const useGuidedComicVaultBridge = create<GuidedComicVaultBridgeState>((se
   },
 
   clearPendingTarget: () => set({ pendingTarget: null }),
+
+  cancelAndReturnToComic: () => set({ pendingTarget: null, selection: null, portalToOpen: 'comic' }),
 }));

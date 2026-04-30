@@ -62,7 +62,7 @@ export const AssetVault: React.FC = () => {
       <div
         className="absolute inset-0 -z-10 opacity-90"
         style={{
-          background: `linear-gradient(135deg, #1e1033 0%, #0f172a 55%, #1a0a2e 100%)`,
+          background: `linear-gradient(135deg, #050816 0%, #10172f 56%, #0b1024 100%)`,
         }}
       />
 
@@ -93,18 +93,18 @@ export const AssetVault: React.FC = () => {
           className="inline-flex items-center gap-2 rounded-full border px-4 py-2"
           style={{ borderColor: `${AMETHYST}55`, background: 'rgba(0,0,0,0.25)' }}
         >
-          <span className="text-xs uppercase tracking-[0.35em]" style={{ color: AMETHYST_LIGHT }}>
-            Amethyst Vault
+          <span className="text-xs uppercase tracking-[0.35em] text-amber-100/85">
+            ARCS Image Vault
           </span>
         </div>
         <h1
           className="mt-5 text-5xl sm:text-6xl font-extralight tracking-widest drop-shadow-lg leading-none"
-          style={{ color: AMETHYST }}
+          style={{ color: '#D4AF37' }}
         >
           ASSET
           <br />
           <span
-            className="font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-violet-200 to-fuchsia-300 tracking-[0.2em]"
+            className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-sky-200 tracking-[0.2em]"
           >
             VAULT
           </span>

@@ -303,11 +303,11 @@ export function ProfileVaultModal(props: {
           className={[
             'relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh]',
             'border-[#D4AF37]/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)]',
-            'bg-[linear-gradient(135deg,#8b0000_0%,#4a0000_100%)]',
+            'bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]',
           ].join(' ')}
         >
           <div className="absolute inset-0 pointer-events-none opacity-70 bg-[radial-gradient(circle_at_30%_20%,rgba(251,191,36,0.22),transparent_50%)]" />
-          <div className="absolute inset-0 pointer-events-none opacity-60 bg-[radial-gradient(circle_at_70%_60%,rgba(224,17,95,0.18),transparent_55%)]" />
+          <div className="absolute inset-0 pointer-events-none opacity-60 bg-[radial-gradient(circle_at_70%_60%,rgba(59,130,246,0.16),transparent_55%)]" />
 
           <div className="relative p-5 sm:p-7 flex flex-col min-h-0 flex-1 overflow-hidden">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -407,7 +407,7 @@ export function ProfileVaultModal(props: {
             {/* Modals stack */}
             {showRenameProfile && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[#4a0000] p-6 shadow-xl">
+                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[#07101f] p-6 shadow-xl">
                   <h3 className="text-lg font-semibold text-[#FBF5D4]">Rename profile</h3>
                   <p className="text-sm text-[#D4AF37]/80 mt-1">
                     All images in this album move to the new profile name.
@@ -453,7 +453,7 @@ export function ProfileVaultModal(props: {
 
             {showDeleteAlbum && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-[#4a0000] p-6 shadow-xl">
+                <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-[#07101f] p-6 shadow-xl">
                   <h3 className="text-lg font-semibold text-red-200">Delete entire album?</h3>
                   <p className="text-sm text-[#FBF5D4]/80 mt-2">
                     Permanently remove all {items.length} image{items.length === 1 ? '' : 's'} in “
@@ -494,7 +494,7 @@ export function ProfileVaultModal(props: {
 
             {mergeOpen && pendingMove && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[#4a0000] p-6 shadow-xl">
+                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[#07101f] p-6 shadow-xl">
                   <h3 className="text-lg font-semibold text-[#FBF5D4]">Merge into existing album?</h3>
                   <p className="text-sm text-[#D4AF37]/80 mt-2">
                     “{pendingMove.target.trim() || 'Unnamed'}” already has images. This image will be
@@ -533,7 +533,7 @@ export function ProfileVaultModal(props: {
 
             {lastItemOpen && pendingLastItemMove && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-[#4a0000] p-6 shadow-xl">
+                <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-[#07101f] p-6 shadow-xl">
                   <h3 className="text-lg font-semibold text-[#FBF5D4]">Last image in this profile</h3>
                   <p className="text-sm text-[#D4AF37]/80 mt-2">
                     Moving it will remove the empty “{profileName}” album from the vault grid.
@@ -575,11 +575,6 @@ export function ProfileVaultModal(props: {
                   const isSaving = savingId === item.id;
                   const title = item.cast_name || item.name || 'Visual Reference';
                   const isSelected = selectedItemId === item.id;
-                  const showTopBar =
-                    isSelected ||
-                    castEditId === item.id ||
-                    moveItemId === item.id ||
-                    isSaving;
                   return (
                     <div
                       key={item.id}
@@ -590,6 +585,7 @@ export function ProfileVaultModal(props: {
                         isActive
                           ? 'ring-2 ring-[#FBBF24]/70 shadow-[0_0_40px_rgba(224,17,95,0.22)]'
                           : 'hover:border-[#D4AF37]/35 hover:bg-black/25',
+                        isSelected ? 'border-[#FBBF24]/55' : '',
                         'transition',
                       ].join(' ')}
                     >
@@ -607,57 +603,78 @@ export function ProfileVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
-                        <label
-                          className="absolute left-2 top-2 z-[25] flex items-center gap-1.5 rounded-lg border border-[#D4AF37]/40 bg-black/70 px-2 py-1 text-[10px] text-[#FBF5D4] cursor-pointer"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={zipSelectedIds.has(item.id)}
-                            disabled={downloadBusy}
-                            onChange={() => toggleZipSelect(item.id)}
-                            className="rounded border-[#D4AF37]/50"
+                        <div className="flex w-full items-center justify-center bg-black/30 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                          <VaultImageWithFallback
+                            src={item.image_url}
+                            alt={title}
+                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
+                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain opacity-95"
+                            imgStyle={{
+                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                              transform: `scale(${item.thumbnail_scale ?? 1})`,
+                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                            }}
                           />
-                          ZIP
-                        </label>
-                        <div
-                          className={[
-                            'absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2 py-2',
-                            'bg-gradient-to-b from-black/85 via-black/50 to-transparent',
-                            'transition-opacity duration-200',
-                            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
-                            showTopBar && 'opacity-100 pointer-events-auto',
-                          ].join(' ')}
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        </div>
+
+                        {isSaving && (
+                          <div className="absolute inset-0 z-10 bg-black/35 backdrop-blur-[1px]" />
+                        )}
+                      </div>
+
+                      <div
+                        className="border-t border-white/10 bg-[#07101f]/95 p-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-[#FBF5D4]">{title}</p>
+                            <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">
+                              {isActive ? 'Profile cover' : 'Vault reference'}
+                            </p>
+                          </div>
+                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#D4AF37]/35 bg-black/30 px-2 py-1 text-[10px] font-bold text-[#FBF5D4]">
+                            <input
+                              type="checkbox"
+                              checked={zipSelectedIds.has(item.id)}
+                              disabled={downloadBusy}
+                              onChange={() => toggleZipSelect(item.id)}
+                              className="rounded border-[#D4AF37]/50"
+                            />
+                            ZIP
+                          </label>
+                        </div>
+
+                        {guidedSelectionTarget && onUseForGuidedFlow ? (
+                          <button
+                            type="button"
+                            disabled={Boolean(savingId) || busy}
+                            className="mt-3 w-full rounded-xl border border-emerald-300/45 bg-emerald-300/15 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-300/25 disabled:opacity-50"
+                            title={`Use this image for ${guidedSelectionTarget.name}`}
+                            onClick={() => onUseForGuidedFlow(item)}
+                          >
+                            Use for guided flow: {guidedSelectionTarget.name}
+                          </button>
+                        ) : null}
+
+                        <div className="mt-3 grid grid-cols-6 gap-1.5">
                           <button
                             type="button"
                             disabled={Boolean(savingId) || busy || downloadBusy}
-                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
                             title="Download HQ image"
                             onClick={() => void runDownloadOne(item)}
                           >
-                            <Download className="w-4 h-4" />
+                            <Download className="mx-auto h-4 w-4" />
                           </button>
-                          {guidedSelectionTarget && onUseForGuidedFlow ? (
-                            <button
-                              type="button"
-                              disabled={Boolean(savingId) || busy}
-                              className="rounded-lg border border-emerald-300/45 bg-emerald-300/15 px-2 py-1.5 text-[11px] font-bold text-emerald-50 hover:bg-emerald-300/25"
-                              title={`Use this image for ${guidedSelectionTarget.name}`}
-                              onClick={() => onUseForGuidedFlow(item)}
-                            >
-                              Use for guided flow
-                            </button>
-                          ) : null}
                           <button
                             type="button"
                             disabled={Boolean(savingId) || busy}
                             className={[
-                              'rounded-lg border p-1.5 shrink-0',
+                              'rounded-lg border p-1.5 transition disabled:opacity-40',
                               isActive
                                 ? 'border-[#FBBF24]/70 bg-[#FBBF24]/15'
-                                : 'border-[#D4AF37]/35 bg-black/40',
+                                : 'border-[#D4AF37]/30 bg-black/30 hover:bg-black/45',
                             ].join(' ')}
                             title="Set cover"
                             aria-label={isActive ? 'Cover' : 'Set cover'}
@@ -677,22 +694,22 @@ export function ProfileVaultModal(props: {
                               onCoverUpdated();
                             }}
                           >
-                            <RubyEncrustedStar active={isActive} />
+                            <RubyEncrustedStar active={isActive} className="mx-auto block" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Framing"
                             onClick={() => {
                               setFocusEditItem(item);
                               setSelectedItemId(null);
                             }}
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Edit cast name"
                             onClick={() => {
                               setCastEditId(item.id);
@@ -700,11 +717,11 @@ export function ProfileVaultModal(props: {
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <Tag className="w-4 h-4" />
+                            <Tag className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/35 bg-black/40 p-1.5 text-[#FBF5D4] hover:bg-black/55"
+                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Move to profile"
                             onClick={() => {
                               setMoveItemId(item.id);
@@ -712,12 +729,12 @@ export function ProfileVaultModal(props: {
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <FolderInput className="w-4 h-4" />
+                            <FolderInput className="mx-auto h-4 w-4" />
                           </button>
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-lg border border-red-500/40 bg-black/40 p-1.5 text-red-200 hover:bg-red-950/50"
+                            className="rounded-lg border border-red-500/35 bg-black/30 p-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
                             title="Delete image"
                             onClick={async () => {
                               if (!confirm('Delete this image from the vault?')) return;
@@ -732,27 +749,9 @@ export function ProfileVaultModal(props: {
                               }
                             }}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="mx-auto h-4 w-4" />
                           </button>
                         </div>
-
-                        <div className="flex w-full items-center justify-center bg-black/30 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
-                          <VaultImageWithFallback
-                            src={item.image_url}
-                            alt={title}
-                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
-                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain opacity-95"
-                            imgStyle={{
-                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                              transform: `scale(${item.thumbnail_scale ?? 1})`,
-                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                            }}
-                          />
-                        </div>
-
-                        {isSaving && (
-                          <div className="absolute inset-0 z-10 bg-black/35 backdrop-blur-[1px]" />
-                        )}
                       </div>
 
                       {(castEditId === item.id || moveItemId === item.id) && (
