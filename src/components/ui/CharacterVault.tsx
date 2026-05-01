@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import type { VaultCharacterAlbum } from '@/shared/api/arcsVault';
 import { ProfileVaultModal } from '@/components/ui/ProfileVaultModal';
@@ -53,9 +53,9 @@ export const CharacterVault: React.FC = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-5rem)] px-8 py-10">
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]" />
-      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_18%_12%,rgba(251,191,36,0.20),transparent_50%)]" />
-      <div className="absolute inset-0 -z-10 opacity-50 bg-[radial-gradient(circle_at_76%_58%,rgba(59,130,246,0.18),transparent_55%)]" />
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(135deg,#240004_0%,#6f0715_42%,#b31228_72%,#310005_100%)]" />
+      <div className="absolute inset-0 -z-10 opacity-75 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.16),transparent_42%)]" />
+      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_76%_58%,rgba(251,191,36,0.20),transparent_55%)]" />
 
       {selectedAlbum && (
         <ProfileVaultModal
@@ -85,41 +85,26 @@ export const CharacterVault: React.FC = () => {
         />
       )}
 
-      {/* Header */}
       <div className="relative mb-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#D4AF37]/30 bg-black/25 px-4 py-2">
-          <Sparkles className="w-4 h-4 text-[#FBBF24]" />
-          <span className="text-xs uppercase tracking-[0.35em] text-[#FBF5D4]/85">
-            ARCS Image Vault
-          </span>
-        </div>
-
-        <h1 className="mt-5 text-5xl sm:text-6xl font-extralight tracking-widest text-[#D4AF37] drop-shadow-lg leading-none">
-          CHARACTER
-          <br />
-          <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-[#FBF5D4] to-sky-200 tracking-[0.2em]">
-            VAULT
-          </span>
-        </h1>
-
-        <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[#D4AF37]/75">
-          <div className="rounded-xl border border-[#D4AF37]/20 bg-black/20 px-3 py-2">
-            Profiles: <span className="text-[#FBF5D4]/90 font-medium">{albums.length}</span>
+        <div className="grid gap-3 lg:grid-cols-[auto_auto_minmax(220px,1fr)] lg:items-center">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-[#D4AF37]/75">
+            <div className="rounded-xl border border-[#D4AF37]/20 bg-black/20 px-3 py-2">
+              Profiles: <span className="text-[#FBF5D4]/90 font-medium">{albums.length}</span>
+            </div>
+            <div className="rounded-xl border border-[#D4AF37]/20 bg-black/20 px-3 py-2">
+              Images: <span className="text-[#FBF5D4]/90 font-medium">{totalImages}</span>
+            </div>
           </div>
-          <div className="rounded-xl border border-[#D4AF37]/20 bg-black/20 px-3 py-2">
-            Images: <span className="text-[#FBF5D4]/90 font-medium">{totalImages}</span>
-          </div>
-          <div className="h-[1px] w-10 bg-[#D4AF37]/35" />
-          <div className="text-[#FBF5D4]/75">
-            Album covers are gold-starred or fall back to the newest generation.
-          </div>
-        </div>
-
-        {/* Gold structural divider */}
-        <div className="mt-7 h-[2px] w-full rounded-full bg-[linear-gradient(135deg,#D4AF37_0%,#FBBF24_55%,rgba(251,191,36,0.0)_100%)]" />
-
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void refresh()}
+            className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-4 py-2.5 text-sm text-[#FBF5D4] hover:bg-black/40 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh vault
+          </button>
+          <div className="relative min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#D4AF37]/60" />
             <input
               type="search"
@@ -129,15 +114,6 @@ export const CharacterVault: React.FC = () => {
               className="w-full rounded-xl border border-[#D4AF37]/25 bg-black/25 pl-10 pr-3 py-2.5 text-sm text-[#FBF5D4] placeholder:text-[#D4AF37]/50"
             />
           </div>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void refresh()}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-4 py-2.5 text-sm text-[#FBF5D4] hover:bg-black/40 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh vault
-          </button>
         </div>
       </div>
 

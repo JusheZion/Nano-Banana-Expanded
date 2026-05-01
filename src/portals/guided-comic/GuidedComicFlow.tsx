@@ -891,7 +891,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       className="min-h-full w-full overflow-y-auto custom-scrollbar text-white"
       style={{ background: PRIMARY_BG }}
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-6 lg:px-8 xl:pr-64">
+      <div className="flex w-full max-w-none flex-col gap-6 px-5 py-6 lg:px-8 xl:pr-80">
         <header
           className="overflow-hidden rounded-2xl border shadow-2xl"
           style={{
@@ -899,7 +899,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
             borderColor: `${ACCENT_GOLD_SOLID}66`,
           }}
         >
-          <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-end lg:justify-between lg:p-7">
+          <div className="flex flex-col gap-5 p-5 lg:p-7">
             <div className="min-w-0">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
                 <Sparkles className="h-3.5 w-3.5" style={{ color: ACCENT_GOLD_LIGHT }} aria-hidden />
@@ -912,31 +912,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 Move through a calm planning path for story, references, art, layout, and export before opening the
                 full comic canvas.
               </p>
-            </div>
-            <div className="flex shrink-0 flex-col gap-3 sm:items-end">
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1.5 text-xs font-bold text-emerald-100">
-                  {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
-                </span>
-                <button
-                  type="button"
-                  onClick={clearGuidedDraft}
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70 transition hover:bg-white/10"
-                >
-                  Clear guided draft
-                </button>
-              </div>
-              <Tooltip content="Open the current full Comics Studio editor">
-                <button
-                  type="button"
-                  onClick={onOpenAdvancedStudio}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
-                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-                >
-                  <LayoutTemplate className="h-4 w-4" aria-hidden />
-                  Open Advanced Comics Studio
-                </button>
-              </Tooltip>
             </div>
           </div>
           <div className="h-1.5 w-full bg-black/35">
@@ -958,7 +933,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
             </p>
             <p className="mt-1 text-xs text-white/45">{activeIndex + 1} of {STEPS.length}</p>
           </div>
-          <nav className="flex min-h-0 flex-1 flex-col gap-2">
+          <nav className="flex flex-col gap-1.5">
             {STEPS.map((step, index) => {
               const selected = index === activeIndex;
               const complete = index < activeIndex;
@@ -968,7 +943,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                   key={step.id}
                   type="button"
                   onClick={() => setActiveIndex(index)}
-                  className="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition hover:bg-white/10"
+                  className="flex items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition hover:bg-white/10"
                   style={{
                     background: selected ? ACCENT_BLUE_GRADIENT : complete ? 'rgba(252,246,186,0.08)' : 'transparent',
                     borderColor: selected ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.12)',
@@ -977,17 +952,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                   aria-current={selected ? 'step' : undefined}
                 >
                   <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
                     style={{
                       background: selected || complete ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.06)',
                       borderColor: selected || complete ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.16)',
                       color: selected || complete ? TEXT_ON_GOLD : 'rgba(255,255,255,0.8)',
                     }}
                   >
-                    <StepIcon className="h-4 w-4" aria-hidden />
+                    <StepIcon className="h-3.5 w-3.5" aria-hidden />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-black">{step.label}</span>
+                    <span className="block truncate text-xs font-black">{step.label}</span>
                     <span className="block text-[10px] font-bold uppercase tracking-[0.14em] opacity-65">
                       Step {index + 1}
                     </span>
@@ -996,7 +971,33 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
               );
             })}
           </nav>
-          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+              Local draft
+            </p>
+            <span className="mt-2 inline-flex rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-bold text-emerald-100">
+              {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
+            </span>
+            <button
+              type="button"
+              onClick={clearGuidedDraft}
+              className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
+            >
+              Clear guided draft
+            </button>
+            <Tooltip content="Open the current full Comics Studio editor">
+              <button
+                type="button"
+                onClick={onOpenAdvancedStudio}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
+                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
+              >
+                <LayoutTemplate className="h-4 w-4" aria-hidden />
+                Open Advanced Comics Studio
+              </button>
+            </Tooltip>
+          </div>
+          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
             <button
               type="button"
               onClick={goBack}
@@ -1061,8 +1062,32 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
           })}
         </nav>
 
-        <main className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
+        <div className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm sm:grid-cols-[auto_auto_minmax(0,1fr)] xl:hidden">
+          <span className="inline-flex items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100">
+            {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
+          </span>
+          <button
+            type="button"
+            onClick={clearGuidedDraft}
+            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
+          >
+            Clear guided draft
+          </button>
+          <Tooltip content="Open the current full Comics Studio editor">
+            <button
+              type="button"
+              onClick={onOpenAdvancedStudio}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
+              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
+            >
+              <LayoutTemplate className="h-4 w-4" aria-hidden />
+              Open Advanced Comics Studio
+            </button>
+          </Tooltip>
+        </div>
+
+        <main className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: ACCENT_GOLD_LIGHT }}>
@@ -1086,7 +1111,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
               </div>
             </div>
 
-            <div className="mt-6 rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
+            <div className="mt-6 min-w-0 rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white/90">{activeStep.actionLabel}</p>
@@ -1419,7 +1444,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 </div>
               ) : isVisualPrepStep ? (
                 <div className="mt-5 grid gap-4">
-                  <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
+                <div className="min-w-0 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
                     Image Vault selection is wired for character and location rows. Use Advanced Imageshop for actual
                     image generation; the other controls below remain local planning/status controls only.
                   </div>
@@ -1441,7 +1466,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                           return (
                             <div
                               key={character}
-                              className="grid gap-3 rounded-lg border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                              className="grid gap-4 rounded-xl border border-white/10 bg-black/25 p-4 lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]"
                             >
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-white">{character}</p>
@@ -1454,24 +1479,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 >
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
-                                {reference?.imageUrl ? (
-                                  <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-2.5">
+                              </div>
+                              {reference?.imageUrl ? (
+                                <div className="w-[186px] rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                                  <div className="group/reference overflow-hidden rounded-lg border border-white/10 bg-black/35 shadow-lg shadow-black/25">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
                                       alt={`${character} vault reference`}
-                                      frameClassName="flex h-36 w-full items-center justify-center overflow-hidden rounded-lg bg-black/35"
-                                      imgClassName="max-h-36 w-full object-contain"
+                                      frameClassName="mx-auto flex h-[288px] w-[162px] items-center justify-center overflow-hidden bg-black/35"
+                                      imgClassName="h-[288px] w-[162px] object-cover transition duration-300 group-hover/reference:scale-110"
                                     />
-                                    <div className="mt-2 min-w-0">
-                                      <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
-                                      <p className="truncate text-[11px] text-white/55">
-                                        {reference.sourceLabel ?? reference.referenceId}
-                                      </p>
-                                    </div>
                                   </div>
-                                ) : null}
-                              </div>
-                              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
+                                  <div className="mt-3 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
+                                    <p className="truncate text-[11px] text-white/55">
+                                      {reference.sourceLabel ?? reference.referenceId}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : null}
+                              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3">
                                 <button
                                   type="button"
                                   onClick={() => markCharacterReference(character, 'added')}
@@ -1523,7 +1550,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                           return (
                             <div
                               key={location}
-                              className="grid gap-3 rounded-lg border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                              className="grid gap-4 rounded-xl border border-white/10 bg-black/25 p-4 lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]"
                             >
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-white">{location}</p>
@@ -1536,24 +1563,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                 >
                                   {ready ? 'Ready' : 'Missing reference'}
                                 </span>
-                                {reference?.imageUrl ? (
-                                  <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-2.5">
+                              </div>
+                              {reference?.imageUrl ? (
+                                <div className="w-[186px] rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                                  <div className="group/reference overflow-hidden rounded-lg border border-white/10 bg-black/35 shadow-lg shadow-black/25">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
                                       alt={`${location} vault reference`}
-                                      frameClassName="flex h-36 w-full items-center justify-center overflow-hidden rounded-lg bg-black/35"
-                                      imgClassName="max-h-36 w-full object-contain"
+                                      frameClassName="mx-auto flex h-[288px] w-[162px] items-center justify-center overflow-hidden bg-black/35"
+                                      imgClassName="h-[288px] w-[162px] object-cover transition duration-300 group-hover/reference:scale-110"
                                     />
-                                    <div className="mt-2 min-w-0">
-                                      <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
-                                      <p className="truncate text-[11px] text-white/55">
-                                        {reference.sourceLabel ?? reference.referenceId}
-                                      </p>
-                                    </div>
                                   </div>
-                                ) : null}
-                              </div>
-                              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
+                                  <div className="mt-3 min-w-0">
+                                    <p className="text-xs font-bold text-emerald-100">From Image Vault</p>
+                                    <p className="truncate text-[11px] text-white/55">
+                                      {reference.sourceLabel ?? reference.referenceId}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : null}
+                              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3">
                                 <button
                                   type="button"
                                   onClick={() => markLocationReference(location, 'added')}

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Download,
   FolderInput,
+  Maximize2,
+  Minimize2,
   Pencil,
   RefreshCw,
   Tag,
@@ -90,6 +92,7 @@ export function ProfileVaultModal(props: {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modalSize, setModalSize] = useState<'fit' | 'wide'>('fit');
 
   const [showRenameProfile, setShowRenameProfile] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -298,24 +301,29 @@ export function ProfileVaultModal(props: {
         onClick={onClose}
       />
 
-      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1280px,96vw)] max-h-[92vh] flex flex-col">
+      <div
+        className={[
+          'absolute left-2 right-2 top-2 max-h-[calc(100vh-1rem)] flex flex-col md:left-24',
+          modalSize === 'fit' ? 'md:right-auto md:w-[min(1320px,calc(100vw-7rem))]' : 'md:right-2',
+        ].join(' ')}
+      >
         <div
           className={[
-            'relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh]',
+            'relative overflow-hidden rounded-2xl border flex flex-col max-h-[calc(100vh-1rem)]',
             'border-[#D4AF37]/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)]',
-            'bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]',
+            'bg-[linear-gradient(135deg,#240004_0%,#6f0715_42%,#b31228_72%,#310005_100%)]',
           ].join(' ')}
         >
-          <div className="absolute inset-0 pointer-events-none opacity-70 bg-[radial-gradient(circle_at_30%_20%,rgba(251,191,36,0.22),transparent_50%)]" />
-          <div className="absolute inset-0 pointer-events-none opacity-60 bg-[radial-gradient(circle_at_70%_60%,rgba(59,130,246,0.16),transparent_55%)]" />
+          <div className="absolute inset-0 pointer-events-none opacity-70 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.16),transparent_50%)]" />
+          <div className="absolute inset-0 pointer-events-none opacity-65 bg-[radial-gradient(circle_at_70%_60%,rgba(251,191,36,0.20),transparent_55%)]" />
 
-          <div className="relative p-5 sm:p-7 flex flex-col min-h-0 flex-1 overflow-hidden">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="relative p-4 sm:p-5 flex flex-col min-h-0 flex-1 overflow-hidden">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs uppercase tracking-[0.35em] text-[#FBBF24]/80">
                   Profile Vault
                 </div>
-                <div className="mt-1 text-2xl sm:text-3xl font-semibold tracking-wide text-[#FBF5D4] break-words">
+                <div className="mt-1 text-2xl font-semibold tracking-wide text-[#FBF5D4] break-words">
                   {profileName}
                 </div>
                 <div className="mt-2 text-sm text-[#D4AF37]/70">
@@ -374,6 +382,18 @@ export function ProfileVaultModal(props: {
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalSize((size) => (size === 'fit' ? 'wide' : 'fit'))}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40"
+                >
+                  {modalSize === 'fit' ? (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  )}
+                  {modalSize === 'fit' ? 'Wide view' : 'Fit view'}
                 </button>
                 <button
                   type="button"
@@ -561,7 +581,7 @@ export function ProfileVaultModal(props: {
               </div>
             )}
 
-            <div className="mt-6 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
+            <div className="mt-4 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
               <datalist id="vault-profile-destinations-global">
                 {allProfileNames
                   .filter((p) => normalizeProf(p) !== normalizeProf(profileName))
@@ -569,7 +589,7 @@ export function ProfileVaultModal(props: {
                     <option key={p} value={p === 'Unnamed' ? '' : p} />
                   ))}
               </datalist>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 pb-4">
+              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {sorted.map((item) => {
                   const isActive = coverId === item.id;
                   const isSaving = savingId === item.id;
@@ -603,16 +623,14 @@ export function ProfileVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
-                        <div className="flex w-full items-center justify-center bg-black/30 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                        <div className="flex aspect-[9/16] w-full items-center justify-center overflow-hidden bg-black/30">
                           <VaultImageWithFallback
                             src={item.image_url}
                             alt={title}
-                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
-                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain opacity-95"
+                            frameClassName="flex aspect-[9/16] w-full items-center justify-center overflow-hidden"
+                            imgClassName="block h-full w-full object-cover opacity-95"
                             imgStyle={{
                               objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                              transform: `scale(${item.thumbnail_scale ?? 1})`,
-                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
                             }}
                           />
                         </div>
@@ -623,26 +641,18 @@ export function ProfileVaultModal(props: {
                       </div>
 
                       <div
-                        className="border-t border-white/10 bg-[#07101f]/95 p-3"
+                        className="border-t border-white/10 bg-[#240004]/95 p-3"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-[#FBF5D4]">{title}</p>
+                            <p className="line-clamp-2 min-h-[2.25rem] break-words text-sm font-bold leading-snug text-[#FBF5D4]">
+                              {title}
+                            </p>
                             <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">
                               {isActive ? 'Profile cover' : 'Vault reference'}
                             </p>
                           </div>
-                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#D4AF37]/35 bg-black/30 px-2 py-1 text-[10px] font-bold text-[#FBF5D4]">
-                            <input
-                              type="checkbox"
-                              checked={zipSelectedIds.has(item.id)}
-                              disabled={downloadBusy}
-                              onChange={() => toggleZipSelect(item.id)}
-                              className="rounded border-[#D4AF37]/50"
-                            />
-                            ZIP
-                          </label>
                         </div>
 
                         {guidedSelectionTarget && onUseForGuidedFlow ? (
@@ -657,11 +667,21 @@ export function ProfileVaultModal(props: {
                           </button>
                         ) : null}
 
-                        <div className="mt-3 grid grid-cols-6 gap-1.5">
+                        <div className="mt-3 grid grid-cols-7 gap-1.5">
+                          <label className="flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[10px] font-bold text-[#FBF5D4] transition hover:bg-black/45">
+                            <input
+                              type="checkbox"
+                              checked={zipSelectedIds.has(item.id)}
+                              disabled={downloadBusy}
+                              onChange={() => toggleZipSelect(item.id)}
+                              className="rounded border-[#D4AF37]/50"
+                            />
+                            ZIP
+                          </label>
                           <button
                             type="button"
                             disabled={Boolean(savingId) || busy || downloadBusy}
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
                             title="Download HQ image"
                             onClick={() => void runDownloadOne(item)}
                           >
@@ -671,7 +691,7 @@ export function ProfileVaultModal(props: {
                             type="button"
                             disabled={Boolean(savingId) || busy}
                             className={[
-                              'rounded-lg border p-1.5 transition disabled:opacity-40',
+                              'min-w-0 rounded-lg border px-1 py-1.5 transition disabled:opacity-40',
                               isActive
                                 ? 'border-[#FBBF24]/70 bg-[#FBBF24]/15'
                                 : 'border-[#D4AF37]/30 bg-black/30 hover:bg-black/45',
@@ -698,7 +718,7 @@ export function ProfileVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Framing"
                             onClick={() => {
                               setFocusEditItem(item);
@@ -709,7 +729,7 @@ export function ProfileVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Edit cast name"
                             onClick={() => {
                               setCastEditId(item.id);
@@ -721,7 +741,7 @@ export function ProfileVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Move to profile"
                             onClick={() => {
                               setMoveItemId(item.id);
@@ -734,7 +754,7 @@ export function ProfileVaultModal(props: {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-lg border border-red-500/35 bg-black/30 p-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
+                            className="min-w-0 rounded-lg border border-red-500/35 bg-black/30 px-1 py-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
                             title="Delete image"
                             onClick={async () => {
                               if (!confirm('Delete this image from the vault?')) return;

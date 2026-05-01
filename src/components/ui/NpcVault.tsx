@@ -32,23 +32,16 @@ export const NpcVault: React.FC = () => {
   }, [rows, selectedId]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 pb-10">
-      <div className="rounded-2xl border border-white/10 bg-black/25 p-6 text-white/80">
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-fuchsia-200/70">
-          Illustrator’s Imageshop lane
-        </p>
-        <div className="mt-2 flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-white">NPC Vault</h2>
-            <p className="mt-2 text-sm leading-relaxed text-white/70">
-              Quick refs created in Illustrator’s Imageshop: one-off NPCs, cameo characters, exploratory environments,
-              and mood-board images you may want to reuse later.
-            </p>
+    <div className="w-full px-8 py-10">
+      <div className="mb-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-xl border border-[#D4AF37]/25 bg-black/20 px-3 py-2 text-sm text-[#D4AF37]/80">
+            References: <span className="font-medium text-[#FBF5D4]/90">{rows.length}</span>
           </div>
           <button
             type="button"
             onClick={() => setRefreshNonce((n) => n + 1)}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+            className="rounded-xl border border-[#D4AF37]/35 bg-black/30 px-4 py-2.5 text-sm text-[#FBF5D4] hover:bg-black/40"
           >
             Refresh
           </button>
@@ -141,4 +134,3 @@ export const NpcVault: React.FC = () => {
     </div>
   );
 };
-

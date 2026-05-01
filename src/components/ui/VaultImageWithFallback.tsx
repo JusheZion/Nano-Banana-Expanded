@@ -24,11 +24,25 @@ export function VaultImageWithFallback({
   imgStyle,
 }: VaultImageWithFallbackProps) {
   const [failed, setFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const displaySrc = useArcsResolvedSrc(src);
+  const canRetry = Boolean(displaySrc) && !displaySrc.startsWith('blob:') && !displaySrc.startsWith('data:');
+  const retrySrc = canRetry && retryCount > 0
+    ? `${displaySrc}${displaySrc.includes('?') ? '&' : '?'}arcsRetry=${retryCount}`
+    : displaySrc;
 
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+    setRetryCount(0);
+  }, [src, displaySrc]);
+
+  const handleError = () => {
+    if (canRetry && retryCount < 2) {
+      setRetryCount((count) => count + 1);
+      return;
+    }
+    setFailed(true);
+  };
 
   if (failed) {
     return (
@@ -44,13 +58,15 @@ export function VaultImageWithFallback({
   }
 
   return (
-    <img
-      src={displaySrc}
-      alt={alt}
-      className={imgClassName}
-      style={imgStyle}
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
+    <div className={frameClassName}>
+      <img
+        src={retrySrc}
+        alt={alt}
+        className={imgClassName}
+        style={imgStyle}
+        loading="lazy"
+        onError={handleError}
+      />
+    </div>
   );
 }

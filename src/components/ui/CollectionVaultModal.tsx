@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Download,
   FolderInput,
+  Maximize2,
+  Minimize2,
   Pencil,
   RefreshCw,
   Tag,
@@ -32,7 +34,7 @@ import {
 } from '@/shared/lib/vaultImageDownload';
 import type { GuidedComicVaultTarget } from '@/stores/guidedComicVaultBridge';
 
-const AMETHYST = '#8B5CF6';
+const LIME = '#84CC16';
 
 export function CollectionVaultModal(props: {
   open: boolean;
@@ -57,6 +59,7 @@ export function CollectionVaultModal(props: {
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modalSize, setModalSize] = useState<'fit' | 'wide'>('fit');
 
   const [showRename, setShowRename] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -252,12 +255,19 @@ export function CollectionVaultModal(props: {
         onClick={onClose}
       />
 
-      <div className="absolute inset-x-0 top-6 mx-auto w-[min(1280px,96vw)] max-h-[92vh] flex flex-col">
+      <div
+        className={[
+          'absolute left-2 right-2 top-2 max-h-[calc(100vh-1rem)] flex flex-col md:left-24',
+          modalSize === 'fit' ? 'md:right-auto md:w-[min(1320px,calc(100vw-7rem))]' : 'md:right-2',
+        ].join(' ')}
+      >
         <div
-          className="relative overflow-hidden rounded-2xl border flex flex-col max-h-[92vh] border-[#D4AF37]/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)] bg-[linear-gradient(135deg,#050816_0%,#10172f_58%,#070914_100%)]"
+          className="relative overflow-hidden rounded-2xl border flex flex-col max-h-[calc(100vh-1rem)] border-[#D4AF37]/30 shadow-[0_30px_120px_rgba(0,0,0,0.55)] bg-[linear-gradient(135deg,#071407_0%,#16610d_42%,#84cc16_74%,#102806_100%)]"
         >
-          <div className="relative p-5 sm:p-7 flex flex-col min-h-0 flex-1 overflow-hidden">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="absolute inset-0 pointer-events-none opacity-70 bg-[radial-gradient(circle_at_26%_18%,rgba(255,255,255,0.16),transparent_48%)]" />
+          <div className="absolute inset-0 pointer-events-none opacity-65 bg-[radial-gradient(circle_at_74%_58%,rgba(251,191,36,0.22),transparent_55%)]" />
+          <div className="relative p-4 sm:p-5 flex flex-col min-h-0 flex-1 overflow-hidden">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div
                   className="text-xs uppercase tracking-[0.35em]"
@@ -266,7 +276,7 @@ export function CollectionVaultModal(props: {
                   Asset collection
                 </div>
                 <div
-                  className="mt-1 text-2xl sm:text-3xl font-semibold tracking-wide text-white break-words"
+                  className="mt-1 text-2xl font-semibold tracking-wide text-white break-words"
                   style={{ color: '#FBF5D4' }}
                 >
                   {collectionName}
@@ -330,6 +340,18 @@ export function CollectionVaultModal(props: {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setModalSize((size) => (size === 'fit' ? 'wide' : 'fit'))}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4]"
+                >
+                  {modalSize === 'fit' ? (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  )}
+                  {modalSize === 'fit' ? 'Wide view' : 'Fit view'}
+                </button>
+                <button
+                  type="button"
                   onClick={onClose}
                   className="inline-flex items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-black/30 w-10 h-10 text-[#FBF5D4]"
                   aria-label="Close"
@@ -340,27 +362,27 @@ export function CollectionVaultModal(props: {
             </div>
 
             {(saveError || busy || downloadBusy || downloadError) && (
-              <div className="mt-4 rounded-xl border border-violet-500/30 bg-black/25 px-4 py-3 text-sm">
+              <div className="mt-4 rounded-xl border border-[#D4AF37]/30 bg-black/25 px-4 py-3 text-sm">
                 {downloadError ? (
                   <span className="text-amber-300">{downloadError}</span>
                 ) : saveError ? (
                   <span className="text-amber-300">{saveError}</span>
                 ) : downloadBusy ? (
-                  <span className="text-violet-200/80">Preparing download…</span>
+                  <span className="text-[#FBF5D4]/80">Preparing download…</span>
                 ) : (
-                  <span className="text-violet-200/80">Working…</span>
+                  <span className="text-[#FBF5D4]/80">Working…</span>
                 )}
               </div>
             )}
 
             {showRename && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-violet-500/40 bg-[#1e1033] p-6">
-                  <h3 className="text-lg font-semibold text-violet-100">Rename collection</h3>
+                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[linear-gradient(135deg,#071407,#16610d_55%,#102806)] p-6">
+                  <h3 className="text-lg font-semibold text-[#FBF5D4]">Rename collection</h3>
                   <input
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
-                    className="mt-4 w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-violet-50"
+                    className="mt-4 w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-[#FBF5D4]"
                     placeholder="Collection name"
                   />
                   <div className="mt-4 flex justify-end gap-2">
@@ -389,7 +411,7 @@ export function CollectionVaultModal(props: {
                         }
                       }}
                       className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-                      style={{ backgroundColor: AMETHYST }}
+                      style={{ backgroundColor: LIME, color: '#102806' }}
                     >
                       Rename
                     </button>
@@ -400,9 +422,9 @@ export function CollectionVaultModal(props: {
 
             {showDeleteCollection && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-[#1e1033] p-6">
+                <div className="w-full max-w-md rounded-2xl border border-red-500/40 bg-[linear-gradient(135deg,#071407,#16610d_55%,#102806)] p-6">
                   <h3 className="text-lg font-semibold text-red-200">Delete entire collection?</h3>
-                  <p className="text-sm text-violet-200/80 mt-2">
+                  <p className="text-sm text-[#FBF5D4]/80 mt-2">
                     Remove all {items.length} asset{items.length === 1 ? '' : 's'} in “
                     {collectionName}”.
                   </p>
@@ -439,12 +461,12 @@ export function CollectionVaultModal(props: {
 
             {mergeOpen && pendingMove && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-violet-500/40 bg-[#1e1033] p-6">
-                  <h3 className="text-lg font-semibold text-violet-100">Merge into collection?</h3>
-                  <p className="text-sm text-violet-200/75 mt-2">
+                <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/40 bg-[linear-gradient(135deg,#071407,#16610d_55%,#102806)] p-6">
+                  <h3 className="text-lg font-semibold text-[#FBF5D4]">Merge into collection?</h3>
+                  <p className="text-sm text-[#FBF5D4]/75 mt-2">
                     “{pendingMove.target.trim() || 'Unnamed'}” already has assets.
                   </p>
-                  <label className="mt-4 flex items-center gap-2 text-sm text-violet-200 cursor-pointer">
+                  <label className="mt-4 flex items-center gap-2 text-sm text-[#FBF5D4] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={mergeDontAsk}
@@ -467,7 +489,7 @@ export function CollectionVaultModal(props: {
                       type="button"
                       onClick={() => void confirmMerge()}
                       className="px-4 py-2 rounded-xl text-sm font-medium text-white"
-                      style={{ backgroundColor: AMETHYST }}
+                      style={{ backgroundColor: LIME, color: '#102806' }}
                     >
                       Merge &amp; move
                     </button>
@@ -478,9 +500,9 @@ export function CollectionVaultModal(props: {
 
             {lastItemOpen && pendingLastItemMove && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60">
-                <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-[#1e1033] p-6">
-                  <h3 className="text-lg font-semibold text-violet-100">Last asset here</h3>
-                  <p className="text-sm text-violet-200/75 mt-2">
+                <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-[linear-gradient(135deg,#071407,#16610d_55%,#102806)] p-6">
+                  <h3 className="text-lg font-semibold text-[#FBF5D4]">Last asset here</h3>
+                  <p className="text-sm text-[#FBF5D4]/75 mt-2">
                     Moving it removes the empty “{collectionName}” group from the vault.
                   </p>
                   <div className="mt-4 flex justify-end gap-2">
@@ -506,7 +528,7 @@ export function CollectionVaultModal(props: {
               </div>
             )}
 
-            <div className="mt-6 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
+            <div className="mt-4 overflow-y-auto flex-1 min-h-0 pr-1 custom-scrollbar">
               <datalist id="vault-asset-collections-global">
                 {allCollectionNames
                   .filter((c) => normCol(c) !== normCol(collectionName))
@@ -514,7 +536,7 @@ export function CollectionVaultModal(props: {
                     <option key={c} value={c === 'Unnamed' ? '' : c} />
                   ))}
               </datalist>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 pb-4">
+              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {sorted.map((item) => {
                   const title = item.asset_name || item.name || 'Asset';
                   const isSelected = selectedItemId === item.id;
@@ -540,40 +562,30 @@ export function CollectionVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
-                        <div className="flex w-full items-center justify-center bg-black/25 min-h-[min(52vh,380px)] max-h-[min(72vh,640px)]">
+                        <div className="flex aspect-[9/16] w-full items-center justify-center overflow-hidden bg-black/25">
                           <VaultImageWithFallback
                             src={item.image_url}
                             alt={title}
-                            frameClassName="flex w-full items-center justify-center min-h-[min(52vh,380px)] max-h-[min(72vh,640px)] px-1"
-                            imgClassName="max-h-[min(72vh,640px)] w-full h-auto max-w-full object-contain"
+                            frameClassName="flex aspect-[9/16] w-full items-center justify-center overflow-hidden"
+                            imgClassName="block h-full w-full object-cover"
                             imgStyle={{
                               objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
-                              transform: `scale(${item.thumbnail_scale ?? 1})`,
-                              transformOrigin: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
                             }}
                           />
                         </div>
                       </div>
 
                       <div
-                        className="border-t border-white/10 bg-[#07101f]/95 p-3"
+                        className="border-t border-white/10 bg-[#071407]/95 p-3"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-[#FBF5D4]">{title}</p>
+                            <p className="line-clamp-2 min-h-[2.25rem] break-words text-sm font-bold leading-snug text-[#FBF5D4]">
+                              {title}
+                            </p>
                             <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">Vault asset</p>
                           </div>
-                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#D4AF37]/35 bg-black/30 px-2 py-1 text-[10px] font-bold text-[#FBF5D4]">
-                            <input
-                              type="checkbox"
-                              checked={zipSelectedIds.has(item.id)}
-                              disabled={downloadBusy}
-                              onChange={() => toggleZipSelect(item.id)}
-                              className="rounded border-[#D4AF37]/50"
-                            />
-                            ZIP
-                          </label>
                         </div>
 
                         {guidedSelectionTarget && onUseForGuidedFlow ? (
@@ -588,11 +600,21 @@ export function CollectionVaultModal(props: {
                           </button>
                         ) : null}
 
-                        <div className="mt-3 grid grid-cols-5 gap-1.5">
+                        <div className="mt-3 grid grid-cols-6 gap-1.5">
+                          <label className="flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[10px] font-bold text-[#FBF5D4] transition hover:bg-black/45">
+                            <input
+                              type="checkbox"
+                              checked={zipSelectedIds.has(item.id)}
+                              disabled={downloadBusy}
+                              onChange={() => toggleZipSelect(item.id)}
+                              className="rounded border-[#D4AF37]/50"
+                            />
+                            ZIP
+                          </label>
                           <button
                             type="button"
                             disabled={busy || downloadBusy}
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
                             title="Download HQ image"
                             onClick={() => void runDownloadOne(item)}
                           >
@@ -600,7 +622,7 @@ export function CollectionVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Framing"
                             onClick={() => {
                               setFocusEditItem(item);
@@ -611,7 +633,7 @@ export function CollectionVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Edit asset name"
                             onClick={() => {
                               setNameEditId(item.id);
@@ -623,7 +645,7 @@ export function CollectionVaultModal(props: {
                           </button>
                           <button
                             type="button"
-                            className="rounded-lg border border-[#D4AF37]/30 bg-black/30 p-1.5 text-[#FBF5D4] transition hover:bg-black/45"
+                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
                             title="Move to collection"
                             onClick={() => {
                               setMoveItemId(item.id);
@@ -636,7 +658,7 @@ export function CollectionVaultModal(props: {
                           <button
                             type="button"
                             disabled={busy}
-                            className="rounded-lg border border-red-500/35 bg-black/30 p-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
+                            className="min-w-0 rounded-lg border border-red-500/35 bg-black/30 px-1 py-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
                             title="Delete asset"
                             onClick={async () => {
                               if (!confirm('Delete this asset?')) return;
@@ -685,7 +707,7 @@ export function CollectionVaultModal(props: {
                                   }
                                 }}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                                style={{ backgroundColor: AMETHYST }}
+                                style={{ backgroundColor: LIME, color: '#102806' }}
                               >
                                 Save
                               </button>
@@ -735,10 +757,10 @@ export function CollectionVaultModal(props: {
 
                       <div className="relative z-[5] border-t border-white/10 bg-black/35 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 min-w-0">
-                          <div className="min-w-0 truncate text-sm font-medium text-violet-100">
+                          <div className="min-w-0 truncate text-sm font-medium text-[#FBF5D4]">
                             {title}
                           </div>
-                          <span className="text-[10px] text-violet-400/50 shrink-0 hidden sm:inline">
+                          <span className="text-[10px] text-[#D4AF37]/55 shrink-0 hidden sm:inline">
                             Click image for actions
                           </span>
                         </div>
