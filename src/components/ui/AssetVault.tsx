@@ -75,16 +75,19 @@ export const AssetVault: React.FC = () => {
           allCollectionNames={albums.map((a) => a.collectionName)}
           onClose={() => setOpenCollection(null)}
           onVaultChanged={() => void refresh()}
-          guidedSelectionTarget={guidedTarget?.type === 'location' ? guidedTarget : null}
-          onUseForGuidedFlow={(item) =>
-            selectGuidedReference({
-              type: 'location',
-              name: guidedTarget?.name ?? selected.collectionName,
-              referenceId: item.id,
-              imageUrl: item.image_url,
-              sourceType: 'asset',
-              sourceLabel: selected.collectionName,
-            })
+          guidedSelectionTarget={guidedTarget}
+          onUseForGuidedFlow={
+            guidedTarget
+              ? (item) =>
+                  selectGuidedReference({
+                    type: guidedTarget.type,
+                    name: guidedTarget.name,
+                    referenceId: item.id,
+                    imageUrl: item.image_url,
+                    sourceType: 'asset',
+                    sourceLabel: item.asset_name || item.name || selected.collectionName,
+                  })
+              : undefined
           }
         />
       )}
