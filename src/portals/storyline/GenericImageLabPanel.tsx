@@ -28,8 +28,32 @@ import {
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
+import { useImageWorkshopBridge, type GuidedImageWorkshopHandoff } from '@/stores/imageWorkshopBridge';
 
 type LabContext = 'character' | 'asset';
+
+function listOrNone(values: string[] | undefined): string {
+  const cleaned = (values ?? []).map((value) => value.trim()).filter(Boolean);
+  return cleaned.length > 0 ? cleaned.join(', ') : 'None specified';
+}
+
+function buildGuidedPanelPrompt(handoff: GuidedImageWorkshopHandoff): string {
+  const pageNumber = handoff.pageNumber ?? '?';
+  const panelNumber = handoff.panelNumber ?? '?';
+  const pageSummary = handoff.pageSummary?.trim() || 'No page summary provided.';
+  const panelBeat = handoff.panelBeat?.trim() || 'No panel beat provided.';
+  const characters = listOrNone(handoff.pageKeyCharacters);
+  const location = handoff.pageKeyLocation?.trim() || 'No location specified';
+
+  return [
+    `Create comic panel art for Page ${pageNumber}, Panel ${panelNumber}.`,
+    `Page summary: ${pageSummary}`,
+    `Panel beat: ${panelBeat}`,
+    `Characters: ${characters}`,
+    `Location: ${location}`,
+    'Compose this as a clear, cinematic comic-book panel with strong storytelling, consistent character design, readable action, and polished lighting.',
+  ].join('\n');
+}
 
 export function GenericImageLabPanel({
   selectedBeat,
@@ -60,6 +84,8 @@ export function GenericImageLabPanel({
   seedPrompt?: string | null;
   onSeedPromptConsumed?: () => void;
 }) {
+  const consumeGuidedComicHandoff = useImageWorkshopBridge((s) => s.consumeGuidedComicHandoff);
+  const sendGuidedComicPanelImageBack = useImageWorkshopBridge((s) => s.sendGuidedComicPanelImageBack);
   const [refs, setRefs] = useState<string[]>(() => Array.from({ length: 14 }, () => ''));
   const [context, setContext] = useState<LabContext>('character');
   const [modelId] = useState<OnyxModelId>('pro');
@@ -77,6 +103,7 @@ export function GenericImageLabPanel({
 
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
+  const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
 
   useEffect(() => {
     const next = seedPrompt?.trim();
@@ -108,6 +135,46 @@ export function GenericImageLabPanel({
     setContext(nextContext);
     setNotice(null);
   }, []);
+
+  useEffect(() => {
+    const handoff = consumeGuidedComicHandoff();
+    if (!handoff) return;
+
+    const incoming = [...handoff.characters, ...handoff.locations]
+      .map((reference) => reference.imageUrl)
+      .filter(Boolean);
+
+    if (handoff.currentStep === 'art') {
+      setGuidedPanelTarget(handoff);
+      if (incoming.length > 0) {
+        applyRefs(incoming, handoff.characters.length > 0 ? 'character' : 'asset');
+      }
+      setPromptRaw(buildGuidedPanelPrompt(handoff));
+      setPromptRefined('');
+      setUseRefinedPrompt(false);
+      setError(null);
+      setNotice(`Loaded panel from Guided Comic Flow: Page ${handoff.pageNumber ?? '?'}, Panel ${handoff.panelNumber ?? '?'}`);
+      return;
+    }
+
+    if (incoming.length === 0) return;
+
+    applyRefs(incoming, handoff.characters.length > 0 ? 'character' : 'asset');
+    setNotice('Loaded references from Guided Comic Flow');
+  }, [applyRefs, consumeGuidedComicHandoff]);
+
+  const sendBackToGuidedComicFlow = useCallback(() => {
+    if (!guidedPanelTarget || !lastImageUrl || !guidedPanelTarget.pageNumber || !guidedPanelTarget.panelNumber) return;
+
+    sendGuidedComicPanelImageBack({
+      panelId: guidedPanelTarget.panelId,
+      pageNumber: guidedPanelTarget.pageNumber,
+      panelNumber: guidedPanelTarget.panelNumber,
+      imageUrl: lastImageUrl,
+      seed: lastSeed,
+      prompt: effectivePrompt,
+    });
+  }, [effectivePrompt, guidedPanelTarget, lastImageUrl, lastSeed, sendGuidedComicPanelImageBack]);
 
   const getStudioRefs = useCallback((source: 'character' | 'asset'): string[] => {
     if (source === 'character') return useCharacterStudioStore.getState().referenceImageUrls;
@@ -549,6 +616,17 @@ export function GenericImageLabPanel({
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 shrink-0">
+              {guidedPanelTarget?.currentStep === 'art' ? (
+                <button
+                  type="button"
+                  disabled={!lastImageUrl}
+                  onClick={sendBackToGuidedComicFlow}
+                  className="px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
+                  style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
+                >
+                  Send back to Guided Comic Flow
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={!canUseSelectedBeat}
@@ -594,4 +672,3 @@ export function GenericImageLabPanel({
     </section>
   );
 }
-

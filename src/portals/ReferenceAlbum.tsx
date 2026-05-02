@@ -8,6 +8,18 @@ import { Boxes, Sparkles, UserRound, Users } from 'lucide-react';
 
 type ArchiveTab = 'character' | 'asset' | 'supporting';
 
+function displayTitleCase(value: string): string {
+    return value
+        .trim()
+        .split(/\s+/)
+        .map((word) => {
+            if (word.length <= 1) return word.toUpperCase();
+            if (/^[A-Z0-9]{2,}$/.test(word)) return word;
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+}
+
 export const ReferenceAlbum: React.FC = () => {
     const { setTheme } = useTheme();
     const pendingGuidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
@@ -79,22 +91,25 @@ export const ReferenceAlbum: React.FC = () => {
             />
             <div className="relative z-10 min-h-screen pb-12">
                 {pendingGuidedTarget ? (
-                    <div className="sticky top-4 z-30 mx-auto mb-6 flex max-w-6xl flex-col gap-3 rounded-2xl border border-amber-300/35 bg-[#07101f]/95 px-5 py-4 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+                    <div className="sticky top-3 z-30 mx-auto mb-4 flex max-w-6xl flex-col gap-2 rounded-xl border border-amber-300/30 bg-[#07101f]/95 px-4 py-3 text-amber-50 shadow-2xl shadow-black/35 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-200/70">
                                 Guided Comic Flow reference pick
                             </p>
-                            <p className="mt-1 text-base font-black">
-                                Select a vault image for {pendingGuidedTarget.type === 'character' ? 'character' : 'location / asset'}: {pendingGuidedTarget.name}
+                            <p className="mt-0.5 text-base font-black">
+                                Select image for:{' '}
+                                <span className="text-amber-100">
+                                    {displayTitleCase(pendingGuidedTarget.name)}
+                                </span>
                             </p>
-                            <p className="mt-1 text-xs leading-relaxed text-amber-100/75">
+                            <p className="mt-0.5 text-xs leading-relaxed text-amber-100/65">
                                 Open a {pendingGuidedTarget.type === 'character' ? 'character profile' : 'asset collection'}, then use the highlighted button in the card details panel.
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={cancelAndReturnToComic}
-                            className="rounded-xl border border-amber-200/40 bg-amber-300/15 px-4 py-2.5 text-xs font-black text-amber-50 transition hover:bg-amber-300/25"
+                            className="rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-amber-100/75 transition hover:bg-white/10 hover:text-amber-50"
                         >
                             Cancel and return
                         </button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpenText,
   ChevronLeft,
@@ -8,8 +8,11 @@ import {
   LayoutTemplate,
   Palette,
   PanelTop,
+  RefreshCw,
   Rocket,
   Sparkles,
+  Trash2,
+  ZoomIn,
 } from 'lucide-react';
 import {
   ACCENT_BLUE_GRADIENT,
@@ -26,6 +29,7 @@ import { Tooltip } from '@/shared/components/Tooltip';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import type { Portal } from '@/shared/portals';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
+import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 
 type GuidedComicStepId =
   | 'setup'
@@ -110,6 +114,13 @@ type PanelArtQueueItem = {
   location: string;
 };
 
+type PanelArtImageState = {
+  imageUrl: string;
+  source: 'imageshop';
+  returnedAt: string;
+  prompt?: string;
+};
+
 type LayoutTemplateId = 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
 
 type LayoutTemplateOption = {
@@ -129,6 +140,7 @@ type GuidedComicDraftState = {
   locationReferences: Record<string, VisualReferenceState>;
   selectedPanelId: string | null;
   panelArtStatuses: Record<string, PanelArtStatus>;
+  panelArtImages: Record<string, PanelArtImageState>;
   pageLayoutTemplates: Record<number, LayoutTemplateId>;
 };
 
@@ -396,6 +408,18 @@ function uniquePageCardTerms(values: string[]): string[] {
   return uniqueTerms;
 }
 
+function displayTitleCase(value: string): string {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      if (word.length <= 1) return word.toUpperCase();
+      if (/^[A-Z0-9]{2,}$/.test(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 function cloneInitialOutlineBeats(): OutlineBeat[] {
   return INITIAL_OUTLINE_BEATS.map((beat) => ({ ...beat }));
 }
@@ -428,6 +452,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       locationReferences: parsed.locationReferences ?? {},
       selectedPanelId: typeof parsed.selectedPanelId === 'string' ? parsed.selectedPanelId : null,
       panelArtStatuses: parsed.panelArtStatuses ?? {},
+      panelArtImages: parsed.panelArtImages ?? {},
       pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
     };
   } catch {
@@ -469,6 +494,29 @@ function pagePanelArtSummary(page: PageCard, panelArtStatuses: Record<string, Pa
   const readyCount = panelStatuses.filter((status) => status === 'ready').length;
   const needsArtCount = panelStatuses.filter((status) => status === 'needs-art').length;
   return `${approvedCount} approved / ${readyCount} ready / ${needsArtCount} needs art`;
+}
+
+function layoutTemplateClass(templateId: LayoutTemplateId): string {
+  switch (templateId) {
+    case 'three-panel':
+      return 'grid-rows-3';
+    case 'four-panel':
+      return 'grid-cols-2 grid-rows-2';
+    case 'six-panel-grid':
+      return 'grid-cols-2 grid-rows-3';
+    case 'splash':
+      return 'grid-cols-1 grid-rows-1';
+    case 'auto':
+    default:
+      return 'grid-cols-2 grid-rows-2';
+  }
+}
+
+function layoutPanelSlotCount(templateId: LayoutTemplateId): number {
+  if (templateId === 'splash') return 1;
+  if (templateId === 'three-panel') return 3;
+  if (templateId === 'six-panel-grid') return 6;
+  return 4;
 }
 
 function outlineSeedForBeat(beatId: OutlineBeatId, story: StoryFormState): string {
@@ -532,6 +580,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const skipNextDraftSaveRef = useRef(false);
   const requestVaultSelection = useGuidedComicVaultBridge((s) => s.requestVaultSelection);
   const consumeVaultSelection = useGuidedComicVaultBridge((s) => s.consumeSelection);
+  const requestGuidedComicHandoff = useImageWorkshopBridge((s) => s.requestGuidedComicHandoff);
+  const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
   const restoredDraft = useMemo(() => readGuidedComicDraft(), []);
   const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
   const [setupForm, setSetupForm] = useState<SetupFormState>(() => restoredDraft?.setupForm ?? DEFAULT_SETUP_FORM);
@@ -559,6 +609,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>(
     () => restoredDraft?.panelArtStatuses ?? {},
   );
+  const [panelArtImages, setPanelArtImages] = useState<Record<string, PanelArtImageState>>(
+    () => restoredDraft?.panelArtImages ?? {},
+  );
   const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>(
     () => restoredDraft?.pageLayoutTemplates ?? {},
   );
@@ -583,6 +636,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       locationReferences,
       selectedPanelId,
       panelArtStatuses,
+      panelArtImages,
       pageLayoutTemplates,
     };
 
@@ -599,6 +653,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
     outlineBeats,
     pageCards,
     pageLayoutTemplates,
+    panelArtImages,
     panelArtStatuses,
     selectedPanelId,
     setupForm,
@@ -625,6 +680,25 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
 
     setLocationReferences((current) => ({ ...current, [selection.name]: reference }));
   }, [consumeVaultSelection]);
+
+  useEffect(() => {
+    const panelReturn = consumeGuidedComicPanelImageReturn();
+    if (!panelReturn) return;
+
+    const panelId = panelReturn.panelId ?? panelArtQueueId(panelReturn.pageNumber, panelReturn.panelNumber);
+    setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
+    setSelectedPanelId(panelId);
+    setPanelArtImages((current) => ({
+      ...current,
+      [panelId]: {
+        imageUrl: panelReturn.imageUrl,
+        source: 'imageshop',
+        returnedAt: panelReturn.returnedAt,
+        prompt: panelReturn.prompt,
+      },
+    }));
+    setPanelArtStatuses((current) => ({ ...current, [panelId]: 'ready' }));
+  }, [consumeGuidedComicPanelImageReturn]);
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -730,6 +804,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const updatePanelArtStatus = (panelId: string, status: PanelArtStatus) => {
     setPanelArtStatuses((current) => ({ ...current, [panelId]: status }));
   };
+  const deletePanelArtImage = (panelId: string) => {
+    setPanelArtImages((current) => {
+      const next = { ...current };
+      delete next[panelId];
+      return next;
+    });
+    setPanelArtStatuses((current) => ({ ...current, [panelId]: 'needs-art' }));
+  };
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
   };
@@ -748,6 +830,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
     setLocationReferences({});
     setSelectedPanelId(null);
     setPanelArtStatuses({});
+    setPanelArtImages({});
     setPageLayoutTemplates({});
     setDraftSavedAt(null);
   };
@@ -773,6 +856,50 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const totalVisualReferences = pageCharacters.length + pageLocations.length;
   const readyVisualReferences = readyCharacterCount + readyLocationCount;
   const missingVisualReferences = Math.max(0, totalVisualReferences - readyVisualReferences);
+  const openImageshopWithGuidedReferences = useCallback(() => {
+    const characters = pageCharacters.flatMap((name) => {
+      const reference = characterReferences[name];
+      if (reference?.status !== 'ready' || !reference.imageUrl) return [];
+      return [{
+        name,
+        displayName: displayTitleCase(name),
+        imageUrl: reference.imageUrl,
+        referenceId: reference.referenceId,
+        sourceLabel: reference.sourceLabel,
+      }];
+    });
+    const locations = pageLocations.flatMap((name) => {
+      const reference = locationReferences[name];
+      if (reference?.status !== 'ready' || !reference.imageUrl) return [];
+      return [{
+        name,
+        displayName: displayTitleCase(name),
+        imageUrl: reference.imageUrl,
+        referenceId: reference.referenceId,
+        sourceLabel: reference.sourceLabel,
+      }];
+    });
+    const pageSummary = pageCards
+      .map((page) => page.summary.trim())
+      .filter(Boolean)
+      .join('\n');
+
+    requestGuidedComicHandoff({
+      source: 'guided-comic',
+      currentStep: 'visual-prep',
+      sourceLabel: 'Guided Comic Flow · Visual Prep',
+      characters,
+      locations,
+      pageSummary: pageSummary || undefined,
+    });
+  }, [
+    characterReferences,
+    locationReferences,
+    pageCards,
+    pageCharacters,
+    pageLocations,
+    requestGuidedComicHandoff,
+  ]);
   const panelArtQueue = useMemo<PanelArtQueueItem[]>(
     () =>
       pageCards.flatMap((page) =>
@@ -795,6 +922,58 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const selectedPanelStatus = selectedPanel
     ? panelArtStatuses[selectedPanel.id] ?? 'needs-art'
     : 'needs-art';
+  const selectedPanelArtImage = selectedPanel ? panelArtImages[selectedPanel.id] : null;
+  const openImageshopWithSelectedPanel = useCallback(() => {
+    if (!selectedPanel) return;
+
+    const page = pageCards.find((card) => card.pageNumber === selectedPanel.pageNumber);
+    const characters = selectedPanel.characters.flatMap((name) => {
+      const reference = characterReferences[name];
+      if (reference?.status !== 'ready' || !reference.imageUrl) return [];
+      return [{
+        name,
+        displayName: displayTitleCase(name),
+        imageUrl: reference.imageUrl,
+        referenceId: reference.referenceId,
+        sourceLabel: reference.sourceLabel,
+      }];
+    });
+    const locations = selectedPanel.location
+      ? [selectedPanel.location].flatMap((name) => {
+        const reference = locationReferences[name];
+        if (reference?.status !== 'ready' || !reference.imageUrl) return [];
+        return [{
+          name,
+          displayName: displayTitleCase(name),
+          imageUrl: reference.imageUrl,
+          referenceId: reference.referenceId,
+          sourceLabel: reference.sourceLabel,
+        }];
+      })
+      : [];
+
+    requestGuidedComicHandoff({
+      source: 'guided-comic',
+      currentStep: 'art',
+      returnTarget: 'guided-comic-art',
+      sourceLabel: `Guided Comic Flow · Page ${selectedPanel.pageNumber}, Panel ${selectedPanel.panelNumber}`,
+      panelId: selectedPanel.id,
+      pageNumber: selectedPanel.pageNumber,
+      panelNumber: selectedPanel.panelNumber,
+      panelBeat: selectedPanel.beatText,
+      pageSummary: page?.summary.trim() || undefined,
+      pageKeyCharacters: selectedPanel.characters,
+      pageKeyLocation: selectedPanel.location || undefined,
+      characters,
+      locations,
+    });
+  }, [
+    characterReferences,
+    locationReferences,
+    pageCards,
+    requestGuidedComicHandoff,
+    selectedPanel,
+  ]);
   const layoutChecklistItems = useMemo(() => {
     const allPagesPlanned =
       pageCards.length > 0 && pageCards.every((page) => page.summary.trim() && Number.parseInt(page.panelCount, 10) > 0);
@@ -1147,7 +1326,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
-                    onClick={() => onNavigatePortal('lab')}
+                    onClick={openImageshopWithGuidedReferences}
                     className="inline-flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-black text-white/90 transition hover:bg-white/15 active:scale-[0.99]"
                     style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(252,246,186,0.10)' }}
                   >
@@ -1443,8 +1622,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                   })}
                 </div>
               ) : isVisualPrepStep ? (
-                <div className="mt-5 grid gap-4">
-                <div className="min-w-0 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
+                <div className="mt-5 grid gap-3">
+                  <div className="min-w-0 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50">
                     Image Vault selection is wired for character and location rows. Use Advanced Imageshop for actual
                     image generation; the other controls below remain local planning/status controls only.
                   </div>
@@ -1463,13 +1642,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                         pageCharacters.map((character) => {
                           const reference = characterReferences[character];
                           const ready = reference?.status === 'ready';
+                          const displayName = displayTitleCase(character);
                           return (
                             <div
                               key={character}
-                              className="grid gap-4 rounded-xl border border-white/10 bg-black/25 p-4 lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]"
+                              className={[
+                                'grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3',
+                                reference?.imageUrl
+                                  ? 'lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]'
+                                  : 'lg:grid-cols-[minmax(120px,150px)_minmax(220px,1fr)]',
+                              ].join(' ')}
                             >
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-white">{character}</p>
+                                <p className="truncate text-sm font-bold text-white">{displayName}</p>
                                 <span
                                   className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
                                   style={{
@@ -1485,7 +1670,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                   <div className="group/reference overflow-hidden rounded-lg border border-white/10 bg-black/35 shadow-lg shadow-black/25">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
-                                      alt={`${character} vault reference`}
+                                      alt={`${displayName} vault reference`}
                                       frameClassName="mx-auto flex h-[288px] w-[162px] items-center justify-center overflow-hidden bg-black/35"
                                       imgClassName="h-[288px] w-[162px] object-cover transition duration-300 group-hover/reference:scale-110"
                                     />
@@ -1501,24 +1686,25 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3">
                                 <button
                                   type="button"
+                                  onClick={() => requestCharacterVaultReference(character)}
+                                  className="rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
+                                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                                >
+                                  Use from vault
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => markCharacterReference(character, 'added')}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                  className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.07] hover:text-white/75"
                                 >
                                   Mark ready: reference planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markCharacterReference(character, 'built')}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                  className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.07] hover:text-white/75"
                                 >
                                   Mark ready: character planned
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => requestCharacterVaultReference(character)}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                                >
-                                  Use from vault
                                 </button>
                               </div>
                             </div>
@@ -1547,13 +1733,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                         pageLocations.map((location) => {
                           const reference = locationReferences[location];
                           const ready = reference?.status === 'ready';
+                          const displayName = displayTitleCase(location);
                           return (
                             <div
                               key={location}
-                              className="grid gap-4 rounded-xl border border-white/10 bg-black/25 p-4 lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]"
+                              className={[
+                                'grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3',
+                                reference?.imageUrl
+                                  ? 'lg:grid-cols-[minmax(120px,150px)_auto_minmax(220px,1fr)]'
+                                  : 'lg:grid-cols-[minmax(120px,150px)_minmax(220px,1fr)]',
+                              ].join(' ')}
                             >
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-white">{location}</p>
+                                <p className="truncate text-sm font-bold text-white">{displayName}</p>
                                 <span
                                   className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
                                   style={{
@@ -1569,7 +1761,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                                   <div className="group/reference overflow-hidden rounded-lg border border-white/10 bg-black/35 shadow-lg shadow-black/25">
                                     <VaultImageWithFallback
                                       src={reference.imageUrl}
-                                      alt={`${location} vault reference`}
+                                      alt={`${displayName} vault reference`}
                                       frameClassName="mx-auto flex h-[288px] w-[162px] items-center justify-center overflow-hidden bg-black/35"
                                       imgClassName="h-[288px] w-[162px] object-cover transition duration-300 group-hover/reference:scale-110"
                                     />
@@ -1585,24 +1777,25 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                               <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3">
                                 <button
                                   type="button"
+                                  onClick={() => requestLocationVaultReference(location)}
+                                  className="rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
+                                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                                >
+                                  Use from vault
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => markLocationReference(location, 'added')}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                  className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.07] hover:text-white/75"
                                 >
                                   Mark ready: reference planned
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => markLocationReference(location, 'built')}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                                  className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/55 transition hover:bg-white/[0.07] hover:text-white/75"
                                 >
                                   Mark ready: asset planned
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => requestLocationVaultReference(location)}
-                                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                                >
-                                  Use from vault
                                 </button>
                               </div>
                             </div>
@@ -1749,6 +1942,53 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                           </span>
                         </div>
 
+                        {selectedPanelArtImage ? (
+                          <div className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">
+                                Returned Imageshop art
+                              </p>
+                              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-100">
+                                Ready
+                              </span>
+                            </div>
+                            <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-black/35">
+                              <img
+                                src={selectedPanelArtImage.imageUrl}
+                                alt={`Generated art for page ${selectedPanel.pageNumber}, panel ${selectedPanel.panelNumber}`}
+                                className="max-h-[28rem] w-full object-contain"
+                              />
+                            </div>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                              <button
+                                type="button"
+                                onClick={() => deletePanelArtImage(selectedPanel.id)}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-100 transition hover:bg-red-500/15"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={openImageshopWithSelectedPanel}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 transition hover:bg-amber-300/15"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Replace in Imageshop
+                              </button>
+                              <a
+                                href={selectedPanelArtImage.imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                              >
+                                <ZoomIn className="h-3.5 w-3.5" />
+                                View full image
+                              </a>
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="mt-5 min-h-[16rem] rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
                             Panel beat
@@ -1757,6 +1997,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                             {selectedPanel.beatText || 'Add a panel beat on the Pages step.'}
                           </p>
                         </div>
+
+                        {!selectedPanelArtImage ? (
+                          <button
+                            type="button"
+                            onClick={openImageshopWithSelectedPanel}
+                            className="mt-4 inline-flex w-full items-center justify-center rounded-xl border px-4 py-3 text-sm font-black transition hover:scale-[1.01] active:scale-[0.99]"
+                            style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                          >
+                            Generate this panel in Imageshop
+                          </button>
+                        ) : null}
 
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
                           <div className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -1832,7 +2083,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
               ) : isLayoutStep ? (
                 <div className="mt-5 grid gap-4">
                   {pageCards.length > 0 ? (
-                    pageCards.map((page) => (
+                    pageCards.map((page) => {
+                      const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+                      const slotCount = layoutPanelSlotCount(templateId);
+                      return (
                       <article key={page.pageNumber} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
                           <div className="min-w-0">
@@ -1847,7 +2101,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                           <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                             Layout template
                             <select
-                              value={pageLayoutTemplates[page.pageNumber] ?? 'auto'}
+                              value={templateId}
                               onChange={(event) =>
                                 updatePageLayoutTemplate(page.pageNumber, event.target.value as LayoutTemplateId)
                               }
@@ -1860,6 +2114,58 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                               ))}
                             </select>
                           </label>
+                        </div>
+
+                        <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                              Page layout preview
+                            </p>
+                            <span className="text-[11px] font-semibold text-white/45">
+                              {LAYOUT_TEMPLATE_OPTIONS.find((option) => option.id === templateId)?.label ?? 'Auto layout'}
+                            </span>
+                          </div>
+                          <div className={`grid aspect-[2/3] gap-2 ${layoutTemplateClass(templateId)}`}>
+                            {Array.from({ length: slotCount }, (_, slotIndex) => {
+                              const panelNumber = slotIndex + 1;
+                              const panelId = panelArtQueueId(page.pageNumber, panelNumber);
+                              const panelImage = panelArtImages[panelId];
+                              const panelBeat = page.panelBeats[slotIndex] ?? '';
+                              return (
+                                <div
+                                  key={panelId}
+                                  className="relative min-h-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05]"
+                                >
+                                  {panelImage ? (
+                                    <img
+                                      src={panelImage.imageUrl}
+                                      alt={`Page ${page.pageNumber}, panel ${panelNumber}`}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full min-h-[5rem] flex-col justify-between p-2">
+                                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
+                                        Panel {panelNumber}
+                                      </span>
+                                      <p className="line-clamp-3 text-[11px] leading-snug text-white/55">
+                                        {panelBeat || 'Panel art placeholder'}
+                                      </p>
+                                    </div>
+                                  )}
+                                  <span
+                                    className={[
+                                      'absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em]',
+                                      panelImage
+                                        ? 'border-emerald-300/35 bg-emerald-400/20 text-emerald-100'
+                                        : 'border-white/15 bg-black/55 text-white/65',
+                                    ].join(' ')}
+                                  >
+                                    {panelImage ? 'Ready' : 'Needs art'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
 
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -1879,7 +2185,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                           </div>
                         </div>
                       </article>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
                       Build page cards first to plan page layouts.
