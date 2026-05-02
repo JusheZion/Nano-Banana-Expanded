@@ -104,6 +104,15 @@ function isBlobUrl(url: string): boolean {
 
 const STORAGE_UPLOAD_HINT =
   'Sign in, ensure bucket "arcs-generations" exists, and storage policies allow authenticated uploads under your user folder. Images are served via signed URLs.';
+const SIGN_IN_REQUIRED_MESSAGE = 'Sign in to save characters and assets to the cloud vault.';
+
+async function getAuthenticatedUserId(): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.auth.getUser();
+  const userId = data?.user?.id;
+  if (error || !userId) return null;
+  return userId;
+}
 
 function buildCharacterMetadataTags(store: CharacterStudioState): Record<string, unknown> {
   return {
@@ -151,6 +160,9 @@ export async function saveCharacterToDb(
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
   }
+  const ownerId = await getAuthenticatedUserId();
+  if (!ownerId) return { ok: false, error: SIGN_IN_REQUIRED_MESSAGE };
+
   const imageUrl = store.currentLiveImageUrl;
   if (!imageUrl) return { ok: false, error: 'No image to save' };
 
@@ -176,6 +188,7 @@ export async function saveCharacterToDb(
     name: castName ?? profileName ?? (baseName !== 'character' ? baseName : null),
     profile_name: profileName ?? null,
     cast_name: castName ?? null,
+    owner_id: ownerId,
   });
 
   if (error) {
@@ -255,6 +268,9 @@ export async function saveAssetToDb(
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
   }
+  const ownerId = await getAuthenticatedUserId();
+  if (!ownerId) return { ok: false, error: SIGN_IN_REQUIRED_MESSAGE };
+
   const imageUrl = store.currentLiveImageUrl;
   if (!imageUrl) return { ok: false, error: 'No image to save' };
 
@@ -280,6 +296,7 @@ export async function saveAssetToDb(
     name: assetName ?? collectionName ?? (baseName !== 'asset' ? baseName : null),
     collection_name: collectionName ?? null,
     asset_name: assetName ?? null,
+    owner_id: ownerId,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -304,6 +321,9 @@ export async function saveImportedImageToCharacterVault(args: {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
   }
+  const ownerId = await getAuthenticatedUserId();
+  if (!ownerId) return { ok: false, error: SIGN_IN_REQUIRED_MESSAGE };
+
   const imageUrl = args.imageUrl.trim();
   if (!imageUrl) return { ok: false, error: 'No image to save' };
 
@@ -342,6 +362,7 @@ export async function saveImportedImageToCharacterVault(args: {
     name: args.castName ?? args.profileName ?? (base !== 'character' ? base : null),
     profile_name: args.profileName ?? null,
     cast_name: args.castName ?? null,
+    owner_id: ownerId,
   });
 
   if (error) {
@@ -364,6 +385,9 @@ export async function saveImportedImageToAssetVault(args: {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
   }
+  const ownerId = await getAuthenticatedUserId();
+  if (!ownerId) return { ok: false, error: SIGN_IN_REQUIRED_MESSAGE };
+
   const imageUrl = args.imageUrl.trim();
   if (!imageUrl) return { ok: false, error: 'No image to save' };
 
@@ -402,6 +426,7 @@ export async function saveImportedImageToAssetVault(args: {
     name: args.assetName ?? args.collectionName ?? (base !== 'asset' ? base : null),
     collection_name: args.collectionName ?? null,
     asset_name: args.assetName ?? null,
+    owner_id: ownerId,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -435,6 +460,9 @@ export async function saveStorySequenceToAssetsVault(args: {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
   }
+  const ownerId = await getAuthenticatedUserId();
+  if (!ownerId) return { ok: false, error: SIGN_IN_REQUIRED_MESSAGE };
+
   const cover = args.coverImageUrl.trim();
   if (!cover) {
     return { ok: false, error: 'No cover image — generate at least one beat first.' };
@@ -481,6 +509,7 @@ export async function saveStorySequenceToAssetsVault(args: {
     name: displayName,
     collection_name: args.collectionNameForDb ?? null,
     asset_name: args.assetName?.trim() || null,
+    owner_id: ownerId,
   });
 
   if (error) return { ok: false, error: error.message };
