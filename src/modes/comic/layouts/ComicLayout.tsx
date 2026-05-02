@@ -24,9 +24,15 @@ import { PanelRightOpen } from 'lucide-react';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
+  guidedWorkflowSteps?: Array<{ id: string; label: string }>;
+  onOpenGuidedWorkflowStep?: (stepId: string) => void;
 }
 
-export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
+export const ComicLayout: React.FC<ComicLayoutProps> = ({
+  children,
+  guidedWorkflowSteps,
+  onOpenGuidedWorkflowStep,
+}) => {
   const triggerExport = useComicStore(state => state.triggerExport);
   const flushAutoSave = useComicStore(state => state.flushAutoSave);
   const currentGenreId = useComicStore(state => state.currentGenreId);
@@ -380,6 +386,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({ children }) => {
             onLayoutModeChange={setLayoutMode}
             hasPanelSelected={hasPanelSelected}
             onOpenFormatDialog={openFormatDialog}
+            guidedWorkflowSteps={guidedWorkflowSteps}
+            onOpenGuidedWorkflowStep={onOpenGuidedWorkflowStep}
           />
           <div className="flex-1 min-w-0" />
           <button

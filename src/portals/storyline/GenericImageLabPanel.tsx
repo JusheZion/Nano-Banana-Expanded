@@ -44,6 +44,21 @@ function buildGuidedPanelPrompt(handoff: GuidedImageWorkshopHandoff): string {
   const panelBeat = handoff.panelBeat?.trim() || 'No panel beat provided.';
   const characters = listOrNone(handoff.pageKeyCharacters);
   const location = handoff.pageKeyLocation?.trim() || 'No location specified';
+  const artDirection = handoff.artDirection;
+  const artDirectionLines = artDirection
+    ? [
+        'Art direction:',
+        artDirection.artStyle.trim() ? `- Art style: ${artDirection.artStyle.trim()}` : '',
+        artDirection.defaultAspectRatio.trim() ? `- Default aspect ratio: ${artDirection.defaultAspectRatio.trim()}` : '',
+        artDirection.renderingStyle.trim() ? `- Rendering style: ${artDirection.renderingStyle.trim()}` : '',
+        artDirection.colorMood.trim() ? `- Color mood: ${artDirection.colorMood.trim()}` : '',
+        artDirection.lighting.trim() ? `- Lighting: ${artDirection.lighting.trim()}` : '',
+        artDirection.continuityNotes.trim() ? `- Continuity notes: ${artDirection.continuityNotes.trim()}` : '',
+        artDirection.excludeTextFromImages
+          ? '- Do not include text, speech bubbles, captions, lettering, watermarks, or readable words in the generated image.'
+          : '',
+      ].filter(Boolean)
+    : [];
 
   return [
     `Create comic panel art for Page ${pageNumber}, Panel ${panelNumber}.`,
@@ -51,6 +66,7 @@ function buildGuidedPanelPrompt(handoff: GuidedImageWorkshopHandoff): string {
     `Panel beat: ${panelBeat}`,
     `Characters: ${characters}`,
     `Location: ${location}`,
+    ...artDirectionLines,
     'Compose this as a clear, cinematic comic-book panel with strong storytelling, consistent character design, readable action, and polished lighting.',
   ].join('\n');
 }

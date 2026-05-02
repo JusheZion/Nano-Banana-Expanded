@@ -6,6 +6,7 @@ import {
   Download,
   ImagePlus,
   LayoutTemplate,
+  MonitorUp,
   Palette,
   PanelTop,
   RefreshCw,
@@ -30,8 +31,9 @@ import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import type { Portal } from '@/shared/portals';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 
-type GuidedComicStepId =
+export type GuidedComicStepId =
   | 'setup'
   | 'story'
   | 'pages'
@@ -71,6 +73,16 @@ type StoryFormState = {
   conflict: string;
   setting: string;
   endingGoal: string;
+};
+
+type ArtDirectionState = {
+  artStyle: string;
+  defaultAspectRatio: string;
+  renderingStyle: string;
+  colorMood: string;
+  lighting: string;
+  continuityNotes: string;
+  excludeTextFromImages: boolean;
 };
 
 type OutlineBeatId = 'opening-hook' | 'rising-conflict' | 'midpoint-turn' | 'climax' | 'ending-beat';
@@ -134,6 +146,7 @@ type GuidedComicDraftState = {
   activeIndex: number;
   setupForm: SetupFormState;
   storyForm: StoryFormState;
+  artDirection: ArtDirectionState;
   outlineBeats: OutlineBeat[];
   pageCards: PageCard[];
   characterReferences: Record<string, VisualReferenceState>;
@@ -187,6 +200,27 @@ const DEFAULT_STORY_FORM: StoryFormState = {
   setting: '',
   endingGoal: '',
 };
+
+const DEFAULT_ART_DIRECTION: ArtDirectionState = {
+  artStyle: '',
+  defaultAspectRatio: 'Match panel layout',
+  renderingStyle: '',
+  colorMood: '',
+  lighting: '',
+  continuityNotes: '',
+  excludeTextFromImages: true,
+};
+
+const ASPECT_RATIO_OPTIONS = [
+  'Match panel layout',
+  '1:1 square',
+  '4:5 portrait',
+  '2:3 comic page portrait',
+  '3:2 landscape',
+  '16:9 cinematic',
+  '9:16 vertical',
+  'Custom',
+];
 
 const INITIAL_OUTLINE_BEATS: OutlineBeat[] = [
   { id: 'opening-hook', title: 'Opening Hook', description: '', locked: false },
@@ -385,6 +419,7 @@ const STEPS: GuidedComicStep[] = [
 interface GuidedComicFlowProps {
   onNavigatePortal: (portal: Portal) => void;
   onOpenAdvancedStudio: () => void;
+  requestedStepId?: GuidedComicStepId | null;
 }
 
 function splitListText(value: string): string[] {
@@ -446,6 +481,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       activeIndex: safeActiveIndex(parsed.activeIndex),
       setupForm: { ...DEFAULT_SETUP_FORM, ...parsed.setupForm },
       storyForm: { ...DEFAULT_STORY_FORM, ...parsed.storyForm },
+      artDirection: { ...DEFAULT_ART_DIRECTION, ...parsed.artDirection },
       outlineBeats: Array.isArray(parsed.outlineBeats) ? (parsed.outlineBeats as OutlineBeat[]) : cloneInitialOutlineBeats(),
       pageCards: Array.isArray(parsed.pageCards) ? (parsed.pageCards as PageCard[]) : [],
       characterReferences: parsed.characterReferences ?? {},
@@ -576,16 +612,20 @@ function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats
   };
 }
 
-export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: GuidedComicFlowProps) {
+export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, requestedStepId }: GuidedComicFlowProps) {
   const skipNextDraftSaveRef = useRef(false);
   const requestVaultSelection = useGuidedComicVaultBridge((s) => s.requestVaultSelection);
   const consumeVaultSelection = useGuidedComicVaultBridge((s) => s.consumeSelection);
   const requestGuidedComicHandoff = useImageWorkshopBridge((s) => s.requestGuidedComicHandoff);
   const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
+  const requestLayoutHandoff = useGuidedComicLayoutBridge((s) => s.requestLayoutHandoff);
   const restoredDraft = useMemo(() => readGuidedComicDraft(), []);
   const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
   const [setupForm, setSetupForm] = useState<SetupFormState>(() => restoredDraft?.setupForm ?? DEFAULT_SETUP_FORM);
   const [storyForm, setStoryForm] = useState<StoryFormState>(() => restoredDraft?.storyForm ?? DEFAULT_STORY_FORM);
+  const [artDirection, setArtDirection] = useState<ArtDirectionState>(
+    () => restoredDraft?.artDirection ?? DEFAULT_ART_DIRECTION,
+  );
   const [outlineBeats, setOutlineBeats] = useState<OutlineBeat[]>(() => restoredDraft?.outlineBeats ?? cloneInitialOutlineBeats());
   const [pageCards, setPageCards] = useState<PageCard[]>(() => restoredDraft?.pageCards ?? []);
   const activeStep = STEPS[activeIndex];
@@ -618,6 +658,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(() => restoredDraft?.savedAt ?? null);
 
   useEffect(() => {
+    if (!requestedStepId) return;
+    const requestedIndex = STEPS.findIndex((step) => step.id === requestedStepId);
+    if (requestedIndex === -1) return;
+    setActiveIndex(requestedIndex);
+  }, [requestedStepId]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     if (skipNextDraftSaveRef.current) {
       skipNextDraftSaveRef.current = false;
@@ -630,6 +677,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       activeIndex,
       setupForm,
       storyForm,
+      artDirection,
       outlineBeats,
       pageCards,
       characterReferences,
@@ -648,6 +696,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
     }
   }, [
     activeIndex,
+    artDirection,
     characterReferences,
     locationReferences,
     outlineBeats,
@@ -766,6 +815,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const updateStoryField = (field: keyof StoryFormState, value: string) => {
     setStoryForm((current) => ({ ...current, [field]: value }));
   };
+  const updateArtDirectionField = <Field extends keyof ArtDirectionState>(
+    field: Field,
+    value: ArtDirectionState[Field],
+  ) => {
+    setArtDirection((current) => ({ ...current, [field]: value }));
+  };
   const updatePageCard = (
     pageNumber: number,
     updates: Partial<Pick<PageCard, 'summary' | 'panelCount' | 'keyCharacters' | 'keyLocation' | 'expanded'>>,
@@ -815,6 +870,37 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
   };
+  const openPageInAdvancedStudio = (page: PageCard) => {
+    const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    const orderedPanelIds = Array.from({ length: layoutPanelSlotCount(layoutTemplate) }, (_, slotIndex) =>
+      panelArtQueueId(page.pageNumber, slotIndex + 1),
+    );
+    const handoffPanelArtImages = orderedPanelIds.reduce<Record<string, GuidedComicLayoutPanelImage>>((images, panelId) => {
+      const image = panelArtImages[panelId];
+      if (!image) return images;
+      images[panelId] = {
+        panelId,
+        imageUrl: image.imageUrl,
+        prompt: image.prompt,
+        returnedAt: image.returnedAt,
+        source: image.source,
+      };
+      return images;
+    }, {});
+
+    requestLayoutHandoff({
+      pageNumber: page.pageNumber,
+      layoutTemplate,
+      orderedPanelIds,
+      panelArtImages: handoffPanelArtImages,
+      panelBeats: orderedPanelIds.map((panelId, index) => ({
+        panelId,
+        panelNumber: index + 1,
+        beatText: page.panelBeats[index] ?? '',
+      })),
+    });
+    onOpenAdvancedStudio();
+  };
   const clearGuidedDraft = () => {
     const confirmed = window.confirm('Clear the saved guided comic draft from this browser? This resets the guided flow.');
     if (!confirmed) return;
@@ -824,6 +910,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
     setActiveIndex(0);
     setSetupForm(DEFAULT_SETUP_FORM);
     setStoryForm(DEFAULT_STORY_FORM);
+    setArtDirection(DEFAULT_ART_DIRECTION);
     setOutlineBeats(cloneInitialOutlineBeats());
     setPageCards([]);
     setCharacterReferences({});
@@ -964,10 +1051,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
       pageSummary: page?.summary.trim() || undefined,
       pageKeyCharacters: selectedPanel.characters,
       pageKeyLocation: selectedPanel.location || undefined,
+      artDirection,
       characters,
       locations,
     });
   }, [
+    artDirection,
     characterReferences,
     locationReferences,
     pageCards,
@@ -1164,7 +1253,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
             >
               Clear guided draft
             </button>
-            <Tooltip content="Open the current full Comics Studio editor">
+            <Tooltip content="Open the advanced editor without sending a guided page">
               <button
                 type="button"
                 onClick={onOpenAdvancedStudio}
@@ -1172,7 +1261,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
                 <LayoutTemplate className="h-4 w-4" aria-hidden />
-                Open Advanced Comics Studio
+                Open blank Advanced Studio
               </button>
             </Tooltip>
           </div>
@@ -1252,7 +1341,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
           >
             Clear guided draft
           </button>
-          <Tooltip content="Open the current full Comics Studio editor">
+          <Tooltip content="Open the advanced editor without sending a guided page">
             <button
               type="button"
               onClick={onOpenAdvancedStudio}
@@ -1260,7 +1349,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
               style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
             >
               <LayoutTemplate className="h-4 w-4" aria-hidden />
-              Open Advanced Comics Studio
+              Open blank Advanced Studio
             </button>
           </Tooltip>
         </div>
@@ -1429,6 +1518,92 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                       className="min-h-[8rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
                     />
                   </label>
+
+                  <section className="rounded-xl border border-white/10 bg-black/25 p-4">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                        Art Direction
+                      </p>
+                      <p className="text-xs leading-relaxed text-white/55">
+                        Reusable visual defaults for panel Imageshop handoffs.
+                      </p>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                        Art style
+                        <input
+                          type="text"
+                          value={artDirection.artStyle}
+                          onChange={(event) => updateArtDirectionField('artStyle', event.target.value)}
+                          placeholder="e.g. clean modern superhero comic"
+                          className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                        Default aspect ratio
+                        <select
+                          value={artDirection.defaultAspectRatio}
+                          onChange={(event) => updateArtDirectionField('defaultAspectRatio', event.target.value)}
+                          className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                        >
+                          {ASPECT_RATIO_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                        Rendering style
+                        <input
+                          type="text"
+                          value={artDirection.renderingStyle}
+                          onChange={(event) => updateArtDirectionField('renderingStyle', event.target.value)}
+                          placeholder="e.g. inked linework with painterly color"
+                          className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                        Color mood
+                        <input
+                          type="text"
+                          value={artDirection.colorMood}
+                          onChange={(event) => updateArtDirectionField('colorMood', event.target.value)}
+                          placeholder="e.g. saturated neon blues and warm golds"
+                          className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                        Lighting
+                        <input
+                          type="text"
+                          value={artDirection.lighting}
+                          onChange={(event) => updateArtDirectionField('lighting', event.target.value)}
+                          placeholder="e.g. cinematic rim light, soft volumetric glow"
+                          className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                        />
+                      </label>
+                      <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.05] p-3 text-sm font-bold normal-case tracking-normal text-white/75">
+                        <input
+                          type="checkbox"
+                          checked={artDirection.excludeTextFromImages}
+                          onChange={(event) => updateArtDirectionField('excludeTextFromImages', event.target.checked)}
+                          className="mt-1 h-4 w-4 accent-amber-300"
+                        />
+                        <span>Keep text, speech bubbles, and captions out of generated images</span>
+                      </label>
+                    </div>
+                    <label className="mt-4 flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      Continuity notes
+                      <textarea
+                        value={artDirection.continuityNotes}
+                        onChange={(event) => updateArtDirectionField('continuityNotes', event.target.value)}
+                        rows={4}
+                        placeholder="Costumes, recurring props, camera rules, character consistency, or visual motifs to preserve across panels."
+                        className="min-h-[6.5rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                      />
+                    </label>
+                  </section>
 
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
@@ -2184,6 +2359,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                             </p>
                           </div>
                         </div>
+                        <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                            Page {page.pageNumber} handoff
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => openPageInAdvancedStudio(page)}
+                            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/15 px-4 py-2.5 text-sm font-black text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-300/20 md:w-auto"
+                          >
+                            <MonitorUp className="h-4 w-4" aria-hidden="true" />
+                            Send this page to Advanced Studio
+                          </button>
+                        </div>
                       </article>
                       );
                     })
@@ -2273,7 +2461,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                         className="rounded-lg border px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/10"
                         style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
                       >
-                        Open Advanced Comics Studio
+                        Open blank Advanced Studio
                       </button>
                     </div>
                   </section>
@@ -2490,7 +2678,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
             <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
               <p className="text-xs font-bold text-white/85">Ready for precision work?</p>
               <p className="mt-2 text-xs leading-relaxed text-white/55">
-                Open the full studio when you are ready to work directly on the canvas.
+                Open the full studio without sending a guided page when you are ready to work directly on the canvas.
               </p>
               <button
                 type="button"
@@ -2498,7 +2686,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio }: Guid
                 className="mt-4 w-full rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10"
                 style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
-                Open Advanced Comics Studio
+                Open blank Advanced Studio
               </button>
             </div>
           </aside>

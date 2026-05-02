@@ -138,6 +138,15 @@ describe('useImageWorkshopBridge', () => {
       pageSummary: 'The team enters the observatory.',
       pageKeyCharacters: ['flux', 'elder hayward'],
       pageKeyLocation: 'sky observatory',
+      artDirection: {
+        artStyle: 'clean superhero comic',
+        defaultAspectRatio: 'Match panel layout',
+        renderingStyle: 'inked linework with painterly color',
+        colorMood: 'electric blues and warm golds',
+        lighting: 'dramatic rim light',
+        continuityNotes: 'Keep Flux in the same jacket.',
+        excludeTextFromImages: true,
+      },
       characters: [
         {
           name: 'flux',
@@ -164,6 +173,8 @@ describe('useImageWorkshopBridge', () => {
     expect(out?.pageNumber).toBe(2);
     expect(out?.panelNumber).toBe(3);
     expect(out?.panelBeat).toContain('sky engine');
+    expect(out?.artDirection?.excludeTextFromImages).toBe(true);
+    expect(out?.artDirection?.continuityNotes).toContain('same jacket');
     expect(out?.characters).toHaveLength(1);
     expect(out?.locations).toHaveLength(1);
     expect(useImageWorkshopBridge.getState().consumeGuidedComicHandoff()).toBeNull();

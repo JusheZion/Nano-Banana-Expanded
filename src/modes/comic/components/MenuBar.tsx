@@ -13,7 +13,7 @@ const HOVER_TEXT_GOLD = ACCENT_GOLD_LIGHT;
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
 const SFX_OPTIONS = ['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'];
 
-export type MenuId = 'home' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | null;
+export type MenuId = 'home' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | 'workflow' | null;
 
 export interface MenuBarProps {
   /** Which menu is open; used to drive contextual ribbon */
@@ -41,6 +41,8 @@ export interface MenuBarProps {
   hasPanelSelected: boolean;
   /** Open the Format dialog with the given tab (from Text / Objects menu items) */
   onOpenFormatDialog?: (tab: import('./FormatDialog').FormatDialogTabId) => void;
+  guidedWorkflowSteps?: Array<{ id: string; label: string }>;
+  onOpenGuidedWorkflowStep?: (stepId: string) => void;
 }
 
 function useCloseOnOutside(ref: React.RefObject<HTMLDivElement | null>, open: boolean, onClose: () => void) {
@@ -124,7 +126,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
         aria-expanded={openMenu === id}
         aria-label={label}
       >
-        <span className={`font-semibold text-xs uppercase tracking-wider ${id === 'text' || id === 'objects' ? 'inline' : 'hidden sm:inline'}`}>{label}</span>
+        <span className={`font-semibold text-xs uppercase tracking-wider ${id === 'text' || id === 'objects' || id === 'workflow' ? 'inline' : 'hidden sm:inline'}`}>{label}</span>
         <ChevronDown size={12} className={openMenu === id ? 'rotate-180' : ''} />
       </button>
     </Tooltip>
@@ -426,6 +428,25 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           <div className="px-3 py-1 text-[10px] opacity-70" style={dropdownHeadingStyle}>Ribbon below shows fill, border, shadow, texture. Select a balloon or panel.</div>
         </div>
       ))}
+      {props.guidedWorkflowSteps?.length && props.onOpenGuidedWorkflowStep ? menuWithDropdown('workflow', 'Workflow', null, (
+        <div className={`${dropdownPanelClass} min-w-[240px]`} style={dropdownPanelStyle}>
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Guided Comic Flow</div>
+          {props.guidedWorkflowSteps.map((step) => (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => {
+                props.onOpenGuidedWorkflowStep?.(step.id);
+                close();
+              }}
+              className={dropdownItemClass}
+              style={dropdownItemStyle}
+            >
+              {step.label}
+            </button>
+          ))}
+        </div>
+      )) : null}
     </div>
   );
 };

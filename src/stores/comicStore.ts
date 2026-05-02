@@ -4,6 +4,7 @@ import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
 import type { GradientSpec } from '../types/gradient';
+import type { GuidedComicLayoutHandoff, GuidedComicLayoutTemplate } from './guidedComicLayoutBridge';
 
 export interface Panel {
     id: string;
@@ -240,6 +241,7 @@ interface ComicState {
     removeOverlay: (pageId: string, overlayId: string) => void;
     serializeProject: () => void;
     loadProject: (jsonString: string) => void;
+    replaceCurrentPageWithGuidedLayout: (payload: GuidedComicLayoutHandoff) => void;
     splitPanel: (pageId: string, panelId: string, direction: 'horizontal' | 'vertical', slant?: number) => void;
     snapBalloonTailToPanelEdge: (pageId: string, balloonId: string) => void;
 
@@ -332,6 +334,47 @@ export function comicRedo(): void {
     } finally {
         undoPaused = false;
     }
+}
+
+const COMIC_PAGE_WIDTH = 800;
+const COMIC_PAGE_HEIGHT = 1200;
+
+function layoutRectsForTemplate(template: GuidedComicLayoutTemplate, gutter: number): Array<Pick<Panel, 'x' | 'y' | 'width' | 'height'>> {
+    const safeGutter = Math.max(0, gutter);
+    const innerX = safeGutter;
+    const innerY = safeGutter;
+    const innerWidth = COMIC_PAGE_WIDTH - safeGutter * 2;
+    const innerHeight = COMIC_PAGE_HEIGHT - safeGutter * 2;
+
+    if (template === 'splash') {
+        return [{ x: innerX, y: innerY, width: innerWidth, height: innerHeight }];
+    }
+
+    if (template === 'three-panel') {
+        const panelHeight = (innerHeight - safeGutter * 2) / 3;
+        return [0, 1, 2].map((row) => ({
+            x: innerX,
+            y: innerY + row * (panelHeight + safeGutter),
+            width: innerWidth,
+            height: panelHeight,
+        }));
+    }
+
+    const columns = 2;
+    const rows = template === 'six-panel-grid' ? 3 : 2;
+    const panelWidth = (innerWidth - safeGutter * (columns - 1)) / columns;
+    const panelHeight = (innerHeight - safeGutter * (rows - 1)) / rows;
+
+    return Array.from({ length: columns * rows }, (_, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        return {
+            x: innerX + column * (panelWidth + safeGutter),
+            y: innerY + row * (panelHeight + safeGutter),
+            width: panelWidth,
+            height: panelHeight,
+        };
+    });
 }
 
 export const useComicStore = create<ComicState>()(
@@ -1131,6 +1174,69 @@ export const useComicStore = create<ComicState>()(
                         console.error("Failed to load project", e);
                     }
                 },
+
+                replaceCurrentPageWithGuidedLayout: (payload: GuidedComicLayoutHandoff) => set((state: ComicState) => {
+                    const pageId = state.currentPageId ?? state.pages[0]?.id ?? `page-${payload.pageNumber}`;
+                    const targetPage = state.pages.find((page) => page.id === pageId);
+                    const defaultBg = state.projectSettings?.defaultPageBackgroundColor ?? '#ffffff';
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+                    const rects = layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
+                    const panelIds = payload.orderedPanelIds.slice(0, rects.length);
+                    const panels: Panel[] = panelIds.map((sourcePanelId, index) => {
+                        const panelImage = payload.panelArtImages[sourcePanelId];
+                        const panelBeat = payload.panelBeats?.find((beat) => beat.panelId === sourcePanelId);
+                        return {
+                            id: crypto.randomUUID(),
+                            type: 'panel',
+                            shapeType: 'rect',
+                            ...rects[index],
+                            imageUrl: panelImage?.imageUrl,
+                            prompt: panelBeat?.beatText || panelImage?.prompt,
+                            imageFillMode: panelImage ? 'cover' : undefined,
+                            imageScale: panelImage ? 1 : undefined,
+                            imageOffsetX: panelImage ? 0 : undefined,
+                            imageOffsetY: panelImage ? 0 : undefined,
+                            isVisible: true,
+                            isLocked: false,
+                            strokeColor: genre.palette?.border ?? '#000000',
+                            ...(genre.textureId !== undefined && { textureId: genre.textureId }),
+                            ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
+                        };
+                    });
+                    const panelLayerIds = panels.map((panel) => panel.id);
+                    const existingPages = state.pages.length > 0 ? state.pages : [{
+                        id: pageId,
+                        panels: [],
+                        balloons: [],
+                        drawings: [],
+                        overlays: [],
+                        background: defaultBg,
+                        layerOrder: [],
+                    }];
+
+                    return {
+                        pages: existingPages.map((page) =>
+                            page.id === pageId
+                                ? {
+                                    ...page,
+                                    panels,
+                                    balloons: [],
+                                    drawings: [],
+                                    overlays: page.overlays ?? [],
+                                    background: targetPage?.background ?? defaultBg,
+                                    layerOrder: panelLayerIds,
+                                }
+                                : page
+                        ),
+                        currentPageId: pageId,
+                        selectedElementIds: panelLayerIds.slice(0, 1),
+                        groupsByPage: {
+                            ...state.groupsByPage,
+                            [pageId]: [],
+                        },
+                    };
+                }),
 
                 saveBlankPanelTemplate: (pageId: string, name?: string) => set((state: ComicState) => {
                     const page = state.pages.find(p => p.id === pageId);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ComicEditor } from '@/modes/comic/pages/ComicEditor';
 import { GuidedComicFlow } from '@/portals/guided-comic/GuidedComicFlow';
+import type { GuidedComicStepId } from '@/portals/guided-comic/GuidedComicFlow';
 import type { Portal } from '@/shared/portals';
 
 type ComicPortalProps = {
@@ -13,13 +14,22 @@ type ComicPortalProps = {
  */
 export const ComicPortal: React.FC<ComicPortalProps> = ({ onNavigatePortal }) => {
   const [showAdvancedStudio, setShowAdvancedStudio] = useState(false);
+  const [requestedGuidedStepId, setRequestedGuidedStepId] = useState<GuidedComicStepId | null>(null);
 
-  if (showAdvancedStudio) return <ComicEditor />;
+  const openGuidedStep = (stepId: GuidedComicStepId) => {
+    setRequestedGuidedStepId(stepId);
+    setShowAdvancedStudio(false);
+  };
+
+  if (showAdvancedStudio) {
+    return <ComicEditor onOpenGuidedWorkflowStep={openGuidedStep} />;
+  }
 
   return (
     <GuidedComicFlow
       onNavigatePortal={onNavigatePortal}
       onOpenAdvancedStudio={() => setShowAdvancedStudio(true)}
+      requestedStepId={requestedGuidedStepId}
     />
   );
 };

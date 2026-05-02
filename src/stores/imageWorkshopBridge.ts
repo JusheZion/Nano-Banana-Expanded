@@ -24,6 +24,15 @@ export type GuidedImageWorkshopHandoff = {
   panelBeat?: string;
   pageKeyCharacters?: string[];
   pageKeyLocation?: string;
+  artDirection?: {
+    artStyle: string;
+    defaultAspectRatio: string;
+    renderingStyle: string;
+    colorMood: string;
+    lighting: string;
+    continuityNotes: string;
+    excludeTextFromImages: boolean;
+  };
 };
 
 export type GuidedComicPanelImageReturn = {
