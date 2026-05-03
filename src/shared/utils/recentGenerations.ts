@@ -19,13 +19,25 @@ export interface RecentGeneration {
 const RECENT_KEY = 'arcs_recent_generations_v1';
 const MAX_RECENT = 12;
 
+function isRecentGeneration(value: unknown): value is RecentGeneration {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<RecentGeneration>;
+  return (
+    typeof item.id === 'string' &&
+    (item.kind === 'character' || item.kind === 'asset') &&
+    typeof item.imageUrl === 'string' &&
+    item.imageUrl.length > 0 &&
+    typeof item.savedAt === 'number'
+  );
+}
+
 function loadRecentList(): RecentGeneration[] {
   const raw = localStorage.getItem(RECENT_KEY);
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as RecentGeneration[];
+    const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed;
+    return parsed.filter(isRecentGeneration);
   } catch {
     return [];
   }

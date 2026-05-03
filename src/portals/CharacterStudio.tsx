@@ -253,6 +253,7 @@ export const CharacterStudio: React.FC = () => {
   const [saveCharacterCastName, setSaveCharacterCastName] = useState('');
   const [saveCharacterIsEditProfile, setSaveCharacterIsEditProfile] = useState(false);
   const [saveCharacterError, setSaveCharacterError] = useState<string | null>(null);
+  const [saveCharacterSubmitting, setSaveCharacterSubmitting] = useState(false);
   const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
   const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
   const [recentCharacters, setRecentCharacters] = useState<RecentGeneration[]>([]);
@@ -680,6 +681,7 @@ export const CharacterStudio: React.FC = () => {
   };
 
   const handleSaveCharacterModalConfirm = async () => {
+    if (saveCharacterSubmitting) return;
     const typedProfileDisplay = saveCharacterProfileName.trim();
     if (!typedProfileDisplay) {
       return;
@@ -705,6 +707,7 @@ export const CharacterStudio: React.FC = () => {
       return;
     }
     const castName = saveCharacterCastName.trim() || undefined;
+    setSaveCharacterSubmitting(true);
     try {
       const result = await saveCharacterToDb(store, baseNameForId, profileNameForDb, castName);
       if (result.ok && result.id != null && result.imageUrl != null) {
@@ -752,6 +755,8 @@ export const CharacterStudio: React.FC = () => {
     } catch (err) {
       setShowSaveCharacterModal(false);
       store.setGenerationStatus('error', err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaveCharacterSubmitting(false);
     }
   };
 
@@ -782,8 +787,10 @@ export const CharacterStudio: React.FC = () => {
         e.preventDefault();
         const dis =
           saveCharacterIsEditProfile
-            ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
-            : !saveCharacterProfileName.trim();
+            ? saveCharacterSubmitting ||
+              vaultProfileLoading ||
+              !getMatchedExistingProfile(saveCharacterProfileName)
+            : saveCharacterSubmitting || !saveCharacterProfileName.trim();
         if (!dis) void handleSaveCharacterModalConfirmRef.current();
       }
       if (e.key === 'Escape') {
@@ -802,6 +809,7 @@ export const CharacterStudio: React.FC = () => {
     showZoomModal,
     showSaveCharacterModal,
     saveCharacterIsEditProfile,
+    saveCharacterSubmitting,
     saveCharacterProfileName,
     vaultProfileLoading,
     vaultProfileOptions,
@@ -2644,8 +2652,10 @@ export const CharacterStudio: React.FC = () => {
                 e.preventDefault();
                 const dis =
                   saveCharacterIsEditProfile
-                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
-                    : !saveCharacterProfileName.trim();
+                    ? saveCharacterSubmitting ||
+                      vaultProfileLoading ||
+                      !getMatchedExistingProfile(saveCharacterProfileName)
+                    : saveCharacterSubmitting || !saveCharacterProfileName.trim();
                 if (!dis) void handleSaveCharacterModalConfirm();
               }}
               helperSlot={
@@ -2675,8 +2685,10 @@ export const CharacterStudio: React.FC = () => {
                 e.preventDefault();
                 const dis =
                   saveCharacterIsEditProfile
-                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
-                    : !saveCharacterProfileName.trim();
+                    ? saveCharacterSubmitting ||
+                      vaultProfileLoading ||
+                      !getMatchedExistingProfile(saveCharacterProfileName)
+                    : saveCharacterSubmitting || !saveCharacterProfileName.trim();
                 if (!dis) void handleSaveCharacterModalConfirm();
               }}
               placeholder="e.g. Mara in ch. 3"
@@ -2700,13 +2712,15 @@ export const CharacterStudio: React.FC = () => {
                 onClick={handleSaveCharacterModalConfirm}
                 disabled={
                   saveCharacterIsEditProfile
-                    ? vaultProfileLoading || !getMatchedExistingProfile(saveCharacterProfileName)
-                    : !saveCharacterProfileName.trim()
+                    ? saveCharacterSubmitting ||
+                      vaultProfileLoading ||
+                      !getMatchedExistingProfile(saveCharacterProfileName)
+                    : saveCharacterSubmitting || !saveCharacterProfileName.trim()
                 }
                 className="px-3 py-2 rounded-lg text-sm font-medium text-black border border-amber-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
-                Save
+                {saveCharacterSubmitting ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
