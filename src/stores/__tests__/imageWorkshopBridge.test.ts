@@ -264,4 +264,24 @@ describe('useImageWorkshopBridge', () => {
     expect(out?.returnedAt).toEqual(expect.any(String));
     expect(useImageWorkshopBridge.getState().consumeGuidedComicPanelImageReturn()).toBeNull();
   });
+
+  it('returns to guided comic flow without creating a panel image return', () => {
+    useImageWorkshopBridge.getState().requestGuidedComicHandoff({
+      source: 'guided-comic',
+      currentStep: 'art',
+      returnTarget: 'guided-comic-art',
+      sourceLabel: 'Guided Comic Flow · Page 1, Panel 2',
+      pageNumber: 1,
+      panelNumber: 2,
+      characters: [],
+      locations: [],
+      npcs: [],
+    });
+
+    useImageWorkshopBridge.getState().returnToGuidedComicFlow();
+
+    expect(useImageWorkshopBridge.getState().portalToOpen).toBe('comic');
+    expect(useImageWorkshopBridge.getState().guidedPanelReturn).toBeNull();
+    expect(useImageWorkshopBridge.getState().guidedHandoff?.pageNumber).toBe(1);
+  });
 });

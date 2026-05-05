@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function formatGeminiClientError(message: string): string {
   if (message.includes('VITE_GEMINI_API_KEY')) {
@@ -118,6 +118,7 @@ export function GenericImageLabPanel({
 }) {
   const consumeGuidedComicHandoff = useImageWorkshopBridge((s) => s.consumeGuidedComicHandoff);
   const sendGuidedComicPanelImageBack = useImageWorkshopBridge((s) => s.sendGuidedComicPanelImageBack);
+  const returnToGuidedComicFlow = useImageWorkshopBridge((s) => s.returnToGuidedComicFlow);
   const [refs, setRefs] = useState<string[]>(() => Array.from({ length: 14 }, () => ''));
   const [context, setContext] = useState<LabContext>('character');
   const [modelId] = useState<OnyxModelId>('pro');
@@ -135,6 +136,7 @@ export function GenericImageLabPanel({
 
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
+  const [guidedHandoffContext, setGuidedHandoffContext] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [generatedVaultTarget, setGeneratedVaultTarget] = useState<GeneratedVaultTarget>('npc');
   const [generatedProfileName, setGeneratedProfileName] = useState('');
@@ -155,6 +157,7 @@ export function GenericImageLabPanel({
   const addSessionResult = useImageshopSessionStore((s) => s.addResult);
   const selectSessionResult = useImageshopSessionStore((s) => s.selectResult);
   const removeSessionResult = useImageshopSessionStore((s) => s.removeResult);
+  const saveExportPanelRef = useRef<HTMLDivElement | null>(null);
 
   const activeSessionResult = useMemo(
     () =>
@@ -288,6 +291,7 @@ export function GenericImageLabPanel({
     const handoff = consumeGuidedComicHandoff();
     if (!handoff) return;
 
+    setGuidedHandoffContext(handoff);
     const preload = getGuidedImageWorkshopPreload(handoff);
     const preloadSuffix =
       preload.allReferences.length > preload.slotUrls.length
@@ -329,6 +333,10 @@ export function GenericImageLabPanel({
       prompt: effectivePrompt,
     });
   }, [effectivePrompt, guidedPanelTarget, lastImageUrl, lastSeed, sendGuidedComicPanelImageBack]);
+
+  const scrollToSaveExport = useCallback(() => {
+    saveExportPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   const getStudioRefs = useCallback((source: 'character' | 'asset'): string[] => {
     if (source === 'character') return useCharacterStudioStore.getState().referenceImageUrls;
@@ -667,9 +675,71 @@ export function GenericImageLabPanel({
   const labPreviewMaxH = studioPreviewMaxHeightCss(aspectRatio as StudioPreviewAspectId);
   const isCinematic = aspectRatio === '21:9';
   const previewMaxH = isCinematic ? 'min(56vh, 520px)' : labPreviewMaxH;
+  const guidedPanelContextLabel =
+    guidedHandoffContext?.pageNumber != null && guidedHandoffContext.panelNumber != null
+      ? `Page ${guidedHandoffContext.pageNumber}, Panel ${guidedHandoffContext.panelNumber}`
+      : guidedHandoffContext?.pageNumber != null
+        ? `Page ${guidedHandoffContext.pageNumber}`
+        : guidedHandoffContext?.panelNumber != null
+          ? `Panel ${guidedHandoffContext.panelNumber}`
+          : null;
+  const canSendBackToGuidedFlow = Boolean(
+    guidedPanelTarget?.currentStep === 'art' &&
+      guidedPanelTarget.pageNumber != null &&
+      guidedPanelTarget.panelNumber != null &&
+      lastImageUrl,
+  );
 
   return (
-    <section className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+    <section className="mt-4 rounded-xl border border-white/10 bg-black/20 overflow-visible">
+      {guidedHandoffContext ? (
+        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-amber-400/35 bg-[#050814]/95 px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <button
+              type="button"
+              onClick={returnToGuidedComicFlow}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-amber-300/45 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-300/20"
+            >
+              <span aria-hidden="true">&larr;</span>
+              <span>Back to Comic Creator</span>
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-semibold text-white/80">Loaded from Guided Comic Flow</p>
+              {guidedPanelContextLabel ? (
+                <p className="truncate text-[10px] text-amber-200/65">{guidedPanelContextLabel}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-center md:block">
+            <p className="text-sm font-bold text-white">Illustrator&rsquo;s Imageshop</p>
+            <p className="mt-0.5 text-[10px] text-white/45">Generate, refine, save, and export visual assets</p>
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <button
+              type="button"
+              disabled={!lastImageUrl}
+              onClick={scrollToSaveExport}
+              className="inline-flex h-9 items-center rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-40"
+            >
+              Save / Export
+            </button>
+            {canSendBackToGuidedFlow ? (
+              <button
+                type="button"
+                onClick={sendBackToGuidedComicFlow}
+                className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-black"
+                style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
+              >
+                Send back to Guided Flow
+              </button>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
+
+      <div className="p-3">
       <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Image Lab</h3>
 
       <ImageshopImportPanel />
@@ -993,7 +1063,7 @@ export function GenericImageLabPanel({
               </button>
             </div>
 
-            <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-950/10 p-3 shrink-0">
+            <div ref={saveExportPanelRef} className="mt-3 scroll-mt-16 rounded-lg border border-amber-500/25 bg-amber-950/10 p-3 shrink-0">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200/80">
@@ -1161,6 +1231,7 @@ export function GenericImageLabPanel({
             </p>
           </div>
         )}
+      </div>
       </div>
       </div>
     </section>

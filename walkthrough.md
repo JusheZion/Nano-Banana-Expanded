@@ -1261,6 +1261,155 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Image Vault → open a profile/collection album with multiple images → resize until wrapping changes → confirm the **last tile in each row** still shows the **full icon action strip** and **bottom footer banner**.
 
+---
+
+## Guided Comic Flow Imageshop return header - 2026-05-05
+
+### What changed
+
+- Added a compact sticky Guided Comic Flow return header inside Illustrator's Imageshop when Imageshop is opened from the guided comic bridge.
+- The header provides:
+  - left return controls with "Back to Comic Creator", "Loaded from Guided Comic Flow", and optional page/panel context;
+  - centered Imageshop title/subtitle copy;
+  - right-side Save / Export entry point plus a guided send-back action only when a generated panel image can actually be returned.
+- Added a bridge action for returning to the comic portal without generating or sending an image.
+
+### Files touched
+
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Guided context is detected from the existing `consumeGuidedComicHandoff()` payload and stored locally as `guidedHandoffContext` after the one-shot bridge is consumed.
+- Page/panel sublabel text is derived from optional `pageNumber` and `panelNumber` on the guided handoff.
+- The Back button calls `returnToGuidedComicFlow()`, which only sets `portalToOpen: 'comic'`; it does not create a guided panel return, call AI, or mutate the guided draft.
+- The guided draft's originating step remains the persisted Guided Comic Flow state because the Imageshop return path only navigates back through the existing portal bridge.
+- The header is not rendered when no guided handoff was consumed.
+
+### Verification
+
+- `npm test -- imageWorkshopBridge.test.ts` - PASS
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+
+### Outstanding issues
+
+- No manual browser screenshot check was run in this pass.
+
+### Risks or caveats
+
+- The header send-back button is intentionally limited to guided Art panel handoffs with page/panel metadata and an image, because non-panel guided handoffs do not have a safe no-mutation return target for attaching an image.
+
+### Operator follow-up
+
+- In the browser, open Guided Comic Flow -> Art -> Generate/Replace in Imageshop and confirm the sticky header remains visible while scrolling and Back returns to Comic Creator without sending an image.
+
+### Next steps
+
+- None.
+
+---
+
+## Guided Comic Flow page navigator rail placement - 2026-05-05
+
+### What changed
+
+- Moved the Guided Comic Flow page navigator out of the main workflow card and into the existing right-side vertical guided navigation rail.
+- The navigator now appears only on the Pages and Layout steps, below the guided step list and above the rail's lower controls.
+- Replaced the former sticky horizontal main-content navigator with a compact vertical list of `Page 1`, `Page 2`, etc.
+- Added active page highlighting from page button clicks and visible page detection.
+- Added a compact `Show pages` / `Hide pages` toggle in the right rail.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `shouldRenderGuidedPageNavigator()` centralizes the rule that the navigator only renders for `pages` or `layout` when page cards exist.
+- When the navigator is hidden, only the small rail toggle remains; the vertical page list is conditionally not rendered, so it has no layout or interaction footprint.
+- Page cards and layout preview articles now expose `data-guided-page-number` for active-page tracking.
+- `IntersectionObserver` updates the active page as page cards/layout previews become visible; clicking a page also sets the active page before calling the existing `scrollIntoView()` jump.
+- Guided draft persistence, `pageCards`, layout preview state, routing, and `ComicEditor` were left unchanged.
+
+### Verification
+
+- `npm test -- guidedComicPageNavigator.test.ts` - RED first because `shouldRenderGuidedPageNavigator` did not exist, then PASS after implementation.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+
+- No manual browser screenshot check was run in this pass.
+
+### Risks or caveats
+
+- The rail is only present at the existing `xl` breakpoint because this patch deliberately did not introduce a new navigation system or render the navigator outside the right rail.
+
+### Operator follow-up
+
+- In the browser, check Pages and Layout at desktop width: confirm the navigator sits in the right rail, the hidden state leaves only the small toggle, and page jumps do not overlap the editor/previews.
+
+### Next steps
+
+- None.
+
+---
+
+## Guided Comic Flow Advanced Studio access clarity - 2026-05-05
+
+### What changed
+
+- Kept a single global Guided Comic Flow blank-editor action in the existing right-side vertical rail: `Open blank Advanced Studio`.
+- Removed duplicate blank Advanced Studio buttons from non-rail guided workflow surfaces to reduce confusion with guided page import.
+- Kept the Layout page-card handoff action labeled distinctly as `Send this page to Advanced Studio`.
+- Exported the Advanced Studio workflow return step list for focused verification.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/modes/comic/pages/ComicEditor.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `ADVANCED_STUDIO_ACTION_LABELS.openBlank` is used only for the rail button that calls `onOpenAdvancedStudio` directly and does not request a guided layout handoff.
+- `ADVANCED_STUDIO_ACTION_LABELS.sendPage` is used only inside each Layout page card and still calls `openPageInAdvancedStudio(page)`, which requests the existing guided layout handoff before opening `ComicEditor`.
+- The vertical rail remains the global blank Advanced Studio access point and is scrollable so the button remains reachable even when rail content grows.
+- `GUIDED_WORKFLOW_STEPS` remains the source for the Advanced Studio Workflow menu return options: Setup, Story, Pages, Visual Prep, Art, Layout, Export.
+- Routing architecture, guided draft persistence, `ComicEditor` behavior, and the layout handoff bridge were preserved.
+
+### Verification
+
+- `npm test -- guidedComicAdvancedStudioAccess.test.ts` - RED first because the exported labels/step list did not exist, then PASS after implementation.
+- `npm test -- guidedComicAdvancedStudioAccess.test.ts guidedComicPageNavigator.test.ts guidedComicLayoutBridge.test.ts` - PASS.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+
+- No manual browser screenshot check was run in this pass.
+
+### Risks or caveats
+
+- The global blank Advanced Studio action now intentionally lives in the existing vertical rail only, to avoid duplicate blank-editor CTAs competing with the page handoff button.
+
+### Operator follow-up
+
+- In the browser, confirm the rail button opens a blank Advanced Studio from several guided steps, and confirm a Layout page card's `Send this page to Advanced Studio` still imports that page content.
+
+### Next steps
+
+- None.
+
 ## How to Use These Docs
 
 | File | Use |

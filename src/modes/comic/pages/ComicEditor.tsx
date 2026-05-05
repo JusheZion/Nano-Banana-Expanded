@@ -9,7 +9,7 @@ type ComicEditorProps = {
     onOpenGuidedWorkflowStep?: (stepId: GuidedComicStepId) => void;
 };
 
-const GUIDED_WORKFLOW_STEPS: Array<{ id: GuidedComicStepId; label: string }> = [
+export const GUIDED_WORKFLOW_STEPS: Array<{ id: GuidedComicStepId; label: string }> = [
     { id: 'setup', label: 'Setup' },
     { id: 'story', label: 'Story' },
     { id: 'pages', label: 'Pages' },

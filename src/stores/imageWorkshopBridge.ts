@@ -80,6 +80,7 @@ interface ImageWorkshopBridgeState {
   requestGuidedComicHandoff: (handoff: GuidedImageWorkshopHandoff) => void;
   consumeGuidedComicHandoff: () => GuidedImageWorkshopHandoff | null;
   sendGuidedComicPanelImageBack: (payload: Omit<GuidedComicPanelImageReturn, 'source' | 'returnTarget' | 'returnedAt'>) => void;
+  returnToGuidedComicFlow: () => void;
   consumeGuidedComicPanelImageReturn: () => GuidedComicPanelImageReturn | null;
   clearPortalRequest: () => void;
   clearDraft: () => void;
@@ -108,6 +109,7 @@ export const useImageWorkshopBridge = create<ImageWorkshopBridgeState>((set, get
       },
       portalToOpen: 'comic',
     }),
+  returnToGuidedComicFlow: () => set({ portalToOpen: 'comic' }),
   consumeGuidedComicPanelImageReturn: () => {
     const payload = get().guidedPanelReturn;
     if (!payload) return null;

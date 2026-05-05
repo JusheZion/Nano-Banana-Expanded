@@ -65,6 +65,15 @@ type GuidedComicStep = {
   Icon: React.ComponentType<{ className?: string }>;
 };
 
+export function shouldRenderGuidedPageNavigator(stepId: GuidedComicStepId, pageCount: number): boolean {
+  return (stepId === 'pages' || stepId === 'layout') && pageCount > 0;
+}
+
+export const ADVANCED_STUDIO_ACTION_LABELS = {
+  openBlank: 'Open blank Advanced Studio',
+  sendPage: 'Send this page to Advanced Studio',
+} as const;
+
 type SetupFormState = {
   seriesTitle: string;
   issueTitle: string;
@@ -779,6 +788,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
   const [outlineBeats, setOutlineBeats] = useState<OutlineBeat[]>(() => restoredDraft?.outlineBeats ?? cloneInitialOutlineBeats());
   const [pageCards, setPageCards] = useState<PageCard[]>(() => restoredDraft?.pageCards ?? []);
+  const [activePageNumber, setActivePageNumber] = useState<number | null>(() => restoredDraft?.pageCards?.[0]?.pageNumber ?? null);
   const activeStep = STEPS[activeIndex];
   const progress = useMemo(() => ((activeIndex + 1) / STEPS.length) * 100, [activeIndex]);
   const atStart = activeIndex === 0;
@@ -1006,9 +1016,43 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     });
   }, [isLayoutStep, pageCards]);
 
+  useEffect(() => {
+    if (!shouldRenderGuidedPageNavigator(activeStep.id, pageCards.length)) return;
+    if (pageCards.some((page) => page.pageNumber === activePageNumber)) return;
+    setActivePageNumber(pageCards[0]?.pageNumber ?? null);
+  }, [activePageNumber, activeStep.id, pageCards]);
+
+  useEffect(() => {
+    if (!shouldRenderGuidedPageNavigator(activeStep.id, pageCards.length)) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        const pageNumber = Number((visibleEntry?.target as HTMLElement | undefined)?.dataset.guidedPageNumber);
+        if (Number.isFinite(pageNumber)) setActivePageNumber(pageNumber);
+      },
+      {
+        root: null,
+        rootMargin: '-20% 0px -55% 0px',
+        threshold: [0.1, 0.35, 0.6],
+      },
+    );
+
+    pageCards.forEach((page) => {
+      const node = pageSectionRefs.current[page.pageNumber];
+      if (node) observer.observe(node);
+    });
+
+    return () => observer.disconnect();
+  }, [activeStep.id, pageCards]);
+
   const goBack = () => setActiveIndex((index) => Math.max(0, index - 1));
   const goNext = () => setActiveIndex((index) => Math.min(STEPS.length - 1, index + 1));
   const jumpToPage = (pageNumber: number) => {
+    setActivePageNumber(pageNumber);
     pageSectionRefs.current[pageNumber]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const updateSetupField = (field: keyof SetupFormState, value: string) => {
@@ -1396,43 +1440,39 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       { label: 'Panel placeholders ready', complete: pageCards.every((page) => getGuidedComicActivePanelCount(page) > 0) },
     ];
   }, [pageCards, setupForm.targetPageCount]);
+  const shouldShowPageNavigator = shouldRenderGuidedPageNavigator(activeStep.id, pageCards.length);
   const pageNavigator =
-    (isPagesStep || isLayoutStep) && pageCards.length > 0 ? (
-      <section className="sticky top-3 z-20 rounded-xl border border-white/10 bg-[#07101f]/92 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-              Page navigator
-            </p>
-            <p className="mt-1 text-xs text-white/55">
-              {isPagesStep ? 'Jump between page cards.' : 'Jump between layout previews.'}
-            </p>
-          </div>
+    shouldShowPageNavigator ? (
+      <section className="mt-3 border-t border-white/10 pt-3" aria-label="Page navigator">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Pages</p>
           <button
             type="button"
             onClick={() => setPageNavigatorVisible((visible) => !visible)}
-            className="rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10"
+            className="rounded-lg border border-white/15 bg-black/25 px-2.5 py-1.5 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
             aria-expanded={pageNavigatorVisible}
           >
-            {pageNavigatorVisible ? 'Hide navigator' : 'Show navigator'}
+            {pageNavigatorVisible ? 'Hide pages' : 'Show pages'}
           </button>
         </div>
         {pageNavigatorVisible ? (
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <div className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto pr-1 custom-scrollbar">
             {pageCards.map((page) => {
-              const panelCount = getGuidedComicActivePanelCount(page);
-              const hasSummary = Boolean(page.summary.trim());
+              const selected = page.pageNumber === activePageNumber;
               return (
                 <button
                   key={page.pageNumber}
                   type="button"
                   onClick={() => jumpToPage(page.pageNumber)}
-                  className="min-w-[104px] rounded-lg border border-white/12 bg-black/25 px-3 py-2 text-left transition hover:border-amber-300/55 hover:bg-amber-300/10"
+                  className="rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-amber-300/55 hover:bg-amber-300/10"
+                  style={{
+                    background: selected ? 'rgba(252,246,186,0.14)' : 'rgba(255,255,255,0.04)',
+                    borderColor: selected ? `${ACCENT_GOLD_SOLID}99` : 'rgba(255,255,255,0.12)',
+                    color: selected ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.76)',
+                  }}
+                  aria-current={selected ? 'location' : undefined}
                 >
-                  <span className="block text-xs font-black text-white">Page {page.pageNumber}</span>
-                  <span className="mt-1 block text-[10px] font-semibold text-white/42">
-                    {panelCount} panel{panelCount === 1 ? '' : 's'} · {hasSummary ? 'summary' : 'needs summary'}
-                  </span>
+                  Page {page.pageNumber}
                 </button>
               );
             })}
@@ -1479,7 +1519,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         </header>
 
         <aside
-          className="fixed bottom-6 right-6 top-24 z-20 hidden w-56 flex-col rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl xl:flex"
+          className="fixed bottom-6 right-6 top-24 z-20 hidden w-56 flex-col overflow-y-auto rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl custom-scrollbar xl:flex"
           aria-label="Persistent guided comic steps"
         >
           <div className="mb-3 px-2">
@@ -1526,6 +1566,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               );
             })}
           </nav>
+          {pageNavigator}
           <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
               Local draft
@@ -1548,7 +1589,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
                 <LayoutTemplate className="h-4 w-4" aria-hidden />
-                Open blank Advanced Studio
+                {ADVANCED_STUDIO_ACTION_LABELS.openBlank}
               </button>
             </Tooltip>
           </div>
@@ -1617,7 +1658,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           })}
         </nav>
 
-        <div className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm sm:grid-cols-[auto_auto_minmax(0,1fr)] xl:hidden">
+        <div className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm sm:grid-cols-[auto_auto] xl:hidden">
           <span className="inline-flex items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100">
             {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
           </span>
@@ -1628,17 +1669,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           >
             Clear guided draft
           </button>
-          <Tooltip content="Open the advanced editor without sending a guided page">
-            <button
-              type="button"
-              onClick={onOpenAdvancedStudio}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
-              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-            >
-              <LayoutTemplate className="h-4 w-4" aria-hidden />
-              Open blank Advanced Studio
-            </button>
-          </Tooltip>
         </div>
 
         <main className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1718,8 +1748,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </button>
                 </div>
               ) : null}
-
-              {pageNavigator}
 
               {isSetupStep ? (
                 <div className="mt-5 grid gap-4">
@@ -1982,6 +2010,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     return (
                       <article
                         key={page.pageNumber}
+                        data-guided-page-number={page.pageNumber}
                         ref={(node) => {
                           pageSectionRefs.current[page.pageNumber] = node;
                         }}
@@ -2630,6 +2659,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       return (
                       <article
                         key={page.pageNumber}
+                        data-guided-page-number={page.pageNumber}
                         ref={(node) => {
                           pageSectionRefs.current[page.pageNumber] = node;
                         }}
@@ -2756,7 +2786,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/15 px-4 py-2.5 text-sm font-black text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-300/20 md:w-auto"
                           >
                             <MonitorUp className="h-4 w-4" aria-hidden="true" />
-                            Send this page to Advanced Studio
+                            {ADVANCED_STUDIO_ACTION_LABELS.sendPage}
                           </button>
                         </div>
                       </article>
@@ -2841,14 +2871,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         className="rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/35"
                       >
                         Export PNG pages
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onOpenAdvancedStudio}
-                        className="rounded-lg border px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/10"
-                        style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-                      >
-                        Open blank Advanced Studio
                       </button>
                     </div>
                   </section>
@@ -3062,20 +3084,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </ul>
               </>
             )}
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
-              <p className="text-xs font-bold text-white/85">Ready for precision work?</p>
-              <p className="mt-2 text-xs leading-relaxed text-white/55">
-                Open the full studio without sending a guided page when you are ready to work directly on the canvas.
-              </p>
-              <button
-                type="button"
-                onClick={onOpenAdvancedStudio}
-                className="mt-4 w-full rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10"
-                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-              >
-                Open blank Advanced Studio
-              </button>
-            </div>
           </aside>
         </main>
       </div>
