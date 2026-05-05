@@ -584,7 +584,9 @@ export function CollectionVaultModal(props: {
                             <p className="line-clamp-2 min-h-[2.25rem] break-words text-sm font-bold leading-snug text-[#FBF5D4]">
                               {title}
                             </p>
-                            <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">Vault asset</p>
+                            <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">
+                              {guidedSelectionTarget ? collectionName : 'Vault asset'}
+                            </p>
                           </div>
                         </div>
 

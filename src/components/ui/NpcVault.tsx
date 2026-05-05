@@ -7,6 +7,7 @@ import {
   getGenerations,
   type StoredGeneration,
 } from '@/shared/utils/generationOutputRouter';
+import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 
 function formatWhen(ts: number): string {
   try {
@@ -19,6 +20,8 @@ function formatWhen(ts: number): string {
 export const NpcVault: React.FC = () => {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const guidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
+  const selectGuidedReference = useGuidedComicVaultBridge((s) => s.selectVaultReference);
 
   const rows = useMemo(() => {
     void refreshNonce;
@@ -89,6 +92,28 @@ export const NpcVault: React.FC = () => {
                 <p className="text-[10px] text-white/45 truncate">{formatWhen(selected.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">
+                {guidedTarget?.type === 'npc' ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-emerald-300/45 bg-emerald-300/15 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-300/25"
+                    title={`Use this image for ${guidedTarget.name}`}
+                    onClick={() => {
+                      const label = selected.supportingLabel?.trim() || 'NPC ref';
+                      selectGuidedReference({
+                        type: guidedTarget.type,
+                        name: guidedTarget.name,
+                        referenceId: selected.id,
+                        imageUrl: selected.url,
+                        sourceType: 'npc',
+                        sourceLabel: label,
+                        displayName: label,
+                        imageLabel: label,
+                      });
+                    }}
+                  >
+                    Use for guided flow
+                  </button>
+                ) : null}
                 <Tooltip content="Copy URL" side="bottom">
                   <button
                     type="button"

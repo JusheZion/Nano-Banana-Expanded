@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import {
+  getGuidedImageWorkshopPreload,
+  useImageWorkshopBridge,
+} from '@/stores/imageWorkshopBridge';
 
 beforeEach(() => {
   useImageWorkshopBridge.setState({
@@ -67,10 +70,19 @@ describe('useImageWorkshopBridge', () => {
         },
       ],
       locations: [],
+      npcs: [
+        {
+          name: 'alley witness',
+          displayName: 'Alley Witness',
+          imageUrl: 'https://example.com/witness.png',
+          sourceType: 'npc',
+        },
+      ],
     });
 
     expect(useImageWorkshopBridge.getState().portalToOpen).toBe('lab');
     expect(useImageWorkshopBridge.getState().guidedHandoff?.characters[0].displayName).toBe('Flux');
+    expect(useImageWorkshopBridge.getState().guidedHandoff?.npcs[0].displayName).toBe('Alley Witness');
   });
 
   it('clears only the portal request for guided comic handoffs', () => {
@@ -80,6 +92,7 @@ describe('useImageWorkshopBridge', () => {
       sourceLabel: 'Guided Comic Flow · Visual Prep',
       characters: [],
       locations: [],
+      npcs: [],
     });
 
     useImageWorkshopBridge.getState().clearPortalRequest();
@@ -101,11 +114,13 @@ describe('useImageWorkshopBridge', () => {
           imageUrl: 'https://example.com/temple.png',
         },
       ],
+      npcs: [],
     });
 
     const out = useImageWorkshopBridge.getState().consumeGuidedComicHandoff();
 
     expect(out?.locations[0].displayName).toBe('Sky Temple');
+    expect(out?.npcs).toEqual([]);
     expect(useImageWorkshopBridge.getState().guidedHandoff).toBeNull();
     expect(useImageWorkshopBridge.getState().consumeGuidedComicHandoff()).toBeNull();
   });
@@ -117,12 +132,50 @@ describe('useImageWorkshopBridge', () => {
       sourceLabel: 'Guided Comic Flow · Visual Prep',
       characters: [],
       locations: [],
+      npcs: [],
     });
 
     const out = useImageWorkshopBridge.getState().consumeGuidedComicHandoff();
 
     expect(out?.characters).toEqual([]);
     expect(out?.locations).toEqual([]);
+    expect(out?.npcs).toEqual([]);
+  });
+
+  it('keeps all guided comic references available while preloading the first 14 slots', () => {
+    const handoff = {
+      source: 'guided-comic' as const,
+      currentStep: 'visual-prep' as const,
+      sourceLabel: 'Guided Comic Flow · Visual Prep',
+      characters: Array.from({ length: 8 }, (_, index) => ({
+        name: `hero ${index + 1}`,
+        displayName: `Hero ${index + 1}`,
+        imageUrl: `https://example.com/hero-${index + 1}.png`,
+        sourceType: 'character' as const,
+      })),
+      locations: Array.from({ length: 5 }, (_, index) => ({
+        name: `location ${index + 1}`,
+        displayName: `Location ${index + 1}`,
+        imageUrl: `https://example.com/location-${index + 1}.png`,
+        sourceType: 'asset' as const,
+      })),
+      npcs: Array.from({ length: 4 }, (_, index) => ({
+        name: `npc ${index + 1}`,
+        displayName: `NPC ${index + 1}`,
+        imageUrl: `https://example.com/npc-${index + 1}.png`,
+        sourceType: 'npc' as const,
+      })),
+    };
+
+    const preload = getGuidedImageWorkshopPreload(handoff);
+
+    expect(preload.allReferences).toHaveLength(17);
+    expect(preload.slotUrls).toHaveLength(14);
+    expect(preload.slotUrls[0]).toBe('https://example.com/hero-1.png');
+    expect(preload.slotUrls[12]).toBe('https://example.com/location-5.png');
+    expect(preload.slotUrls[13]).toBe('https://example.com/npc-1.png');
+    expect(preload.allReferences[16].displayName).toBe('NPC 4');
+    expect(preload.context).toBe('character');
   });
 
   it('stores and consumes guided comic panel handoffs', () => {
@@ -161,6 +214,14 @@ describe('useImageWorkshopBridge', () => {
           imageUrl: 'https://example.com/observatory.png',
         },
       ],
+      npcs: [
+        {
+          name: 'alley witness',
+          displayName: 'Alley Witness',
+          imageUrl: 'https://example.com/witness.png',
+          sourceType: 'npc',
+        },
+      ],
     });
 
     expect(useImageWorkshopBridge.getState().portalToOpen).toBe('lab');
@@ -177,6 +238,7 @@ describe('useImageWorkshopBridge', () => {
     expect(out?.artDirection?.continuityNotes).toContain('same jacket');
     expect(out?.characters).toHaveLength(1);
     expect(out?.locations).toHaveLength(1);
+    expect(out?.npcs).toHaveLength(1);
     expect(useImageWorkshopBridge.getState().consumeGuidedComicHandoff()).toBeNull();
   });
 

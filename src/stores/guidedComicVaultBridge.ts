@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import type { Portal } from '@/shared/portals';
 
-export type GuidedComicVaultTargetType = 'character' | 'location';
-export type GuidedComicVaultSourceType = 'character' | 'asset';
+export type GuidedComicVaultTargetType = 'character' | 'location' | 'npc' | 'panel-art';
+export type GuidedComicVaultSourceType = 'character' | 'asset' | 'npc';
 
 export type GuidedComicVaultTarget = {
   type: GuidedComicVaultTargetType;
@@ -14,6 +14,11 @@ export type GuidedComicVaultSelection = GuidedComicVaultTarget & {
   imageUrl: string;
   sourceType: GuidedComicVaultSourceType;
   sourceLabel: string;
+  displayName: string;
+  profileName?: string;
+  collectionName?: string;
+  imageLabel?: string;
+  castName?: string;
 };
 
 interface GuidedComicVaultBridgeState {
@@ -54,7 +59,7 @@ export const useGuidedComicVaultBridge = create<GuidedComicVaultBridgeState>((se
   consumeSelection: () => {
     const selection = get().selection;
     if (!selection) return null;
-    queueMicrotask(() => set({ selection: null }));
+    set({ selection: null });
     return selection;
   },
 

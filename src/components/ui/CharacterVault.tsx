@@ -71,16 +71,31 @@ export const CharacterVault: React.FC = () => {
           onVaultChanged={() => {
             void refresh();
           }}
-          guidedSelectionTarget={guidedTarget?.type === 'character' ? guidedTarget : null}
-          onUseForGuidedFlow={(item) =>
-            selectGuidedReference({
-              type: 'character',
-              name: guidedTarget?.name ?? selectedAlbum.profileName,
-              referenceId: item.id,
-              imageUrl: item.image_url,
-              sourceType: 'character',
-              sourceLabel: selectedAlbum.profileName,
-            })
+          guidedSelectionTarget={
+            guidedTarget?.type === 'character' || guidedTarget?.type === 'panel-art'
+              ? guidedTarget
+              : null
+          }
+          onUseForGuidedFlow={
+            guidedTarget?.type === 'character' || guidedTarget?.type === 'panel-art'
+              ? (item) => {
+                  const castName = item.cast_name?.trim() || undefined;
+                  const imageLabel = item.name?.trim() || undefined;
+                  const displayName = castName || imageLabel || selectedAlbum.profileName;
+                  selectGuidedReference({
+                    type: guidedTarget.type,
+                    name: guidedTarget.name,
+                    referenceId: item.id,
+                    imageUrl: item.image_url,
+                    sourceType: 'character',
+                    sourceLabel: displayName,
+                    displayName,
+                    profileName: selectedAlbum.profileName,
+                    castName,
+                    imageLabel,
+                  });
+                }
+              : undefined
           }
         />
       )}

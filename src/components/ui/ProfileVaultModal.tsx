@@ -650,7 +650,7 @@ export function ProfileVaultModal(props: {
                               {title}
                             </p>
                             <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">
-                              {isActive ? 'Profile cover' : 'Vault reference'}
+                              {guidedSelectionTarget ? profileName : isActive ? 'Profile cover' : 'Vault reference'}
                             </p>
                           </div>
                         </div>

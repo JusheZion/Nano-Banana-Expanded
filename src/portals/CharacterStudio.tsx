@@ -2294,20 +2294,20 @@ export const CharacterStudio: React.FC = () => {
                         <span className="text-[10px] uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
                         <div className="flex flex-wrap gap-2">
                           {recentCharacters.map((item) => (
-                            <Tooltip variant="character" key={item.id} content={item.displayName ?? item.profileName ?? 'Character'}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  store.setCurrentLiveImageUrl(item.imageUrl);
-                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                                }}
-                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                  store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
-                                }`}
-                              >
-                                <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                              </button>
-                            </Tooltip>
+                            <button
+                              key={item.id}
+                              type="button"
+                              title={item.displayName ?? item.profileName ?? 'Character'}
+                              onClick={() => {
+                                store.setCurrentLiveImageUrl(item.imageUrl);
+                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                              }}
+                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                store.galleryDensity === 'compact' ? 'w-10 h-10' : 'w-12 h-12'
+                              }`}
+                            >
+                              <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </button>
                           ))}
                         </div>
                       </div>

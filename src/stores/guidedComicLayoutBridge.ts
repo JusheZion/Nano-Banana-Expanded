@@ -7,7 +7,7 @@ export type GuidedComicLayoutPanelImage = {
   imageUrl: string;
   prompt?: string;
   returnedAt?: string;
-  source?: 'imageshop';
+  source?: 'imageshop' | 'vault' | 'upload' | 'paste';
 };
 
 export type GuidedComicLayoutPanelBeat = {

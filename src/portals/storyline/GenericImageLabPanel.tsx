@@ -8,8 +8,16 @@ function formatGeminiClientError(message: string): string {
 }
 import { generateGeminiText } from '@/shared/api/geminiTextApi';
 import { generateImage, type OnyxModelId } from '@/shared/api/geminiImageApi';
+import {
+  saveImportedImageToAssetVault,
+  saveImportedImageToCharacterVault,
+} from '@/shared/api/arcsPersistence';
+import { getCharacterAlbums } from '@/shared/api/arcsVault';
+import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
+import { isSupabaseConfigured } from '@/shared/lib/supabase';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import { SearchableVaultSelect } from '@/shared/components/SearchableVaultSelect';
 import { parseJsonFromModel } from '@/portals/storyline/parseDirectorJson';
 import type {
   ProductionAssetMember,
@@ -22,15 +30,23 @@ import { buildStorylineReferenceSlots } from '@/portals/storyline/buildStoryline
 import { useCharacterStudioStore } from '@/stores/characterStudioStore';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { pickGenerationSeed } from '@/shared/utils/generationSeed';
+import { saveGeneration } from '@/shared/utils/generationOutputRouter';
+import { addRecentFromAsset, addRecentFromCharacter } from '@/shared/utils/recentGenerations';
 import {
   studioPreviewAspectCss,
   studioPreviewMaxHeightCss,
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
-import { useImageWorkshopBridge, type GuidedImageWorkshopHandoff } from '@/stores/imageWorkshopBridge';
+import {
+  getGuidedImageWorkshopPreload,
+  useImageWorkshopBridge,
+  type GuidedImageWorkshopHandoff,
+} from '@/stores/imageWorkshopBridge';
+import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/imageshopSessionStore';
 
 type LabContext = 'character' | 'asset';
+type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
 
 function listOrNone(values: string[] | undefined): string {
   const cleaned = (values ?? []).map((value) => value.trim()).filter(Boolean);
@@ -120,6 +136,33 @@ export function GenericImageLabPanel({
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
   const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
+  const [generatedVaultTarget, setGeneratedVaultTarget] = useState<GeneratedVaultTarget>('npc');
+  const [generatedProfileName, setGeneratedProfileName] = useState('');
+  const [generatedCastName, setGeneratedCastName] = useState('');
+  const [generatedCollectionName, setGeneratedCollectionName] = useState('');
+  const [generatedAssetName, setGeneratedAssetName] = useState('');
+  const [generatedNpcLabel, setGeneratedNpcLabel] = useState('Imageshop result');
+  const [generatedSavePending, setGeneratedSavePending] = useState(false);
+  const [generatedSaveError, setGeneratedSaveError] = useState<string | null>(null);
+  const [generatedSaveNotice, setGeneratedSaveNotice] = useState<string | null>(null);
+  const [vaultProfileOptions, setVaultProfileOptions] = useState<string[]>([]);
+  const [vaultProfileLoading, setVaultProfileLoading] = useState(false);
+  const [vaultCollectionOptions, setVaultCollectionOptions] = useState<string[]>([]);
+  const [vaultCollectionLoading, setVaultCollectionLoading] = useState(false);
+  const supabaseReady = isSupabaseConfigured();
+  const sessionResults = useImageshopSessionStore((s) => s.results);
+  const activeSessionResultId = useImageshopSessionStore((s) => s.activeResultId);
+  const addSessionResult = useImageshopSessionStore((s) => s.addResult);
+  const selectSessionResult = useImageshopSessionStore((s) => s.selectResult);
+  const removeSessionResult = useImageshopSessionStore((s) => s.removeResult);
+
+  const activeSessionResult = useMemo(
+    () =>
+      sessionResults.find((result) => result.id === activeSessionResultId) ??
+      sessionResults[0] ??
+      null,
+    [activeSessionResultId, sessionResults],
+  );
 
   useEffect(() => {
     const next = seedPrompt?.trim();
@@ -130,6 +173,52 @@ export function GenericImageLabPanel({
     setNotice('Visual Prep seeded Image Lab with the selected prompt.');
     onSeedPromptConsumed?.();
   }, [seedPrompt, onSeedPromptConsumed]);
+
+  const loadProfileOptions = useCallback(() => {
+    if (!supabaseReady) return;
+    setVaultProfileLoading(true);
+    getCharacterAlbums()
+      .then((albums) => setVaultProfileOptions(albums.map((album) => album.profileName)))
+      .catch(() => setVaultProfileOptions([]))
+      .finally(() => setVaultProfileLoading(false));
+  }, [supabaseReady]);
+
+  const loadCollectionOptions = useCallback(() => {
+    if (!supabaseReady) return;
+    setVaultCollectionLoading(true);
+    getAssetAlbums()
+      .then((albums) => setVaultCollectionOptions(albums.map((album) => album.collectionName)))
+      .catch(() => setVaultCollectionOptions([]))
+      .finally(() => setVaultCollectionLoading(false));
+  }, [supabaseReady]);
+
+  useEffect(() => {
+    if (generatedVaultTarget === 'character') void loadProfileOptions();
+  }, [generatedVaultTarget, loadProfileOptions]);
+
+  useEffect(() => {
+    if (generatedVaultTarget === 'asset') void loadCollectionOptions();
+  }, [generatedVaultTarget, loadCollectionOptions]);
+
+  const getMatchedProfile = useCallback(
+    (typed: string): string | null => {
+      const q = typed.trim();
+      if (!q) return null;
+      const lower = q.toLowerCase();
+      return vaultProfileOptions.find((profile) => profile.toLowerCase() === lower) ?? null;
+    },
+    [vaultProfileOptions],
+  );
+
+  const getMatchedCollection = useCallback(
+    (typed: string): string | null => {
+      const q = typed.trim();
+      if (!q) return null;
+      const lower = q.toLowerCase();
+      return vaultCollectionOptions.find((collection) => collection.toLowerCase() === lower) ?? null;
+    },
+    [vaultCollectionOptions],
+  );
 
   const stableRefs = useMemo(
     () => Array.from({ length: 14 }, (_, i) => refs[i] ?? ''),
@@ -145,6 +234,49 @@ export function GenericImageLabPanel({
     return refined;
   }, [promptRaw, promptRefined, useRefinedPrompt]);
 
+  const generatedSaveProcessing = useMemo((): Record<string, unknown> => {
+    const guidedTarget =
+      guidedPanelTarget?.currentStep === 'art'
+        ? {
+            panelId: guidedPanelTarget.panelId,
+            pageNumber: guidedPanelTarget.pageNumber,
+            panelNumber: guidedPanelTarget.panelNumber,
+          }
+        : undefined;
+
+    return {
+      source: 'imageshop_generated',
+      prompt: effectivePrompt,
+      aspectRatio,
+      context,
+      modelId,
+      ...(guidedTarget ? { guidedComicPanel: guidedTarget } : {}),
+    };
+  }, [aspectRatio, context, effectivePrompt, guidedPanelTarget, modelId]);
+
+  const restoreSessionResult = useCallback(
+    (result: ImageshopSessionResult) => {
+      setLastImageUrl(result.imageUrl);
+      setLastSeed(result.seed);
+      setAspectRatio(result.aspectRatio);
+      setContext(result.context);
+      if (result.prompt.trim()) {
+        setPromptRaw(result.prompt);
+        setUseRefinedPrompt(false);
+      }
+      setGeneratedSaveError(null);
+      setGeneratedSaveNotice(null);
+      selectSessionResult(result.id);
+      setNotice('Restored an Imageshop result from this session.');
+    },
+    [selectSessionResult],
+  );
+
+  useEffect(() => {
+    if (lastImageUrl || !activeSessionResult) return;
+    restoreSessionResult(activeSessionResult);
+  }, [activeSessionResult, lastImageUrl, restoreSessionResult]);
+
   const applyRefs = useCallback((incoming: string[], nextContext: LabContext) => {
     const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? '');
     setRefs(next);
@@ -156,27 +288,33 @@ export function GenericImageLabPanel({
     const handoff = consumeGuidedComicHandoff();
     if (!handoff) return;
 
-    const incoming = [...handoff.characters, ...handoff.locations]
-      .map((reference) => reference.imageUrl)
-      .filter(Boolean);
+    const preload = getGuidedImageWorkshopPreload(handoff);
+    const preloadSuffix =
+      preload.allReferences.length > preload.slotUrls.length
+        ? `, first ${preload.slotUrls.length} preloaded into Imageshop slots`
+        : '';
 
     if (handoff.currentStep === 'art') {
       setGuidedPanelTarget(handoff);
-      if (incoming.length > 0) {
-        applyRefs(incoming, handoff.characters.length > 0 ? 'character' : 'asset');
+      if (preload.slotUrls.length > 0) {
+        applyRefs(preload.slotUrls, preload.context);
       }
       setPromptRaw(buildGuidedPanelPrompt(handoff));
       setPromptRefined('');
       setUseRefinedPrompt(false);
       setError(null);
-      setNotice(`Loaded panel from Guided Comic Flow: Page ${handoff.pageNumber ?? '?'}, Panel ${handoff.panelNumber ?? '?'}`);
+      setNotice(
+        `Loaded panel from Guided Comic Flow: Page ${handoff.pageNumber ?? '?'}, Panel ${handoff.panelNumber ?? '?'} with ${preload.allReferences.length} reference${preload.allReferences.length === 1 ? '' : 's'}${preloadSuffix}.`,
+      );
       return;
     }
 
-    if (incoming.length === 0) return;
+    if (preload.slotUrls.length === 0) return;
 
-    applyRefs(incoming, handoff.characters.length > 0 ? 'character' : 'asset');
-    setNotice('Loaded references from Guided Comic Flow');
+    applyRefs(preload.slotUrls, preload.context);
+    setNotice(
+      `Loaded ${preload.allReferences.length} reference${preload.allReferences.length === 1 ? '' : 's'} from Guided Comic Flow${preloadSuffix}.`,
+    );
   }, [applyRefs, consumeGuidedComicHandoff]);
 
   const sendBackToGuidedComicFlow = useCallback(() => {
@@ -363,12 +501,156 @@ export function GenericImageLabPanel({
         else setError('Failed to generate image.');
         return;
       }
-      setLastImageUrl(res.imageDataUrl);
-      setLastSeed(seed);
+      const stored = addSessionResult({
+        imageUrl: res.imageDataUrl,
+        seed,
+        prompt: basePrompt,
+        aspectRatio,
+        context,
+        modelId,
+        sourceLabel: guidedPanelTarget?.sourceLabel,
+      });
+      setLastImageUrl(stored.imageUrl);
+      setLastSeed(stored.seed);
+      setGeneratedSaveError(null);
+      setGeneratedSaveNotice(null);
     } finally {
       setGenBusy(false);
     }
-  }, [aspectRatio, context, effectivePrompt, modelId, stableRefs]);
+  }, [addSessionResult, aspectRatio, context, effectivePrompt, guidedPanelTarget?.sourceLabel, modelId, stableRefs]);
+
+  const handleSaveGeneratedToVault = useCallback(async () => {
+    if (!lastImageUrl) {
+      setGeneratedSaveError('Generate an image before saving.');
+      return;
+    }
+
+    setGeneratedSaveError(null);
+    setGeneratedSaveNotice(null);
+    setGeneratedSavePending(true);
+    try {
+      if (generatedVaultTarget === 'npc') {
+        const label = generatedNpcLabel.trim() || 'Imageshop result';
+        saveGeneration('supporting_reference', lastImageUrl, lastSeed ?? undefined, {
+          supportingLabel: label,
+        });
+        setGeneratedSaveNotice(`Saved to NPC Vault as "${label}".`);
+        return;
+      }
+
+      if (generatedVaultTarget === 'character') {
+        const typed = generatedProfileName.trim();
+        if (!typed) {
+          setGeneratedSaveError('Enter a profile name.');
+          return;
+        }
+        const matched = getMatchedProfile(typed);
+        const profileNameForDb = matched ?? typed;
+        const isUnnamed = profileNameForDb.toLowerCase() === 'unnamed';
+        const baseNameForId = isUnnamed ? 'Unnamed' : profileNameForDb;
+        const profileForInsert = isUnnamed ? undefined : profileNameForDb;
+        const cast = generatedCastName.trim() || undefined;
+
+        if (supabaseReady) {
+          const result = await saveImportedImageToCharacterVault({
+            imageUrl: lastImageUrl,
+            baseName: baseNameForId,
+            profileName: profileForInsert,
+            castName: cast,
+            seed: lastSeed,
+            processing: generatedSaveProcessing,
+          });
+          if (!result.ok) {
+            setGeneratedSaveError(result.error ?? 'Save failed.');
+            return;
+          }
+          if (result.id && result.imageUrl) {
+            addRecentFromCharacter({
+              id: result.id,
+              image_url: result.imageUrl,
+              profile_name: profileForInsert ?? null,
+              cast_name: cast ?? null,
+              seed: lastSeed,
+            });
+            saveGeneration('character', result.imageUrl, lastSeed ?? undefined, {
+              profileName: profileForInsert,
+              castName: cast,
+            });
+          }
+        } else {
+          saveGeneration('character', lastImageUrl, lastSeed ?? undefined, {
+            profileName: profileForInsert,
+            castName: cast,
+          });
+        }
+
+        setGeneratedSaveNotice(`Saved to Character Vault as "${profileNameForDb}".`);
+        return;
+      }
+
+      const typed = generatedCollectionName.trim();
+      if (!typed) {
+        setGeneratedSaveError('Enter a collection name.');
+        return;
+      }
+      const matched = getMatchedCollection(typed);
+      const collectionForDb = matched ?? typed;
+      const isUnnamed = collectionForDb.toLowerCase() === 'unnamed';
+      const baseNameForId = isUnnamed ? 'Unnamed' : collectionForDb;
+      const collectionInsert = isUnnamed ? undefined : collectionForDb;
+      const asset = generatedAssetName.trim() || undefined;
+
+      if (supabaseReady) {
+        const result = await saveImportedImageToAssetVault({
+          imageUrl: lastImageUrl,
+          baseName: baseNameForId,
+          collectionName: collectionInsert,
+          assetName: asset,
+          seed: lastSeed,
+          processing: generatedSaveProcessing,
+        });
+        if (!result.ok) {
+          setGeneratedSaveError(result.error ?? 'Save failed.');
+          return;
+        }
+        if (result.id && result.imageUrl) {
+          addRecentFromAsset({
+            id: result.id,
+            image_url: result.imageUrl,
+            collection_name: collectionInsert ?? null,
+            asset_name: asset ?? null,
+            seed: lastSeed,
+          });
+          saveGeneration('asset', result.imageUrl, lastSeed ?? undefined, {
+            collectionName: collectionInsert,
+            assetName: asset,
+          });
+        }
+      } else {
+        saveGeneration('asset', lastImageUrl, lastSeed ?? undefined, {
+          collectionName: collectionInsert,
+          assetName: asset,
+        });
+      }
+
+      setGeneratedSaveNotice(`Saved to Asset Vault collection "${collectionForDb}".`);
+    } finally {
+      setGeneratedSavePending(false);
+    }
+  }, [
+    generatedAssetName,
+    generatedCastName,
+    generatedCollectionName,
+    generatedNpcLabel,
+    generatedProfileName,
+    generatedSaveProcessing,
+    generatedVaultTarget,
+    getMatchedCollection,
+    getMatchedProfile,
+    lastImageUrl,
+    lastSeed,
+    supabaseReady,
+  ]);
 
   const downloadDataUrl = useCallback((dataUrl: string, fileName: string) => {
     const a = document.createElement('a');
@@ -585,30 +867,6 @@ export function GenericImageLabPanel({
         >
           {genBusy ? 'Generating…' : 'Generate'}
         </button>
-
-        <button
-          type="button"
-          disabled={!lastImageUrl}
-          onClick={() => {
-            if (!lastImageUrl) return;
-            void navigator.clipboard.writeText(lastImageUrl);
-          }}
-          className="px-3 py-2 rounded-full text-xs border border-white/15 hover:bg-white/10 disabled:opacity-50"
-        >
-          Copy image data URL
-        </button>
-
-        <button
-          type="button"
-          disabled={!lastImageUrl}
-          onClick={() => {
-            if (!lastImageUrl) return;
-            downloadDataUrl(lastImageUrl, 'image-lab.png');
-          }}
-          className="px-3 py-2 rounded-full text-xs border border-white/15 hover:bg-white/10 disabled:opacity-50"
-        >
-          Download PNG
-        </button>
       </div>
       </div>
 
@@ -630,6 +888,65 @@ export function GenericImageLabPanel({
                 <ArcsStorageImg src={lastImageUrl} alt="" className="h-full w-full object-contain object-center" />
               </div>
             </div>
+
+            {sessionResults.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2 shrink-0">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Session results
+                  </p>
+                  <span className="text-[10px] text-white/35">{sessionResults.length} recoverable</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <div className="flex w-max max-w-none gap-2">
+                    {sessionResults.map((result, index) => {
+                      const selected = result.imageUrl === lastImageUrl;
+                      return (
+                        <div
+                          key={result.id}
+                          className={`relative w-[86px] shrink-0 overflow-hidden rounded-lg border bg-black/35 ${
+                            selected ? 'border-amber-300/70' : 'border-white/15'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            className="block w-full text-left"
+                            title={result.sourceLabel ?? result.prompt}
+                            onClick={() => restoreSessionResult(result)}
+                          >
+                            <ArcsStorageImg
+                              src={result.imageUrl}
+                              alt={`Session result ${index + 1}`}
+                              className="h-[72px] w-full object-cover"
+                            />
+                            <div className="border-t border-white/10 px-1.5 py-1">
+                              <p className="truncate text-[10px] font-bold text-white/80">
+                                {selected ? 'Current' : `Result ${index + 1}`}
+                              </p>
+                              <p className="truncate text-[9px] text-white/38">{result.aspectRatio}</p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Remove session result"
+                            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-xs font-black text-white hover:bg-red-500/85"
+                            onClick={() => {
+                              removeSessionResult(result.id);
+                              if (result.imageUrl === lastImageUrl) {
+                                setLastImageUrl(null);
+                                setLastSeed(null);
+                              }
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-3 flex flex-wrap gap-2 shrink-0">
               {guidedPanelTarget?.currentStep === 'art' ? (
@@ -674,6 +991,167 @@ export function GenericImageLabPanel({
               >
                 Create new B-roll beat
               </button>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-950/10 p-3 shrink-0">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200/80">
+                    Save / Export
+                  </p>
+                  <p className="mt-1 text-[11px] text-white/50">
+                    Save or download the current generated result without leaving Imageshop.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['npc', 'character', 'asset'] as GeneratedVaultTarget[]).map((target) => (
+                    <button
+                      key={target}
+                      type="button"
+                      onClick={() => {
+                        setGeneratedVaultTarget(target);
+                        setGeneratedSaveError(null);
+                        setGeneratedSaveNotice(null);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] border ${
+                        generatedVaultTarget === target
+                          ? 'border-amber-300 bg-amber-400/20 text-amber-100'
+                          : 'border-white/15 bg-black/20 text-white/70 hover:bg-white/10'
+                      }`}
+                    >
+                      {target === 'npc'
+                        ? 'NPC Vault'
+                        : target === 'character'
+                          ? 'Character Vault'
+                          : 'Asset Vault'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {generatedVaultTarget === 'character' ? (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <SearchableVaultSelect
+                      id="imageshop-generated-profile"
+                      label="Profile name"
+                      labelClassName="text-[10px] text-white/45 uppercase"
+                      value={generatedProfileName}
+                      onChange={setGeneratedProfileName}
+                      options={vaultProfileOptions}
+                      loading={vaultProfileLoading}
+                      placeholder="Type or choose profile"
+                      inputClassName="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
+                      wrapClassName="relative"
+                      helperSlot={
+                        <p className="text-[10px] text-white/35">
+                          {supabaseReady
+                            ? 'Type a new profile or choose an existing one.'
+                            : 'Supabase unavailable - saving locally.'}
+                        </p>
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/45 uppercase">Cast name (optional)</label>
+                    <input
+                      type="text"
+                      className="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
+                      value={generatedCastName}
+                      onChange={(e) => setGeneratedCastName(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {generatedVaultTarget === 'asset' ? (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <SearchableVaultSelect
+                      id="imageshop-generated-collection"
+                      label="Collection name"
+                      labelClassName="text-[10px] text-white/45 uppercase"
+                      value={generatedCollectionName}
+                      onChange={setGeneratedCollectionName}
+                      options={vaultCollectionOptions}
+                      loading={vaultCollectionLoading}
+                      placeholder="Type or choose collection"
+                      inputClassName="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
+                      wrapClassName="relative"
+                      helperSlot={
+                        <p className="text-[10px] text-white/35">
+                          {supabaseReady
+                            ? 'Type a new collection or choose an existing one.'
+                            : 'Supabase unavailable - saving locally.'}
+                        </p>
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/45 uppercase">Asset name (optional)</label>
+                    <input
+                      type="text"
+                      className="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
+                      value={generatedAssetName}
+                      onChange={(e) => setGeneratedAssetName(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {generatedVaultTarget === 'npc' ? (
+                <div className="mt-3">
+                  <label className="text-[10px] text-white/45 uppercase">NPC label</label>
+                  <input
+                    type="text"
+                    className="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
+                    value={generatedNpcLabel}
+                    onChange={(e) => setGeneratedNpcLabel(e.target.value)}
+                    placeholder="Imageshop result"
+                  />
+                </div>
+              ) : null}
+
+              {generatedSaveError ? (
+                <p className="mt-2 text-[11px] text-red-200/90">{generatedSaveError}</p>
+              ) : null}
+              {generatedSaveNotice ? (
+                <p className="mt-2 text-[11px] text-emerald-200/90">{generatedSaveNotice}</p>
+              ) : null}
+
+              <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[10px] text-white/40">
+                  {supabaseReady
+                    ? 'Character and Asset saves use the existing vault persistence helpers.'
+                    : 'Supabase is unavailable, so saves use the local recent-generation archive.'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!lastImageUrl}
+                    onClick={() => {
+                      if (!lastImageUrl) return;
+                      downloadDataUrl(lastImageUrl, 'image-lab.png');
+                      setGeneratedSaveNotice('Downloaded the current generated image.');
+                      setGeneratedSaveError(null);
+                    }}
+                    className="px-3 py-2 rounded-full text-xs border border-white/15 text-white/80 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    disabled={generatedSavePending || !lastImageUrl}
+                    onClick={() => void handleSaveGeneratedToVault()}
+                    className="px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
+                    style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
+                  >
+                    {generatedSavePending ? 'Saving…' : 'Save to Vault'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : (

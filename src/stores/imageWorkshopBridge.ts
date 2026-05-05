@@ -8,6 +8,10 @@ export type GuidedImageWorkshopReference = {
   imageUrl: string;
   referenceId?: string;
   sourceLabel?: string;
+  sourceType?: 'character' | 'asset' | 'npc';
+  profileName?: string;
+  imageLabel?: string;
+  castName?: string;
 };
 
 export type GuidedImageWorkshopHandoff = {
@@ -17,6 +21,7 @@ export type GuidedImageWorkshopHandoff = {
   sourceLabel: string;
   characters: GuidedImageWorkshopReference[];
   locations: GuidedImageWorkshopReference[];
+  npcs: GuidedImageWorkshopReference[];
   pageSummary?: string;
   panelId?: string;
   pageNumber?: number;
@@ -34,6 +39,25 @@ export type GuidedImageWorkshopHandoff = {
     excludeTextFromImages: boolean;
   };
 };
+
+const IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT = 14;
+
+export function getGuidedImageWorkshopPreload(handoff: GuidedImageWorkshopHandoff): {
+  allReferences: GuidedImageWorkshopReference[];
+  slotUrls: string[];
+  context: 'character' | 'asset';
+} {
+  const allReferences = [...handoff.characters, ...handoff.locations, ...handoff.npcs].filter((reference) =>
+    reference.imageUrl.trim(),
+  );
+  return {
+    allReferences,
+    slotUrls: allReferences
+      .slice(0, IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT)
+      .map((reference) => reference.imageUrl),
+    context: handoff.characters.length > 0 ? 'character' : 'asset',
+  };
+}
 
 export type GuidedComicPanelImageReturn = {
   source: 'guided-comic';

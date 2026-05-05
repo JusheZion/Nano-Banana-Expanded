@@ -78,15 +78,21 @@ export const AssetVault: React.FC = () => {
           guidedSelectionTarget={guidedTarget}
           onUseForGuidedFlow={
             guidedTarget
-              ? (item) =>
+              ? (item) => {
+                  const imageLabel = item.asset_name?.trim() || item.name?.trim() || undefined;
+                  const displayName = imageLabel || selected.collectionName;
                   selectGuidedReference({
                     type: guidedTarget.type,
                     name: guidedTarget.name,
                     referenceId: item.id,
                     imageUrl: item.image_url,
                     sourceType: 'asset',
-                    sourceLabel: item.asset_name || item.name || selected.collectionName,
-                  })
+                    sourceLabel: displayName,
+                    displayName,
+                    collectionName: selected.collectionName,
+                    imageLabel,
+                  });
+                }
               : undefined
           }
         />

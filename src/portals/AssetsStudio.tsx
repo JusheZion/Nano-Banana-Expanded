@@ -974,20 +974,20 @@ export const AssetsStudio: React.FC = () => {
                         <span className="text-sm uppercase tracking-wider text-white/60 block mb-1">Recent (saved)</span>
                         <div className="flex flex-wrap gap-2">
                           {recentAssets.map((item) => (
-                            <Tooltip variant="asset" key={item.id} content={item.displayName ?? item.collectionName ?? 'Asset'}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  store.setCurrentLiveImageUrl(item.imageUrl);
-                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                                }}
-                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                  store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
-                                }`}
-                              >
-                                <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
-                              </button>
-                            </Tooltip>
+                            <button
+                              key={item.id}
+                              type="button"
+                              title={item.displayName ?? item.collectionName ?? 'Asset'}
+                              onClick={() => {
+                                store.setCurrentLiveImageUrl(item.imageUrl);
+                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                              }}
+                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
+                              }`}
+                            >
+                              <ArcsStorageImg src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -997,29 +997,24 @@ export const AssetsStudio: React.FC = () => {
                         <span className="text-sm uppercase tracking-wider text-white/60 block mb-1">This session</span>
                         <div className="flex flex-wrap gap-2">
                           {getCachedGenerations('asset').map((item) => (
-                            <Tooltip
-                              variant="asset"
+                            <button
                               key={item.id}
-                              content={
+                              type="button"
+                              title={
                                 item.seed != null
                                   ? `Load this session generation (seed ${item.seed}).`
                                   : 'Load this generation from the current session.'
                               }
-                              side="top"
+                              onClick={() => {
+                                store.setCurrentLiveImageUrl(item.url);
+                                if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
+                              }}
+                              className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
+                                store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
+                              }`}
                             >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  store.setCurrentLiveImageUrl(item.url);
-                                  if (item.seed != null) store.setCurrentGenerationSeed(item.seed);
-                                }}
-                                className={`rounded border border-amber-500/30 overflow-hidden hover:border-amber-500/60 transition-transform hover:scale-105 ${
-                                  store.galleryDensity === 'compact' ? 'w-11 h-11' : 'w-14 h-14'
-                                }`}
-                              >
-                                <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
-                              </button>
-                            </Tooltip>
+                              <ArcsStorageImg src={item.url} alt="" className="w-full h-full object-cover" />
+                            </button>
                           ))}
                         </div>
                       </div>

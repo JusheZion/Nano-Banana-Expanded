@@ -17,7 +17,7 @@ describe('useGuidedComicLayoutBridge', () => {
         'page-2-panel-1': {
           panelId: 'page-2-panel-1',
           imageUrl: 'https://example.com/panel-1.png',
-          source: 'imageshop',
+          source: 'vault',
         },
       },
       panelBeats: [

@@ -32,7 +32,13 @@ export const ReferenceAlbum: React.FC = () => {
 
     useEffect(() => {
         if (!pendingGuidedTarget) return;
-        setTab(pendingGuidedTarget.type === 'character' ? 'character' : 'asset');
+        setTab(
+            pendingGuidedTarget.type === 'character'
+                ? 'character'
+                : pendingGuidedTarget.type === 'npc'
+                  ? 'supporting'
+                  : 'asset',
+        );
     }, [pendingGuidedTarget]);
 
     const tabItems = [
@@ -103,7 +109,13 @@ export const ReferenceAlbum: React.FC = () => {
                                 </span>
                             </p>
                             <p className="mt-0.5 text-xs leading-relaxed text-amber-100/65">
-                                Open a {pendingGuidedTarget.type === 'character' ? 'character profile' : 'asset collection'}, then use the highlighted button in the card details panel.
+                                {`Open a ${
+                                    pendingGuidedTarget.type === 'character'
+                                        ? 'character profile'
+                                        : pendingGuidedTarget.type === 'npc'
+                                          ? 'NPC Vault image'
+                                          : 'character profile or asset collection'
+                                }, then use the highlighted button in the card details panel.`}
                             </p>
                         </div>
                         <button

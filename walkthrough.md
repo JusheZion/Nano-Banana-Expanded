@@ -1,5 +1,494 @@
 # ARCS: Walkthrough & Roadmap
 
+## Guided Comic Flow - page navigation and intent-aware layout previews - 2026-05-05
+
+### What changed
+- Added a sticky page navigator for the **Pages** and **Layout** steps.
+- The navigator can be hidden or shown and jumps directly to the selected page card/layout preview.
+- Pages now render only the panel beat editors that exist according to the page `panelCount`.
+- Layout previews now render only existing panels instead of fixed template slot counts.
+- Panel beat editors were expanded from single-line inputs to resizeable textareas.
+- Layout previews now use an intent-aware planning helper so beats such as establishing shots, wide action, tall motion, or reveal moments can occupy larger preview space.
+- Advanced Studio page handoff now uses the same existing-panel plan as the Layout preview.
+
+### Files touched
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLayoutPlan.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- New helper module `guidedComicLayoutPlan.ts` centralizes:
+  - active panel count parsing and clamping,
+  - existing panel beat slicing/filling,
+  - layout panel planning,
+  - layout grid style selection,
+  - simple beat-intent inference for `feature`, `wide`, `tall`, and `normal` panels.
+- `getGuidedComicExistingPanelBeats(page)` returns exactly the panel slots implied by `page.panelCount`, filling missing text with blank strings without rendering old extra beats.
+- `getGuidedComicLayoutPanels(page, templateId)` is now used by:
+  - Layout preview rendering,
+  - Layout -> Advanced Studio handoff,
+  - panel art queue generation,
+  - local page/art summaries.
+- Existing manual template choices still exist, but previews are less uniformly forced because individual panels can span rows/columns based on beat wording.
+- Page navigator state is local UI state only and is not persisted into the guided draft.
+- No routing, ComicEditor, AI-generation, Supabase schema, or portal architecture changes were made.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for:
+  - hiding/showing the navigator,
+  - jumping between pages in Pages and Layout,
+  - changing panel count down/up and confirming old extra beats do not render,
+  - confirming Layout preview sizes feel appropriate for representative beat wording.
+
+### Risks or caveats
+- Beat-intent sizing is heuristic and local; wording like “wide”, “establishing”, “reveal”, “vertical”, or “fall” affects preview span, but it is not a full layout engine.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+### Operator follow-up
+- Browser-test the Pages and Layout steps on a draft with several pages and mixed panel counts.
+
+### Next steps
+- Consider exposing manual per-panel size controls if the heuristic layout preview is helpful but needs operator override.
+
+## Guided Comic Flow - complete reference handoff with NPC support - 2026-05-04
+
+### What changed
+- Completed the Guided Comic Flow reference handoff path for character, location/asset, and NPC references.
+- Visual Prep now supports adding NPC references from NPC Vault with a user-entered NPC label.
+- NPC reference rows render the same ordered thumbnail strip and per-reference remove action as character/location rows.
+- Guided Comic Flow now persists `npcReferences` alongside existing `characterReferences` and `locationReferences`.
+- Guided Comic Flow Imageshop handoffs now include all selected character, location/asset, and NPC references.
+- Imageshop now consumes guided handoffs through a shared preload helper that preserves the full reference list while loading the first 14 image URLs into the existing Imageshop reference slots.
+- Guided reference labels now prefer cast name / image label as the primary label, with profile/collection name as the secondary group label when available.
+
+### Files touched
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/components/ui/NpcVault.tsx`
+- `src/portals/ReferenceAlbum.tsx`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `src/stores/__tests__/guidedComicVaultBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Reference state now has three ordered maps:
+  - `characterReferences: Record<string, ReferenceImage[]>`
+  - `locationReferences: Record<string, ReferenceImage[]>`
+  - `npcReferences: Record<string, ReferenceImage[]>`
+- `ReferenceImage` remains the shared local shape for guided references:
+  - `referenceId`
+  - `imageUrl`
+  - `displayName`
+  - `profileName`
+  - `collectionName`
+  - `sourceLabel`
+  - `imageLabel`
+  - `castName`
+- The guided vault bridge now supports target/source type `npc`.
+- `NpcVault` can return a selected local NPC Vault image to Guided Comic Flow when the pending guided target is `npc`.
+- `ReferenceAlbum` opens the NPC Vault tab automatically for NPC guided picks.
+- `GuidedImageWorkshopHandoff` now includes `npcs: GuidedImageWorkshopReference[]` in addition to `characters` and `locations`.
+- `getGuidedImageWorkshopPreload` returns:
+  - `allReferences`: every reference in the handoff,
+  - `slotUrls`: the first 14 reference image URLs for the existing Imageshop slots,
+  - `context`: `character` when character refs exist, otherwise `asset`.
+- Art-step handoffs now use the full guided reference maps, not only the currently selected panel terms.
+- No routing, ComicEditor, AI-generation, or Supabase schema changes were made.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for:
+  - adding an NPC reference from Visual Prep,
+  - returning from NPC Vault to Guided Comic Flow,
+  - opening Imageshop from Visual Prep and Art,
+  - confirming the first 14 refs preload into Imageshop slots when more than 14 refs exist.
+
+### Risks or caveats
+- Imageshop still has 14 visible reference slots. Handoffs carry all references, but only the first 14 image URLs are preloaded into the current slot UI.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+### Operator follow-up
+- Browser-test the NPC reference pick and Imageshop preload flow with a draft that has multiple character, location/asset, and NPC references.
+
+### Next steps
+- Consider a future Imageshop UI affordance for viewing overflow guided references beyond the first 14 slots.
+
+## Imageshop - session-safe generated results and Save / Export panel - 2026-05-04
+
+### What changed
+- Generated Image Lab results are now stored in an Imageshop session cache.
+- Returning to Imageshop restores the active session result automatically when no local preview is loaded.
+- The generated result preview now includes a compact **Session results** strip for recovering recent generated images from the current browser session.
+- The generated-result save UI is now labeled **Save / Export** and includes:
+  - Save to NPC Vault
+  - Save to Character Vault
+  - Save to Asset Vault
+  - Download
+- Imported/processed images no longer require Process again before saving when a processed image already exists.
+
+### Files touched
+- `src/stores/imageshopSessionStore.ts`
+- `src/stores/__tests__/imageshopSessionStore.test.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- `useImageshopSessionStore` persists up to eight generated Image Lab results in `sessionStorage` under `arcs-imageshop-session-v1`.
+- Each session result stores:
+  - `imageUrl`
+  - `seed`
+  - `prompt`
+  - `aspectRatio`
+  - `context`
+  - `modelId`
+  - `generatedAt`
+  - optional `sourceLabel`
+- New generations are added to the session cache and made active immediately.
+- Selecting a session thumbnail restores the preview, seed, prompt, context, and aspect ratio.
+- Removing the active session thumbnail clears the current preview and allows the next cached result to restore.
+- Generated Character/Asset saves continue to reuse the existing vault persistence helpers, and NPC saves continue to use the local supporting-reference archive.
+- Import saves keep using the frozen processing snapshot metadata from the generated preview; changing options only means Process again is needed to update pixels, not to save the existing image.
+- No routing, ComicEditor, AI auto-generation, or Supabase schema changes were made.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/imageshopSessionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is recommended for generating two results, navigating away, returning to Imageshop, selecting a session thumbnail, saving to each vault target, and downloading.
+
+### Risks or caveats
+- Session cache uses browser `sessionStorage`; very large generated data URLs can still hit browser quota, but failures are isolated to recovery cache persistence and do not block the live generated preview.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+## Guided Comic Flow - prevent duplicate vault reference append - 2026-05-04
+
+### What changed
+- Fixed a Visual Prep issue where one vault image pick could append twice to a character/location reference strip.
+
+### Files touched
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/stores/__tests__/guidedComicVaultBridge.test.ts`
+
+### Implementation notes
+- Root cause: `consumeSelection` cleared the guided vault bridge selection on a queued microtask.
+- In React dev rendering, the consuming effect can run again before that microtask clears the selection.
+- Multi-reference append made this visible as duplicate thumbnails.
+- `consumeSelection` now clears `selection` synchronously before returning the consumed value.
+- Added a regression test that consumes the same selection twice and verifies the second consume returns `null`.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Existing duplicate thumbnails in the local guided draft may need manual removal once; new picks should append only once.
+
+### Risks or caveats
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+## Guided Comic Flow - Layout preview resolves vault image URLs - 2026-05-04
+
+### What changed
+- Fixed Layout step panel previews that showed panels as **Ready** while the image itself failed to display.
+- Layout panel art now uses the same vault-aware image rendering path as the vault and Visual Prep thumbnails.
+
+### Files touched
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+
+### Implementation notes
+- Root cause: Layout preview used a raw `<img src={panelImage.imageUrl}>`.
+- Vault images can be stored as ARCS/Supabase generation URLs that need display-time resolution before an `<img>` can load them.
+- Replaced the raw image with `VaultImageWithFallback`, which resolves private `arcs-generations` URLs and shows a clear unavailable state if loading fails.
+- No routing, ComicEditor, AI, or Supabase schema changes were made.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is recommended on the current draft: revisit Layout and confirm Ready panels now show the same images that appear in the vault.
+
+### Risks or caveats
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+## Guided Comic Flow - multiple vault references per character/location - 2026-05-03
+
+### What changed
+- Guided Comic Flow Visual Prep now supports multiple selected vault references per character or location row.
+- Each new vault pick appends to the row instead of replacing the previous image.
+- Selected references render as a compact horizontal thumbnail strip with tight spacing.
+- Each thumbnail includes:
+  - image preview
+  - truncated display label
+  - optional profile/collection group label
+  - per-reference remove action
+- Visual Prep and Art Imageshop handoffs now pass all selected references in their saved order.
+
+### Files touched
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- `characterReferences` and `locationReferences` now use ordered arrays:
+  - `Record<string, ReferenceImage[]>`
+- `ReferenceImage` includes:
+  - `referenceId`
+  - `imageUrl`
+  - `displayName`
+  - `profileName`
+  - `collectionName`
+  - `sourceLabel`
+  - `imageLabel`
+  - `castName`
+- Older local guided drafts with a single reference object are normalized into one-item arrays on read.
+- Removing a thumbnail removes only that array item; no reordering UI was added.
+- No AI call, routing change, ComicEditor change, or Supabase schema change was added.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for adding/removing multiple references from Character Vault and Asset Vault rows, then opening Imageshop to confirm every image loads.
+
+### Risks or caveats
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+## Guided Comic Flow - clearer vault reference labels - 2026-05-03
+
+### What changed
+- Guided Comic Flow vault selection now keeps the vault grouping name separate from the selectable image label.
+- In guided-pick mode, Character Vault modal cards show:
+  - primary: cast name, then image name fallback
+  - secondary: profile name
+- In guided-pick mode, Asset Vault modal cards show:
+  - primary: asset/image label
+  - secondary: collection name
+- Visual Prep selected references now prefer the selected image display name/cast name instead of only the page-card character or location term.
+
+### Files touched
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/stores/__tests__/guidedComicVaultBridge.test.ts`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+
+### Implementation notes
+- Guided vault selections now carry:
+  - `displayName`
+  - `profileName`
+  - `collectionName`
+  - `imageLabel`
+  - `castName`
+  - existing `imageUrl`, `referenceId`, `sourceType`, and `sourceLabel`
+- `profileName` / `collectionName` remain the grouping source.
+- `displayName` is the primary user-facing selected-reference label.
+- Existing storage/routing/database schemas were not changed.
+- Multi-reference support was not added.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for picking one Character Vault image and one Asset Vault image from Guided Comic Flow Visual Prep.
+
+### Risks or caveats
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+## Illustrator's Imageshop - save generated Image Lab results to vault - 2026-05-03
+
+### What changed
+- Generated Image Lab results now show a **Save generated image to vault** panel directly below the generated preview actions.
+- Users can save the current generated result to:
+  - **NPC Vault**
+  - **Character Vault**
+  - **Asset Vault**
+- The save panel stays inside Imageshop; it does not navigate to Character Studio, Asset Studio, or another portal.
+- When a generated result came from Guided Comic Flow, **Send back to Guided Comic Flow** remains available next to the existing beat actions.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+
+### Implementation notes
+- Character saves reuse `saveImportedImageToCharacterVault`.
+- Asset saves reuse `saveImportedImageToAssetVault`.
+- NPC saves reuse the existing local `saveGeneration('supporting_reference', ...)` path.
+- Character and Asset targets reuse `SearchableVaultSelect` so users can type a new profile/collection or choose an existing one.
+- Successful Character/Asset saves update the local recent-generation archive through `saveGeneration` plus `addRecentFromCharacter` / `addRecentFromAsset`.
+- The vault persistence metadata includes:
+  - `source: "imageshop_generated"`
+  - generation prompt
+  - aspect ratio
+  - Imageshop context
+  - model id
+  - Guided Comic panel identifiers when the result came from the Guided Comic Flow Art step
+- No automatic generation, routing change, or ComicEditor behavior change was added.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/shared/api/__tests__/arcsPersistence.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for saving one generated result into each vault target.
+
+### Risks or caveats
+- Character and Asset remote saves still depend on the existing Supabase authentication and storage paths used by imported Imageshop results.
+- If Supabase is unavailable, Character and Asset generated-result saves fall back to the existing local recent-generation archive.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+### Next steps
+- Browser QA the Save generated image panel with a freshly generated result.
+- Confirm Guided Comic Flow handoff users can both save to vault and send the same result back to the selected panel.
+
+## Guided Comic Flow - panel art assignment without Imageshop requirement - 2026-05-03
+
+### What changed
+- The Guided Comic Flow **Art** step now lets users assign finished art directly to a selected panel without requiring a new Imageshop generation.
+- Added four panel image source actions in the selected-panel area:
+  - **Generate in Imageshop**
+  - **Use from Image Vault**
+  - **Upload image**
+  - **Paste image**
+- Existing Imageshop handoff and return behavior remains intact. Imageshop is now one source option rather than the only path.
+- Assigned panel art is shown immediately in the Art step and continues to drive the Layout step previews and Advanced Studio page handoff.
+
+### Files touched
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/components/ui/CharacterVault.tsx`
+- `src/portals/ReferenceAlbum.tsx`
+- `src/stores/__tests__/guidedComicVaultBridge.test.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+
+### Implementation notes
+- `PanelArtImageState.source` now supports:
+  - `imageshop`
+  - `vault`
+  - `upload`
+  - `paste`
+- A shared `assignPanelArtImage` helper attaches the image to `panelArtImages[panelId]`, sets `returnedAt`, selects the panel, and marks `panelArtStatuses[panelId] = 'ready'`.
+- The existing guided draft persistence stores these assigned images through the current `panelArtImages` draft field.
+- The guided vault bridge now supports a `panel-art` target type so Image Vault can return an image directly into a panel slot.
+- `ReferenceAlbum` routes `panel-art` picks to the asset side by default, while Character Vault and Asset Vault can both provide images for the panel-art target.
+- Upload and paste use local data URLs in the guided draft. No Supabase write was added.
+- Paste is user initiated through a focused paste target and `onPaste`; the app does not programmatically read clipboard contents.
+- `GuidedComicLayoutPanelImage.source` now accepts non-Imageshop sources so page handoff to Advanced Studio can carry uploaded, pasted, or vault-selected panel images.
+- ComicEditor behavior and routing architecture were not changed.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vitest/vitest.mjs run src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual browser QA is still recommended for:
+  - assigning from Image Vault into a panel,
+  - uploading a local image,
+  - pasting an image,
+  - confirming Layout step previews update from each source.
+
+### Risks or caveats
+- Uploaded and pasted images are persisted as data URLs in the existing guided draft; very large files could increase localStorage pressure.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains, especially around the Comic portal bundle.
+
+### Operator follow-up
+- None required for Supabase or routing.
+
+### Next steps
+- Browser QA the new panel image source actions end to end.
+- Consider adding size guidance or compression for uploaded/pasted panel images if localStorage pressure becomes visible.
+
+## Character and Asset Studio - recent thumbnail tooltip crash fix - 2026-05-03
+
+### What changed
+- Investigated a blank-screen crash after saving from Character Reference Studio to Character Vault.
+- User-provided console showed React minified error `#185`, with the stack pointing into the shared `Tooltip` bundle.
+- The post-save path creates a new **Recent (saved)** thumbnail. Those thumbnails were wrapped in Radix-backed `Tooltip` components.
+- Replaced Radix `Tooltip` wrappers around recent saved/session thumbnails with native `title` attributes in Character Studio and Assets Studio.
+
+### Files touched
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/AssetsStudio.tsx`
+
+### Implementation notes
+- The UI still exposes hover labels through native browser tooltips.
+- This keeps the recent thumbnail affordance while removing the Radix tooltip state machine from the post-save render path.
+- The same pattern was applied in Assets Studio proactively because it had the same recent-thumbnail-with-tooltip structure.
+
+### Verification
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc -b`
+- Focused tests for related bridge/persistence paths passed before the follow-up patch.
+- `git diff --check`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/eslint/bin/eslint.js .`
+- `/Users/apoaaron/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/vite/bin/vite.js build`
+
+### Outstanding issues
+- Manual retry of Character Vault save in the browser is still the best confirmation that the blank-screen crash is gone.
+
+### Risks or caveats
+- The exact minified stack could not be source-mapped inside this session, but the stack pointed to the Tooltip chunk and the affected UI path was removed.
+- Existing ESLint baseline remains at 67 warnings, 0 errors.
+- Existing Vite large chunk warning remains.
+
+### Operator follow-up
+- Reproduce the original Character Vault save flow once after reload. The image should save and the app should remain on the studio UI instead of clearing to the landing background.
+
+### Next steps
+- If a React `#185` console error still appears, capture the updated stack after this tooltip removal.
+
 **Illustrator’s Imageshop — import, process, save to vault (2026-04-21):** Added **Import external image** block in [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx) via [`ImageshopImportPanel.tsx`](src/portals/storyline/ImageshopImportPanel.tsx). Users pick a file (max 20 MB), set optional retouch, art style (from [`ART_STYLE_LIBRARY`](src/data/character_studio_spec.ts) or none), extra style notes, author notes, and aspect ratio (`9:16` / `1:1` / `21:9`). **Process** calls [`generateImage`](src/shared/api/geminiImageApi.ts) with the file as the first reference image and prompt from [`buildImageshopImportPrompt`](src/portals/storyline/imageshopImportPrompt.ts). **Save to vault** targets **NPC Vault** (local [`saveGeneration`](src/shared/utils/generationOutputRouter.ts) `supporting_reference`), **Character Vault**, or **Asset Vault** — Character/Asset use [`saveImportedImageToCharacterVault`](src/shared/api/arcsPersistence.ts) / [`saveImportedImageToAssetVault`](src/shared/api/arcsPersistence.ts) when Supabase is configured (with [`SearchableVaultSelect`](src/shared/components/SearchableVaultSelect.tsx) for profile/collection), plus local archive + [`addRecentFromCharacter`](src/shared/utils/recentGenerations.ts) / [`addRecentFromAsset`](src/shared/utils/recentGenerations.ts) on success; otherwise local-only `saveGeneration`. Copy explains generative retouch is not dedicated upscaling. **Verify:** `npm run test -- --run`, `npm run build` (**102** tests).
 
 **Writers’ Workshop — Cockpit tab + Idea assist (2026-04-21):** Added **`cockpit`** workspace surface in [`WriterPortal.tsx`](src/portals/writer/WriterPortal.tsx) — 3 read-only columns with per-column view selectors (outline/beats/dialogue/arc/lore/video/scripts-style synopsis helper), **hideable Idea assist** strip (include left/middle/right digests + focus control for optional `page_id`), Find integration via `cockpitFindText` in [`writerSearch.ts`](src/portals/writer/writerSearch.ts), and **non-destructive output actions** (copy / append to outline supplement draft + beats/dialogue drafts). Client invokes `writer-tools` **`idea_assist`** via [`invokeWriterTools`](src/shared/api/writerTools.ts) with capped digests; response JSON is validated with [`ideaAssistResultSchema`](src/shared/writer/schemas.ts). Pipeline strip now marks **Cockpit** “done” only when the full pipeline artifacts exist (outline + beats coverage + dialogue coverage + lore + shot plan + pacing/canon cache). **Operator:** if deploying Edge changes, run **`supabase functions deploy writer-tools`**. **Verify:** `npm run test -- --run`, `npm run build` (2026-04-21 — **98** tests passed); optional manual browser smoke Cockpit + Idea assist + Find + append/copy.

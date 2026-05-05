@@ -60,6 +60,7 @@ export function ImageshopImportPanel() {
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSaveError, setImportSaveError] = useState<string | null>(null);
+  const [importSaveNotice, setImportSaveNotice] = useState<string | null>(null);
   const [importSavePending, setImportSavePending] = useState(false);
 
   const [profileName, setProfileName] = useState('');
@@ -108,26 +109,6 @@ export function ImageshopImportPanel() {
     };
   }, [importProcessingSnapshot, processingMeta]);
 
-  /** True when current options match the last successful Process (pixels + prompt). Vault target can differ without reprocessing. */
-  const processOptionsMatchSnapshot = useMemo(() => {
-    if (!importProcessingSnapshot) return true;
-    const s = importProcessingSnapshot;
-    return (
-      importRetouch === s.retouch &&
-      (importStylePreset.trim() || undefined) === s.stylePreset &&
-      (importStyleExtra.trim() || undefined) === s.styleExtra &&
-      importAspect === s.aspectRatio &&
-      (importUserNote.trim() || undefined) === s.userNote
-    );
-  }, [
-    importAspect,
-    importProcessingSnapshot,
-    importRetouch,
-    importStyleExtra,
-    importStylePreset,
-    importUserNote,
-  ]);
-
   useEffect(() => {
     return () => {
       if (importObjectUrl?.startsWith('blob:')) {
@@ -170,6 +151,7 @@ export function ImageshopImportPanel() {
     (files: FileList | null) => {
       setImportError(null);
       setImportSaveError(null);
+      setImportSaveNotice(null);
       setImportProcessedUrl(null);
       setImportProcessingSnapshot(null);
       setImportSeed(null);
@@ -230,6 +212,7 @@ export function ImageshopImportPanel() {
         return;
       }
       setImportProcessedUrl(res.imageDataUrl);
+      setImportSaveNotice(null);
       setImportSeed(seed);
       setImportProcessingSnapshot({
         retouch: importRetouch,
@@ -279,11 +262,8 @@ export function ImageshopImportPanel() {
       setImportSaveError('Process an image before saving.');
       return;
     }
-    if (!processOptionsMatchSnapshot) {
-      setImportSaveError('Options changed since the last Process — run Process again before saving.');
-      return;
-    }
     setImportSaveError(null);
+    setImportSaveNotice(null);
     setImportSavePending(true);
     try {
       if (importVaultTarget === 'npc') {
@@ -291,6 +271,7 @@ export function ImageshopImportPanel() {
         saveGeneration('supporting_reference', importProcessedUrl, importSeed ?? undefined, {
           supportingLabel: label,
         });
+        setImportSaveNotice(`Saved to NPC Vault as "${label}".`);
         return;
       }
 
@@ -339,6 +320,7 @@ export function ImageshopImportPanel() {
             castName: cast,
           });
         }
+        setImportSaveNotice(`Saved to Character Vault as "${profileNameForDb}".`);
         return;
       }
 
@@ -387,6 +369,7 @@ export function ImageshopImportPanel() {
             assetName: asset,
           });
         }
+        setImportSaveNotice(`Saved to Asset Vault collection "${collectionForDb}".`);
       }
     } finally {
       setImportSavePending(false);
@@ -401,7 +384,6 @@ export function ImageshopImportPanel() {
     importSeed,
     importVaultTarget,
     npcLabel,
-    processOptionsMatchSnapshot,
     processingForPersist,
     profileName,
     supabaseReady,
@@ -640,6 +622,7 @@ export function ImageshopImportPanel() {
 
       {importError ? <p className="mt-2 text-xs text-red-200/90">{importError}</p> : null}
       {importSaveError ? <p className="mt-2 text-xs text-red-200/90">{importSaveError}</p> : null}
+      {importSaveNotice ? <p className="mt-2 text-xs text-emerald-200/90">{importSaveNotice}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Tooltip content="Send source image to the model with your options" side="top">
@@ -654,16 +637,12 @@ export function ImageshopImportPanel() {
           </button>
         </Tooltip>
         <Tooltip
-          content={
-            importProcessedUrl && !processOptionsMatchSnapshot
-              ? 'Processing options changed — run Process again to update the preview, then save.'
-              : 'Save the current processed image to the selected vault'
-          }
+          content="Save the current processed image to the selected vault"
           side="top"
         >
           <button
             type="button"
-            disabled={importSavePending || !importProcessedUrl || !processOptionsMatchSnapshot}
+            disabled={importSavePending || !importProcessedUrl}
             onClick={() => void handleSave()}
             className="px-3 py-2 rounded-full text-xs border border-amber-400/40 text-amber-100 hover:bg-amber-500/15 disabled:opacity-50"
           >
@@ -673,21 +652,9 @@ export function ImageshopImportPanel() {
       </div>
 
       {importProcessedUrl ? (
-        <p
-          className={
-            processOptionsMatchSnapshot
-              ? 'mt-2 text-[10px] text-emerald-200/80'
-              : 'mt-2 text-[10px] text-amber-200/75'
-          }
-        >
-          {processOptionsMatchSnapshot ? (
-            <>
-              Ready to save. NPC Vault stores locally; Character/Asset use Supabase when configured and
-              signed in.
-            </>
-          ) : (
-            <>Options no longer match this preview — run Process again before saving.</>
-          )}
+        <p className="mt-2 text-[10px] text-emerald-200/80">
+          Ready to save. NPC Vault stores locally; Character/Asset use Supabase when configured and
+          signed in. If options change, Process again only when you want to update the preview.
         </p>
       ) : null}
     </div>
