@@ -14,6 +14,16 @@ export type GuidedImageWorkshopReference = {
   castName?: string;
 };
 
+export type GuidedImageWorkshopAspectRatio = '9:16' | '1:1' | '21:9';
+export type GuidedImageWorkshopLayoutIntent = 'feature' | 'wide' | 'tall' | 'normal';
+export type GuidedImageWorkshopPanelLayout = {
+  templateId?: 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+  intent?: GuidedImageWorkshopLayoutIntent;
+  columnSpan?: number;
+  rowSpan?: number;
+  aspectRatioHint?: GuidedImageWorkshopAspectRatio;
+};
+
 export type GuidedImageWorkshopHandoff = {
   source: 'guided-comic';
   currentStep: 'visual-prep' | 'art';
@@ -27,6 +37,7 @@ export type GuidedImageWorkshopHandoff = {
   pageNumber?: number;
   panelNumber?: number;
   panelBeat?: string;
+  panelLayout?: GuidedImageWorkshopPanelLayout;
   pageKeyCharacters?: string[];
   pageKeyLocation?: string;
   artDirection?: {
@@ -45,18 +56,91 @@ const IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT = 14;
 export function getGuidedImageWorkshopPreload(handoff: GuidedImageWorkshopHandoff): {
   allReferences: GuidedImageWorkshopReference[];
   slotUrls: string[];
+  overflowReferences: GuidedImageWorkshopReference[];
   context: 'character' | 'asset';
 } {
   const allReferences = [...handoff.characters, ...handoff.locations, ...handoff.npcs].filter((reference) =>
     reference.imageUrl.trim(),
   );
+  const preloadedReferences = allReferences.slice(0, IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT);
   return {
     allReferences,
-    slotUrls: allReferences
-      .slice(0, IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT)
-      .map((reference) => reference.imageUrl),
+    slotUrls: preloadedReferences.map((reference) => reference.imageUrl),
+    overflowReferences: allReferences.slice(IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT),
     context: handoff.characters.length > 0 ? 'character' : 'asset',
   };
+}
+
+function joinDisplayNames(references: GuidedImageWorkshopReference[]): string {
+  const labels = references.map((reference) => reference.displayName.trim()).filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : 'None selected';
+}
+
+function joinOptionalList(values: string[] | undefined): string {
+  const labels = (values ?? []).map((value) => value.trim()).filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : 'None specified';
+}
+
+export function buildGuidedImageWorkshopPrompt(handoff: GuidedImageWorkshopHandoff): string {
+  const panelBeat = handoff.panelBeat?.trim() || 'Create finished comic panel art for the selected panel.';
+  const pageSummary = handoff.pageSummary?.trim() || 'No page summary provided.';
+  const pageKeyLocation = handoff.pageKeyLocation?.trim() || 'None specified';
+  const artDirection = handoff.artDirection;
+  const panelLayout = handoff.panelLayout;
+  const panelLabel =
+    handoff.pageNumber != null && handoff.panelNumber != null
+      ? `Page ${handoff.pageNumber}, Panel ${handoff.panelNumber}`
+      : null;
+
+  return [
+    panelLabel ? `Panel: ${panelLabel}` : '',
+    `Image objective: ${panelBeat}`,
+    `Page context: ${pageSummary}`,
+    `Page key characters: ${joinOptionalList(handoff.pageKeyCharacters)}`,
+    `Page key location: ${pageKeyLocation}`,
+    `Character references: ${joinDisplayNames(handoff.characters)}`,
+    `Location / asset references: ${joinDisplayNames(handoff.locations)}`,
+    `NPC references: ${joinDisplayNames(handoff.npcs)}`,
+    panelLayout?.intent ? `Panel layout intent: ${panelLayout.intent}` : '',
+    panelLayout?.columnSpan || panelLayout?.rowSpan
+      ? `Panel layout span: ${panelLayout.columnSpan ?? 1} columns x ${panelLayout.rowSpan ?? 1} rows`
+      : '',
+    artDirection?.artStyle.trim() ? `Art style: ${artDirection.artStyle.trim()}` : '',
+    artDirection?.defaultAspectRatio.trim() ? `Preferred aspect: ${artDirection.defaultAspectRatio.trim()}` : '',
+    artDirection?.renderingStyle.trim() ? `Rendering style: ${artDirection.renderingStyle.trim()}` : '',
+    artDirection?.colorMood.trim() ? `Color mood: ${artDirection.colorMood.trim()}` : '',
+    artDirection?.lighting.trim() ? `Lighting: ${artDirection.lighting.trim()}` : '',
+    artDirection?.continuityNotes.trim() ? `Continuity notes: ${artDirection.continuityNotes.trim()}` : '',
+    'Do not include speech bubbles, captions, narration boxes, lettering, watermarks, or embedded text unless the user manually adds text to this prompt.',
+    'Compose this as a polished comic-book panel with clear storytelling, consistent character design, readable action, and finished lighting.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function aspectRatioFromArtDirection(value: string | undefined): GuidedImageWorkshopAspectRatio | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes('21:9') || normalized.includes('wide') || normalized.includes('cinematic')) return '21:9';
+  if (normalized.includes('1:1') || normalized.includes('square')) return '1:1';
+  if (normalized.includes('9:16') || normalized.includes('portrait') || normalized.includes('tall')) return '9:16';
+  return null;
+}
+
+export function getGuidedImageWorkshopAspectRatio(
+  handoff: GuidedImageWorkshopHandoff,
+): GuidedImageWorkshopAspectRatio {
+  const layout = handoff.panelLayout;
+  if (layout?.aspectRatioHint) return layout.aspectRatioHint;
+  if (layout?.intent === 'wide') return '21:9';
+  if (layout?.intent === 'tall' || layout?.intent === 'feature') return '9:16';
+  if (layout?.intent === 'normal') return '1:1';
+  if (layout?.columnSpan && layout?.rowSpan) {
+    if (layout.columnSpan > layout.rowSpan) return '21:9';
+    if (layout.rowSpan > layout.columnSpan) return '9:16';
+    return '1:1';
+  }
+  return aspectRatioFromArtDirection(handoff.artDirection?.defaultAspectRatio) ?? '9:16';
 }
 
 export type GuidedComicPanelImageReturn = {

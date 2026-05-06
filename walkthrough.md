@@ -1410,6 +1410,472 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - None.
 
+---
+
+## Guided Comic review comments: compact navigator and resolved art images - 2026-05-05
+
+### What changed
+
+- Changed the right-rail page navigator buttons from `Page 1`, `Page 2`, etc. to compact numeric buttons while preserving accessible `aria-label` text like `Page 1`.
+- Increased the Guided Comic Flow right rail height by moving it from `top-24` to `top-6`, making the rail use more of the available viewport height.
+- Updated the selected Art step assigned-image preview to use `VaultImageWithFallback`, matching the storage URL resolver used elsewhere in the app.
+- Updated Advanced Comics Studio comic panels to resolve ARCS storage URLs before passing them to `useImage`, so guided page handoff images can load in Konva panels.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts`
+- `src/modes/comic/components/ComicPanel.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `getGuidedPageNavigatorButtonLabel()` now returns only the page number for the visible button label.
+- The page navigator remains in the right rail only and still conditionally renders only for Pages/Layout.
+- The Art step image issue came from a raw `<img>` path that bypassed the existing private `arcs-generations` signed URL resolver.
+- The Advanced Studio image issue came from `ComicPanel` passing the stored raw URL directly to `useImage`; it now uses `useArcsResolvedSrc()` first.
+
+### Verification
+
+- `npm test -- guidedComicPageNavigator.test.ts guidedComicAdvancedStudioAccess.test.ts guidedComicLayoutBridge.test.ts` - PASS.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+- Browser DOM check on `http://localhost:5173/`: confirmed the rail page buttons render as numeric labels, the first Layout preview image resolves to a signed `arcs-generations` URL, the selected Art image resolves to a signed `arcs-generations` URL, and opening `Send this page to Advanced Studio` produced no browser console errors.
+
+### Outstanding issues
+
+- Browser screenshot capture timed out in the in-app browser tool, so this pass did not attach a fresh visual screenshot.
+
+### Risks or caveats
+
+- Advanced Studio stores the original guided image URL in panel state, then resolves it at render time. This preserves stable draft data while allowing the current render session to use a signed display URL.
+
+### Operator follow-up
+
+- In the browser, visually confirm Advanced Studio panel fills now show the guided images after `Send this page to Advanced Studio`.
+
+### Next steps
+
+- None.
+
+---
+
+## Guided Imageshop header overlap fix - 2026-05-05
+
+### What changed
+
+- Adjusted the Guided Comic Flow return header inside Illustrator's Imageshop so the left return controls, center title, and right actions use normal wrapping layout instead of an absolutely centered title.
+- Kept the compact sticky header behavior and existing guided return/send-back actions unchanged.
+
+### Files touched
+
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The previous header placed the center title with `absolute left-1/2`, which could overlap the return controls and `Save / Export` action inside narrow embedded Imageshop panels.
+- The header now uses `flex-wrap` with three flexible regions:
+  - left guided return/context controls,
+  - center Imageshop title/subtitle,
+  - right save/send-back actions.
+- Text-heavy header elements now truncate or wrap through their own layout region rather than painting over neighboring controls.
+- No routing, ComicEditor, image generation, or guided draft mutation behavior was changed.
+
+### Verification
+
+- `git diff --check` - PASS.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- Browser check attempted on `http://localhost:5173/`, but the reloaded current tab no longer had the guided Imageshop header context available to inspect visually.
+
+### Outstanding issues
+
+- A live guided Imageshop browser screenshot should still be checked once the app is back in the same guided handoff state shown in the review comment.
+
+### Risks or caveats
+
+- On very narrow panels, the header may become two compact rows instead of forcing all controls into one row. This is intentional to prevent overlap while keeping the header small.
+
+### Operator follow-up
+
+- Reopen Imageshop from Guided Comic Flow and visually confirm the sticky return header does not overlap in the embedded panel.
+
+### Next steps
+
+- None.
+
+---
+
+## Guided Art to Imageshop ready-generation bridge - 2026-05-05
+
+### What changed
+
+- Improved the Guided Comic Flow Art step handoff so `Generate in Imageshop` and `Replace in Imageshop` open Imageshop with a richer panel-generation workspace.
+- Added reusable bridge helpers for guided panel prompt construction, reference overflow tracking, and layout-intent-to-Imageshop aspect ratio selection.
+- Updated Imageshop guided handoff consumption to apply the generated prompt and mapped aspect ratio immediately, without auto-generating an image.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `GuidedImageWorkshopHandoff` now supports `panelLayout`, carrying the selected panel's layout template, inferred intent, column span, and row span from `getGuidedComicLayoutPanels()`.
+- `buildGuidedImageWorkshopPrompt()` builds an editable Imageshop prompt with page/panel label, panel beat objective, page context, page key characters/location, character/location/NPC reference labels, panel layout intent/span, art direction settings, continuity notes, and an explicit no-text instruction.
+- `getGuidedImageWorkshopAspectRatio()` maps guided layout signals to existing Imageshop ratios:
+  - `wide` or wider column span -> `21:9`
+  - `tall` or `feature` -> `9:16`
+  - `normal` or square span -> `1:1`
+  - explicit `aspectRatioHint` wins when provided
+  - otherwise falls back to recognizable art-direction aspect text, then the prior portrait default
+- `getGuidedImageWorkshopPreload()` still preserves all references while preloading only the first 14 slot URLs, and now also returns `overflowReferences` so Imageshop can tell the user when additional references remain in the handoff.
+- Imageshop now sets its initial aspect ratio from the guided handoff when loading an Art-step panel.
+- Existing return behavior, `Send back to Guided Flow`, `Save / Export`, session result recovery, upload/vault/paste assignment, routing, and ComicEditor behavior were preserved.
+
+### Verification
+
+- `npm test -- imageWorkshopBridge.test.ts` - RED first with missing helper/overflow behavior, then PASS after implementation.
+- `npm test -- imageWorkshopBridge.test.ts guidedComicLayoutPlan.test.ts` - PASS, 18 tests.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+
+- No manual browser flow was completed for this pass because the current browser tab was not already in a reproducible guided Art-to-Imageshop handoff state.
+
+### Risks or caveats
+
+- Reference preloading still honors the existing 14-slot Imageshop UI limit; additional references are preserved in the handoff and surfaced through the load notice, but they are not shown as extra slot controls.
+
+### Operator follow-up
+
+- In the browser, open a guided Art panel with a wide/tall/normal layout and confirm Imageshop starts with the expected prompt, reference slots, overflow notice when applicable, and aspect ratio selection.
+
+### Next steps
+
+- None.
+
+---
+
+## ARCS Image Vault UI/UX modernization - 2026-05-05
+
+### What changed
+
+- Restyled the Image Vault portal shell to align more closely with Guided Comic Flow's darker ARCS creative-workspace language.
+- Added shared vault UI chrome for guided-mode context, compact/large preview mode toggles, reusable image action buttons, and full-image open links.
+- Reworked character, asset, and NPC vault browsing surfaces to support compact and large preview modes.
+- Changed vault collection/profile thumbnails and modal image cards toward `object-contain` preview behavior so reference images are easier to inspect without aggressive cropping.
+- Moved per-image actions into bottom image-card overlay bars across character, asset, and NPC item cards.
+- Added Guided Comic Flow page/panel metadata to panel-art vault requests so guided vault mode can show the originating page/panel when available.
+
+### Files touched
+
+- `src/components/ui/VaultChrome.tsx`
+- `src/portals/ReferenceAlbum.tsx`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `src/components/ui/NpcVault.tsx`
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `VaultChrome.tsx` now centralizes:
+  - `GuidedVaultModePanel`
+  - `VaultViewModeToggle`
+  - `VaultActionIconButton`
+  - `VaultOpenLink`
+  - guided panel-target parsing and target-type labels
+- Guided mode now displays the requested reference type, the target name, and Page/Panel labels for panel-art requests when those values are present.
+- Character and asset album grids now use the same compact/large preview mode pattern as the item modals.
+- Profile and collection modal cards now keep actions in the image overlay:
+  - guided pick/use
+  - ZIP selection
+  - download
+  - favorite/profile cover where applicable
+  - framing
+  - metadata/name edit
+  - move
+  - copy URL
+  - open full image
+  - delete
+- NPC Vault cards now use the same bottom action-bar pattern for guided pick, copy, open, and delete, while preserving the existing full preview modal.
+- The guided vault bridge change is additive: `pageNumber` and `panelNumber` are optional and existing selections remain compatible.
+
+### Verification
+
+- `npm test -- guidedComicVaultBridge.test.ts` - PASS, 5 tests.
+- `npm run build` - PASS; Vite still reports the existing large `ComicPortal` chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+- Browser check on `http://localhost:5173/`: opened Reference Vault, confirmed `ARCS Image Vault`, `Character Vault`, `Compact`, and `Large` controls render; opened the Aries profile modal and confirmed modal action controls include `Download HQ image`, `Copy image URL`, and `Open full image`.
+
+### Outstanding issues
+
+- Browser console still contains pre-existing nested-button warnings from the Storyline timeline surface; they were not from the refactored vault surface and were not addressed in this pass.
+- I did not perform a full guided-mode browser walkthrough from Guided Comic Flow into Vault selection, only a structural DOM/load check of the Reference Vault and profile modal.
+
+### Risks or caveats
+
+- The action bars intentionally use compact icon buttons, so discoverability depends on browser titles/ARIA labels and the visual grouping. A later pass could add a small overflow menu for very narrow cards if the icon row feels dense.
+- The future history/variants/version-comparison systems are only prepared for structurally through shared chrome and action grouping; no generated-history data model or batch action backend was added.
+
+### Operator follow-up
+
+- From Guided Comic Flow, test character, location, NPC, and panel-art vault picks end-to-end to confirm the highlighted guided action bar feels obvious in each context.
+
+### Next steps
+
+- None.
+
+---
+
+## ARCS Image Vault UX stabilization cleanup - 2026-05-05
+
+### What changed
+
+- Performed a restraint-focused cleanup of the latest Image Vault UI pass after browser review showed the cards had become too overlay-heavy and visually noisy.
+- Restored image-first album cards by moving profile/collection text below or beside thumbnails instead of over the artwork.
+- Reworked compact mode into dense thumbnail rows with text beside the image, keeping thumbnails recognizable while reducing visible metadata.
+- Removed persistent image-covering action overlays from character, asset, and NPC item cards.
+- Collapsed secondary action trays to zero height and disabled pointer events until hover, focus, or selection, preventing invisible controls from occupying layout or blocking interaction.
+- Restored portal-specific color identity: Character Vault returns to a dark red/gold palette, Asset Vault returns to emerald/gold, and NPC Vault keeps a separate darker supporting-reference palette.
+- Made modal Fit/Wide behavior more distinct: Fit uses fewer/larger cards and full-image visibility, while Wide uses more cinematic landscape-oriented cards with cover-style scanning.
+
+### Files touched
+
+- `src/portals/ReferenceAlbum.tsx`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `src/components/ui/NpcVault.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Character and asset album cards now use `object-cover` in fixed image frames so covers fill the card instead of leaving large dead space.
+- Large album cards use an image block plus a separate metadata footer; compact album cards use a thumbnail-plus-details layout.
+- Profile and collection modal cards now keep only primary controls visible in the card body:
+  - guided use action when guided context exists
+  - ZIP selection
+  - cover star for Character Vault items
+- Secondary maintenance actions remain available but are progressively disclosed below the metadata body:
+  - download
+  - framing
+  - metadata edit
+  - move
+  - copy
+  - open full image
+  - delete
+- Hidden trays use `max-h-0`, `opacity-0`, and `pointer-events-none`, then expand on hover/focus/selected state.
+- Removed the inert `Click image for actions` helper copy.
+- NPC Vault now follows the same non-overlapping card pattern, while preserving its existing preview modal and guided NPC selection behavior.
+
+### Verification
+
+- `npm run build` - PASS; Vite still reports the existing large chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+- Browser check on `http://localhost:5173/`: opened Reference Vault, toggled compact mode, opened the Aries profile modal, confirmed the stale `Click image for actions` text is gone, and confirmed the modal still exposes ZIP, cover star, `Wide view`, and full-image open behavior.
+
+### Outstanding issues
+
+- The modal still has a large amount of empty space when an album contains only one image; that is calmer than the previous clutter, but a future pass could center or constrain sparse albums more elegantly.
+
+### Risks or caveats
+
+- Compact thumbnails now prioritize recognition and density with `object-cover`, so extreme portraits may crop edges in compact browsing. Fit mode remains the full-image visibility path.
+- Secondary actions are intentionally less visible until hover/focus/selection; this improves scanning but slightly reduces immediate discoverability.
+
+### Operator follow-up
+
+- Manually inspect a large multi-image album in Character and Asset Vault to confirm hover/focus action reveal feels discoverable without clutter.
+
+### Next steps
+
+- None.
+
+---
+
+## ARCS Image Vault modal view-mode follow-up - 2026-05-05
+
+### What changed
+
+- Tightened the follow-up Image Vault profile/collection modal behavior after browser comments identified subject framing and view-mode clarity issues.
+- Replaced the single Fit/Wide toggle button with a two-option segmented control so the active modal width mode is visible instead of implied by an action label.
+- Made compact modal Fit and Wide modes meaningfully different:
+  - Fit compact uses smaller thumbnail rows for denser browsing.
+  - Wide compact uses wider row cards with larger thumbnails.
+- Adjusted cover-mode image focus fallback so wide and compact crops bias upward when no custom thumbnail focus has been stored, keeping character faces/upper bodies more centered.
+- Reduced album-grid name clipping by moving compact card `Open` controls out of the title row and allowing profile/collection names to wrap instead of always truncating.
+
+### Files touched
+
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Profile and collection modals now render separate `Fit` and `Wide` buttons, each with its own selected styling.
+- Wide compact modal cards now use a larger `minmax(380px, 1fr)` grid and `150px` thumbnail column, while Fit compact remains denser with `minmax(260px, 1fr)` and `108px` thumbnails.
+- Wide/compact `object-cover` images use a `38%` vertical focus fallback when stored focus is missing or still at the old default `50%`.
+- Large Fit mode still preserves full-image visibility with `object-contain`; Large Wide mode still uses `object-cover` for frame-filling scans.
+- Character and asset album compact titles now use wrapping text and put the `Open` button below the title block, avoiding avoidable name clipping such as `Firepit Crew`.
+
+### Verification
+
+- `npm run build` - PASS; Vite still reports the existing large chunk warning.
+- `npm run lint` - PASS with 67 existing warnings in unrelated files; no lint errors.
+- `git diff --check` - PASS.
+- Browser check on `http://localhost:5173/`: opened Reference Vault, confirmed `Firepit Crew` appears as full text in the compact album card DOM, opened the Flux profile modal, confirmed separate `Fit` and active `Wide` controls render, and confirmed the old `Wide view`/`Fit view` action-label pattern is gone.
+
+### Outstanding issues
+
+- Some individual images may still need manual thumbnail focus tuning through the existing framing tool if their subject is unusually off-center. This pass improves the fallback behavior but does not infer faces or rewrite saved focus metadata.
+
+### Risks or caveats
+
+- The upward `38%` fallback is intentionally conservative. It improves portrait/character crops, but abstract/generated images with important lower-frame details may still benefit from manual framing.
+
+### Operator follow-up
+
+- In the browser, inspect Flux in Wide + Large and Wide + Compact and manually adjust any specific image whose stored focus should override the new fallback.
+
+### Next steps
+
+- None.
+
+## ARCS Image Vault fill and surface polish follow-up - 2026-05-06
+
+### What changed
+
+- Fixed profile/collection modal image cards so all modal view combinations use frame-filling image presentation instead of leaving persistent side gutters in Fit + Large.
+- Restored more premium visual depth to the Image Vault shell with gold highlight gradients at the top of the vault header.
+- Strengthened portal-specific color identity:
+  - Character Vault uses a deeper ruby red gradient with reflective highlight layers.
+  - Asset Vault uses a moss green gradient with reflective highlight layers.
+  - NPC Vault keeps its distinct supporting-reference palette while also receiving the shared gold header treatment.
+
+### Files touched
+
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/portals/ReferenceAlbum.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Profile and collection modal card images now use `object-cover` across Fit, Wide, Compact, and Large modes. Fit/Wide now describe modal width/layout rather than switching between contained and filled image rendering.
+- Existing object-position fallback behavior remains in place, so default cover-mode crops still bias upward when saved thumbnail focus is missing or still at the old `50%` default.
+- `ReferenceAlbum` now provides each vault tab with a `headerBackground` gradient, allowing the shared vault header to keep the gold reflective top treatment while preserving tab-specific base colors.
+- Character and Asset Vault page bodies now add top gold sheen overlays and diagonal reflective highlights over their ruby/moss base gradients.
+
+### Verification
+
+- `npm run build` - PASS; Vite still reports the existing large chunk warning.
+- `npm run lint` - PASS with 67 existing warnings and 0 errors.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+
+- Browser visual verification still needs a final manual glance after the dev server refreshes to confirm the new image-fill mode visually matches the requested screenshots.
+
+### Risks or caveats
+
+- Using `object-cover` everywhere in the profile/collection modal trades full-image visibility for artwork-first frame filling. Manual thumbnail focus controls remain the way to correct unusual source images with important edge content.
+
+### Operator follow-up
+
+- Inspect a profile modal in Fit + Large and Wide + Large to confirm the cards now fill their frames without purple/empty side gutters.
+
+### Next steps
+
+- None.
+
+---
+
+## ARCS Image Vault density and interaction polish - 2026-05-06
+
+### What changed
+
+- Performed a focused refinement pass on the current Image Vault direction without redesigning the vault.
+- Reduced compact card height moderately across Character Vault, Asset Vault, profile/collection modals, and NPC Vault.
+- Added restrained card hover polish:
+  - subtle upward lift
+  - faint gold edge glow
+  - soft shadow elevation
+  - slightly stronger selected/active emphasis in profile and collection modals
+- Improved title handling so long fantasy/sci-fi names use two-line clamps instead of harsh one-line truncation in key browsing surfaces.
+- Softened the Character Vault ruby center glow so the red/gold identity remains warm but less fatiguing behind cards.
+- Added shared vault layout helper presets as a first step toward future image-size/density sliders while preserving the current Compact/Large and Fit/Wide controls.
+
+### Files touched
+
+- `src/components/ui/VaultChrome.tsx`
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/AssetVault.tsx`
+- `src/components/ui/ProfileVaultModal.tsx`
+- `src/components/ui/CollectionVaultModal.tsx`
+- `src/components/ui/NpcVault.tsx`
+- `src/portals/ReferenceAlbum.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `VaultChrome.tsx` now exports:
+  - `VAULT_CARD_INTERACTION` for consistent restrained hover treatment.
+  - `getVaultAlbumLayout(mode)` for Character/Asset album grid, card, frame, title, and metadata sizing.
+  - `getVaultModalLayout(mode, size)` for profile/collection modal grid, card, image frame, title, and action spacing.
+- Compact album cards now use `min-h-[112px]` and `96px` thumbnail columns instead of the previous `124px` / `104px` sizing.
+- Compact modal cards now use `min-h-[104px]` for Fit and `min-h-[116px]` for Wide, down from the previous `116px` / `132px`.
+- NPC compact cards now use `min-h-[96px]` and `88px` thumbnails, with labels moving from one-line truncation to a two-line clamp.
+- Character Vault gradients were darkened/desaturated in the central red range while keeping ruby/gold identity and top sheen.
+
+### Verification
+
+- `npm run build` - PASS; Vite still reports the existing large chunk warning.
+- `npm run lint` - PASS with 67 existing warnings and 0 errors.
+- `git diff --check` - PASS.
+- Browser check on `http://localhost:5173/`:
+  - Opened Reference Vault and switched Character Vault to Compact.
+  - Confirmed the Aries compact card class includes `min-h-[112px]`, `grid-cols-[96px_minmax(0,1fr)]`, and `hover:-translate-y-0.5`.
+  - Opened the Flux profile modal and confirmed compact modal cards include the smaller `min-h-[104px]` layout and the shared hover treatment.
+
+### Outstanding issues
+
+- The current UI still exposes discrete Compact/Large and Fit/Wide toggles. The helper presets make a future slider migration cleaner, but this pass intentionally did not add visible sliders to avoid cluttering the refined toolbar.
+
+### Risks or caveats
+
+- Two-line title clamps improve readability but can still hide the tail end of very long names. This is intentional to preserve card alignment and browsing rhythm.
+- Compact mode is slightly denser now; if specific albums feel too tight after real browsing, the shared presets can be adjusted in one place.
+
+### Operator follow-up
+
+- Manually scan a few long-name albums in Compact and Large modes to confirm the two-line clamp feels balanced.
+
+### Next steps
+
+- None.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

@@ -7,6 +7,8 @@ export type GuidedComicVaultSourceType = 'character' | 'asset' | 'npc';
 export type GuidedComicVaultTarget = {
   type: GuidedComicVaultTargetType;
   name: string;
+  pageNumber?: number;
+  panelNumber?: number;
 };
 
 export type GuidedComicVaultSelection = GuidedComicVaultTarget & {

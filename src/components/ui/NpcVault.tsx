@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Copy, Trash2, X } from 'lucide-react';
+import { Copy, RefreshCw, Trash2, X } from 'lucide-react';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
+import {
+  VAULT_CARD_INTERACTION,
+  VaultActionIconButton,
+  VaultOpenLink,
+  VaultViewModeToggle,
+  type VaultPreviewMode,
+} from '@/components/ui/VaultChrome';
 import {
   deleteSupportingReferenceGenerationLocal,
   getGenerations,
@@ -20,6 +27,7 @@ function formatWhen(ts: number): string {
 export const NpcVault: React.FC = () => {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<VaultPreviewMode>('large');
   const guidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
   const selectGuidedReference = useGuidedComicVaultBridge((s) => s.selectVaultReference);
 
@@ -35,7 +43,7 @@ export const NpcVault: React.FC = () => {
   }, [rows, selectedId]);
 
   return (
-    <div className="w-full px-8 py-10">
+    <div className="w-full px-6 py-8 sm:px-8">
       <div className="mb-8">
         <div className="flex flex-wrap items-center gap-3">
           <div className="rounded-xl border border-[#D4AF37]/25 bg-black/20 px-3 py-2 text-sm text-[#D4AF37]/80">
@@ -44,10 +52,12 @@ export const NpcVault: React.FC = () => {
           <button
             type="button"
             onClick={() => setRefreshNonce((n) => n + 1)}
-            className="rounded-xl border border-[#D4AF37]/35 bg-black/30 px-4 py-2.5 text-sm text-[#FBF5D4] hover:bg-black/40"
+            className="inline-flex items-center gap-2 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-4 py-2.5 text-sm text-[#FBF5D4] hover:bg-black/40"
           >
+            <RefreshCw className="h-4 w-4" aria-hidden />
             Refresh
           </button>
+          <VaultViewModeToggle value={previewMode} onChange={setPreviewMode} />
         </div>
       </div>
 
@@ -59,25 +69,90 @@ export const NpcVault: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-          {rows.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => setSelectedId(g.id)}
-              className="group rounded-xl border border-white/10 bg-black/20 hover:bg-black/30 overflow-hidden text-left"
-            >
-              <div className="aspect-square bg-black/40">
-                <ArcsStorageImg src={g.url} alt="" className="w-full h-full object-cover" />
+        <div
+          className={[
+            'mt-6 grid',
+            previewMode === 'compact'
+              ? 'grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2.5'
+              : 'grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4',
+          ].join(' ')}
+        >
+          {rows.map((g) => {
+            const label = g.supportingLabel?.trim() ? g.supportingLabel : 'NPC ref';
+            return (
+              <div
+                key={g.id}
+                className={[
+                  'group overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:border-[#FBBF24]/55 hover:bg-white/[0.07]',
+                  previewMode === 'compact'
+                    ? 'grid min-h-[96px] grid-cols-[88px_minmax(0,1fr)]'
+                    : '',
+                  VAULT_CARD_INTERACTION,
+                ].join(' ')}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedId(g.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedId(g.id);
+                    }
+                  }}
+                  className="relative cursor-pointer"
+                >
+                  <div className={previewMode === 'compact' ? 'aspect-square h-full min-h-[96px] bg-black/40' : 'aspect-[4/5] bg-black/40'}>
+                    <ArcsStorageImg src={g.url} alt={label} className={previewMode === 'compact' ? 'h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]' : 'h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.02]'} />
+                  </div>
+                </div>
+                <div className={previewMode === 'compact' ? 'border-l border-white/10 bg-[#07101f]/90 p-2.5' : 'border-t border-white/10 bg-[#07101f]/90 p-3'}>
+                  <p className="line-clamp-2 break-words text-sm font-bold leading-snug text-white/86">{label}</p>
+                  <p className="mt-1 truncate text-[11px] text-white/45">{formatWhen(g.createdAt)}</p>
+                  {guidedTarget?.type === 'npc' ? (
+                    <button
+                      type="button"
+                      className="mt-2 inline-flex h-8 max-w-full items-center rounded-lg border border-emerald-200/55 bg-emerald-300/18 px-2.5 text-[11px] font-black text-emerald-50 transition hover:bg-emerald-300/28"
+                      title={`Use this image for ${guidedTarget.name}`}
+                      onClick={() => {
+                        selectGuidedReference({
+                          type: guidedTarget.type,
+                          name: guidedTarget.name,
+                          referenceId: g.id,
+                          imageUrl: g.url,
+                          sourceType: 'npc',
+                          sourceLabel: label,
+                          displayName: label,
+                          imageLabel: label,
+                        });
+                      }}
+                    >
+                      Use for guided flow
+                    </button>
+                  ) : null}
+                  <div className="pointer-events-none mt-0 flex max-h-0 flex-wrap items-center gap-1.5 overflow-hidden opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:mt-2 group-hover:max-h-20 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:mt-2 group-focus-within:max-h-20 group-focus-within:opacity-100">
+                    <VaultActionIconButton
+                      label="Copy image URL"
+                      onClick={() => void navigator.clipboard.writeText(g.url)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </VaultActionIconButton>
+                    <VaultOpenLink href={g.url} label="Open full image" />
+                    <VaultActionIconButton
+                      label="Delete"
+                      danger
+                      onClick={() => {
+                        deleteSupportingReferenceGenerationLocal(g.id);
+                        setRefreshNonce((n) => n + 1);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </VaultActionIconButton>
+                  </div>
+                </div>
               </div>
-              <div className="p-2">
-                <p className="text-[11px] text-white/80 truncate">
-                  {g.supportingLabel?.trim() ? g.supportingLabel : 'NPC ref'}
-                </p>
-                <p className="text-[10px] text-white/45 truncate">{formatWhen(g.createdAt)}</p>
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 

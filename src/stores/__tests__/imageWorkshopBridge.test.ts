@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  buildGuidedImageWorkshopPrompt,
+  getGuidedImageWorkshopAspectRatio,
   getGuidedImageWorkshopPreload,
   useImageWorkshopBridge,
 } from '@/stores/imageWorkshopBridge';
@@ -175,7 +177,95 @@ describe('useImageWorkshopBridge', () => {
     expect(preload.slotUrls[12]).toBe('https://example.com/location-5.png');
     expect(preload.slotUrls[13]).toBe('https://example.com/npc-1.png');
     expect(preload.allReferences[16].displayName).toBe('NPC 4');
+    expect(preload.overflowReferences.map((reference) => reference.displayName)).toEqual([
+      'NPC 2',
+      'NPC 3',
+      'NPC 4',
+    ]);
     expect(preload.context).toBe('character');
+  });
+
+  it('builds a guided panel Imageshop prompt with panel context, reference labels, art direction, and no-text instruction', () => {
+    const prompt = buildGuidedImageWorkshopPrompt({
+      source: 'guided-comic',
+      currentStep: 'art',
+      returnTarget: 'guided-comic-art',
+      sourceLabel: 'Guided Comic Flow · Page 2, Panel 1',
+      pageNumber: 2,
+      panelNumber: 1,
+      panelBeat: 'A wide establishing shot of Flux entering the sky observatory.',
+      pageSummary: 'The team reaches the observatory before the storm breaks.',
+      pageKeyCharacters: ['Flux', 'Mira'],
+      pageKeyLocation: 'Sky Observatory',
+      artDirection: {
+        artStyle: 'clean superhero comic',
+        defaultAspectRatio: 'Match panel layout',
+        renderingStyle: 'inked linework with painterly color',
+        colorMood: 'electric blues and warm golds',
+        lighting: 'dramatic rim light',
+        continuityNotes: 'Keep Flux in the same jacket.',
+        excludeTextFromImages: true,
+      },
+      panelLayout: {
+        templateId: 'auto',
+        intent: 'wide',
+        columnSpan: 2,
+        rowSpan: 1,
+      },
+      characters: [
+        {
+          name: 'flux',
+          displayName: 'Flux hero ref',
+          imageUrl: 'https://example.com/flux.png',
+          sourceType: 'character',
+        },
+      ],
+      locations: [
+        {
+          name: 'sky observatory',
+          displayName: 'Sky Observatory exterior',
+          imageUrl: 'https://example.com/observatory.png',
+          sourceType: 'asset',
+        },
+      ],
+      npcs: [
+        {
+          name: 'storm courier',
+          displayName: 'Storm Courier',
+          imageUrl: 'https://example.com/courier.png',
+          sourceType: 'npc',
+        },
+      ],
+    });
+
+    expect(prompt).toContain('Image objective: A wide establishing shot of Flux entering the sky observatory.');
+    expect(prompt).toContain('Page context: The team reaches the observatory before the storm breaks.');
+    expect(prompt).toContain('Page key characters: Flux, Mira');
+    expect(prompt).toContain('Page key location: Sky Observatory');
+    expect(prompt).toContain('Character references: Flux hero ref');
+    expect(prompt).toContain('Location / asset references: Sky Observatory exterior');
+    expect(prompt).toContain('NPC references: Storm Courier');
+    expect(prompt).toContain('Panel layout intent: wide');
+    expect(prompt).toContain('Art style: clean superhero comic');
+    expect(prompt).toContain('Do not include speech bubbles, captions, narration boxes, lettering, watermarks, or embedded text unless the user manually adds text to this prompt.');
+  });
+
+  it('maps guided panel layout intent to the closest Imageshop aspect ratio', () => {
+    const base = {
+      source: 'guided-comic' as const,
+      currentStep: 'art' as const,
+      sourceLabel: 'Guided Comic Flow · Page 1, Panel 1',
+      characters: [],
+      locations: [],
+      npcs: [],
+    };
+
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { intent: 'wide' } })).toBe('21:9');
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { intent: 'tall' } })).toBe('9:16');
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { intent: 'feature', templateId: 'splash' } })).toBe('9:16');
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { intent: 'normal' } })).toBe('1:1');
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { columnSpan: 2, rowSpan: 1 } })).toBe('21:9');
+    expect(getGuidedImageWorkshopAspectRatio({ ...base, panelLayout: { aspectRatioHint: '1:1', intent: 'wide' } })).toBe('1:1');
   });
 
   it('stores and consumes guided comic panel handoffs', () => {

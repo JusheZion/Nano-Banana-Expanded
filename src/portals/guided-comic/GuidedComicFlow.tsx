@@ -69,6 +69,10 @@ export function shouldRenderGuidedPageNavigator(stepId: GuidedComicStepId, pageC
   return (stepId === 'pages' || stepId === 'layout') && pageCount > 0;
 }
 
+export function getGuidedPageNavigatorButtonLabel(pageNumber: number): string {
+  return String(pageNumber);
+}
+
 export const ADVANCED_STUDIO_ACTION_LABELS = {
   openBlank: 'Open blank Advanced Studio',
   sendPage: 'Send this page to Advanced Studio',
@@ -1148,7 +1152,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   };
   const requestPanelArtVaultImage = () => {
     if (!selectedPanel) return;
-    requestVaultSelection({ type: 'panel-art', name: selectedPanel.id });
+    requestVaultSelection({
+      type: 'panel-art',
+      name: selectedPanel.id,
+      pageNumber: selectedPanel.pageNumber,
+      panelNumber: selectedPanel.panelNumber,
+    });
   };
   const readPanelArtFile = (file: File, source: 'upload' | 'paste') => {
     if (!selectedPanel || !file.type.startsWith('image/')) return;
@@ -1319,6 +1328,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (!selectedPanel) return;
 
     const page = pageCards.find((card) => card.pageNumber === selectedPanel.pageNumber);
+    const layoutTemplate = page ? pageLayoutTemplates[page.pageNumber] ?? 'auto' : 'auto';
+    const layoutPanel = page
+      ? getGuidedComicLayoutPanels(page, layoutTemplate).find(
+          (panel) => panel.panelNumber === selectedPanel.panelNumber,
+        )
+      : null;
     const characters = mapReferencesForImageshop(characterReferences, 'character');
     const locations = mapReferencesForImageshop(locationReferences, 'asset');
     const npcs = mapReferencesForImageshop(npcReferences, 'npc');
@@ -1332,6 +1347,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageNumber: selectedPanel.pageNumber,
       panelNumber: selectedPanel.panelNumber,
       panelBeat: selectedPanel.beatText,
+      panelLayout: layoutPanel
+        ? {
+            templateId: layoutTemplate,
+            intent: layoutPanel.intent,
+            columnSpan: layoutPanel.columnSpan,
+            rowSpan: layoutPanel.rowSpan,
+          }
+        : undefined,
       pageSummary: page?.summary.trim() || undefined,
       pageKeyCharacters: selectedPanel.characters,
       pageKeyLocation: selectedPanel.location || undefined,
@@ -1346,6 +1369,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     locationReferences,
     npcReferences,
     pageCards,
+    pageLayoutTemplates,
     requestGuidedComicHandoff,
     selectedPanel,
   ]);
@@ -1456,7 +1480,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           </button>
         </div>
         {pageNavigatorVisible ? (
-          <div className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="mt-2 grid max-h-40 grid-cols-5 gap-1 overflow-y-auto pr-1 custom-scrollbar">
             {pageCards.map((page) => {
               const selected = page.pageNumber === activePageNumber;
               return (
@@ -1464,15 +1488,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   key={page.pageNumber}
                   type="button"
                   onClick={() => jumpToPage(page.pageNumber)}
-                  className="rounded-lg border px-2.5 py-1.5 text-left text-xs font-bold transition hover:border-amber-300/55 hover:bg-amber-300/10"
+                  className="flex h-8 min-w-0 items-center justify-center rounded-lg border text-xs font-black transition hover:border-amber-300/55 hover:bg-amber-300/10"
                   style={{
                     background: selected ? 'rgba(252,246,186,0.14)' : 'rgba(255,255,255,0.04)',
                     borderColor: selected ? `${ACCENT_GOLD_SOLID}99` : 'rgba(255,255,255,0.12)',
                     color: selected ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.76)',
                   }}
+                  aria-label={`Page ${page.pageNumber}`}
                   aria-current={selected ? 'location' : undefined}
                 >
-                  Page {page.pageNumber}
+                  {getGuidedPageNavigatorButtonLabel(page.pageNumber)}
                 </button>
               );
             })}
@@ -1519,7 +1544,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         </header>
 
         <aside
-          className="fixed bottom-6 right-6 top-24 z-20 hidden w-56 flex-col overflow-y-auto rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl custom-scrollbar xl:flex"
+          className="fixed bottom-6 right-6 top-6 z-20 hidden w-56 flex-col overflow-y-auto rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl custom-scrollbar xl:flex"
           aria-label="Persistent guided comic steps"
         >
           <div className="mb-3 px-2">
@@ -2475,10 +2500,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               </span>
                             </div>
                             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-black/35">
-                              <img
+                              <VaultImageWithFallback
                                 src={selectedPanelArtImage.imageUrl}
                                 alt={`Assigned art for page ${selectedPanel.pageNumber}, panel ${selectedPanel.panelNumber}`}
-                                className="max-h-[28rem] w-full object-contain"
+                                frameClassName="min-h-[12rem] w-full"
+                                imgClassName="max-h-[28rem] w-full object-contain"
                               />
                             </div>
                             {selectedPanelArtImage.sourceLabel ? (

@@ -39,6 +39,8 @@ import {
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
 import {
+  buildGuidedImageWorkshopPrompt,
+  getGuidedImageWorkshopAspectRatio,
   getGuidedImageWorkshopPreload,
   useImageWorkshopBridge,
   type GuidedImageWorkshopHandoff,
@@ -47,45 +49,6 @@ import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/
 
 type LabContext = 'character' | 'asset';
 type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
-
-function listOrNone(values: string[] | undefined): string {
-  const cleaned = (values ?? []).map((value) => value.trim()).filter(Boolean);
-  return cleaned.length > 0 ? cleaned.join(', ') : 'None specified';
-}
-
-function buildGuidedPanelPrompt(handoff: GuidedImageWorkshopHandoff): string {
-  const pageNumber = handoff.pageNumber ?? '?';
-  const panelNumber = handoff.panelNumber ?? '?';
-  const pageSummary = handoff.pageSummary?.trim() || 'No page summary provided.';
-  const panelBeat = handoff.panelBeat?.trim() || 'No panel beat provided.';
-  const characters = listOrNone(handoff.pageKeyCharacters);
-  const location = handoff.pageKeyLocation?.trim() || 'No location specified';
-  const artDirection = handoff.artDirection;
-  const artDirectionLines = artDirection
-    ? [
-        'Art direction:',
-        artDirection.artStyle.trim() ? `- Art style: ${artDirection.artStyle.trim()}` : '',
-        artDirection.defaultAspectRatio.trim() ? `- Default aspect ratio: ${artDirection.defaultAspectRatio.trim()}` : '',
-        artDirection.renderingStyle.trim() ? `- Rendering style: ${artDirection.renderingStyle.trim()}` : '',
-        artDirection.colorMood.trim() ? `- Color mood: ${artDirection.colorMood.trim()}` : '',
-        artDirection.lighting.trim() ? `- Lighting: ${artDirection.lighting.trim()}` : '',
-        artDirection.continuityNotes.trim() ? `- Continuity notes: ${artDirection.continuityNotes.trim()}` : '',
-        artDirection.excludeTextFromImages
-          ? '- Do not include text, speech bubbles, captions, lettering, watermarks, or readable words in the generated image.'
-          : '',
-      ].filter(Boolean)
-    : [];
-
-  return [
-    `Create comic panel art for Page ${pageNumber}, Panel ${panelNumber}.`,
-    `Page summary: ${pageSummary}`,
-    `Panel beat: ${panelBeat}`,
-    `Characters: ${characters}`,
-    `Location: ${location}`,
-    ...artDirectionLines,
-    'Compose this as a clear, cinematic comic-book panel with strong storytelling, consistent character design, readable action, and polished lighting.',
-  ].join('\n');
-}
 
 export function GenericImageLabPanel({
   selectedBeat,
@@ -295,7 +258,7 @@ export function GenericImageLabPanel({
     const preload = getGuidedImageWorkshopPreload(handoff);
     const preloadSuffix =
       preload.allReferences.length > preload.slotUrls.length
-        ? `, first ${preload.slotUrls.length} preloaded into Imageshop slots`
+        ? `, first ${preload.slotUrls.length} preloaded into Imageshop slots, ${preload.overflowReferences.length} additional kept in the handoff`
         : '';
 
     if (handoff.currentStep === 'art') {
@@ -303,9 +266,10 @@ export function GenericImageLabPanel({
       if (preload.slotUrls.length > 0) {
         applyRefs(preload.slotUrls, preload.context);
       }
-      setPromptRaw(buildGuidedPanelPrompt(handoff));
+      setPromptRaw(buildGuidedImageWorkshopPrompt(handoff));
       setPromptRefined('');
       setUseRefinedPrompt(false);
+      setAspectRatio(getGuidedImageWorkshopAspectRatio(handoff));
       setError(null);
       setNotice(
         `Loaded panel from Guided Comic Flow: Page ${handoff.pageNumber ?? '?'}, Panel ${handoff.panelNumber ?? '?'} with ${preload.allReferences.length} reference${preload.allReferences.length === 1 ? '' : 's'}${preloadSuffix}.`,
@@ -693,12 +657,12 @@ export function GenericImageLabPanel({
   return (
     <section className="mt-4 rounded-xl border border-white/10 bg-black/20 overflow-visible">
       {guidedHandoffContext ? (
-        <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-amber-400/35 bg-[#050814]/95 px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <header className="sticky top-0 z-40 flex min-h-14 w-full flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-400/35 bg-[#050814]/95 px-3 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur">
+          <div className="flex min-w-0 flex-[1_1_18rem] items-center gap-2">
             <button
               type="button"
               onClick={returnToGuidedComicFlow}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-amber-300/45 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-300/20"
+              className="inline-flex h-9 max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-300/45 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-300/20"
             >
               <span aria-hidden="true">&larr;</span>
               <span>Back to Comic Creator</span>
@@ -711,17 +675,19 @@ export function GenericImageLabPanel({
             </div>
           </div>
 
-          <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-center md:block">
-            <p className="text-sm font-bold text-white">Illustrator&rsquo;s Imageshop</p>
-            <p className="mt-0.5 text-[10px] text-white/45">Generate, refine, save, and export visual assets</p>
+          <div className="min-w-0 flex-[1_1_12rem] text-center">
+            <p className="truncate text-sm font-bold text-white">Illustrator&rsquo;s Imageshop</p>
+            <p className="mt-0.5 truncate text-[10px] text-white/45">
+              Generate, refine, save, and export visual assets
+            </p>
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-[1_1_10rem] items-center justify-end gap-2">
             <button
               type="button"
               disabled={!lastImageUrl}
               onClick={scrollToSaveExport}
-              className="inline-flex h-9 items-center rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-40"
+              className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:opacity-40"
             >
               Save / Export
             </button>
@@ -729,7 +695,7 @@ export function GenericImageLabPanel({
               <button
                 type="button"
                 onClick={sendBackToGuidedComicFlow}
-                className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-black"
+                className="inline-flex h-9 min-w-0 items-center justify-center rounded-lg px-3 text-center text-xs font-semibold text-black"
                 style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
               >
                 Send back to Guided Flow

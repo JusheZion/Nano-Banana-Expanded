@@ -4,6 +4,12 @@ import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import type { VaultCharacterAlbum } from '@/shared/api/arcsVault';
 import { ProfileVaultModal } from '@/components/ui/ProfileVaultModal';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
+import {
+  VAULT_CARD_INTERACTION,
+  getVaultAlbumLayout,
+  VaultViewModeToggle,
+  type VaultPreviewMode,
+} from '@/components/ui/VaultChrome';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 
 function getCoverItem(album: VaultCharacterAlbum) {
@@ -17,6 +23,7 @@ export const CharacterVault: React.FC = () => {
   const [albums, setAlbums] = useState<VaultCharacterAlbum[]>([]);
   const [openProfile, setOpenProfile] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [previewMode, setPreviewMode] = useState<VaultPreviewMode>('large');
   const guidedTarget = useGuidedComicVaultBridge((s) => s.pendingTarget);
   const selectGuidedReference = useGuidedComicVaultBridge((s) => s.selectVaultReference);
 
@@ -52,10 +59,12 @@ export const CharacterVault: React.FC = () => {
   const totalImages = albums.reduce((acc, a) => acc + a.items.length, 0);
 
   return (
-    <div className="relative min-h-[calc(100vh-5rem)] px-8 py-10">
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(135deg,#240004_0%,#6f0715_42%,#b31228_72%,#310005_100%)]" />
-      <div className="absolute inset-0 -z-10 opacity-75 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.16),transparent_42%)]" />
-      <div className="absolute inset-0 -z-10 opacity-70 bg-[radial-gradient(circle_at_76%_58%,rgba(251,191,36,0.20),transparent_55%)]" />
+    <div className="relative min-h-[calc(100vh-5rem)] px-6 py-8 sm:px-8">
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(145deg,#160003_0%,#4d0610_34%,#861327_58%,#300207_78%,#120002_100%)]" />
+      <div className="absolute inset-0 -z-10 opacity-58 bg-[radial-gradient(circle_at_18%_12%,rgba(255,77,126,0.18),transparent_38%)]" />
+      <div className="absolute inset-0 -z-10 opacity-52 bg-[radial-gradient(circle_at_76%_58%,rgba(251,191,36,0.18),transparent_55%)]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-56 bg-[linear-gradient(180deg,rgba(251,245,212,0.18),rgba(212,175,55,0.12)_38%,transparent_100%)]" />
+      <div className="absolute inset-0 -z-10 opacity-45 bg-[linear-gradient(118deg,transparent_0%,rgba(255,255,255,0.10)_22%,transparent_40%,rgba(255,255,255,0.06)_64%,transparent_82%)]" />
 
       {selectedAlbum && (
         <ProfileVaultModal
@@ -101,7 +110,7 @@ export const CharacterVault: React.FC = () => {
       )}
 
       <div className="relative mb-8">
-        <div className="grid gap-3 lg:grid-cols-[auto_auto_minmax(220px,1fr)] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[auto_auto_minmax(220px,1fr)_auto] lg:items-center">
           <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm text-[#D4AF37]/75">
             <div className="rounded-xl border border-[#D4AF37]/20 bg-black/20 px-3 py-2">
               Profiles: <span className="text-[#FBF5D4]/90 font-medium">{albums.length}</span>
@@ -129,6 +138,7 @@ export const CharacterVault: React.FC = () => {
               className="w-full rounded-xl border border-[#D4AF37]/25 bg-black/25 pl-10 pr-3 py-2.5 text-sm text-[#FBF5D4] placeholder:text-[#D4AF37]/50"
             />
           </div>
+          <VaultViewModeToggle value={previewMode} onChange={setPreviewMode} />
         </div>
       </div>
 
@@ -143,8 +153,14 @@ export const CharacterVault: React.FC = () => {
           No profiles match “{search.trim()}”.
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6 pb-16">
+        <div
+          className={[
+            'grid pb-16',
+            getVaultAlbumLayout(previewMode).grid,
+          ].join(' ')}
+        >
           {filteredAlbums.map((album) => {
+            const layout = getVaultAlbumLayout(previewMode);
             const coverItem = getCoverItem(album);
             const cover = coverItem?.image_url ?? null;
             const count = album.items.length;
@@ -158,55 +174,59 @@ export const CharacterVault: React.FC = () => {
                 type="button"
                 onClick={() => setOpenProfile(album.profileName)}
                 className={[
-                  'group relative overflow-hidden rounded-2xl border text-left',
-                  'border-[#D4AF37]/25 bg-black/20',
+                  'group relative overflow-hidden rounded-xl border text-left',
+                  layout.card,
+                  'border-[#D4AF37]/18 bg-black/24',
                   'shadow-[0_10px_60px_rgba(0,0,0,0.35)]',
-                  'hover:border-[#FBBF24]/60 hover:bg-black/25',
-                  'transition',
+                  'hover:bg-white/[0.07]',
+                  VAULT_CARD_INTERACTION,
                 ].join(' ')}
               >
-                <div className="absolute inset-0 pointer-events-none opacity-60 bg-[linear-gradient(135deg,rgba(212,175,55,0.18),transparent_45%)]" />
-                <div className="absolute inset-0 pointer-events-none opacity-60 bg-[linear-gradient(to_top,rgba(0,0,0,0.85),transparent_55%)]" />
+                <div className="absolute inset-0 pointer-events-none opacity-40 bg-[linear-gradient(135deg,rgba(212,175,55,0.10),transparent_45%)]" />
 
                 {cover ? (
                   <VaultImageWithFallback
                     src={cover}
                     alt={album.profileName}
-                    frameClassName="w-full h-[280px]"
-                    imgClassName="w-full h-[280px] object-cover opacity-90 group-hover:opacity-100 transition"
+                    frameClassName={[
+                      'relative overflow-hidden bg-black/35',
+                      layout.frame,
+                    ].join(' ')}
+                    imgClassName={[
+                      layout.image,
+                      'w-full object-cover opacity-95 transition duration-300 group-hover:scale-[1.02] group-hover:opacity-100',
+                    ].join(' ')}
                     imgStyle={{
                       objectPosition: `${fx}% ${fy}%`,
-                      transform: `scale(${fsc})`,
+                      transform: `scale(${Math.min(fsc, 1.08)})`,
                       transformOrigin: `${fx}% ${fy}%`,
                     }}
                   />
                 ) : (
-                  <div className="w-full h-[280px] flex items-center justify-center text-[#FBF5D4]/60">
+                  <div className={`flex ${layout.frame} items-center justify-center bg-black/30 text-[#FBF5D4]/60`}>
                     No image
                   </div>
                 )}
 
-                <div className="absolute inset-x-0 bottom-0 p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div className={[layout.body, previewMode === 'compact' ? '' : 'bg-[#180104]/92'].join(' ')}>
+                  <div className={previewMode === 'compact' ? 'flex h-full min-w-0 flex-col justify-between gap-2' : 'flex items-start justify-between gap-3'}>
                     <div className="min-w-0">
                       <div className="text-[11px] uppercase tracking-[0.35em] text-[#FBBF24]/80">
                         Profile
                       </div>
-                      <div className="mt-1 text-xl font-semibold tracking-wide text-[#FBF5D4] truncate">
+                      <div className={`${layout.title} text-[#FBF5D4]`}>
                         {album.profileName}
                       </div>
-                      <div className="mt-1 text-sm text-[#D4AF37]/80">
+                      <div className={`${layout.meta} text-[#D4AF37]/80`}>
                         {count} image{count === 1 ? '' : 's'}
-                        {hasManualCover ? (
-                          <span className="ml-2 text-[#FBF5D4]/70">(starred cover)</span>
-                        ) : (
-                          <span className="ml-2 text-[#FBF5D4]/70">(newest cover)</span>
-                        )}
+                        <span className={previewMode === 'compact' ? 'sr-only' : 'ml-2 text-[#FBF5D4]/70'}>
+                          {hasManualCover ? '(starred cover)' : '(newest cover)'}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-[#D4AF37]/25 bg-black/25 px-3 py-2 text-[#FBF5D4]/85 group-hover:border-[#FBBF24]/55 group-hover:bg-black/35 transition">
-                      <span className="text-xs tracking-wide">Open</span>
+                    <div className={['shrink-0 inline-flex items-center gap-2 rounded-lg border border-[#D4AF37]/25 bg-black/20 px-2.5 py-1.5 text-[#FBF5D4]/82 transition group-hover:border-[#FBBF24]/55 group-hover:bg-black/35', previewMode === 'compact' ? 'self-start' : ''].join(' ')}>
+                      <span className="text-[11px] tracking-wide">Open</span>
                       <ChevronRight className="w-4 h-4 text-[#FBBF24]" />
                     </div>
                   </div>

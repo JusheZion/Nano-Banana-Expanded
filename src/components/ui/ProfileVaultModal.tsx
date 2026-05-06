@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Copy,
   Download,
   FolderInput,
   Maximize2,
@@ -13,6 +14,14 @@ import {
 import type { VaultCharacterItem } from '@/shared/api/arcsVault';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import { ArchiveThumbnailFocusModal } from '@/components/ui/ArchiveThumbnailFocusModal';
+import {
+  VAULT_CARD_INTERACTION,
+  VaultActionIconButton,
+  VaultOpenLink,
+  VaultViewModeToggle,
+  getVaultModalLayout,
+  type VaultPreviewMode,
+} from '@/components/ui/VaultChrome';
 import {
   setProfileCover,
   renameVaultCharacterProfile,
@@ -93,6 +102,7 @@ export function ProfileVaultModal(props: {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modalSize, setModalSize] = useState<'fit' | 'wide'>('fit');
+  const [previewMode, setPreviewMode] = useState<VaultPreviewMode>('large');
 
   const [showRenameProfile, setShowRenameProfile] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -383,18 +393,31 @@ export function ProfileVaultModal(props: {
                   <RefreshCw className="w-3.5 h-3.5" />
                   Refresh
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalSize((size) => (size === 'fit' ? 'wide' : 'fit'))}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D4AF37]/35 bg-black/30 px-3 py-2 text-xs text-[#FBF5D4] hover:bg-black/40"
-                >
-                  {modalSize === 'fit' ? (
-                    <Maximize2 className="w-3.5 h-3.5" />
-                  ) : (
+                <div className="inline-flex rounded-xl border border-[#D4AF37]/25 bg-black/25 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setModalSize('fit')}
+                    className={[
+                      'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition',
+                      modalSize === 'fit' ? 'bg-[#FBBF24] text-black' : 'text-[#FBF5D4]/70 hover:bg-white/10 hover:text-[#FBF5D4]',
+                    ].join(' ')}
+                  >
                     <Minimize2 className="w-3.5 h-3.5" />
-                  )}
-                  {modalSize === 'fit' ? 'Wide view' : 'Fit view'}
-                </button>
+                    Fit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalSize('wide')}
+                    className={[
+                      'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition',
+                      modalSize === 'wide' ? 'bg-[#FBBF24] text-black' : 'text-[#FBF5D4]/70 hover:bg-white/10 hover:text-[#FBF5D4]',
+                    ].join(' ')}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    Wide
+                  </button>
+                </div>
+                <VaultViewModeToggle value={previewMode} onChange={setPreviewMode} />
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-xl border border-[#D4AF37]/30 bg-black/30 text-[#FBF5D4] w-10 h-10 hover:bg-black/40"
@@ -589,24 +612,34 @@ export function ProfileVaultModal(props: {
                     <option key={p} value={p === 'Unnamed' ? '' : p} />
                   ))}
               </datalist>
-              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div
+                className={[
+                  'grid pb-4',
+                  getVaultModalLayout(previewMode, modalSize).grid,
+                ].join(' ')}
+              >
                 {sorted.map((item) => {
+                  const layout = getVaultModalLayout(previewMode, modalSize);
                   const isActive = coverId === item.id;
                   const isSaving = savingId === item.id;
                   const title = item.cast_name || item.name || 'Visual Reference';
                   const isSelected = selectedItemId === item.id;
+                  const imageFitClass = 'object-cover';
                   return (
                     <div
                       key={item.id}
                       className={[
-                        'group relative flex flex-col overflow-hidden rounded-2xl border',
+                        'group relative overflow-hidden rounded-2xl border',
+                        layout.card,
                         'border-white/10 bg-black/20',
                         'shadow-[0_6px_36px_rgba(0,0,0,0.25)]',
                         isActive
-                          ? 'ring-2 ring-[#FBBF24]/70 shadow-[0_0_40px_rgba(224,17,95,0.22)]'
+                          ? 'ring-2 ring-[#FBBF24]/65 shadow-[0_0_34px_rgba(212,175,55,0.22)]'
                           : 'hover:border-[#D4AF37]/35 hover:bg-black/25',
-                        isSelected ? 'border-[#FBBF24]/55' : '',
-                        'transition',
+                        isSelected
+                          ? 'border-[#FBBF24]/60 shadow-[0_14px_42px_rgba(0,0,0,0.38),0_0_0_1px_rgba(212,175,55,0.18)]'
+                          : '',
+                        VAULT_CARD_INTERACTION,
                       ].join(' ')}
                     >
                       <div
@@ -623,14 +656,29 @@ export function ProfileVaultModal(props: {
                         }}
                         className="relative cursor-pointer"
                       >
-                        <div className="flex aspect-[9/16] w-full items-center justify-center overflow-hidden bg-black/30">
+                        <div
+                          className={[
+                            'flex w-full items-center justify-center overflow-hidden bg-black/35',
+                            layout.frame,
+                          ].join(' ')}
+                        >
                           <VaultImageWithFallback
                             src={item.image_url}
                             alt={title}
-                            frameClassName="flex aspect-[9/16] w-full items-center justify-center overflow-hidden"
-                            imgClassName="block h-full w-full object-cover opacity-95"
+                            frameClassName={[
+                              'flex w-full items-center justify-center overflow-hidden',
+                              layout.frame,
+                            ].join(' ')}
+                            imgClassName={[
+                              'block h-full w-full opacity-95 transition duration-300 group-hover:scale-[1.02]',
+                              imageFitClass,
+                            ].join(' ')}
                             imgStyle={{
-                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${item.thumbnail_focus_y ?? 50}%`,
+                              objectPosition: `${item.thumbnail_focus_x ?? 50}% ${
+                                imageFitClass.includes('object-cover') && (item.thumbnail_focus_y == null || item.thumbnail_focus_y === 50)
+                                  ? 38
+                                  : item.thumbnail_focus_y ?? 50
+                              }%`,
                             }}
                           />
                         </div>
@@ -641,12 +689,16 @@ export function ProfileVaultModal(props: {
                       </div>
 
                       <div
-                        className="border-t border-white/10 bg-[#240004]/95 p-3"
+                        className={[
+                          'bg-[#240004]/95',
+                          layout.body,
+                          previewMode === 'compact' ? 'border-l border-white/10' : 'border-t border-white/10',
+                        ].join(' ')}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div>
                           <div className="min-w-0">
-                            <p className="line-clamp-2 min-h-[2.25rem] break-words text-sm font-bold leading-snug text-[#FBF5D4]">
+                            <p className={`${layout.title} text-[#FBF5D4]`}>
                               {title}
                             </p>
                             <p className="mt-1 truncate text-[11px] text-[#D4AF37]/70">
@@ -655,49 +707,32 @@ export function ProfileVaultModal(props: {
                           </div>
                         </div>
 
-                        {guidedSelectionTarget && onUseForGuidedFlow ? (
-                          <button
-                            type="button"
-                            disabled={Boolean(savingId) || busy}
-                            className="mt-3 w-full rounded-xl border border-emerald-300/45 bg-emerald-300/15 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-300/25 disabled:opacity-50"
-                            title={`Use this image for ${guidedSelectionTarget.name}`}
-                            onClick={() => onUseForGuidedFlow(item)}
-                          >
-                            Use for guided flow: {guidedSelectionTarget.name}
-                          </button>
-                        ) : null}
-
-                        <div className="mt-3 grid grid-cols-7 gap-1.5">
-                          <label className="flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[10px] font-bold text-[#FBF5D4] transition hover:bg-black/45">
+                        <div className={`${layout.actionMargin} flex flex-wrap items-center gap-1.5`}>
+                          {guidedSelectionTarget && onUseForGuidedFlow ? (
+                            <button
+                              type="button"
+                              disabled={Boolean(savingId) || busy}
+                              className="inline-flex h-8 max-w-full items-center rounded-lg border border-emerald-200/55 bg-emerald-300/18 px-2.5 text-[11px] font-black text-emerald-50 transition hover:bg-emerald-300/28 disabled:opacity-50"
+                              title={`Use this image for ${guidedSelectionTarget.name}`}
+                              onClick={() => onUseForGuidedFlow(item)}
+                            >
+                              Use for guided flow
+                            </button>
+                          ) : null}
+                          <label className="inline-flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-lg border border-white/15 bg-black/35 px-2 text-[10px] font-bold text-white/78 transition hover:border-amber-200/45 hover:bg-white/10">
                             <input
                               type="checkbox"
                               checked={zipSelectedIds.has(item.id)}
                               disabled={downloadBusy}
                               onChange={() => toggleZipSelect(item.id)}
-                              className="rounded border-[#D4AF37]/50"
+                              className="mr-1 rounded border-[#D4AF37]/50"
                             />
                             ZIP
                           </label>
-                          <button
-                            type="button"
-                            disabled={Boolean(savingId) || busy || downloadBusy}
-                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45 disabled:opacity-40"
-                            title="Download HQ image"
-                            onClick={() => void runDownloadOne(item)}
-                          >
-                            <Download className="mx-auto h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
+                          <VaultActionIconButton
+                            label={isActive ? 'Profile cover' : 'Set cover'}
                             disabled={Boolean(savingId) || busy}
-                            className={[
-                              'min-w-0 rounded-lg border px-1 py-1.5 transition disabled:opacity-40',
-                              isActive
-                                ? 'border-[#FBBF24]/70 bg-[#FBBF24]/15'
-                                : 'border-[#D4AF37]/30 bg-black/30 hover:bg-black/45',
-                            ].join(' ')}
-                            title="Set cover"
-                            aria-label={isActive ? 'Cover' : 'Set cover'}
+                            active={isActive}
                             onClick={async () => {
                               if (savingId) return;
                               setSaveError(null);
@@ -714,48 +749,65 @@ export function ProfileVaultModal(props: {
                               onCoverUpdated();
                             }}
                           >
-                            <RubyEncrustedStar active={isActive} className="mx-auto block" />
-                          </button>
-                          <button
-                            type="button"
-                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
-                            title="Framing"
+                            <RubyEncrustedStar active={isActive} />
+                          </VaultActionIconButton>
+                        </div>
+
+                        <div
+                          className={[
+                            'flex flex-wrap items-center gap-1.5 overflow-hidden transition-all duration-200',
+                            isSelected
+                              ? 'mt-2 max-h-24 opacity-100'
+                              : 'pointer-events-none mt-0 max-h-0 opacity-0 group-hover:pointer-events-auto group-hover:mt-2 group-hover:max-h-24 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:mt-2 group-focus-within:max-h-24 group-focus-within:opacity-100',
+                          ].join(' ')}
+                        >
+                          <VaultActionIconButton
+                            label="Download HQ image"
+                            disabled={Boolean(savingId) || busy || downloadBusy}
+                            onClick={() => void runDownloadOne(item)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </VaultActionIconButton>
+                          <VaultActionIconButton
+                            label="Framing"
                             onClick={() => {
                               setFocusEditItem(item);
                               setSelectedItemId(null);
                             }}
                           >
-                            <Pencil className="mx-auto h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
-                            title="Edit cast name"
+                            <Pencil className="h-4 w-4" />
+                          </VaultActionIconButton>
+                          <VaultActionIconButton
+                            label="Edit metadata"
                             onClick={() => {
                               setCastEditId(item.id);
                               setCastEditValue(item.cast_name || '');
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <Tag className="mx-auto h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            className="min-w-0 rounded-lg border border-[#D4AF37]/30 bg-black/30 px-1 py-1.5 text-[#FBF5D4] transition hover:bg-black/45"
-                            title="Move to profile"
+                            <Tag className="h-4 w-4" />
+                          </VaultActionIconButton>
+                          <VaultActionIconButton
+                            label="Move to profile"
                             onClick={() => {
                               setMoveItemId(item.id);
                               setMoveTarget('');
                               setSelectedItemId(item.id);
                             }}
                           >
-                            <FolderInput className="mx-auto h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
+                            <FolderInput className="h-4 w-4" />
+                          </VaultActionIconButton>
+                          <VaultActionIconButton
+                            label="Copy image URL"
+                            onClick={() => void navigator.clipboard.writeText(item.image_url)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </VaultActionIconButton>
+                          <VaultOpenLink href={item.image_url} label="Open full image" />
+                          <VaultActionIconButton
+                            label="Delete image"
+                            danger
                             disabled={busy}
-                            className="min-w-0 rounded-lg border border-red-500/35 bg-black/30 px-1 py-1.5 text-red-200 transition hover:bg-red-950/35 disabled:opacity-40"
-                            title="Delete image"
                             onClick={async () => {
                               if (!confirm('Delete this image from the vault?')) return;
                               setBusy(true);
@@ -769,8 +821,8 @@ export function ProfileVaultModal(props: {
                               }
                             }}
                           >
-                            <Trash2 className="mx-auto h-4 w-4" />
-                          </button>
+                            <Trash2 className="h-4 w-4" />
+                          </VaultActionIconButton>
                         </div>
                       </div>
 
@@ -851,23 +903,11 @@ export function ProfileVaultModal(props: {
                         </div>
                       )}
 
-                      <div className="relative z-[5] border-t border-white/10 bg-black/35 px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-2 min-w-0">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold text-[#FBF5D4] truncate">
-                              {title}
-                            </div>
-                            {item.seed != null && (
-                              <div className="text-[10px] font-mono text-white/55 mt-0.5">
-                                #{item.seed}
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-[#D4AF37]/50 shrink-0 hidden sm:inline">
-                            Click image for actions
-                          </span>
+                      {item.seed != null && previewMode !== 'compact' ? (
+                        <div className="relative z-[5] border-t border-white/10 bg-black/25 px-3 py-2 text-[10px] font-mono text-white/45">
+                          #{item.seed}
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                   );
                 })}

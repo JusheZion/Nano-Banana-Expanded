@@ -4,6 +4,7 @@ import useImage from 'use-image';
 import { useComicStore, undoPause, undoResume, type Panel } from '../../../stores/comicStore';
 import { getVertexSnapLines, getGutterAwareSnapLines, type DiagonalGuide, type SnapLine } from '../utils/snapping';
 import { getTextureUrl } from '../data/TextureRegistry';
+import { useArcsResolvedSrc } from '@/shared/hooks/useArcsResolvedSrc';
 import {
     getHalfCirclePath,
     getQuarterCirclePath,
@@ -24,7 +25,8 @@ interface ComicPanelProps {
 }
 
 export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd, onDiagonalGuides, onVertexSnap }) => {
-    const [imageObj] = useImage(panel.imageUrl || '', 'anonymous');
+    const resolvedPanelImageUrl = useArcsResolvedSrc(panel.imageUrl || '');
+    const [imageObj] = useImage(resolvedPanelImageUrl || '', 'anonymous');
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
     const imageRef = useRef<any>(null);
