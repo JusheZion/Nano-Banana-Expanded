@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookMarked,
   BookOpenText,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
+  Edit3,
+  FilePlus,
+  FolderOpen,
   ImagePlus,
   LayoutTemplate,
   MonitorUp,
@@ -15,6 +20,7 @@ import {
   Upload,
   Sparkles,
   Trash2,
+  Save,
   ZoomIn,
 } from 'lucide-react';
 import {
@@ -31,6 +37,10 @@ import {
 import { Tooltip } from '@/shared/components/Tooltip';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import type { Portal } from '@/shared/portals';
+import { invokeWriterTools } from '@/shared/api/writerTools';
+import { isSupabaseConfigured } from '@/shared/lib/supabase';
+import { guidedComicAssistResultSchema } from '@/shared/writer/schemas';
+import type { GuidedComicAssistAction, GuidedComicAssistResult } from '@/shared/writer/types';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
@@ -40,6 +50,27 @@ import {
   getGuidedComicLayoutGridStyle,
   getGuidedComicLayoutPanels,
 } from '@/portals/guided-comic/guidedComicLayoutPlan';
+import {
+  GUIDED_COMIC_PROJECT_LIBRARY_STORAGE_KEY,
+  createGuidedComicProject,
+  createGuidedComicProjectLibrary,
+  deleteGuidedComicProject,
+  duplicateGuidedComicProject,
+  getGuidedComicProjectDisplayName,
+  isGuidedComicProjectSnapshotDirty,
+  parseGuidedComicProjectLibrary,
+  renameGuidedComicProject,
+  upsertGuidedComicProject,
+  type GuidedComicProject,
+  type GuidedComicProjectLibrary,
+  type GuidedComicProjectSnapshot,
+} from '@/portals/guided-comic/guidedComicProjectLibrary';
+import {
+  applyGuidedComicAiResult,
+  buildGuidedComicAiContext,
+  getGuidedComicPacingChecks,
+  type GuidedComicAiDraft,
+} from '@/portals/guided-comic/guidedComicAi';
 
 export type GuidedComicStepId =
   | 'setup'
@@ -155,7 +186,14 @@ type PanelArtImageState = {
   sourceLabel?: string;
 };
 
-type LayoutTemplateId = 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+type LayoutTemplateId =
+  | 'auto'
+  | 'three-panel'
+  | 'three-panel-wide-top'
+  | 'three-panel-wide-bottom'
+  | 'four-panel'
+  | 'six-panel-grid'
+  | 'splash';
 
 type LayoutTemplateOption = {
   id: LayoutTemplateId;
@@ -181,6 +219,7 @@ type GuidedComicDraftState = {
 };
 
 const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
+const PROJECT_LIBRARY_STATUS_CLEAR_DELAY_MS = 3200;
 
 const GENRE_OPTIONS = [
   'Superhero',
@@ -263,10 +302,51 @@ const DEFAULT_PANEL_BEATS = [
 const LAYOUT_TEMPLATE_OPTIONS: LayoutTemplateOption[] = [
   { id: 'auto', label: 'Auto layout' },
   { id: 'three-panel', label: '3-panel page' },
+  { id: 'three-panel-wide-top', label: '3-panel: wide top' },
+  { id: 'three-panel-wide-bottom', label: '3-panel: two over wide' },
   { id: 'four-panel', label: '4-panel page' },
   { id: 'six-panel-grid', label: '6-panel grid' },
   { id: 'splash', label: 'Splash page' },
 ];
+
+type GuidedComicAiActionOption = {
+  action: GuidedComicAssistAction;
+  label: string;
+  description: string;
+};
+
+const GUIDED_COMIC_AI_ACTIONS_BY_STEP: Record<GuidedComicStepId, GuidedComicAiActionOption[]> = {
+  setup: [
+    { action: 'improve_premise', label: 'Improve premise', description: 'Tighten the hook without overwriting your draft.' },
+    { action: 'suggest_genre_tone', label: 'Suggest genre/tone fit', description: 'Get a short fit check for genre and tone.' },
+  ],
+  story: [
+    { action: 'generate_story_foundation', label: 'Generate story foundation', description: 'Draft missing spine fields from the setup brief.' },
+    { action: 'suggest_conflict_stakes_ending', label: 'Suggest conflict / stakes / ending', description: 'Strengthen pressure, stakes, and final movement.' },
+    { action: 'generate_issue_outline', label: 'Generate issue outline', description: 'Draft opening, escalation, midpoint, climax, and ending beats.' },
+  ],
+  pages: [
+    { action: 'generate_page_plan', label: 'Generate page plan', description: 'Propose page summaries from the outline and target count.' },
+    { action: 'generate_missing_page_summaries', label: 'Generate missing page summaries', description: 'Fill only empty page summaries by default.' },
+    { action: 'regenerate_selected_page', label: 'Regenerate selected page', description: 'Preview a replacement for the active page only.' },
+    { action: 'generate_panel_beats', label: 'Generate panel beats', description: 'Suggest panel beats from current page summaries.' },
+  ],
+  'visual-prep': [
+    { action: 'suggest_reference_needs', label: 'Suggest reference needs', description: 'Find missing characters, locations, props, and style refs.' },
+  ],
+  art: [
+    { action: 'strengthen_panel_prompt', label: 'Strengthen panel prompt', description: 'Improve the selected panel prompt text only.' },
+    { action: 'suggest_shot_direction', label: 'Suggest shot/camera direction', description: 'Vary camera language for selected panel art.' },
+  ],
+  layout: [
+    { action: 'suggest_layout_pacing', label: 'Suggest layout pacing', description: 'Review visual rhythm across pages.' },
+    { action: 'recommend_layouts', label: 'Recommend layouts', description: 'Suggest splash, 3-panel, wide 3-panel, 4-panel, or 6-panel templates.' },
+  ],
+  export: [
+    { action: 'review_readiness', label: 'Review readiness', description: 'Check whether the guided project is ready to export.' },
+    { action: 'find_export_gaps', label: 'Find gaps before export', description: 'List missing story, art, reference, and layout items.' },
+  ],
+};
 
 const STEPS: GuidedComicStep[] = [
   {
@@ -667,6 +747,78 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
   }
 }
 
+function guidedComicStepIdFromIndex(activeIndex: number): GuidedComicStepId {
+  return STEPS[safeActiveIndex(activeIndex)]?.id ?? 'setup';
+}
+
+function guidedComicStepIndexFromId(stepId: unknown): number {
+  if (typeof stepId !== 'string') return 0;
+  const index = STEPS.findIndex((step) => step.id === stepId);
+  return index === -1 ? 0 : index;
+}
+
+function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): GuidedComicProjectSnapshot {
+  return {
+    setupForm: draft.setupForm,
+    storyForm: draft.storyForm,
+    outlineBeats: draft.outlineBeats,
+    pageCards: draft.pageCards,
+    characterReferences: draft.characterReferences,
+    locationReferences: draft.locationReferences,
+    npcReferences: draft.npcReferences,
+    panelArtStatuses: draft.panelArtStatuses,
+    panelArtImages: draft.panelArtImages,
+    pageLayoutTemplates: draft.pageLayoutTemplates,
+    artDirection: draft.artDirection,
+    currentStep: guidedComicStepIdFromIndex(draft.activeIndex),
+    selectedPanelId: draft.selectedPanelId,
+  };
+}
+
+function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedAt = ''): GuidedComicDraftState {
+  return {
+    version: 1,
+    savedAt,
+    activeIndex: guidedComicStepIndexFromId(snapshot.currentStep),
+    setupForm: { ...DEFAULT_SETUP_FORM, ...snapshot.setupForm },
+    storyForm: { ...DEFAULT_STORY_FORM, ...snapshot.storyForm },
+    artDirection: { ...DEFAULT_ART_DIRECTION, ...snapshot.artDirection },
+    outlineBeats: Array.isArray(snapshot.outlineBeats) ? (snapshot.outlineBeats as OutlineBeat[]) : cloneInitialOutlineBeats(),
+    pageCards: Array.isArray(snapshot.pageCards) ? (snapshot.pageCards as PageCard[]) : [],
+    characterReferences: normalizeReferenceMap(snapshot.characterReferences),
+    locationReferences: normalizeReferenceMap(snapshot.locationReferences),
+    npcReferences: normalizeReferenceMap(snapshot.npcReferences),
+    selectedPanelId: typeof snapshot.selectedPanelId === 'string' ? snapshot.selectedPanelId : null,
+    panelArtStatuses: snapshot.panelArtStatuses as Record<string, PanelArtStatus>,
+    panelArtImages: snapshot.panelArtImages as Record<string, PanelArtImageState>,
+    pageLayoutTemplates: snapshot.pageLayoutTemplates as Record<number, LayoutTemplateId>,
+  };
+}
+
+function readGuidedComicProjectLibrary(): GuidedComicProjectLibrary | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return parseGuidedComicProjectLibrary(window.localStorage.getItem(GUIDED_COMIC_PROJECT_LIBRARY_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function writeGuidedComicProjectLibrary(library: GuidedComicProjectLibrary | null) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (library && library.projects.length > 0) {
+      window.localStorage.setItem(GUIDED_COMIC_PROJECT_LIBRARY_STORAGE_KEY, JSON.stringify(library));
+    } else {
+      window.localStorage.removeItem(GUIDED_COMIC_PROJECT_LIBRARY_STORAGE_KEY);
+    }
+  } catch {
+    // Keep the local recovery draft usable if project library persistence fails.
+  }
+}
+
 function removeGuidedComicDraft() {
   if (typeof window === 'undefined') return;
 
@@ -773,6 +925,24 @@ function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats
   };
 }
 
+function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
+  return {
+    setupForm: DEFAULT_SETUP_FORM,
+    storyForm: DEFAULT_STORY_FORM,
+    outlineBeats: cloneInitialOutlineBeats(),
+    pageCards: [],
+    characterReferences: {},
+    locationReferences: {},
+    npcReferences: {},
+    panelArtStatuses: {},
+    panelArtImages: {},
+    pageLayoutTemplates: {},
+    artDirection: DEFAULT_ART_DIRECTION,
+    currentStep: 'setup',
+    selectedPanelId: null,
+  };
+}
+
 export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, requestedStepId }: GuidedComicFlowProps) {
   const skipNextDraftSaveRef = useRef(false);
   const pageSectionRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -783,7 +953,43 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const requestGuidedComicHandoff = useImageWorkshopBridge((s) => s.requestGuidedComicHandoff);
   const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
   const requestLayoutHandoff = useGuidedComicLayoutBridge((s) => s.requestLayoutHandoff);
-  const restoredDraft = useMemo(() => readGuidedComicDraft(), []);
+  const [restoredProjectState] = useState(() => {
+    const library = readGuidedComicProjectLibrary();
+    const activeProject =
+      library?.projects.find((project) => project.projectId === library.activeProjectId) ?? library?.projects[0] ?? null;
+    if (library && activeProject) {
+      return {
+        draft: snapshotToGuidedComicDraft(activeProject.snapshot, activeProject.updatedAt),
+        library,
+        activeProjectId: activeProject.projectId,
+        migratedDraft: false,
+      };
+    }
+
+    const draft = readGuidedComicDraft();
+    if (!draft) {
+      return {
+        draft: null,
+        library: null,
+        activeProjectId: null,
+        migratedDraft: false,
+      };
+    }
+
+    const migratedLibrary = createGuidedComicProjectLibrary(draftToGuidedComicProjectSnapshot(draft));
+    return {
+      draft,
+      library: migratedLibrary,
+      activeProjectId: migratedLibrary.activeProjectId,
+      migratedDraft: true,
+    };
+  });
+  const restoredDraft = restoredProjectState.draft;
+  const [projectLibrary, setProjectLibrary] = useState<GuidedComicProjectLibrary | null>(() => restoredProjectState.library);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => restoredProjectState.activeProjectId);
+  const [projectLibraryStatus, setProjectLibraryStatus] = useState<string | null>(() =>
+    restoredProjectState.migratedDraft ? 'Recovered current draft into Comic Library.' : null,
+  );
   const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
   const [setupForm, setSetupForm] = useState<SetupFormState>(() => restoredDraft?.setupForm ?? DEFAULT_SETUP_FORM);
   const [storyForm, setStoryForm] = useState<StoryFormState>(() => restoredDraft?.storyForm ?? DEFAULT_STORY_FORM);
@@ -827,6 +1033,96 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(() => restoredDraft?.savedAt ?? null);
+  const [guidedAiLoadingAction, setGuidedAiLoadingAction] = useState<GuidedComicAssistAction | null>(null);
+  const [guidedAiError, setGuidedAiError] = useState<string | null>(null);
+  const [guidedAiPreview, setGuidedAiPreview] = useState<{
+    action: GuidedComicAssistAction;
+    label: string;
+    result: GuidedComicAssistResult;
+    selectedOnly: boolean;
+  } | null>(null);
+  const [guidedAiAcceptedNotes, setGuidedAiAcceptedNotes] = useState<Pick<
+    GuidedComicAssistResult,
+    'pacingNotes' | 'referenceNeeds' | 'dialogueNotes' | 'narrationNotes'
+  > | null>(null);
+  const currentProject = useMemo(
+    () => projectLibrary?.projects.find((project) => project.projectId === activeProjectId) ?? null,
+    [activeProjectId, projectLibrary],
+  );
+  const currentProjectSnapshot = useMemo<GuidedComicProjectSnapshot>(
+    () => ({
+      setupForm,
+      storyForm,
+      outlineBeats,
+      pageCards,
+      characterReferences,
+      locationReferences,
+      npcReferences,
+      panelArtStatuses,
+      panelArtImages,
+      pageLayoutTemplates,
+      artDirection,
+      currentStep: activeStep.id,
+      selectedPanelId,
+    }),
+    [
+      activeStep.id,
+      artDirection,
+      characterReferences,
+      locationReferences,
+      npcReferences,
+      outlineBeats,
+      pageCards,
+      pageLayoutTemplates,
+      panelArtImages,
+      panelArtStatuses,
+      selectedPanelId,
+      setupForm,
+      storyForm,
+    ],
+  );
+  const hasUnsavedProjectChanges = useMemo(
+    () => isGuidedComicProjectSnapshotDirty(currentProjectSnapshot, currentProject),
+    [currentProject, currentProjectSnapshot],
+  );
+  const currentComicDisplayName = currentProject
+    ? getGuidedComicProjectDisplayName(currentProject)
+    : getGuidedComicProjectDisplayName({
+        seriesTitle: setupForm.seriesTitle,
+        issueTitle: setupForm.issueTitle,
+        issueNumber: setupForm.issueNumber,
+      });
+
+  useEffect(() => {
+    if (!projectLibrary) return;
+    writeGuidedComicProjectLibrary(projectLibrary);
+  }, [projectLibrary]);
+
+  useEffect(() => {
+    if (!projectLibraryStatus) return;
+    const timeout = window.setTimeout(() => setProjectLibraryStatus(null), PROJECT_LIBRARY_STATUS_CLEAR_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [projectLibraryStatus]);
+
+  const applyGuidedComicProjectSnapshot = useCallback((snapshot: GuidedComicProjectSnapshot, savedAt: string | null) => {
+    const draft = snapshotToGuidedComicDraft(snapshot, savedAt ?? '');
+    setActiveIndex(draft.activeIndex);
+    setSetupForm(draft.setupForm);
+    setStoryForm(draft.storyForm);
+    setArtDirection(draft.artDirection);
+    setOutlineBeats(draft.outlineBeats);
+    setPageCards(draft.pageCards);
+    setActivePageNumber(draft.pageCards[0]?.pageNumber ?? null);
+    setCharacterReferences(draft.characterReferences);
+    setLocationReferences(draft.locationReferences);
+    setNpcReferences(draft.npcReferences);
+    setNpcReferenceName('');
+    setSelectedPanelId(draft.selectedPanelId);
+    setPanelArtStatuses(draft.panelArtStatuses);
+    setPanelArtImages(draft.panelArtImages);
+    setPageLayoutTemplates(draft.pageLayoutTemplates);
+    setDraftSavedAt(savedAt);
+  }, []);
 
   const assignPanelArtImage = useCallback(
     (
@@ -1059,6 +1355,167 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setActivePageNumber(pageNumber);
     pageSectionRefs.current[pageNumber]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const saveCurrentComic = () => {
+    const timestamp = new Date().toISOString();
+    const project = createGuidedComicProject(currentProjectSnapshot, {
+      projectId: currentProject?.projectId,
+      createdAt: currentProject?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    });
+    const nextLibrary = upsertGuidedComicProject(
+      projectLibrary ?? {
+        version: 1,
+        activeProjectId: project.projectId,
+        updatedAt: timestamp,
+        projects: [],
+      },
+      project,
+      true,
+    );
+    setProjectLibrary(nextLibrary);
+    setActiveProjectId(project.projectId);
+    setProjectLibraryStatus(`Saved ${getGuidedComicProjectDisplayName(project)}.`);
+  };
+  const saveAsNewComic = () => {
+    const promptedSeriesTitle = window.prompt('Save as new comic series title', setupForm.seriesTitle || 'Untitled guided comic');
+    if (promptedSeriesTitle === null) return;
+    const timestamp = new Date().toISOString();
+    const snapshot: GuidedComicProjectSnapshot = {
+      ...currentProjectSnapshot,
+      setupForm: {
+        ...currentProjectSnapshot.setupForm,
+        seriesTitle: promptedSeriesTitle.trim() || 'Untitled guided comic',
+      },
+    };
+    const project = createGuidedComicProject(snapshot, {
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const nextLibrary = upsertGuidedComicProject(
+      projectLibrary ?? {
+        version: 1,
+        activeProjectId: project.projectId,
+        updatedAt: timestamp,
+        projects: [],
+      },
+      project,
+      true,
+    );
+    setProjectLibrary(nextLibrary);
+    setActiveProjectId(project.projectId);
+    applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
+    setProjectLibraryStatus(`Saved new comic ${getGuidedComicProjectDisplayName(project)}.`);
+  };
+  const renameCurrentComic = () => {
+    if (!projectLibrary || !currentProject) {
+      saveCurrentComic();
+      return;
+    }
+    const seriesTitle = window.prompt('Series title', currentProject.seriesTitle || setupForm.seriesTitle);
+    if (seriesTitle === null) return;
+    const issueTitle = window.prompt('Issue title', currentProject.issueTitle || setupForm.issueTitle);
+    if (issueTitle === null) return;
+    const issueNumber = window.prompt('Issue number', currentProject.issueNumber || setupForm.issueNumber);
+    if (issueNumber === null) return;
+
+    const timestamp = new Date().toISOString();
+    const renamedLibrary = renameGuidedComicProject(projectLibrary, currentProject.projectId, {
+      seriesTitle,
+      issueTitle,
+      issueNumber,
+      updatedAt: timestamp,
+    });
+    const renamedProject = renamedLibrary.projects.find((project) => project.projectId === currentProject.projectId);
+    if (renamedProject) {
+      const snapshot: GuidedComicProjectSnapshot = {
+        ...renamedProject.snapshot,
+        setupForm: {
+          ...renamedProject.snapshot.setupForm,
+          seriesTitle: renamedProject.seriesTitle,
+          issueTitle: renamedProject.issueTitle,
+          issueNumber: renamedProject.issueNumber,
+        },
+      };
+      const nextProject: GuidedComicProject = {
+        ...renamedProject,
+        snapshot,
+      };
+      const nextLibrary = upsertGuidedComicProject(renamedLibrary, nextProject, true);
+      setProjectLibrary(nextLibrary);
+      applyGuidedComicProjectSnapshot(snapshot, nextProject.updatedAt);
+      setProjectLibraryStatus(`Renamed to ${getGuidedComicProjectDisplayName(nextProject)}.`);
+    }
+  };
+  const duplicateCurrentComic = () => {
+    const timestamp = new Date().toISOString();
+    const baseProject = createGuidedComicProject(currentProjectSnapshot, {
+      projectId: currentProject?.projectId,
+      createdAt: currentProject?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    });
+    const duplicatedProject = duplicateGuidedComicProject(baseProject, {
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const nextLibrary = upsertGuidedComicProject(
+      projectLibrary ?? {
+        version: 1,
+        activeProjectId: duplicatedProject.projectId,
+        updatedAt: timestamp,
+        projects: [],
+      },
+      duplicatedProject,
+      true,
+    );
+    setProjectLibrary(nextLibrary);
+    setActiveProjectId(duplicatedProject.projectId);
+    applyGuidedComicProjectSnapshot(duplicatedProject.snapshot, duplicatedProject.updatedAt);
+    setProjectLibraryStatus(`Duplicated ${getGuidedComicProjectDisplayName(duplicatedProject)}.`);
+  };
+  const startNewComic = () => {
+    const confirmed = window.confirm(
+      hasUnsavedProjectChanges
+        ? 'Start a new guided comic? Unsaved changes in the current comic will stay in the recovery draft, but they will not be saved to the Comic Library.'
+        : 'Start a new guided comic?',
+    );
+    if (!confirmed) return;
+
+    setActiveProjectId(null);
+    applyGuidedComicProjectSnapshot(buildEmptyGuidedComicProjectSnapshot(), null);
+    setProjectLibraryStatus('Started a new unsaved guided comic.');
+  };
+  const switchCurrentComic = (projectId: string) => {
+    if (!projectLibrary || projectId === activeProjectId) return;
+    const project = projectLibrary.projects.find((candidate) => candidate.projectId === projectId);
+    if (!project) return;
+    if (hasUnsavedProjectChanges) {
+      const confirmed = window.confirm(
+        'Switch comics without saving current changes to the Comic Library? The recovery draft will still keep the latest browser state.',
+      );
+      if (!confirmed) return;
+    }
+    setActiveProjectId(project.projectId);
+    setProjectLibrary({
+      ...projectLibrary,
+      activeProjectId: project.projectId,
+      updatedAt: new Date().toISOString(),
+    });
+    applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
+    setProjectLibraryStatus(`Loaded ${getGuidedComicProjectDisplayName(project)}.`);
+  };
+  const deleteCurrentComic = () => {
+    if (!projectLibrary || !currentProject) return;
+    const confirmed = window.confirm(`Delete "${getGuidedComicProjectDisplayName(currentProject)}" from this browser?`);
+    if (!confirmed) return;
+
+    const nextLibrary = deleteGuidedComicProject(projectLibrary, currentProject.projectId);
+    const nextProject = nextLibrary.projects.find((project) => project.projectId === nextLibrary.activeProjectId) ?? null;
+    setProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
+    setActiveProjectId(nextProject?.projectId ?? null);
+    writeGuidedComicProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
+    applyGuidedComicProjectSnapshot(nextProject?.snapshot ?? buildEmptyGuidedComicProjectSnapshot(), nextProject?.updatedAt ?? null);
+    setProjectLibraryStatus(nextProject ? `Deleted comic. Loaded ${getGuidedComicProjectDisplayName(nextProject)}.` : 'Deleted comic.');
+  };
   const updateSetupField = (field: keyof SetupFormState, value: string) => {
     setSetupForm((current) => ({ ...current, [field]: value }));
   };
@@ -1075,7 +1532,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     pageNumber: number,
     updates: Partial<Pick<PageCard, 'summary' | 'panelCount' | 'keyCharacters' | 'keyLocation' | 'expanded'>>,
   ) => {
-    setPageCards((current) => current.map((page) => (page.pageNumber === pageNumber ? { ...page, ...updates } : page)));
+    setPageCards((current) =>
+      current.map((page) => {
+        if (page.pageNumber !== pageNumber) return page;
+        const nextPage = { ...page, ...updates };
+        if (updates.panelCount !== undefined) {
+          nextPage.panelCount = String(getGuidedComicActivePanelCount(nextPage));
+          nextPage.panelBeats = getGuidedComicExistingPanelBeats(nextPage);
+        }
+        return nextPage;
+      }),
+    );
   };
   const updatePagePanelBeat = (pageNumber: number, panelIndex: number, value: string) => {
     setPageCards((current) =>
@@ -1195,7 +1662,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
   };
+  const openBlankAdvancedStudio = () => {
+    const confirmed = window.confirm('Open a blank Advanced Comics Studio workspace? Save this guided comic first if you want the latest guided changes in the library.');
+    if (!confirmed) return;
+    onOpenAdvancedStudio();
+  };
   const openPageInAdvancedStudio = (page: PageCard) => {
+    const confirmed = window.confirm(`Send page ${page.pageNumber} to Advanced Comics Studio? This will open the advanced editor with the current guided layout handoff.`);
+    if (!confirmed) return;
+
     const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
     const layoutPanels = getGuidedComicLayoutPanels(page, layoutTemplate);
     const orderedPanelIds = layoutPanels.map(
@@ -1217,6 +1692,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     requestLayoutHandoff({
       pageNumber: page.pageNumber,
       layoutTemplate,
+      panelCount: layoutPanels.length,
       orderedPanelIds,
       panelArtImages: handoffPanelArtImages,
       panelBeats: orderedPanelIds.map((panelId, index) => ({
@@ -1228,11 +1704,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     onOpenAdvancedStudio();
   };
   const clearGuidedDraft = () => {
-    const confirmed = window.confirm('Clear the saved guided comic draft from this browser? This resets the guided flow.');
+    const confirmed = window.confirm(
+      'Clear the saved recovery draft from this browser and reset the current guided flow? Saved Comic Library projects will remain available.',
+    );
     if (!confirmed) return;
 
     skipNextDraftSaveRef.current = true;
     removeGuidedComicDraft();
+    setActiveProjectId(null);
     setActiveIndex(0);
     setSetupForm(DEFAULT_SETUP_FORM);
     setStoryForm(DEFAULT_STORY_FORM);
@@ -1248,6 +1727,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPanelArtImages({});
     setPageLayoutTemplates({});
     setDraftSavedAt(null);
+    setProjectLibraryStatus('Cleared the recovery draft. Saved library comics were kept.');
   };
 
   const storyCharacters = useMemo(() => splitListText(storyForm.mainCharacters), [storyForm.mainCharacters]);
@@ -1324,6 +1804,117 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     ? panelArtStatuses[selectedPanel.id] ?? 'needs-art'
     : 'needs-art';
   const selectedPanelArtImage = selectedPanel ? panelArtImages[selectedPanel.id] : null;
+  const guidedAiDraft = useMemo<GuidedComicAiDraft>(
+    () => ({
+      currentStep: activeStep.id,
+      setupForm,
+      storyForm,
+      artDirection,
+      outlineBeats,
+      pageCards,
+      characterReferences,
+      locationReferences,
+      npcReferences,
+      panelArtStatuses,
+      panelArtImages,
+      pageLayoutTemplates,
+      selectedPageNumber: activePageNumber ?? selectedPanel?.pageNumber ?? pageCards[0]?.pageNumber ?? null,
+      selectedPanelId: selectedPanel?.id ?? selectedPanelId,
+    }),
+    [
+      activePageNumber,
+      activeStep.id,
+      artDirection,
+      characterReferences,
+      locationReferences,
+      npcReferences,
+      outlineBeats,
+      pageCards,
+      pageLayoutTemplates,
+      panelArtImages,
+      panelArtStatuses,
+      selectedPanel,
+      selectedPanelId,
+      setupForm,
+      storyForm,
+    ],
+  );
+  const guidedAiContext = useMemo(() => buildGuidedComicAiContext(guidedAiDraft), [guidedAiDraft]);
+  const guidedPacingChecks = useMemo(() => getGuidedComicPacingChecks(guidedAiContext), [guidedAiContext]);
+  const guidedAiActions = GUIDED_COMIC_AI_ACTIONS_BY_STEP[activeStep.id];
+  const runGuidedComicAiAction = useCallback(
+    async (action: GuidedComicAssistAction, forceSelectedOnly = false) => {
+      const actionOption = GUIDED_COMIC_AI_ACTIONS_BY_STEP[activeStep.id].find((option) => option.action === action);
+      setGuidedAiError(null);
+      if (!isSupabaseConfigured()) {
+        setGuidedAiError('Supabase is not configured. Guided AI uses the same signed-in writer-tools path as Writers’ Workshop.');
+        return;
+      }
+      setGuidedAiLoadingAction(action);
+      const selectedOnly =
+        forceSelectedOnly ||
+        action === 'regenerate_selected_page' ||
+        action === 'strengthen_panel_prompt' ||
+        action === 'suggest_shot_direction';
+      const res = await invokeWriterTools({
+        mode: 'guided_comic_assist',
+        action,
+        selectedPageNumber: guidedAiContext.selectedPage?.pageNumber,
+        selectedPanelId: guidedAiContext.selectedPanel?.id ?? selectedPanel?.id ?? undefined,
+        context: {
+          ...guidedAiContext,
+          pacingChecks: guidedPacingChecks,
+        },
+      });
+      setGuidedAiLoadingAction(null);
+
+      if (!res.success) {
+        setGuidedAiError([res.error, res.details].filter(Boolean).join(' · '));
+        return;
+      }
+
+      const parsed = guidedComicAssistResultSchema.safeParse(res.data);
+      if (!parsed.success) {
+        setGuidedAiError('Guided AI returned unexpected JSON.');
+        return;
+      }
+
+      setGuidedAiPreview({
+        action,
+        label: actionOption?.label ?? action.replace(/_/g, ' '),
+        result: parsed.data,
+        selectedOnly,
+      });
+    },
+    [activeStep.id, guidedAiContext, guidedPacingChecks, selectedPanel],
+  );
+  const applyGuidedAiPreview = (mode: 'empty-only' | 'replace-confirmed') => {
+    if (!guidedAiPreview) return;
+    if (
+      mode === 'replace-confirmed' &&
+      !window.confirm('Replace existing guided comic text with this AI preview? This will update only guided draft fields, not images or exports.')
+    ) {
+      return;
+    }
+    const nextDraft = applyGuidedComicAiResult(guidedAiDraft, guidedAiPreview.result, {
+      mode,
+      selectedOnly: guidedAiPreview.selectedOnly,
+      selectedPageNumber: guidedAiContext.selectedPage?.pageNumber ?? activePageNumber,
+    });
+    setSetupForm(nextDraft.setupForm);
+    setStoryForm(nextDraft.storyForm);
+    setArtDirection(nextDraft.artDirection);
+    setOutlineBeats(nextDraft.outlineBeats as OutlineBeat[]);
+    setPageCards(nextDraft.pageCards as PageCard[]);
+    setPageLayoutTemplates(nextDraft.pageLayoutTemplates as Record<number, LayoutTemplateId>);
+    setGuidedAiAcceptedNotes({
+      pacingNotes: guidedAiPreview.result.pacingNotes,
+      referenceNeeds: guidedAiPreview.result.referenceNeeds,
+      dialogueNotes: guidedAiPreview.result.dialogueNotes,
+      narrationNotes: guidedAiPreview.result.narrationNotes,
+    });
+    setGuidedAiPreview(null);
+  };
   const openImageshopWithSelectedPanel = useCallback(() => {
     if (!selectedPanel) return;
 
@@ -1593,8 +2184,117 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           </nav>
           {pageNavigator}
           <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
+            <div className="flex items-start gap-2">
+              <BookMarked className="mt-0.5 h-4 w-4 shrink-0" style={{ color: ACCENT_GOLD_LIGHT }} aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                  Current comic
+                </p>
+                <p className="mt-1 truncate text-xs font-black text-white">{currentComicDisplayName}</p>
+                <p className="mt-1 text-[11px] font-bold text-white/45">
+                  {currentProject ? `Updated ${new Date(currentProject.updatedAt).toLocaleString()}` : 'Unsaved local comic'}
+                </p>
+              </div>
+            </div>
+            <span
+              className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                hasUnsavedProjectChanges
+                  ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                  : 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100'
+              }`}
+            >
+              {hasUnsavedProjectChanges ? 'Unsaved library changes' : 'Saved to library'}
+            </span>
+            <label className="mt-3 flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Comic Library
+              <select
+                value={activeProjectId ?? ''}
+                onChange={(event) => switchCurrentComic(event.target.value)}
+                disabled={!projectLibrary?.projects.length}
+                className="rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none disabled:opacity-45"
+              >
+                <option value="" disabled={Boolean(activeProjectId)}>
+                  Unsaved local comic
+                </option>
+                {projectLibrary?.projects.map((project) => (
+                  <option key={project.projectId} value={project.projectId}>
+                    {getGuidedComicProjectDisplayName(project)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Tooltip content="Save current guided state to this comic">
+                <button
+                  type="button"
+                  onClick={saveCurrentComic}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+                >
+                  <Save className="h-3.5 w-3.5" aria-hidden />
+                  Save
+                </button>
+              </Tooltip>
+              <Tooltip content="Save the current guided state as a new comic">
+                <button
+                  type="button"
+                  onClick={saveAsNewComic}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+                  Save as
+                </button>
+              </Tooltip>
+              <Tooltip content="Rename the saved comic">
+                <button
+                  type="button"
+                  onClick={renameCurrentComic}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+                >
+                  <Edit3 className="h-3.5 w-3.5" aria-hidden />
+                  Rename
+                </button>
+              </Tooltip>
+              <Tooltip content="Duplicate the current comic into a new library entry">
+                <button
+                  type="button"
+                  onClick={duplicateCurrentComic}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden />
+                  Duplicate
+                </button>
+              </Tooltip>
+              <Tooltip content="Start a new unsaved guided comic">
+                <button
+                  type="button"
+                  onClick={startNewComic}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+                >
+                  <FilePlus className="h-3.5 w-3.5" aria-hidden />
+                  New
+                </button>
+              </Tooltip>
+              <Tooltip content="Delete this comic from the local library">
+                <button
+                  type="button"
+                  onClick={deleteCurrentComic}
+                  disabled={!currentProject}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-300/20 bg-rose-500/10 px-2 py-2 text-[11px] font-bold text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Delete
+                </button>
+              </Tooltip>
+            </div>
+            {projectLibraryStatus ? (
+              <p className="mt-2 rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-2 py-1.5 text-[11px] font-bold text-emerald-100">
+                {projectLibraryStatus}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-              Local draft
+              Recovery draft
             </p>
             <span className="mt-2 inline-flex rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-[11px] font-bold text-emerald-100">
               {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
@@ -1609,7 +2309,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             <Tooltip content="Open the advanced editor without sending a guided page">
               <button
                 type="button"
-                onClick={onOpenAdvancedStudio}
+                onClick={openBlankAdvancedStudio}
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
                 style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
               >
@@ -1683,17 +2383,98 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           })}
         </nav>
 
-        <div className="grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm sm:grid-cols-[auto_auto] xl:hidden">
-          <span className="inline-flex items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100">
-            {draftSavedAt ? 'Saved locally' : 'Local draft not saved'}
-          </span>
-          <button
-            type="button"
-            onClick={clearGuidedDraft}
-            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
-          >
-            Clear guided draft
-          </button>
+        <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm xl:hidden">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                Current comic
+              </p>
+              <p className="mt-1 truncate text-sm font-black text-white">{currentComicDisplayName}</p>
+              <p className="mt-1 text-xs font-bold text-white/45">
+                {hasUnsavedProjectChanges ? 'Unsaved library changes' : 'Saved to Comic Library'} ·{' '}
+                {draftSavedAt ? 'Recovery draft saved' : 'Recovery draft not saved'}
+              </p>
+            </div>
+            <select
+              value={activeProjectId ?? ''}
+              onChange={(event) => switchCurrentComic(event.target.value)}
+              disabled={!projectLibrary?.projects.length}
+              className="min-w-0 rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold text-white outline-none disabled:opacity-45 md:w-64"
+            >
+              <option value="" disabled={Boolean(activeProjectId)}>
+                Unsaved local comic
+              </option>
+              {projectLibrary?.projects.map((project) => (
+                <option key={project.projectId} value={project.projectId}>
+                  {getGuidedComicProjectDisplayName(project)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            <button
+              type="button"
+              onClick={saveCurrentComic}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+            >
+              <Save className="h-3.5 w-3.5" aria-hidden />
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={saveAsNewComic}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+            >
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+              Save as
+            </button>
+            <button
+              type="button"
+              onClick={renameCurrentComic}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+            >
+              <Edit3 className="h-3.5 w-3.5" aria-hidden />
+              Rename
+            </button>
+            <button
+              type="button"
+              onClick={duplicateCurrentComic}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+              Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={startNewComic}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+            >
+              <FilePlus className="h-3.5 w-3.5" aria-hidden />
+              New
+            </button>
+            <button
+              type="button"
+              onClick={deleteCurrentComic}
+              disabled={!currentProject}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-300/20 bg-rose-500/10 px-2 py-2 text-[11px] font-bold text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              Delete
+            </button>
+            <button
+              type="button"
+              onClick={clearGuidedDraft}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/70 transition hover:bg-white/10"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              Clear draft
+            </button>
+          </div>
+          {projectLibraryStatus ? (
+            <p className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100">
+              {projectLibraryStatus}
+            </p>
+          ) : null}
         </div>
 
         <main className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1729,18 +2510,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     {isSetupStep
                       ? 'Complete the local brief, then continue into Story. Your draft is saved locally in this browser.'
                       : isStoryStep
-                        ? 'Shape the story locally here. The outline action is still parked until AI wiring is added.'
+                        ? 'Shape the story locally here, or preview AI suggestions before accepting them into the draft.'
                         : isPagesStep
-                          ? 'Edit local page cards before moving into visual reference prep.'
+                          ? 'Edit local page cards or preview AI page and panel beat suggestions.'
                           : isVisualPrepStep
                             ? 'Use Image Vault to attach real references to character and location rows. Advanced Imageshop still handles image generation.'
-                            : isArtStep
-                              ? 'Panel art generation is not wired here yet. Use Advanced Imageshop to generate actual images for now.'
+                          : isArtStep
+                              ? 'Preview prompt and camera suggestions, then use Advanced Imageshop to generate actual images.'
                               : isLayoutStep
-                                ? 'Choose page layout templates locally before the final export review.'
+                                ? 'Choose page layout templates locally, with optional AI layout pacing suggestions.'
                                 : isExportStep
-                                  ? 'Review the local comic plan. Export actions are placeholders until file generation is wired.'
-                      : 'This button is a planning placeholder for now; no AI calls or data changes happen in this pass.'}
+                                  ? 'Review the local comic plan. AI can find story, reference, art, and layout gaps before export.'
+                      : 'Preview AI suggestions before applying them; no accepted change is written silently.'}
                   </p>
                 </div>
                 <button
@@ -1773,6 +2554,45 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </button>
                 </div>
               ) : null}
+
+              <section className="mt-4 rounded-xl border border-sky-300/20 bg-sky-300/10 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
+                      AI writing assist
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-sky-50/75">
+                      Uses Writers’ Workshop writer-tools. Results open as a preview and never overwrite text until accepted.
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 rounded-full border border-sky-200/25 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-50/75">
+                    Preview first
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {guidedAiActions.map((option) => {
+                    const loading = guidedAiLoadingAction === option.action;
+                    return (
+                      <Tooltip key={option.action} content={option.description}>
+                        <button
+                          type="button"
+                          disabled={Boolean(guidedAiLoadingAction)}
+                          onClick={() => void runGuidedComicAiAction(option.action)}
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                          {loading ? 'Thinking...' : option.label}
+                        </button>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+                {guidedAiError ? (
+                  <p className="mt-3 rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100">
+                    {guidedAiError}
+                  </p>
+                ) : null}
+              </section>
 
               {isSetupStep ? (
                 <div className="mt-5 grid gap-4">
@@ -2940,6 +3760,43 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           </section>
 
           <aside className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm">
+            <section className="mb-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                Pacing review
+              </p>
+              <h3 className="mt-2 text-lg font-black text-white">Guided readiness checks</h3>
+              <div className="mt-3 space-y-2">
+                {guidedPacingChecks.slice(0, 6).map((check) => (
+                  <div key={check.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white/75">{check.label}</p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-white/45">{check.detail}</p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                      style={{
+                        borderColor: check.status === 'ready' ? `${ACCENT_GOLD_SOLID}88` : 'rgba(251,113,133,0.35)',
+                        color: check.status === 'ready' ? ACCENT_GOLD_LIGHT : 'rgb(254,205,211)',
+                      }}
+                    >
+                      {check.status === 'ready' ? 'Ready' : 'Gap'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {guidedAiAcceptedNotes?.pacingNotes?.length ? (
+                <div className="mt-3 rounded-lg border border-sky-300/20 bg-sky-300/10 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/65">
+                    AI pacing notes
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs leading-relaxed text-sky-50/75">
+                    {guidedAiAcceptedNotes.pacingNotes.slice(0, 4).map((note, index) => (
+                      <li key={`${note}-${index}`}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
             {isStoryStep ? (
               <>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
@@ -3112,6 +3969,133 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             )}
           </aside>
         </main>
+        {guidedAiPreview ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+            <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-[#101529] p-5 shadow-2xl custom-scrollbar">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                    AI preview
+                  </p>
+                  <h3 className="mt-2 text-2xl font-black text-white">
+                    {guidedAiPreview.result.title || guidedAiPreview.label}
+                  </h3>
+                  {guidedAiPreview.result.summary ? (
+                    <p className="mt-2 text-sm leading-relaxed text-white/65">{guidedAiPreview.result.summary}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGuidedAiPreview(null)}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10"
+                >
+                  Reject
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-4">
+                {guidedAiPreview.result.suggestions?.length ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Suggestions</p>
+                    <ul className="mt-2 space-y-1 text-sm leading-relaxed text-white/75">
+                      {guidedAiPreview.result.suggestions.map((suggestion, index) => (
+                        <li key={`${suggestion}-${index}`}>{suggestion}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {guidedAiPreview.result.replacements ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Field suggestions</p>
+                    <pre className="mt-2 max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/10 bg-black/30 p-3 text-xs leading-relaxed text-white/75 custom-scrollbar">
+                      {JSON.stringify(guidedAiPreview.result.replacements, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+
+                {guidedAiPreview.result.outlineBeats?.length ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Outline beats</p>
+                    <div className="mt-2 space-y-2">
+                      {guidedAiPreview.result.outlineBeats.map((beat, index) => (
+                        <div key={`${beat.id ?? beat.title ?? 'beat'}-${index}`} className="rounded-lg border border-white/10 bg-black/25 p-3">
+                          <p className="text-xs font-black text-white">{beat.title ?? beat.id ?? `Beat ${index + 1}`}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-white/65">{beat.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {guidedAiPreview.result.pageUpdates?.length ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Page and panel updates</p>
+                    <div className="mt-2 space-y-2">
+                      {guidedAiPreview.result.pageUpdates.map((page) => (
+                        <div key={page.pageNumber} className="rounded-lg border border-white/10 bg-black/25 p-3">
+                          <p className="text-xs font-black text-white">Page {page.pageNumber}</p>
+                          {page.summary ? <p className="mt-1 text-xs leading-relaxed text-white/65">{page.summary}</p> : null}
+                          {page.panelBeats?.length ? (
+                            <ul className="mt-2 space-y-1 text-xs leading-relaxed text-white/55">
+                              {page.panelBeats.map((beat, index) => (
+                                <li key={`${page.pageNumber}-${index}`}>Panel {index + 1}: {beat}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {[
+                  ['Pacing notes', guidedAiPreview.result.pacingNotes],
+                  ['Reference needs', guidedAiPreview.result.referenceNeeds?.map((need) => `${need.type}: ${need.name}${need.reason ? ` — ${need.reason}` : ''}`)],
+                  ['Dialogue notes', guidedAiPreview.result.dialogueNotes],
+                  ['Narration notes', guidedAiPreview.result.narrationNotes],
+                ].map(([title, items]) =>
+                  Array.isArray(items) && items.length ? (
+                    <div key={title as string} className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">{title as string}</p>
+                      <ul className="mt-2 space-y-1 text-sm leading-relaxed text-white/70">
+                        {(items as string[]).map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+
+              <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => applyGuidedAiPreview('empty-only')}
+                  className="rounded-xl px-4 py-2.5 text-xs font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
+                  style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                >
+                  Apply to empty fields only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGuidedAiPreview('replace-confirmed')}
+                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                >
+                  Replace with confirmation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runGuidedComicAiAction(guidedAiPreview.action, true)}
+                  disabled={Boolean(guidedAiLoadingAction)}
+                  className="rounded-xl border border-sky-300/25 bg-sky-300/10 px-4 py-2.5 text-xs font-bold text-sky-50 transition hover:bg-sky-300/15 disabled:opacity-45"
+                >
+                  Regenerate selected only
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
     </div>
   );

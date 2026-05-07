@@ -228,6 +228,124 @@ export const writerToolsIdeaAssistRequestSchema = z.object({
   page_id: z.string().uuid().optional(),
 });
 
+export const guidedComicAssistActionSchema = z.enum([
+  'improve_premise',
+  'suggest_genre_tone',
+  'generate_story_foundation',
+  'suggest_conflict_stakes_ending',
+  'generate_issue_outline',
+  'generate_page_plan',
+  'generate_missing_page_summaries',
+  'regenerate_selected_page',
+  'generate_panel_beats',
+  'suggest_reference_needs',
+  'strengthen_panel_prompt',
+  'suggest_shot_direction',
+  'suggest_layout_pacing',
+  'recommend_layouts',
+  'review_readiness',
+  'find_export_gaps',
+]);
+
+export const guidedComicAssistContextSchema = z
+  .object({
+    currentStep: z.enum(['setup', 'story', 'pages', 'visual-prep', 'art', 'layout', 'export']),
+    setupForm: z.record(z.unknown()),
+    storyForm: z.record(z.unknown()),
+    artDirection: z.record(z.unknown()),
+    outlineBeats: z.array(z.unknown()).max(24),
+    pageCards: z.array(z.unknown()).max(80),
+    selectedPage: z.unknown().optional(),
+    selectedPanel: z.unknown().optional(),
+    referenceCounts: z
+      .object({
+        characters: z.number().int().min(0).max(500),
+        locations: z.number().int().min(0).max(500),
+        npcs: z.number().int().min(0).max(500),
+      })
+      .optional(),
+    missingReferences: z.array(z.string().max(500)).max(200).optional(),
+    pacingChecks: z.array(z.unknown()).max(40).optional(),
+  })
+  .passthrough();
+
+export const writerToolsGuidedComicAssistRequestSchema = z
+  .object({
+    mode: z.literal('guided_comic_assist'),
+    action: guidedComicAssistActionSchema,
+    context: guidedComicAssistContextSchema,
+    selectedPageNumber: z.number().int().positive().max(500).optional(),
+    selectedPanelId: z.string().max(200).optional(),
+  })
+  .strict();
+
+const guidedComicFieldReplacementSchema = z.object({
+  setupForm: z.record(z.string()).optional(),
+  storyForm: z.record(z.string()).optional(),
+  artDirection: z.record(z.union([z.string(), z.boolean()])).optional(),
+});
+
+const guidedComicOutlineBeatSuggestionSchema = z.object({
+  id: z.string().max(120).optional(),
+  title: z.string().max(200).optional(),
+  description: z.string().max(4000),
+});
+
+const guidedComicPageUpdateSchema = z.object({
+  pageNumber: z.number().int().positive().max(500),
+  summary: z.string().max(4000).optional(),
+  panelCount: z.string().max(20).optional(),
+  keyCharacters: z.string().max(2000).optional(),
+  keyLocation: z.string().max(2000).optional(),
+  panelBeats: z.array(z.string().max(2000)).max(24).optional(),
+  layoutTemplate: z
+    .enum(['auto', 'three-panel', 'three-panel-wide-top', 'three-panel-wide-bottom', 'four-panel', 'six-panel-grid', 'splash'])
+    .optional(),
+});
+
+function normalizeGuidedComicNote(note: unknown): string {
+  if (typeof note === 'string') return note;
+  if (!note || typeof note !== 'object' || Array.isArray(note)) return String(note ?? '');
+
+  const record = note as Record<string, unknown>;
+  const preferredKeys = ['note', 'detail', 'suggestion', 'summary', 'text', 'reason', 'title'];
+  const parts = preferredKeys
+    .map((key) => record[key])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+  if (parts.length > 0) return parts.join(' - ');
+  return JSON.stringify(record);
+}
+
+const guidedComicNoteSchema = z
+  .union([z.string(), z.record(z.unknown())])
+  .transform(normalizeGuidedComicNote)
+  .pipe(z.string().max(2000));
+
+export const guidedComicAssistResultSchema = z
+  .object({
+    title: z.string().max(200).optional(),
+    summary: z.string().max(4000).optional(),
+    suggestions: z.array(z.string().max(2000)).max(48).optional(),
+    replacements: guidedComicFieldReplacementSchema.optional(),
+    outlineBeats: z.array(guidedComicOutlineBeatSuggestionSchema).max(24).optional(),
+    pageUpdates: z.array(guidedComicPageUpdateSchema).max(80).optional(),
+    pacingNotes: z.array(guidedComicNoteSchema).max(48).optional(),
+    referenceNeeds: z
+      .array(
+        z.object({
+          type: z.enum(['character', 'location', 'npc', 'prop', 'style']),
+          name: z.string().max(200),
+          reason: z.string().max(1000).optional(),
+        }),
+      )
+      .max(80)
+      .optional(),
+    dialogueNotes: z.array(guidedComicNoteSchema).max(48).optional(),
+    narrationNotes: z.array(guidedComicNoteSchema).max(48).optional(),
+  })
+  .passthrough();
+
 export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
@@ -237,6 +355,7 @@ export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsCanonCheckRequestSchema,
   writerToolsPlanShotsRequestSchema,
   writerToolsIdeaAssistRequestSchema,
+  writerToolsGuidedComicAssistRequestSchema,
 ]);
 
 const writerToolsSuccessSchema = z.object({

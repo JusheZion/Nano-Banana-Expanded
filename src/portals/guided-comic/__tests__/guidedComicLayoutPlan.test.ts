@@ -63,4 +63,25 @@ describe('guided comic layout planning', () => {
       gridAutoRows: 'minmax(96px, 1fr)',
     });
   });
+
+  it('supports a two-over-one-wide three-panel template', () => {
+    const panels = getGuidedComicLayoutPanels(
+      {
+        pageNumber: 1,
+        panelCount: '3',
+        panelBeats: ['Reaction left', 'Reaction right', 'Wide reveal across the bottom', 'Old extra beat'],
+      },
+      'three-panel-wide-bottom',
+    );
+
+    expect(panels).toHaveLength(3);
+    expect(panels.map((panel) => panel.panelNumber)).toEqual([1, 2, 3]);
+    expect(panels[0]).toMatchObject({ columnSpan: 1, rowSpan: 1 });
+    expect(panels[1]).toMatchObject({ columnSpan: 1, rowSpan: 1 });
+    expect(panels[2]).toMatchObject({ columnSpan: 2, rowSpan: 1, intent: 'wide' });
+    expect(getGuidedComicLayoutGridStyle('three-panel-wide-bottom', 3)).toEqual({
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      gridAutoRows: 'minmax(128px, 1fr)',
+    });
+  });
 });

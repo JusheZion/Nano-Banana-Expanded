@@ -1,4 +1,11 @@
-export type GuidedComicLayoutTemplateId = 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+export type GuidedComicLayoutTemplateId =
+  | 'auto'
+  | 'three-panel'
+  | 'three-panel-wide-top'
+  | 'three-panel-wide-bottom'
+  | 'four-panel'
+  | 'six-panel-grid'
+  | 'splash';
 
 export type GuidedComicLayoutPageInput = {
   pageNumber?: number;
@@ -64,20 +71,38 @@ function panelSpanForIntent(intent: GuidedComicLayoutIntent, panelCount: number)
   return { columnSpan: 1, rowSpan: 1 };
 }
 
+function templateSpanForPanel(
+  templateId: GuidedComicLayoutTemplateId,
+  panelNumber: number,
+  panelCount: number,
+): { intent?: GuidedComicLayoutIntent; columnSpan: number; rowSpan: number } | null {
+  if (templateId === 'three-panel-wide-top' && panelCount === 3) {
+    return panelNumber === 1
+      ? { intent: 'wide', columnSpan: 2, rowSpan: 1 }
+      : { columnSpan: 1, rowSpan: 1 };
+  }
+  if (templateId === 'three-panel-wide-bottom' && panelCount === 3) {
+    return panelNumber === 3
+      ? { intent: 'wide', columnSpan: 2, rowSpan: 1 }
+      : { columnSpan: 1, rowSpan: 1 };
+  }
+  return null;
+}
+
 export function getGuidedComicLayoutPanels(
   page: GuidedComicLayoutPageInput,
   templateId: GuidedComicLayoutTemplateId,
 ): GuidedComicLayoutPanelPlan[] {
-  void templateId;
   const beats = getGuidedComicExistingPanelBeats(page);
   return beats.map((beatText, index) => {
     const intent = inferPanelIntent(beatText, beats.length);
+    const templateSpan = templateSpanForPanel(templateId, index + 1, beats.length);
     return {
       panelNumber: index + 1,
       panelId: page.pageNumber ? `page-${page.pageNumber}-panel-${index + 1}` : undefined,
       beatText,
-      intent,
-      ...panelSpanForIntent(intent, beats.length),
+      intent: templateSpan?.intent ?? intent,
+      ...(templateSpan ?? panelSpanForIntent(intent, beats.length)),
     };
   });
 }
@@ -96,6 +121,12 @@ export function getGuidedComicLayoutGridStyle(
     return {
       gridTemplateColumns: 'minmax(0, 1fr)',
       gridAutoRows: 'minmax(150px, 1fr)',
+    };
+  }
+  if ((templateId === 'three-panel-wide-top' || templateId === 'three-panel-wide-bottom') && panelCount === 3) {
+    return {
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      gridAutoRows: 'minmax(128px, 1fr)',
     };
   }
   if (templateId === 'six-panel-grid' || panelCount >= 5) {

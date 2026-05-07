@@ -360,6 +360,25 @@ function layoutRectsForTemplate(template: GuidedComicLayoutTemplate, gutter: num
         }));
     }
 
+    if (template === 'three-panel-wide-top' || template === 'three-panel-wide-bottom') {
+        const halfWidth = (innerWidth - safeGutter) / 2;
+        const topHeight = (innerHeight - safeGutter) / 3;
+        const bottomHeight = innerHeight - topHeight - safeGutter;
+        const topPanels = [
+            { x: innerX, y: innerY, width: halfWidth, height: topHeight },
+            { x: innerX + halfWidth + safeGutter, y: innerY, width: halfWidth, height: topHeight },
+        ];
+        const bottomPanel = { x: innerX, y: innerY + topHeight + safeGutter, width: innerWidth, height: bottomHeight };
+        if (template === 'three-panel-wide-bottom') {
+            return [...topPanels, bottomPanel];
+        }
+        return [
+            { x: innerX, y: innerY, width: innerWidth, height: bottomHeight },
+            { x: innerX, y: innerY + bottomHeight + safeGutter, width: halfWidth, height: topHeight },
+            { x: innerX + halfWidth + safeGutter, y: innerY + bottomHeight + safeGutter, width: halfWidth, height: topHeight },
+        ];
+    }
+
     const columns = 2;
     const rows = template === 'six-panel-grid' ? 3 : 2;
     const panelWidth = (innerWidth - safeGutter * (columns - 1)) / columns;
@@ -1182,7 +1201,8 @@ export const useComicStore = create<ComicState>()(
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
                     const rects = layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
-                    const panelIds = payload.orderedPanelIds.slice(0, rects.length);
+                    const requestedPanelCount = Math.max(1, Math.min(payload.panelCount, payload.orderedPanelIds.length, rects.length));
+                    const panelIds = payload.orderedPanelIds.slice(0, requestedPanelCount);
                     const panels: Panel[] = panelIds.map((sourcePanelId, index) => {
                         const panelImage = payload.panelArtImages[sourcePanelId];
                         const panelBeat = payload.panelBeats?.find((beat) => beat.panelId === sourcePanelId);

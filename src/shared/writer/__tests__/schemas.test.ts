@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  guidedComicAssistResultSchema,
   ideaAssistResultSchema,
   issueOutlineSchema,
   pageBeatsJsonSchema,
   pacingReviewResultSchema,
   shotPlanJsonSchema,
+  writerToolsGuidedComicAssistRequestSchema,
   writerToolsDraftDialogueRequestSchema,
   writerToolsOutlineIssueRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
@@ -229,12 +231,108 @@ describe('writerToolsRequestSchema', () => {
     });
   });
 
+  it('parses guided_comic_assist request without writer DB ids', () => {
+    const r = writerToolsRequestSchema.parse({
+      mode: 'guided_comic_assist',
+      action: 'generate_page_plan',
+      selectedPageNumber: 2,
+      context: {
+        currentStep: 'pages',
+        setupForm: {
+          seriesTitle: 'Astral City',
+          issueTitle: 'Gate of the First Sun',
+          issueNumber: '1',
+          targetPageCount: '4',
+          genre: 'Sci-fi',
+          tone: 'Cinematic',
+          premise: 'A city wakes beneath twin suns.',
+        },
+        storyForm: {
+          premise: 'A city wakes beneath twin suns.',
+          mainCharacters: 'Mara, Sol',
+          conflict: 'The gate is unstable.',
+          setting: 'Orbital city',
+          endingGoal: 'Seal the gate.',
+        },
+        artDirection: {
+          artStyle: 'clean line art',
+          defaultAspectRatio: 'Match panel layout',
+          renderingStyle: 'inked',
+          colorMood: 'warm gold',
+          lighting: 'sunrise',
+          continuityNotes: '',
+          excludeTextFromImages: true,
+        },
+        outlineBeats: [{ id: 'opening-hook', title: 'Opening Hook', description: 'Mara sees the gate.', locked: false }],
+        pageCards: [{ pageNumber: 1, summary: 'Mara finds the gate.', panelCount: '4', keyCharacters: 'Mara', keyLocation: 'Gate', panelBeats: ['Wide shot'] }],
+      },
+    });
+
+    expect(r).toMatchObject({ mode: 'guided_comic_assist', action: 'generate_page_plan', selectedPageNumber: 2 });
+    if (r.mode !== 'guided_comic_assist') throw new Error('Expected guided_comic_assist');
+    expect(() =>
+      writerToolsGuidedComicAssistRequestSchema.parse({
+        mode: 'guided_comic_assist',
+        action: 'generate_page_plan',
+        issue_id: '550e8400-e29b-41d4-a716-446655440000',
+        context: r.context,
+      }),
+    ).toThrow();
+  });
+
   it('ideaAssistResultSchema requires answer_markdown', () => {
     const r = ideaAssistResultSchema.parse({
       answer_markdown: 'Here is the answer.',
       bullets: ['A', 'B'],
     });
     expect(r.answer_markdown).toContain('answer');
+  });
+
+  it('guidedComicAssistResultSchema accepts structured preview suggestions', () => {
+    const r = guidedComicAssistResultSchema.parse({
+      title: 'Page plan',
+      summary: 'A tighter four-page plan.',
+      suggestions: ['Clarify the midpoint turn.'],
+      replacements: {
+        setupForm: { premise: 'A stronger premise.' },
+        storyForm: { conflict: 'The gate is collapsing.' },
+      },
+      outlineBeats: [{ id: 'opening-hook', title: 'Opening Hook', description: 'Start with the gate waking.' }],
+      pageUpdates: [
+        {
+          pageNumber: 2,
+          summary: 'Mara chooses to cross the gate.',
+          panelCount: '4',
+          keyCharacters: 'Mara',
+          keyLocation: 'Gate bridge',
+          panelBeats: ['Wide on gate', 'Close on Mara'],
+        },
+      ],
+      pacingNotes: ['Act two needs a clearer turn.'],
+      referenceNeeds: [{ type: 'location', name: 'Gate bridge', reason: 'Recurring setting.' }],
+      dialogueNotes: ['Use captions sparingly.'],
+    });
+
+    expect(r.pageUpdates?.[0]?.pageNumber).toBe(2);
+    expect(r.referenceNeeds?.[0]?.type).toBe('location');
+  });
+
+  it('guidedComicAssistResultSchema normalizes object-shaped notes', () => {
+    const r = guidedComicAssistResultSchema.parse({
+      title: 'Page plan',
+      narrationNotes: [
+        {
+          note: 'Use one caption to bridge the time jump.',
+          reason: 'Avoid overloading the first panel.',
+        },
+      ],
+      dialogueNotes: [{ suggestion: 'Keep dialogue sparse.' }],
+      pacingNotes: [{ detail: 'Page 3 needs a clearer visual turn.' }],
+    });
+
+    expect(r.narrationNotes?.[0]).toContain('Use one caption');
+    expect(r.dialogueNotes?.[0]).toContain('Keep dialogue sparse');
+    expect(r.pacingNotes?.[0]).toContain('Page 3');
   });
 
   it('pacingReviewResultSchema requires overall_pacing', () => {

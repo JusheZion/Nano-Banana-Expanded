@@ -17,7 +17,7 @@ export type GuidedImageWorkshopReference = {
 export type GuidedImageWorkshopAspectRatio = '9:16' | '1:1' | '21:9';
 export type GuidedImageWorkshopLayoutIntent = 'feature' | 'wide' | 'tall' | 'normal';
 export type GuidedImageWorkshopPanelLayout = {
-  templateId?: 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+  templateId?: 'auto' | 'three-panel' | 'three-panel-wide-top' | 'three-panel-wide-bottom' | 'four-panel' | 'six-panel-grid' | 'splash';
   intent?: GuidedImageWorkshopLayoutIntent;
   columnSpan?: number;
   rowSpan?: number;

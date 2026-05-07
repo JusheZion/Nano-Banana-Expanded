@@ -8,6 +8,8 @@ import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
+import { ProtectedPortalGate } from './components/auth/ProtectedPortalGate';
+import { isProtectedPortal } from '@/shared/auth/protectedPortals';
 
 const CharacterStudio = lazy(() => import('./portals/CharacterStudio').then(m => ({ default: m.CharacterStudio })));
 const AssetsStudio = lazy(() => import('./portals/AssetsStudio').then(m => ({ default: m.AssetsStudio })));
@@ -95,42 +97,54 @@ function App() {
 
   return (
     <AppShell activePortal={activePortal} setActivePortal={navigatePortal}>
-      {activePortal === 'home' && <LandingPage onNavigate={navigatePortal} />}
+      {activePortal === 'home' && !isProtectedPortal(activePortal) && <LandingPage onNavigate={navigatePortal} />}
       {activePortal === 'studio' && (
-        <Suspense fallback={<PortalFallback />}>
-          <div className="h-full min-h-0 flex flex-col overflow-hidden">
-            <CharacterStudio />
-          </div>
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <div className="h-full min-h-0 flex flex-col overflow-hidden">
+              <CharacterStudio />
+            </div>
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'assets' && (
-        <Suspense fallback={<PortalFallback />}>
-          <div className="h-full min-h-0 flex flex-col overflow-hidden">
-            <AssetsStudio />
-          </div>
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <div className="h-full min-h-0 flex flex-col overflow-hidden">
+              <AssetsStudio />
+            </div>
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'reference' && (
-        <Suspense fallback={<PortalFallback />}>
-          <ReferenceAlbum />
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <ReferenceAlbum />
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'lab' && (
-        <Suspense fallback={<PortalFallback />}>
-          <PhotoLab />
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <PhotoLab />
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'comic' && (
-        <Suspense fallback={<PortalFallback />}>
-          <ComicPortal onNavigatePortal={navigatePortal} />
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <ComicPortal onNavigatePortal={navigatePortal} />
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'writer' && (
-        <Suspense fallback={<PortalFallback />}>
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
-            <WriterPortal onRequestPortalsWiki={requestPortalsWiki} />
-          </div>
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
+              <WriterPortal onRequestPortalsWiki={requestPortalsWiki} />
+            </div>
+          </Suspense>
+        </ProtectedPortalGate>
       )}
       {activePortal === 'wiki' && (
         <Suspense fallback={<PortalFallback />}>

@@ -12,6 +12,7 @@ describe('useGuidedComicLayoutBridge', () => {
     useGuidedComicLayoutBridge.getState().requestLayoutHandoff({
       pageNumber: 2,
       layoutTemplate: 'three-panel',
+      panelCount: 3,
       orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
       panelArtImages: {
         'page-2-panel-1': {
@@ -36,6 +37,7 @@ describe('useGuidedComicLayoutBridge', () => {
       target: 'advanced-comics-studio',
       pageNumber: 2,
       layoutTemplate: 'three-panel',
+      panelCount: 3,
       orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
       panelArtImages: {
         'page-2-panel-1': {
@@ -50,6 +52,7 @@ describe('useGuidedComicLayoutBridge', () => {
     useGuidedComicLayoutBridge.getState().requestLayoutHandoff({
       pageNumber: 1,
       layoutTemplate: 'splash',
+      panelCount: 1,
       orderedPanelIds: ['page-1-panel-1'],
       panelArtImages: {},
     });

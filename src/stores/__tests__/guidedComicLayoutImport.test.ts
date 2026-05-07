@@ -34,6 +34,7 @@ describe('guided comic layout import', () => {
       target: 'advanced-comics-studio',
       pageNumber: 4,
       layoutTemplate: 'three-panel',
+      panelCount: 3,
       orderedPanelIds: ['page-4-panel-1', 'page-4-panel-2', 'page-4-panel-3'],
       panelArtImages: {
         'page-4-panel-1': {
@@ -73,5 +74,49 @@ describe('guided comic layout import', () => {
     expect(page.panels[2]?.imageUrl).toBe('https://example.com/panel-3.png');
     expect(page.layerOrder).toEqual(['test-panel-1', 'test-panel-2', 'test-panel-3']);
     expect(useComicStore.getState().currentPageId).toBe('page-1');
+  });
+
+  it('imports a two-over-one-wide guided layout with all selected panel images', () => {
+    const payload: GuidedComicLayoutHandoff = {
+      source: 'guided-comic',
+      target: 'advanced-comics-studio',
+      pageNumber: 2,
+      layoutTemplate: 'three-panel-wide-bottom',
+      panelCount: 3,
+      orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
+      panelArtImages: {
+        'page-2-panel-1': {
+          panelId: 'page-2-panel-1',
+          imageUrl: 'https://example.com/panel-1.png',
+        },
+        'page-2-panel-2': {
+          panelId: 'page-2-panel-2',
+          imageUrl: 'https://example.com/panel-2.png',
+        },
+        'page-2-panel-3': {
+          panelId: 'page-2-panel-3',
+          imageUrl: 'https://example.com/panel-3.png',
+        },
+      },
+      panelBeats: [
+        { panelId: 'page-2-panel-1', panelNumber: 1, beatText: 'Left reaction.' },
+        { panelId: 'page-2-panel-2', panelNumber: 2, beatText: 'Right reaction.' },
+        { panelId: 'page-2-panel-3', panelNumber: 3, beatText: 'Wide bottom reveal.' },
+      ],
+      requestedAt: '2026-05-01T00:00:00.000Z',
+    };
+
+    useComicStore.getState().replaceCurrentPageWithGuidedLayout(payload);
+
+    const page = useComicStore.getState().pages[0];
+    expect(page.panels).toHaveLength(3);
+    expect(page.panels.map((panel) => panel.imageUrl)).toEqual([
+      'https://example.com/panel-1.png',
+      'https://example.com/panel-2.png',
+      'https://example.com/panel-3.png',
+    ]);
+    expect(page.panels[0]).toMatchObject({ x: 16, y: 16, width: 376, height: 384 });
+    expect(page.panels[1]).toMatchObject({ x: 408, y: 16, width: 376, height: 384 });
+    expect(page.panels[2]).toMatchObject({ x: 16, y: 416, width: 768, height: 768 });
   });
 });

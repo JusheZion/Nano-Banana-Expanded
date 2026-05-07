@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 
-export type GuidedComicLayoutTemplate = 'auto' | 'three-panel' | 'four-panel' | 'six-panel-grid' | 'splash';
+export type GuidedComicLayoutTemplate =
+  | 'auto'
+  | 'three-panel'
+  | 'three-panel-wide-top'
+  | 'three-panel-wide-bottom'
+  | 'four-panel'
+  | 'six-panel-grid'
+  | 'splash';
 
 export type GuidedComicLayoutPanelImage = {
   panelId: string;
@@ -21,6 +28,7 @@ export type GuidedComicLayoutHandoff = {
   target: 'advanced-comics-studio';
   pageNumber: number;
   layoutTemplate: GuidedComicLayoutTemplate;
+  panelCount: number;
   orderedPanelIds: string[];
   panelArtImages: Record<string, GuidedComicLayoutPanelImage>;
   panelBeats?: GuidedComicLayoutPanelBeat[];

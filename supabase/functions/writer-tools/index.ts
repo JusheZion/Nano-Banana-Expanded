@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import {
   canonCheckResultSchema,
   draftDialogueResultSchema,
+  guidedComicAssistResultSchema,
   ideaAssistResultSchema,
   issueOutlineSchema,
   pacingReviewResultSchema,
@@ -792,6 +793,54 @@ function buildIdeaAssistUserPrompt(args: {
     .join('\n');
 }
 
+function guidedComicActionLabel(action: string): string {
+  return action.replace(/_/g, ' ');
+}
+
+function buildGuidedComicAssistUserPrompt(args: {
+  action: string;
+  context: unknown;
+  selectedPageNumber?: number;
+  selectedPanelId?: string;
+}): string {
+  return [
+    `You are a senior comics story editor helping inside a beginner-friendly Guided Comic Flow.`,
+    `Reuse Writers' Workshop craft standards, but keep the answer lightweight and directly applicable to the guided local draft.`,
+    `Do not generate images, export files, modify routes, or assume database state. Do not place dialogue or captions onto images.`,
+    `Never ask to overwrite user text. Return preview suggestions only; the client will ask for confirmation before applying.`,
+    '',
+    `Requested guided action: ${guidedComicActionLabel(args.action)}.`,
+    args.selectedPageNumber ? `Selected page number: ${args.selectedPageNumber}.` : '',
+    args.selectedPanelId ? `Selected panel id: ${args.selectedPanelId}.` : '',
+    '',
+    `Guided comic context JSON:\n${JSON.stringify(args.context, null, 2)}`,
+    '',
+    'Output JSON only (no markdown fences). Return any useful keys from this shape:',
+    '{',
+    '  "title"?: string,',
+    '  "summary"?: string,',
+    '  "suggestions"?: string[],',
+    '  "replacements"?: {',
+    '    "setupForm"?: { "premise"?: string, "genre"?: string, "tone"?: string },',
+    '    "storyForm"?: { "premise"?: string, "mainCharacters"?: string, "conflict"?: string, "setting"?: string, "endingGoal"?: string },',
+    '    "artDirection"?: { "continuityNotes"?: string, "artStyle"?: string, "renderingStyle"?: string, "colorMood"?: string, "lighting"?: string }',
+    '  },',
+    '  "outlineBeats"?: [ { "id"?: string, "title"?: string, "description": string } ],',
+    '  "pageUpdates"?: [ { "pageNumber": number, "summary"?: string, "panelCount"?: string, "keyCharacters"?: string, "keyLocation"?: string, "panelBeats"?: string[], "layoutTemplate"?: "auto"|"three-panel"|"three-panel-wide-top"|"three-panel-wide-bottom"|"four-panel"|"six-panel-grid"|"splash" } ],',
+    '  "pacingNotes"?: string[],',
+    '  "referenceNeeds"?: [ { "type": "character"|"location"|"npc"|"prop"|"style", "name": string, "reason"?: string } ],',
+    '  "dialogueNotes"?: string[],',
+    '  "narrationNotes"?: string[]',
+    '}',
+    '',
+    'For selected-page or selected-panel actions, only include updates for the selected target.',
+    'Layout templates must be one of the listed layoutTemplate values. Use "three-panel-wide-bottom" for two panels over one wide rectangle; do not recommend layouts the client cannot select.',
+    'For dialogue/narration, return notes only; do not write full balloon placement instructions.',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -855,6 +904,49 @@ Deno.serve(async (req) => {
       return Response.json(
         { success: false, error: 'Invalid JWT', details: authErr.message },
         { status: 401, headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'guided_comic_assist') {
+      const { action, context, selectedPageNumber, selectedPanelId } = parsedReq.data;
+      const system =
+        'You are a comics writers’ room assistant embedded in a guided comic workflow. Output only valid JSON. No markdown fences. Be concise, practical, and safe.';
+      const userPrompt = buildGuidedComicAssistUserPrompt({
+        action,
+        context,
+        selectedPageNumber,
+        selectedPanelId,
+      });
+
+      let guidedJson: unknown;
+      try {
+        guidedJson = await callGeminiJson({
+          system,
+          user: userPrompt,
+          preferredModel: geminiModel,
+          apiKey: geminiKey,
+          temperature: 0.5,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return llmFailureResponse(msg);
+      }
+
+      const guidedParsed = guidedComicAssistResultSchema.safeParse(guidedJson);
+      if (!guidedParsed.success) {
+        return Response.json(
+          { success: false, error: 'Guided comic assist failed validation', details: guidedParsed.error.message },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+
+      return Response.json(
+        {
+          success: true,
+          mode: 'guided_comic_assist',
+          data: guidedParsed.data,
+        },
+        { headers: corsHeaders },
       );
     }
 

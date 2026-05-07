@@ -100,6 +100,65 @@ export type WriterToolsIdeaAssistPayload = {
   page_id?: string;
 };
 
+export type GuidedComicAssistAction =
+  | 'improve_premise'
+  | 'suggest_genre_tone'
+  | 'generate_story_foundation'
+  | 'suggest_conflict_stakes_ending'
+  | 'generate_issue_outline'
+  | 'generate_page_plan'
+  | 'generate_missing_page_summaries'
+  | 'regenerate_selected_page'
+  | 'generate_panel_beats'
+  | 'suggest_reference_needs'
+  | 'strengthen_panel_prompt'
+  | 'suggest_shot_direction'
+  | 'suggest_layout_pacing'
+  | 'recommend_layouts'
+  | 'review_readiness'
+  | 'find_export_gaps';
+
+export type GuidedComicAssistPayload = {
+  mode: 'guided_comic_assist';
+  action: GuidedComicAssistAction;
+  context: Record<string, unknown>;
+  selectedPageNumber?: number;
+  selectedPanelId?: string;
+};
+
+export type GuidedComicAssistResult = {
+  title?: string;
+  summary?: string;
+  suggestions?: string[];
+  replacements?: {
+    setupForm?: Record<string, string>;
+    storyForm?: Record<string, string>;
+    artDirection?: Record<string, string | boolean>;
+  };
+  outlineBeats?: Array<{
+    id?: string;
+    title?: string;
+    description: string;
+  }>;
+  pageUpdates?: Array<{
+    pageNumber: number;
+    summary?: string;
+    panelCount?: string;
+    keyCharacters?: string;
+    keyLocation?: string;
+    panelBeats?: string[];
+    layoutTemplate?: 'auto' | 'three-panel' | 'three-panel-wide-top' | 'three-panel-wide-bottom' | 'four-panel' | 'six-panel-grid' | 'splash';
+  }>;
+  pacingNotes?: string[];
+  referenceNeeds?: Array<{
+    type: 'character' | 'location' | 'npc' | 'prop' | 'style';
+    name: string;
+    reason?: string;
+  }>;
+  dialogueNotes?: string[];
+  narrationNotes?: string[];
+};
+
 export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsPageBeatsPayload
@@ -108,7 +167,8 @@ export type WriterToolsRequest =
   | WriterToolsPacingReviewPayload
   | WriterToolsCanonCheckPayload
   | WriterToolsPlanShotsPayload
-  | WriterToolsIdeaAssistPayload;
+  | WriterToolsIdeaAssistPayload
+  | GuidedComicAssistPayload;
 
 export type WriterToolsSuccessResponse = {
   success: true;
