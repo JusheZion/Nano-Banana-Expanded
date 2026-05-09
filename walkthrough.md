@@ -2061,6 +2061,96 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Comic Engine Protection Plan - 2026-05-09
+
+### What changed
+
+- Added a documentation-only protection plan for Advanced Comics Studio / Comic Portal modernization work.
+- Defined non-negotiable preservation rules for existing panel, balloon, layer, mask, image-preservation, transform, save/load, export, and Guided-to-Advanced handoff behavior.
+- Added a removal gate requiring side-by-side UI proof before existing comic engine logic can be deleted, replaced, simplified, or bypassed.
+- Added a regression checklist covering panels, image preservation, masks/clipping, balloons, layers, save/load, export, and Guided-to-Advanced handoff.
+
+### Files touched
+
+- `docs/comic-engine-protection-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was intentionally limited to documentation and walkthrough maintenance.
+- No source code, schema, geometry utility, adapter, store, bridge, renderer, routing, or runtime behavior was changed.
+- Future modernization should add shared types/adapters beside the current implementation, keep legacy paths available, and remove old code only after the protection checklist and UI proof gate are satisfied.
+
+### Verification
+
+- `git diff -- docs/comic-engine-protection-plan.md walkthrough.md` - PASS; only the walkthrough diff was shown because the new protection plan file is untracked until staged.
+- `git status --short` - PASS; changed files were limited to `walkthrough.md` and `docs/comic-engine-protection-plan.md`.
+- `rg -n "Removal gate|Regression checklist|Guided-to-Advanced|image preservation" docs/comic-engine-protection-plan.md` - PASS; required protection phrases were present.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The checklist is a guardrail for future implementation work. It does not itself verify current runtime behavior.
+
+### Operator follow-up
+
+- Use `docs/comic-engine-protection-plan.md` before any comic engine schema, geometry, adapter, or renderer modernization.
+
+### Next steps
+
+- Future engine work should start by adding shared types/adapters around the existing implementation, then prove behavior in focused tests and the UI before any removal.
+
+---
+
+## Comic Object Schema Audit - 2026-05-09
+
+### What changed
+
+- Added a documentation-only audit of the current Advanced Comics Studio / Comic Portal object and editor state model.
+- Documented current panel, balloon, image/asset, transform, layer, mask/shape, serialization, export, and Guided-to-Advanced handoff fields.
+- Identified current `any` usage where object contracts are unclear, especially Konva refs/events, store middleware, balloon override spreading, and UI update payloads.
+- Added a compatibility map from current flat fields to proposed future canonical field groups for later adapter work.
+
+### Files touched
+
+- `docs/comic-object-schema-audit.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was intentionally limited to documentation and walkthrough maintenance.
+- No source code, schema, geometry utility, adapter, store, bridge, renderer, routing, save/load, export, or runtime behavior was changed.
+- The audit records that overlays currently live in `page.overlays` and render above main comic elements, while `LayerTree` and `layerOrder` currently focus on panels, balloons, and drawings.
+- The audit records that Guided Flow layout geometry is normalized and converted into 800x1200 Advanced Studio panel rectangles during handoff.
+
+### Verification
+
+- `rg -n "Current panel object fields|Current balloon object fields|Compatibility map|Current Guided-to-Advanced handoff payload|Current unclear contracts" docs/comic-object-schema-audit.md` - PASS; all required audit sections were present.
+- `git diff -- docs/comic-object-schema-audit.md walkthrough.md` - PASS; the tracked diff was limited to walkthrough updates, with the new audit doc still untracked until staged.
+- `git status --short` - PASS; changed files were documentation-only: `walkthrough.md`, `docs/comic-engine-protection-plan.md`, and `docs/comic-object-schema-audit.md`.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- This audit proposes future canonical field names for planning only. It does not migrate or validate runtime behavior.
+- Current uncommitted documentation changes from the previous protection-plan task remain in the worktree and were preserved.
+
+### Operator follow-up
+
+- Use `docs/comic-object-schema-audit.md` with `docs/comic-engine-protection-plan.md` before designing comic schema adapters or geometry utilities.
+
+### Next steps
+
+- Future schema work should start with additive adapters that read current fields and expose canonical groups without changing persisted objects or rendering paths.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |
