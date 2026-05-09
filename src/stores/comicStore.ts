@@ -37,10 +37,12 @@ export interface Panel {
     glowOpacity?: number;
 
     // Advanced Fill
-    imageFillMode?: 'cover' | 'stretch' | 'center' | 'decal';
+    imageFillMode?: 'cover' | 'contain' | 'stretch' | 'center' | 'decal';
     imageOffsetX?: number;
     imageOffsetY?: number;
     imageScale?: number;
+    imageFocusX?: number;
+    imageFocusY?: number;
 
     // Texture
     textureId?: string;
@@ -394,6 +396,23 @@ function layoutRectsForTemplate(template: GuidedComicLayoutTemplate, gutter: num
             height: panelHeight,
         };
     });
+}
+
+function layoutRectsForGuidedGeometry(
+    payload: GuidedComicLayoutHandoff,
+): Array<Pick<Panel, 'x' | 'y' | 'width' | 'height'>> {
+    if (!payload.panelGeometry.length) return [];
+    const geometryById = new Map(payload.panelGeometry.map((panel) => [panel.panelId, panel]));
+    return payload.orderedPanelIds
+        .map((panelId) => geometryById.get(panelId))
+        .filter((panel): panel is NonNullable<typeof panel> => Boolean(panel))
+        .sort((a, b) => a.order - b.order)
+        .map((panel) => ({
+            x: Math.round(panel.x * COMIC_PAGE_WIDTH),
+            y: Math.round(panel.y * COMIC_PAGE_HEIGHT),
+            width: Math.round(panel.w * COMIC_PAGE_WIDTH),
+            height: Math.round(panel.h * COMIC_PAGE_HEIGHT),
+        }));
 }
 
 export const useComicStore = create<ComicState>()(
@@ -1200,23 +1219,27 @@ export const useComicStore = create<ComicState>()(
                     const defaultBg = state.projectSettings?.defaultPageBackgroundColor ?? '#ffffff';
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
-                    const rects = layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
-                    const requestedPanelCount = Math.max(1, Math.min(payload.panelCount, payload.orderedPanelIds.length, rects.length));
+                    const rects = layoutRectsForGuidedGeometry(payload);
+                    const fallbackRects = rects.length > 0 ? rects : layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
+                    const requestedPanelCount = Math.max(1, Math.min(payload.panelCount, payload.orderedPanelIds.length, fallbackRects.length));
                     const panelIds = payload.orderedPanelIds.slice(0, requestedPanelCount);
                     const panels: Panel[] = panelIds.map((sourcePanelId, index) => {
                         const panelImage = payload.panelArtImages[sourcePanelId];
                         const panelBeat = payload.panelBeats?.find((beat) => beat.panelId === sourcePanelId);
+                        const sourceGeometry = payload.panelGeometry.find((panel) => panel.panelId === sourcePanelId);
                         return {
                             id: crypto.randomUUID(),
                             type: 'panel',
                             shapeType: 'rect',
-                            ...rects[index],
+                            ...fallbackRects[index],
                             imageUrl: panelImage?.imageUrl,
                             prompt: panelBeat?.beatText || panelImage?.prompt,
-                            imageFillMode: panelImage ? 'cover' : undefined,
-                            imageScale: panelImage ? 1 : undefined,
+                            imageFillMode: panelImage ? (sourceGeometry?.imageFit ?? 'cover') : undefined,
+                            imageScale: panelImage ? (sourceGeometry?.imageZoom ?? 1) : undefined,
                             imageOffsetX: panelImage ? 0 : undefined,
                             imageOffsetY: panelImage ? 0 : undefined,
+                            imageFocusX: panelImage ? sourceGeometry?.imageFocusX : undefined,
+                            imageFocusY: panelImage ? sourceGeometry?.imageFocusY : undefined,
                             isVisible: true,
                             isLocked: false,
                             strokeColor: genre.palette?.border ?? '#000000',

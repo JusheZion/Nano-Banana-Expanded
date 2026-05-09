@@ -29,6 +29,31 @@ At the approximate 80% context threshold, or whenever context loss seems likely:
 
 If the user explicitly says the context window is nearly full, prepare the handoff immediately.
 
+## Browser Use / in-app browser access
+
+When the user asks Codex to inspect, click, screenshot, or QA the in-app browser for this project, use the Browser Use plugin through the Node REPL browser bridge.
+
+- First read the Browser Use skill file completely before browser work: `/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/skills/browser/SKILL.md`.
+- If the browser tool is not visible, use tool discovery for `node_repl js` or `node_repl JavaScript execution`; the actual callable tool is the Node REPL `js` tool, not a separate browser-specific tool.
+- Bootstrap the runtime with the Browser Use `iab` backend from `/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/scripts/browser-client.mjs`.
+- Reuse the selected in-app tab when possible:
+
+```js
+if (!globalThis.agent) {
+  const { setupAtlasRuntime } = await import('/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/scripts/browser-client.mjs');
+  const backend = 'iab';
+  await setupAtlasRuntime({ globals: globalThis, backend });
+}
+await agent.browser.nameSession('🔎 Guided Comic Flow QA');
+if (typeof tab === 'undefined') {
+  globalThis.tab = await agent.browser.tabs.selected();
+}
+```
+
+- A successful setup can confirm the current app tab with `await tab.url()` and `await tab.title()`; for this repo the expected local app is usually `http://127.0.0.1:5173/` with title `ARCS Expanded`.
+- Do not use Computer Use as the first fallback for the Codex in-app browser. Computer Use may be blocked from controlling the Codex app window; Browser Use via `node_repl` is the correct path.
+- If `node_repl js` still cannot be discovered in a fresh chat, tell the user the Browser Use plugin is enabled but the Node REPL bridge is not exposed in that active session, then suggest starting a fresh Codex thread or restarting Codex.
+
 # Project walkthrough operating rule
 
 ## Purpose of the walkthrough in this repository
@@ -50,6 +75,9 @@ The walkthrough supports:
 - Add new content in discrete appendable sections unless explicitly instructed to reorganize or rewrite prior history.
 - Do not overwrite existing historical content by default.
 - Do not compress multiple unrelated updates into a vague summary if distinct sections are more accurate.
+- In this repository, meaningful project work should update `walkthrough.md` directly in the same turn unless the user explicitly asks not to modify the file. Returning an append-ready section in chat is not enough when filesystem access is available.
+- Before final response after meaningful project work, verify the walkthrough update landed with a direct file check such as `git status --short walkthrough.md` plus a targeted `rg -n "<new section title>" walkthrough.md`.
+- If direct file editing is unavailable, blocked, or intentionally skipped, say that explicitly in the final response and provide the append-ready section for the user.
 
 ## Relationship to the global AGENTS.md
 
@@ -71,7 +99,7 @@ If there is ever a conflict, follow the more specific project instruction while 
 
 ## Core operating rule
 
-Whenever a prompt produces meaningful project work, Codex must prepare a walkthrough update that reflects the immediate delta created by that prompt.
+Whenever a prompt produces meaningful project work, Codex must append a walkthrough update that reflects the immediate delta created by that prompt.
 
 Codex must clearly distinguish between:
 1. the immediate update,

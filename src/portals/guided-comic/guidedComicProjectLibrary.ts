@@ -17,6 +17,8 @@ export type GuidedComicProjectSnapshot = {
     targetPageCount: string;
     genre: string;
     tone: string;
+    layoutMarginMode?: 'safe' | 'full-bleed';
+    layoutGutterMode?: 'standard' | 'thin';
     premise: string;
   };
   storyForm: {
@@ -34,6 +36,7 @@ export type GuidedComicProjectSnapshot = {
   panelArtStatuses: Record<string, unknown>;
   panelArtImages: Record<string, unknown>;
   pageLayoutTemplates: Record<number, unknown>;
+  pageLayoutGeometry?: Record<number, unknown[]>;
   artDirection: {
     artStyle: string;
     defaultAspectRatio: string;

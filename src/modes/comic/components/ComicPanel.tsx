@@ -129,13 +129,22 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
         const imgW = imageObj.width;
         const imgH = imageObj.height;
 
+        const focusX = Math.min(1, Math.max(0, panel.imageFocusX ?? 0.5));
+        const focusY = Math.min(1, Math.max(0, panel.imageFocusY ?? 0.5));
+        const imageZoom = Math.max(0.1, panel.imageScale ?? 1);
+
         if (fillMode === 'cover') {
-            const scale = Math.max(bboxWidth / imgW, bboxHeight / imgH);
+            const scale = Math.max(bboxWidth / imgW, bboxHeight / imgH) * imageZoom;
             imgScaleX = scale;
             imgScaleY = scale;
-            // Center the "cover" crop over the bounding box
-            imgX = bboxMinX + (bboxWidth - imgW * scale) / 2;
-            imgY = bboxMinY + (bboxHeight - imgH * scale) / 2;
+            imgX = bboxMinX + (bboxWidth - imgW * scale) * focusX;
+            imgY = bboxMinY + (bboxHeight - imgH * scale) * focusY;
+        } else if (fillMode === 'contain') {
+            const scale = Math.min(bboxWidth / imgW, bboxHeight / imgH) * imageZoom;
+            imgScaleX = scale;
+            imgScaleY = scale;
+            imgX = bboxMinX + (bboxWidth - imgW * scale) * focusX;
+            imgY = bboxMinY + (bboxHeight - imgH * scale) * focusY;
         } else if (fillMode === 'stretch') {
             imgScaleX = bboxWidth / imgW;
             imgScaleY = bboxHeight / imgH;

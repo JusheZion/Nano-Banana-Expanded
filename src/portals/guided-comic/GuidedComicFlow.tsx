@@ -45,10 +45,20 @@ import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 import {
+  createGuidedComicStarterLayout,
+  getConstrainedGuidedComicPanelGeometry,
   getGuidedComicActivePanelCount,
   getGuidedComicExistingPanelBeats,
-  getGuidedComicLayoutGridStyle,
   getGuidedComicLayoutPanels,
+  getGuidedComicSafeMarginPanelGeometry,
+  getSnappedGuidedComicPanelGeometry,
+  NORMALIZED_LAYOUT_MARGIN,
+  syncGuidedComicLayoutGeometry,
+  type GuidedComicImageFit,
+  type GuidedComicLayoutGutterMode,
+  type GuidedComicLayoutMarginMode,
+  type GuidedComicLayoutSettings,
+  type GuidedComicPanelGeometry,
 } from '@/portals/guided-comic/guidedComicLayoutPlan';
 import {
   GUIDED_COMIC_PROJECT_LIBRARY_STORAGE_KEY,
@@ -116,6 +126,8 @@ type SetupFormState = {
   targetPageCount: string;
   genre: string;
   tone: string;
+  layoutMarginMode: GuidedComicLayoutMarginMode;
+  layoutGutterMode: GuidedComicLayoutGutterMode;
   premise: string;
 };
 
@@ -186,6 +198,17 @@ type PanelArtImageState = {
   sourceLabel?: string;
 };
 
+type ComicProjectMetadataForm = {
+  seriesTitle: string;
+  issueTitle: string;
+  issueNumber: string;
+};
+
+type ComicProjectMetadataDialog = {
+  mode: 'save-as' | 'rename';
+  form: ComicProjectMetadataForm;
+} | null;
+
 type LayoutTemplateId =
   | 'auto'
   | 'three-panel'
@@ -198,6 +221,21 @@ type LayoutTemplateId =
 type LayoutTemplateOption = {
   id: LayoutTemplateId;
   label: string;
+};
+
+type LayoutResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
+
+type ActiveLayoutEdit = {
+  pageNumber: number;
+  panelId: string;
+  mode: 'move' | 'resize';
+  handle?: LayoutResizeHandle;
+  startClientX: number;
+  startClientY: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  startPanel: GuidedComicPanelGeometry;
+  startGeometry: GuidedComicPanelGeometry[];
 };
 
 type GuidedComicDraftState = {
@@ -216,6 +254,7 @@ type GuidedComicDraftState = {
   panelArtStatuses: Record<string, PanelArtStatus>;
   panelArtImages: Record<string, PanelArtImageState>;
   pageLayoutTemplates: Record<number, LayoutTemplateId>;
+  pageLayoutGeometry: Record<number, GuidedComicPanelGeometry[]>;
 };
 
 const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
@@ -252,6 +291,8 @@ const DEFAULT_SETUP_FORM: SetupFormState = {
   targetPageCount: '22',
   genre: GENRE_OPTIONS[0],
   tone: TONE_OPTIONS[0],
+  layoutMarginMode: 'safe',
+  layoutGutterMode: 'standard',
   premise: '',
 };
 
@@ -741,6 +782,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       panelArtStatuses: parsed.panelArtStatuses ?? {},
       panelArtImages: parsed.panelArtImages ?? {},
       pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
+      pageLayoutGeometry: parsed.pageLayoutGeometry ?? {},
     };
   } catch {
     return null;
@@ -769,6 +811,7 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     panelArtStatuses: draft.panelArtStatuses,
     panelArtImages: draft.panelArtImages,
     pageLayoutTemplates: draft.pageLayoutTemplates,
+    pageLayoutGeometry: draft.pageLayoutGeometry,
     artDirection: draft.artDirection,
     currentStep: guidedComicStepIdFromIndex(draft.activeIndex),
     selectedPanelId: draft.selectedPanelId,
@@ -792,6 +835,7 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     panelArtStatuses: snapshot.panelArtStatuses as Record<string, PanelArtStatus>,
     panelArtImages: snapshot.panelArtImages as Record<string, PanelArtImageState>,
     pageLayoutTemplates: snapshot.pageLayoutTemplates as Record<number, LayoutTemplateId>,
+    pageLayoutGeometry: (snapshot.pageLayoutGeometry ?? {}) as Record<number, GuidedComicPanelGeometry[]>,
   };
 }
 
@@ -842,6 +886,29 @@ function panelArtStatusLabel(status: PanelArtStatus): string {
     case 'needs-art':
       return 'Needs art';
   }
+}
+
+function panelArtStatusButtonStyle(buttonStatus: PanelArtStatus, selectedStatus: PanelArtStatus): React.CSSProperties {
+  const active = buttonStatus === selectedStatus;
+  if (buttonStatus === 'approved') {
+    return {
+      borderColor: active ? 'rgba(134,239,172,0.78)' : 'rgba(134,239,172,0.26)',
+      background: active ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.08)',
+      color: active ? 'rgb(220,252,231)' : 'rgba(255,255,255,0.78)',
+    };
+  }
+  if (buttonStatus === 'ready') {
+    return {
+      borderColor: active ? `${ACCENT_GOLD_SOLID}dd` : 'rgba(255,255,255,0.16)',
+      background: active ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.08)',
+      color: active ? TEXT_ON_GOLD : 'rgba(255,255,255,0.78)',
+    };
+  }
+  return {
+    borderColor: active ? 'rgba(251,113,133,0.72)' : 'rgba(255,255,255,0.16)',
+    background: active ? 'rgba(244,63,94,0.18)' : 'rgba(255,255,255,0.08)',
+    color: active ? 'rgb(255,228,230)' : 'rgba(255,255,255,0.78)',
+  };
 }
 
 function panelArtSourceLabel(source: PanelArtImageState['source']): string {
@@ -937,6 +1004,7 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
     panelArtStatuses: {},
     panelArtImages: {},
     pageLayoutTemplates: {},
+    pageLayoutGeometry: {},
     artDirection: DEFAULT_ART_DIRECTION,
     currentStep: 'setup',
     selectedPanelId: null,
@@ -946,6 +1014,7 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
 export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, requestedStepId }: GuidedComicFlowProps) {
   const skipNextDraftSaveRef = useRef(false);
   const pageSectionRefs = useRef<Record<number, HTMLElement | null>>({});
+  const layoutCanvasRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const panelUploadInputRef = useRef<HTMLInputElement | null>(null);
   const panelPasteTargetRef = useRef<HTMLDivElement | null>(null);
   const requestVaultSelection = useGuidedComicVaultBridge((s) => s.requestVaultSelection);
@@ -1031,7 +1100,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>(
     () => restoredDraft?.pageLayoutTemplates ?? {},
   );
+  const [pageLayoutGeometry, setPageLayoutGeometry] = useState<Record<number, GuidedComicPanelGeometry[]>>(
+    () => restoredDraft?.pageLayoutGeometry ?? {},
+  );
+  const [activeLayoutEdit, setActiveLayoutEdit] = useState<ActiveLayoutEdit | null>(null);
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
+  const [primaryActionMessage, setPrimaryActionMessage] = useState<string | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(() => restoredDraft?.savedAt ?? null);
   const [guidedAiLoadingAction, setGuidedAiLoadingAction] = useState<GuidedComicAssistAction | null>(null);
   const [guidedAiError, setGuidedAiError] = useState<string | null>(null);
@@ -1041,6 +1115,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     result: GuidedComicAssistResult;
     selectedOnly: boolean;
   } | null>(null);
+  const [comicProjectMetadataDialog, setComicProjectMetadataDialog] = useState<ComicProjectMetadataDialog>(null);
   const [guidedAiAcceptedNotes, setGuidedAiAcceptedNotes] = useState<Pick<
     GuidedComicAssistResult,
     'pacingNotes' | 'referenceNeeds' | 'dialogueNotes' | 'narrationNotes'
@@ -1048,6 +1123,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const currentProject = useMemo(
     () => projectLibrary?.projects.find((project) => project.projectId === activeProjectId) ?? null,
     [activeProjectId, projectLibrary],
+  );
+  const guidedLayoutSettings = useMemo<GuidedComicLayoutSettings>(
+    () => ({
+      marginMode: setupForm.layoutMarginMode,
+      gutterMode: setupForm.layoutGutterMode,
+    }),
+    [setupForm.layoutGutterMode, setupForm.layoutMarginMode],
   );
   const currentProjectSnapshot = useMemo<GuidedComicProjectSnapshot>(
     () => ({
@@ -1061,6 +1143,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       panelArtStatuses,
       panelArtImages,
       pageLayoutTemplates,
+      pageLayoutGeometry,
       artDirection,
       currentStep: activeStep.id,
       selectedPanelId,
@@ -1074,6 +1157,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       outlineBeats,
       pageCards,
       pageLayoutTemplates,
+      pageLayoutGeometry,
       panelArtImages,
       panelArtStatuses,
       selectedPanelId,
@@ -1085,6 +1169,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     () => isGuidedComicProjectSnapshotDirty(currentProjectSnapshot, currentProject),
     [currentProject, currentProjectSnapshot],
   );
+  const hasSavedLibraryProjects = Boolean(projectLibrary?.projects.length);
   const currentComicDisplayName = currentProject
     ? getGuidedComicProjectDisplayName(currentProject)
     : getGuidedComicProjectDisplayName({
@@ -1121,6 +1206,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPanelArtStatuses(draft.panelArtStatuses);
     setPanelArtImages(draft.panelArtImages);
     setPageLayoutTemplates(draft.pageLayoutTemplates);
+    setPageLayoutGeometry(draft.pageLayoutGeometry);
     setDraftSavedAt(savedAt);
   }, []);
 
@@ -1137,9 +1223,24 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           returnedAt: image.returnedAt ?? new Date().toISOString(),
         },
       }));
+      setPageLayoutGeometry((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([pageNumber, geometry]) => [
+            pageNumber,
+            geometry.map((panel) =>
+              panel.panelId === panelId
+                ? {
+                    ...panel,
+                    imageUrl: image.imageUrl,
+                  }
+                : panel,
+            ),
+          ]),
+        ) as Record<number, GuidedComicPanelGeometry[]>,
+      );
       setPanelArtStatuses((current) => ({ ...current, [panelId]: 'ready' }));
     },
-    [setPanelArtImages, setPanelArtStatuses, setSelectedPanelId],
+    [setPageLayoutGeometry, setPanelArtImages, setPanelArtStatuses, setSelectedPanelId],
   );
 
   useEffect(() => {
@@ -1172,6 +1273,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       panelArtStatuses,
       panelArtImages,
       pageLayoutTemplates,
+      pageLayoutGeometry,
     };
 
     try {
@@ -1189,6 +1291,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     outlineBeats,
     pageCards,
     pageLayoutTemplates,
+    pageLayoutGeometry,
     panelArtImages,
     panelArtStatuses,
     selectedPanelId,
@@ -1314,7 +1417,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       });
       return changed ? next : current;
     });
-  }, [isLayoutStep, pageCards]);
+    setPageLayoutGeometry((current) => {
+      let changed = false;
+      const next: Record<number, GuidedComicPanelGeometry[]> = {};
+      pageCards.forEach((page) => {
+        const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+        const synced = syncGuidedComicLayoutGeometry(page, current[page.pageNumber], templateId, guidedLayoutSettings);
+        next[page.pageNumber] = synced;
+        if (JSON.stringify(synced) !== JSON.stringify(current[page.pageNumber] ?? [])) {
+          changed = true;
+        }
+      });
+      if (Object.keys(current).some((pageNumber) => !next[Number(pageNumber)])) {
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [guidedLayoutSettings, isLayoutStep, pageCards, pageLayoutTemplates]);
 
   useEffect(() => {
     if (!shouldRenderGuidedPageNavigator(activeStep.id, pageCards.length)) return;
@@ -1351,6 +1470,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
   const goBack = () => setActiveIndex((index) => Math.max(0, index - 1));
   const goNext = () => setActiveIndex((index) => Math.min(STEPS.length - 1, index + 1));
+  const handlePrimaryStepAction = () => {
+    if (isExportStep) {
+      setPrimaryActionMessage(
+        'Export review is ready. Download packaging is not wired yet, so use Advanced Studio for final canvas export after review.',
+      );
+      return;
+    }
+
+    setPrimaryActionMessage(null);
+    goNext();
+  };
   const jumpToPage = (pageNumber: number) => {
     setActivePageNumber(pageNumber);
     pageSectionRefs.current[pageNumber]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1376,53 +1506,111 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setActiveProjectId(project.projectId);
     setProjectLibraryStatus(`Saved ${getGuidedComicProjectDisplayName(project)}.`);
   };
-  const saveAsNewComic = () => {
-    const promptedSeriesTitle = window.prompt('Save as new comic series title', setupForm.seriesTitle || 'Untitled guided comic');
-    if (promptedSeriesTitle === null) return;
-    const timestamp = new Date().toISOString();
-    const snapshot: GuidedComicProjectSnapshot = {
-      ...currentProjectSnapshot,
-      setupForm: {
-        ...currentProjectSnapshot.setupForm,
-        seriesTitle: promptedSeriesTitle.trim() || 'Untitled guided comic',
+  const openSaveAsDialog = () => {
+    setComicProjectMetadataDialog({
+      mode: 'save-as',
+      form: {
+        seriesTitle: setupForm.seriesTitle || currentProject?.seriesTitle || 'Untitled guided comic',
+        issueTitle: setupForm.issueTitle || currentProject?.issueTitle || '',
+        issueNumber: setupForm.issueNumber || currentProject?.issueNumber || '1',
       },
-    };
-    const project = createGuidedComicProject(snapshot, {
-      createdAt: timestamp,
-      updatedAt: timestamp,
     });
-    const nextLibrary = upsertGuidedComicProject(
-      projectLibrary ?? {
-        version: 1,
-        activeProjectId: project.projectId,
-        updatedAt: timestamp,
-        projects: [],
-      },
-      project,
-      true,
-    );
-    setProjectLibrary(nextLibrary);
-    setActiveProjectId(project.projectId);
-    applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
-    setProjectLibraryStatus(`Saved new comic ${getGuidedComicProjectDisplayName(project)}.`);
   };
-  const renameCurrentComic = () => {
-    if (!projectLibrary || !currentProject) {
-      saveCurrentComic();
-      return;
-    }
-    const seriesTitle = window.prompt('Series title', currentProject.seriesTitle || setupForm.seriesTitle);
-    if (seriesTitle === null) return;
-    const issueTitle = window.prompt('Issue title', currentProject.issueTitle || setupForm.issueTitle);
-    if (issueTitle === null) return;
-    const issueNumber = window.prompt('Issue number', currentProject.issueNumber || setupForm.issueNumber);
-    if (issueNumber === null) return;
+  const openRenameDialog = () => {
+    setComicProjectMetadataDialog({
+      mode: 'rename',
+      form: {
+        seriesTitle: currentProject?.seriesTitle || setupForm.seriesTitle || 'Untitled guided comic',
+        issueTitle: currentProject?.issueTitle || setupForm.issueTitle || '',
+        issueNumber: currentProject?.issueNumber || setupForm.issueNumber || '1',
+      },
+    });
+  };
+  const updateComicProjectMetadataField = (field: keyof ComicProjectMetadataForm, value: string) => {
+    setComicProjectMetadataDialog((dialog) =>
+      dialog
+        ? {
+            ...dialog,
+            form: {
+              ...dialog.form,
+              [field]: value,
+            },
+          }
+        : dialog,
+    );
+  };
+  const submitComicProjectMetadataDialog = () => {
+    if (!comicProjectMetadataDialog) return;
 
     const timestamp = new Date().toISOString();
+    const metadata = {
+      seriesTitle: comicProjectMetadataDialog.form.seriesTitle.trim() || 'Untitled guided comic',
+      issueTitle: comicProjectMetadataDialog.form.issueTitle.trim(),
+      issueNumber: comicProjectMetadataDialog.form.issueNumber.trim() || '1',
+    };
+
+    if (comicProjectMetadataDialog.mode === 'save-as') {
+      const snapshot: GuidedComicProjectSnapshot = {
+        ...currentProjectSnapshot,
+        setupForm: {
+          ...currentProjectSnapshot.setupForm,
+          ...metadata,
+        },
+      };
+      const project = createGuidedComicProject(snapshot, {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      const nextLibrary = upsertGuidedComicProject(
+        projectLibrary ?? {
+          version: 1,
+          activeProjectId: project.projectId,
+          updatedAt: timestamp,
+          projects: [],
+        },
+        project,
+        true,
+      );
+      setProjectLibrary(nextLibrary);
+      setActiveProjectId(project.projectId);
+      applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
+      setComicProjectMetadataDialog(null);
+      setProjectLibraryStatus(`Saved new comic ${getGuidedComicProjectDisplayName(project)}.`);
+      return;
+    }
+
+    if (!projectLibrary || !currentProject) {
+      const snapshot: GuidedComicProjectSnapshot = {
+        ...currentProjectSnapshot,
+        setupForm: {
+          ...currentProjectSnapshot.setupForm,
+          ...metadata,
+        },
+      };
+      const project = createGuidedComicProject(snapshot, {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      const nextLibrary = upsertGuidedComicProject(
+        projectLibrary ?? {
+          version: 1,
+          activeProjectId: project.projectId,
+          updatedAt: timestamp,
+          projects: [],
+        },
+        project,
+        true,
+      );
+      setProjectLibrary(nextLibrary);
+      setActiveProjectId(project.projectId);
+      applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
+      setComicProjectMetadataDialog(null);
+      setProjectLibraryStatus(`Saved ${getGuidedComicProjectDisplayName(project)}.`);
+      return;
+    }
+
     const renamedLibrary = renameGuidedComicProject(projectLibrary, currentProject.projectId, {
-      seriesTitle,
-      issueTitle,
-      issueNumber,
+      ...metadata,
       updatedAt: timestamp,
     });
     const renamedProject = renamedLibrary.projects.find((project) => project.projectId === currentProject.projectId);
@@ -1443,6 +1631,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       const nextLibrary = upsertGuidedComicProject(renamedLibrary, nextProject, true);
       setProjectLibrary(nextLibrary);
       applyGuidedComicProjectSnapshot(snapshot, nextProject.updatedAt);
+      setComicProjectMetadataDialog(null);
       setProjectLibraryStatus(`Renamed to ${getGuidedComicProjectDisplayName(nextProject)}.`);
     }
   };
@@ -1516,7 +1705,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     applyGuidedComicProjectSnapshot(nextProject?.snapshot ?? buildEmptyGuidedComicProjectSnapshot(), nextProject?.updatedAt ?? null);
     setProjectLibraryStatus(nextProject ? `Deleted comic. Loaded ${getGuidedComicProjectDisplayName(nextProject)}.` : 'Deleted comic.');
   };
-  const updateSetupField = (field: keyof SetupFormState, value: string) => {
+  const updateSetupField = <K extends keyof SetupFormState>(field: K, value: SetupFormState[K]) => {
     setSetupForm((current) => ({ ...current, [field]: value }));
   };
   const updateStoryField = (field: keyof StoryFormState, value: string) => {
@@ -1540,6 +1729,29 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           nextPage.panelCount = String(getGuidedComicActivePanelCount(nextPage));
           nextPage.panelBeats = getGuidedComicExistingPanelBeats(nextPage);
         }
+        return nextPage;
+      }),
+    );
+  };
+  const updatePagePanelCount = (pageNumber: number, panelCount: string) => {
+    setPageCards((current) =>
+      current.map((page) => {
+        if (page.pageNumber !== pageNumber) return page;
+        const nextPage = {
+          ...page,
+          panelCount,
+        };
+        nextPage.panelCount = String(getGuidedComicActivePanelCount(nextPage));
+        nextPage.panelBeats = getGuidedComicExistingPanelBeats(nextPage);
+        setPageLayoutGeometry((layouts) => ({
+          ...layouts,
+          [pageNumber]: syncGuidedComicLayoutGeometry(
+            nextPage,
+            layouts[pageNumber],
+            pageLayoutTemplates[pageNumber] ?? 'auto',
+            guidedLayoutSettings,
+          ),
+        }));
         return nextPage;
       }),
     );
@@ -1615,6 +1827,20 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       delete next[panelId];
       return next;
     });
+    setPageLayoutGeometry((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([pageNumber, geometry]) => [
+          pageNumber,
+          geometry.map((panel) => {
+            if (panel.panelId !== panelId) return panel;
+            const nextPanel = { ...panel };
+            delete nextPanel.imageUrl;
+            delete nextPanel.imageId;
+            return nextPanel;
+          }),
+        ]),
+      ) as Record<number, GuidedComicPanelGeometry[]>,
+    );
     setPanelArtStatuses((current) => ({ ...current, [panelId]: 'needs-art' }));
   };
   const requestPanelArtVaultImage = () => {
@@ -1661,7 +1887,136 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   };
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
+    const page = pageCards.find((card) => card.pageNumber === pageNumber);
+    if (!page) return;
+    setPageLayoutGeometry((current) => ({
+      ...current,
+      [pageNumber]: createGuidedComicStarterLayout(page, templateId, guidedLayoutSettings),
+    }));
   };
+  const applySafeMarginsToPageLayout = (page: PageCard) => {
+    const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    setPageLayoutGeometry((current) => {
+      const syncedGeometry = syncGuidedComicLayoutGeometry(page, current[page.pageNumber], templateId, guidedLayoutSettings);
+      return {
+        ...current,
+        [page.pageNumber]: syncedGeometry.map((panel) => getGuidedComicSafeMarginPanelGeometry(panel)),
+      };
+    });
+    setPrimaryActionMessage(`Applied the safe margin guide to page ${page.pageNumber}.`);
+  };
+  const updateLayoutPanelFraming = (
+    pageNumber: number,
+    panelId: string,
+    updates: Partial<Pick<GuidedComicPanelGeometry, 'imageFit' | 'imageFocusX' | 'imageFocusY' | 'imageZoom'>>,
+  ) => {
+    setPageLayoutGeometry((current) => ({
+      ...current,
+      [pageNumber]: (current[pageNumber] ?? []).map((panel) =>
+        panel.panelId === panelId
+          ? {
+              ...panel,
+              ...updates,
+              imageFocusX:
+                updates.imageFocusX === undefined
+                  ? panel.imageFocusX
+                  : Math.min(1, Math.max(0, updates.imageFocusX)),
+              imageFocusY:
+                updates.imageFocusY === undefined
+                  ? panel.imageFocusY
+                  : Math.min(1, Math.max(0, updates.imageFocusY)),
+              imageZoom:
+                updates.imageZoom === undefined
+                  ? panel.imageZoom
+                  : Math.min(2, Math.max(1, updates.imageZoom)),
+            }
+          : panel,
+      ),
+    }));
+  };
+  const startLayoutPanelEdit = (
+    event: React.PointerEvent,
+    pageNumber: number,
+    panel: GuidedComicPanelGeometry,
+    mode: ActiveLayoutEdit['mode'],
+    handle?: LayoutResizeHandle,
+  ) => {
+    const canvasRect = layoutCanvasRefs.current[pageNumber]?.getBoundingClientRect();
+    const page = pageCards.find((card) => card.pageNumber === pageNumber);
+    if (!canvasRect || !page) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setActivePageNumber(pageNumber);
+    setSelectedPanelId(panel.panelId);
+    setActiveLayoutEdit({
+      pageNumber,
+      panelId: panel.panelId,
+      mode,
+      handle,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      canvasWidth: canvasRect.width,
+      canvasHeight: canvasRect.height,
+      startPanel: panel,
+      startGeometry: syncGuidedComicLayoutGeometry(
+        page,
+        pageLayoutGeometry[pageNumber],
+        pageLayoutTemplates[pageNumber] ?? 'auto',
+        guidedLayoutSettings,
+      ),
+    });
+  };
+  useEffect(() => {
+    if (!activeLayoutEdit) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const dx = (event.clientX - activeLayoutEdit.startClientX) / activeLayoutEdit.canvasWidth;
+      const dy = (event.clientY - activeLayoutEdit.startClientY) / activeLayoutEdit.canvasHeight;
+      const { startPanel } = activeLayoutEdit;
+      let nextPanel: GuidedComicPanelGeometry = { ...startPanel };
+
+      if (activeLayoutEdit.mode === 'move') {
+        nextPanel = {
+          ...nextPanel,
+          x: startPanel.x + dx,
+          y: startPanel.y + dy,
+        };
+      } else {
+        const handle = activeLayoutEdit.handle ?? 'se';
+        if (handle.includes('e')) {
+          nextPanel.w = startPanel.w + dx;
+        }
+        if (handle.includes('s')) {
+          nextPanel.h = startPanel.h + dy;
+        }
+        if (handle.includes('w')) {
+          nextPanel.x = startPanel.x + dx;
+          nextPanel.w = startPanel.w - dx;
+        }
+        if (handle.includes('n')) {
+          nextPanel.y = startPanel.y + dy;
+          nextPanel.h = startPanel.h - dy;
+        }
+      }
+
+      const constrained = getConstrainedGuidedComicPanelGeometry(nextPanel);
+      const snapped = getSnappedGuidedComicPanelGeometry(constrained, activeLayoutEdit.startGeometry, guidedLayoutSettings);
+      setPageLayoutGeometry((current) => ({
+        ...current,
+        [activeLayoutEdit.pageNumber]: (current[activeLayoutEdit.pageNumber] ?? activeLayoutEdit.startGeometry).map((panel) =>
+          panel.panelId === activeLayoutEdit.panelId ? snapped : panel,
+        ),
+      }));
+    };
+    const handlePointerUp = () => setActiveLayoutEdit(null);
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [activeLayoutEdit, guidedLayoutSettings]);
   const openBlankAdvancedStudio = () => {
     const confirmed = window.confirm('Open a blank Advanced Comics Studio workspace? Save this guided comic first if you want the latest guided changes in the library.');
     if (!confirmed) return;
@@ -1673,9 +2028,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
     const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
     const layoutPanels = getGuidedComicLayoutPanels(page, layoutTemplate);
-    const orderedPanelIds = layoutPanels.map(
-      (panel) => panel.panelId ?? panelArtQueueId(page.pageNumber, panel.panelNumber),
+    const layoutGeometry = syncGuidedComicLayoutGeometry(
+      page,
+      pageLayoutGeometry[page.pageNumber],
+      layoutTemplate,
+      guidedLayoutSettings,
     );
+    const orderedPanelIds = [...layoutGeometry].sort((a, b) => a.order - b.order).map((panel) => panel.panelId);
     const handoffPanelArtImages = orderedPanelIds.reduce<Record<string, GuidedComicLayoutPanelImage>>((images, panelId) => {
       const image = panelArtImages[panelId];
       if (!image) return images;
@@ -1694,11 +2053,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       layoutTemplate,
       panelCount: layoutPanels.length,
       orderedPanelIds,
+      panelGeometry: layoutGeometry,
       panelArtImages: handoffPanelArtImages,
       panelBeats: orderedPanelIds.map((panelId, index) => ({
         panelId,
         panelNumber: index + 1,
-        beatText: layoutPanels[index]?.beatText ?? '',
+        beatText: layoutPanels.find((panel) => panel.panelId === panelId)?.beatText ?? '',
       })),
     });
     onOpenAdvancedStudio();
@@ -1726,6 +2086,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPanelArtStatuses({});
     setPanelArtImages({});
     setPageLayoutTemplates({});
+    setPageLayoutGeometry({});
     setDraftSavedAt(null);
     setProjectLibraryStatus('Cleared the recovery draft. Saved library comics were kept.');
   };
@@ -1800,50 +2161,82 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
   const selectedPanel =
     panelArtQueue.find((panel) => panel.id === selectedPanelId) ?? panelArtQueue[0] ?? null;
+  const selectedPanelEffectiveId = selectedPanel?.id ?? selectedPanelId;
+  const selectedPanelPageNumber = selectedPanel?.pageNumber ?? null;
   const selectedPanelStatus = selectedPanel
     ? panelArtStatuses[selectedPanel.id] ?? 'needs-art'
     : 'needs-art';
   const selectedPanelArtImage = selectedPanel ? panelArtImages[selectedPanel.id] : null;
-  const guidedAiDraft = useMemo<GuidedComicAiDraft>(
-    () => ({
-      currentStep: activeStep.id,
-      setupForm,
-      storyForm,
-      artDirection,
-      outlineBeats,
-      pageCards,
-      characterReferences,
-      locationReferences,
-      npcReferences,
-      panelArtStatuses,
-      panelArtImages,
-      pageLayoutTemplates,
-      selectedPageNumber: activePageNumber ?? selectedPanel?.pageNumber ?? pageCards[0]?.pageNumber ?? null,
-      selectedPanelId: selectedPanel?.id ?? selectedPanelId,
-    }),
-    [
-      activePageNumber,
-      activeStep.id,
-      artDirection,
-      characterReferences,
-      locationReferences,
-      npcReferences,
-      outlineBeats,
-      pageCards,
-      pageLayoutTemplates,
-      panelArtImages,
-      panelArtStatuses,
-      selectedPanel,
-      selectedPanelId,
-      setupForm,
-      storyForm,
-    ],
-  );
-  const guidedAiContext = useMemo(() => buildGuidedComicAiContext(guidedAiDraft), [guidedAiDraft]);
-  const guidedPacingChecks = useMemo(() => getGuidedComicPacingChecks(guidedAiContext), [guidedAiContext]);
+  const selectedPanelQueueIndex = selectedPanel
+    ? panelArtQueue.findIndex((panel) => panel.id === selectedPanel.id)
+    : -1;
+  const selectedPagePanels = selectedPanel
+    ? panelArtQueue.filter((panel) => panel.pageNumber === selectedPanel.pageNumber)
+    : [];
+  const selectedPagePanelIndex = selectedPanel
+    ? selectedPagePanels.findIndex((panel) => panel.id === selectedPanel.id)
+    : -1;
+  const selectedPagePanelStatuses = selectedPagePanels.map((panel) => panelArtStatuses[panel.id] ?? 'needs-art');
+  const selectedPageApprovedCount = selectedPagePanelStatuses.filter((status) => status === 'approved').length;
+  const selectedPageReadyCount = selectedPagePanelStatuses.filter((status) => status === 'ready').length;
+  const selectedPageNeedsArtCount = selectedPagePanelStatuses.filter((status) => status === 'needs-art').length;
+  const selectedPageArtSummary = selectedPanel
+    ? `${selectedPageApprovedCount} approved / ${selectedPageReadyCount} ready / ${selectedPageNeedsArtCount} needs art`
+    : 'No panel selected';
+  const selectedLayoutPage =
+    pageCards.find((page) => page.pageNumber === (activePageNumber ?? selectedPanelPageNumber)) ??
+    pageCards[0] ??
+    null;
+  const selectedLayoutTemplateId = selectedLayoutPage
+    ? pageLayoutTemplates[selectedLayoutPage.pageNumber] ?? 'auto'
+    : 'auto';
+  const selectedLayoutGeometry = selectedLayoutPage
+    ? syncGuidedComicLayoutGeometry(
+        selectedLayoutPage,
+        pageLayoutGeometry[selectedLayoutPage.pageNumber],
+        selectedLayoutTemplateId,
+        guidedLayoutSettings,
+      )
+    : [];
+  const selectedLayoutPanelId =
+    selectedPanel && selectedPanel.pageNumber === selectedLayoutPage?.pageNumber
+      ? selectedPanel.id
+      : selectedLayoutGeometry[0]?.panelId;
+  const selectedLayoutPanel =
+    selectedLayoutGeometry.find((panel) => panel.panelId === selectedLayoutPanelId) ??
+    selectedLayoutGeometry[0] ??
+    null;
+  const selectedLayoutPanelImage = selectedLayoutPanel ? panelArtImages[selectedLayoutPanel.panelId] : undefined;
+  const selectedLayoutPanelNumber = selectedLayoutPanel ? selectedLayoutPanel.order + 1 : 0;
+  const selectedImageFit = selectedLayoutPanel?.imageFit ?? 'cover';
+  const selectedImageFocusX = selectedLayoutPanel?.imageFocusX ?? 0.5;
+  const selectedImageFocusY = selectedLayoutPanel?.imageFocusY ?? 0.5;
+  const selectedImageZoom = selectedLayoutPanel?.imageZoom ?? 1;
+  const selectPanelByOffset = (offset: number) => {
+    if (selectedPanelQueueIndex < 0) return;
+    const nextPanel = panelArtQueue[selectedPanelQueueIndex + offset];
+    if (nextPanel) setSelectedPanelId(nextPanel.id);
+  };
+  const guidedAiDraft: GuidedComicAiDraft = {
+    currentStep: activeStep.id,
+    setupForm,
+    storyForm,
+    artDirection,
+    outlineBeats,
+    pageCards,
+    characterReferences,
+    locationReferences,
+    npcReferences,
+    panelArtStatuses,
+    panelArtImages,
+    pageLayoutTemplates,
+    selectedPageNumber: activePageNumber ?? selectedPanelPageNumber ?? pageCards[0]?.pageNumber ?? null,
+    selectedPanelId: selectedPanelEffectiveId,
+  };
+  const guidedAiContext = buildGuidedComicAiContext(guidedAiDraft);
+  const guidedPacingChecks = getGuidedComicPacingChecks(guidedAiContext);
   const guidedAiActions = GUIDED_COMIC_AI_ACTIONS_BY_STEP[activeStep.id];
-  const runGuidedComicAiAction = useCallback(
-    async (action: GuidedComicAssistAction, forceSelectedOnly = false) => {
+  const runGuidedComicAiAction = async (action: GuidedComicAssistAction, forceSelectedOnly = false) => {
       const actionOption = GUIDED_COMIC_AI_ACTIONS_BY_STEP[activeStep.id].find((option) => option.action === action);
       setGuidedAiError(null);
       if (!isSupabaseConfigured()) {
@@ -1860,7 +2253,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         mode: 'guided_comic_assist',
         action,
         selectedPageNumber: guidedAiContext.selectedPage?.pageNumber,
-        selectedPanelId: guidedAiContext.selectedPanel?.id ?? selectedPanel?.id ?? undefined,
+        selectedPanelId: guidedAiContext.selectedPanel?.id ?? selectedPanelEffectiveId ?? undefined,
         context: {
           ...guidedAiContext,
           pacingChecks: guidedPacingChecks,
@@ -1885,9 +2278,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         result: parsed.data,
         selectedOnly,
       });
-    },
-    [activeStep.id, guidedAiContext, guidedPacingChecks, selectedPanel],
-  );
+  };
   const applyGuidedAiPreview = (mode: 'empty-only' | 'replace-confirmed') => {
     if (!guidedAiPreview) return;
     if (
@@ -1901,7 +2292,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       selectedOnly: guidedAiPreview.selectedOnly,
       selectedPageNumber: guidedAiContext.selectedPage?.pageNumber ?? activePageNumber,
     });
-    setSetupForm(nextDraft.setupForm);
+    setSetupForm((current) => ({ ...current, ...nextDraft.setupForm }));
     setStoryForm(nextDraft.storyForm);
     setArtDirection(nextDraft.artDirection);
     setOutlineBeats(nextDraft.outlineBeats as OutlineBeat[]);
@@ -1915,7 +2306,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     });
     setGuidedAiPreview(null);
   };
-  const openImageshopWithSelectedPanel = useCallback(() => {
+  const openImageshopWithSelectedPanel = () => {
     if (!selectedPanel) return;
 
     const page = pageCards.find((card) => card.pageNumber === selectedPanel.pageNumber);
@@ -1954,16 +2345,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       locations,
       npcs,
     });
-  }, [
-    artDirection,
-    characterReferences,
-    locationReferences,
-    npcReferences,
-    pageCards,
-    pageLayoutTemplates,
-    requestGuidedComicHandoff,
-    selectedPanel,
-  ]);
+  };
   const layoutChecklistItems = useMemo(() => {
     const allPagesPlanned =
       pageCards.length > 0 && pageCards.every((page) => page.summary.trim() && Number.parseInt(page.panelCount, 10) > 0);
@@ -2207,22 +2589,38 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </span>
             <label className="mt-3 flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
               Comic Library
-              <select
-                value={activeProjectId ?? ''}
-                onChange={(event) => switchCurrentComic(event.target.value)}
-                disabled={!projectLibrary?.projects.length}
-                className="rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none disabled:opacity-45"
-              >
-                <option value="" disabled={Boolean(activeProjectId)}>
-                  Unsaved local comic
-                </option>
-                {projectLibrary?.projects.map((project) => (
-                  <option key={project.projectId} value={project.projectId}>
-                    {getGuidedComicProjectDisplayName(project)}
+              {hasSavedLibraryProjects ? (
+                <select
+                  value={activeProjectId ?? ''}
+                  onChange={(event) => switchCurrentComic(event.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none"
+                >
+                  <option value="" disabled={Boolean(activeProjectId)}>
+                    Unsaved local comic
                   </option>
-                ))}
-              </select>
+                  {projectLibrary?.projects.map((project) => (
+                    <option key={project.projectId} value={project.projectId}>
+                      {getGuidedComicProjectDisplayName(project)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-lg border border-amber-300/25 bg-amber-300/[0.08] px-2.5 py-2 text-xs font-bold normal-case tracking-normal text-amber-50">
+                  Current recovery draft is open. Save it to add it to the Comic Library.
+                </div>
+              )}
             </label>
+            {!hasSavedLibraryProjects ? (
+              <button
+                type="button"
+                onClick={saveCurrentComic}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-black transition hover:scale-[1.01] active:scale-[0.99]"
+                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+              >
+                <Save className="h-3.5 w-3.5" aria-hidden />
+                Save local comic to library
+              </button>
+            ) : null}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Tooltip content="Save current guided state to this comic">
                 <button
@@ -2237,7 +2635,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <Tooltip content="Save the current guided state as a new comic">
                 <button
                   type="button"
-                  onClick={saveAsNewComic}
+                  onClick={openSaveAsDialog}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
                 >
                   <FolderOpen className="h-3.5 w-3.5" aria-hidden />
@@ -2247,7 +2645,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <Tooltip content="Rename the saved comic">
                 <button
                   type="button"
-                  onClick={renameCurrentComic}
+                  onClick={openRenameDialog}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
                 >
                   <Edit3 className="h-3.5 w-3.5" aria-hidden />
@@ -2395,23 +2793,39 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 {draftSavedAt ? 'Recovery draft saved' : 'Recovery draft not saved'}
               </p>
             </div>
-            <select
-              value={activeProjectId ?? ''}
-              onChange={(event) => switchCurrentComic(event.target.value)}
-              disabled={!projectLibrary?.projects.length}
-              className="min-w-0 rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold text-white outline-none disabled:opacity-45 md:w-64"
-            >
-              <option value="" disabled={Boolean(activeProjectId)}>
-                Unsaved local comic
-              </option>
-              {projectLibrary?.projects.map((project) => (
-                <option key={project.projectId} value={project.projectId}>
-                  {getGuidedComicProjectDisplayName(project)}
+            {hasSavedLibraryProjects ? (
+              <select
+                value={activeProjectId ?? ''}
+                onChange={(event) => switchCurrentComic(event.target.value)}
+                className="min-w-0 rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-xs font-bold text-white outline-none md:w-64"
+              >
+                <option value="" disabled={Boolean(activeProjectId)}>
+                  Unsaved local comic
                 </option>
-              ))}
-            </select>
+                {projectLibrary?.projects.map((project) => (
+                  <option key={project.projectId} value={project.projectId}>
+                    {getGuidedComicProjectDisplayName(project)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="min-w-0 rounded-xl border border-amber-300/25 bg-amber-300/[0.08] px-3 py-2 text-xs font-bold text-amber-50 md:w-64">
+                Current recovery draft is open. Save it to add it to the Comic Library.
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {!hasSavedLibraryProjects ? (
+              <button
+                type="button"
+                onClick={saveCurrentComic}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-[11px] font-black transition hover:scale-[1.01] active:scale-[0.99] sm:col-span-2"
+                style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+              >
+                <Save className="h-3.5 w-3.5" aria-hidden />
+                Save local comic to library
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={saveCurrentComic}
@@ -2422,7 +2836,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </button>
             <button
               type="button"
-              onClick={saveAsNewComic}
+              onClick={openSaveAsDialog}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
             >
               <FolderOpen className="h-3.5 w-3.5" aria-hidden />
@@ -2430,7 +2844,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </button>
             <button
               type="button"
-              onClick={renameCurrentComic}
+              onClick={openRenameDialog}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
             >
               <Edit3 className="h-3.5 w-3.5" aria-hidden />
@@ -2477,7 +2891,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
         </div>
 
-        <main className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <main className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
@@ -2526,14 +2940,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </div>
                 <button
                   type="button"
-                  disabled={!isSetupStep}
-                  onClick={isSetupStep ? goNext : undefined}
+                  onClick={handlePrimaryStepAction}
                   className="inline-flex shrink-0 items-center justify-center rounded-lg px-4 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
                   style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
                 >
                   {activeStep.actionLabel}
                 </button>
               </div>
+              {primaryActionMessage ? (
+                <p className="mt-3 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-50">
+                  {primaryActionMessage}
+                </p>
+              ) : null}
               {isVisualPrepStep ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <button
@@ -2669,6 +3087,71 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       </select>
                     </label>
                   </div>
+
+                  <section className="rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-4">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                        Page layout defaults
+                      </p>
+                      <p className="text-xs leading-relaxed text-white/55">
+                        Starter layouts use these defaults. Existing hand-edited panels stay as you placed them.
+                      </p>
+                    </div>
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Page edge</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'safe', label: 'Safe margins' },
+                            { id: 'full-bleed', label: 'Full bleed' },
+                          ].map((option) => {
+                            const selected = setupForm.layoutMarginMode === option.id;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => updateSetupField('layoutMarginMode', option.id as GuidedComicLayoutMarginMode)}
+                                className="rounded-lg border px-3 py-2 text-xs font-black transition hover:brightness-110"
+                                style={{
+                                  borderColor: selected ? `${ACCENT_GOLD_SOLID}dd` : 'rgba(255,255,255,0.14)',
+                                  background: selected ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.07)',
+                                  color: selected ? TEXT_ON_GOLD : 'rgba(255,255,255,0.76)',
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Panel dividers</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'standard', label: 'Standard gutters' },
+                            { id: 'thin', label: 'Thin dividers' },
+                          ].map((option) => {
+                            const selected = setupForm.layoutGutterMode === option.id;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => updateSetupField('layoutGutterMode', option.id as GuidedComicLayoutGutterMode)}
+                                className="rounded-lg border px-3 py-2 text-xs font-black transition hover:brightness-110"
+                                style={{
+                                  borderColor: selected ? `${ACCENT_GOLD_SOLID}dd` : 'rgba(255,255,255,0.14)',
+                                  background: selected ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.07)',
+                                  color: selected ? TEXT_ON_GOLD : 'rgba(255,255,255,0.76)',
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
 
                   <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                     Short idea / premise
@@ -2908,7 +3391,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             Panel count
                             <select
                               value={page.panelCount}
-                              onChange={(event) => updatePageCard(page.pageNumber, { panelCount: event.target.value })}
+                              onChange={(event) => updatePagePanelCount(page.pageNumber, event.target.value)}
                               className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
                             >
                               {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
@@ -3198,12 +3681,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </div>
                 </div>
               ) : isArtStep ? (
-                <div className="mt-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+                <div className="mt-5 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
                   <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-relaxed text-amber-50 xl:col-span-2">
                     Assign finished art directly from Image Vault, upload or paste a local image, or generate a new
                     version in Imageshop. Assigned images are saved in this guided draft and appear in Layout.
                   </div>
-                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                  <section className="rounded-xl border border-amber-300/15 bg-black/20 p-4">
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
@@ -3213,7 +3696,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       </div>
                       <span className="text-xs text-white/50">{panelArtQueue.length} panels</span>
                     </div>
-                    <div className="mt-4 max-h-[34rem] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                    <div className="mt-4 max-h-[40rem] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                       {panelArtQueue.length > 0 ? (
                         panelArtQueue.map((panel) => {
                           const selected = selectedPanel?.id === panel.id;
@@ -3225,8 +3708,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               onClick={() => setSelectedPanelId(panel.id)}
                               className="w-full rounded-lg border p-3 text-left transition hover:bg-white/10"
                               style={{
-                                background: selected ? 'rgba(252,246,186,0.12)' : 'rgba(0,0,0,0.22)',
-                                borderColor: selected ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.12)',
+                                background: selected ? 'rgba(252,246,186,0.16)' : 'rgba(0,0,0,0.28)',
+                                borderColor: selected ? `${ACCENT_GOLD_SOLID}bb` : 'rgba(252,211,77,0.14)',
+                                boxShadow: selected ? '0 0 0 1px rgba(252,211,77,0.18) inset' : 'none',
                               }}
                             >
                               <div className="flex items-start justify-between gap-3">
@@ -3269,7 +3753,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     </div>
                   </section>
 
-                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                  <section className="rounded-xl border border-amber-300/15 bg-white/[0.045] p-4">
                     {selectedPanel ? (
                       <>
                         <input
@@ -3464,28 +3948,28 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           </div>
                         </div>
 
-                        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-                          <button
-                            type="button"
-                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'ready')}
-                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                          >
-                            Mark ready (status only)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'approved')}
-                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                          >
-                            Approve panel (status only)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updatePanelArtStatus(selectedPanel.id, 'needs-art')}
-                            className="rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                          >
-                            Needs revision (status only)
-                          </button>
+                        <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                              Panel review status
+                            </p>
+                            <span className="text-xs font-black text-white">
+                              Current: {panelArtStatusLabel(selectedPanelStatus)}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            {(['ready', 'approved', 'needs-art'] as PanelArtStatus[]).map((status) => (
+                              <button
+                                key={status}
+                                type="button"
+                                onClick={() => updatePanelArtStatus(selectedPanel.id, status)}
+                                className="rounded-lg border px-3 py-2.5 text-xs font-black transition hover:brightness-110 active:scale-[0.99]"
+                                style={panelArtStatusButtonStyle(status, selectedPanelStatus)}
+                              >
+                                {status === 'ready' ? 'Mark ready' : status === 'approved' ? 'Approve panel' : 'Needs revision'}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -3501,7 +3985,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     pageCards.map((page) => {
                       const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
                       const layoutPanels = getGuidedComicLayoutPanels(page, templateId);
-                      const layoutGridStyle = getGuidedComicLayoutGridStyle(templateId, layoutPanels.length);
+                      const layoutGeometry = syncGuidedComicLayoutGeometry(
+                        page,
+                        pageLayoutGeometry[page.pageNumber],
+                        templateId,
+                        guidedLayoutSettings,
+                      );
                       return (
                       <article
                         key={page.pageNumber}
@@ -3522,7 +4011,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             </p>
                           </div>
                           <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
-                            Layout template
+                            Starter preset
                             <select
                               value={templateId}
                               onChange={(event) =>
@@ -3539,101 +4028,185 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           </label>
                         </div>
 
-                        <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3">
-                          <div className="mb-2 flex items-center justify-between gap-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-                              Page layout preview
-                            </p>
-                            <span className="text-[11px] font-semibold text-white/45">
-                              {LAYOUT_TEMPLATE_OPTIONS.find((option) => option.id === templateId)?.label ?? 'Auto layout'}
-                            </span>
-                          </div>
-                          <div className="grid aspect-[2/3] gap-2" style={layoutGridStyle}>
-                            {layoutPanels.map((panel) => {
-                              const panelNumber = panel.panelNumber;
-                              const panelId = panel.panelId ?? panelArtQueueId(page.pageNumber, panelNumber);
-                              const panelImage = panelArtImages[panelId];
-                              return (
-                                <div
-                                  key={panelId}
-                                  className="relative min-h-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.05]"
-                                  style={{
-                                    gridColumn: panel.columnSpan > 1 ? `span ${panel.columnSpan} / span ${panel.columnSpan}` : undefined,
-                                    gridRow: panel.rowSpan > 1 ? `span ${panel.rowSpan} / span ${panel.rowSpan}` : undefined,
-                                  }}
+                        <div className="mt-4 grid gap-4">
+                          <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.045] p-3">
+                            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                                Guided layout canvas
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => applySafeMarginsToPageLayout(page)}
+                                  className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-50 transition hover:bg-amber-300/15"
                                 >
-                                  {panelImage ? (
-                                    <VaultImageWithFallback
-                                      src={panelImage.imageUrl}
-                                      alt={`Page ${page.pageNumber}, panel ${panelNumber}`}
-                                      frameClassName="h-full w-full"
-                                      imgClassName="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full min-h-[5rem] flex-col justify-between p-2">
-                                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
-                                        Panel {panelNumber}
-                                      </span>
-                                      <p className="line-clamp-3 text-[11px] leading-snug text-white/55">
-                                        {panel.beatText || 'Panel art placeholder'}
-                                      </p>
-                                      <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/28">
-                                        {panel.intent === 'feature'
-                                          ? 'Feature beat'
-                                          : panel.intent === 'wide'
-                                            ? 'Wide beat'
-                                            : panel.intent === 'tall'
-                                              ? 'Tall beat'
-                                              : 'Standard beat'}
-                                      </span>
-                                    </div>
-                                  )}
-                                  <span
-                                    className={[
-                                      'absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em]',
-                                      panelImage
-                                        ? 'border-emerald-300/35 bg-emerald-400/20 text-emerald-100'
-                                        : 'border-white/15 bg-black/55 text-white/65',
-                                    ].join(' ')}
+                                  Apply safe margins
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updatePageLayoutTemplate(page.pageNumber, templateId)}
+                                  className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/70 transition hover:bg-white/15"
+                                >
+                                  Reset starter
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mb-3 text-xs leading-relaxed text-amber-50/65">
+                              The dashed guide marks the printable safe area. Advanced Studio receives the rectangles as edited;
+                              use Apply safe margins when panels should stay away from page edges.
+                            </p>
+                            <div
+                              ref={(node) => {
+                                layoutCanvasRefs.current[page.pageNumber] = node;
+                              }}
+                              className="relative aspect-[2/3] overflow-hidden rounded-lg border border-amber-300/25 bg-[#100e16]"
+                              style={{
+                                backgroundImage:
+                                  'linear-gradient(90deg, rgba(252,211,77,0.06) 1px, transparent 1px), linear-gradient(180deg, rgba(252,211,77,0.06) 1px, transparent 1px)',
+                                backgroundSize: '10% 10%',
+                              }}
+                            >
+                              <div
+                                className="pointer-events-none absolute z-20 rounded border border-dashed border-amber-100/45"
+                                style={{ inset: `${NORMALIZED_LAYOUT_MARGIN * 100}%` }}
+                                aria-hidden
+                              />
+                              <span
+                                className="pointer-events-none absolute left-[5%] top-[5%] z-20 rounded bg-black/55 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-amber-50/75"
+                                aria-hidden
+                              >
+                                Safe margin
+                              </span>
+                              {layoutGeometry.map((panel) => {
+                                const panelNumber = panel.order + 1;
+                                const panelPlan = layoutPanels.find((candidate) => candidate.panelId === panel.panelId) ?? layoutPanels[panel.order];
+                                const panelId = panel.panelId;
+                                const panelImage = panelArtImages[panelId];
+                                const selected = selectedLayoutPanel?.panelId === panelId || activeLayoutEdit?.panelId === panelId;
+                                return (
+                                  <div
+                                    key={panelId}
+                                    role="button"
+                                    tabIndex={0}
+                                    onPointerDown={(event) => startLayoutPanelEdit(event, page.pageNumber, panel, 'move')}
+                                    className="absolute min-h-0 overflow-hidden rounded-md border bg-amber-300/[0.055] shadow-lg transition"
+                                    style={{
+                                      left: `${panel.x * 100}%`,
+                                      top: `${panel.y * 100}%`,
+                                      width: `${panel.w * 100}%`,
+                                      height: `${panel.h * 100}%`,
+                                      borderColor: selected ? `${ACCENT_GOLD_SOLID}` : 'rgba(252,211,77,0.52)',
+                                      cursor: panel.locked ? 'default' : 'move',
+                                      boxShadow: selected
+                                        ? '0 0 0 2px rgba(252,246,186,0.28), 0 18px 40px rgba(0,0,0,0.34)'
+                                        : '0 0 0 1px rgba(0,0,0,0.32), 0 12px 30px rgba(0,0,0,0.28)',
+                                    }}
                                   >
-                                    {panelImage ? 'Ready' : 'Needs art'}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                                    {panelImage ? (
+                                      <VaultImageWithFallback
+                                        src={panelImage.imageUrl}
+                                        alt={`Page ${page.pageNumber}, panel ${panelNumber}`}
+                                        frameClassName="h-full w-full overflow-hidden"
+                                        imgClassName="h-full w-full"
+                                        imgStyle={{
+                                          objectFit:
+                                            panel.imageFit === 'stretch'
+                                              ? 'fill'
+                                              : panel.imageFit === 'contain'
+                                                ? 'contain'
+                                                : 'cover',
+                                          objectPosition: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                                          transform: (panel.imageZoom ?? 1) > 1 ? `scale(${panel.imageZoom})` : undefined,
+                                          transformOrigin: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="flex h-full min-h-[5rem] flex-col justify-between bg-black/20 p-2">
+                                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-100/65">
+                                          Panel {panelNumber}
+                                        </span>
+                                        <p className="line-clamp-3 text-[11px] leading-snug text-white/68">
+                                          {panelPlan?.beatText || 'Panel art placeholder'}
+                                        </p>
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-amber-100/42">
+                                          {panelPlan?.intent === 'feature'
+                                            ? 'Feature beat'
+                                            : panelPlan?.intent === 'wide'
+                                              ? 'Wide beat'
+                                              : panelPlan?.intent === 'tall'
+                                                ? 'Tall beat'
+                                                : 'Standard beat'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <span
+                                      className={[
+                                        'absolute left-2 top-2 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em]',
+                                        panelImage
+                                          ? 'border-emerald-300/35 bg-emerald-400/20 text-emerald-100'
+                                          : 'border-white/15 bg-black/55 text-white/65',
+                                      ].join(' ')}
+                                    >
+                                      {panelImage ? 'Ready' : 'Needs art'}
+                                    </span>
+                                    {(['nw', 'ne', 'sw', 'se'] as LayoutResizeHandle[]).map((handle) => (
+                                      <button
+                                        key={handle}
+                                        type="button"
+                                        aria-label={`Resize panel ${panelNumber} ${handle}`}
+                                        onPointerDown={(event) => startLayoutPanelEdit(event, page.pageNumber, panel, 'resize', handle)}
+                                        className={[
+                                          'absolute h-3 w-3 rounded-full border border-black/50 bg-amber-200 shadow-sm',
+                                          handle.includes('n') ? 'top-1' : 'bottom-1',
+                                          handle.includes('w') ? 'left-1' : 'right-1',
+                                        ].join(' ')}
+                                        style={{
+                                          cursor:
+                                            handle === 'nw' || handle === 'se'
+                                              ? 'nwse-resize'
+                                              : 'nesw-resize',
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="mt-4 grid gap-3 md:grid-cols-2">
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-                              Panel count
-                            </p>
-                            <p className="mt-1 text-sm font-bold text-white/85">
-                              {layoutPanels.length} panel{layoutPanels.length === 1 ? '' : 's'}
-                            </p>
+                          <div className="grid gap-3">
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                                  Panel count
+                                </p>
+                                <p className="mt-1 text-sm font-bold text-white/85">
+                                  {layoutPanels.length} panel{layoutPanels.length === 1 ? '' : 's'}
+                                </p>
+                              </div>
+                              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                                  Art status summary
+                                </p>
+                                <p className="mt-1 text-sm font-bold text-white/85">
+                                  {pagePanelArtSummary(page, panelArtStatuses)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.07] p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                                Page {page.pageNumber} handoff
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => openPageInAdvancedStudio(page)}
+                                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/15 px-4 py-2.5 text-sm font-black text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-300/20"
+                              >
+                                <MonitorUp className="h-4 w-4" aria-hidden="true" />
+                                {ADVANCED_STUDIO_ACTION_LABELS.sendPage}
+                              </button>
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-                              Art status summary
-                            </p>
-                            <p className="mt-1 text-sm font-bold text-white/85">
-                              {pagePanelArtSummary(page, panelArtStatuses)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
-                            Page {page.pageNumber} handoff
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => openPageInAdvancedStudio(page)}
-                            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300/35 bg-amber-300/15 px-4 py-2.5 text-sm font-black text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-300/20 md:w-auto"
-                          >
-                            <MonitorUp className="h-4 w-4" aria-hidden="true" />
-                            {ADVANCED_STUDIO_ACTION_LABELS.sendPage}
-                          </button>
                         </div>
                       </article>
                       );
@@ -3658,6 +4231,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         ['Target page count', String(targetPageCountFromInput(setupForm.targetPageCount))],
                         ['Genre', setupForm.genre],
                         ['Tone', setupForm.tone],
+                        [
+                          'Layout defaults',
+                          `${setupForm.layoutMarginMode === 'safe' ? 'Safe margins' : 'Full bleed'} / ${
+                            setupForm.layoutGutterMode === 'standard' ? 'Standard gutters' : 'Thin dividers'
+                          }`,
+                        ],
                       ].map(([label, value]) => (
                         <div key={label} className="rounded-lg border border-white/10 bg-black/20 p-3">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">{label}</p>
@@ -3759,43 +4338,150 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm">
+          <aside className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto custom-scrollbar">
             <section className="mb-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-                Pacing review
-              </p>
-              <h3 className="mt-2 text-lg font-black text-white">Guided readiness checks</h3>
-              <div className="mt-3 space-y-2">
-                {guidedPacingChecks.slice(0, 6).map((check) => (
-                  <div key={check.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-white/75">{check.label}</p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-white/45">{check.detail}</p>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
-                      style={{
-                        borderColor: check.status === 'ready' ? `${ACCENT_GOLD_SOLID}88` : 'rgba(251,113,133,0.35)',
-                        color: check.status === 'ready' ? ACCENT_GOLD_LIGHT : 'rgb(254,205,211)',
-                      }}
-                    >
-                      {check.status === 'ready' ? 'Ready' : 'Gap'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {guidedAiAcceptedNotes?.pacingNotes?.length ? (
-                <div className="mt-3 rounded-lg border border-sky-300/20 bg-sky-300/10 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/65">
-                    AI pacing notes
+              {isArtStep ? (
+                <>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                    Panel menu
                   </p>
-                  <ul className="mt-2 space-y-1 text-xs leading-relaxed text-sky-50/75">
-                    {guidedAiAcceptedNotes.pacingNotes.slice(0, 4).map((note, index) => (
-                      <li key={`${note}-${index}`}>{note}</li>
+                  <h3 className="mt-2 text-lg font-black text-white">
+                    {selectedPanel ? `Page ${selectedPanel.pageNumber} controls` : 'Art workspace'}
+                  </h3>
+                  {selectedPanel ? (
+                    <>
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-2 py-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-100/60">Current</p>
+                          <p className="mt-1 text-lg font-black text-white">{selectedPanel.panelNumber} / {selectedPagePanels.length}</p>
+                        </div>
+                        <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.07] px-2 py-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100/60">Approved</p>
+                          <p className="mt-1 text-lg font-black text-white">{selectedPagePanels.filter((panel) => (panelArtStatuses[panel.id] ?? 'needs-art') === 'approved').length}</p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/[0.06] px-2 py-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Queued</p>
+                          <p className="mt-1 text-lg font-black text-white">{panelArtQueue.length}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                        {selectedPagePanels.map((panel) => {
+                          const active = selectedPanel.id === panel.id;
+                          const status = panelArtStatuses[panel.id] ?? 'needs-art';
+                          return (
+                            <button
+                              key={panel.id}
+                              type="button"
+                              onClick={() => setSelectedPanelId(panel.id)}
+                              className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition hover:bg-white/10"
+                              style={{
+                                borderColor: active ? `${ACCENT_GOLD_SOLID}aa` : 'rgba(255,255,255,0.12)',
+                                background: active ? 'rgba(252,246,186,0.13)' : 'rgba(0,0,0,0.22)',
+                                color: active ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.72)',
+                              }}
+                            >
+                              <span>Panel {panel.panelNumber}</span>
+                              <span className="text-[10px] uppercase tracking-[0.12em]">
+                                {panelArtStatusLabel(status)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4 rounded-xl border border-amber-300/25 bg-[#181a22]/95 p-3 shadow-lg">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                          Active panel workspace
+                        </p>
+                        <h4 className="mt-1 text-lg font-black text-white">
+                          Page {selectedPanel.pageNumber}, Panel {selectedPanel.panelNumber}
+                        </h4>
+                        <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-white/60">
+                          {selectedPanel.beatText || 'Choose a page panel from the queue to assign art and update its review status.'}
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => selectPanelByOffset(-1)}
+                            disabled={selectedPanelQueueIndex <= 0}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                            Previous
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => selectPanelByOffset(1)}
+                            disabled={selectedPanelQueueIndex < 0 || selectedPanelQueueIndex >= panelArtQueue.length - 1}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:scale-100 disabled:opacity-40"
+                            style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                          >
+                            Next
+                            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                          {(['ready', 'approved', 'needs-art'] as PanelArtStatus[]).map((status) => (
+                            <button
+                              key={status}
+                              type="button"
+                              onClick={() => updatePanelArtStatus(selectedPanel.id, status)}
+                              className="rounded-lg border px-3 py-2 text-xs font-black transition hover:brightness-110 active:scale-[0.99]"
+                              style={panelArtStatusButtonStyle(status, selectedPanelStatus)}
+                            >
+                              {status === 'ready' ? 'Mark ready' : status === 'approved' ? 'Approve panel' : 'Needs revision'}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-xs font-bold text-white/55">
+                          Panel {selectedPagePanelIndex + 1} of {selectedPagePanels.length} on this page · {panelArtStatusLabel(selectedPanelStatus)}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-3 text-xs leading-relaxed text-white/55">
+                      Build page cards first to create panel-specific art controls here.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                    Pacing review
+                  </p>
+                  <h3 className="mt-2 text-lg font-black text-white">Guided readiness checks</h3>
+                  <div className="mt-3 space-y-2">
+                    {guidedPacingChecks.slice(0, 6).map((check) => (
+                      <div key={check.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white/75">{check.label}</p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-white/45">{check.detail}</p>
+                        </div>
+                        <span
+                          className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                          style={{
+                            borderColor: check.status === 'ready' ? `${ACCENT_GOLD_SOLID}88` : 'rgba(251,113,133,0.35)',
+                            color: check.status === 'ready' ? ACCENT_GOLD_LIGHT : 'rgb(254,205,211)',
+                          }}
+                        >
+                          {check.status === 'ready' ? 'Ready' : 'Gap'}
+                        </span>
+                      </div>
                     ))}
-                  </ul>
-                </div>
-              ) : null}
+                  </div>
+                  {guidedAiAcceptedNotes?.pacingNotes?.length ? (
+                    <div className="mt-3 rounded-lg border border-sky-300/20 bg-sky-300/10 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/65">
+                        AI pacing notes
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs leading-relaxed text-sky-50/75">
+                        {guidedAiAcceptedNotes.pacingNotes.slice(0, 4).map((note, index) => (
+                          <li key={`${note}-${index}`}>{note}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </section>
             {isStoryStep ? (
               <>
@@ -3882,6 +4568,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   anything yet.
                 </p>
               </>
+            ) : isArtStep ? (
+              <>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                  Page art review
+                </p>
+                <h3 className="mt-2 text-lg font-black text-white">Panel progress</h3>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Total queue</p>
+                    <p className="mt-1 text-2xl font-black text-white">{panelArtQueue.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Selected page</p>
+                    <p className="mt-1 text-sm font-bold text-white/80">{selectedPageArtSummary}</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs leading-relaxed text-white/55">
+                  The bottom Next button moves to Layout. Use the panel menu above to move between panels while staying in Art.
+                </p>
+              </>
             ) : isLayoutStep ? (
               <>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
@@ -3908,8 +4614,131 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   ))}
                 </div>
                 <p className="mt-4 text-xs leading-relaxed text-white/55">
-                  This checklist only reads local page cards, panel art statuses, and layout template choices.
+                  This checklist only reads local page cards, panel art statuses, and editable layout geometry.
                 </p>
+                <section className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between 2xl:flex-col">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                        Panel image framing
+                      </p>
+                      <h4 className="mt-1 text-base font-black text-white">
+                        {selectedLayoutPage && selectedLayoutPanel
+                          ? `Page ${selectedLayoutPage.pageNumber}, Panel ${selectedLayoutPanelNumber}`
+                          : 'Select a layout panel'}
+                      </h4>
+                    </div>
+                    <span className="w-fit rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/55">
+                      {selectedLayoutPanelImage ? 'Image assigned' : selectedLayoutPanel ? 'Needs art' : 'No panel'}
+                    </span>
+                  </div>
+                  {selectedLayoutPage && selectedLayoutPanel ? (
+                    <>
+                      <p className="mt-3 text-xs leading-relaxed text-white/55">
+                        Follows the visible page on the left. Click a panel to adjust a different image frame.
+                      </p>
+                      <div className="mt-4 grid gap-4">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                            Fit
+                          </p>
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {(['cover', 'contain', 'stretch'] as GuidedComicImageFit[]).map((fit) => {
+                              const selected = selectedImageFit === fit;
+                              return (
+                                <button
+                                  key={fit}
+                                  type="button"
+                                  disabled={!selectedLayoutPanelImage}
+                                  onClick={() =>
+                                    updateLayoutPanelFraming(selectedLayoutPage.pageNumber, selectedLayoutPanel.panelId, {
+                                      imageFit: fit,
+                                    })
+                                  }
+                                  className="rounded-lg border px-3 py-2 text-xs font-black capitalize transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                                  style={{
+                                    borderColor: selected ? `${ACCENT_GOLD_SOLID}dd` : 'rgba(255,255,255,0.14)',
+                                    background: selected ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.07)',
+                                    color: selected ? TEXT_ON_GOLD : 'rgba(255,255,255,0.76)',
+                                  }}
+                                >
+                                  {fit}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <label className="mt-3 flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                            Zoom
+                            <input
+                              type="range"
+                              min="1"
+                              max="2"
+                              step="0.05"
+                              value={selectedImageZoom}
+                              disabled={!selectedLayoutPanelImage || selectedImageFit === 'stretch'}
+                              onChange={(event) =>
+                                updateLayoutPanelFraming(selectedLayoutPage.pageNumber, selectedLayoutPanel.panelId, {
+                                  imageZoom: Number(event.target.value),
+                                })
+                              }
+                              className="w-full accent-amber-300 disabled:opacity-45"
+                            />
+                          </label>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                            Focus
+                          </p>
+                          <div className="mt-2 grid max-w-36 grid-cols-3 gap-1">
+                            {[
+                              [0, 0],
+                              [0.5, 0],
+                              [1, 0],
+                              [0, 0.5],
+                              [0.5, 0.5],
+                              [1, 0.5],
+                              [0, 1],
+                              [0.5, 1],
+                              [1, 1],
+                            ].map(([focusX, focusY]) => {
+                              const selected =
+                                Math.abs(selectedImageFocusX - focusX) < 0.01 &&
+                                Math.abs(selectedImageFocusY - focusY) < 0.01;
+                              return (
+                                <button
+                                  key={`${focusX}-${focusY}`}
+                                  type="button"
+                                  aria-label={`Focus ${focusX * 100}% ${focusY * 100}%`}
+                                  disabled={!selectedLayoutPanelImage || selectedImageFit === 'stretch'}
+                                  onClick={() =>
+                                    updateLayoutPanelFraming(selectedLayoutPage.pageNumber, selectedLayoutPanel.panelId, {
+                                      imageFocusX: focusX,
+                                      imageFocusY: focusY,
+                                    })
+                                  }
+                                  className="flex aspect-square items-center justify-center rounded-md border transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+                                  style={{
+                                    borderColor: selected ? `${ACCENT_GOLD_SOLID}` : 'rgba(255,255,255,0.14)',
+                                    background: selected ? 'rgba(252,246,186,0.18)' : 'rgba(255,255,255,0.06)',
+                                  }}
+                                >
+                                  <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ background: selected ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.45)' }}
+                                  />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-3 text-xs leading-relaxed text-white/55">
+                      Build page cards first, then select a panel on the layout canvas.
+                    </p>
+                  )}
+                </section>
               </>
             ) : isExportStep ? (
               <>
@@ -3969,6 +4798,89 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             )}
           </aside>
         </main>
+        {comicProjectMetadataDialog ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitComicProjectMetadataDialog();
+              }}
+              className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#101529] p-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                    Comic Library
+                  </p>
+                  <h3 className="mt-2 text-xl font-black text-white">
+                    {comicProjectMetadataDialog.mode === 'save-as' ? 'Save as new comic' : 'Rename comic'}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-white/60">
+                    {comicProjectMetadataDialog.mode === 'save-as'
+                      ? 'Create a separate saved library entry from the current guided draft.'
+                      : 'Update this comic’s library name and issue details.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setComicProjectMetadataDialog(null)}
+                  className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/15"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-4">
+                <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                  Comic / series title
+                  <input
+                    type="text"
+                    value={comicProjectMetadataDialog.form.seriesTitle}
+                    onChange={(event) => updateComicProjectMetadataField('seriesTitle', event.target.value)}
+                    className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                    autoFocus
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                  Issue title
+                  <input
+                    type="text"
+                    value={comicProjectMetadataDialog.form.issueTitle}
+                    onChange={(event) => updateComicProjectMetadataField('issueTitle', event.target.value)}
+                    className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                  Issue number
+                  <input
+                    type="text"
+                    value={comicProjectMetadataDialog.form.issueNumber}
+                    onChange={(event) => updateComicProjectMetadataField('issueNumber', event.target.value)}
+                    className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none placeholder:text-white/30 focus:border-amber-300/70"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setComicProjectMetadataDialog(null)}
+                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/15"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl px-4 py-2.5 text-xs font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
+                  style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                >
+                  {comicProjectMetadataDialog.mode === 'save-as' ? 'Save new comic' : 'Rename comic'}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
         {guidedAiPreview ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
             <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-[#101529] p-5 shadow-2xl custom-scrollbar">

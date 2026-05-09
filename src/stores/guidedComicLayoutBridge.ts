@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { GuidedComicPanelGeometry } from '@/portals/guided-comic/guidedComicLayoutPlan';
 
 export type GuidedComicLayoutTemplate =
   | 'auto'
@@ -30,6 +31,7 @@ export type GuidedComicLayoutHandoff = {
   layoutTemplate: GuidedComicLayoutTemplate;
   panelCount: number;
   orderedPanelIds: string[];
+  panelGeometry: GuidedComicPanelGeometry[];
   panelArtImages: Record<string, GuidedComicLayoutPanelImage>;
   panelBeats?: GuidedComicLayoutPanelBeat[];
   requestedAt: string;

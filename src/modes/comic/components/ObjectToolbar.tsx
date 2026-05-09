@@ -351,6 +351,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                     >
                         <option value="center">Center</option>
                         <option value="cover">Cover</option>
+                        <option value="contain">Contain</option>
                         <option value="decal">Decal</option>
                         <option value="stretch">Stretch</option>
                     </select>

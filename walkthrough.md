@@ -1876,6 +1876,191 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Reconstructed backfill: Guided Comic AI, project library, and portal protection - 2026-05-07
+
+### What changed
+
+- Reconstructed from git commit `8be8af4` (`fix: normalize guided comic panel counts and layout handoff`) and available session evidence.
+- Added protected portal gating around the main authenticated work surfaces:
+  - Studio,
+  - Asset Studio,
+  - Reference Vault,
+  - Imageshop,
+  - Comic Creator,
+  - Writers' Workshop.
+- Added shared protected-portal helpers and tests so portal protection can be reasoned about outside `App.tsx`.
+- Expanded Guided Comic Flow with a local comic project library:
+  - saved guided project snapshots,
+  - active project tracking,
+  - save, save-as, rename, duplicate, delete, and project switching,
+  - migration from the single recovery draft into a saved project library entry.
+- Added Guided Comic AI support that uses the Writers' Workshop writer-tools path:
+  - setup/premise improvement,
+  - story and outline support,
+  - page and panel beat suggestions,
+  - visual prep/reference notes,
+  - panel prompt/camera guidance,
+  - layout pacing and template recommendations,
+  - export readiness and gap review.
+- Added schemas and shared writer types for `guided_comic_assist` requests and results.
+- Strengthened Guided Comic Flow page and panel count handling:
+  - panel counts are derived from the active page state,
+  - AI page updates only apply suggested panel counts when the current page is still using default/generated panel beats,
+  - layout template recommendations are constrained to known supported template ids.
+- Expanded Layout handoff metadata:
+  - handoff includes page number, selected layout template, panel count, ordered panel ids, and panel art images,
+  - tests cover guided layout bridge/import behavior.
+- Added project-library and guided-AI tests.
+
+### Files touched
+
+- `src/App.tsx`
+- `src/components/auth/ProtectedPortalGate.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicAi.ts`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/guided-comic/guidedComicLayoutPlan.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAi.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts`
+- `src/shared/auth/protectedPortals.ts`
+- `src/shared/auth/__tests__/protectedPortals.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `src/stores/__tests__/guidedComicLayoutImport.test.ts`
+- `src/stores/comicStore.ts`
+- `src/stores/imageWorkshopBridge.ts`
+
+### Implementation notes
+
+- Guided Comic Flow still remained in the existing Comic Creator portal rather than becoming a new routed portal.
+- The project library uses browser-local persistence, separate from the recovery draft, and keeps the active saved project explicit.
+- AI suggestions are preview-first and parsed through shared schemas before being accepted into local guided draft state.
+- The guided AI context compacts long strings and omits image data/URLs where appropriate so large local image payloads are not sent as raw prompt context.
+- Supported layout ids at this stage included `auto`, `three-panel`, `three-panel-wide-top`, `three-panel-wide-bottom`, `four-panel`, `six-panel-grid`, and `splash`.
+- Writer-tools schema updates were mirrored in the Supabase function shared schema and writer-tools function so the client and function stayed aligned.
+
+### Verification
+
+- Evidence comes from commit `8be8af4` and the tests added in that commit.
+- Later recovery verification in this session ran `npm run test -- guidedComicLayoutPlan guidedComicLayoutBridge guidedComicLayoutImport` and passed 3 test files / 18 tests.
+- Later build verification in this session ran `npm run build` and passed; Vite still reported existing large chunk warnings.
+
+### Outstanding issues
+
+- This is a reconstructed backfill, not a perfect chat transcript. Exact intermediate QA comments and small implementation detours may be missing.
+
+### Risks or caveats
+
+- The project library and AI assist surfaces added a large amount of state and UI behavior to `GuidedComicFlow.tsx`; future work should be careful not to add parallel state paths for the same guided draft/project concepts.
+- Browser-local saved projects remain local to the browser storage.
+
+### Operator follow-up
+
+- Continue treating the Current Comic library panel and local recovery draft as distinct but related persistence surfaces.
+- When changing Guided AI response shape, update both shared schemas and writer-tools function schemas.
+
+### Next steps
+
+- Use the newer May 9 guided layout/framing section for the next state of the Layout editor work.
+
+---
+
+## Guided Comic Flow editable layout, framing, and QA repairs - 2026-05-09
+
+### What changed
+
+- Reconstructed from current uncommitted diff, current chat QA, and Browser Use DOM checks after the missing walkthrough gap was discovered.
+- Reworked Guided Comic Flow Layout from fixed template selection into an editable guided layout canvas:
+  - each guided page now stores normalized panel rectangles with panel id, order, geometry, lock/image fields, and image framing metadata,
+  - starter templates now seed editable geometry instead of acting as the final layout authority,
+  - panels can be moved and resized inside the page bounds with minimum size enforcement,
+  - panel geometry snaps to page edges, safe margins, gutters, and nearby panel edges,
+  - changing a layout no longer silently changes the selected panel count.
+- Added Step 1 layout defaults for safe margin and gutter behavior:
+  - safe margins are the default,
+  - full-bleed and thin-gutter options remain available for comic styles that intentionally use the whole page.
+- Added visual panel image framing controls:
+  - fit modes: cover, contain, stretch,
+  - zoom control,
+  - 3x3 focal point control,
+  - framing data persists with the guided page geometry and is used in Layout previews.
+- Updated Layout-to-Advanced Studio handoff so it sends the edited rectangles and image framing data instead of only a template id.
+- Updated Advanced Studio import behavior so guided pages open with the edited guided geometry, margins/gutters, panel images, and framing metadata.
+- Repaired Guided Comic Flow library controls:
+  - Save As and Rename now use in-app metadata dialogs instead of browser prompt flows,
+  - Save, Save As, Rename, Duplicate, New, Delete, and project switching remain in the Current Comic panel.
+- Improved Art step usability:
+  - added Previous panel / Next panel controls in the right-side panel menu,
+  - made panel status buttons visibly reflect the selected status,
+  - moved the active panel workspace controls out of the main content hover area and into the right rail.
+- Improved Layout step usability:
+  - moved panel image framing out of each page layout card into a single right-rail inspector,
+  - clicking, dragging, or resizing a layout panel now also sets that panel's page as active so the inspector stays synced,
+  - adjusted responsive breakpoints so the inspector rail docks from `lg` width upward and no longer falls below the long page list at the tested 1191px width.
+- Added Browser Use / in-app browser access notes to `AGENTS.md` so future agents can use the Node REPL Browser Use bridge for `http://127.0.0.1:5173/` QA.
+
+### Files touched
+
+- `AGENTS.md`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLayoutPlan.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `src/stores/__tests__/guidedComicLayoutImport.test.ts`
+- `src/stores/comicStore.ts`
+- `src/modes/comic/components/ComicPanel.tsx`
+- `src/modes/comic/components/ObjectToolbar.tsx`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Guided layout state remains local React/local draft state; this work did not add Supabase writes or route-level architecture changes.
+- `guidedComicLayoutPlan.ts` now owns the starter geometry, safe-margin geometry, snap behavior, panel constraints, and geometry sync helpers.
+- Guided page geometry is kept in `pageLayoutGeometry`, keyed by page number, and is synchronized against current page cards/templates/settings so page count remains authoritative.
+- Image framing metadata is stored on guided panel geometry as `imageFit`, `imageFocusX`, `imageFocusY`, and `imageZoom`.
+- The Layout right rail is now `lg:sticky` with an internal scroll area so the framing inspector remains available while the user works down the layout page list.
+- Advanced Studio guided import converts normalized guided rectangles into canvas rectangles and applies the guided image fit/focus/zoom metadata to imported panels.
+- Browser Use is available through the Codex Node REPL `js` tool with the `iab` backend; future browser QA should read the Browser Use skill first and then bootstrap from `browser-client.mjs`.
+
+### Verification
+
+- `npm run build` - PASS; Vite still reports the existing large chunk warning for `ComicPortal` and other large bundles.
+- `npm run test -- guidedComicLayoutPlan guidedComicLayoutBridge guidedComicLayoutImport` - PASS; 3 test files and 18 tests passed. Vitest reported inspector port `9229` unavailable and used `9230` instead.
+- Browser DOM QA on `http://127.0.0.1:5173/`:
+  - confirmed the Layout step renders a single `Panel image framing` inspector in the Layout rail,
+  - confirmed clicking a different layout panel updates the inspector heading to that panel,
+  - confirmed the Layout inspector is present after reload.
+- User QA reported persistence, Advanced Studio handoff, panel counts, and library safety checks passed before the 1191px responsive issue was found.
+
+### Outstanding issues
+
+- Manual visual QA should recheck the Layout step at the exact 1191px width after the `lg` breakpoint fix to confirm the framing panel no longer drops below the page list.
+- Browser screenshot capture through Browser Use timed out during earlier checks, so the most recent browser verification is DOM-based rather than screenshot-based.
+
+### Risks or caveats
+
+- `GuidedComicFlow.tsx` is now carrying a lot of guided workflow behavior. Future changes should stay scoped and should consider extracting helpers only when it reduces real complexity.
+- Docking the inspector at `lg` keeps controls accessible at the tested width, but it also means the layout canvas gives up some horizontal space sooner than before. This is intentional to keep the framing controls usable.
+
+### Operator follow-up
+
+- Reload the local app and recheck Step 6 Layout around 1191px wide.
+- Spot check one page with assigned art and one page needing art to confirm the right-rail framing inspector remains readable and correctly synced.
+
+### Next steps
+
+- Continue with UI refinement or the next portal once the responsive Layout rail is visually confirmed.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

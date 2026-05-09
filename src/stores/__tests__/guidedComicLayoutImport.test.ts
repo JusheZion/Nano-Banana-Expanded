@@ -36,10 +36,30 @@ describe('guided comic layout import', () => {
       layoutTemplate: 'three-panel',
       panelCount: 3,
       orderedPanelIds: ['page-4-panel-1', 'page-4-panel-2', 'page-4-panel-3'],
+      panelGeometry: [
+        { panelId: 'page-4-panel-1', x: 0, y: 0, w: 1, h: 0.32, order: 0 },
+        {
+          panelId: 'page-4-panel-2',
+          x: 0,
+          y: 0.34,
+          w: 1,
+          h: 0.32,
+          order: 1,
+          imageFit: 'cover',
+          imageFocusX: 0.25,
+          imageFocusY: 0.75,
+          imageZoom: 1.35,
+        },
+        { panelId: 'page-4-panel-3', x: 0, y: 0.68, w: 1, h: 0.32, order: 2 },
+      ],
       panelArtImages: {
         'page-4-panel-1': {
           panelId: 'page-4-panel-1',
           imageUrl: 'https://example.com/panel-1.png',
+        },
+        'page-4-panel-2': {
+          panelId: 'page-4-panel-2',
+          imageUrl: 'https://example.com/panel-2.png',
         },
         'page-4-panel-3': {
           panelId: 'page-4-panel-3',
@@ -63,14 +83,20 @@ describe('guided comic layout import', () => {
     expect(page.panels[0]).toMatchObject({
       id: 'test-panel-1',
       shapeType: 'rect',
-      x: 16,
-      y: 16,
-      width: 768,
+      x: 0,
+      y: 0,
+      width: 800,
       imageUrl: 'https://example.com/panel-1.png',
       prompt: 'Wide establishing shot.',
       imageFillMode: 'cover',
     });
-    expect(page.panels[1]?.imageUrl).toBeUndefined();
+    expect(page.panels[1]).toMatchObject({
+      imageUrl: 'https://example.com/panel-2.png',
+      imageFillMode: 'cover',
+      imageFocusX: 0.25,
+      imageFocusY: 0.75,
+      imageScale: 1.35,
+    });
     expect(page.panels[2]?.imageUrl).toBe('https://example.com/panel-3.png');
     expect(page.layerOrder).toEqual(['test-panel-1', 'test-panel-2', 'test-panel-3']);
     expect(useComicStore.getState().currentPageId).toBe('page-1');
@@ -84,6 +110,11 @@ describe('guided comic layout import', () => {
       layoutTemplate: 'three-panel-wide-bottom',
       panelCount: 3,
       orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
+      panelGeometry: [
+        { panelId: 'page-2-panel-1', x: 0.1, y: 0.1, w: 0.3, h: 0.25, order: 0 },
+        { panelId: 'page-2-panel-2', x: 0.55, y: 0.1, w: 0.35, h: 0.25, order: 1 },
+        { panelId: 'page-2-panel-3', x: 0.1, y: 0.45, w: 0.8, h: 0.4, order: 2 },
+      ],
       panelArtImages: {
         'page-2-panel-1': {
           panelId: 'page-2-panel-1',
@@ -115,8 +146,8 @@ describe('guided comic layout import', () => {
       'https://example.com/panel-2.png',
       'https://example.com/panel-3.png',
     ]);
-    expect(page.panels[0]).toMatchObject({ x: 16, y: 16, width: 376, height: 384 });
-    expect(page.panels[1]).toMatchObject({ x: 408, y: 16, width: 376, height: 384 });
-    expect(page.panels[2]).toMatchObject({ x: 16, y: 416, width: 768, height: 768 });
+    expect(page.panels[0]).toMatchObject({ x: 80, y: 120, width: 240, height: 300 });
+    expect(page.panels[1]).toMatchObject({ x: 440, y: 120, width: 280, height: 300 });
+    expect(page.panels[2]).toMatchObject({ x: 80, y: 540, width: 640, height: 480 });
   });
 });
