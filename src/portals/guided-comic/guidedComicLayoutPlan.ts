@@ -1,3 +1,14 @@
+import {
+  generateLayoutFromAiIntent,
+  generateLayoutFromTemplate,
+  type ComicLayoutIntent,
+  type ComicLayoutTemplateId,
+  type GeneratedComicPanelLayout,
+} from '@/modes/comic/geometry/layoutTemplates';
+import { movePanelRect, resizePanelRect, type PanelResizeHandle } from '@/modes/comic/geometry/panels';
+import { snapRectToGutters, snapRectToMargins } from '@/modes/comic/geometry/snapping';
+import { clampRectToPage, type ComicRect } from '@/modes/comic/geometry/rects';
+
 export type GuidedComicLayoutTemplateId =
   | 'auto'
   | 'three-panel'
@@ -47,6 +58,7 @@ export type GuidedComicPanelGeometry = {
   imageFocusY?: number;
   imageZoom?: number;
 };
+export type GuidedComicLayoutResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 
 export type GuidedComicLayoutGridStyle = {
   gridTemplateColumns: string;
@@ -57,8 +69,17 @@ const MAX_GUIDED_PANELS = 8;
 const NORMALIZED_LAYOUT_GUTTER = 0.017;
 const NORMALIZED_THIN_LAYOUT_GUTTER = 0.006;
 export const NORMALIZED_LAYOUT_MARGIN = 0.04;
-const NORMALIZED_SNAP_TOLERANCE = 0.025;
 const MIN_GUIDED_PANEL_SIZE = 0.12;
+const VALID_GUIDED_TEMPLATE_IDS = new Set<GuidedComicLayoutTemplateId>([
+  'auto',
+  'three-panel',
+  'three-panel-wide-top',
+  'three-panel-wide-bottom',
+  'four-panel',
+  'six-panel-grid',
+  'splash',
+]);
+const VALID_GUIDED_LAYOUT_INTENTS = new Set<GuidedComicLayoutIntent>(['feature', 'wide', 'tall', 'normal']);
 
 function getLayoutMetrics(settings: GuidedComicLayoutSettings = {}) {
   const margin = settings.marginMode === 'full-bleed' ? 0 : NORMALIZED_LAYOUT_MARGIN;
@@ -94,47 +115,36 @@ export function getGuidedComicExistingPanelBeats(page: Pick<GuidedComicLayoutPag
   return Array.from({ length: count }, (_, index) => page.panelBeats[index] ?? '');
 }
 
-function geometry(
+function geometryFromSharedPanel(
   pageNumber: number | undefined,
-  panelNumber: number,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
+  sharedPanel: GeneratedComicPanelLayout,
 ): GuidedComicPanelGeometry {
   return {
-    panelId: panelIdFor(pageNumber, panelNumber),
-    x: roundLayoutValue(x),
-    y: roundLayoutValue(y),
-    w: roundLayoutValue(w),
-    h: roundLayoutValue(h),
-    order: panelNumber - 1,
+    panelId: panelIdFor(pageNumber, sharedPanel.order + 1),
+    x: roundLayoutValue(sharedPanel.rect.x),
+    y: roundLayoutValue(sharedPanel.rect.y),
+    w: roundLayoutValue(sharedPanel.rect.width),
+    h: roundLayoutValue(sharedPanel.rect.height),
+    order: sharedPanel.order,
   };
 }
 
-function gridStarterGeometry(
-  pageNumber: number | undefined,
-  panelCount: number,
-  settings: GuidedComicLayoutSettings = {},
-): GuidedComicPanelGeometry[] {
+function getSharedLayoutOptions(settings: GuidedComicLayoutSettings = {}) {
   const metrics = getLayoutMetrics(settings);
-  const columns = panelCount <= 2 ? panelCount : panelCount >= 5 ? 3 : 2;
-  const rows = Math.ceil(panelCount / columns);
-  const cellW = (metrics.w - metrics.gutter * (columns - 1)) / columns;
-  const cellH = (metrics.h - metrics.gutter * (rows - 1)) / rows;
+  return {
+    margin: metrics.margin,
+    gutter: metrics.gutter,
+  };
+}
 
-  return Array.from({ length: panelCount }, (_, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    return geometry(
-      pageNumber,
-      index + 1,
-      metrics.x + column * (cellW + metrics.gutter),
-      metrics.y + row * (cellH + metrics.gutter),
-      cellW,
-      cellH,
-    );
-  });
+export function normalizeGuidedComicLayoutTemplateId(value: unknown): GuidedComicLayoutTemplateId | undefined {
+  if (typeof value !== 'string') return undefined;
+  return VALID_GUIDED_TEMPLATE_IDS.has(value as GuidedComicLayoutTemplateId) ? (value as GuidedComicLayoutTemplateId) : 'auto';
+}
+
+export function normalizeGuidedComicLayoutIntent(value: unknown): GuidedComicLayoutIntent | undefined {
+  if (typeof value !== 'string') return undefined;
+  return VALID_GUIDED_LAYOUT_INTENTS.has(value as GuidedComicLayoutIntent) ? (value as GuidedComicLayoutIntent) : undefined;
 }
 
 export function createGuidedComicStarterLayout(
@@ -144,36 +154,51 @@ export function createGuidedComicStarterLayout(
 ): GuidedComicPanelGeometry[] {
   const panelCount = getGuidedComicActivePanelCount(page);
   const pageNumber = page.pageNumber;
-  const metrics = getLayoutMetrics(settings);
-  if (panelCount === 1 || templateId === 'splash') {
-    return [geometry(pageNumber, 1, metrics.x, metrics.y, metrics.w, metrics.h)];
-  }
-  if (templateId === 'three-panel' && panelCount === 3) {
-    const h = (metrics.h - metrics.gutter * 2) / 3;
-    return [0, 1, 2].map((row) =>
-      geometry(pageNumber, row + 1, metrics.x, metrics.y + row * (h + metrics.gutter), metrics.w, h),
-    );
-  }
-  if (templateId === 'three-panel-wide-top' && panelCount === 3) {
-    const featureH = metrics.h * 0.658;
-    const bottomH = metrics.h - featureH - metrics.gutter;
-    const halfW = (metrics.w - metrics.gutter) / 2;
-    return [
-      geometry(pageNumber, 1, metrics.x, metrics.y, metrics.w, featureH),
-      geometry(pageNumber, 2, metrics.x, metrics.y + featureH + metrics.gutter, halfW, bottomH),
-      geometry(pageNumber, 3, metrics.x + halfW + metrics.gutter, metrics.y + featureH + metrics.gutter, halfW, bottomH),
-    ];
-  }
-  if (templateId === 'three-panel-wide-bottom' && panelCount === 3) {
-    const topH = metrics.h * 0.325;
-    const halfW = (metrics.w - metrics.gutter) / 2;
-    return [
-      geometry(pageNumber, 1, metrics.x, metrics.y, halfW, topH),
-      geometry(pageNumber, 2, metrics.x + halfW + metrics.gutter, metrics.y, halfW, topH),
-      geometry(pageNumber, 3, metrics.x, metrics.y + topH + metrics.gutter, metrics.w, metrics.h - topH - metrics.gutter),
-    ];
-  }
-  return gridStarterGeometry(pageNumber, panelCount, settings);
+  return generateLayoutFromTemplate(templateId as ComicLayoutTemplateId, panelCount, getSharedLayoutOptions(settings)).map((panel) =>
+    geometryFromSharedPanel(pageNumber, panel),
+  );
+}
+
+export function createGuidedComicStarterLayoutFromAiIntent(
+  page: GuidedComicLayoutPageInput,
+  intent: GuidedComicLayoutIntent,
+  settings: GuidedComicLayoutSettings = {},
+): GuidedComicPanelGeometry[] {
+  const panelCount = getGuidedComicActivePanelCount(page);
+  const pageNumber = page.pageNumber;
+  return generateLayoutFromAiIntent(intent as ComicLayoutIntent, panelCount, getSharedLayoutOptions(settings)).map((panel) =>
+    geometryFromSharedPanel(pageNumber, panel),
+  );
+}
+
+function copyGuidedPanelMetadata(
+  starterGeometry: GuidedComicPanelGeometry[],
+  existingGeometry: GuidedComicPanelGeometry[] | undefined,
+): GuidedComicPanelGeometry[] {
+  const byPanelId = new Map((existingGeometry ?? []).map((panel) => [panel.panelId, panel]));
+  return starterGeometry.map((panel) => {
+    const existing = byPanelId.get(panel.panelId);
+    if (!existing) return panel;
+    return {
+      ...panel,
+      locked: existing.locked,
+      imageId: existing.imageId,
+      imageUrl: existing.imageUrl,
+      imageFit: existing.imageFit,
+      imageFocusX: existing.imageFocusX,
+      imageFocusY: existing.imageFocusY,
+      imageZoom: existing.imageZoom,
+    };
+  });
+}
+
+export function createGuidedComicStarterLayoutWithExistingMetadata(
+  page: GuidedComicLayoutPageInput,
+  templateId: GuidedComicLayoutTemplateId,
+  existingGeometry: GuidedComicPanelGeometry[] | undefined,
+  settings: GuidedComicLayoutSettings = {},
+): GuidedComicPanelGeometry[] {
+  return copyGuidedPanelMetadata(createGuidedComicStarterLayout(page, templateId, settings), existingGeometry);
 }
 
 export function getConstrainedGuidedComicPanelGeometry(
@@ -181,16 +206,13 @@ export function getConstrainedGuidedComicPanelGeometry(
   options: { minSize?: number } = {},
 ): GuidedComicPanelGeometry {
   const minSize = options.minSize ?? MIN_GUIDED_PANEL_SIZE;
-  const w = Math.min(1, Math.max(minSize, panel.w));
-  const h = Math.min(1, Math.max(minSize, panel.h));
-  const x = Math.min(1 - w, Math.max(0, panel.x));
-  const y = Math.min(1 - h, Math.max(0, panel.y));
+  const rect = clampRectToPage({ x: panel.x, y: panel.y, width: panel.w, height: panel.h }, { minWidth: minSize, minHeight: minSize });
   return {
     ...panel,
-    x: roundLayoutValue(x),
-    y: roundLayoutValue(y),
-    w: roundLayoutValue(w),
-    h: roundLayoutValue(h),
+    x: rect.x,
+    y: rect.y,
+    w: rect.width,
+    h: rect.height,
   };
 }
 
@@ -211,16 +233,6 @@ export function getGuidedComicSafeMarginPanelGeometry(
   });
 }
 
-function snapValue(value: number, guides: number[]): number {
-  const guide = guides.reduce<{ value: number; distance: number } | null>((nearest, candidate) => {
-    const distance = Math.abs(candidate - value);
-    if (distance > NORMALIZED_SNAP_TOLERANCE) return nearest;
-    if (!nearest || distance < nearest.distance) return { value: candidate, distance };
-    return nearest;
-  }, null);
-  return guide?.value ?? value;
-}
-
 export function getSnappedGuidedComicPanelGeometry(
   panel: GuidedComicPanelGeometry,
   pageGeometry: GuidedComicPanelGeometry[],
@@ -228,34 +240,80 @@ export function getSnappedGuidedComicPanelGeometry(
 ): GuidedComicPanelGeometry {
   const otherPanels = pageGeometry.filter((candidate) => candidate.panelId !== panel.panelId);
   const metrics = getLayoutMetrics(settings);
-  const marginGuides = metrics.margin > 0 ? [metrics.margin, 1 - metrics.margin] : [];
-  const guides = [
-    0,
-    ...marginGuides,
-    1,
-    ...otherPanels.flatMap((candidate) => [
-      candidate.x,
-      candidate.y,
-      candidate.x + candidate.w,
-      candidate.y + candidate.h,
-      candidate.x - metrics.gutter,
-      candidate.y - metrics.gutter,
-      candidate.x + candidate.w + metrics.gutter,
-      candidate.y + candidate.h + metrics.gutter,
-    ]),
-  ].map(roundLayoutValue);
-
-  const snappedX = snapValue(panel.x, guides);
-  const snappedY = snapValue(panel.y, guides);
-  const snappedRight = snapValue(panel.x + panel.w, guides);
-  const snappedBottom = snapValue(panel.y + panel.h, guides);
+  const rect: ComicRect = { x: panel.x, y: panel.y, width: panel.w, height: panel.h };
+  const marginSnapped =
+    metrics.margin > 0 ? snapRectToMargins(rect, { margin: metrics.margin, threshold: 0.025 }).rect : rect;
+  const gutterSnapped = snapRectToGutters(
+    marginSnapped,
+    otherPanels.map((candidate) => ({ x: candidate.x, y: candidate.y, width: candidate.w, height: candidate.h })),
+    { gutter: metrics.gutter, threshold: 0.025 },
+  ).rect;
   return getConstrainedGuidedComicPanelGeometry({
     ...panel,
-    x: snappedX,
-    y: snappedY,
-    w: snappedRight !== panel.x + panel.w ? snappedRight - snappedX : panel.w,
-    h: snappedBottom !== panel.y + panel.h ? snappedBottom - snappedY : panel.h,
+    x: gutterSnapped.x,
+    y: gutterSnapped.y,
+    w: gutterSnapped.width,
+    h: gutterSnapped.height,
   });
+}
+
+function panelToRect(panel: GuidedComicPanelGeometry): ComicRect {
+  return { x: panel.x, y: panel.y, width: panel.w, height: panel.h };
+}
+
+function rectToPanel(panel: GuidedComicPanelGeometry, rect: ComicRect): GuidedComicPanelGeometry {
+  return {
+    ...panel,
+    x: rect.x,
+    y: rect.y,
+    w: rect.width,
+    h: rect.height,
+  };
+}
+
+function mapResizeHandle(handle: GuidedComicLayoutResizeHandle): PanelResizeHandle {
+  switch (handle) {
+    case 'nw':
+      return 'top-left';
+    case 'ne':
+      return 'top-right';
+    case 'sw':
+      return 'bottom-left';
+    case 'se':
+      return 'bottom-right';
+    default:
+      return 'bottom-right';
+  }
+}
+
+export function moveGuidedComicPanelGeometry(
+  panel: GuidedComicPanelGeometry,
+  delta: { x: number; y: number },
+  pageGeometry: GuidedComicPanelGeometry[],
+  settings: GuidedComicLayoutSettings = {},
+): GuidedComicPanelGeometry {
+  const moved = rectToPanel(
+    panel,
+    movePanelRect(panelToRect(panel), delta, { minWidth: MIN_GUIDED_PANEL_SIZE, minHeight: MIN_GUIDED_PANEL_SIZE }),
+  );
+  return getSnappedGuidedComicPanelGeometry(moved, pageGeometry, settings);
+}
+
+export function resizeGuidedComicPanelGeometry(
+  panel: GuidedComicPanelGeometry,
+  handle: GuidedComicLayoutResizeHandle,
+  delta: { x: number; y: number },
+  pageGeometry: GuidedComicPanelGeometry[],
+  settings: GuidedComicLayoutSettings = {},
+): GuidedComicPanelGeometry {
+  const resized = rectToPanel(
+    panel,
+    resizePanelRect(panelToRect(panel), mapResizeHandle(handle), delta, {
+      minWidth: MIN_GUIDED_PANEL_SIZE,
+      minHeight: MIN_GUIDED_PANEL_SIZE,
+    }),
+  );
+  return getSnappedGuidedComicPanelGeometry(resized, pageGeometry, settings);
 }
 
 export function syncGuidedComicLayoutGeometry(

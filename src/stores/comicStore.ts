@@ -415,6 +415,61 @@ function layoutRectsForGuidedGeometry(
         }));
 }
 
+type GuidedPanelImportEntry = {
+    panelId: string;
+    order: number;
+    rect: Pick<Panel, 'x' | 'y' | 'width' | 'height'>;
+    geometry?: GuidedComicLayoutHandoff['panelGeometry'][number];
+};
+
+function rectFromNormalizedPanelRect(
+    normalized: NonNullable<GuidedComicLayoutHandoff['normalizedPanelRects']>[number]['rect'],
+): Pick<Panel, 'x' | 'y' | 'width' | 'height'> {
+    return {
+        x: Math.round(normalized.x * COMIC_PAGE_WIDTH),
+        y: Math.round(normalized.y * COMIC_PAGE_HEIGHT),
+        width: Math.round(normalized.width * COMIC_PAGE_WIDTH),
+        height: Math.round(normalized.height * COMIC_PAGE_HEIGHT),
+    };
+}
+
+function guidedPanelImportEntries(
+    payload: GuidedComicLayoutHandoff,
+    fallbackRects: Array<Pick<Panel, 'x' | 'y' | 'width' | 'height'>>,
+): GuidedPanelImportEntry[] {
+    const geometryById = new Map(payload.panelGeometry.map((panel) => [panel.panelId, panel]));
+    if (payload.normalizedPanelRects?.length) {
+        return payload.normalizedPanelRects
+            .map((panel) => ({
+                panelId: panel.panelId,
+                order: panel.order,
+                rect: rectFromNormalizedPanelRect(panel.rect),
+                geometry: geometryById.get(panel.panelId),
+            }))
+            .sort((a, b) => a.order - b.order);
+    }
+
+    const geometryRects = layoutRectsForGuidedGeometry(payload);
+    if (geometryRects.length > 0) {
+        return [...payload.panelGeometry]
+            .sort((a, b) => a.order - b.order)
+            .map((panel, index) => ({
+                panelId: panel.panelId,
+                order: panel.order,
+                rect: geometryRects[index],
+                geometry: panel,
+            }))
+            .filter((entry) => Boolean(entry.rect));
+    }
+
+    return payload.orderedPanelIds.map((panelId, index) => ({
+        panelId,
+        order: index,
+        rect: fallbackRects[index],
+        geometry: geometryById.get(panelId),
+    })).filter((entry) => Boolean(entry.rect));
+}
+
 export const useComicStore = create<ComicState>()(
     undoMiddleware(
         persist(
@@ -1214,24 +1269,24 @@ export const useComicStore = create<ComicState>()(
                 },
 
                 replaceCurrentPageWithGuidedLayout: (payload: GuidedComicLayoutHandoff) => set((state: ComicState) => {
-                    const pageId = state.currentPageId ?? state.pages[0]?.id ?? `page-${payload.pageNumber}`;
+                    const pageId = state.currentPageId ?? payload.pageId ?? state.pages[0]?.id ?? `page-${payload.pageNumber}`;
                     const targetPage = state.pages.find((page) => page.id === pageId);
                     const defaultBg = state.projectSettings?.defaultPageBackgroundColor ?? '#ffffff';
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
-                    const rects = layoutRectsForGuidedGeometry(payload);
-                    const fallbackRects = rects.length > 0 ? rects : layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
-                    const requestedPanelCount = Math.max(1, Math.min(payload.panelCount, payload.orderedPanelIds.length, fallbackRects.length));
-                    const panelIds = payload.orderedPanelIds.slice(0, requestedPanelCount);
-                    const panels: Panel[] = panelIds.map((sourcePanelId, index) => {
+                    const fallbackRects = layoutRectsForTemplate(payload.layoutTemplate, state.gutterSize);
+                    const panelEntries = guidedPanelImportEntries(payload, fallbackRects);
+                    const requestedPanelCount = Math.max(1, Math.min(payload.panelCount, panelEntries.length));
+                    const panels: Panel[] = panelEntries.slice(0, requestedPanelCount).map((entry) => {
+                        const sourcePanelId = entry.panelId;
                         const panelImage = payload.panelArtImages[sourcePanelId];
                         const panelBeat = payload.panelBeats?.find((beat) => beat.panelId === sourcePanelId);
-                        const sourceGeometry = payload.panelGeometry.find((panel) => panel.panelId === sourcePanelId);
+                        const sourceGeometry = entry.geometry ?? payload.panelGeometry.find((panel) => panel.panelId === sourcePanelId);
                         return {
                             id: crypto.randomUUID(),
                             type: 'panel',
-                            shapeType: 'rect',
-                            ...fallbackRects[index],
+                            shapeType: payload.panelShapeDefaults?.shapeType ?? 'rect',
+                            ...entry.rect,
                             imageUrl: panelImage?.imageUrl,
                             prompt: panelBeat?.beatText || panelImage?.prompt,
                             imageFillMode: panelImage ? (sourceGeometry?.imageFit ?? 'cover') : undefined,
@@ -1240,8 +1295,8 @@ export const useComicStore = create<ComicState>()(
                             imageOffsetY: panelImage ? 0 : undefined,
                             imageFocusX: panelImage ? sourceGeometry?.imageFocusX : undefined,
                             imageFocusY: panelImage ? sourceGeometry?.imageFocusY : undefined,
-                            isVisible: true,
-                            isLocked: false,
+                            isVisible: payload.panelShapeDefaults?.isVisible ?? true,
+                            isLocked: payload.panelShapeDefaults?.isLocked ?? false,
                             strokeColor: genre.palette?.border ?? '#000000',
                             ...(genre.textureId !== undefined && { textureId: genre.textureId }),
                             ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),

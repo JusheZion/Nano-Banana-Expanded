@@ -10,10 +10,17 @@ beforeEach(() => {
 describe('useGuidedComicLayoutBridge', () => {
   it('stores a guided comic layout handoff for Advanced Comics Studio', () => {
     useGuidedComicLayoutBridge.getState().requestLayoutHandoff({
+      pageId: 'guided-page-2',
       pageNumber: 2,
       layoutTemplate: 'three-panel',
+      layoutIntent: 'wide',
       panelCount: 3,
       orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
+      normalizedPanelRects: [
+        { panelId: 'page-2-panel-1', order: 0, rect: { x: 0, y: 0, width: 0.5, height: 0.35 } },
+        { panelId: 'page-2-panel-2', order: 1, rect: { x: 0.5, y: 0, width: 0.5, height: 0.35 } },
+        { panelId: 'page-2-panel-3', order: 2, rect: { x: 0, y: 0.35, width: 1, height: 0.65 } },
+      ],
       panelGeometry: [
         { panelId: 'page-2-panel-1', x: 0, y: 0, w: 0.5, h: 0.35, order: 0 },
         { panelId: 'page-2-panel-2', x: 0.5, y: 0, w: 0.5, h: 0.35, order: 1 },
@@ -22,9 +29,15 @@ describe('useGuidedComicLayoutBridge', () => {
       panelArtImages: {
         'page-2-panel-1': {
           panelId: 'page-2-panel-1',
+          imageId: 'vault-image-1',
           imageUrl: 'https://example.com/panel-1.png',
           source: 'vault',
         },
+      },
+      panelShapeDefaults: {
+        shapeType: 'rect',
+        isVisible: true,
+        isLocked: false,
       },
       panelBeats: [
         {
@@ -40,10 +53,17 @@ describe('useGuidedComicLayoutBridge', () => {
     expect(payload).toMatchObject({
       source: 'guided-comic',
       target: 'advanced-comics-studio',
+      pageId: 'guided-page-2',
       pageNumber: 2,
       layoutTemplate: 'three-panel',
+      layoutIntent: 'wide',
       panelCount: 3,
       orderedPanelIds: ['page-2-panel-1', 'page-2-panel-2', 'page-2-panel-3'],
+      normalizedPanelRects: [
+        { panelId: 'page-2-panel-1', order: 0, rect: { x: 0, y: 0, width: 0.5, height: 0.35 } },
+        { panelId: 'page-2-panel-2', order: 1, rect: { x: 0.5, y: 0, width: 0.5, height: 0.35 } },
+        { panelId: 'page-2-panel-3', order: 2, rect: { x: 0, y: 0.35, width: 1, height: 0.65 } },
+      ],
       panelGeometry: [
         { panelId: 'page-2-panel-1', x: 0, y: 0, w: 0.5, h: 0.35, order: 0 },
         { panelId: 'page-2-panel-2', x: 0.5, y: 0, w: 0.5, h: 0.35, order: 1 },
@@ -51,8 +71,14 @@ describe('useGuidedComicLayoutBridge', () => {
       ],
       panelArtImages: {
         'page-2-panel-1': {
+          imageId: 'vault-image-1',
           imageUrl: 'https://example.com/panel-1.png',
         },
+      },
+      panelShapeDefaults: {
+        shapeType: 'rect',
+        isVisible: true,
+        isLocked: false,
       },
     });
     expect(payload?.requestedAt).toEqual(expect.any(String));

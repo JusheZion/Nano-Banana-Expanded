@@ -826,7 +826,7 @@ function buildGuidedComicAssistUserPrompt(args: {
     '    "artDirection"?: { "continuityNotes"?: string, "artStyle"?: string, "renderingStyle"?: string, "colorMood"?: string, "lighting"?: string }',
     '  },',
     '  "outlineBeats"?: [ { "id"?: string, "title"?: string, "description": string } ],',
-    '  "pageUpdates"?: [ { "pageNumber": number, "summary"?: string, "panelCount"?: string, "keyCharacters"?: string, "keyLocation"?: string, "panelBeats"?: string[], "layoutTemplate"?: "auto"|"three-panel"|"three-panel-wide-top"|"three-panel-wide-bottom"|"four-panel"|"six-panel-grid"|"splash" } ],',
+    '  "pageUpdates"?: [ { "pageNumber": number, "summary"?: string, "panelCount"?: string, "keyCharacters"?: string, "keyLocation"?: string, "panelBeats"?: string[], "layoutTemplate"?: "auto"|"three-panel"|"three-panel-wide-top"|"three-panel-wide-bottom"|"four-panel"|"six-panel-grid"|"splash", "layoutIntent"?: "feature"|"wide"|"tall"|"normal" } ],',
     '  "pacingNotes"?: string[],',
     '  "referenceNeeds"?: [ { "type": "character"|"location"|"npc"|"prop"|"style", "name": string, "reason"?: string } ],',
     '  "dialogueNotes"?: string[],',
@@ -834,7 +834,7 @@ function buildGuidedComicAssistUserPrompt(args: {
     '}',
     '',
     'For selected-page or selected-panel actions, only include updates for the selected target.',
-    'Layout templates must be one of the listed layoutTemplate values. Use "three-panel-wide-bottom" for two panels over one wide rectangle; do not recommend layouts the client cannot select.',
+    'Layout templates must be one of the listed layoutTemplate values. Layout intent must be one of feature, wide, tall, or normal. Use "three-panel-wide-bottom" for two panels over one wide rectangle; do not recommend layouts or intents the client cannot select.',
     'For dialogue/narration, return notes only; do not write full balloon placement instructions.',
   ]
     .filter((line) => line !== '')

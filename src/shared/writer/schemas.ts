@@ -301,6 +301,7 @@ const guidedComicPageUpdateSchema = z.object({
   layoutTemplate: z
     .enum(['auto', 'three-panel', 'three-panel-wide-top', 'three-panel-wide-bottom', 'four-panel', 'six-panel-grid', 'splash'])
     .optional(),
+  layoutIntent: z.enum(['feature', 'wide', 'tall', 'normal']).optional(),
 });
 
 function normalizeGuidedComicNote(note: unknown): string {

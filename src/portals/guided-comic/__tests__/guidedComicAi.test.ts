@@ -68,6 +68,8 @@ function makeDraft(overrides: Partial<GuidedComicAiDraft> = {}): GuidedComicAiDr
     panelArtStatuses: {},
     panelArtImages: {},
     pageLayoutTemplates: {},
+    pageLayoutIntents: {},
+    pageLayoutGeometry: {},
     selectedPageNumber: 2,
     selectedPanelId: 'page-2-panel-1',
     ...overrides,
@@ -250,6 +252,87 @@ describe('guided comic AI helpers', () => {
 
     expect(applied.pageCards[0]?.panelCount).toBe('3');
     expect(applied.pageCards[0]?.panelBeats).toEqual(['Existing 1', 'Existing 2', 'Existing 3']);
+  });
+
+  it('preserves user panel counts even when applying confirmed AI layout suggestions', () => {
+    const draft = makeDraft({
+      pageCards: [
+        {
+          pageNumber: 1,
+          summary: 'Mara crosses the threshold.',
+          panelCount: '5',
+          keyCharacters: '',
+          keyLocation: '',
+          expanded: true,
+          panelBeats: ['One', 'Two', 'Three', 'Four', 'Five'],
+        },
+      ],
+      pageLayoutTemplates: { 1: 'auto' },
+      pageLayoutGeometry: {
+        1: [
+          { panelId: 'page-1-panel-1', x: 0.1, y: 0.1, w: 0.3, h: 0.2, order: 0, imageUrl: 'panel-1.png' },
+          { panelId: 'page-1-panel-2', x: 0.45, y: 0.1, w: 0.3, h: 0.2, order: 1 },
+          { panelId: 'page-1-panel-3', x: 0.1, y: 0.4, w: 0.3, h: 0.2, order: 2 },
+          { panelId: 'page-1-panel-4', x: 0.45, y: 0.4, w: 0.3, h: 0.2, order: 3 },
+          { panelId: 'page-1-panel-5', x: 0.1, y: 0.7, w: 0.3, h: 0.2, order: 4 },
+        ],
+      },
+    });
+    const result: GuidedComicAssistResult = {
+      title: 'AI layout',
+      pageUpdates: [
+        {
+          pageNumber: 1,
+          panelCount: '3',
+          panelBeats: ['New 1', 'New 2', 'New 3'],
+          layoutTemplate: 'three-panel-wide-bottom',
+        },
+      ],
+    };
+
+    const applied = applyGuidedComicAiResult(draft, result, { mode: 'replace-confirmed' });
+
+    expect(applied.pageCards[0]?.panelCount).toBe('5');
+    expect(applied.pageCards[0]?.panelBeats).toEqual(['New 1', 'New 2', 'New 3', '', '']);
+    expect(applied.pageLayoutTemplates[1]).toBe('three-panel-wide-bottom');
+    expect(applied.pageLayoutGeometry[1]).toHaveLength(5);
+    expect(applied.pageLayoutGeometry[1]?.[0]).toMatchObject({ panelId: 'page-1-panel-1', imageUrl: 'panel-1.png' });
+  });
+
+  it('maps valid AI layout intents to starter geometry for default pages', () => {
+    const draft = makeDraft({
+      pageCards: [
+        {
+          pageNumber: 1,
+          summary: '',
+          panelCount: '4',
+          keyCharacters: '',
+          keyLocation: '',
+          expanded: true,
+          panelBeats: [],
+        },
+      ],
+      pageLayoutTemplates: {},
+      pageLayoutGeometry: {},
+    });
+    const result: GuidedComicAssistResult = {
+      title: 'Wide layout',
+      pageUpdates: [
+        {
+          pageNumber: 1,
+          panelCount: '3',
+          panelBeats: ['Wide opener', 'Reaction', 'Reveal'],
+          layoutIntent: 'wide',
+        },
+      ],
+    };
+
+    const applied = applyGuidedComicAiResult(draft, result, { mode: 'empty-only' });
+
+    expect(applied.pageCards[0]?.panelCount).toBe('3');
+    expect(applied.pageLayoutTemplates[1]).toBe('auto');
+    expect(applied.pageLayoutIntents[1]).toBe('wide');
+    expect(applied.pageLayoutGeometry[1]).toHaveLength(3);
   });
 
   it('maps outline beat suggestions by id without dropping existing beats', () => {

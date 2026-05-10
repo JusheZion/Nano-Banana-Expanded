@@ -2205,6 +2205,235 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Shared Comic Geometry Utility Layer - 2026-05-09
+
+### What changed
+
+- Added a shared comic geometry utility layer beside the current Advanced Comics Studio implementation.
+- Added normalized rect conversion, clamping, panel move/resize helpers, margin/gutter snapping, overlap detection, and starter layout generation utilities.
+- Added focused unit tests covering every requested utility.
+
+### Files touched
+
+- `src/modes/comic/geometry/rects.ts`
+- `src/modes/comic/geometry/panels.ts`
+- `src/modes/comic/geometry/layoutTemplates.ts`
+- `src/modes/comic/geometry/snapping.ts`
+- `src/modes/comic/geometry/collision.ts`
+- `src/modes/comic/geometry/normalization.ts`
+- `src/modes/comic/geometry/__tests__/geometry.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This is an additive utility layer only. No existing Advanced Studio panel, snapping, rendering, save/load, export, bridge, or store logic was replaced or imported into the new path.
+- Persistence-facing geometry uses normalized `x`, `y`, `width`, and `height` values. `normalizeRect` and `denormalizeRect` are the explicit conversion points between normalized persistence coordinates and absolute page pixels for rendering/editing.
+- Layout templates are starter presets only. `generateLayoutFromTemplate` and `generateLayoutFromAiIntent` return editable normalized panel rects and do not lock final layouts.
+- The default normalized margin/gutter values mirror the existing guided layout math (`0.04` margin and `0.017` gutter) without routing Guided Flow or Advanced Studio through this new utility layer.
+
+### Verification
+
+- `npm run test -- src/modes/comic/geometry/__tests__/geometry.test.ts` - RED first; failed because the new geometry modules did not exist yet.
+- `npm run test -- src/modes/comic/geometry/__tests__/geometry.test.ts` - PASS after implementation; 1 file, 9 tests.
+- `npm run test -- --run src/modes/comic/geometry` - PASS; 1 file, 9 tests.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 warnings in pre-existing areas; no new warnings were reported for the added geometry utility files.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The new geometry utilities are not runtime-integrated yet. Future work must still prove side-by-side UI behavior before replacing existing Advanced Studio geometry, snapping, resize, export, or persistence paths.
+
+### Operator follow-up
+
+- Keep future migrations narrow: route tests or adapters through this geometry layer first, then manually verify the protected comic engine surfaces before changing runtime behavior.
+
+### Next steps
+
+- Future adapter work can use these helpers to normalize panel geometry at boundaries while preserving the current Advanced Studio editing implementation.
+
+---
+
+## Guided Comic Normalized Layout State - 2026-05-09
+
+### What changed
+
+- Updated Guided Comic Flow layout planning to consume the shared normalized comic geometry utilities for starter layouts, clamping, and snapping.
+- Carried `pageLayoutGeometry` through the Guided AI draft/apply path so per-page panel rectangles remain stored as normalized geometry while preserving the existing guided layout shape.
+- Preserved user-selected panel counts when applying AI suggestions; AI panel counts now only apply when a page is empty/default.
+- Allowed AI suggestions to use only valid layout template IDs or valid layout intents, with invalid template IDs normalized back to `auto`.
+- Mapped valid AI layout intents into starter geometry and preserved existing panel image/framing metadata by panel ID when geometry changes.
+- Kept the existing Guided-to-Advanced handoff behavior intact by preserving the current `GuidedComicPanelGeometry` `x`/`y`/`w`/`h` adapter shape.
+
+### Files touched
+
+- `src/portals/guided-comic/guidedComicLayoutPlan.ts`
+- `src/portals/guided-comic/guidedComicAi.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAi.test.ts`
+- `src/modes/comic/geometry/snapping.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `guidedComicLayoutPlan.ts` now adapts shared `generateLayoutFromTemplate`, `generateLayoutFromAiIntent`, `clampRectToPage`, `snapRectToMargins`, and `snapRectToGutters` output into the existing Guided Flow geometry type instead of introducing a new runtime editor contract.
+- `normalizeGuidedComicLayoutTemplateId` and `normalizeGuidedComicLayoutIntent` constrain AI-provided layout data before it can affect guided page state.
+- `applyGuidedComicAiResult` now updates `pageLayoutTemplates` and `pageLayoutGeometry` together, while keeping selected panel counts stable for non-default pages and filling/trimming beats to the active panel count.
+- `copyPanelMediaMetadata` carries existing panel media fields across starter-geometry replacement so layout changes do not discard generated panel art or framing values.
+- Writer schema/tool prompts now expose `layoutIntent` as the bounded AI-facing recommendation path.
+- The shared snapper now supports snapping both opposing edges on one axis when a rectangle already matches safe margins, which preserves current guided safe-margin expectations while keeping the behavior in the shared utility layer.
+
+### Verification
+
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicAi.test.ts` - RED first; failed before implementation because the new layout helpers did not exist and AI application still reset a five-panel page to three panels.
+- `npm run test -- src/modes/comic/geometry/__tests__/geometry.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicAi.test.ts` - PASS; 3 files, 38 tests.
+- `npm run test -- src/portals/guided-comic/__tests__ src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/modes/comic/geometry/__tests__/geometry.test.ts` - PASS; 8 files, 53 tests.
+- `npm run build` - PASS after removing one unused import; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings in pre-existing areas.
+
+### Outstanding issues
+
+- Manual browser click-through for selecting 3, 4, 5, and 6 panels was not run in this pass. The focused automated tests cover panel-count consistency, AI count preservation, valid template normalization, layout intent mapping, and Guided-to-Advanced bridge coverage.
+
+### Risks or caveats
+
+- Advanced Comics Studio runtime behavior remains intentionally unchanged. This pass only routes Guided Flow planning/state application through shared normalized geometry adapters.
+- AI layout suggestions still generate starter geometry, not locked final layouts.
+
+### Operator follow-up
+
+- If a visual QA pass is needed, open Guided Comic Flow and manually select 3, 4, 5, and 6 panels, then apply AI layout suggestions on edited pages to confirm the UI matches the automated count-preservation coverage.
+
+### Next steps
+
+- Future work can continue narrowing Guided Flow state toward `ComicPageGeometry` directly once the adapter path is visually verified and the Advanced Studio boundary remains protected.
+
+---
+
+## Guided Comic Beginner Rectangular Layout Editor - 2026-05-09
+
+### What changed
+
+- Tightened the Guided Comic Flow Layout step into a beginner-friendly rectangular editor surface over the shared normalized geometry model.
+- Added shared Guided layout adapter helpers for moving and resizing panels through `movePanelRect`/`resizePanelRect`, snapping to shared margin/gutter guides, clamping to page bounds, and enforcing minimum panel size.
+- Added a starter-regeneration helper that preserves panel media/framing metadata while resetting rectangles to the selected starter preset.
+- Updated the Layout canvas pointer-edit path to use the shared geometry-backed move/resize helpers instead of inline rectangle math.
+- Kept panel count authoritative by regenerating only the selected page's current panel slots and preserving existing panel IDs.
+- Kept panel numbers visible over assigned images as well as empty panels.
+- Kept Guided-to-Advanced handoff on the existing rectangular `GuidedComicPanelGeometry` adapter so Advanced Studio receives exact edited normalized rectangles and panel images without weakening existing Advanced Studio shape behavior.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLayoutPlan.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `moveGuidedComicPanelGeometry` and `resizeGuidedComicPanelGeometry` are the new component-facing edit helpers; they adapt the existing `GuidedComicPanelGeometry` shape to shared normalized rect utilities, then return the existing Guided geometry shape for state and handoff compatibility.
+- `createGuidedComicStarterLayoutWithExistingMetadata` regenerates starter rectangles while carrying `locked`, `imageId`, `imageUrl`, `imageFit`, `imageFocusX`, `imageFocusY`, and `imageZoom` for matching panel IDs.
+- `GuidedComicFlow` now uses these helpers for drag/resize and the reset starter action, so assigned art and framing survive starter regeneration and layout edits.
+- Guided Flow still exposes only rectangular panels. Oval/circle/custom shapes remain Advanced Studio-only features.
+- No Advanced Studio panel shape code, object toolbar code, canvas code, or store shape behavior was removed or weakened.
+
+### Verification
+
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts` - RED first; failed because the new move/resize/regenerate helpers did not exist yet.
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts` - PASS after implementation; 1 file, 20 tests.
+- `npm run test -- src/portals/guided-comic/__tests__ src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/modes/comic/geometry/__tests__/geometry.test.ts` - PASS; 8 files, 56 tests.
+- Manual browser QA on `http://127.0.0.1:5173/` - PARTIAL PASS: opened Guided Comic Flow Layout, confirmed Page 1 showed 3 panels with assigned images, resized panel 1 larger, moved panel 2, and confirmed all three panel image markers remained in the DOM and screenshot.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings in pre-existing areas.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+
+- Manual browser automation could not complete the final click through the native `window.confirm` handoff dialog into Advanced Studio; the click opened the blocking confirmation and the browser automation session timed out. The Advanced Studio geometry/image import path remains covered by the focused `guidedComicLayoutImport` tests.
+
+### Risks or caveats
+
+- The Layout editor is intentionally rectangular-only. Shape editing remains in Advanced Studio.
+- The handoff confirmation is still useful for users, but it can block the in-app browser automation flow unless the dialog is accepted manually.
+
+### Operator follow-up
+
+- For full visual sign-off, manually click **Send this page to Advanced Studio**, accept the confirmation dialog, and compare the opened Advanced Studio panel positions/images against the edited Guided Layout page.
+
+### Next steps
+
+- Consider adding a test-friendly confirmation abstraction later if repeated browser automation needs to click through the handoff without changing the user-facing confirmation behavior.
+
+---
+
+## Guided Flow to Advanced Studio Exact Handoff - 2026-05-10
+
+### What changed
+
+- Strengthened the Guided Comic Flow to Advanced Studio handoff payload so exact edited Guided Layout geometry travels with the bridge payload instead of relying on template reconstruction.
+- Added additive bridge fields for `pageId`, AI `layoutIntent`, normalized panel rectangles, assigned image IDs, and rectangular panel shape defaults while preserving the existing `layoutTemplate`, `orderedPanelIds`, `panelGeometry`, `panelArtImages`, and `panelBeats` compatibility fields.
+- Updated Guided Flow's Advanced Studio send action to include deterministic guided page IDs, normalized panel rects, panel order, panel count, image IDs/URLs, optional AI layout intent, and rectangular shape defaults.
+- Added `pageLayoutIntents` to Guided Flow draft/project/AI state so AI-provided layout intent can be preserved into the handoff when present.
+- Updated Advanced Studio import logic in `comicStore` to prefer `normalizedPanelRects` first, then existing `panelGeometry`, then the legacy template-only fallback.
+- Kept legacy template-only import behavior available until manual testing confirms the new payload path end-to-end.
+
+### Files touched
+
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/stores/comicStore.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `src/stores/__tests__/guidedComicLayoutImport.test.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicAi.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAi.test.ts`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `guidedPanelImportEntries` is the new import adapter in `comicStore`; it sorts incoming exact rects by panel order and maps normalized coordinates to the native 800x1200 Advanced Studio page size.
+- Advanced import now uses exact normalized rects when present and does not regenerate panels from the selected template in that path.
+- Legacy `layoutRectsForTemplate` fallback remains in place for old payloads with no exact geometry.
+- Guided Flow still sends rectangular panel defaults only; no oval/circle/custom Guided Flow shape path was added.
+- Assigned image URLs remain the Advanced Studio-compatible image source. Image IDs are carried in the handoff payload for traceability but are not written onto `Panel` because `comicStore.Panel` does not currently define an image ID field.
+
+### Verification
+
+- `npm run test -- src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` - RED first; failed because the new 4-panel edited payload was still imported using template geometry.
+- `npm run test -- src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` - PASS after implementation; 2 files, 7 tests.
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicAi.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` - PASS; 3 files, 19 tests.
+- `npm run test -- src/portals/guided-comic/__tests__ src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/modes/comic/geometry/__tests__/geometry.test.ts` - PASS; 8 files, 59 tests.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings in pre-existing areas.
+- Browser access check - PASS: Browser runtime listed both Chrome and Codex In-app Browser, and both opened `http://127.0.0.1:5173/` with title `ARCS Expanded`.
+
+### Outstanding issues
+
+- Full manual visual handoff comparison in Advanced Studio was not rerun in this pass. The exact import behavior is covered by focused store tests for 3-panel edited geometry, 4-panel edited geometry, image preservation, panel count preservation, panel order, and legacy template-only fallback.
+
+### Risks or caveats
+
+- `imageId` is payload metadata only until `comicStore.Panel` grows a compatible image ID field.
+- Existing Advanced Studio shape behavior remains untouched; Guided Flow still hands off rectangular panels only.
+
+### Operator follow-up
+
+- With browser access restored, manually run the full visual handoff once: edit a 3-panel Guided Layout page, send it to Advanced Studio, accept the confirmation, and compare Advanced Studio panel positions/images against the Guided canvas.
+
+### Next steps
+
+- After manual proof, consider documenting the new payload as the preferred handoff contract and keep the legacy fallback as a guarded compatibility path.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

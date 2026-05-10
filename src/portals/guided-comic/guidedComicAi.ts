@@ -1,7 +1,13 @@
 import type { GuidedComicAssistResult } from '@/shared/writer/types';
 import {
+  createGuidedComicStarterLayout,
+  createGuidedComicStarterLayoutFromAiIntent,
   getGuidedComicActivePanelCount,
   getGuidedComicExistingPanelBeats,
+  normalizeGuidedComicLayoutIntent,
+  normalizeGuidedComicLayoutTemplateId,
+  syncGuidedComicLayoutGeometry,
+  type GuidedComicPanelGeometry,
 } from '@/portals/guided-comic/guidedComicLayoutPlan';
 
 export type GuidedComicAiStepId = 'setup' | 'story' | 'pages' | 'visual-prep' | 'art' | 'layout' | 'export';
@@ -64,6 +70,8 @@ export type GuidedComicAiDraft = {
   panelArtStatuses: Record<string, unknown>;
   panelArtImages: Record<string, unknown>;
   pageLayoutTemplates: Record<number, string>;
+  pageLayoutIntents: Record<number, string>;
+  pageLayoutGeometry: Record<number, GuidedComicPanelGeometry[]>;
   selectedPageNumber?: number | null;
   selectedPanelId?: string | null;
 };
@@ -350,10 +358,9 @@ function looksLikeDefaultPanelBeats(beats: string[]): boolean {
 function shouldApplySuggestedPanelCount(
   base: GuidedComicAiPageCard,
   suggestedPanelCount: unknown,
-  mode: GuidedComicAiApplyOptions['mode'],
 ): suggestedPanelCount is string {
   if (typeof suggestedPanelCount !== 'string') return false;
-  if (mode === 'replace-confirmed' || isBlank(base.panelCount)) return true;
+  if (isBlank(base.panelCount)) return true;
   return base.panelCount === '4' && (base.panelBeats.length === 0 || looksLikeDefaultPanelBeats(base.panelBeats));
 }
 
@@ -365,7 +372,9 @@ function applyPanelBeats(
 ): string[] {
   const activePanelCount = getGuidedComicActivePanelCount({ panelCount, panelBeats: currentBeats });
   if (!suggestedBeats?.length) return currentBeats.slice(0, activePanelCount);
-  if (mode === 'replace-confirmed') return suggestedBeats.slice(0, activePanelCount);
+  if (mode === 'replace-confirmed') {
+    return Array.from({ length: activePanelCount }, (_, index) => suggestedBeats[index] ?? '');
+  }
   const maxLength = Math.max(currentBeats.length, suggestedBeats.length);
   return Array.from({ length: Math.min(maxLength, activePanelCount) }, (_, index) => {
     const current = currentBeats[index] ?? '';
@@ -397,7 +406,7 @@ function applyPageUpdates(
         expanded: false,
         panelBeats: [],
       } satisfies GuidedComicAiPageCard);
-    const nextPanelCount = shouldApplySuggestedPanelCount(base, update.panelCount, options.mode)
+    const nextPanelCount = shouldApplySuggestedPanelCount(base, update.panelCount)
       ? String(getGuidedComicActivePanelCount({ panelCount: update.panelCount, panelBeats: update.panelBeats ?? base.panelBeats }))
       : base.panelCount;
     const merged: GuidedComicAiPageCard = {
@@ -423,11 +432,110 @@ function applyPageUpdates(
   return next.sort((a, b) => a.pageNumber - b.pageNumber);
 }
 
+function layoutPageFor(pageCards: GuidedComicAiPageCard[], pageNumber: number): GuidedComicAiPageCard | undefined {
+  return pageCards.find((page) => page.pageNumber === pageNumber);
+}
+
+function copyPanelMediaMetadata(
+  starterGeometry: GuidedComicPanelGeometry[],
+  existingGeometry: GuidedComicPanelGeometry[] | undefined,
+): GuidedComicPanelGeometry[] {
+  const existingById = new Map((existingGeometry ?? []).map((panel) => [panel.panelId, panel]));
+  return starterGeometry.map((panel) => {
+    const existing = existingById.get(panel.panelId);
+    if (!existing) return panel;
+    return {
+      ...panel,
+      locked: existing.locked,
+      imageId: existing.imageId,
+      imageUrl: existing.imageUrl,
+      imageFit: existing.imageFit,
+      imageFocusX: existing.imageFocusX,
+      imageFocusY: existing.imageFocusY,
+      imageZoom: existing.imageZoom,
+    };
+  });
+}
+
+function applyLayoutSuggestions(
+  draft: GuidedComicAiDraft,
+  nextPageCards: GuidedComicAiPageCard[],
+  updates: GuidedComicAssistResult['pageUpdates'],
+  options: GuidedComicAiApplyOptions,
+): Pick<GuidedComicAiDraft, 'pageLayoutTemplates' | 'pageLayoutIntents' | 'pageLayoutGeometry'> {
+  if (!updates?.length) {
+    return {
+      pageLayoutTemplates: draft.pageLayoutTemplates,
+      pageLayoutIntents: draft.pageLayoutIntents,
+      pageLayoutGeometry: draft.pageLayoutGeometry,
+    };
+  }
+
+  const selectedUpdates = options.selectedOnly && options.selectedPageNumber
+    ? updates.filter((update) => update.pageNumber === options.selectedPageNumber)
+    : updates;
+  let pageLayoutTemplates = { ...draft.pageLayoutTemplates };
+  let pageLayoutIntents = { ...draft.pageLayoutIntents };
+  let pageLayoutGeometry = { ...draft.pageLayoutGeometry };
+
+  selectedUpdates.forEach((update) => {
+    const page = layoutPageFor(nextPageCards, update.pageNumber);
+    if (!page) return;
+    const templateId = normalizeGuidedComicLayoutTemplateId(update.layoutTemplate);
+    const layoutIntent = normalizeGuidedComicLayoutIntent(update.layoutIntent);
+    const existingGeometry = pageLayoutGeometry[update.pageNumber];
+
+    if (templateId) {
+      pageLayoutTemplates = { ...pageLayoutTemplates, [update.pageNumber]: templateId };
+      pageLayoutIntents = { ...pageLayoutIntents };
+      delete pageLayoutIntents[update.pageNumber];
+      pageLayoutGeometry = {
+        ...pageLayoutGeometry,
+        [update.pageNumber]: copyPanelMediaMetadata(
+          createGuidedComicStarterLayout(page, templateId, {}),
+          existingGeometry,
+        ),
+      };
+      return;
+    }
+
+    if (layoutIntent) {
+      const currentTemplate = normalizeGuidedComicLayoutTemplateId(pageLayoutTemplates[update.pageNumber]) ?? 'auto';
+      pageLayoutTemplates = { ...pageLayoutTemplates, [update.pageNumber]: currentTemplate };
+      pageLayoutIntents = { ...pageLayoutIntents, [update.pageNumber]: layoutIntent };
+      pageLayoutGeometry = {
+        ...pageLayoutGeometry,
+        [update.pageNumber]: copyPanelMediaMetadata(
+          createGuidedComicStarterLayoutFromAiIntent(page, layoutIntent, {}),
+          existingGeometry,
+        ),
+      };
+      return;
+    }
+
+    if (existingGeometry) {
+      pageLayoutGeometry = {
+        ...pageLayoutGeometry,
+        [update.pageNumber]: syncGuidedComicLayoutGeometry(
+          page,
+          existingGeometry,
+          normalizeGuidedComicLayoutTemplateId(pageLayoutTemplates[update.pageNumber]) ?? 'auto',
+          {},
+        ),
+      };
+    }
+  });
+
+  return { pageLayoutTemplates, pageLayoutIntents, pageLayoutGeometry };
+}
+
 export function applyGuidedComicAiResult(
   draft: GuidedComicAiDraft,
   result: GuidedComicAssistResult,
   options: GuidedComicAiApplyOptions,
 ): GuidedComicAiDraft {
+  const nextPageCards = applyPageUpdates(draft.pageCards, result.pageUpdates, options);
+  const layoutSuggestions = applyLayoutSuggestions(draft, nextPageCards, result.pageUpdates, options);
   return {
     ...draft,
     setupForm: applyFormReplacements(draft.setupForm, result.replacements?.setupForm, options.mode) as GuidedComicAiSetupForm,
@@ -437,17 +545,9 @@ export function applyGuidedComicAiResult(
       ...(options.mode === 'replace-confirmed' ? result.replacements?.artDirection : {}),
     },
     outlineBeats: applyOutlineBeats(draft.outlineBeats, result.outlineBeats, options.mode),
-    pageCards: applyPageUpdates(draft.pageCards, result.pageUpdates, options),
-    pageLayoutTemplates:
-      result.pageUpdates?.length && options.mode === 'replace-confirmed'
-        ? result.pageUpdates.reduce(
-            (templates, update) => {
-              if (!update.layoutTemplate) return templates;
-              if (options.selectedOnly && options.selectedPageNumber && update.pageNumber !== options.selectedPageNumber) return templates;
-              return { ...templates, [update.pageNumber]: update.layoutTemplate };
-            },
-            draft.pageLayoutTemplates,
-          )
-        : draft.pageLayoutTemplates,
+    pageCards: nextPageCards,
+    pageLayoutTemplates: layoutSuggestions.pageLayoutTemplates,
+    pageLayoutIntents: layoutSuggestions.pageLayoutIntents,
+    pageLayoutGeometry: layoutSuggestions.pageLayoutGeometry,
   };
 }

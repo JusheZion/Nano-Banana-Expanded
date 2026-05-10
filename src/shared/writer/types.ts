@@ -148,6 +148,7 @@ export type GuidedComicAssistResult = {
     keyLocation?: string;
     panelBeats?: string[];
     layoutTemplate?: 'auto' | 'three-panel' | 'three-panel-wide-top' | 'three-panel-wide-bottom' | 'four-panel' | 'six-panel-grid' | 'splash';
+    layoutIntent?: 'feature' | 'wide' | 'tall' | 'normal';
   }>;
   pacingNotes?: string[];
   referenceNeeds?: Array<{

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GuidedComicPanelGeometry } from '@/portals/guided-comic/guidedComicLayoutPlan';
+import type { GuidedComicLayoutIntent, GuidedComicPanelGeometry } from '@/portals/guided-comic/guidedComicLayoutPlan';
 
 export type GuidedComicLayoutTemplate =
   | 'auto'
@@ -12,6 +12,7 @@ export type GuidedComicLayoutTemplate =
 
 export type GuidedComicLayoutPanelImage = {
   panelId: string;
+  imageId?: string;
   imageUrl: string;
   prompt?: string;
   returnedAt?: string;
@@ -24,15 +25,36 @@ export type GuidedComicLayoutPanelBeat = {
   beatText: string;
 };
 
+export type GuidedComicNormalizedPanelRect = {
+  panelId: string;
+  order: number;
+  rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+};
+
+export type GuidedComicPanelShapeDefaults = {
+  shapeType: 'rect';
+  isVisible?: boolean;
+  isLocked?: boolean;
+};
+
 export type GuidedComicLayoutHandoff = {
   source: 'guided-comic';
   target: 'advanced-comics-studio';
+  pageId?: string;
   pageNumber: number;
   layoutTemplate: GuidedComicLayoutTemplate;
+  layoutIntent?: GuidedComicLayoutIntent;
   panelCount: number;
   orderedPanelIds: string[];
+  normalizedPanelRects?: GuidedComicNormalizedPanelRect[];
   panelGeometry: GuidedComicPanelGeometry[];
   panelArtImages: Record<string, GuidedComicLayoutPanelImage>;
+  panelShapeDefaults?: GuidedComicPanelShapeDefaults;
   panelBeats?: GuidedComicLayoutPanelBeat[];
   requestedAt: string;
 };

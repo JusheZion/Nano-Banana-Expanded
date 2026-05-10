@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   createGuidedComicStarterLayout,
+  createGuidedComicStarterLayoutFromAiIntent,
+  createGuidedComicStarterLayoutWithExistingMetadata,
   getConstrainedGuidedComicPanelGeometry,
   getGuidedComicExistingPanelBeats,
   getGuidedComicLayoutGridStyle,
   getGuidedComicLayoutPanels,
   getGuidedComicSafeMarginPanelGeometry,
   getSnappedGuidedComicPanelGeometry,
+  moveGuidedComicPanelGeometry,
+  normalizeGuidedComicLayoutTemplateId,
+  resizeGuidedComicPanelGeometry,
   syncGuidedComicLayoutGeometry,
 } from '@/portals/guided-comic/guidedComicLayoutPlan';
 
@@ -105,6 +110,33 @@ describe('guided comic layout planning', () => {
       { panelId: 'page-3-panel-2', x: 0.508, y: 0.04, w: 0.452, h: 0.299, order: 1 },
       { panelId: 'page-3-panel-3', x: 0.04, y: 0.356, w: 0.92, h: 0.604, order: 2 },
     ]);
+  });
+
+  it('keeps starter geometry counts consistent for four, five, and six panels', () => {
+    expect(createGuidedComicStarterLayout({ pageNumber: 4, panelCount: '4', panelBeats: [] }, 'auto')).toHaveLength(4);
+    expect(createGuidedComicStarterLayout({ pageNumber: 5, panelCount: '5', panelBeats: [] }, 'auto')).toHaveLength(5);
+    expect(createGuidedComicStarterLayout({ pageNumber: 6, panelCount: '6', panelBeats: [] }, 'auto')).toHaveLength(6);
+  });
+
+  it('normalizes invalid AI template ids to auto', () => {
+    expect(normalizeGuidedComicLayoutTemplateId('six-panel-grid')).toBe('six-panel-grid');
+    expect(normalizeGuidedComicLayoutTemplateId('cinematic-chaos')).toBe('auto');
+    expect(normalizeGuidedComicLayoutTemplateId(undefined)).toBeUndefined();
+  });
+
+  it('maps AI layout intent to valid starter geometry without changing panel count', () => {
+    const geometry = createGuidedComicStarterLayoutFromAiIntent(
+      {
+        pageNumber: 8,
+        panelCount: '5',
+        panelBeats: ['Wide opener', 'Beat 2', 'Beat 3', 'Beat 4', 'Beat 5'],
+      },
+      'wide',
+    );
+
+    expect(geometry).toHaveLength(5);
+    expect(geometry[0]).toMatchObject({ panelId: 'page-8-panel-1', order: 0 });
+    expect(geometry.every((panel) => panel.x >= 0 && panel.y >= 0 && panel.w > 0 && panel.h > 0)).toBe(true);
   });
 
   it('uses safe margins and standard gutters for default starter geometry', () => {
@@ -220,6 +252,77 @@ describe('guided comic layout planning', () => {
       w: 0.92,
       h: 0.92,
       order: 0,
+    });
+  });
+
+  it('moves panels through shared geometry while keeping bounds and snapping', () => {
+    const moved = moveGuidedComicPanelGeometry(
+      { panelId: 'page-1-panel-1', x: 0.5, y: 0.5, w: 0.35, h: 0.25, order: 0 },
+      { x: 0.5, y: 0.5 },
+      [],
+    );
+
+    expect(moved).toMatchObject({ x: 0.65, y: 0.75, w: 0.35, h: 0.25 });
+
+    const snapped = moveGuidedComicPanelGeometry(
+      { panelId: 'page-1-panel-1', x: 0.08, y: 0.08, w: 0.3, h: 0.2, order: 0 },
+      { x: -0.037, y: -0.041 },
+      [],
+    );
+
+    expect(snapped).toMatchObject({ x: 0.04, y: 0.04 });
+  });
+
+  it('resizes panels through shared geometry while enforcing minimum size', () => {
+    const resized = resizeGuidedComicPanelGeometry(
+      { panelId: 'page-1-panel-1', x: 0.2, y: 0.2, w: 0.4, h: 0.3, order: 0 },
+      'nw',
+      { x: 0.35, y: 0.25 },
+      [],
+    );
+
+    expect(resized).toMatchObject({ x: 0.48, y: 0.38, w: 0.12, h: 0.12 });
+  });
+
+  it('regenerates starter geometry without losing panel image metadata', () => {
+    const geometry = createGuidedComicStarterLayoutWithExistingMetadata(
+      {
+        pageNumber: 7,
+        panelCount: '3',
+        panelBeats: ['One', 'Two', 'Three'],
+      },
+      'three-panel-wide-bottom',
+      [
+        {
+          panelId: 'page-7-panel-2',
+          x: 0.2,
+          y: 0.2,
+          w: 0.2,
+          h: 0.2,
+          order: 1,
+          imageId: 'image-2',
+          imageUrl: 'https://example.com/two.png',
+          imageFit: 'contain',
+          imageFocusX: 0.25,
+          imageFocusY: 0.75,
+          imageZoom: 1.4,
+        },
+      ],
+    );
+
+    expect(geometry).toHaveLength(3);
+    expect(geometry[1]).toMatchObject({
+      panelId: 'page-7-panel-2',
+      x: 0.508,
+      y: 0.04,
+      w: 0.452,
+      h: 0.299,
+      imageId: 'image-2',
+      imageUrl: 'https://example.com/two.png',
+      imageFit: 'contain',
+      imageFocusX: 0.25,
+      imageFocusY: 0.75,
+      imageZoom: 1.4,
     });
   });
 });

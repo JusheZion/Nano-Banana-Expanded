@@ -45,18 +45,20 @@ import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 import {
-  createGuidedComicStarterLayout,
-  getConstrainedGuidedComicPanelGeometry,
+  createGuidedComicStarterLayoutWithExistingMetadata,
   getGuidedComicActivePanelCount,
   getGuidedComicExistingPanelBeats,
   getGuidedComicLayoutPanels,
   getGuidedComicSafeMarginPanelGeometry,
-  getSnappedGuidedComicPanelGeometry,
+  moveGuidedComicPanelGeometry,
   NORMALIZED_LAYOUT_MARGIN,
+  resizeGuidedComicPanelGeometry,
   syncGuidedComicLayoutGeometry,
   type GuidedComicImageFit,
   type GuidedComicLayoutGutterMode,
+  type GuidedComicLayoutIntent,
   type GuidedComicLayoutMarginMode,
+  type GuidedComicLayoutResizeHandle,
   type GuidedComicLayoutSettings,
   type GuidedComicPanelGeometry,
 } from '@/portals/guided-comic/guidedComicLayoutPlan';
@@ -191,6 +193,7 @@ type PanelArtQueueItem = {
 };
 
 type PanelArtImageState = {
+  imageId?: string;
   imageUrl: string;
   source: 'imageshop' | 'vault' | 'upload' | 'paste';
   returnedAt: string;
@@ -223,7 +226,7 @@ type LayoutTemplateOption = {
   label: string;
 };
 
-type LayoutResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
+type LayoutResizeHandle = GuidedComicLayoutResizeHandle;
 
 type ActiveLayoutEdit = {
   pageNumber: number;
@@ -254,6 +257,7 @@ type GuidedComicDraftState = {
   panelArtStatuses: Record<string, PanelArtStatus>;
   panelArtImages: Record<string, PanelArtImageState>;
   pageLayoutTemplates: Record<number, LayoutTemplateId>;
+  pageLayoutIntents: Record<number, GuidedComicLayoutIntent>;
   pageLayoutGeometry: Record<number, GuidedComicPanelGeometry[]>;
 };
 
@@ -782,6 +786,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       panelArtStatuses: parsed.panelArtStatuses ?? {},
       panelArtImages: parsed.panelArtImages ?? {},
       pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
+      pageLayoutIntents: parsed.pageLayoutIntents ?? {},
       pageLayoutGeometry: parsed.pageLayoutGeometry ?? {},
     };
   } catch {
@@ -811,6 +816,7 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     panelArtStatuses: draft.panelArtStatuses,
     panelArtImages: draft.panelArtImages,
     pageLayoutTemplates: draft.pageLayoutTemplates,
+    pageLayoutIntents: draft.pageLayoutIntents,
     pageLayoutGeometry: draft.pageLayoutGeometry,
     artDirection: draft.artDirection,
     currentStep: guidedComicStepIdFromIndex(draft.activeIndex),
@@ -835,6 +841,7 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     panelArtStatuses: snapshot.panelArtStatuses as Record<string, PanelArtStatus>,
     panelArtImages: snapshot.panelArtImages as Record<string, PanelArtImageState>,
     pageLayoutTemplates: snapshot.pageLayoutTemplates as Record<number, LayoutTemplateId>,
+    pageLayoutIntents: (snapshot.pageLayoutIntents ?? {}) as Record<number, GuidedComicLayoutIntent>,
     pageLayoutGeometry: (snapshot.pageLayoutGeometry ?? {}) as Record<number, GuidedComicPanelGeometry[]>,
   };
 }
@@ -1004,6 +1011,7 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
     panelArtStatuses: {},
     panelArtImages: {},
     pageLayoutTemplates: {},
+    pageLayoutIntents: {},
     pageLayoutGeometry: {},
     artDirection: DEFAULT_ART_DIRECTION,
     currentStep: 'setup',
@@ -1100,6 +1108,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>(
     () => restoredDraft?.pageLayoutTemplates ?? {},
   );
+  const [pageLayoutIntents, setPageLayoutIntents] = useState<Record<number, GuidedComicLayoutIntent>>(
+    () => restoredDraft?.pageLayoutIntents ?? {},
+  );
   const [pageLayoutGeometry, setPageLayoutGeometry] = useState<Record<number, GuidedComicPanelGeometry[]>>(
     () => restoredDraft?.pageLayoutGeometry ?? {},
   );
@@ -1143,6 +1154,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       panelArtStatuses,
       panelArtImages,
       pageLayoutTemplates,
+      pageLayoutIntents,
       pageLayoutGeometry,
       artDirection,
       currentStep: activeStep.id,
@@ -1157,6 +1169,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       outlineBeats,
       pageCards,
       pageLayoutTemplates,
+      pageLayoutIntents,
       pageLayoutGeometry,
       panelArtImages,
       panelArtStatuses,
@@ -1206,6 +1219,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPanelArtStatuses(draft.panelArtStatuses);
     setPanelArtImages(draft.panelArtImages);
     setPageLayoutTemplates(draft.pageLayoutTemplates);
+    setPageLayoutIntents(draft.pageLayoutIntents);
     setPageLayoutGeometry(draft.pageLayoutGeometry);
     setDraftSavedAt(savedAt);
   }, []);
@@ -1230,8 +1244,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             geometry.map((panel) =>
               panel.panelId === panelId
                 ? {
-                    ...panel,
-                    imageUrl: image.imageUrl,
+                  ...panel,
+                  imageId: image.imageId,
+                  imageUrl: image.imageUrl,
                   }
                 : panel,
             ),
@@ -1273,6 +1288,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       panelArtStatuses,
       panelArtImages,
       pageLayoutTemplates,
+      pageLayoutIntents,
       pageLayoutGeometry,
     };
 
@@ -1291,6 +1307,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     outlineBeats,
     pageCards,
     pageLayoutTemplates,
+    pageLayoutIntents,
     pageLayoutGeometry,
     panelArtImages,
     panelArtStatuses,
@@ -1306,6 +1323,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (selection.type === 'panel-art') {
       setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
       assignPanelArtImage(selection.name, {
+        imageId: selection.referenceId,
         imageUrl: selection.imageUrl,
         source: 'vault',
         sourceLabel: selection.sourceLabel,
@@ -1887,12 +1905,27 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   };
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
+    setPageLayoutIntents((current) => {
+      const next = { ...current };
+      delete next[pageNumber];
+      return next;
+    });
     const page = pageCards.find((card) => card.pageNumber === pageNumber);
     if (!page) return;
     setPageLayoutGeometry((current) => ({
       ...current,
-      [pageNumber]: createGuidedComicStarterLayout(page, templateId, guidedLayoutSettings),
+      [pageNumber]: createGuidedComicStarterLayoutWithExistingMetadata(
+        page,
+        templateId,
+        current[pageNumber],
+        guidedLayoutSettings,
+      ),
     }));
+  };
+  const regeneratePageStarterLayout = (page: PageCard) => {
+    const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    updatePageLayoutTemplate(page.pageNumber, templateId);
+    setPrimaryActionMessage(`Regenerated page ${page.pageNumber} starter layout without changing panel count or assigned art.`);
   };
   const applySafeMarginsToPageLayout = (page: PageCard) => {
     const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
@@ -1944,6 +1977,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const canvasRect = layoutCanvasRefs.current[pageNumber]?.getBoundingClientRect();
     const page = pageCards.find((card) => card.pageNumber === pageNumber);
     if (!canvasRect || !page) return;
+    if (panel.locked) return;
     event.preventDefault();
     event.stopPropagation();
     setActivePageNumber(pageNumber);
@@ -1973,38 +2007,30 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       const dx = (event.clientX - activeLayoutEdit.startClientX) / activeLayoutEdit.canvasWidth;
       const dy = (event.clientY - activeLayoutEdit.startClientY) / activeLayoutEdit.canvasHeight;
       const { startPanel } = activeLayoutEdit;
-      let nextPanel: GuidedComicPanelGeometry = { ...startPanel };
+      let nextPanel: GuidedComicPanelGeometry;
 
       if (activeLayoutEdit.mode === 'move') {
-        nextPanel = {
-          ...nextPanel,
-          x: startPanel.x + dx,
-          y: startPanel.y + dy,
-        };
+        nextPanel = moveGuidedComicPanelGeometry(
+          startPanel,
+          { x: dx, y: dy },
+          activeLayoutEdit.startGeometry,
+          guidedLayoutSettings,
+        );
       } else {
         const handle = activeLayoutEdit.handle ?? 'se';
-        if (handle.includes('e')) {
-          nextPanel.w = startPanel.w + dx;
-        }
-        if (handle.includes('s')) {
-          nextPanel.h = startPanel.h + dy;
-        }
-        if (handle.includes('w')) {
-          nextPanel.x = startPanel.x + dx;
-          nextPanel.w = startPanel.w - dx;
-        }
-        if (handle.includes('n')) {
-          nextPanel.y = startPanel.y + dy;
-          nextPanel.h = startPanel.h - dy;
-        }
+        nextPanel = resizeGuidedComicPanelGeometry(
+          startPanel,
+          handle,
+          { x: dx, y: dy },
+          activeLayoutEdit.startGeometry,
+          guidedLayoutSettings,
+        );
       }
 
-      const constrained = getConstrainedGuidedComicPanelGeometry(nextPanel);
-      const snapped = getSnappedGuidedComicPanelGeometry(constrained, activeLayoutEdit.startGeometry, guidedLayoutSettings);
       setPageLayoutGeometry((current) => ({
         ...current,
         [activeLayoutEdit.pageNumber]: (current[activeLayoutEdit.pageNumber] ?? activeLayoutEdit.startGeometry).map((panel) =>
-          panel.panelId === activeLayoutEdit.panelId ? snapped : panel,
+          panel.panelId === activeLayoutEdit.panelId ? nextPanel : panel,
         ),
       }));
     };
@@ -2027,6 +2053,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (!confirmed) return;
 
     const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    const layoutIntent = pageLayoutIntents[page.pageNumber];
     const layoutPanels = getGuidedComicLayoutPanels(page, layoutTemplate);
     const layoutGeometry = syncGuidedComicLayoutGeometry(
       page,
@@ -2037,9 +2064,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const orderedPanelIds = [...layoutGeometry].sort((a, b) => a.order - b.order).map((panel) => panel.panelId);
     const handoffPanelArtImages = orderedPanelIds.reduce<Record<string, GuidedComicLayoutPanelImage>>((images, panelId) => {
       const image = panelArtImages[panelId];
+      const geometry = layoutGeometry.find((panel) => panel.panelId === panelId);
       if (!image) return images;
       images[panelId] = {
         panelId,
+        imageId: image.imageId ?? geometry?.imageId,
         imageUrl: image.imageUrl,
         prompt: image.prompt,
         returnedAt: image.returnedAt,
@@ -2049,12 +2078,29 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     }, {});
 
     requestLayoutHandoff({
+      pageId: `guided-page-${page.pageNumber}`,
       pageNumber: page.pageNumber,
       layoutTemplate,
+      ...(layoutIntent && { layoutIntent }),
       panelCount: layoutPanels.length,
       orderedPanelIds,
+      normalizedPanelRects: layoutGeometry.map((panel) => ({
+        panelId: panel.panelId,
+        order: panel.order,
+        rect: {
+          x: panel.x,
+          y: panel.y,
+          width: panel.w,
+          height: panel.h,
+        },
+      })),
       panelGeometry: layoutGeometry,
       panelArtImages: handoffPanelArtImages,
+      panelShapeDefaults: {
+        shapeType: 'rect',
+        isVisible: true,
+        isLocked: false,
+      },
       panelBeats: orderedPanelIds.map((panelId, index) => ({
         panelId,
         panelNumber: index + 1,
@@ -2086,6 +2132,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPanelArtStatuses({});
     setPanelArtImages({});
     setPageLayoutTemplates({});
+    setPageLayoutIntents({});
     setPageLayoutGeometry({});
     setDraftSavedAt(null);
     setProjectLibraryStatus('Cleared the recovery draft. Saved library comics were kept.');
@@ -2230,6 +2277,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     panelArtStatuses,
     panelArtImages,
     pageLayoutTemplates,
+    pageLayoutIntents,
+    pageLayoutGeometry,
     selectedPageNumber: activePageNumber ?? selectedPanelPageNumber ?? pageCards[0]?.pageNumber ?? null,
     selectedPanelId: selectedPanelEffectiveId,
   };
@@ -2298,6 +2347,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setOutlineBeats(nextDraft.outlineBeats as OutlineBeat[]);
     setPageCards(nextDraft.pageCards as PageCard[]);
     setPageLayoutTemplates(nextDraft.pageLayoutTemplates as Record<number, LayoutTemplateId>);
+    setPageLayoutIntents(nextDraft.pageLayoutIntents as Record<number, GuidedComicLayoutIntent>);
+    setPageLayoutGeometry(nextDraft.pageLayoutGeometry as Record<number, GuidedComicPanelGeometry[]>);
     setGuidedAiAcceptedNotes({
       pacingNotes: guidedAiPreview.result.pacingNotes,
       referenceNeeds: guidedAiPreview.result.referenceNeeds,
@@ -4044,10 +4095,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updatePageLayoutTemplate(page.pageNumber, templateId)}
+                                  onClick={() => regeneratePageStarterLayout(page)}
                                   className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/70 transition hover:bg-white/15"
                                 >
-                                  Reset starter
+                                  Reset starter layout
                                 </button>
                               </div>
                             </div>
@@ -4148,6 +4199,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                       ].join(' ')}
                                     >
                                       {panelImage ? 'Ready' : 'Needs art'}
+                                    </span>
+                                    <span className="absolute right-2 top-2 rounded-full border border-amber-200/45 bg-black/65 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-amber-50">
+                                      Panel {panelNumber}
                                     </span>
                                     {(['nw', 'ne', 'sw', 'se'] as LayoutResizeHandle[]).map((handle) => (
                                       <button

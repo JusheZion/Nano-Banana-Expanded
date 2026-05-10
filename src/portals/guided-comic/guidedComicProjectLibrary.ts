@@ -36,6 +36,7 @@ export type GuidedComicProjectSnapshot = {
   panelArtStatuses: Record<string, unknown>;
   panelArtImages: Record<string, unknown>;
   pageLayoutTemplates: Record<number, unknown>;
+  pageLayoutIntents?: Record<number, unknown>;
   pageLayoutGeometry?: Record<number, unknown[]>;
   artDirection: {
     artStyle: string;
