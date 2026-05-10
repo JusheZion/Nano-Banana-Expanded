@@ -2151,6 +2151,60 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Canonical Comic Object Types - 2026-05-09
+
+### What changed
+
+- Added shared canonical comic type modules beside the current Advanced Comics Studio implementation without wiring them into existing runtime store or renderer paths.
+- Added canonical object, geometry, serialization, and editor-state shapes for panels, balloons, text, assets, transforms, normalized/absolute rects, page geometry, layers, and serialized comic page/document state.
+- Added runtime type guards for canonical panel, balloon, text, and asset objects.
+- Added legacy compatibility helpers to normalize existing flat Advanced Studio objects/pages into the canonical sidecar shape and serialize normalized pages back toward the legacy store shape.
+- Added focused unit coverage for the new guards and legacy normalization/serialization helpers.
+
+### Files touched
+
+- `src/modes/comic/types/comicGeometry.ts`
+- `src/modes/comic/types/comicObjects.ts`
+- `src/modes/comic/types/comicSerialization.ts`
+- `src/modes/comic/types/comicEditorState.ts`
+- `src/modes/comic/types/__tests__/comicObjects.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The implementation follows `docs/comic-engine-protection-plan.md` and `docs/comic-object-schema-audit.md`: shared types and adapters were added beside the current implementation first, with no replacement of `comicStore`, `ComicCanvas`, `ComicPanel`, `BalloonNode`, `LayerTree`, Guided Flow handoff, save/load, export, or rendering logic.
+- Canonical objects use a new `kind` discriminator while preserving legacy `type` values so overlays can remain compatible with existing `type: 'image' | 'sfx'` records.
+- `normalizeLegacyComicObject` preserves the original flat fields and adds canonical grouped fields such as `geometry`, `transform`, and `image`.
+- `normalizeLegacyComicPage` builds canonical `objects` and `layers` while preserving the original page arrays and `layerOrder`; overlays that are not part of `layerOrder` are appended as generated layers rather than mutating the legacy order.
+- `serializeComicPageForLegacyStore` removes canonical sidecar fields and emits the legacy arrays back out for compatibility if a future adapter needs the reverse direction.
+
+### Verification
+
+- `npm run test -- src/modes/comic/types/__tests__/comicObjects.test.ts` - RED first; failed because `../comicObjects` did not exist yet.
+- `npm run test -- src/modes/comic/types/__tests__/comicObjects.test.ts` - PASS after implementation; 1 file, 3 tests.
+- `npm run test -- src/modes/comic/types/__tests__/comicObjects.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/portals/guided-comic/__tests__` - PASS; 8 files, 42 tests.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 warnings in pre-existing areas such as Konva `any` usage and React hook dependency warnings; no new warnings were reported for the added comic type modules.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The new canonical types and helpers are intentionally not connected to runtime behavior yet. Future work must keep using the protection-plan removal gate before replacing store, renderer, export, or Guided-to-Advanced paths.
+- The helper layer does not attempt to resolve current ambiguous Konva/event `any` usage documented in the audit.
+
+### Operator follow-up
+
+- Preserve this as an additive sidecar layer until focused UI proof and save/load/export compatibility checks justify routing live behavior through it.
+
+### Next steps
+
+- Future schema work can start by routing narrow bridge or serialization tests through these helpers before touching Advanced Studio runtime paths.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |
