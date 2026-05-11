@@ -37,13 +37,27 @@ import {
 import { Tooltip } from '@/shared/components/Tooltip';
 import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import type { Portal } from '@/shared/portals';
+import {
+  createWriterIssue,
+  createWriterSeries,
+  ensureWriterPagesToCount,
+  listWriterIssues,
+  listWriterOutlinesForIssue,
+  listWriterPages,
+  listWriterSeries,
+  updateWriterIssue,
+  updateWriterSeries,
+  type WriterIssueRow,
+  type WriterSeriesRow,
+} from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
-import { guidedComicAssistResultSchema } from '@/shared/writer/schemas';
+import { guidedComicAssistResultSchema, issueOutlineSchema, WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
 import type { GuidedComicAssistAction, GuidedComicAssistResult } from '@/shared/writer/types';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
+import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
 import {
   createGuidedComicStarterLayoutWithExistingMetadata,
   getGuidedComicActivePanelCount,
@@ -84,6 +98,19 @@ import {
   getGuidedComicPacingChecks,
   type GuidedComicAiDraft,
 } from '@/portals/guided-comic/guidedComicAi';
+import {
+  buildGuidedWriterToolRequest,
+  createWriterIssueDraftFromGuidedStoryFoundation,
+  getGuidedWriterPageBeatBatchOffsets,
+  mapWriterDialogueToGuidedDialogueSeeds,
+  mapWriterIssueToGuidedStoryFoundation,
+  mapWriterOutlineToGuidedOutlineBeats,
+  mapWriterOutlineToGuidedPageCards,
+  mergeWriterOutlineIntoGuidedPageCards,
+  mergeWriterPagesIntoGuidedPageCards,
+  type GuidedComicBridgeDialogueSeed,
+  type GuidedWriterToolAction,
+} from '@/portals/guided-comic/writersWorkshopBridge';
 
 export type GuidedComicStepId =
   | 'setup'
@@ -295,6 +322,7 @@ type ActiveLayoutEdit = {
 type GuidedComicDraftState = {
   version: 1;
   savedAt: string;
+  writerIssueId?: string | null;
   activeIndex: number;
   setupForm: SetupFormState;
   storyForm: StoryFormState;
@@ -310,6 +338,7 @@ type GuidedComicDraftState = {
   pageLayoutTemplates: Record<number, LayoutTemplateId>;
   pageLayoutIntents: Record<number, GuidedComicLayoutIntent>;
   pageLayoutGeometry: Record<number, GuidedComicPanelGeometry[]>;
+  writerDialogueSeeds: Record<number, GuidedComicBridgeDialogueSeed>;
 };
 
 const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
@@ -417,9 +446,10 @@ const GUIDED_COMIC_AI_ACTIONS_BY_STEP: Record<GuidedComicStepId, GuidedComicAiAc
     { action: 'suggest_genre_tone', label: 'Suggest genre/tone fit', description: 'Get a short fit check for genre and tone.' },
   ],
   story: [
-    { action: 'generate_story_foundation', label: 'Generate story foundation', description: 'Draft missing spine fields from the setup brief.' },
-    { action: 'suggest_conflict_stakes_ending', label: 'Suggest conflict / stakes / ending', description: 'Strengthen pressure, stakes, and final movement.' },
-    { action: 'generate_issue_outline', label: 'Generate issue outline', description: 'Draft opening, escalation, midpoint, climax, and ending beats.' },
+    { action: 'improve_premise', label: 'Expand premise', description: 'Broaden the rough idea without judging story structure.' },
+    { action: 'suggest_conflict_stakes_ending', label: 'Generate possible conflicts', description: 'Offer conflict and stakes options from the intake fields.' },
+    { action: 'suggest_character_dynamics', label: 'Suggest character dynamics', description: 'Suggest relationships, tensions, and emotional turns.' },
+    { action: 'generate_story_foundation', label: 'Generate story foundation', description: 'Draft the missing intake fields as a co-writer.' },
   ],
   pages: [
     { action: 'generate_page_plan', label: 'Generate page plan', description: 'Propose page summaries from the outline and target count.' },
@@ -443,6 +473,62 @@ const GUIDED_COMIC_AI_ACTIONS_BY_STEP: Record<GuidedComicStepId, GuidedComicAiAc
     { action: 'find_export_gaps', label: 'Find gaps before export', description: 'List missing story, art, reference, and layout items.' },
   ],
 };
+
+export const GUIDED_STORY_PHASE_COPY = {
+  intakeTitle: 'Story Intake',
+  intakeGoal: 'Capture rough creative intent only. The AI helps expand the idea before it reviews structure.',
+  outlineTitle: 'Outline Generation',
+  outlineGoal: 'Generate actual structural story beats, then edit or accept them.',
+  reviewTitle: 'Readiness Review',
+  reviewGoal: 'Optional editorial assistance appears after an outline exists.',
+  assistantTitle: 'Story pacing assistant',
+  assistantInactiveTitle: 'Outline development',
+  assistantInactiveDetail: 'Add or generate outline beats first. Pacing review stays quiet until there is structure to respond to.',
+} as const;
+
+export const GUIDED_STORY_INTAKE_ACTION_LABELS = GUIDED_COMIC_AI_ACTIONS_BY_STEP.story.map((action) => action.label);
+
+export function hasGuidedComicOutlineDraft(outlineBeats: Array<Pick<OutlineBeat, 'description'>>): boolean {
+  return outlineBeats.some((beat) => beat.description.trim().length > 0);
+}
+
+export const GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS = {
+  continueLocal: 'Continue locally',
+  useWorkshop: 'Use Writers Workshop outline',
+  importLatest: 'Import latest Writer issue beats',
+  openLinked: 'Open linked issue in Writers Workshop',
+} as const;
+
+export const GUIDED_WRITERS_WORKSHOP_TOOL_ACTIONS: Array<{
+  action: GuidedWriterToolAction;
+  label: string;
+  description: string;
+}> = [
+  {
+    action: 'outline',
+    label: 'Generate Writer outline',
+    description: 'Run the Writers Workshop outline_issue mode for the linked issue.',
+  },
+  {
+    action: 'pacing',
+    label: 'Run pacing review',
+    description: 'Run the Writers Workshop pacing_review mode for the linked issue.',
+  },
+  {
+    action: 'page-beats',
+    label: 'Generate page beats',
+    description: 'Run the Writers Workshop page_beats_issue mode in safe batches.',
+  },
+  {
+    action: 'dialogue',
+    label: 'Draft selected page dialogue',
+    description: 'Run the Writers Workshop draft_dialogue mode for the active Guided page.',
+  },
+];
+
+export const GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS = GUIDED_WRITERS_WORKSHOP_TOOL_ACTIONS.map(
+  (action) => action.label,
+);
 
 const STEPS: GuidedComicStep[] = [
   {
@@ -473,9 +559,9 @@ const STEPS: GuidedComicStep[] = [
     id: 'story',
     label: 'Story',
     eyebrow: 'Script foundation',
-    title: 'Bring in the story spine',
-    summary: 'Capture the synopsis, outline, page beats, or script context that will guide the rest of the workflow.',
-    helperText: 'This step is where the comic’s narrative source of truth comes together before page planning.',
+    title: 'Build the story in phases',
+    summary: 'Start with rough creative intent, then generate editable outline beats before asking for pacing review.',
+    helperText: 'The AI acts as a co-writer first. Structure checks stay quiet until there is an outline to respond to.',
     actionLabel: 'Generate Issue Outline',
     workflowCards: [
       {
@@ -824,6 +910,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
     return {
       version: 1,
       savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+      writerIssueId: typeof parsed.writerIssueId === 'string' ? parsed.writerIssueId : null,
       activeIndex: safeActiveIndex(parsed.activeIndex),
       setupForm: { ...DEFAULT_SETUP_FORM, ...parsed.setupForm },
       storyForm: { ...DEFAULT_STORY_FORM, ...parsed.storyForm },
@@ -839,6 +926,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
       pageLayoutIntents: parsed.pageLayoutIntents ?? {},
       pageLayoutGeometry: parsed.pageLayoutGeometry ?? {},
+      writerDialogueSeeds: (parsed.writerDialogueSeeds ?? {}) as Record<number, GuidedComicBridgeDialogueSeed>,
     };
   } catch {
     return null;
@@ -857,6 +945,7 @@ function guidedComicStepIndexFromId(stepId: unknown): number {
 
 function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): GuidedComicProjectSnapshot {
   return {
+    writerIssueId: draft.writerIssueId ?? null,
     setupForm: draft.setupForm,
     storyForm: draft.storyForm,
     outlineBeats: draft.outlineBeats,
@@ -869,6 +958,7 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     pageLayoutTemplates: draft.pageLayoutTemplates,
     pageLayoutIntents: draft.pageLayoutIntents,
     pageLayoutGeometry: draft.pageLayoutGeometry,
+    writerDialogueSeeds: draft.writerDialogueSeeds,
     artDirection: draft.artDirection,
     currentStep: guidedComicStepIdFromIndex(draft.activeIndex),
     selectedPanelId: draft.selectedPanelId,
@@ -879,6 +969,7 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
   return {
     version: 1,
     savedAt,
+    writerIssueId: typeof snapshot.writerIssueId === 'string' ? snapshot.writerIssueId : null,
     activeIndex: guidedComicStepIndexFromId(snapshot.currentStep),
     setupForm: { ...DEFAULT_SETUP_FORM, ...snapshot.setupForm },
     storyForm: { ...DEFAULT_STORY_FORM, ...snapshot.storyForm },
@@ -894,6 +985,7 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     pageLayoutTemplates: snapshot.pageLayoutTemplates as Record<number, LayoutTemplateId>,
     pageLayoutIntents: (snapshot.pageLayoutIntents ?? {}) as Record<number, GuidedComicLayoutIntent>,
     pageLayoutGeometry: (snapshot.pageLayoutGeometry ?? {}) as Record<number, GuidedComicPanelGeometry[]>,
+    writerDialogueSeeds: (snapshot.writerDialogueSeeds ?? {}) as Record<number, GuidedComicBridgeDialogueSeed>,
   };
 }
 
@@ -1052,6 +1144,7 @@ function buildPageCard(pageNumber: number, targetPageCount: number, outlineBeats
 
 function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
   return {
+    writerIssueId: null,
     setupForm: DEFAULT_SETUP_FORM,
     storyForm: DEFAULT_STORY_FORM,
     outlineBeats: cloneInitialOutlineBeats(),
@@ -1064,6 +1157,7 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
     pageLayoutTemplates: {},
     pageLayoutIntents: {},
     pageLayoutGeometry: {},
+    writerDialogueSeeds: {},
     artDirection: DEFAULT_ART_DIRECTION,
     currentStep: 'setup',
     selectedPanelId: null,
@@ -1081,6 +1175,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const requestGuidedComicHandoff = useImageWorkshopBridge((s) => s.requestGuidedComicHandoff);
   const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
   const requestLayoutHandoff = useGuidedComicLayoutBridge((s) => s.requestLayoutHandoff);
+  const requestWriterIssueOpen = useWriterWorkshopBridge((s) => s.requestIssueOpen);
   const [restoredProjectState] = useState(() => {
     const library = readGuidedComicProjectLibrary();
     const activeProject =
@@ -1119,6 +1214,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     restoredProjectState.migratedDraft ? 'Recovered current draft into Comic Library.' : null,
   );
   const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
+  const [writerIssueId, setWriterIssueId] = useState<string | null>(() => restoredDraft?.writerIssueId ?? null);
   const [setupForm, setSetupForm] = useState<SetupFormState>(() => restoredDraft?.setupForm ?? DEFAULT_SETUP_FORM);
   const [storyForm, setStoryForm] = useState<StoryFormState>(() => restoredDraft?.storyForm ?? DEFAULT_STORY_FORM);
   const [artDirection, setArtDirection] = useState<ArtDirectionState>(
@@ -1165,6 +1261,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [pageLayoutGeometry, setPageLayoutGeometry] = useState<Record<number, GuidedComicPanelGeometry[]>>(
     () => restoredDraft?.pageLayoutGeometry ?? {},
   );
+  const [writerDialogueSeeds, setWriterDialogueSeeds] = useState<Record<number, GuidedComicBridgeDialogueSeed>>(
+    () => restoredDraft?.writerDialogueSeeds ?? {},
+  );
+  const [writerBridgeExpanded, setWriterBridgeExpanded] = useState(false);
+  const [writerBridgeSeries, setWriterBridgeSeries] = useState<WriterSeriesRow[]>([]);
+  const [writerBridgeIssues, setWriterBridgeIssues] = useState<WriterIssueRow[]>([]);
+  const [writerBridgeSelectedSeriesId, setWriterBridgeSelectedSeriesId] = useState<string>('');
+  const [writerBridgeSelectedIssueId, setWriterBridgeSelectedIssueId] = useState<string>(() => restoredDraft?.writerIssueId ?? '');
+  const [writerBridgeBusyAction, setWriterBridgeBusyAction] = useState<
+    'load' | 'create' | 'link' | 'import' | 'open' | GuidedWriterToolAction | null
+  >(null);
+  const [writerBridgeMessage, setWriterBridgeMessage] = useState<string | null>(null);
+  const [writerBridgeError, setWriterBridgeError] = useState<string | null>(null);
   const [layoutDisclosureMode, setLayoutDisclosureMode] = useState<GuidedLayoutDisclosureMode>('simple');
   const [activeLayoutEdit, setActiveLayoutEdit] = useState<ActiveLayoutEdit | null>(null);
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
@@ -1196,6 +1305,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
   const currentProjectSnapshot = useMemo<GuidedComicProjectSnapshot>(
     () => ({
+      writerIssueId,
       setupForm,
       storyForm,
       outlineBeats,
@@ -1208,6 +1318,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageLayoutTemplates,
       pageLayoutIntents,
       pageLayoutGeometry,
+      writerDialogueSeeds,
       artDirection,
       currentStep: activeStep.id,
       selectedPanelId,
@@ -1228,6 +1339,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       selectedPanelId,
       setupForm,
       storyForm,
+      writerDialogueSeeds,
+      writerIssueId,
     ],
   );
   const hasUnsavedProjectChanges = useMemo(
@@ -1242,6 +1355,24 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         issueTitle: setupForm.issueTitle,
         issueNumber: setupForm.issueNumber,
       });
+  const writerBridgeIssueOptions = useMemo(
+    () =>
+      writerBridgeIssues.map((issue) => ({
+        issue,
+        seriesTitle: writerBridgeSeries.find((series) => series.id === issue.series_id)?.title ?? 'Untitled series',
+      })),
+    [writerBridgeIssues, writerBridgeSeries],
+  );
+  const selectedWriterBridgeIssue =
+    writerBridgeIssueOptions.find((option) => option.issue.id === writerBridgeSelectedIssueId) ??
+    writerBridgeIssueOptions.find((option) => option.issue.id === writerIssueId) ??
+    null;
+  const linkedWriterBridgeIssue =
+    writerBridgeIssueOptions.find((option) => option.issue.id === writerIssueId) ?? selectedWriterBridgeIssue;
+  const writerDialogueSeedCount = Object.values(writerDialogueSeeds).reduce(
+    (total, seed) => total + seed.panelSeeds.length,
+    0,
+  );
 
   useEffect(() => {
     if (!projectLibrary) return;
@@ -1254,9 +1385,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     return () => window.clearTimeout(timeout);
   }, [projectLibraryStatus]);
 
+  useEffect(() => {
+    if (writerIssueId) setWriterBridgeSelectedIssueId(writerIssueId);
+  }, [writerIssueId]);
+
   const applyGuidedComicProjectSnapshot = useCallback((snapshot: GuidedComicProjectSnapshot, savedAt: string | null) => {
     const draft = snapshotToGuidedComicDraft(snapshot, savedAt ?? '');
     setActiveIndex(draft.activeIndex);
+    setWriterIssueId(draft.writerIssueId ?? null);
     setSetupForm(draft.setupForm);
     setStoryForm(draft.storyForm);
     setArtDirection(draft.artDirection);
@@ -1273,6 +1409,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPageLayoutTemplates(draft.pageLayoutTemplates);
     setPageLayoutIntents(draft.pageLayoutIntents);
     setPageLayoutGeometry(draft.pageLayoutGeometry);
+    setWriterDialogueSeeds(draft.writerDialogueSeeds);
+    setWriterBridgeSelectedIssueId(draft.writerIssueId ?? '');
     setDraftSavedAt(savedAt);
   }, []);
 
@@ -1327,6 +1465,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const draft: GuidedComicDraftState = {
       version: 1,
       savedAt: new Date().toISOString(),
+      writerIssueId,
       activeIndex,
       setupForm,
       storyForm,
@@ -1342,6 +1481,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageLayoutTemplates,
       pageLayoutIntents,
       pageLayoutGeometry,
+      writerDialogueSeeds,
     };
 
     try {
@@ -1366,6 +1506,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     selectedPanelId,
     setupForm,
     storyForm,
+    writerDialogueSeeds,
+    writerIssueId,
   ]);
 
   useEffect(() => {
@@ -1781,6 +1923,325 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const updateStoryField = (field: keyof StoryFormState, value: string) => {
     setStoryForm((current) => ({ ...current, [field]: value }));
   };
+  const updateOutlineBeat = (beatId: OutlineBeatId, updates: Partial<Pick<OutlineBeat, 'title' | 'description'>>) => {
+    setOutlineBeats((current) => current.map((beat) => (beat.id === beatId ? { ...beat, ...updates } : beat)));
+  };
+  const applyWriterFoundationToEmptyLocalFields = (
+    foundation: ReturnType<typeof mapWriterIssueToGuidedStoryFoundation>,
+  ) => {
+    setSetupForm((current) => ({
+      ...current,
+      seriesTitle: current.seriesTitle || foundation.seriesTitle,
+      issueTitle: current.issueTitle || foundation.issueTitle,
+      issueNumber: current.issueNumber || foundation.issueNumber,
+      targetPageCount: current.targetPageCount || foundation.targetPageCount,
+      genre: current.genre || foundation.genre,
+      tone: current.tone || foundation.tone,
+      premise: current.premise || foundation.premise,
+    }));
+    setStoryForm((current) => ({
+      premise: current.premise || foundation.premise,
+      mainCharacters: current.mainCharacters || foundation.characters,
+      conflict: current.conflict || foundation.conflict,
+      setting: current.setting || foundation.setting,
+      endingGoal: current.endingGoal || foundation.endingGoal,
+    }));
+  };
+  const buildCurrentWriterIssueDraft = () =>
+    createWriterIssueDraftFromGuidedStoryFoundation({
+      writerIssueId,
+      seriesTitle: setupForm.seriesTitle,
+      issueTitle: setupForm.issueTitle,
+      issueNumber: setupForm.issueNumber,
+      targetPageCount: setupForm.targetPageCount,
+      genre: setupForm.genre,
+      tone: setupForm.tone,
+      premise: storyForm.premise || setupForm.premise,
+      characters: storyForm.mainCharacters,
+      setting: storyForm.setting,
+      conflict: storyForm.conflict,
+      endingGoal: storyForm.endingGoal,
+    });
+  const loadWriterBridgeOptions = async (preferredIssueId = writerIssueId ?? writerBridgeSelectedIssueId) => {
+    setWriterBridgeError(null);
+    if (!isSupabaseConfigured()) {
+      setWriterBridgeError('Supabase is not configured. Continue locally, or configure Writers Workshop persistence first.');
+      return;
+    }
+    setWriterBridgeBusyAction('load');
+    const seriesRows = await listWriterSeries();
+    const issueGroups = await Promise.all(
+      seriesRows.map(async (series) => ({
+        series,
+        issues: await listWriterIssues(series.id),
+      })),
+    );
+    const issueRows = issueGroups.flatMap((group) => group.issues);
+    setWriterBridgeSeries(seriesRows);
+    setWriterBridgeIssues(issueRows);
+    const nextIssueId =
+      preferredIssueId && issueRows.some((issue) => issue.id === preferredIssueId)
+        ? preferredIssueId
+        : issueRows[0]?.id ?? '';
+    setWriterBridgeSelectedIssueId(nextIssueId);
+    setWriterBridgeSelectedSeriesId(
+      seriesRows.find((series) => series.id === issueRows.find((issue) => issue.id === nextIssueId)?.series_id)?.id ??
+        seriesRows[0]?.id ??
+        '',
+    );
+    setWriterBridgeBusyAction(null);
+    setWriterBridgeMessage(
+      issueRows.length > 0
+        ? `Loaded ${issueRows.length} Writer issue${issueRows.length === 1 ? '' : 's'} for linking.`
+        : 'No Writer issues found yet. You can create one from this Guided story foundation.',
+    );
+  };
+  const linkSelectedWriterIssue = () => {
+    const issueOption = selectedWriterBridgeIssue;
+    if (!issueOption) {
+      setWriterBridgeError('Select a Writer issue first, or create one from this story foundation.');
+      return;
+    }
+    setWriterIssueId(issueOption.issue.id);
+    setWriterBridgeSelectedIssueId(issueOption.issue.id);
+    applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(issueOption.issue));
+    setWriterBridgeError(null);
+    setWriterBridgeMessage(`Linked ${issueOption.seriesTitle} #${issueOption.issue.issue_number}. Guided Comics remains editable locally.`);
+  };
+  const createLinkedWriterIssueFromGuidedStory = async () => {
+    setWriterBridgeError(null);
+    if (!isSupabaseConfigured()) {
+      setWriterBridgeError('Supabase is not configured. Continue locally, or configure Writers Workshop persistence first.');
+      return;
+    }
+    setWriterBridgeBusyAction('create');
+    const draft = buildCurrentWriterIssueDraft();
+    let seriesRow = writerBridgeSeries.find((series) => series.id === writerBridgeSelectedSeriesId) ?? null;
+
+    if (!seriesRow) {
+      seriesRow = await createWriterSeries({ title: draft.notes.guidedComic.seriesTitle || draft.title });
+      if (seriesRow) {
+        await updateWriterSeries(seriesRow.id, {
+          logline: draft.notes.guidedComic.storyFoundation.premise || null,
+          genre: draft.notes.guidedComic.genre || null,
+          tone: draft.notes.guidedComic.tone || null,
+        });
+      }
+    }
+
+    if (!seriesRow) {
+      setWriterBridgeBusyAction(null);
+      setWriterBridgeError('Could not create a Writer series. Check Writers Workshop persistence and permissions.');
+      return;
+    }
+
+    const issueNumber =
+      draft.issueNumber ??
+      Math.max(0, ...writerBridgeIssues.filter((issue) => issue.series_id === seriesRow.id).map((issue) => issue.issue_number)) + 1;
+    const issue = await createWriterIssue({
+      series_id: seriesRow.id,
+      issue_number: issueNumber,
+      title: draft.title,
+    });
+    if (!issue) {
+      setWriterBridgeBusyAction(null);
+      setWriterBridgeError('Could not create the Writer issue. Check writer_issues permissions and issue number uniqueness.');
+      return;
+    }
+
+    await updateWriterIssue(issue.id, {
+      title: draft.title,
+      synopsis: draft.synopsis || null,
+      notes: {
+        ...issue.notes,
+        ...draft.notes,
+      },
+    });
+    if (draft.notes.guidedComic.targetPageCount) {
+      await ensureWriterPagesToCount(issue.id, draft.notes.guidedComic.targetPageCount);
+    }
+    setWriterIssueId(issue.id);
+    setWriterBridgeSelectedIssueId(issue.id);
+    setWriterBridgeBusyAction(null);
+    setWriterBridgeMessage(`Created and linked Writer issue #${issue.issue_number}.`);
+    await loadWriterBridgeOptions(issue.id);
+  };
+  const importLatestLinkedWriterIssue = async () => {
+    const issueId = writerIssueId ?? writerBridgeSelectedIssueId;
+    if (!issueId) {
+      setWriterBridgeError('Link or select a Writer issue before importing.');
+      return;
+    }
+    setWriterBridgeError(null);
+    if (!isSupabaseConfigured()) {
+      setWriterBridgeError('Supabase is not configured. Continue locally, or configure Writers Workshop persistence first.');
+      return;
+    }
+
+    setWriterBridgeBusyAction('import');
+    const [outlineRows, pageRows] = await Promise.all([
+      listWriterOutlinesForIssue(issueId),
+      listWriterPages(issueId),
+    ]);
+    const latestOutline = outlineRows[0];
+    const parsedOutline = latestOutline ? issueOutlineSchema.safeParse(latestOutline.outline_json) : null;
+    let nextPageCards: PageCard[] = pageCards;
+    let importedOutline = false;
+
+    if (parsedOutline?.success) {
+      importedOutline = true;
+      const outline = parsedOutline.data;
+      setOutlineBeats(mapWriterOutlineToGuidedOutlineBeats(outline) as OutlineBeat[]);
+      const outlineCards = mapWriterOutlineToGuidedPageCards(outline, {
+        targetPageCount: targetPageCountFromInput(setupForm.targetPageCount),
+        defaultPanelCount: pageCards[0]?.panelCount ?? 3,
+      }) as PageCard[];
+      nextPageCards = mergeWriterOutlineIntoGuidedPageCards(nextPageCards, outlineCards) as PageCard[];
+      const linkedIssue = writerBridgeIssues.find((issue) => issue.id === issueId);
+      if (linkedIssue) {
+        applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(linkedIssue, { outline }));
+      }
+    }
+
+    nextPageCards = mergeWriterPagesIntoGuidedPageCards(nextPageCards, pageRows, {
+      defaultPanelCount: pageCards[0]?.panelCount ?? 3,
+    }) as PageCard[];
+    const dialogueSeeds = mapWriterDialogueToGuidedDialogueSeeds(pageRows);
+    setPageCards(nextPageCards);
+    setWriterDialogueSeeds(Object.fromEntries(dialogueSeeds.map((seed) => [seed.pageNumber, seed])));
+    setWriterIssueId(issueId);
+    setWriterBridgeSelectedIssueId(issueId);
+    setActivePageNumber(nextPageCards[0]?.pageNumber ?? null);
+    setWriterBridgeBusyAction(null);
+    setWriterBridgeMessage(
+      `Imported ${importedOutline ? 'outline, ' : ''}${pageRows.length} Writer page${pageRows.length === 1 ? '' : 's'} and ${dialogueSeeds.reduce(
+        (total, seed) => total + seed.panelSeeds.length,
+        0,
+      )} dialogue seed${dialogueSeeds.length === 1 ? '' : 's'}.`,
+    );
+  };
+  const writerToolErrorMessage = (res: { error: string; details?: string }) =>
+    res.details ? `${res.error}: ${res.details}` : res.error;
+  const buildWriterOutlineSupplement = () =>
+    [
+      storyForm.premise.trim() ? `Guided premise: ${storyForm.premise.trim()}` : '',
+      storyForm.mainCharacters.trim() ? `Characters: ${storyForm.mainCharacters.trim()}` : '',
+      storyForm.setting.trim() ? `Setting: ${storyForm.setting.trim()}` : '',
+      storyForm.conflict.trim() ? `Conflict: ${storyForm.conflict.trim()}` : '',
+      storyForm.endingGoal.trim() ? `Ending goal: ${storyForm.endingGoal.trim()}` : '',
+      outlineBeats.some((beat) => beat.description.trim())
+        ? `Current Guided outline beats:\n${outlineBeats
+            .map((beat) => `${beat.title}: ${beat.description.trim() || '(empty)'}`)
+            .join('\n')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  const runGuidedWriterToolAction = async (action: GuidedWriterToolAction) => {
+    const issueId = writerIssueId ?? writerBridgeSelectedIssueId;
+    if (!issueId) {
+      setWriterBridgeError('Link or select a Writer issue before running Writers Workshop tools.');
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      setWriterBridgeError('Supabase is not configured. Continue locally, or configure Writers Workshop persistence first.');
+      return;
+    }
+
+    setWriterBridgeError(null);
+    setWriterBridgeBusyAction(action);
+    const targetPageCount = targetPageCountFromInput(setupForm.targetPageCount);
+
+    if (action === 'page-beats') {
+      const ensured = await ensureWriterPagesToCount(issueId, targetPageCount);
+      if (!ensured.ok) {
+        setWriterBridgeBusyAction(null);
+        setWriterBridgeError('Could not prepare Writer page rows before generating page beats.');
+        return;
+      }
+      const offsets = getGuidedWriterPageBeatBatchOffsets(targetPageCount, WRITER_PAGE_BEATS_ISSUE_MAX);
+      for (const batchOffset of offsets) {
+        const res = await invokeWriterTools(
+          buildGuidedWriterToolRequest('page-beats', {
+            issueId,
+            batchLimit: WRITER_PAGE_BEATS_ISSUE_MAX,
+            batchOffset,
+          }),
+        );
+        if (!res.success) {
+          setWriterBridgeBusyAction(null);
+          setWriterBridgeError(writerToolErrorMessage(res));
+          return;
+        }
+      }
+      await importLatestLinkedWriterIssue();
+      setWriterBridgeMessage(`Generated Writer page beats in ${offsets.length} batch${offsets.length === 1 ? '' : 'es'} and imported them into Guided pages.`);
+      return;
+    }
+
+    if (action === 'dialogue') {
+      const ensured = await ensureWriterPagesToCount(issueId, targetPageCount);
+      if (!ensured.ok) {
+        setWriterBridgeBusyAction(null);
+        setWriterBridgeError('Could not prepare Writer page rows before drafting dialogue.');
+        return;
+      }
+      const pages = await listWriterPages(issueId);
+      const targetPageNumber = activePageNumber ?? pageCards[0]?.pageNumber ?? 1;
+      const targetPage = pages.find((page) => page.page_number === targetPageNumber) ?? pages[0];
+      if (!targetPage) {
+        setWriterBridgeBusyAction(null);
+        setWriterBridgeError('No Writer page is available for dialogue drafting.');
+        return;
+      }
+      const res = await invokeWriterTools(
+        buildGuidedWriterToolRequest('dialogue', {
+          issueId,
+          pageId: targetPage.id,
+        }),
+      );
+      if (!res.success) {
+        setWriterBridgeBusyAction(null);
+        setWriterBridgeError(writerToolErrorMessage(res));
+        return;
+      }
+      await importLatestLinkedWriterIssue();
+      setWriterBridgeMessage(`Drafted Writer dialogue for page ${targetPage.page_number} and imported dialogue seeds.`);
+      return;
+    }
+
+    const res = await invokeWriterTools(
+      buildGuidedWriterToolRequest(action, {
+        issueId,
+        targetPageCount,
+        outlineSupplement: action === 'outline' ? buildWriterOutlineSupplement() : undefined,
+      }),
+    );
+    if (!res.success) {
+      setWriterBridgeBusyAction(null);
+      setWriterBridgeError(writerToolErrorMessage(res));
+      return;
+    }
+
+    if (action === 'outline') {
+      await importLatestLinkedWriterIssue();
+      setWriterBridgeMessage('Generated a Writer outline and imported accepted structure into Guided Comics.');
+      return;
+    }
+
+    setWriterBridgeBusyAction(null);
+    setWriterBridgeMessage('Ran Writers Workshop pacing review for the linked issue.');
+  };
+  const openLinkedWriterIssue = () => {
+    const issueId = writerIssueId ?? writerBridgeSelectedIssueId;
+    if (!issueId) {
+      setWriterBridgeError('Link or select a Writer issue before opening Writers Workshop.');
+      return;
+    }
+    setWriterBridgeBusyAction('open');
+    requestWriterIssueOpen(issueId);
+    onNavigatePortal('writer');
+  };
   const updateArtDirectionField = <Field extends keyof ArtDirectionState>(
     field: Field,
     value: ArtDirectionState[Field],
@@ -2171,6 +2632,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     removeGuidedComicDraft();
     setActiveProjectId(null);
     setActiveIndex(0);
+    setWriterIssueId(null);
     setSetupForm(DEFAULT_SETUP_FORM);
     setStoryForm(DEFAULT_STORY_FORM);
     setArtDirection(DEFAULT_ART_DIRECTION);
@@ -2186,6 +2648,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPageLayoutTemplates({});
     setPageLayoutIntents({});
     setPageLayoutGeometry({});
+    setWriterDialogueSeeds({});
+    setWriterBridgeSelectedIssueId('');
     setDraftSavedAt(null);
     setProjectLibraryStatus('Cleared the recovery draft. Saved library comics were kept.');
   };
@@ -2372,6 +2836,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     selectedPageNumber: activePageNumber ?? selectedPanelPageNumber ?? pageCards[0]?.pageNumber ?? null,
     selectedPanelId: selectedPanelEffectiveId,
   };
+  const outlineDraftExists = hasGuidedComicOutlineDraft(outlineBeats);
   const guidedAiContext = buildGuidedComicAiContext(guidedAiDraft);
   const guidedPacingChecks = getGuidedComicPacingChecks(guidedAiContext);
   const guidedAiActions = GUIDED_COMIC_AI_ACTIONS_BY_STEP[activeStep.id];
@@ -2388,6 +2853,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         action === 'regenerate_selected_page' ||
         action === 'strengthen_panel_prompt' ||
         action === 'suggest_shot_direction';
+      const shouldSendPacingChecks =
+        outlineDraftExists &&
+        (action === 'review_readiness' || action === 'find_export_gaps' || action === 'suggest_layout_pacing');
       const res = await invokeWriterTools({
         mode: 'guided_comic_assist',
         action,
@@ -2395,7 +2863,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         selectedPanelId: guidedAiContext.selectedPanel?.id ?? selectedPanelEffectiveId ?? undefined,
         context: {
           ...guidedAiContext,
-          pacingChecks: guidedPacingChecks,
+          ...(shouldSendPacingChecks ? { pacingChecks: guidedPacingChecks } : {}),
         },
       });
       setGuidedAiLoadingAction(null);
@@ -3118,10 +3586,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
-                      AI writing assist
+                      {isStoryStep ? 'Phase 1 co-writer' : 'AI writing assist'}
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-sky-50/75">
-                      Uses Writers’ Workshop writer-tools. Results open as a preview and never overwrite text until accepted.
+                      {isStoryStep
+                        ? 'Expand the intake fields first. Structure review stays separate until an outline exists.'
+                        : 'Uses Writers’ Workshop writer-tools. Results open as a preview and never overwrite text until accepted.'}
                     </p>
                   </div>
                   <span className="inline-flex shrink-0 rounded-full border border-sky-200/25 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-50/75">
@@ -3414,6 +3884,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </div>
               ) : isStoryStep ? (
                 <div className="mt-5 grid gap-4">
+                  <section className="rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                      Phase 1 - {GUIDED_STORY_PHASE_COPY.intakeTitle}
+                    </p>
+                    <h3 className="mt-1 text-lg font-black text-white">Rough intent first</h3>
+                    <p className="mt-2 text-xs leading-relaxed text-white/62">
+                      {GUIDED_STORY_PHASE_COPY.intakeGoal}
+                    </p>
+                  </section>
+
                   <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                     Premise
                     <textarea
@@ -3470,6 +3950,223 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       />
                     </label>
                   </div>
+
+                  <section className="rounded-xl border border-sky-300/20 bg-sky-300/[0.08] p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
+                          Phase 2 - {GUIDED_STORY_PHASE_COPY.outlineTitle}
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">Create the structure after intake</h3>
+                        <p className="mt-2 text-xs leading-relaxed text-white/62">
+                          {GUIDED_STORY_PHASE_COPY.outlineGoal}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={Boolean(guidedAiLoadingAction)}
+                        onClick={() => void runGuidedComicAiAction('generate_issue_outline')}
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                        {guidedAiLoadingAction === 'generate_issue_outline' ? 'Thinking...' : 'Generate issue outline'}
+                      </button>
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      {outlineBeats.map((beat) => (
+                        <div key={beat.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            {beat.title}
+                            <textarea
+                              value={beat.description}
+                              onChange={(event) => updateOutlineBeat(beat.id, { description: event.target.value })}
+                              rows={3}
+                              placeholder={`Draft the ${beat.title.toLowerCase()} here, or generate an outline from the intake fields.`}
+                              className="min-h-[5.5rem] resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none placeholder:text-white/30 focus:border-sky-300/70"
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-emerald-300/20 bg-emerald-300/[0.075] p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">
+                          Phase 3 - Writers Workshop bridge
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">Use deeper writing tools when you want them</h3>
+                        <p className="mt-2 text-xs leading-relaxed text-white/62">
+                          Link a Writer issue explicitly, import accepted outline/page beats/dialogue, or keep building locally.
+                        </p>
+                      </div>
+                      <span className="inline-flex shrink-0 rounded-full border border-emerald-200/25 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-50/75">
+                        {writerIssueId ? 'Linked' : 'Optional'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWriterBridgeExpanded(false);
+                          setWriterBridgeError(null);
+                          setWriterBridgeMessage('Continuing locally. Writers Workshop remains available whenever you want it.');
+                        }}
+                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white/75 transition hover:bg-white/10"
+                      >
+                        {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.continueLocal}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(writerBridgeBusyAction)}
+                        onClick={() => {
+                          setWriterBridgeExpanded(true);
+                          void loadWriterBridgeOptions();
+                        }}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <BookOpenText className="h-3.5 w-3.5" aria-hidden />
+                        {writerBridgeBusyAction === 'load' ? 'Loading...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
+                        onClick={() => void importLatestLinkedWriterIssue()}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                        {writerBridgeBusyAction === 'import' ? 'Importing...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
+                        onClick={openLinkedWriterIssue}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <BookMarked className="h-3.5 w-3.5" aria-hidden />
+                        {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.openLinked}
+                      </button>
+                    </div>
+
+                    {writerBridgeExpanded ? (
+                      <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Writer series
+                            <select
+                              value={writerBridgeSelectedSeriesId}
+                              onChange={(event) => {
+                                const nextSeriesId = event.target.value;
+                                setWriterBridgeSelectedSeriesId(nextSeriesId);
+                                setWriterBridgeSelectedIssueId(
+                                  writerBridgeIssues.find((issue) => issue.series_id === nextSeriesId)?.id ?? '',
+                                );
+                              }}
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
+                            >
+                              <option value="">New guided series</option>
+                              {writerBridgeSeries.map((series) => (
+                                <option key={series.id} value={series.id}>
+                                  {series.title || 'Untitled series'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Writer issue
+                            <select
+                              value={writerBridgeSelectedIssueId}
+                              onChange={(event) => setWriterBridgeSelectedIssueId(event.target.value)}
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
+                            >
+                              <option value="">Select existing issue</option>
+                              {writerBridgeIssueOptions
+                                .filter((option) => !writerBridgeSelectedSeriesId || option.issue.series_id === writerBridgeSelectedSeriesId)
+                                .map((option) => (
+                                  <option key={option.issue.id} value={option.issue.id}>
+                                    {option.seriesTitle} #{option.issue.issue_number}
+                                    {option.issue.title ? `: ${option.issue.title}` : ''}
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                          <div className="flex flex-col justify-end gap-2 sm:flex-row lg:flex-col">
+                            <button
+                              type="button"
+                              disabled={Boolean(writerBridgeBusyAction) || !selectedWriterBridgeIssue}
+                              onClick={linkSelectedWriterIssue}
+                              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 bg-white/[0.07] px-3 py-2 text-xs font-black text-white/78 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              Link selected
+                            </button>
+                            <button
+                              type="button"
+                              disabled={Boolean(writerBridgeBusyAction)}
+                              onClick={() => void createLinkedWriterIssueFromGuidedStory()}
+                              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              {writerBridgeBusyAction === 'create' ? 'Creating...' : 'Create linked issue'}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-white/48">
+                          {linkedWriterBridgeIssue
+                            ? `Linked target: ${linkedWriterBridgeIssue.seriesTitle} #${linkedWriterBridgeIssue.issue.issue_number}${
+                                linkedWriterBridgeIssue.issue.title ? `: ${linkedWriterBridgeIssue.issue.title}` : ''
+                              }.`
+                            : 'No Writer issue is linked. Local Guided Comics still works normally.'}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 rounded-xl border border-sky-200/15 bg-sky-200/[0.06] p-3">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
+                          Phase 4 - Writer tools inside Guided Comics
+                        </p>
+                        <p className="text-xs leading-relaxed text-white/58">
+                          Run the same Writers Workshop modes directly, then import the accepted structure back into Guided pages.
+                        </p>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {GUIDED_WRITERS_WORKSHOP_TOOL_ACTIONS.map((toolAction) => {
+                          const loading = writerBridgeBusyAction === toolAction.action;
+                          return (
+                            <Tooltip key={toolAction.action} content={toolAction.description}>
+                              <button
+                                type="button"
+                                disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
+                                onClick={() => void runGuidedWriterToolAction(toolAction.action)}
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                                {loading ? 'Running...' : toolAction.label}
+                              </button>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {writerDialogueSeedCount > 0 ? (
+                      <p className="mt-3 rounded-lg border border-emerald-200/20 bg-black/20 px-3 py-2 text-xs font-semibold text-emerald-50/78">
+                        Imported dialogue seeds are attached to {Object.keys(writerDialogueSeeds).length} page
+                        {Object.keys(writerDialogueSeeds).length === 1 ? '' : 's'} for later lettering and Advanced Studio work.
+                      </p>
+                    ) : null}
+                    {writerBridgeMessage ? (
+                      <p className="mt-3 rounded-lg border border-emerald-200/20 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-50">
+                        {writerBridgeMessage}
+                      </p>
+                    ) : null}
+                    {writerBridgeError ? (
+                      <p className="mt-3 rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100">
+                        {writerBridgeError}
+                      </p>
+                    ) : null}
+                  </section>
                 </div>
               ) : isPagesStep ? (
                 <div className="mt-5 grid gap-4">
@@ -4708,32 +5405,44 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               ) : (
                 <>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-                    Pacing review
+                    {isStoryStep && !outlineDraftExists ? 'Story intake' : 'Narrative signals detected'}
                   </p>
-                  <h3 className="mt-2 text-lg font-black text-white">Guided readiness checks</h3>
-                  <div className="mt-3 space-y-2">
-                    {guidedPacingChecks.slice(0, 6).map((check) => (
-                      <div key={check.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-white/75">{check.label}</p>
-                          <p className="mt-0.5 text-[11px] leading-snug text-white/45">{check.detail}</p>
+                  <h3 className="mt-2 text-lg font-black text-white">
+                    {isStoryStep && !outlineDraftExists
+                      ? GUIDED_STORY_PHASE_COPY.assistantInactiveTitle
+                      : GUIDED_STORY_PHASE_COPY.assistantTitle}
+                  </h3>
+                  {isStoryStep && !outlineDraftExists ? (
+                    <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-3">
+                      <p className="text-xs leading-relaxed text-white/58">
+                        {GUIDED_STORY_PHASE_COPY.assistantInactiveDetail}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {guidedPacingChecks.slice(0, 6).map((check) => (
+                        <div key={check.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white/75">{check.label}</p>
+                            <p className="mt-0.5 text-[11px] leading-snug text-white/45">{check.detail}</p>
+                          </div>
+                          <span
+                            className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
+                            style={{
+                              borderColor: check.status === 'ready' ? `${ACCENT_GOLD_SOLID}88` : 'rgba(255,255,255,0.18)',
+                              color: check.status === 'ready' ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.58)',
+                            }}
+                          >
+                            {check.status === 'ready' ? 'Detected' : 'Develop'}
+                          </span>
                         </div>
-                        <span
-                          className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em]"
-                          style={{
-                            borderColor: check.status === 'ready' ? `${ACCENT_GOLD_SOLID}88` : 'rgba(251,113,133,0.35)',
-                            color: check.status === 'ready' ? ACCENT_GOLD_LIGHT : 'rgb(254,205,211)',
-                          }}
-                        >
-                          {check.status === 'ready' ? 'Ready' : 'Gap'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                   {guidedAiAcceptedNotes?.pacingNotes?.length ? (
                     <div className="mt-3 rounded-lg border border-sky-300/20 bg-sky-300/10 p-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/65">
-                        AI pacing notes
+                        Optional pacing notes
                       </p>
                       <ul className="mt-2 space-y-1 text-xs leading-relaxed text-sky-50/75">
                         {guidedAiAcceptedNotes.pacingNotes.slice(0, 4).map((note, index) => (

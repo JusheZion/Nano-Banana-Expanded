@@ -105,6 +105,7 @@ export type GuidedComicAssistAction =
   | 'suggest_genre_tone'
   | 'generate_story_foundation'
   | 'suggest_conflict_stakes_ending'
+  | 'suggest_character_dynamics'
   | 'generate_issue_outline'
   | 'generate_page_plan'
   | 'generate_missing_page_summaries'

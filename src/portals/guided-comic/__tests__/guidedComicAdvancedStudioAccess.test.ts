@@ -3,6 +3,11 @@ import {
   ADVANCED_STUDIO_ACTION_LABELS,
   GUIDED_LAYOUT_DISCLOSURE_COPY,
   GUIDED_LAYOUT_DISCLOSURE_LEVELS,
+  GUIDED_STORY_INTAKE_ACTION_LABELS,
+  GUIDED_STORY_PHASE_COPY,
+  GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS,
+  GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS,
+  hasGuidedComicOutlineDraft,
 } from '@/portals/guided-comic/GuidedComicFlow';
 import { GUIDED_WORKFLOW_STEPS } from '@/modes/comic/pages/ComicEditor';
 
@@ -35,5 +40,31 @@ describe('guided comic Advanced Studio access', () => {
     expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS[1].controls).toContain('Drag rectangular panels');
     expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS[2].controls).toContain('Custom shapes');
     expect(ADVANCED_STUDIO_ACTION_LABELS.openBlank).toContain('Advanced Studio');
+  });
+
+  it('separates story intake actions from outline review pressure', () => {
+    expect(GUIDED_STORY_INTAKE_ACTION_LABELS).toEqual([
+      'Expand premise',
+      'Generate possible conflicts',
+      'Suggest character dynamics',
+      'Generate story foundation',
+    ]);
+    expect(GUIDED_STORY_PHASE_COPY.assistantInactiveTitle).toBe('Outline development');
+    expect(GUIDED_STORY_PHASE_COPY.assistantTitle).toBe('Story pacing assistant');
+    expect(hasGuidedComicOutlineDraft([{ description: '' }, { description: '   ' }])).toBe(false);
+    expect(hasGuidedComicOutlineDraft([{ description: 'Opening hook exists.' }])).toBe(true);
+  });
+
+  it('offers Writers Workshop as an explicit bridge without forcing it', () => {
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.continueLocal).toBe('Continue locally');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop).toBe('Use Writers Workshop outline');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest).toBe('Import latest Writer issue beats');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.openLinked).toBe('Open linked issue in Writers Workshop');
+    expect(GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS).toEqual([
+      'Generate Writer outline',
+      'Run pacing review',
+      'Generate page beats',
+      'Draft selected page dialogue',
+    ]);
   });
 });

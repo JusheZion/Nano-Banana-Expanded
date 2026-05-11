@@ -10,6 +10,7 @@ export type GuidedComicProjectStepId =
   | 'export';
 
 export type GuidedComicProjectSnapshot = {
+  writerIssueId?: string | null;
   setupForm: {
     seriesTitle: string;
     issueTitle: string;
@@ -38,6 +39,7 @@ export type GuidedComicProjectSnapshot = {
   pageLayoutTemplates: Record<number, unknown>;
   pageLayoutIntents?: Record<number, unknown>;
   pageLayoutGeometry?: Record<number, unknown[]>;
+  writerDialogueSeeds?: Record<number, unknown>;
   artDirection: {
     artStyle: string;
     defaultAspectRatio: string;

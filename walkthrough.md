@@ -2535,6 +2535,505 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Comic Portal QA Subagent Assignment and Results - 2026-05-11
+
+### What changed
+
+- Recorded the non-human QA pass for the Comic Portal, Guided Comic Flow, Guided-to-Advanced handoff, comic store compatibility, and regression documentation.
+- Split QA responsibility into subagent-friendly tracks and kept canvas-heavy visual checks in a separate human-style QA list.
+- No runtime implementation files were changed as part of this QA coordination pass.
+
+### Files touched
+
+- `walkthrough.md`
+
+### QA performed
+
+- Automated QA subagent ran focused comic tests plus build and lint.
+- Guided Flow static QA subagent inspected panel count preservation, Simple/Edit progressive disclosure, Simple control wiring, rectangular-only Edit behavior, image metadata preservation, and Advanced Studio entry visibility.
+- Guided-to-Advanced handoff/store QA subagent inspected payload shape, import priority, geometry/image/order preservation, template fallback behavior, and store compatibility.
+- Documentation QA subagent inspected `docs/comic-engine-regression-results.md`, `docs/comic-engine-protection-plan.md`, `docs/comic-object-schema-audit.md`, and recent walkthrough entries for regression coverage and remaining gaps.
+
+### Results
+
+- Automated focused QA: PASS. `npm run test -- src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/stores/__tests__/comicStoreSerialization.test.ts` passed with 5 files and 33 tests.
+- Build: PASS. `npm run build` completed successfully with the existing Vite large chunk warning.
+- Lint: PASS with warnings. `npm run lint` completed with 0 errors and 67 existing warnings.
+- Guided Flow static QA: PASS. Code inspection and focused tests confirmed preserved panel counts, required progressive disclosure copy, wired Simple controls, rectangular-only Edit drag/resize behavior, image metadata preservation, and retained Advanced Studio entry points.
+- Guided-to-Advanced handoff/store QA: PASS with caveats. Tests and inspection confirmed normalized rectangles, panel count, order, image URLs, template metadata, AI intent when present, shape defaults, and legacy fallback paths. Caveats remain for product/manual confirmation: `imageId` is present in the handoff payload but Advanced Studio currently imports image URL fields, and the store targets the current Advanced page before using payload `pageId`.
+- Documentation QA: PASS with recommended follow-up. Regression documentation is usable, but should later add a clearer protection-checklist coverage matrix, explicit automation-boundary notes, and a visible "legacy removal blocked pending full manual UI pass" status.
+
+### Human-style QA list
+
+- Create a Guided Comic draft and visually confirm the full step flow feels coherent.
+- Select 3, 4, 5, and 6 panels and confirm every visible Guided UI section reflects the selected count.
+- In Guided Layout Simple mode, select panels and use bigger, wider, reset, and regenerate controls.
+- In Guided Layout Edit mode, drag panels, resize panels, and confirm snapping, bounds, and minimum size.
+- Assign images to panels, then resize/move panels and confirm images remain attached.
+- Send edited 3-panel, 4-panel, and 6-panel Guided pages to Advanced Studio and visually compare positions/images/order.
+- Confirm whether Advanced Studio must preserve `imageId`, not only image URL.
+- Confirm whether imported Guided `pageId` should replace/select a page or intentionally import into the current Advanced page.
+- In Advanced Studio, create a page, add panel images, move panels, resize panels, and change panel shapes.
+- Confirm images remain intact after rectangle, oval/circle, and custom shape changes.
+- Create balloons, edit balloon text, resize balloons, and move balloon tails/pointers.
+- Verify layer tree selection and ordering through visible UI interaction.
+- Test overlays, masks, and freeform composition if supported in the current UI.
+- Save/reload a project if supported and confirm panels/images/balloons/layers persist.
+- Export if supported and visually inspect output.
+- Check desktop and narrower viewport layouts for overlapping controls or unreadable labels.
+- Update `docs/comic-engine-regression-results.md` after the manual pass with final pass/fail notes.
+
+### Outstanding issues
+
+- Human-style Advanced Studio canvas QA remains pending and is now explicitly separated from subagent/static/automated QA.
+- Legacy compatibility code should remain in place until the human-style QA pass is clean.
+
+### Risks or caveats
+
+- Subagent QA can prove store, serialization, import, and static UI wiring, but it does not replace human visual confirmation of Konva canvas drag/resize, shape editing, layer reorder, save/reload UX, or export output.
+- Documentation recommendations were captured here, but `docs/comic-engine-regression-results.md` was not updated in this prompt.
+
+### Operator follow-up
+
+- Complete the human-style QA list above.
+- After manual QA, update `docs/comic-engine-regression-results.md` with pass/fail notes and any known issues.
+
+### Next steps
+
+- If human QA finds regressions, patch them without removing legacy compatibility helpers until the regression pass is clean.
+
+---
+
+## Guided Story AI Phase Separation - 2026-05-11
+
+### What changed
+
+- Restructured Guided Comic Flow Step 2 so story help is presented as Story Intake, Outline Generation, then optional Readiness Review.
+- Reframed Step 2 copy so AI acts as a co-writer first and structure checks stay quiet until an outline exists.
+- Changed the Step 2 AI assist buttons to intake/co-writing actions: Expand premise, Generate possible conflicts, Suggest character dynamics, and Generate story foundation.
+- Moved Generate issue outline into the new Outline Generation section and exposed editable outline beat textareas for opening hook, rising conflict, midpoint turn, climax, and ending beat.
+- Replaced the early "Guided readiness checks" sidebar framing with softer "Outline development" / "Story pacing assistant" language.
+- Replaced Step 2 pacing badges from "Ready" / "Gap" to "Detected" / "Develop" when review is available.
+- Added a `suggest_character_dynamics` guided comic assist action to the shared writer contract and Supabase edge-function schema.
+- Updated writer-tools guided comic prompt guidance so story intake actions avoid pacing/readiness critique, outline generation creates structure without grading, and review actions remain optional editorial assistance.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Pacing checks are still computed locally, but they are only sent to writer-tools for review-oriented actions after an outline exists.
+- Story intake actions no longer include `pacingChecks` in the AI request context, preventing foundation generation from immediately critiquing hook, midpoint, climax, or page balance.
+- `hasGuidedComicOutlineDraft` centralizes the outline-exists gate used by the Step 2 sidebar and tests.
+- Existing Guided Flow state remains local; no Advanced Studio behavior, routing, or handoff logic was changed.
+- The in-app browser already had a draft with outline content, so the smoke check verified the post-outline assistant state. The pre-outline inactive state is covered by focused tests.
+
+### Verification
+
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/shared/writer/__tests__/schemas.test.ts src/portals/guided-comic/__tests__/guidedComicAi.test.ts` - PASS; 3 files, 45 tests.
+- `npm run build` - PASS; Vite reported the existing large ComicPortal chunk warning.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- Manual in-app browser smoke check at `http://localhost:5173/` - PASS for Step 2 showing "Build the story in phases", "Phase 1 - Story Intake", "Phase 1 co-writer", the new intake AI buttons, "Phase 2 - Outline Generation", and "Generate issue outline"; the old "Guided readiness checks", "Ready", and "Gap" strings were not visible in the Step 2 snapshot.
+
+### Outstanding issues
+
+- None known for this UX restructuring pass.
+
+### Risks or caveats
+
+- The new `suggest_character_dynamics` action is accepted by the shared schemas and writer-tools prompt builder, but live AI behavior still depends on the deployed Supabase function using this updated code.
+- Step 2 now has more visible structure; future polish may tune spacing once the user has tried the flow with an empty draft and a partially completed draft.
+
+### Operator follow-up
+
+- Try Step 2 from an empty/new guided draft to confirm the inactive "Outline development" sidebar feels calm before any outline exists.
+
+### Next steps
+
+- If the live writer-tools function is deployed separately, deploy the Supabase function update before expecting `suggest_character_dynamics` to work in a hosted environment.
+
+---
+
+## Writer Tools Function Deployment for Guided Story UX - 2026-05-11
+
+### What changed
+
+- Deployed the updated Supabase Edge Function `writer-tools` so the live function includes the Guided Comic Flow Step 2 story-intake prompt guidance and the new `suggest_character_dynamics` action schema.
+- Verified the deployed function is active in the linked Supabase project.
+
+### Files touched
+
+- `walkthrough.md`
+
+### Implementation notes
+
+- Deployment used the linked Supabase project ref `vxclogwiytxjolisnakd`.
+- The local function config keeps `[functions.writer-tools] verify_jwt = false`, matching the existing project setup.
+- The deploy uploaded `supabase/functions/writer-tools/index.ts` and `supabase/functions/_shared/writerSchemas.ts`.
+- Supabase CLI version used: `2.75.0`.
+
+### Verification
+
+- Checked current Supabase CLI deploy help before deploying: `supabase functions deploy --help`.
+- Deployed with `supabase functions deploy writer-tools --project-ref vxclogwiytxjolisnakd --use-api` - PASS.
+- Verified with `supabase functions list --project-ref vxclogwiytxjolisnakd` - PASS; `writer-tools` is `ACTIVE`, version `44`, updated at `2026-05-11 11:10:23 UTC`.
+
+### Outstanding issues
+
+- None known for the function deployment.
+
+### Risks or caveats
+
+- This was a function deployment only. No database migrations or Supabase table/RLS changes were made.
+
+### Operator follow-up
+
+- Re-test Guided Comic Flow Step 2 AI actions against the live function if authenticated writer-tools calls are available in the browser session.
+
+### Next steps
+
+- If live AI behavior still feels evaluative, tune the deployed prompt guidance in `supabase/functions/writer-tools/index.ts` and redeploy `writer-tools`.
+
+---
+
+## Guided Comics / Writers Workshop Bridge Direction - 2026-05-11
+
+### What changed
+
+- Added a product and implementation direction document clarifying that Guided Comics should not reinvent the Writers Workshop writing workflow.
+- Defined Writers Workshop as the primary system for outline generation/refinement, page beat generation, dialogue drafting, and pacing/page-count revision.
+- Defined Guided Comics as the bridge from narrative structure into comic pages, panel beats, visual references, image prompts, layout intent, and Advanced Studio handoff.
+- Captured a target Step 2A-2E structure: Story Foundation, Outline, Page Planning, Page Beats, and Dialogue.
+- Captured the recommendation to use existing writer-tools modes (`outline_issue`, `page_beats`, `page_beats_issue`, `draft_dialogue`, `pacing_review`) before expanding `guided_comic_assist` further.
+
+### Files touched
+
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a planning/architecture guardrail update, not a runtime implementation change.
+- The document recommends creating a small tested bridge layer before further Guided Comic Step 2 UI expansion.
+- The proposed bridge should convert Writers Workshop issue metadata, outline JSON, page beats JSON, and dialogue into Guided Comic page cards, panel beats, and visual/panel metadata.
+- The document preserves current architecture constraints: no Advanced Studio changes, no routing changes, and no forced database dependency for the local beginner flow.
+
+### Verification
+
+- Inspected Writers Workshop surfaces in `src/portals/writer/WriterPortal.tsx`, `src/portals/writer/writerNextStep.ts`, `src/shared/writer`, and `supabase/functions/writer-tools/index.ts`.
+- Confirmed Writers Workshop already owns mature outline, page beats, dialogue, and pacing workflows.
+- Added `docs/guided-comics-writers-workshop-bridge-plan.md` and verified the file exists.
+- Verified this walkthrough section landed with `rg -n "Guided Comics / Writers Workshop Bridge Direction" walkthrough.md`.
+
+### Outstanding issues
+
+- The bridge layer is not implemented yet.
+- Guided Comic Step 2 still has recent local phased-story UX changes; future work should converge it toward Writers Workshop reuse rather than expanding another parallel writing workflow.
+
+### Risks or caveats
+
+- Further Guided Comics writing UI work should be paused until the bridge contract is designed, or the product may continue duplicating Writers Workshop in a weaker form.
+
+### Operator follow-up
+
+- Decide whether Guided Comics should create/select a Writers Workshop issue automatically or only when the user opts into deeper writing tools.
+- Decide whether Guided Comics should store a persistent `writerIssueId` in its local project/library snapshot.
+
+### Next steps
+
+- Implement `src/portals/guided-comic/writersWorkshopBridge.ts` with tests for mapping Writers Workshop outline/page beat/dialogue outputs into Guided Comic page cards and panel beats.
+
+---
+
+## Guided Comics Bridge Decisions and Open-Question Form Preference - 2026-05-11
+
+### What changed
+
+- Updated the Guided Comics / Writers Workshop bridge plan to replace open questions with answered product decisions.
+- Captured that Guided Comics must remain local-first and must not silently auto-create Writers Workshop issues.
+- Captured that Guided Comics should store an optional persistent `writerIssueId` in local draft/library snapshots while keeping Guided Comics and Writers Workshop as separate source-of-truth domains.
+- Captured that accepted Writers Workshop dialogue should become panel/page narrative metadata and optional Advanced Studio balloon seed metadata.
+- Captured that Guided Comics should call existing writer-tools modes directly whenever possible so normal comic creation stays inside the unified Guided workflow.
+- Added a global preference memory note: future AI-generated documents with unresolved open questions should also include a fillable answer form in chat.
+
+### Files touched
+
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+- Global memory note: `/Users/apoaaron/.codex/memories/extensions/ad_hoc/notes/20260511T090127-0400-fillable-open-questions.md`
+
+### Implementation notes
+
+- The bridge plan now treats Writers Workshop as an additive power-up rather than a required detour.
+- Persistent writer database state is additive for long-term story management, continuity, exports, issue libraries, collaboration/sync, and deeper Writers Workshop workflows.
+- A beginner should be able to enter a premise, generate an outline, generate page beats, generate dialogue, create comic pages, and experiment locally without understanding Writers Workshop issue persistence.
+- The global memory note instructs future agents to surface document open questions in chat as copy/paste-friendly forms with suitable input types and blocker/non-blocker labels.
+
+### Verification
+
+- Updated `docs/guided-comics-writers-workshop-bridge-plan.md`.
+- Added the global memory note at `/Users/apoaaron/.codex/memories/extensions/ad_hoc/notes/20260511T090127-0400-fillable-open-questions.md`.
+- Verified this walkthrough section with `rg -n "Guided Comics Bridge Decisions and Open-Question Form Preference" walkthrough.md`.
+
+### Outstanding issues
+
+- Existing generated documents may still contain unresolved open questions from earlier work. They were not audited in this prompt.
+
+### Risks or caveats
+
+- The global memory note is an ad hoc memory update request; it records the preference for future sessions, but it does not rewrite already-generated docs unless explicitly requested.
+
+### Operator follow-up
+
+- If there are other existing project documents you want checked for unresolved open questions, request an audit and I should produce a fillable form for any findings.
+
+### Next steps
+
+- Use the answered bridge decisions when implementing the `writersWorkshopBridge.ts` adapter.
+
+---
+
+## Guided Comics / Writers Workshop Bridge Adapter - 2026-05-11
+
+### What changed
+
+- Added the first tested bridge adapter for moving Writers Workshop outputs into Guided Comics without changing the visible Guided Flow or Advanced Studio behavior.
+- Created `writersWorkshopBridge.ts` to convert accepted issue outlines into Guided page cards, convert writer page beats into Guided panel beat text, and extract dialogue seed metadata from comic script pages.
+- Added optional `writerIssueId` persistence to Guided Comic draft/project snapshots so local Guided Comics can remember a linked Writers Workshop issue while staying local-first.
+- Added tests for outline-to-page-card mapping, page-beat-to-panel-beat mapping, dialogue seed extraction, and project-library preservation of the optional writer link.
+
+### Files touched
+
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This is an adapter slice only. It does not create Writers Workshop issues, does not call Supabase from Guided Comics, and does not replace existing Guided Comic or Advanced Studio runtime logic.
+- `mapWriterOutlineToGuidedPageCards` respects the requested page count, keeps missing pages as empty editable cards, and maps outline scene/summary/emotional turn into starter Guided page card fields.
+- `mapWriterPagesToGuidedPageCards` preserves existing Guided page settings such as user-edited summaries, panel count, characters, locations, and expansion state while replacing panel beat text with accepted Writers Workshop page beats.
+- `mapWriterDialogueToGuidedDialogueSeeds` extracts panel-numbered dialogue from comic script text and pairs it with matching writer page beat action text for future panel/page metadata or Advanced Studio balloon seed usage.
+- `writerIssueId` is optional and nullable in snapshots/drafts so beginner local-first workflows still work without Writers Workshop persistence.
+
+### Verification
+
+- Red test confirmed the new bridge module was missing before implementation.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed.
+- `npm run build` passed.
+- `npm run lint` passed with existing warnings only.
+- Verified this walkthrough section landed with `rg -n "Guided Comics / Writers Workshop Bridge Adapter" walkthrough.md`.
+
+### Outstanding issues
+
+- The bridge adapter is not wired into the Guided Comic UI yet.
+- No automatic or user-triggered Writers Workshop issue selection/creation UI was added in this slice.
+- Dialogue seed metadata is prepared by the adapter but is not yet attached to Guided page/panel state or Advanced Studio handoff payloads.
+
+### Risks or caveats
+
+- `GuidedComicFlow.tsx` already contains other local Step 2 UX edits in the current worktree; this slice only added the `writerIssueId` draft/snapshot plumbing in that file.
+- Future bridge UI work should continue to keep Guided Comics and Writers Workshop as separate source-of-truth domains connected by tested adapters.
+
+### Operator follow-up
+
+- Decide the first visible bridge entry point: likely offering Writers Workshop after outline generation, pacing review, page beats, dialogue generation, or explicit "Use Writers Workshop".
+- When UI wiring begins, preserve the local-first path and never silently create a Writers Workshop issue.
+
+### Next steps
+
+- Wire the bridge adapter into Guided Comic Step 2/Pages flows behind explicit user actions.
+- Add tests for preserving local page/panel edits when importing or refreshing Writers Workshop outline, page beat, and dialogue data.
+
+---
+
+## Guided Comics / Writers Workshop Bridge Phase 2 Completion - 2026-05-11
+
+### What changed
+
+- Completed Phase 2 of the Guided Comics / Writers Workshop bridge plan by expanding the bridge adapter to cover the remaining story foundation and Writer issue metadata contract.
+- Added tested conversion from Guided Comic story foundation fields into a Writers Workshop issue draft shape containing title, issue number, synopsis, and Guided metadata notes.
+- Added tested conversion from a linked Writers Workshop issue row plus optional outline JSON back into a Guided Comic story foundation shape.
+- Updated the bridge plan document with an implementation status section marking Phase 1 and Phase 2 complete and identifying Phase 3 as the next boundary.
+
+### Files touched
+
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The new bridge helpers are pure adapters. They do not create database records, call Supabase, or require a linked Writers Workshop issue to use Guided Comics.
+- `createWriterIssueDraftFromGuidedStoryFoundation` packages local Guided story intake into a Writer issue draft shape that can be used later by explicit Phase 3 create/link UI.
+- `mapWriterIssueToGuidedStoryFoundation` reads `notes.guidedComic` metadata when present and prefers an accepted outline premise over older issue synopsis text.
+- This completes the Phase 2 conversion list from the plan: Guided story foundation, Writer issue metadata, Writer outline JSON, Writer page beats JSON, Writer dialogue text, and Guided page card/panel beat outputs.
+
+### Verification
+
+- Red test confirmed the story foundation and Writer issue metadata bridge helpers were missing before implementation.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed.
+- `npm run build` passed.
+- `npm run lint` passed with existing warnings only.
+- Verified this walkthrough section landed with `rg -n "Guided Comics / Writers Workshop Bridge Phase 2 Completion" walkthrough.md`.
+
+### Outstanding issues
+
+- Phase 3 is not implemented yet: there is still no Guided UI to select, create, open, or import from a linked Writers Workshop issue.
+- The bridge adapter is not wired into Step 2/Pages UI actions yet.
+
+### Risks or caveats
+
+- The current implementation intentionally keeps Guided Comics and Writers Workshop as separate source-of-truth domains. Future UI wiring should sync through the adapter rather than merging mutable state directly.
+
+### Operator follow-up
+
+- For Phase 3, add explicit user-controlled bridge actions such as "Continue locally", "Use Writers Workshop outline", and "Import latest Writer issue beats".
+- Preserve the rule that Guided Comics must not silently auto-create a Writers Workshop issue.
+
+### Next steps
+
+- Begin Phase 3 by designing the explicit Guided UI entry points for selecting or creating a linked Writer issue.
+- Add tests for preserving local page/panel edits when importing refreshed Writer issue data through those UI actions.
+
+---
+
+## Guided Comics / Writers Workshop Bridge Phase 3 Completion - 2026-05-11
+
+### What changed
+
+- Completed Phase 3 of the Guided Comics / Writers Workshop bridge plan.
+- Added an explicit Writers Workshop bridge panel to Guided Comic Step 2 with user-controlled actions: `Continue locally`, `Use Writers Workshop outline`, `Import latest Writer issue beats`, and `Open linked issue in Writers Workshop`.
+- Added UI for loading existing Writer series/issues, linking a selected issue, and creating a linked Writer issue from the Guided story foundation.
+- Added import behavior for the latest linked Writer issue outline, page beats, and dialogue seeds.
+- Added a one-shot Writer Portal handoff store so opening a linked issue from Guided Comics can select that issue in Writers Workshop without changing routes.
+- Updated Writer Portal to consume the linked issue handoff and preserve a requested issue selection when its issue list refreshes.
+- Updated the bridge plan document to mark Phase 3 complete and identify Phase 4 as the next boundary.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/stores/writerWorkshopBridge.ts`
+- `src/stores/__tests__/writerWorkshopBridge.test.ts`
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The Phase 3 bridge remains local-first and opt-in. Guided Comics does not silently create Writer issues.
+- Creating a linked Writer issue is an explicit button action. It creates/uses a Writer series, creates the issue, stores Guided story foundation metadata in issue notes, updates synopsis/title, and ensures Writer page rows exist up to the Guided target page count.
+- Importing from a linked issue uses the shared adapter and merge helpers so local Guided page summaries, panel counts, characters, locations, expansion state, and local-only pages are preserved.
+- Dialogue imports are stored as `writerDialogueSeeds` in Guided draft/project snapshots for later panel/page metadata or Advanced Studio balloon seed work.
+- The bridge panel shows Writers Workshop as an optional power-up, not a required detour.
+- Browser smoke testing intentionally avoided create/import actions because those would write persisted Writer data or modify the current Guided draft.
+
+### Verification
+
+- Red tests confirmed the new outline-beat adapter, merge helpers, bridge action copy, and Writer Portal handoff store were missing before implementation.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts` passed.
+- `npm run build` passed.
+- `npm run lint` passed with existing warnings only.
+- Manual in-app browser smoke check at `http://localhost:5173/` confirmed Guided Comic Step 2 renders the Phase 3 bridge controls, expands the Writer series/issue selector, and enables import/open actions once an issue is selected.
+- Verified this walkthrough section landed with `rg -n "Guided Comics / Writers Workshop Bridge Phase 3 Completion" walkthrough.md`.
+
+### Outstanding issues
+
+- Phase 4 is not implemented yet: Guided Comics does not yet call `outline_issue`, `page_beats`, `page_beats_issue`, `draft_dialogue`, or `pacing_review` directly for linked Writer issues.
+- Imported dialogue seeds are persisted in Guided snapshots but not yet surfaced as editable page/panel dialogue UI or Advanced Studio balloon seed payloads.
+
+### Risks or caveats
+
+- Writer issue creation depends on existing Supabase/Writers Workshop table permissions. If the database is not configured or RLS blocks inserts/updates, the UI reports an error and Guided Comics remains local-first.
+- The linked issue handoff selects the Writer issue after navigating to Writers Workshop, but it does not change browser URL routing or create a deep link.
+
+### Operator follow-up
+
+- Manually test create/import against a disposable Writer issue when ready, since those actions intentionally mutate persisted Writer data and were not exercised in the browser smoke test.
+- Continue to avoid silent Writer issue creation in later phases.
+
+### Next steps
+
+- Begin Phase 4 by wiring linked-issue actions to existing writer-tools modes directly from Guided Comics.
+- Add focused tests for direct writer-tools action eligibility and import preservation after generated outline/page beats/dialogue refresh.
+
+---
+
+## Guided Comics / Writers Workshop Bridge Phase 4 Completion - 2026-05-11
+
+### What changed
+
+- Completed Phase 4 of the Guided Comics / Writers Workshop bridge plan.
+- Added direct Guided Comic actions for running linked Writers Workshop writer-tools modes without requiring repeated portal switching.
+- Added tested request builders for `outline_issue`, `pacing_review`, `page_beats_issue`, and `draft_dialogue` so Guided Comics can call the same underlying modes as Writers Workshop.
+- Added safe page-beat batching for linked issues using the shared `WRITER_PAGE_BEATS_ISSUE_MAX` limit.
+- Added a Phase 4 bridge UI section in Guided Comic Step 2 with actions for generating a Writer outline, running pacing review, generating page beats, and drafting selected-page dialogue.
+- Updated the bridge plan document to mark Phase 4 implemented and identify Phase 5 as the next implementation boundary.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Phase 4 remains opt-in and linked-issue based. Guided Comics still does not silently create Writer issues.
+- `buildGuidedWriterToolRequest` centralizes the payload shapes Guided Comics uses for the existing writer-tools modes.
+- `getGuidedWriterPageBeatBatchOffsets` keeps `page_beats_issue` calls inside the shared batch limit while covering the full target page count.
+- The Guided Step 2 Phase 4 controls stay disabled until a Writer issue is selected or linked.
+- Running outline, page-beat, or dialogue generation imports the refreshed linked issue data back into Guided Comics through the existing bridge adapter.
+- Running pacing review leaves Guided content unchanged because pacing notes are stored on the Writer issue side.
+- No Advanced Studio panel, shape, image, balloon, or export behavior was changed.
+
+### Verification
+
+- Red tests confirmed the Phase 4 writer-tools request helpers and Guided UI action labels were missing before implementation.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts` passed.
+- `npm run build` passed.
+- `npm run lint` passed with existing warnings only.
+- Manual in-app browser smoke check at `http://localhost:5173/` confirmed the Phase 4 controls render in Guided Comic Step 2 and remain safely disabled when no linked Writer issue is selected.
+
+### Outstanding issues
+
+- The Phase 4 generation buttons were not clicked during browser smoke testing because they call Edge Functions and mutate linked Writer issue content.
+- Dialogue seeds are still stored as Guided metadata and are not yet surfaced as editable page/panel dialogue UI or Advanced Studio balloon seed payloads.
+
+### Risks or caveats
+
+- Direct writer-tools actions depend on the same Supabase function availability, database permissions, and linked Writer issue state as Writers Workshop.
+- If a linked issue has missing Writer pages, Guided Comics attempts to create pages up to the target page count before page-beat or dialogue generation.
+
+### Operator follow-up
+
+- Test Phase 4 actions against a disposable linked Writer issue before using them on production story data.
+- Confirm generated outline/page beats/dialogue import cleanly after each action in a live Supabase-backed browser session.
+
+### Next steps
+
+- Begin Phase 5 by turning accepted story structure, page beats, and dialogue seeds into richer visual storytelling metadata for references, panel prompts, layout intent, and Advanced Studio handoff.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

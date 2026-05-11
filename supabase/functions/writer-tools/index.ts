@@ -797,12 +797,52 @@ function guidedComicActionLabel(action: string): string {
   return action.replace(/_/g, ' ');
 }
 
+function guidedComicActionGuidance(action: string): string[] {
+  switch (action) {
+    case 'improve_premise':
+      return [
+        'Phase 1 story intake: act as a co-writer expanding rough intent.',
+        'Offer a stronger premise without judging structure, pacing, hook, midpoint, climax, or readiness.',
+      ];
+    case 'suggest_conflict_stakes_ending':
+      return [
+        'Phase 1 story intake: generate possible conflicts, stakes, and ending directions from the rough brief.',
+        'Do not critique missing outline beats or imply the user has failed to provide structure.',
+      ];
+    case 'suggest_character_dynamics':
+      return [
+        'Phase 1 story intake: suggest character relationships, tensions, alliances, or emotional dynamics.',
+        'Return suggestions and optional storyForm replacements only; do not evaluate pacing or readiness.',
+      ];
+    case 'generate_story_foundation':
+      return [
+        'Phase 1 story intake: build a helpful story foundation from premise, characters, setting, conflict, and ending goal.',
+        'Do not include pacingNotes or readiness critique. First help create structure before evaluating structure.',
+      ];
+    case 'generate_issue_outline':
+      return [
+        'Phase 2 outline generation: create editable structural beats for opening hook, rising action, midpoint, climax, ending beat, and page estimate if useful.',
+        'This is generation, not grading. Avoid readiness language unless the user later asks for review.',
+      ];
+    case 'review_readiness':
+    case 'find_export_gaps':
+    case 'suggest_layout_pacing':
+      return [
+        'Phase 3 readiness review: offer optional editorial assistance against existing outline/page structure.',
+        'Keep the tone collaborative and avoid grading language.',
+      ];
+    default:
+      return [];
+  }
+}
+
 function buildGuidedComicAssistUserPrompt(args: {
   action: string;
   context: unknown;
   selectedPageNumber?: number;
   selectedPanelId?: string;
 }): string {
+  const actionGuidance = guidedComicActionGuidance(args.action);
   return [
     `You are a senior comics story editor helping inside a beginner-friendly Guided Comic Flow.`,
     `Reuse Writers' Workshop craft standards, but keep the answer lightweight and directly applicable to the guided local draft.`,
@@ -812,6 +852,7 @@ function buildGuidedComicAssistUserPrompt(args: {
     `Requested guided action: ${guidedComicActionLabel(args.action)}.`,
     args.selectedPageNumber ? `Selected page number: ${args.selectedPageNumber}.` : '',
     args.selectedPanelId ? `Selected panel id: ${args.selectedPanelId}.` : '',
+    ...actionGuidance,
     '',
     `Guided comic context JSON:\n${JSON.stringify(args.context, null, 2)}`,
     '',

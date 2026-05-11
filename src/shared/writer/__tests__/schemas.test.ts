@@ -280,6 +280,45 @@ describe('writerToolsRequestSchema', () => {
     ).toThrow();
   });
 
+  it('allows guided comic character dynamics assistance during story intake', () => {
+    const r = writerToolsGuidedComicAssistRequestSchema.parse({
+      mode: 'guided_comic_assist',
+      action: 'suggest_character_dynamics',
+      context: {
+        currentStep: 'story',
+        setupForm: {
+          seriesTitle: 'Astral City',
+          issueTitle: 'Gate of the First Sun',
+          issueNumber: '1',
+          targetPageCount: '4',
+          genre: 'Sci-fi',
+          tone: 'Cinematic',
+          premise: 'A city wakes beneath twin suns.',
+        },
+        storyForm: {
+          premise: 'A city wakes beneath twin suns.',
+          mainCharacters: 'Mara, Sol',
+          conflict: 'The gate is unstable.',
+          setting: 'Orbital city',
+          endingGoal: 'Seal the gate.',
+        },
+        artDirection: {
+          artStyle: 'clean line art',
+          defaultAspectRatio: 'Match panel layout',
+          renderingStyle: 'inked',
+          colorMood: 'warm gold',
+          lighting: 'sunrise',
+          continuityNotes: '',
+          excludeTextFromImages: true,
+        },
+        outlineBeats: [],
+        pageCards: [],
+      },
+    });
+
+    expect(r.action).toBe('suggest_character_dynamics');
+  });
+
   it('ideaAssistResultSchema requires answer_markdown', () => {
     const r = ideaAssistResultSchema.parse({
       answer_markdown: 'Here is the answer.',

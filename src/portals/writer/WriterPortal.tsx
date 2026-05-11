@@ -79,6 +79,7 @@ import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
 import {
   ACCENT_GOLD_GRADIENT,
   WRITERS_GOLD_SLANT,
@@ -419,6 +420,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
   const requestWriterHandoff = useImageWorkshopBridge((s) => s.requestWriterHandoff);
+  const consumeRequestedIssueOpen = useWriterWorkshopBridge((s) => s.consumeRequestedIssueOpen);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
     'details' in res && res.details ? `${res.error}: ${res.details}` : res.error;
@@ -481,6 +483,35 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [authUser]);
 
   useEffect(() => {
+    const requestedIssueId = consumeRequestedIssueOpen();
+    if (!requestedIssueId) return;
+    let cancelled = false;
+
+    void (async () => {
+      const seriesRows = await listWriterSeries();
+      for (const series of seriesRows) {
+        const issueRows = await listWriterIssues(series.id);
+        const requestedIssue = issueRows.find((issue) => issue.id === requestedIssueId);
+        if (!requestedIssue) continue;
+        if (cancelled) return;
+        setSeriesList(seriesRows);
+        setSelectedSeriesId(series.id);
+        setIssues(issueRows);
+        setSelectedIssueId(requestedIssue.id);
+        setDockTab('library');
+        setDockCollapsed(false);
+        pushHistory(`opened linked Guided Comics issue #${requestedIssue.issue_number}`);
+        return;
+      }
+      if (!cancelled) pushHistory('linked Guided Comics issue was not found in Writers Workshop');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [consumeRequestedIssueOpen, pushHistory]);
+
+  useEffect(() => {
     let cancelled = false;
     void (async () => {
       const rows = await listWriterSeries();
@@ -534,7 +565,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const rows = await listWriterIssues(selectedSeriesId);
       if (cancelled) return;
       setIssues(rows);
-      setSelectedIssueId(rows[0]?.id ?? null);
+      setSelectedIssueId((prev) => (prev && rows.some((row) => row.id === prev) ? prev : rows[0]?.id ?? null));
     })();
     return () => {
       cancelled = true;

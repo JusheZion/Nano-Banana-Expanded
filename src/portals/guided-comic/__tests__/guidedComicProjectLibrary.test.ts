@@ -80,7 +80,7 @@ describe('guided comic project library', () => {
   });
 
   it('migrates one current snapshot into an active project library', () => {
-    const library = createGuidedComicProjectLibrary(makeSnapshot(), {
+    const library = createGuidedComicProjectLibrary(makeSnapshot({ writerIssueId: 'writer-issue-1' }), {
       projectId: 'migrated-draft',
       now: '2026-05-06T12:05:00.000Z',
     });
@@ -89,6 +89,7 @@ describe('guided comic project library', () => {
     expect(library.activeProjectId).toBe('migrated-draft');
     expect(library.projects).toHaveLength(1);
     expect(library.projects[0].snapshot.currentStep).toBe('pages');
+    expect(library.projects[0].snapshot.writerIssueId).toBe('writer-issue-1');
   });
 
   it('parses a valid library and rejects malformed storage payloads', () => {
@@ -128,6 +129,23 @@ describe('guided comic project library', () => {
     expect(withDuplicate.activeProjectId).toBe('project-2');
     expect(deleted.projects.map((project) => project.projectId)).toEqual(['project-2']);
     expect(deleted.activeProjectId).toBe('project-2');
+  });
+
+  it('preserves the optional Writers Workshop issue link when parsing and duplicating projects', () => {
+    const library = createGuidedComicProjectLibrary(makeSnapshot({ writerIssueId: 'writer-issue-42' }), {
+      projectId: 'project-1',
+      now: '2026-05-06T12:18:00.000Z',
+    });
+
+    const parsed = parseGuidedComicProjectLibrary(JSON.stringify(library));
+    const duplicate = duplicateGuidedComicProject(library.projects[0], {
+      projectId: 'project-2',
+      createdAt: '2026-05-06T12:19:00.000Z',
+      updatedAt: '2026-05-06T12:19:00.000Z',
+    });
+
+    expect(parsed?.projects[0].snapshot.writerIssueId).toBe('writer-issue-42');
+    expect(duplicate.snapshot.writerIssueId).toBe('writer-issue-42');
   });
 
   it('detects unsaved changes by comparing the active snapshot to the saved project', () => {
