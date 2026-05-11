@@ -47,6 +47,7 @@ import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/
 import {
   createGuidedComicStarterLayoutWithExistingMetadata,
   getGuidedComicActivePanelCount,
+  getSnappedGuidedComicPanelGeometry,
   getGuidedComicExistingPanelBeats,
   getGuidedComicLayoutPanels,
   getGuidedComicSafeMarginPanelGeometry,
@@ -120,6 +121,56 @@ export const ADVANCED_STUDIO_ACTION_LABELS = {
   openBlank: 'Open blank Advanced Studio',
   sendPage: 'Send this page to Advanced Studio',
 } as const;
+
+export const GUIDED_LAYOUT_DISCLOSURE_COPY = {
+  start: 'Start with a layout, then adjust it.',
+  advanced: 'Use Advanced Studio for custom shapes, lettering, overlays, and final polish.',
+} as const;
+
+export const GUIDED_LAYOUT_DISCLOSURE_LEVELS = [
+  {
+    id: 'simple',
+    label: 'Level 1: Simple',
+    summary: 'Choose panel count, pick AI or starter layouts, and make quick size adjustments.',
+    controls: [
+      'Choose panel count',
+      'Choose AI/start layout',
+      'Make selected panel bigger',
+      'Make selected panel wider',
+      'Reset layout',
+      'Regenerate layout',
+    ],
+  },
+  {
+    id: 'edit',
+    label: 'Level 2: Edit',
+    summary: 'Drag and resize rectangular panels while preserving images and snapping to the page.',
+    controls: [
+      'Drag rectangular panels',
+      'Resize rectangular panels',
+      'Snap to page margins/gutters',
+      'Preserve images',
+      'Show panel numbers and basic labels',
+    ],
+  },
+  {
+    id: 'advanced',
+    label: 'Level 3: Advanced Studio',
+    summary: 'Move to the power-user editor for final composition and publishing polish.',
+    controls: [
+      'Custom shapes',
+      'Oval/circle panels',
+      'Masks',
+      'Overlays',
+      'Balloons',
+      'Lettering',
+      'Freeform composition',
+      'Advanced export polish',
+    ],
+  },
+] as const;
+
+type GuidedLayoutDisclosureMode = (typeof GUIDED_LAYOUT_DISCLOSURE_LEVELS)[0]['id'] | (typeof GUIDED_LAYOUT_DISCLOSURE_LEVELS)[1]['id'];
 
 type SetupFormState = {
   seriesTitle: string;
@@ -1114,6 +1165,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [pageLayoutGeometry, setPageLayoutGeometry] = useState<Record<number, GuidedComicPanelGeometry[]>>(
     () => restoredDraft?.pageLayoutGeometry ?? {},
   );
+  const [layoutDisclosureMode, setLayoutDisclosureMode] = useState<GuidedLayoutDisclosureMode>('simple');
   const [activeLayoutEdit, setActiveLayoutEdit] = useState<ActiveLayoutEdit | null>(null);
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
   const [primaryActionMessage, setPrimaryActionMessage] = useState<string | null>(null);
@@ -2259,6 +2311,44 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const selectedImageFocusX = selectedLayoutPanel?.imageFocusX ?? 0.5;
   const selectedImageFocusY = selectedLayoutPanel?.imageFocusY ?? 0.5;
   const selectedImageZoom = selectedLayoutPanel?.imageZoom ?? 1;
+  const adjustSelectedLayoutPanel = (page: PageCard, adjustment: 'bigger' | 'wider') => {
+    const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    const syncedGeometry = syncGuidedComicLayoutGeometry(
+      page,
+      pageLayoutGeometry[page.pageNumber],
+      templateId,
+      guidedLayoutSettings,
+    );
+    const targetPanel =
+      syncedGeometry.find((panel) => panel.panelId === selectedLayoutPanel?.panelId) ??
+      syncedGeometry[0];
+    if (!targetPanel || targetPanel.locked) return;
+
+    const widthDelta = adjustment === 'bigger' ? 0.08 : 0.1;
+    const heightDelta = adjustment === 'bigger' ? 0.08 : 0;
+    const resizedPanel = {
+      ...targetPanel,
+      x: targetPanel.x - widthDelta / 2,
+      y: targetPanel.y - heightDelta / 2,
+      w: targetPanel.w + widthDelta,
+      h: targetPanel.h + heightDelta,
+    };
+    const nextPanel = getSnappedGuidedComicPanelGeometry(resizedPanel, syncedGeometry, guidedLayoutSettings);
+
+    setActivePageNumber(page.pageNumber);
+    setSelectedPanelId(targetPanel.panelId);
+    setPageLayoutGeometry((current) => ({
+      ...current,
+      [page.pageNumber]: (current[page.pageNumber] ?? syncedGeometry).map((panel) =>
+        panel.panelId === targetPanel.panelId ? nextPanel : panel,
+      ),
+    }));
+    setPrimaryActionMessage(
+      adjustment === 'bigger'
+        ? `Made page ${page.pageNumber}, panel ${targetPanel.order + 1} bigger.`
+        : `Made page ${page.pageNumber}, panel ${targetPanel.order + 1} wider.`,
+    );
+  };
   const selectPanelByOffset = (offset: number) => {
     if (selectedPanelQueueIndex < 0) return;
     const nextPanel = panelArtQueue[selectedPanelQueueIndex + offset];
@@ -4032,6 +4122,68 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </div>
               ) : isLayoutStep ? (
                 <div className="mt-5 grid gap-4">
+                  <section className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                          Guided layout levels
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-white">{GUIDED_LAYOUT_DISCLOSURE_COPY.start}</h3>
+                        <p className="mt-2 text-sm leading-relaxed text-white/68">
+                          Guided Flow is the accessible creative path. Advanced Studio is the power-user refinement path.
+                          Both share the same comic engine.
+                        </p>
+                      </div>
+                      <div className="flex rounded-lg border border-white/10 bg-black/25 p-1">
+                        {GUIDED_LAYOUT_DISCLOSURE_LEVELS.slice(0, 2).map((level) => {
+                          const mode = level.id as GuidedLayoutDisclosureMode;
+                          const selected = layoutDisclosureMode === level.id;
+                          return (
+                            <button
+                              key={level.id}
+                              type="button"
+                              onClick={() => setLayoutDisclosureMode(mode)}
+                              className="rounded-md px-3 py-2 text-xs font-black transition"
+                              style={
+                                selected
+                                  ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }
+                                  : { color: 'rgba(255,255,255,0.68)' }
+                              }
+                            >
+                              {level.id === 'simple' ? 'Simple' : 'Edit'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                      {GUIDED_LAYOUT_DISCLOSURE_LEVELS.map((level) => {
+                        const active =
+                          (level.id === 'simple' && layoutDisclosureMode === 'simple') ||
+                          (level.id === 'edit' && layoutDisclosureMode === 'edit') ||
+                          level.id === 'advanced';
+                        return (
+                          <div
+                            key={level.id}
+                            className="rounded-lg border p-3"
+                            style={{
+                              borderColor: active ? 'rgba(252,211,77,0.35)' : 'rgba(255,255,255,0.1)',
+                              background: active ? 'rgba(252,211,77,0.07)' : 'rgba(0,0,0,0.18)',
+                            }}
+                          >
+                            <p className="text-xs font-black text-white">{level.label}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-white/62">{level.summary}</p>
+                            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-100/62">
+                              {level.controls.slice(0, 4).join(' · ')}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-3 py-2 text-xs font-bold leading-relaxed text-amber-50/75">
+                      {GUIDED_LAYOUT_DISCLOSURE_COPY.advanced}
+                    </p>
+                  </section>
                   {pageCards.length > 0 ? (
                     pageCards.map((page) => {
                       const templateId = pageLayoutTemplates[page.pageNumber] ?? 'auto';
@@ -4051,7 +4203,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         }}
                         className="rounded-xl border border-white/10 bg-white/[0.06] p-4"
                       >
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start">
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px_220px] lg:items-start">
                           <div className="min-w-0">
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
                               Page {page.pageNumber}
@@ -4061,6 +4213,20 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               {page.summary.trim() || 'Add a page summary on the Pages step.'}
                             </p>
                           </div>
+                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                            Panel count
+                            <select
+                              value={String(getGuidedComicActivePanelCount(page))}
+                              onChange={(event) => updatePagePanelCount(page.pageNumber, event.target.value)}
+                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
+                                <option key={count} value={count}>
+                                  {count} panel{count === 1 ? '' : 's'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                             Starter preset
                             <select
@@ -4083,9 +4249,27 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.045] p-3">
                             <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
-                                Guided layout canvas
+                                {layoutDisclosureMode === 'simple' ? 'Simple layout controls' : 'Editable layout canvas'}
                               </p>
                               <div className="flex flex-wrap gap-2">
+                                {layoutDisclosureMode === 'simple' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustSelectedLayoutPanel(page, 'bigger')}
+                                      className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-50 transition hover:bg-amber-300/15"
+                                    >
+                                      Make selected panel bigger
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustSelectedLayoutPanel(page, 'wider')}
+                                      className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1.5 text-[11px] font-bold text-amber-50 transition hover:bg-amber-300/15"
+                                    >
+                                      Make selected panel wider
+                                    </button>
+                                  </>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => applySafeMarginsToPageLayout(page)}
@@ -4093,18 +4277,32 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                 >
                                   Apply safe margins
                                 </button>
+                                {layoutDisclosureMode === 'simple' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updatePageLayoutTemplate(page.pageNumber, templateId);
+                                      setPrimaryActionMessage(`Reset page ${page.pageNumber} layout to the selected starter.`);
+                                    }}
+                                    className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/70 transition hover:bg-white/15"
+                                  >
+                                    Reset layout
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => regeneratePageStarterLayout(page)}
                                   className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/70 transition hover:bg-white/15"
                                 >
-                                  Reset starter layout
+                                  {layoutDisclosureMode === 'simple' ? 'Regenerate layout' : 'Reset starter layout'}
                                 </button>
                               </div>
                             </div>
                             <p className="mb-3 text-xs leading-relaxed text-amber-50/65">
-                              The dashed guide marks the printable safe area. Advanced Studio receives the rectangles as edited;
-                              use Apply safe margins when panels should stay away from page edges.
+                              {layoutDisclosureMode === 'simple'
+                                ? 'Choose a panel count and starter layout first. Select a panel, then use the quick buttons to adjust it without needing precision editing.'
+                                : 'Drag rectangular panels, resize them from the corner handles, and snap them to page margins or gutters.'}{' '}
+                              Advanced Studio receives the rectangles as edited.
                             </p>
                             <div
                               ref={(node) => {
@@ -4139,7 +4337,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                     key={panelId}
                                     role="button"
                                     tabIndex={0}
-                                    onPointerDown={(event) => startLayoutPanelEdit(event, page.pageNumber, panel, 'move')}
+                                    aria-label={`Select page ${page.pageNumber}, panel ${panelNumber}`}
+                                    onClick={() => {
+                                      setActivePageNumber(page.pageNumber);
+                                      setSelectedPanelId(panelId);
+                                    }}
+                                    onPointerDown={(event) => {
+                                      if (layoutDisclosureMode === 'edit') {
+                                        startLayoutPanelEdit(event, page.pageNumber, panel, 'move');
+                                      }
+                                    }}
                                     className="absolute min-h-0 overflow-hidden rounded-md border bg-amber-300/[0.055] shadow-lg transition"
                                     style={{
                                       left: `${panel.x * 100}%`,
@@ -4147,7 +4354,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                       width: `${panel.w * 100}%`,
                                       height: `${panel.h * 100}%`,
                                       borderColor: selected ? `${ACCENT_GOLD_SOLID}` : 'rgba(252,211,77,0.52)',
-                                      cursor: panel.locked ? 'default' : 'move',
+                                      cursor: panel.locked ? 'default' : layoutDisclosureMode === 'edit' ? 'move' : 'pointer',
                                       boxShadow: selected
                                         ? '0 0 0 2px rgba(252,246,186,0.28), 0 18px 40px rgba(0,0,0,0.34)'
                                         : '0 0 0 1px rgba(0,0,0,0.32), 0 12px 30px rgba(0,0,0,0.28)',
@@ -4203,25 +4410,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                     <span className="absolute right-2 top-2 rounded-full border border-amber-200/45 bg-black/65 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-amber-50">
                                       Panel {panelNumber}
                                     </span>
-                                    {(['nw', 'ne', 'sw', 'se'] as LayoutResizeHandle[]).map((handle) => (
-                                      <button
-                                        key={handle}
-                                        type="button"
-                                        aria-label={`Resize panel ${panelNumber} ${handle}`}
-                                        onPointerDown={(event) => startLayoutPanelEdit(event, page.pageNumber, panel, 'resize', handle)}
-                                        className={[
-                                          'absolute h-3 w-3 rounded-full border border-black/50 bg-amber-200 shadow-sm',
-                                          handle.includes('n') ? 'top-1' : 'bottom-1',
-                                          handle.includes('w') ? 'left-1' : 'right-1',
-                                        ].join(' ')}
-                                        style={{
-                                          cursor:
-                                            handle === 'nw' || handle === 'se'
-                                              ? 'nwse-resize'
-                                              : 'nesw-resize',
-                                        }}
-                                      />
-                                    ))}
+                                    {layoutDisclosureMode === 'edit' &&
+                                      (['nw', 'ne', 'sw', 'se'] as LayoutResizeHandle[]).map((handle) => (
+                                        <button
+                                          key={handle}
+                                          type="button"
+                                          aria-label={`Resize panel ${panelNumber} ${handle}`}
+                                          onPointerDown={(event) => startLayoutPanelEdit(event, page.pageNumber, panel, 'resize', handle)}
+                                          className={[
+                                            'absolute h-3 w-3 rounded-full border border-black/50 bg-amber-200 shadow-sm',
+                                            handle.includes('n') ? 'top-1' : 'bottom-1',
+                                            handle.includes('w') ? 'left-1' : 'right-1',
+                                          ].join(' ')}
+                                          style={{
+                                            cursor:
+                                              handle === 'nw' || handle === 'se'
+                                                ? 'nwse-resize'
+                                                : 'nesw-resize',
+                                          }}
+                                        />
+                                      ))}
                                   </div>
                                 );
                               })}

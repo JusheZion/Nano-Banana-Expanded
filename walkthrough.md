@@ -2434,6 +2434,107 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Advanced Comics Studio Regression Pass - 2026-05-10
+
+### What changed
+
+- Added a focused Advanced Comics Studio regression result document with pass/fail notes, automation coverage, browser access status, manual coverage, known gaps, and the explicit legacy-code hold.
+- Added focused `comicStore` regression tests for project serialization/load compatibility, panel image preservation across shape and geometry updates, panel geometry serialization, balloon text/tail serialization, and legacy saved page loading.
+- Ran a manual in-app browser pass through Guided Comic Flow into Advanced Studio and confirmed the imported page opened with 3 panels and visible panel images.
+- Documented that the modernization is not clean enough for legacy-code removal because the full canvas manipulation checklist was only partially completed manually.
+
+### Files touched
+
+- `docs/comic-engine-regression-results.md`
+- `src/stores/__tests__/comicStoreSerialization.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The new focused store test stubs the browser download path used by `serializeProject` so the generated comic project JSON can be inspected without triggering jsdom navigation behavior.
+- Serialization coverage now explicitly checks panel image fields, panel geometry fields, layer order, balloon text, balloon tail points, and balloon overrides.
+- Legacy load coverage intentionally uses an older project-shaped payload without newer page fields to verify that existing `loadProject` compatibility continues to preserve panels, images, balloons, and layer order.
+- Browser automation confirmed the in-app Browser path works for this repo. External Chrome was visible through Computer Use, but tab switching/navigation remained unreliable in this pass, so Chrome was not used as the source of manual sign-off.
+
+### Verification
+
+- `npm run test -- src/stores/__tests__/comicStoreSerialization.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/modes/comic/types/__tests__/comicObjects.test.ts` - PASS; 3 files, 11 tests.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings in pre-existing areas.
+- Manual in-app browser check - PASS for opening ARCS Expanded, opening Comic Creator, sending Guided Flow page 1 to Advanced Studio, and visually confirming Advanced Studio showed `Page 1` with `3 Panels` and imported panel images.
+
+### Outstanding issues
+
+- Full manual canvas interaction remains incomplete: page creation, Advanced Studio image insertion, panel drag/resize, shape switching, balloon creation/editing, tail dragging, layer reorder, save/reload, and export still need a clean manual UI pass.
+- External Chrome access is improved enough to inspect Chrome, but not reliable enough yet for this repo's local-app manual regression flow.
+
+### Risks or caveats
+
+- Store/import tests cover the key data-preservation risks, but they do not replace the remaining UI-level Konva canvas regression checks.
+- Legacy compatibility code must remain until the manual checklist is clean.
+
+### Operator follow-up
+
+- Complete the remaining manual Advanced Studio checklist with direct UI control or a more reliable low-level canvas automation path.
+
+### Next steps
+
+- After the manual pass is clean, update `docs/comic-engine-regression-results.md` with final pass notes before considering any legacy compatibility removal.
+
+---
+
+## Guided Layout Progressive Disclosure - 2026-05-10
+
+### What changed
+
+- Added progressive disclosure to the Guided Comic Flow Layout step so the page now clearly presents Simple, Edit, and Advanced Studio levels.
+- Added the required product copy: "Start with a layout, then adjust it." and "Use Advanced Studio for custom shapes, lettering, overlays, and final polish."
+- Added Simple layout controls for choosing panel count, choosing a starter preset, making the selected panel bigger, making the selected panel wider, applying safe margins, resetting the selected starter layout, and regenerating the starter layout.
+- Kept Edit mode as the rectangular drag/resize surface with panel numbers, basic labels, snapping behavior, page bounds, minimum-size enforcement, and image-preserving geometry edits.
+- Kept Advanced Studio visible as the power-user path for custom shapes, masks, overlays, balloons, lettering, freeform composition, and final export polish.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Advanced Studio code and shape behavior were not removed, hidden, or weakened.
+- The new Simple/Edit toggle only changes the Guided Layout control surface; the underlying shared geometry and handoff data remain the same.
+- Simple quick-size actions use the existing guided geometry sync and snapping helpers, so updated rectangles stay within the page model and preserve panel metadata/images.
+- The panel count selector reuses the existing `updatePagePanelCount` path so Guided UI sections continue to share the selected count.
+- Reset and Regenerate are intentionally starter-layout actions in Guided Flow; freeform/custom composition remains in Advanced Studio.
+
+### Verification
+
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` - RED first; failed as expected before implementation because `GUIDED_LAYOUT_DISCLOSURE_COPY` was undefined.
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` - PASS; 1 file, 3 tests.
+- `npm run test -- src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` - PASS; 4 files, 30 tests.
+- `npm run build` - PASS; Vite reported the existing large chunk-size warning for built assets.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings in pre-existing areas.
+- Manual in-app browser smoke check - PASS for opening ARCS Expanded, opening Comic Creator, confirming the Guided layout level copy, confirming Simple quick controls, switching to Edit mode, and confirming Advanced Studio remains visible from the Guided Flow shell.
+
+### Outstanding issues
+
+- None for this progressive-disclosure pass.
+
+### Risks or caveats
+
+- Simple `Reset layout` and `Regenerate layout` both rebuild from the selected starter preset today; the labels separate beginner intent while keeping the existing starter-template behavior.
+- Guided Flow still only edits rectangular panels. Oval/circle/custom panel shapes, masks, overlays, balloons, lettering, and advanced export polish remain Advanced Studio responsibilities.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Keep any future Guided Layout additions layered over the shared geometry adapters so Advanced Studio continues to receive exact edited rectangles and images.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

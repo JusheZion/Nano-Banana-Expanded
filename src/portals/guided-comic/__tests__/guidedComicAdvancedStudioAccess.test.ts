@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ADVANCED_STUDIO_ACTION_LABELS } from '@/portals/guided-comic/GuidedComicFlow';
+import {
+  ADVANCED_STUDIO_ACTION_LABELS,
+  GUIDED_LAYOUT_DISCLOSURE_COPY,
+  GUIDED_LAYOUT_DISCLOSURE_LEVELS,
+} from '@/portals/guided-comic/GuidedComicFlow';
 import { GUIDED_WORKFLOW_STEPS } from '@/modes/comic/pages/ComicEditor';
 
 describe('guided comic Advanced Studio access', () => {
@@ -19,5 +23,17 @@ describe('guided comic Advanced Studio access', () => {
       'Layout',
       'Export',
     ]);
+  });
+
+  it('describes the three guided layout disclosure levels without hiding Advanced Studio', () => {
+    expect(GUIDED_LAYOUT_DISCLOSURE_COPY.start).toBe('Start with a layout, then adjust it.');
+    expect(GUIDED_LAYOUT_DISCLOSURE_COPY.advanced).toBe(
+      'Use Advanced Studio for custom shapes, lettering, overlays, and final polish.',
+    );
+    expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS.map((level) => level.id)).toEqual(['simple', 'edit', 'advanced']);
+    expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS[0].controls).toContain('Make selected panel bigger');
+    expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS[1].controls).toContain('Drag rectangular panels');
+    expect(GUIDED_LAYOUT_DISCLOSURE_LEVELS[2].controls).toContain('Custom shapes');
+    expect(ADVANCED_STUDIO_ACTION_LABELS.openBlank).toContain('Advanced Studio');
   });
 });
