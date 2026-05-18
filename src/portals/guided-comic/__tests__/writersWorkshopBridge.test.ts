@@ -4,12 +4,18 @@ import type { IssueOutline } from '@/shared/writer/types';
 import {
   createWriterIssueDraftFromGuidedStoryFoundation,
   buildGuidedWriterToolRequest,
+  analyzeGuidedDialogueSeedDensity,
+  createEditableDialogueSeedsFromWriterSeed,
   getGuidedWriterPageBeatBatchOffsets,
+  buildGuidedComicVisualPageMetadata,
   mapWriterDialogueToGuidedDialogueSeeds,
   mapWriterIssueToGuidedStoryFoundation,
   mapWriterOutlineToGuidedOutlineBeats,
   mapWriterOutlineToGuidedPageCards,
   mapWriterPagesToGuidedPageCards,
+  promoteAcceptedDialogueToBalloonSeeds,
+  setEditableDialogueSeedStatus,
+  updateEditableDialogueSeedText,
   mergeWriterOutlineIntoGuidedPageCards,
   mergeWriterPagesIntoGuidedPageCards,
 } from '../writersWorkshopBridge';
@@ -485,6 +491,267 @@ describe('writersWorkshopBridge', () => {
             dialogueText: 'SOL: Run.',
           },
         ],
+      },
+    ]);
+  });
+
+  it('builds visual storytelling metadata from page beats, dialogue seeds, and layout intent', () => {
+    const metadata = buildGuidedComicVisualPageMetadata({
+      page: {
+        pageNumber: 2,
+        summary: 'Mara and Sol reach the sky observatory before the storm breaks.',
+        panelCount: '3',
+        keyCharacters: 'Mara, Sol',
+        keyLocation: 'Sky Observatory',
+        expanded: true,
+        panelBeats: [
+          'Wide establishing shot of the observatory under storm light.',
+          'Mara notices the gate is already opening.',
+          'Sol reaches for the broken control lever.',
+        ],
+      },
+      layoutPanels: [
+        {
+          panelId: 'page-2-panel-1',
+          panelNumber: 1,
+          beatText: 'Wide establishing shot of the observatory under storm light.',
+          intent: 'wide',
+          columnSpan: 2,
+          rowSpan: 1,
+        },
+        {
+          panelId: 'page-2-panel-2',
+          panelNumber: 2,
+          beatText: 'Mara notices the gate is already opening.',
+          intent: 'normal',
+          columnSpan: 1,
+          rowSpan: 1,
+        },
+        {
+          panelId: 'page-2-panel-3',
+          panelNumber: 3,
+          beatText: 'Sol reaches for the broken control lever.',
+          intent: 'feature',
+          columnSpan: 2,
+          rowSpan: 2,
+        },
+      ],
+      dialogueSeed: {
+        pageNumber: 2,
+        scriptText: 'PANEL 2\nMARA: The gate is awake.\n\nPANEL 3\nSOL: Then we close it.',
+        panelSeeds: [
+          {
+            panelNumber: 2,
+            beatText: 'Mara notices the gate is already opening.',
+            dialogueText: 'MARA: The gate is awake.',
+          },
+          {
+            panelNumber: 3,
+            beatText: 'Sol reaches for the broken control lever.',
+            dialogueText: 'SOL: Then we close it.',
+          },
+        ],
+      },
+    });
+
+    expect(metadata.referenceNeeds).toEqual({
+      characters: ['Mara', 'Sol'],
+      locations: ['Sky Observatory'],
+      npcs: [],
+    });
+    expect(metadata.layoutIntent).toBe('feature');
+    expect(metadata.panels[0]).toMatchObject({
+      panelId: 'page-2-panel-1',
+      panelNumber: 1,
+      layoutIntent: 'wide',
+      dialogueText: '',
+    });
+    expect(metadata.panels[1]).toMatchObject({
+      panelId: 'page-2-panel-2',
+      panelNumber: 2,
+      dialogueText: 'MARA: The gate is awake.',
+      layoutIntent: 'normal',
+    });
+    expect(metadata.panels[1].visualPrompt).toContain('Mara notices the gate is already opening.');
+    expect(metadata.panels[1].visualPrompt).toContain('Dialogue context: MARA: The gate is awake.');
+    expect(metadata.panels[1].visualPrompt).toContain('Key characters: Mara, Sol.');
+    expect(metadata.panels[2].visualPrompt).toContain('Composition intent: feature.');
+  });
+
+  it('creates editable dialogue seeds with source, speaker, kind, and generated status', () => {
+    const editableSeeds = createEditableDialogueSeedsFromWriterSeed({
+      pageId: 'writer-page-1',
+      pageNumber: 1,
+      scriptText: 'PANEL 1\nMARA: It is awake.\nCAPTION: Dawn splits the city.',
+      panelSeeds: [
+        {
+          panelNumber: 1,
+          beatText: 'Mara looks up at the gate.',
+          dialogueText: 'MARA: It is awake.\nCAPTION: Dawn splits the city.',
+        },
+      ],
+    });
+
+    expect(editableSeeds).toEqual([
+      {
+        id: 'page-1-panel-1-line-1',
+        pageId: 'writer-page-1',
+        pageNumber: 1,
+        panelNumber: 1,
+        order: 1,
+        kind: 'dialogue',
+        speaker: 'MARA',
+        text: 'It is awake.',
+        originalText: 'MARA: It is awake.',
+        beatText: 'Mara looks up at the gate.',
+        status: 'generated',
+        source: 'writer-tools',
+      },
+      {
+        id: 'page-1-panel-1-line-2',
+        pageId: 'writer-page-1',
+        pageNumber: 1,
+        panelNumber: 1,
+        order: 2,
+        kind: 'narration',
+        speaker: 'CAPTION',
+        text: 'Dawn splits the city.',
+        originalText: 'CAPTION: Dawn splits the city.',
+        beatText: 'Mara looks up at the gate.',
+        status: 'generated',
+        source: 'writer-tools',
+      },
+    ]);
+  });
+
+  it('supports manual edits and acceptance without mutating other dialogue seeds', () => {
+    const seeds = createEditableDialogueSeedsFromWriterSeed({
+      pageNumber: 1,
+      scriptText: '',
+      panelSeeds: [
+        { panelNumber: 1, beatText: 'A beat.', dialogueText: 'MARA: We move now.' },
+        { panelNumber: 2, beatText: 'Another beat.', dialogueText: 'SOL: Wait.' },
+      ],
+    });
+
+    const edited = updateEditableDialogueSeedText(seeds, 'page-1-panel-1-line-1', 'We move at dawn.');
+    const accepted = setEditableDialogueSeedStatus(edited, 'page-1-panel-1-line-1', 'accepted');
+    const rejected = setEditableDialogueSeedStatus(accepted, 'page-1-panel-2-line-1', 'rejected');
+
+    expect(rejected[0]).toMatchObject({
+      id: 'page-1-panel-1-line-1',
+      text: 'We move at dawn.',
+      status: 'accepted',
+    });
+    expect(rejected[1]).toMatchObject({
+      id: 'page-1-panel-2-line-1',
+      text: 'Wait.',
+      status: 'rejected',
+    });
+    expect(seeds[0]).toMatchObject({ text: 'We move now.', status: 'generated' });
+  });
+
+  it('reports soft dialogue density and crowding indicators', () => {
+    const seeds = createEditableDialogueSeedsFromWriterSeed({
+      pageNumber: 1,
+      scriptText: '',
+      panelSeeds: [
+        {
+          panelNumber: 1,
+          beatText: 'A crowded reveal.',
+          dialogueText:
+            'MARA: This is a very long explanation about the gate, the storm, the city, and why every second matters before sunrise.\nSOL: Then we need a better plan.',
+        },
+        {
+          panelNumber: 2,
+          beatText: 'Quiet reaction.',
+          dialogueText: 'CAPTION: Silence.',
+        },
+      ],
+    });
+
+    const density = analyzeGuidedDialogueSeedDensity(seeds);
+
+    expect(density.panelSummaries[0]).toMatchObject({
+      panelNumber: 1,
+      seedCount: 2,
+      hasCrowdingRisk: true,
+    });
+    expect(density.panelSummaries[0].indicators).toEqual(
+      expect.arrayContaining(['dense dialogue', 'high text load', 'possible crowding', 'consider reducing dialogue']),
+    );
+    expect(density.pageIndicators).toEqual(expect.arrayContaining(['narration/dialogue imbalance']));
+  });
+
+  it('promotes only accepted editable dialogue seeds into Advanced Studio balloon seed metadata', () => {
+    const seeds = [
+      {
+        id: 'seed-1',
+        pageNumber: 2,
+        panelNumber: 1,
+        order: 1,
+        kind: 'dialogue' as const,
+        speaker: 'MARA',
+        text: 'We close the gate.',
+        originalText: 'MARA: We close the gate.',
+        beatText: 'Mara reaches the lever.',
+        status: 'accepted' as const,
+        source: 'writer-tools' as const,
+      },
+      {
+        id: 'seed-2',
+        pageNumber: 2,
+        panelNumber: 1,
+        order: 2,
+        kind: 'narration' as const,
+        speaker: 'CAPTION',
+        text: 'The city holds its breath.',
+        originalText: 'CAPTION: The city holds its breath.',
+        beatText: 'Mara reaches the lever.',
+        status: 'accepted' as const,
+        source: 'manual' as const,
+      },
+      {
+        id: 'seed-3',
+        pageNumber: 2,
+        panelNumber: 2,
+        order: 1,
+        kind: 'dialogue' as const,
+        speaker: 'SOL',
+        text: 'Rejected line.',
+        originalText: 'SOL: Rejected line.',
+        beatText: 'Sol watches.',
+        status: 'rejected' as const,
+        source: 'writer-tools' as const,
+      },
+    ];
+
+    const balloonSeeds = promoteAcceptedDialogueToBalloonSeeds(seeds, {
+      panelIdFor: (panelNumber) => `page-2-panel-${panelNumber}`,
+    });
+
+    expect(balloonSeeds).toEqual([
+      {
+        seedId: 'seed-1',
+        panelId: 'page-2-panel-1',
+        pageNumber: 2,
+        panelNumber: 1,
+        order: 1,
+        kind: 'dialogue',
+        speaker: 'MARA',
+        text: 'We close the gate.',
+        source: 'writer-tools',
+      },
+      {
+        seedId: 'seed-2',
+        panelId: 'page-2-panel-1',
+        pageNumber: 2,
+        panelNumber: 1,
+        order: 2,
+        kind: 'narration',
+        speaker: 'CAPTION',
+        text: 'The city holds its breath.',
+        source: 'manual',
       },
     ]);
   });

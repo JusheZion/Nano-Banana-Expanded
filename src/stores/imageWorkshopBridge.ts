@@ -24,6 +24,12 @@ export type GuidedImageWorkshopPanelLayout = {
   aspectRatioHint?: GuidedImageWorkshopAspectRatio;
 };
 
+export type GuidedImageWorkshopReferenceNeeds = {
+  characters: string[];
+  locations: string[];
+  npcs: string[];
+};
+
 export type GuidedImageWorkshopHandoff = {
   source: 'guided-comic';
   currentStep: 'visual-prep' | 'art';
@@ -37,6 +43,9 @@ export type GuidedImageWorkshopHandoff = {
   pageNumber?: number;
   panelNumber?: number;
   panelBeat?: string;
+  visualPrompt?: string;
+  dialogueContext?: string;
+  referenceNeeds?: GuidedImageWorkshopReferenceNeeds;
   panelLayout?: GuidedImageWorkshopPanelLayout;
   pageKeyCharacters?: string[];
   pageKeyLocation?: string;
@@ -81,6 +90,15 @@ function joinOptionalList(values: string[] | undefined): string {
   return labels.length > 0 ? labels.join(', ') : 'None specified';
 }
 
+function formatReferenceNeeds(needs: GuidedImageWorkshopReferenceNeeds | undefined): string {
+  if (!needs) return '';
+  return [
+    `characters - ${joinOptionalList(needs.characters)}`,
+    `locations - ${joinOptionalList(needs.locations)}`,
+    `NPCs - ${joinOptionalList(needs.npcs)}`,
+  ].join('; ');
+}
+
 export function buildGuidedImageWorkshopPrompt(handoff: GuidedImageWorkshopHandoff): string {
   const panelBeat = handoff.panelBeat?.trim() || 'Create finished comic panel art for the selected panel.';
   const pageSummary = handoff.pageSummary?.trim() || 'No page summary provided.';
@@ -95,6 +113,9 @@ export function buildGuidedImageWorkshopPrompt(handoff: GuidedImageWorkshopHando
   return [
     panelLabel ? `Panel: ${panelLabel}` : '',
     `Image objective: ${panelBeat}`,
+    handoff.visualPrompt?.trim() ? `Visual storytelling prompt: ${handoff.visualPrompt.trim()}` : '',
+    handoff.dialogueContext?.trim() ? `Dialogue context for final lettering: ${handoff.dialogueContext.trim()}` : '',
+    handoff.referenceNeeds ? `Visual reference needs: ${formatReferenceNeeds(handoff.referenceNeeds)}` : '',
     `Page context: ${pageSummary}`,
     `Page key characters: ${joinOptionalList(handoff.pageKeyCharacters)}`,
     `Page key location: ${pageKeyLocation}`,

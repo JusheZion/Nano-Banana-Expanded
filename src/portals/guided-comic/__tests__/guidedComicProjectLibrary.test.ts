@@ -148,6 +148,59 @@ describe('guided comic project library', () => {
     expect(duplicate.snapshot.writerIssueId).toBe('writer-issue-42');
   });
 
+  it('preserves editable dialogue seeds and promoted balloon seeds in local snapshots', () => {
+    const snapshot = makeSnapshot({
+      writerDialogueSeeds: {
+        2: {
+          pageNumber: 2,
+          scriptText: 'PANEL 1\nMARA: We move.',
+          panelSeeds: [{ panelNumber: 1, beatText: 'Mara moves.', dialogueText: 'MARA: We move.' }],
+        },
+      },
+      editableDialogueSeeds: {
+        2: [
+          {
+            id: 'page-2-panel-1-line-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            speaker: 'MARA',
+            text: 'We move.',
+            originalText: 'MARA: We move.',
+            beatText: 'Mara moves.',
+            status: 'accepted',
+            source: 'writer-tools',
+          },
+        ],
+      },
+      promotedBalloonSeeds: {
+        2: [
+          {
+            seedId: 'page-2-panel-1-line-1',
+            panelId: 'page-2-panel-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            speaker: 'MARA',
+            text: 'We move.',
+            source: 'writer-tools',
+          },
+        ],
+      },
+    });
+
+    const library = createGuidedComicProjectLibrary(snapshot, {
+      projectId: 'project-1',
+      now: '2026-05-18T12:00:00.000Z',
+    });
+    const parsed = parseGuidedComicProjectLibrary(JSON.stringify(library));
+
+    expect(parsed?.projects[0].snapshot.editableDialogueSeeds).toEqual(snapshot.editableDialogueSeeds);
+    expect(parsed?.projects[0].snapshot.promotedBalloonSeeds).toEqual(snapshot.promotedBalloonSeeds);
+  });
+
   it('detects unsaved changes by comparing the active snapshot to the saved project', () => {
     const saved = createGuidedComicProject(makeSnapshot(), {
       projectId: 'project-1',

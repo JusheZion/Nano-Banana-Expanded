@@ -150,7 +150,9 @@ Guided Comics output:
 - The bridge contract currently covers Guided story foundation, Writers Workshop issue metadata, Writers Workshop outline JSON, Writers Workshop page beats JSON, Writers Workshop dialogue text, and Guided page card/panel beat outputs.
 - Phase 3 is implemented as an explicit Guided Comics bridge panel: users can continue locally, load/select/link existing Writer issues, create a linked Writer issue from the Guided story foundation, open the linked issue in Writers Workshop, and import latest outline/page beats/dialogue from the linked issue.
 - Phase 4 is implemented as direct linked-issue writer-tools actions inside Guided Comics. When a linked Writer issue exists, Guided can trigger outline generation, pacing review, page-beat generation, and selected-page dialogue drafting through the same Writers Workshop modes.
-- Phase 5 remains the next implementation boundary: make Guided Comics the visual storytelling bridge from accepted story structure into page cards, panel beats, reference needs, image prompts, layout intent, and Advanced Studio-ready metadata.
+- Phase 5 is implemented as the visual storytelling bridge from accepted story structure into page/panel visual metadata, Imageshop prompt context, layout intent, and Advanced Studio-ready panel metadata.
+- Editable dialogue seeds and balloon seed refinement are implemented as a lightweight editorial staging layer. Guided Comics can stage, edit, accept, reject, analyze, and explicitly promote accepted dialogue into Advanced Studio balloon seed metadata without placing balloons or finalizing lettering.
+- The next boundary is manual QA and optional Advanced Studio consumption UI for promoted balloon seed metadata, while keeping final lettering and balloon layout inside Advanced Studio.
 
 ### Phase 1 - Stop Duplicating the Writing Workflow
 
@@ -229,6 +231,13 @@ Guided Comics should focus on:
 - panel art prompts
 - layout intent from narrative importance
 - handoff to Advanced Studio with exact geometry/images/metadata
+
+Implemented Phase 5 bridge behavior:
+
+- `buildGuidedComicVisualPageMetadata` turns Guided page cards, panel beats, layout panel plans, and optional Writer dialogue seeds into page/panel visual metadata.
+- Imageshop handoffs can now carry visual storytelling prompts, dialogue context for final lettering, and reference needs alongside the existing page/panel/reference payload.
+- Guided Comic Layout handoffs can carry `visualStoryMetadata` to Advanced Studio.
+- Advanced Studio import preserves Guided page/panel number, panel beat, dialogue text, visual prompt, and layout intent as optional panel metadata without changing panel geometry, images, shapes, balloons, or export behavior.
 
 ## UX Guardrails
 
@@ -322,11 +331,17 @@ The bridge should progressively enhance the experience rather than block local c
 
 ## Recommended Next Step
 
-Begin Phase 5 with the visual storytelling bridge:
+Continue after Phase 5 with editable dialogue and balloon-seed refinement:
 
-- turn accepted outline/page beat/dialogue data into richer Guided page and panel metadata
-- surface dialogue seeds as editable page/panel suggestions before Advanced Studio handoff
-- derive visual reference needs from story/page data
-- generate panel art prompt inputs from accepted beats, dialogue context, and references
-- preserve the exact Guided geometry/images/metadata handoff into Advanced Studio
+- surface imported dialogue seeds as editable page/panel suggestions
+- add an explicit user action to promote accepted dialogue into Advanced Studio balloon seed metadata
+- manually QA the metadata handoff against a disposable linked Writer issue and a real Guided-to-Advanced page
 - keep Advanced Studio as the power-user refinement path for lettering, custom shapes, overlays, masks, and export polish
+
+Implemented editable dialogue / balloon seed behavior:
+
+- imported Writer dialogue is converted into editable per-panel line seeds with source, speaker, narration/dialogue kind, order, and status
+- Guided Art step supports local dialogue seed edits, manual seed creation, acceptance/rejection, and page-level regeneration through the linked Writer issue path
+- soft editorial indicators flag dense dialogue, high text load, possible crowding, narration/dialogue imbalance, and suggestions like consider reducing dialogue or splitting the panel
+- `Promote to Advanced Studio Balloon Seeds` explicitly exports only accepted lines into structured balloon seed metadata
+- Advanced Studio import preserves promoted balloon seeds on the page but does not create balloon objects, alter balloon geometry, or finalize lettering

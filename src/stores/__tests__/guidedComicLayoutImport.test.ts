@@ -151,6 +151,44 @@ describe('guided comic layout import', () => {
           beatText: 'Wide establishing shot.',
         },
       ],
+      visualStoryMetadata: {
+        pageNumber: 4,
+        summary: 'The team enters the observatory.',
+        layoutIntent: 'wide',
+        referenceNeeds: {
+          characters: ['Flux'],
+          locations: ['Sky Observatory'],
+          npcs: [],
+        },
+        panels: [
+          {
+            panelId: 'page-4-panel-1',
+            panelNumber: 1,
+            beatText: 'Wide establishing shot.',
+            dialogueText: 'FLUX: We are inside.',
+            visualPrompt: 'Wide establishing shot of Flux entering the observatory with storm light.',
+            layoutIntent: 'wide',
+            referenceNeeds: {
+              characters: ['Flux'],
+              locations: ['Sky Observatory'],
+              npcs: [],
+            },
+          },
+        ],
+      },
+      balloonSeeds: [
+        {
+          seedId: 'seed-1',
+          panelId: 'page-4-panel-1',
+          pageNumber: 4,
+          panelNumber: 1,
+          order: 1,
+          kind: 'dialogue',
+          speaker: 'FLUX',
+          text: 'We are inside.',
+          source: 'writer-tools',
+        },
+      ],
       requestedAt: '2026-05-01T00:00:00.000Z',
     };
 
@@ -166,6 +204,12 @@ describe('guided comic layout import', () => {
       width: 800,
       imageUrl: 'https://example.com/panel-1.png',
       prompt: 'Wide establishing shot.',
+      guidedPageNumber: 4,
+      guidedPanelNumber: 1,
+      guidedPanelBeat: 'Wide establishing shot.',
+      guidedDialogueText: 'FLUX: We are inside.',
+      guidedVisualPrompt: 'Wide establishing shot of Flux entering the observatory with storm light.',
+      guidedLayoutIntent: 'wide',
       imageFillMode: 'cover',
     });
     expect(page.panels[1]).toMatchObject({
@@ -176,6 +220,20 @@ describe('guided comic layout import', () => {
       imageScale: 1.35,
     });
     expect(page.panels[2]?.imageUrl).toBe('https://example.com/panel-3.png');
+    expect(page.balloons).toEqual([]);
+    expect(page.guidedBalloonSeeds).toEqual([
+      {
+        seedId: 'seed-1',
+        panelId: 'page-4-panel-1',
+        pageNumber: 4,
+        panelNumber: 1,
+        order: 1,
+        kind: 'dialogue',
+        speaker: 'FLUX',
+        text: 'We are inside.',
+        source: 'writer-tools',
+      },
+    ]);
     expect(page.layerOrder).toEqual(['test-panel-1', 'test-panel-2', 'test-panel-3']);
     expect(useComicStore.getState().currentPageId).toBe('page-1');
   });

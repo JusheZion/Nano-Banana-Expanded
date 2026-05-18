@@ -4,6 +4,7 @@ import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
 import type { GradientSpec } from '../types/gradient';
+import type { GuidedComicBalloonSeed } from '../portals/guided-comic/writersWorkshopBridge';
 import type { GuidedComicLayoutHandoff, GuidedComicLayoutTemplate } from './guidedComicLayoutBridge';
 
 export interface Panel {
@@ -43,6 +44,14 @@ export interface Panel {
     imageScale?: number;
     imageFocusX?: number;
     imageFocusY?: number;
+
+    // Guided Comic narrative metadata carried through handoff for later lettering/polish.
+    guidedPageNumber?: number;
+    guidedPanelNumber?: number;
+    guidedPanelBeat?: string;
+    guidedDialogueText?: string;
+    guidedVisualPrompt?: string;
+    guidedLayoutIntent?: 'feature' | 'wide' | 'tall' | 'normal';
 
     // Texture
     textureId?: string;
@@ -94,6 +103,7 @@ export interface ComicPage {
     balloons: BalloonInstance[];
     drawings: Drawing[];
     overlays?: OverlayObject[];
+    guidedBalloonSeeds?: GuidedComicBalloonSeed[];
     background: string;
     layerOrder: string[]; // Order of IDs from back to front
     /** When true, gutter snapping is disabled for this page (full-bleed cover). */
@@ -1281,6 +1291,7 @@ export const useComicStore = create<ComicState>()(
                         const sourcePanelId = entry.panelId;
                         const panelImage = payload.panelArtImages[sourcePanelId];
                         const panelBeat = payload.panelBeats?.find((beat) => beat.panelId === sourcePanelId);
+                        const visualPanel = payload.visualStoryMetadata?.panels.find((panel) => panel.panelId === sourcePanelId);
                         const sourceGeometry = entry.geometry ?? payload.panelGeometry.find((panel) => panel.panelId === sourcePanelId);
                         return {
                             id: crypto.randomUUID(),
@@ -1297,6 +1308,12 @@ export const useComicStore = create<ComicState>()(
                             imageFocusY: panelImage ? sourceGeometry?.imageFocusY : undefined,
                             isVisible: payload.panelShapeDefaults?.isVisible ?? true,
                             isLocked: payload.panelShapeDefaults?.isLocked ?? false,
+                            guidedPageNumber: payload.visualStoryMetadata?.pageNumber,
+                            guidedPanelNumber: visualPanel?.panelNumber,
+                            guidedPanelBeat: visualPanel?.beatText,
+                            guidedDialogueText: visualPanel?.dialogueText,
+                            guidedVisualPrompt: visualPanel?.visualPrompt,
+                            guidedLayoutIntent: visualPanel?.layoutIntent,
                             strokeColor: genre.palette?.border ?? '#000000',
                             ...(genre.textureId !== undefined && { textureId: genre.textureId }),
                             ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
@@ -1322,6 +1339,7 @@ export const useComicStore = create<ComicState>()(
                                     balloons: [],
                                     drawings: [],
                                     overlays: page.overlays ?? [],
+                                    guidedBalloonSeeds: payload.balloonSeeds ?? [],
                                     background: targetPage?.background ?? defaultBg,
                                     layerOrder: panelLayerIds,
                                 }

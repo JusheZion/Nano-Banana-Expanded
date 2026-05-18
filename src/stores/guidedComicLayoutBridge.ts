@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { GuidedComicLayoutIntent, GuidedComicPanelGeometry } from '@/portals/guided-comic/guidedComicLayoutPlan';
+import type { GuidedComicBalloonSeed, GuidedComicVisualPageMetadata } from '@/portals/guided-comic/writersWorkshopBridge';
 
 export type GuidedComicLayoutTemplate =
   | 'auto'
@@ -56,6 +57,8 @@ export type GuidedComicLayoutHandoff = {
   panelArtImages: Record<string, GuidedComicLayoutPanelImage>;
   panelShapeDefaults?: GuidedComicPanelShapeDefaults;
   panelBeats?: GuidedComicLayoutPanelBeat[];
+  visualStoryMetadata?: GuidedComicVisualPageMetadata;
+  balloonSeeds?: GuidedComicBalloonSeed[];
   requestedAt: string;
 };
 

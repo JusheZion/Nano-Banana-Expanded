@@ -1,5 +1,6 @@
 import type { WriterIssueRow, WriterPageRow } from '@/shared/api/arcsWriterRoom';
 import { pageBeatsJsonSchema } from '@/shared/writer/schemas';
+import type { GuidedComicLayoutIntent, GuidedComicLayoutPanelPlan } from './guidedComicLayoutPlan';
 import type {
   IssueOutline,
   IssueOutlinePageBeat,
@@ -71,6 +72,79 @@ export type GuidedComicBridgeDialogueSeed = {
   }>;
 };
 
+export type GuidedComicVisualReferenceNeeds = {
+  characters: string[];
+  locations: string[];
+  npcs: string[];
+};
+
+export type GuidedComicVisualPanelMetadata = {
+  panelId?: string;
+  panelNumber: number;
+  beatText: string;
+  dialogueText: string;
+  visualPrompt: string;
+  layoutIntent: GuidedComicLayoutIntent;
+  referenceNeeds: GuidedComicVisualReferenceNeeds;
+};
+
+export type GuidedComicVisualPageMetadata = {
+  pageNumber: number;
+  summary: string;
+  layoutIntent: GuidedComicLayoutIntent;
+  referenceNeeds: GuidedComicVisualReferenceNeeds;
+  panels: GuidedComicVisualPanelMetadata[];
+  scriptText?: string;
+};
+
+export type GuidedComicDialogueSeedStatus = 'generated' | 'edited' | 'accepted' | 'rejected';
+export type GuidedComicDialogueSeedKind = 'dialogue' | 'narration';
+export type GuidedComicDialogueSeedSource = 'writer-tools' | 'manual';
+
+export type GuidedComicEditableDialogueSeed = {
+  id: string;
+  pageId?: string;
+  pageNumber: number;
+  panelNumber: number;
+  order: number;
+  kind: GuidedComicDialogueSeedKind;
+  speaker?: string;
+  text: string;
+  originalText: string;
+  beatText: string;
+  status: GuidedComicDialogueSeedStatus;
+  source: GuidedComicDialogueSeedSource;
+};
+
+export type GuidedComicDialoguePanelDensity = {
+  panelNumber: number;
+  seedCount: number;
+  wordCount: number;
+  narrationCount: number;
+  dialogueCount: number;
+  hasCrowdingRisk: boolean;
+  indicators: string[];
+};
+
+export type GuidedComicDialogueDensitySummary = {
+  pageNumber: number | null;
+  totalWordCount: number;
+  pageIndicators: string[];
+  panelSummaries: GuidedComicDialoguePanelDensity[];
+};
+
+export type GuidedComicBalloonSeed = {
+  seedId: string;
+  panelId?: string;
+  pageNumber: number;
+  panelNumber: number;
+  order: number;
+  kind: GuidedComicDialogueSeedKind;
+  speaker?: string;
+  text: string;
+  source: GuidedComicDialogueSeedSource;
+};
+
 export type GuidedWriterToolAction = 'outline' | 'pacing' | 'page-beats' | 'dialogue';
 
 export type GuidedWriterToolRequestOptions = {
@@ -118,6 +192,13 @@ function coercePositiveIntegerText(value: unknown): string {
 
 function trimText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function splitListText(value: unknown): string[] {
+  return trimText(value)
+    .split(/[\n,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function readGuidedComicNotes(notes: Record<string, unknown>): Partial<GuidedComicNotes> {
@@ -426,6 +507,22 @@ function parseScriptPanelDialogue(scriptText: string): Map<number, string> {
   return new Map(Array.from(panelDialogue.entries()).map(([panelNumber, lines]) => [panelNumber, lines.join('\n')]));
 }
 
+function parseDialogueLine(line: string): {
+  kind: GuidedComicDialogueSeedKind;
+  speaker?: string;
+  text: string;
+} {
+  const trimmed = line.trim();
+  const speakerMatch = trimmed.match(/^([A-Z][A-Z0-9 _-]{1,30}):\s*(.+)$/);
+  if (!speakerMatch) {
+    return { kind: 'dialogue', text: trimmed };
+  }
+  const speaker = speakerMatch[1].trim();
+  const text = speakerMatch[2].trim();
+  const kind = /\b(CAPTION|NARRATION|NARRATOR|BOX)\b/.test(speaker) ? 'narration' : 'dialogue';
+  return { kind, speaker, text };
+}
+
 export function mapWriterDialogueToGuidedDialogueSeeds(pages: WriterPageBridgeRow[]): GuidedComicBridgeDialogueSeed[] {
   return [...pages]
     .sort((a, b) => a.page_number - b.page_number)
@@ -445,4 +542,223 @@ export function mapWriterDialogueToGuidedDialogueSeeds(pages: WriterPageBridgeRo
         })),
       };
     });
+}
+
+export function createEditableDialogueSeedsFromWriterSeed(
+  seed: GuidedComicBridgeDialogueSeed,
+): GuidedComicEditableDialogueSeed[] {
+  return seed.panelSeeds.flatMap((panelSeed) =>
+    panelSeed.dialogueText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const parsedLine = parseDialogueLine(line);
+        const order = index + 1;
+        return {
+          id: `page-${seed.pageNumber}-panel-${panelSeed.panelNumber}-line-${order}`,
+          pageId: seed.pageId,
+          pageNumber: seed.pageNumber,
+          panelNumber: panelSeed.panelNumber,
+          order,
+          kind: parsedLine.kind,
+          speaker: parsedLine.speaker,
+          text: parsedLine.text,
+          originalText: line,
+          beatText: panelSeed.beatText,
+          status: 'generated',
+          source: 'writer-tools',
+        };
+      }),
+  );
+}
+
+export function updateEditableDialogueSeedText(
+  seeds: GuidedComicEditableDialogueSeed[],
+  seedId: string,
+  text: string,
+): GuidedComicEditableDialogueSeed[] {
+  return seeds.map((seed) =>
+    seed.id === seedId
+      ? {
+          ...seed,
+          text,
+          status: seed.status === 'accepted' || seed.status === 'rejected' ? seed.status : 'edited',
+        }
+      : seed,
+  );
+}
+
+export function setEditableDialogueSeedStatus(
+  seeds: GuidedComicEditableDialogueSeed[],
+  seedId: string,
+  status: GuidedComicDialogueSeedStatus,
+): GuidedComicEditableDialogueSeed[] {
+  return seeds.map((seed) => (seed.id === seedId ? { ...seed, status } : seed));
+}
+
+function wordCount(value: string): number {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
+export function analyzeGuidedDialogueSeedDensity(
+  seeds: GuidedComicEditableDialogueSeed[],
+): GuidedComicDialogueDensitySummary {
+  const activeSeeds = seeds.filter((seed) => seed.status !== 'rejected' && seed.text.trim());
+  const seedsByPanel = new Map<number, GuidedComicEditableDialogueSeed[]>();
+  activeSeeds.forEach((seed) => {
+    seedsByPanel.set(seed.panelNumber, [...(seedsByPanel.get(seed.panelNumber) ?? []), seed]);
+  });
+
+  const panelSummaries = Array.from(seedsByPanel.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([panelNumber, panelSeeds]) => {
+      const panelWordCount = panelSeeds.reduce((total, seed) => total + wordCount(seed.text), 0);
+      const narrationCount = panelSeeds.filter((seed) => seed.kind === 'narration').length;
+      const dialogueCount = panelSeeds.filter((seed) => seed.kind === 'dialogue').length;
+      const indicators: string[] = [];
+      if (panelSeeds.length >= 2) indicators.push('dense dialogue');
+      if (panelWordCount >= 24) indicators.push('high text load');
+      if (panelSeeds.length >= 2 && panelWordCount >= 24) indicators.push('possible crowding');
+      if (panelWordCount >= 18) indicators.push('consider reducing dialogue');
+      if (panelWordCount >= 32) indicators.push('consider splitting panel');
+
+      return {
+        panelNumber,
+        seedCount: panelSeeds.length,
+        wordCount: panelWordCount,
+        narrationCount,
+        dialogueCount,
+        hasCrowdingRisk: indicators.includes('possible crowding'),
+        indicators,
+      };
+    });
+
+  const narrationTotal = activeSeeds.filter((seed) => seed.kind === 'narration').length;
+  const dialogueTotal = activeSeeds.filter((seed) => seed.kind === 'dialogue').length;
+  const pageIndicators: string[] = [];
+  if (narrationTotal > 0 && dialogueTotal > 0 && Math.max(narrationTotal, dialogueTotal) >= 2) {
+    pageIndicators.push('narration/dialogue imbalance');
+  }
+  if (panelSummaries.some((summary) => summary.hasCrowdingRisk)) {
+    pageIndicators.push('possible crowding');
+  }
+
+  return {
+    pageNumber: activeSeeds[0]?.pageNumber ?? null,
+    totalWordCount: panelSummaries.reduce((total, panel) => total + panel.wordCount, 0),
+    pageIndicators,
+    panelSummaries,
+  };
+}
+
+export function promoteAcceptedDialogueToBalloonSeeds(
+  seeds: GuidedComicEditableDialogueSeed[],
+  options: { panelIdFor?: (panelNumber: number) => string | undefined } = {},
+): GuidedComicBalloonSeed[] {
+  return seeds
+    .filter((seed) => seed.status === 'accepted' && seed.text.trim())
+    .sort((a, b) => a.pageNumber - b.pageNumber || a.panelNumber - b.panelNumber || a.order - b.order)
+    .map((seed) => ({
+      seedId: seed.id,
+      panelId: options.panelIdFor?.(seed.panelNumber),
+      pageNumber: seed.pageNumber,
+      panelNumber: seed.panelNumber,
+      order: seed.order,
+      kind: seed.kind,
+      speaker: seed.speaker,
+      text: seed.text.trim(),
+      source: seed.source,
+    }));
+}
+
+function strongestLayoutIntent(panels: GuidedComicLayoutPanelPlan[]): GuidedComicLayoutIntent {
+  if (panels.some((panel) => panel.intent === 'feature')) return 'feature';
+  if (panels.some((panel) => panel.intent === 'wide')) return 'wide';
+  if (panels.some((panel) => panel.intent === 'tall')) return 'tall';
+  return 'normal';
+}
+
+function joinPromptLine(label: string, value: string): string {
+  return value ? `${label}: ${sentence(value)}` : '';
+}
+
+function buildPanelVisualPrompt(options: {
+  pageSummary: string;
+  beatText: string;
+  dialogueText: string;
+  layoutIntent: GuidedComicLayoutIntent;
+  referenceNeeds: GuidedComicVisualReferenceNeeds;
+}): string {
+  return [
+    sentence(options.beatText),
+    joinPromptLine('Page context', options.pageSummary),
+    joinPromptLine('Dialogue context', options.dialogueText),
+    options.referenceNeeds.characters.length > 0
+      ? sentence(`Key characters: ${options.referenceNeeds.characters.join(', ')}`)
+      : '',
+    options.referenceNeeds.locations.length > 0
+      ? sentence(`Key location: ${options.referenceNeeds.locations.join(', ')}`)
+      : '',
+    options.referenceNeeds.npcs.length > 0 ? sentence(`NPC context: ${options.referenceNeeds.npcs.join(', ')}`) : '',
+    sentence(`Composition intent: ${options.layoutIntent}`),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function buildGuidedComicVisualPageMetadata(options: {
+  page: GuidedComicBridgePageCard;
+  layoutPanels: GuidedComicLayoutPanelPlan[];
+  dialogueSeed?: GuidedComicBridgeDialogueSeed;
+  editableDialogueSeeds?: GuidedComicEditableDialogueSeed[];
+  npcNames?: string[];
+}): GuidedComicVisualPageMetadata {
+  const referenceNeeds: GuidedComicVisualReferenceNeeds = {
+    characters: splitListText(options.page.keyCharacters),
+    locations: splitListText(options.page.keyLocation),
+    npcs: options.npcNames?.map((name) => name.trim()).filter(Boolean) ?? [],
+  };
+  const dialogueByPanel = new Map<number, string>();
+  if (options.editableDialogueSeeds?.length) {
+    options.editableDialogueSeeds
+      .filter((seed) => seed.status !== 'rejected' && seed.text.trim())
+      .sort((a, b) => a.panelNumber - b.panelNumber || a.order - b.order)
+      .forEach((seed) => {
+        const prefix = seed.speaker ? `${seed.speaker}: ` : '';
+        const line = `${prefix}${seed.text.trim()}`;
+        dialogueByPanel.set(seed.panelNumber, [dialogueByPanel.get(seed.panelNumber), line].filter(Boolean).join('\n'));
+      });
+  } else {
+    options.dialogueSeed?.panelSeeds.forEach((seed) => {
+      dialogueByPanel.set(seed.panelNumber, seed.dialogueText.trim());
+    });
+  }
+
+  return {
+    pageNumber: options.page.pageNumber,
+    summary: trimText(options.page.summary),
+    layoutIntent: strongestLayoutIntent(options.layoutPanels),
+    referenceNeeds,
+    ...(options.dialogueSeed?.scriptText ? { scriptText: options.dialogueSeed.scriptText } : {}),
+    panels: options.layoutPanels.map((panel) => {
+      const beatText = trimText(panel.beatText) || trimText(options.page.panelBeats[panel.panelNumber - 1]);
+      const dialogueText = dialogueByPanel.get(panel.panelNumber) ?? '';
+      return {
+        panelId: panel.panelId,
+        panelNumber: panel.panelNumber,
+        beatText,
+        dialogueText,
+        layoutIntent: panel.intent,
+        referenceNeeds,
+        visualPrompt: buildPanelVisualPrompt({
+          pageSummary: options.page.summary,
+          beatText,
+          dialogueText,
+          layoutIntent: panel.intent,
+          referenceNeeds,
+        }),
+      };
+    }),
+  };
 }

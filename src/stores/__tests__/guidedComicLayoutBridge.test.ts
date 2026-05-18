@@ -46,6 +46,44 @@ describe('useGuidedComicLayoutBridge', () => {
           beatText: 'Opening image.',
         },
       ],
+      visualStoryMetadata: {
+        pageNumber: 2,
+        summary: 'The page opens on a citywide reveal.',
+        layoutIntent: 'wide',
+        referenceNeeds: {
+          characters: ['Flux'],
+          locations: ['Sky Observatory'],
+          npcs: [],
+        },
+        panels: [
+          {
+            panelId: 'page-2-panel-1',
+            panelNumber: 1,
+            beatText: 'Opening image.',
+            dialogueText: 'FLUX: The storm is here.',
+            visualPrompt: 'Show Flux watching the storm arrive over the observatory.',
+            layoutIntent: 'wide',
+            referenceNeeds: {
+              characters: ['Flux'],
+              locations: ['Sky Observatory'],
+              npcs: [],
+            },
+          },
+        ],
+      },
+      balloonSeeds: [
+        {
+          seedId: 'dialogue-seed-1',
+          panelId: 'page-2-panel-1',
+          pageNumber: 2,
+          panelNumber: 1,
+          order: 1,
+          kind: 'dialogue',
+          speaker: 'FLUX',
+          text: 'The storm is here.',
+          source: 'writer-tools',
+        },
+      ],
     });
 
     const payload = useGuidedComicLayoutBridge.getState().layoutHandoff;
@@ -80,6 +118,30 @@ describe('useGuidedComicLayoutBridge', () => {
         isVisible: true,
         isLocked: false,
       },
+      visualStoryMetadata: {
+        pageNumber: 2,
+        panels: [
+          {
+            panelId: 'page-2-panel-1',
+            dialogueText: 'FLUX: The storm is here.',
+            visualPrompt: 'Show Flux watching the storm arrive over the observatory.',
+            layoutIntent: 'wide',
+          },
+        ],
+      },
+      balloonSeeds: [
+        {
+          seedId: 'dialogue-seed-1',
+          panelId: 'page-2-panel-1',
+          pageNumber: 2,
+          panelNumber: 1,
+          order: 1,
+          kind: 'dialogue',
+          speaker: 'FLUX',
+          text: 'The storm is here.',
+          source: 'writer-tools',
+        },
+      ],
     });
     expect(payload?.requestedAt).toEqual(expect.any(String));
   });

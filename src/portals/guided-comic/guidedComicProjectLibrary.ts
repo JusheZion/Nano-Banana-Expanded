@@ -40,6 +40,8 @@ export type GuidedComicProjectSnapshot = {
   pageLayoutIntents?: Record<number, unknown>;
   pageLayoutGeometry?: Record<number, unknown[]>;
   writerDialogueSeeds?: Record<number, unknown>;
+  editableDialogueSeeds?: Record<number, unknown[]>;
+  promotedBalloonSeeds?: Record<number, unknown[]>;
   artDirection: {
     artStyle: string;
     defaultAspectRatio: string;

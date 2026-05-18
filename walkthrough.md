@@ -3034,6 +3034,133 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Guided Comics / Writers Workshop Bridge Phase 5 Completion - 2026-05-18
+
+### What changed
+
+- Completed Phase 5 of the Guided Comics / Writers Workshop bridge plan.
+- Added a tested visual storytelling metadata adapter that turns Guided page cards, panel beats, layout panel plans, and optional Writer dialogue seeds into page/panel visual metadata.
+- Enriched Guided-to-Imageshop panel handoffs with visual storytelling prompts, dialogue context for final lettering, and reference needs.
+- Added a visible Art step "Visual storytelling bridge" panel so the selected panel shows the composed visual prompt and dialogue seed context before opening Imageshop.
+- Extended Guided-to-Advanced layout handoffs with optional `visualStoryMetadata`.
+- Preserved the Phase 5 metadata on imported Advanced Studio panels as optional Guided metadata without changing geometry, images, panel shape behavior, balloons, layer order, or export behavior.
+- Updated the bridge plan document to mark Phase 5 implemented and identify editable dialogue/balloon seed refinement as the next boundary.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `src/stores/comicStore.ts`
+- `src/stores/__tests__/guidedComicLayoutImport.test.ts`
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `buildGuidedComicVisualPageMetadata` derives reference needs from page key characters/locations, merges matching Writer dialogue seeds by panel number, and keeps layout intent per panel.
+- Imageshop prompt construction now includes visual prompt context, dialogue context, and reference needs while preserving the existing no-lettering/no-embedded-text instruction.
+- Advanced Studio receives the exact existing layout geometry and panel images as before; Phase 5 only adds optional metadata fields to imported panels.
+- The added panel metadata is intended for later dialogue editing, balloon seed, and export polish work. It does not auto-create balloons or change Advanced Studio composition behavior.
+
+### Verification
+
+- Red tests confirmed the Phase 5 visual metadata helper, Imageshop prompt fields, and Advanced Studio metadata preservation were missing before implementation.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed.
+- `npm run build` passed.
+- `npm run lint` passed with existing warnings only.
+- Manual in-app browser smoke check at `http://localhost:5173/` confirmed the Guided Comic Art step renders the `Visual storytelling bridge` panel and keeps the existing Imageshop action available.
+
+### Outstanding issues
+
+- Imported dialogue seeds are now part of visual/Advanced metadata, but there is still no dedicated editable dialogue UI on Guided page/panel cards.
+- Phase 5 does not yet promote dialogue into actual Advanced Studio balloon objects; that remains a deliberate later step after manual QA.
+
+### Risks or caveats
+
+- The metadata handoff is additive. Future code should continue treating these fields as optional so legacy Guided and Advanced Studio payloads keep working.
+- Live writer-tools generation was not required for this slice; Phase 5 works with already-imported or locally edited Guided page/panel data.
+
+### Operator follow-up
+
+- Manually test a disposable linked Writer issue that has imported dialogue seeds, then send a page to Advanced Studio and confirm the optional metadata is present in serialized panel data if needed.
+
+### Next steps
+
+- Add editable dialogue seed controls in Guided Comics.
+- Add an explicit Advanced Studio balloon seed promotion path after manual QA confirms the metadata contract.
+
+---
+
+## Editable Dialogue Seeds and Balloon Seed Refinement - 2026-05-18
+
+### What changed
+
+- Added the next bridge phase: editable dialogue seeds plus explicit Advanced Studio balloon seed metadata promotion.
+- Added typed editable dialogue seed helpers that split imported Writer dialogue into per-panel lines with page/panel association, order, speaker, narration/dialogue kind, source attribution, original text, editable text, and status.
+- Added local editorial status support for `generated`, `edited`, `accepted`, and `rejected` dialogue seeds.
+- Added soft dialogue density analysis for dense dialogue, high text load, possible crowding, narration/dialogue imbalance, and suggestions to reduce dialogue or split a panel.
+- Added accepted-only balloon seed promotion metadata via `Promote to Advanced Studio Balloon Seeds`.
+- Extended Guided draft/project snapshots to persist editable dialogue seeds and promoted balloon seeds locally.
+- Extended Guided-to-Advanced layout handoff payloads with promoted `balloonSeeds`.
+- Preserved promoted balloon seeds on imported Advanced Studio pages without creating balloon objects or altering existing panel geometry, images, shapes, export, or balloon behavior.
+- Added Guided Art step UI for editing, accepting, rejecting, manually adding, regenerating, and promoting dialogue seeds while keeping final lettering in Advanced Studio.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts`
+- `src/stores/guidedComicLayoutBridge.ts`
+- `src/stores/__tests__/guidedComicLayoutBridge.test.ts`
+- `src/stores/comicStore.ts`
+- `src/stores/__tests__/guidedComicLayoutImport.test.ts`
+- `docs/guided-comics-writers-workshop-bridge-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Guided Comics remains an editorial staging and visual planning layer. It does not auto-place balloons, finalize lettering, or perform page composition.
+- Writer imports do not silently overwrite existing editable dialogue seeds. Fresh imports initialize editable seeds only when a page does not already have local editable seeds.
+- Explicit dialogue regeneration for a linked Writer issue clears that page's editable/promoted dialogue seed staging before importing the regenerated Writer dialogue.
+- Only accepted editable seeds are promoted into balloon seed metadata.
+- Rejected seeds remain local editorial state and are excluded from density/promotion output.
+- Advanced Studio import stores promoted balloon seeds as page metadata only; `page.balloons` remains empty during Guided layout import unless a separate Advanced Studio action creates actual balloons later.
+
+### Verification
+
+- Red tests confirmed the editable dialogue helpers, density indicators, accepted-only balloon seed promotion, snapshot persistence, and Advanced Studio page metadata preservation were missing before implementation.
+- `PATH=/usr/local/bin:$PATH npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed.
+- `PATH=/usr/local/bin:$PATH npm run build` passed.
+- `PATH=/usr/local/bin:$PATH npm run lint` passed with existing warnings only.
+- Browser smoke check passed against `http://127.0.0.1:5173/`: Guided Art rendered the `Editable dialogue seeds` surface, `Add local seed`, disabled `Regenerate page dialogue`, and `Promote to Advanced Studio Balloon Seeds`; browser console reported no errors. Mutation-heavy linked Writer/local draft QA remains a human-style follow-up to avoid altering the loaded comic during smoke verification.
+
+### Outstanding issues
+
+- Advanced Studio does not yet expose a UI for consuming promoted balloon seed metadata; it only preserves the metadata safely.
+- Full linked Writer issue mutation QA should be run against a disposable issue before using regeneration/promotion on important story data.
+
+### Risks or caveats
+
+- Editable dialogue staging is intentionally lightweight and should not grow into a full script editor inside Guided Comics.
+- Future work should keep Advanced Studio responsible for balloon layout, tails, typography, overlap resolution, and final export polish.
+
+### Operator follow-up
+
+- Manually QA linked Writer issue regeneration, local-only manual seed editing, accepted/rejected persistence, mixed narration/dialogue panels, and Guided-to-Advanced metadata handoff with a disposable project.
+
+### Next steps
+
+- Add an Advanced Studio affordance to review promoted balloon seed metadata and optionally create editable balloon drafts under explicit user control.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

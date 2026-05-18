@@ -99,7 +99,10 @@ import {
   type GuidedComicAiDraft,
 } from '@/portals/guided-comic/guidedComicAi';
 import {
+  analyzeGuidedDialogueSeedDensity,
+  buildGuidedComicVisualPageMetadata,
   buildGuidedWriterToolRequest,
+  createEditableDialogueSeedsFromWriterSeed,
   createWriterIssueDraftFromGuidedStoryFoundation,
   getGuidedWriterPageBeatBatchOffsets,
   mapWriterDialogueToGuidedDialogueSeeds,
@@ -108,7 +111,13 @@ import {
   mapWriterOutlineToGuidedPageCards,
   mergeWriterOutlineIntoGuidedPageCards,
   mergeWriterPagesIntoGuidedPageCards,
+  promoteAcceptedDialogueToBalloonSeeds,
+  setEditableDialogueSeedStatus,
+  updateEditableDialogueSeedText,
+  type GuidedComicBalloonSeed,
   type GuidedComicBridgeDialogueSeed,
+  type GuidedComicDialogueSeedStatus,
+  type GuidedComicEditableDialogueSeed,
   type GuidedWriterToolAction,
 } from '@/portals/guided-comic/writersWorkshopBridge';
 
@@ -339,6 +348,8 @@ type GuidedComicDraftState = {
   pageLayoutIntents: Record<number, GuidedComicLayoutIntent>;
   pageLayoutGeometry: Record<number, GuidedComicPanelGeometry[]>;
   writerDialogueSeeds: Record<number, GuidedComicBridgeDialogueSeed>;
+  editableDialogueSeeds: Record<number, GuidedComicEditableDialogueSeed[]>;
+  promotedBalloonSeeds: Record<number, GuidedComicBalloonSeed[]>;
 };
 
 const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
@@ -927,6 +938,8 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       pageLayoutIntents: parsed.pageLayoutIntents ?? {},
       pageLayoutGeometry: parsed.pageLayoutGeometry ?? {},
       writerDialogueSeeds: (parsed.writerDialogueSeeds ?? {}) as Record<number, GuidedComicBridgeDialogueSeed>,
+      editableDialogueSeeds: (parsed.editableDialogueSeeds ?? {}) as Record<number, GuidedComicEditableDialogueSeed[]>,
+      promotedBalloonSeeds: (parsed.promotedBalloonSeeds ?? {}) as Record<number, GuidedComicBalloonSeed[]>,
     };
   } catch {
     return null;
@@ -959,6 +972,8 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     pageLayoutIntents: draft.pageLayoutIntents,
     pageLayoutGeometry: draft.pageLayoutGeometry,
     writerDialogueSeeds: draft.writerDialogueSeeds,
+    editableDialogueSeeds: draft.editableDialogueSeeds,
+    promotedBalloonSeeds: draft.promotedBalloonSeeds,
     artDirection: draft.artDirection,
     currentStep: guidedComicStepIdFromIndex(draft.activeIndex),
     selectedPanelId: draft.selectedPanelId,
@@ -986,6 +1001,8 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     pageLayoutIntents: (snapshot.pageLayoutIntents ?? {}) as Record<number, GuidedComicLayoutIntent>,
     pageLayoutGeometry: (snapshot.pageLayoutGeometry ?? {}) as Record<number, GuidedComicPanelGeometry[]>,
     writerDialogueSeeds: (snapshot.writerDialogueSeeds ?? {}) as Record<number, GuidedComicBridgeDialogueSeed>,
+    editableDialogueSeeds: (snapshot.editableDialogueSeeds ?? {}) as Record<number, GuidedComicEditableDialogueSeed[]>,
+    promotedBalloonSeeds: (snapshot.promotedBalloonSeeds ?? {}) as Record<number, GuidedComicBalloonSeed[]>,
   };
 }
 
@@ -1158,6 +1175,8 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
     pageLayoutIntents: {},
     pageLayoutGeometry: {},
     writerDialogueSeeds: {},
+    editableDialogueSeeds: {},
+    promotedBalloonSeeds: {},
     artDirection: DEFAULT_ART_DIRECTION,
     currentStep: 'setup',
     selectedPanelId: null,
@@ -1264,6 +1283,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [writerDialogueSeeds, setWriterDialogueSeeds] = useState<Record<number, GuidedComicBridgeDialogueSeed>>(
     () => restoredDraft?.writerDialogueSeeds ?? {},
   );
+  const [editableDialogueSeeds, setEditableDialogueSeeds] = useState<Record<number, GuidedComicEditableDialogueSeed[]>>(
+    () => restoredDraft?.editableDialogueSeeds ?? {},
+  );
+  const [promotedBalloonSeeds, setPromotedBalloonSeeds] = useState<Record<number, GuidedComicBalloonSeed[]>>(
+    () => restoredDraft?.promotedBalloonSeeds ?? {},
+  );
   const [writerBridgeExpanded, setWriterBridgeExpanded] = useState(false);
   const [writerBridgeSeries, setWriterBridgeSeries] = useState<WriterSeriesRow[]>([]);
   const [writerBridgeIssues, setWriterBridgeIssues] = useState<WriterIssueRow[]>([]);
@@ -1319,6 +1344,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageLayoutIntents,
       pageLayoutGeometry,
       writerDialogueSeeds,
+      editableDialogueSeeds,
+      promotedBalloonSeeds,
       artDirection,
       currentStep: activeStep.id,
       selectedPanelId,
@@ -1327,6 +1354,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       activeStep.id,
       artDirection,
       characterReferences,
+      editableDialogueSeeds,
       locationReferences,
       npcReferences,
       outlineBeats,
@@ -1336,6 +1364,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageLayoutGeometry,
       panelArtImages,
       panelArtStatuses,
+      promotedBalloonSeeds,
       selectedPanelId,
       setupForm,
       storyForm,
@@ -1410,6 +1439,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPageLayoutIntents(draft.pageLayoutIntents);
     setPageLayoutGeometry(draft.pageLayoutGeometry);
     setWriterDialogueSeeds(draft.writerDialogueSeeds);
+    setEditableDialogueSeeds(draft.editableDialogueSeeds);
+    setPromotedBalloonSeeds(draft.promotedBalloonSeeds);
     setWriterBridgeSelectedIssueId(draft.writerIssueId ?? '');
     setDraftSavedAt(savedAt);
   }, []);
@@ -1482,6 +1513,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageLayoutIntents,
       pageLayoutGeometry,
       writerDialogueSeeds,
+      editableDialogueSeeds,
+      promotedBalloonSeeds,
     };
 
     try {
@@ -1494,6 +1527,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     activeIndex,
     artDirection,
     characterReferences,
+    editableDialogueSeeds,
     locationReferences,
     npcReferences,
     outlineBeats,
@@ -1503,6 +1537,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     pageLayoutGeometry,
     panelArtImages,
     panelArtStatuses,
+    promotedBalloonSeeds,
     selectedPanelId,
     setupForm,
     storyForm,
@@ -2109,6 +2144,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const dialogueSeeds = mapWriterDialogueToGuidedDialogueSeeds(pageRows);
     setPageCards(nextPageCards);
     setWriterDialogueSeeds(Object.fromEntries(dialogueSeeds.map((seed) => [seed.pageNumber, seed])));
+    setEditableDialogueSeeds((current) => {
+      const next = { ...current };
+      dialogueSeeds.forEach((seed) => {
+        if (!next[seed.pageNumber]?.length) {
+          next[seed.pageNumber] = createEditableDialogueSeedsFromWriterSeed(seed);
+        }
+      });
+      return next;
+    });
     setWriterIssueId(issueId);
     setWriterBridgeSelectedIssueId(issueId);
     setActivePageNumber(nextPageCards[0]?.pageNumber ?? null);
@@ -2194,6 +2238,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         setWriterBridgeError('No Writer page is available for dialogue drafting.');
         return;
       }
+      setEditableDialogueSeeds((current) => {
+        const next = { ...current };
+        delete next[targetPage.page_number];
+        return next;
+      });
+      setPromotedBalloonSeeds((current) => {
+        const next = { ...current };
+        delete next[targetPage.page_number];
+        return next;
+      });
       const res = await invokeWriterTools(
         buildGuidedWriterToolRequest('dialogue', {
           issueId,
@@ -2561,6 +2615,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (!confirmed) return;
     onOpenAdvancedStudio();
   };
+  const buildVisualMetadataForPage = (page: PageCard, layoutTemplate: LayoutTemplateId) =>
+    buildGuidedComicVisualPageMetadata({
+      page,
+      layoutPanels: getGuidedComicLayoutPanels(page, layoutTemplate),
+      dialogueSeed: writerDialogueSeeds[page.pageNumber],
+      editableDialogueSeeds: editableDialogueSeeds[page.pageNumber],
+      npcNames: npcReferenceNames,
+    });
   const openPageInAdvancedStudio = (page: PageCard) => {
     const confirmed = window.confirm(`Send page ${page.pageNumber} to Advanced Comics Studio? This will open the advanced editor with the current guided layout handoff.`);
     if (!confirmed) return;
@@ -2568,6 +2630,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
     const layoutIntent = pageLayoutIntents[page.pageNumber];
     const layoutPanels = getGuidedComicLayoutPanels(page, layoutTemplate);
+    const visualStoryMetadata = buildVisualMetadataForPage(page, layoutTemplate);
     const layoutGeometry = syncGuidedComicLayoutGeometry(
       page,
       pageLayoutGeometry[page.pageNumber],
@@ -2619,6 +2682,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         panelNumber: index + 1,
         beatText: layoutPanels.find((panel) => panel.panelId === panelId)?.beatText ?? '',
       })),
+      visualStoryMetadata,
+      balloonSeeds: promotedBalloonSeeds[page.pageNumber] ?? [],
     });
     onOpenAdvancedStudio();
   };
@@ -2649,6 +2714,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setPageLayoutIntents({});
     setPageLayoutGeometry({});
     setWriterDialogueSeeds({});
+    setEditableDialogueSeeds({});
+    setPromotedBalloonSeeds({});
     setWriterBridgeSelectedIssueId('');
     setDraftSavedAt(null);
     setProjectLibraryStatus('Cleared the recovery draft. Saved library comics were kept.');
@@ -2724,6 +2791,105 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
   const selectedPanel =
     panelArtQueue.find((panel) => panel.id === selectedPanelId) ?? panelArtQueue[0] ?? null;
+  const selectedPanelVisualMetadata = useMemo(() => {
+    if (!selectedPanel) return null;
+    const page = pageCards.find((candidate) => candidate.pageNumber === selectedPanel.pageNumber);
+    if (!page) return null;
+    const layoutTemplate = pageLayoutTemplates[page.pageNumber] ?? 'auto';
+    const visualStoryMetadata = buildGuidedComicVisualPageMetadata({
+      page,
+      layoutPanels: getGuidedComicLayoutPanels(page, layoutTemplate),
+      dialogueSeed: writerDialogueSeeds[page.pageNumber],
+      editableDialogueSeeds: editableDialogueSeeds[page.pageNumber],
+      npcNames: npcReferenceNames,
+    });
+    return (
+      visualStoryMetadata.panels.find((panel) => panel.panelNumber === selectedPanel.panelNumber) ?? null
+    );
+  }, [editableDialogueSeeds, npcReferenceNames, pageCards, pageLayoutTemplates, selectedPanel, writerDialogueSeeds]);
+  const selectedPanelDialogueSeeds = useMemo(() => {
+    if (!selectedPanel) return [];
+    return (editableDialogueSeeds[selectedPanel.pageNumber] ?? [])
+      .filter((seed) => seed.panelNumber === selectedPanel.panelNumber)
+      .sort((a, b) => a.order - b.order);
+  }, [editableDialogueSeeds, selectedPanel]);
+  const selectedPageDialogueDensity = useMemo(() => {
+    if (!selectedPanel) return null;
+    return analyzeGuidedDialogueSeedDensity(editableDialogueSeeds[selectedPanel.pageNumber] ?? []);
+  }, [editableDialogueSeeds, selectedPanel]);
+  const selectedPanelDialogueDensity =
+    selectedPanel && selectedPageDialogueDensity
+      ? selectedPageDialogueDensity.panelSummaries.find((summary) => summary.panelNumber === selectedPanel.panelNumber) ?? null
+      : null;
+  const selectedPagePromotedBalloonSeedCount = selectedPanel
+    ? promotedBalloonSeeds[selectedPanel.pageNumber]?.length ?? 0
+    : 0;
+  const selectedDialogueIndicators = Array.from(
+    new Set([...(selectedPanelDialogueDensity?.indicators ?? []), ...(selectedPageDialogueDensity?.pageIndicators ?? [])]),
+  );
+  const updateDialogueSeedText = (pageNumber: number, seedId: string, text: string) => {
+    setEditableDialogueSeeds((current) => ({
+      ...current,
+      [pageNumber]: updateEditableDialogueSeedText(current[pageNumber] ?? [], seedId, text),
+    }));
+    setPromotedBalloonSeeds((current) => {
+      const next = { ...current };
+      delete next[pageNumber];
+      return next;
+    });
+  };
+  const updateDialogueSeedStatus = (pageNumber: number, seedId: string, status: GuidedComicDialogueSeedStatus) => {
+    setEditableDialogueSeeds((current) => ({
+      ...current,
+      [pageNumber]: setEditableDialogueSeedStatus(current[pageNumber] ?? [], seedId, status),
+    }));
+    setPromotedBalloonSeeds((current) => {
+      const next = { ...current };
+      delete next[pageNumber];
+      return next;
+    });
+  };
+  const addManualDialogueSeedForSelectedPanel = () => {
+    if (!selectedPanel) return;
+    const existing = editableDialogueSeeds[selectedPanel.pageNumber] ?? [];
+    const order =
+      Math.max(0, ...existing.filter((seed) => seed.panelNumber === selectedPanel.panelNumber).map((seed) => seed.order)) + 1;
+    const id = `manual-page-${selectedPanel.pageNumber}-panel-${selectedPanel.panelNumber}-line-${Date.now()}`;
+    setEditableDialogueSeeds((current) => ({
+      ...current,
+      [selectedPanel.pageNumber]: [
+        ...(current[selectedPanel.pageNumber] ?? []),
+        {
+          id,
+          pageNumber: selectedPanel.pageNumber,
+          panelNumber: selectedPanel.panelNumber,
+          order,
+          kind: 'dialogue',
+          text: '',
+          originalText: '',
+          beatText: selectedPanel.beatText,
+          status: 'edited',
+          source: 'manual',
+        },
+      ],
+    }));
+  };
+  const promoteSelectedPageDialogueSeeds = () => {
+    if (!selectedPanel) return;
+    const page = pageCards.find((card) => card.pageNumber === selectedPanel.pageNumber);
+    const layoutTemplate = page ? pageLayoutTemplates[page.pageNumber] ?? 'auto' : 'auto';
+    const layoutPanels = page ? getGuidedComicLayoutPanels(page, layoutTemplate) : [];
+    const panelIdFor = (panelNumber: number) => layoutPanels.find((panel) => panel.panelNumber === panelNumber)?.panelId;
+    const balloonSeeds = promoteAcceptedDialogueToBalloonSeeds(editableDialogueSeeds[selectedPanel.pageNumber] ?? [], {
+      panelIdFor,
+    });
+    setPromotedBalloonSeeds((current) => ({ ...current, [selectedPanel.pageNumber]: balloonSeeds }));
+    setPrimaryActionMessage(
+      balloonSeeds.length > 0
+        ? `Promoted ${balloonSeeds.length} accepted dialogue seed${balloonSeeds.length === 1 ? '' : 's'} for page ${selectedPanel.pageNumber}.`
+        : `No accepted dialogue seeds are ready to promote on page ${selectedPanel.pageNumber}.`,
+    );
+  };
   const selectedPanelEffectiveId = selectedPanel?.id ?? selectedPanelId;
   const selectedPanelPageNumber = selectedPanel?.pageNumber ?? null;
   const selectedPanelStatus = selectedPanel
@@ -2928,6 +3094,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const characters = mapReferencesForImageshop(characterReferences, 'character');
     const locations = mapReferencesForImageshop(locationReferences, 'asset');
     const npcs = mapReferencesForImageshop(npcReferences, 'npc');
+    const visualStoryMetadata = page ? buildVisualMetadataForPage(page, layoutTemplate) : null;
+    const visualPanelMetadata = visualStoryMetadata?.panels.find(
+      (panel) => panel.panelNumber === selectedPanel.panelNumber,
+    );
 
     requestGuidedComicHandoff({
       source: 'guided-comic',
@@ -2938,6 +3108,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       pageNumber: selectedPanel.pageNumber,
       panelNumber: selectedPanel.panelNumber,
       panelBeat: selectedPanel.beatText,
+      visualPrompt: visualPanelMetadata?.visualPrompt,
+      dialogueContext: visualPanelMetadata?.dialogueText || undefined,
+      referenceNeeds: visualPanelMetadata?.referenceNeeds,
       panelLayout: layoutPanel
         ? {
             templateId: layoutTemplate,
@@ -4692,6 +4865,127 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             {selectedPanel.beatText || 'Add a panel beat on the Pages step.'}
                           </p>
                         </div>
+
+                        {selectedPanelVisualMetadata ? (
+                          <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-4">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
+                                  Visual storytelling bridge
+                                </p>
+                                <p className="mt-1 text-sm font-semibold leading-relaxed text-amber-50/85">
+                                  Beats, dialogue, references, and layout intent feed the Imageshop prompt and Advanced Studio handoff.
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50">
+                                {selectedPanelVisualMetadata.layoutIntent}
+                              </span>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap rounded-lg border border-white/10 bg-black/25 p-3 text-xs leading-relaxed text-white/72">
+                              {selectedPanelVisualMetadata.visualPrompt}
+                            </p>
+                            {selectedPanelVisualMetadata.dialogueText ? (
+                              <p className="mt-2 whitespace-pre-wrap rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-relaxed text-white/62">
+                                Dialogue seed: {selectedPanelVisualMetadata.dialogueText}
+                              </p>
+                            ) : null}
+                            <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+                                    Editable dialogue seeds
+                                  </p>
+                                  <p className="mt-1 text-xs leading-relaxed text-white/58">
+                                    Accept only the lines you want to prepare for Advanced Studio. Balloons are not placed here.
+                                  </p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={addManualDialogueSeedForSelectedPanel}
+                                    className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/75 transition hover:bg-white/15"
+                                  >
+                                    Add local seed
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!writerIssueId && !writerBridgeSelectedIssueId}
+                                    onClick={() => {
+                                      if (selectedPanel) setActivePageNumber(selectedPanel.pageNumber);
+                                      void runGuidedWriterToolAction('dialogue');
+                                    }}
+                                    className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/75 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    Regenerate page dialogue
+                                  </button>
+                                </div>
+                              </div>
+                              {selectedDialogueIndicators.length ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {selectedDialogueIndicators.map((indicator) => (
+                                    <span
+                                      key={indicator}
+                                      className="rounded-full border border-amber-200/25 bg-amber-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50/78"
+                                    >
+                                      {indicator}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {selectedPanelDialogueSeeds.length > 0 ? (
+                                <div className="mt-3 grid gap-3">
+                                  {selectedPanelDialogueSeeds.map((seed) => (
+                                    <div key={seed.id} className="rounded-lg border border-white/10 bg-black/25 p-3">
+                                      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                                          {seed.kind === 'narration' ? 'Narration' : 'Dialogue'}
+                                          {seed.speaker ? ` · ${seed.speaker}` : ''} · {seed.source}
+                                        </p>
+                                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/60">
+                                          {seed.status}
+                                        </span>
+                                      </div>
+                                      <textarea
+                                        value={seed.text}
+                                        onChange={(event) => updateDialogueSeedText(seed.pageNumber, seed.id, event.target.value)}
+                                        rows={2}
+                                        className="min-h-[4.5rem] w-full resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm font-medium leading-relaxed text-white outline-none focus:border-amber-300/70"
+                                      />
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        {(['accepted', 'rejected', 'generated'] as GuidedComicDialogueSeedStatus[]).map((status) => (
+                                          <button
+                                            key={status}
+                                            type="button"
+                                            onClick={() => updateDialogueSeedStatus(seed.pageNumber, seed.id, status)}
+                                            className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/72 transition hover:bg-white/15"
+                                          >
+                                            {status === 'accepted' ? 'Accept' : status === 'rejected' ? 'Reject' : 'Keep staging'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 rounded-lg border border-white/10 bg-black/25 p-3 text-xs leading-relaxed text-white/50">
+                                  No dialogue seeds are staged for this panel yet. Add a local seed, or regenerate page dialogue from a linked Writer issue.
+                                </p>
+                              )}
+                              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-xs leading-relaxed text-white/55">
+                                  {selectedPagePromotedBalloonSeedCount} accepted seed{selectedPagePromotedBalloonSeedCount === 1 ? '' : 's'} promoted for this page.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={promoteSelectedPageDialogueSeeds}
+                                  className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/15"
+                                >
+                                  Promote to Advanced Studio Balloon Seeds
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
 
                         <div
                           ref={panelPasteTargetRef}

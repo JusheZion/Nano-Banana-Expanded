@@ -194,6 +194,13 @@ describe('useImageWorkshopBridge', () => {
       pageNumber: 2,
       panelNumber: 1,
       panelBeat: 'A wide establishing shot of Flux entering the sky observatory.',
+      visualPrompt: 'Compose the observatory as a wide reveal with Flux framed against the storm window.',
+      dialogueContext: 'FLUX: We are too late.',
+      referenceNeeds: {
+        characters: ['Flux', 'Mira'],
+        locations: ['Sky Observatory'],
+        npcs: ['Storm Courier'],
+      },
       pageSummary: 'The team reaches the observatory before the storm breaks.',
       pageKeyCharacters: ['Flux', 'Mira'],
       pageKeyLocation: 'Sky Observatory',
@@ -239,6 +246,9 @@ describe('useImageWorkshopBridge', () => {
     });
 
     expect(prompt).toContain('Image objective: A wide establishing shot of Flux entering the sky observatory.');
+    expect(prompt).toContain('Visual storytelling prompt: Compose the observatory as a wide reveal with Flux framed against the storm window.');
+    expect(prompt).toContain('Dialogue context for final lettering: FLUX: We are too late.');
+    expect(prompt).toContain('Visual reference needs: characters - Flux, Mira; locations - Sky Observatory; NPCs - Storm Courier');
     expect(prompt).toContain('Page context: The team reaches the observatory before the storm breaks.');
     expect(prompt).toContain('Page key characters: Flux, Mira');
     expect(prompt).toContain('Page key location: Sky Observatory');
