@@ -3375,7 +3375,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 <select
                   value={activeProjectId ?? ''}
                   onChange={(event) => switchCurrentComic(event.target.value)}
-                  className="rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none"
+                  className="w-full min-w-0 truncate rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none"
                 >
                   <option value="" disabled={Boolean(activeProjectId)}>
                     Unsaved local comic
@@ -3673,8 +3673,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
         </div>
 
-        <main className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
+        <main className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: ACCENT_GOLD_LIGHT }}>
@@ -3698,7 +3698,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               </div>
             </div>
 
-            <div className="mt-6 min-w-0 rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
+            <div className="mt-6 min-w-0 overflow-hidden rounded-xl border border-dashed border-white/20 bg-black/25 p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white/90">{activeStep.actionLabel}</p>
@@ -4056,8 +4056,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </div>
                 </div>
               ) : isStoryStep ? (
-                <div className="mt-5 grid gap-4">
-                  <section className="rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-4">
+                <div className="mt-5 grid min-w-0 gap-4">
+                  <section className="min-w-0 overflow-hidden rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-4">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100/70">
                       Phase 1 - {GUIDED_STORY_PHASE_COPY.intakeTitle}
                     </p>
@@ -4124,7 +4124,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     </label>
                   </div>
 
-                  <section className="rounded-xl border border-sky-300/20 bg-sky-300/[0.08] p-4">
+                  <section className="min-w-0 overflow-hidden rounded-xl border border-sky-300/20 bg-sky-300/[0.08] p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
@@ -4139,7 +4139,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         type="button"
                         disabled={Boolean(guidedAiLoadingAction)}
                         onClick={() => void runGuidedComicAiAction('generate_issue_outline')}
-                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <Sparkles className="h-3.5 w-3.5" aria-hidden />
                         {guidedAiLoadingAction === 'generate_issue_outline' ? 'Thinking...' : 'Generate issue outline'}
@@ -4163,7 +4163,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     </div>
                   </section>
 
-                  <section className="rounded-xl border border-emerald-300/20 bg-emerald-300/[0.075] p-4">
+                  <section className="min-w-0 overflow-hidden rounded-xl border border-emerald-300/20 bg-emerald-300/[0.075] p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">
@@ -4179,7 +4179,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       </span>
                     </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <button
                         type="button"
                         onClick={() => {
@@ -4187,7 +4187,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           setWriterBridgeError(null);
                           setWriterBridgeMessage('Continuing locally. Writers Workshop remains available whenever you want it.');
                         }}
-                        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white/75 transition hover:bg-white/10"
+                        className="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-center text-xs font-black leading-snug text-white/75 transition hover:bg-white/10"
                       >
                         {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.continueLocal}
                       </button>
@@ -4198,7 +4198,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           setWriterBridgeExpanded(true);
                           void loadWriterBridgeOptions();
                         }}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <BookOpenText className="h-3.5 w-3.5" aria-hidden />
                         {writerBridgeBusyAction === 'load' ? 'Loading...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop}
@@ -4207,7 +4207,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         type="button"
                         disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
                         onClick={() => void importLatestLinkedWriterIssue()}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                         {writerBridgeBusyAction === 'import' ? 'Importing...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
@@ -4216,7 +4216,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         type="button"
                         disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
                         onClick={openLinkedWriterIssue}
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <BookMarked className="h-3.5 w-3.5" aria-hidden />
                         {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.openLinked}
@@ -4224,9 +4224,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     </div>
 
                     {writerBridgeExpanded ? (
-                      <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                      <div className="mt-4 grid min-w-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                             Writer series
                             <select
                               value={writerBridgeSelectedSeriesId}
@@ -4237,7 +4237,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                   writerBridgeIssues.find((issue) => issue.series_id === nextSeriesId)?.id ?? '',
                                 );
                               }}
-                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
+                              className="w-full min-w-0 truncate rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
                             >
                               <option value="">New guided series</option>
                               {writerBridgeSeries.map((series) => (
@@ -4247,12 +4247,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               ))}
                             </select>
                           </label>
-                          <label className="flex flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
                             Writer issue
                             <select
                               value={writerBridgeSelectedIssueId}
                               onChange={(event) => setWriterBridgeSelectedIssueId(event.target.value)}
-                              className="rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
+                              className="w-full min-w-0 truncate rounded-lg border border-white/15 bg-black/35 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-white outline-none focus:border-emerald-300/70"
                             >
                               <option value="">Select existing issue</option>
                               {writerBridgeIssueOptions
@@ -4265,12 +4265,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                 ))}
                             </select>
                           </label>
-                          <div className="flex flex-col justify-end gap-2 sm:flex-row lg:flex-col">
+                          <div className="flex min-w-0 flex-col justify-end gap-2 sm:flex-row lg:col-span-2 lg:flex-row xl:col-span-1 xl:flex-col">
                             <button
                               type="button"
                               disabled={Boolean(writerBridgeBusyAction) || !selectedWriterBridgeIssue}
                               onClick={linkSelectedWriterIssue}
-                              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-white/15 bg-white/[0.07] px-3 py-2 text-xs font-black text-white/78 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-45"
+                              className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.07] px-3 py-2 text-center text-xs font-black leading-snug text-white/78 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-45"
                             >
                               Link selected
                             </button>
@@ -4278,13 +4278,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               type="button"
                               disabled={Boolean(writerBridgeBusyAction)}
                               onClick={() => void createLinkedWriterIssueFromGuidedStory()}
-                              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
+                              className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
                             >
                               {writerBridgeBusyAction === 'create' ? 'Creating...' : 'Create linked issue'}
                             </button>
                           </div>
                         </div>
-                        <p className="text-[11px] leading-relaxed text-white/48">
+                        <p className="min-w-0 break-words text-[11px] leading-relaxed text-white/48">
                           {linkedWriterBridgeIssue
                             ? `Linked target: ${linkedWriterBridgeIssue.seriesTitle} #${linkedWriterBridgeIssue.issue.issue_number}${
                                 linkedWriterBridgeIssue.issue.title ? `: ${linkedWriterBridgeIssue.issue.title}` : ''
@@ -4294,7 +4294,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       </div>
                     ) : null}
 
-                    <div className="mt-4 rounded-xl border border-sky-200/15 bg-sky-200/[0.06] p-3">
+                    <div className="mt-4 min-w-0 overflow-hidden rounded-xl border border-sky-200/15 bg-sky-200/[0.06] p-3">
                       <div className="flex flex-col gap-1">
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-100/70">
                           Phase 4 - Writer tools inside Guided Comics
@@ -4303,7 +4303,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           Run the same Writers Workshop modes directly, then import the accepted structure back into Guided pages.
                         </p>
                       </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                         {GUIDED_WRITERS_WORKSHOP_TOOL_ACTIONS.map((toolAction) => {
                           const loading = writerBridgeBusyAction === toolAction.action;
                           return (
@@ -4312,7 +4312,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                 type="button"
                                 disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
                                 onClick={() => void runGuidedWriterToolAction(toolAction.action)}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                                className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
                               >
                                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
                                 {loading ? 'Running...' : toolAction.label}
@@ -5591,8 +5591,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto custom-scrollbar">
-            <section className="mb-5 rounded-xl border border-white/10 bg-white/[0.06] p-4">
+          <aside className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-5 shadow-xl backdrop-blur-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto custom-scrollbar">
+            <section className="mb-5 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] p-4">
               {isArtStep ? (
                 <>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
@@ -5757,11 +5757,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 <div className="mt-4 space-y-3">
                   <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Working logline</p>
-                    <p className="mt-2 text-xs leading-relaxed text-white/75">{workingLogline}</p>
+                    <p className="mt-2 break-words text-xs leading-relaxed text-white/75">{workingLogline}</p>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">Issue summary</p>
-                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-white/75">{issueSummary}</p>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-white/75">{issueSummary}</p>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.06] p-3">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">

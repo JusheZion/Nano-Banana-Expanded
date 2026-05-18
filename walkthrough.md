@@ -3161,6 +3161,53 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Guided Comic Flow UI Overlap Regression Fix - 2026-05-18
+
+### What changed
+
+- Fixed Guided Comic Flow layout overlap where long story/Writer bridge controls could visually push under the story preview rail and fixed guided-step sidebar.
+- Added containment to the main Guided content column and primary action panel so child controls cannot bleed into neighboring layout tracks.
+- Added shrink/truncate behavior to long Comic Library and Writer issue selects.
+- Added `min-w-0`, wrapping, and centered multi-line button text to the Writers Workshop bridge and Writer tools button grids.
+- Added break-word handling to long story preview text and linked Writer target labels.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This is a layout-only regression fix. It does not change Guided draft state, Writer issue linking, AI actions, panel geometry, Advanced Studio import, or export behavior.
+- The fix keeps the existing desktop two-column Guided workspace and fixed right step rail, but prevents long labels, selects, and button rows from forcing the content column wider than its grid lane.
+
+### Verification
+
+- `PATH=/usr/local/bin:$PATH npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed.
+- `PATH=/usr/local/bin:$PATH npm run lint` passed with existing warnings only.
+- `PATH=/usr/local/bin:$PATH npm run build` passed.
+- Browser verification against `http://127.0.0.1:5173/` at a `2048x1152` viewport confirmed the Story step renders the Phase 3 Writer bridge, Writer selectors, story preview rail, and fixed guided-step sidebar in separate horizontal lanes.
+- Browser layout measurements confirmed the Phase 3 section and Writer selects clear the story preview rail, and the story preview rail clears the fixed guided-step sidebar.
+
+### Outstanding issues
+
+- None found in the verified Story step overlap path.
+
+### Risks or caveats
+
+- The browser runtime available in this session supported DOM/layout measurement but not viewport screenshot capture; verification used DOM snapshots, console logs, and bounding-box measurements.
+- Other Guided steps with unusually long imported text should still be spot-checked during the next human-style QA pass.
+
+### Operator follow-up
+
+- Recheck the pages called out in the screenshot with the user's real draft data after pulling this change into the active app session.
+
+### Next steps
+
+- Continue using overflow and bounding-box checks when adding new Guided cards, especially around the fixed step sidebar and story preview rail.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |
