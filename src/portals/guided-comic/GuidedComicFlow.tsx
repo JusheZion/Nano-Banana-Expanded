@@ -505,9 +505,21 @@ export function hasGuidedComicOutlineDraft(outlineBeats: Array<Pick<OutlineBeat,
 
 export const GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS = {
   continueLocal: 'Continue locally',
-  useWorkshop: 'Use Writers Workshop outline',
-  importLatest: 'Import latest Writer issue beats',
+  useWorkshop: 'Choose Writer issue',
+  importLatest: 'Import outline/page beats',
   openLinked: 'Open linked issue in Writers Workshop',
+  linkSelected: 'Link issue only',
+  generateMissingPageBeats: 'Generate missing page beats',
+} as const;
+
+export const GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY = {
+  summary:
+    'Linking connects this Guided draft to a Writer issue. Importing is the separate step that copies saved outline, page beats, panel beats, and dialogue seeds into Guided Comics.',
+  linkedNextStepTitle: 'Linked issue ready',
+  linkedNextStepBody:
+    'Nothing is imported automatically. Choose whether to import saved Writer structure, generate missing page beats, or keep working locally with the link available.',
+  importHelp: 'Copies the latest saved Writer outline, page beats, panel beats, and dialogue seeds into this Guided draft.',
+  generateHelp: 'Runs Writer page-beat generation for the linked issue, then imports the generated beats into Guided pages.',
 } as const;
 
 export const GUIDED_WRITERS_WORKSHOP_TOOL_ACTIONS: Array<{
@@ -2041,7 +2053,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setWriterBridgeSelectedIssueId(issueOption.issue.id);
     applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(issueOption.issue));
     setWriterBridgeError(null);
-    setWriterBridgeMessage(`Linked ${issueOption.seriesTitle} #${issueOption.issue.issue_number}. Guided Comics remains editable locally.`);
+    setWriterBridgeMessage(
+      `Linked ${issueOption.seriesTitle} #${issueOption.issue.issue_number}. No page or panel beats were imported yet.`,
+    );
   };
   const createLinkedWriterIssueFromGuidedStory = async () => {
     setWriterBridgeError(null);
@@ -4171,7 +4185,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         </p>
                         <h3 className="mt-1 text-lg font-black text-white">Use deeper writing tools when you want them</h3>
                         <p className="mt-2 text-xs leading-relaxed text-white/62">
-                          Link a Writer issue explicitly, import accepted outline/page beats/dialogue, or keep building locally.
+                          {GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.summary}
                         </p>
                       </div>
                       <span className="inline-flex shrink-0 rounded-full border border-emerald-200/25 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-50/75">
@@ -4272,7 +4286,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               onClick={linkSelectedWriterIssue}
                               className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-white/15 bg-white/[0.07] px-3 py-2 text-center text-xs font-black leading-snug text-white/78 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-45"
                             >
-                              Link selected
+                              {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.linkSelected}
                             </button>
                             <button
                               type="button"
@@ -4280,7 +4294,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               onClick={() => void createLinkedWriterIssueFromGuidedStory()}
                               className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
                             >
-                              {writerBridgeBusyAction === 'create' ? 'Creating...' : 'Create linked issue'}
+                              {writerBridgeBusyAction === 'create' ? 'Creating...' : 'Create and link issue'}
                             </button>
                           </div>
                         </div>
@@ -4291,6 +4305,61 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               }.`
                             : 'No Writer issue is linked. Local Guided Comics still works normally.'}
                         </p>
+                      </div>
+                    ) : null}
+
+                    {writerIssueId ? (
+                      <div className="mt-4 min-w-0 overflow-hidden rounded-xl border border-emerald-200/20 bg-emerald-300/[0.08] p-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">
+                              {GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.linkedNextStepTitle}
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-emerald-50/78">
+                              {GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.linkedNextStepBody}
+                            </p>
+                          </div>
+                          <span className="inline-flex shrink-0 rounded-full border border-emerald-200/25 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-50/75">
+                            Connected only
+                          </span>
+                        </div>
+                        <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-3">
+                          <Tooltip content={GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.importHelp}>
+                            <button
+                              type="button"
+                              disabled={Boolean(writerBridgeBusyAction)}
+                              onClick={() => void importLatestLinkedWriterIssue()}
+                              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/25 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                              {writerBridgeBusyAction === 'import'
+                                ? 'Importing...'
+                                : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
+                            </button>
+                          </Tooltip>
+                          <Tooltip content={GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.generateHelp}>
+                            <button
+                              type="button"
+                              disabled={Boolean(writerBridgeBusyAction)}
+                              onClick={() => void runGuidedWriterToolAction('page-beats')}
+                              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                              {writerBridgeBusyAction === 'page-beats'
+                                ? 'Generating...'
+                                : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.generateMissingPageBeats}
+                            </button>
+                          </Tooltip>
+                          <button
+                            type="button"
+                            disabled={Boolean(writerBridgeBusyAction)}
+                            onClick={openLinkedWriterIssue}
+                            className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-center text-xs font-black leading-snug text-white/78 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            <BookMarked className="h-3.5 w-3.5" aria-hidden />
+                            {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.openLinked}
+                          </button>
+                        </div>
                       </div>
                     ) : null}
 

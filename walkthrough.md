@@ -3208,6 +3208,58 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Writers Workshop Link vs Import UX Clarification - 2026-05-18
+
+### What changed
+
+- Clarified the Guided Comics Writers Workshop bridge so users can tell that linking a Writer issue only connects the draft, while importing is the separate action that copies saved outline/page beats/dialogue into Guided Comics.
+- Renamed the primary bridge action from `Use Writers Workshop outline` to `Choose Writer issue`.
+- Renamed `Import latest Writer issue beats` to `Import outline/page beats`.
+- Renamed the selected issue action to `Link issue only`.
+- Added explicit bridge copy explaining that linking connects and importing copies saved Writer structure.
+- Added a post-link next-step panel with three clear choices:
+  - `Import outline/page beats`
+  - `Generate missing page beats`
+  - `Open linked issue in Writers Workshop`
+- Updated the post-link status message so it says no page or panel beats were imported yet.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This is a UX-copy and action-surfacing change only. It does not change the underlying bridge adapter, import behavior, Writer generation behavior, local draft persistence, or Advanced Studio handoff.
+- The post-link panel reuses the existing import and page-beat generation handlers, so it does not introduce a parallel import path.
+- The new copy is exported as `GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY` and covered by the existing Guided Comic bridge/access test.
+
+### Verification
+
+- `PATH=/usr/local/bin:$PATH npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed.
+- `PATH=/usr/local/bin:$PATH npm run lint` passed with existing warnings only.
+- `PATH=/usr/local/bin:$PATH npm run build` passed.
+- Browser smoke check against `http://127.0.0.1:5173/` confirmed the Story step renders the clearer bridge summary, `Choose Writer issue`, `Import outline/page beats`, `Open linked issue in Writers Workshop`, and `Generate page beats` with no console errors.
+
+### Outstanding issues
+
+- None for the link/import explanation path.
+
+### Risks or caveats
+
+- The post-link next-step panel appears only after `writerIssueId` is set. Users who have merely selected an issue but not clicked `Link issue only` still need to link before seeing the post-link choices.
+
+### Operator follow-up
+
+- In human QA, link a disposable Writer issue and confirm the new status message makes it clear that no page or panel beats were imported until the user explicitly imports or generates them.
+
+### Next steps
+
+- Consider adding a lightweight import result summary that distinguishes outline rows, page rows, panel beats, and dialogue seeds after import completes.
+
+---
+
 ## How to Use These Docs
 
 | File | Use |

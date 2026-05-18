@@ -6,6 +6,7 @@ import {
   GUIDED_STORY_INTAKE_ACTION_LABELS,
   GUIDED_STORY_PHASE_COPY,
   GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS,
+  GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY,
   GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS,
   hasGuidedComicOutlineDraft,
 } from '@/portals/guided-comic/GuidedComicFlow';
@@ -57,9 +58,14 @@ describe('guided comic Advanced Studio access', () => {
 
   it('offers Writers Workshop as an explicit bridge without forcing it', () => {
     expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.continueLocal).toBe('Continue locally');
-    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop).toBe('Use Writers Workshop outline');
-    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest).toBe('Import latest Writer issue beats');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop).toBe('Choose Writer issue');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest).toBe('Import outline/page beats');
     expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.openLinked).toBe('Open linked issue in Writers Workshop');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.linkSelected).toBe('Link issue only');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.generateMissingPageBeats).toBe('Generate missing page beats');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.summary).toContain('Linking connects');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.summary).toContain('Importing is the separate step');
+    expect(GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.linkedNextStepBody).toContain('Nothing is imported automatically');
     expect(GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS).toEqual([
       'Generate Writer outline',
       'Run pacing review',
