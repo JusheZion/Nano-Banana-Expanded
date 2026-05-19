@@ -12,6 +12,8 @@ import {
   GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS,
   GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY,
   GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS,
+  getGuidedProductionPagePanels,
+  getGuidedProductionPageStatus,
   hasGuidedComicOutlineDraft,
 } from '@/portals/guided-comic/GuidedComicFlow';
 import { GUIDED_WORKFLOW_STEPS } from '@/modes/comic/pages/ComicEditor';
@@ -85,5 +87,140 @@ describe('guided comic Advanced Studio access', () => {
     expect(GUIDED_VISUAL_REFERENCE_NAME_CLASS).toContain('break-words');
     expect(GUIDED_VISUAL_REFERENCE_ACTION_LABEL).toBe('Add ref');
     expect(GUIDED_VISUAL_REFERENCE_EMPTY_LABELS.location).toBe('No refs selected.');
+  });
+
+  it('summarizes page-first production status from existing guided page data', () => {
+    const page = {
+      pageNumber: 2,
+      summary: 'Flux enters the observatory.',
+      panelCount: '2',
+      keyCharacters: 'Flux',
+      keyLocation: 'Sky observatory',
+      expanded: false,
+      panelBeats: ['Wide reveal', 'Flux reacts'],
+    };
+
+    expect(getGuidedProductionPageStatus(page, {})).toBe('needs dialogue');
+    expect(
+      getGuidedProductionPageStatus(page, {
+        editableDialogueSeeds: [
+          {
+            id: 'seed-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            text: 'FLUX: We are here.',
+            originalText: 'FLUX: We are here.',
+            beatText: 'Wide reveal',
+            status: 'accepted',
+            source: 'manual',
+          },
+        ],
+      }),
+    ).toBe('needs art');
+    expect(
+      getGuidedProductionPageStatus(page, {
+        editableDialogueSeeds: [
+          {
+            id: 'seed-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            text: 'FLUX: We are here.',
+            originalText: 'FLUX: We are here.',
+            beatText: 'Wide reveal',
+            status: 'accepted',
+            source: 'manual',
+          },
+        ],
+        panelArtStatuses: {
+          'page-2-panel-1': 'ready',
+          'page-2-panel-2': 'approved',
+        },
+      }),
+    ).toBe('layout ready');
+    expect(
+      getGuidedProductionPageStatus(page, {
+        editableDialogueSeeds: [
+          {
+            id: 'seed-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            text: 'FLUX: We are here.',
+            originalText: 'FLUX: We are here.',
+            beatText: 'Wide reveal',
+            status: 'accepted',
+            source: 'manual',
+          },
+        ],
+        panelArtStatuses: {
+          'page-2-panel-1': 'ready',
+          'page-2-panel-2': 'approved',
+        },
+        layoutTemplateId: 'three-panel',
+      }),
+    ).toBe('ready for Advanced Studio');
+  });
+
+  it('builds selected-page production panels with beats, dialogue, status, and assigned images', () => {
+    const panels = getGuidedProductionPagePanels(
+      {
+        pageNumber: 3,
+        summary: 'The signal room goes dark.',
+        panelCount: '3',
+        keyCharacters: 'Flux, Hayward',
+        keyLocation: 'Signal room',
+        expanded: false,
+        panelBeats: ['Door opens', 'Signal fails', 'Hayward sees the spark'],
+      },
+      {
+        layoutTemplateId: 'auto',
+        panelArtStatuses: {
+          'page-3-panel-2': 'ready',
+        },
+        panelArtImages: {
+          'page-3-panel-2': {
+            imageUrl: 'data:image/png;base64,panel2',
+            source: 'vault',
+            returnedAt: '2026-05-19T00:00:00.000Z',
+          },
+        },
+        editableDialogueSeeds: [
+          {
+            id: 'seed-2',
+            pageNumber: 3,
+            panelNumber: 2,
+            order: 1,
+            kind: 'dialogue',
+            text: 'HAYWARD: The signal died.',
+            originalText: 'HAYWARD: The signal died.',
+            beatText: 'Signal fails',
+            status: 'generated',
+            source: 'writer-tools',
+          },
+        ],
+      },
+    );
+
+    expect(panels).toHaveLength(3);
+    expect(panels[0]).toMatchObject({
+      panelId: 'page-3-panel-1',
+      panelNumber: 1,
+      beatText: 'Door opens',
+      dialogueText: '',
+      status: 'needs-art',
+    });
+    expect(panels[1]).toMatchObject({
+      panelId: 'page-3-panel-2',
+      panelNumber: 2,
+      beatText: 'Signal fails',
+      dialogueText: 'HAYWARD: The signal died.',
+      status: 'ready',
+      imageUrl: 'data:image/png;base64,panel2',
+    });
   });
 });

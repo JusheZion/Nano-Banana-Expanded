@@ -3416,6 +3416,59 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Consider showing a subtle “prompt linked to active refs” indicator in Imageshop if users need clearer feedback about when automatic prompt syncing is active.
 
+---
+
+## Page-First Guided Comic Production Workspace Shell - 2026-05-19
+
+### What changed
+
+- Added the first page-first production workspace shell above the existing Guided Comic Flow wizard without removing the old guided UI.
+- Added a compact Issue Pages navigator that lets users select pages directly and see production status labels: `needs beats`, `needs dialogue`, `needs art`, `layout ready`, and `ready for Advanced Studio`.
+- Added a selected-page production view that renders the chosen page’s panel layout, panel numbers, assigned panel art when present, beat snippets, status chips, and the existing Advanced Studio page handoff action.
+- Added a focused panel workspace that opens when a panel is selected and shows page/panel number, editable panel beat, dialogue seed editing, assigned art preview, reference context chips, and existing panel image actions.
+- Preserved the old Guided Flow sections below the new shell so manual QA can compare the new page-first workflow before any old scroll-heavy UI is retired.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The new shell reuses existing local Guided Comic state and handlers instead of introducing a new engine or store: page cards, page summaries, panel beats, editable dialogue seeds, writer dialogue seed fallback, panel art images/statuses, layout geometry, Visual Prep metadata, vault assignment, upload, paste, Imageshop handoff, and Advanced Studio page handoff.
+- Added exported production selectors, `getGuidedProductionPageStatus` and `getGuidedProductionPagePanels`, so page status and selected-page panel derivation are testable without rendering the full portal.
+- Panel focus actions intentionally call the existing handlers: `requestPanelArtVaultImage`, `handlePanelArtUpload`, `focusPanelPasteTarget`, `openImageshopWithSelectedPanel`, `updatePanelArtStatus`, and page-to-studio handoff remains `openPageInAdvancedStudio`.
+- The production shell uses a responsive layout that stacks or reduces columns before the existing Guided Flow right rail can squeeze the page preview. Browser QA caught an early collapsed preview, so the shell now only uses the three-column workspace at wider viewports and keeps the page preview at stable dimensions.
+- This pass incorporated the frontend-app-builder direction as an app/workspace surface rather than a landing page: focused navigation, stable panel geometry, domain-specific controls, compact status scanning, and direct page/panel actions.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 8 tests after the new selector tests were implemented.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed with 35 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA in the in-app browser at `http://127.0.0.1:5173/` confirmed the Guided Comic Flow renders, the Issue Pages navigator shows mixed page statuses, the page preview has usable dimensions, clicking page 1 panel 1 opens Panel Focus, and the Panel Focus actions for vault, upload, paste, Imageshop, mark ready, next panel, and Advanced Studio are present. No browser console errors were captured.
+
+### Outstanding issues
+
+- The old scroll-heavy Guided Flow sections are still visible below the new shell by design. They should not be collapsed, hidden, or retired until manual QA confirms the new workspace is better.
+
+### Risks or caveats
+
+- This is a shell and workflow reorganization layer, not a full retirement of the old wizard. Some deeper workflows may still send users into the legacy sections while the page-first surface matures.
+- Dialogue is still treated as metadata/seeds only in the focused panel workspace. No automatic final balloons were created in this pass.
+
+### Operator follow-up
+
+- Manually QA the new default mental model: Issue -> Page -> Panel. Confirm users can select pages, focus panels, assign art, edit beat/dialogue seeds, move to the next panel, and hand the selected page to Advanced Studio without hunting through the old vertical flow.
+- Compare the new shell against the old Guided Flow sections before deciding which legacy sections can be collapsed, hidden, or retired.
+
+### Next steps
+
+- Add richer readiness summaries around characters, assets/locations, art style, and layout intent once the shell has been manually validated.
+- Consider making the old guided sections collapsible after manual QA proves the new page-first workspace covers the primary production loop.
+
 ## How to Use These Docs
 
 | File | Use |
