@@ -40,6 +40,7 @@ import {
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
 import {
   buildGuidedImageWorkshopPrompt,
+  buildGuidedImageWorkshopPromptForActiveReferences,
   getGuidedImageWorkshopAspectRatio,
   getGuidedImageWorkshopPreload,
   useImageWorkshopBridge,
@@ -101,6 +102,7 @@ export function GenericImageLabPanel({
   const [lastSeed, setLastSeed] = useState<number | null>(null);
   const [guidedHandoffContext, setGuidedHandoffContext] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
+  const [guidedPromptTracksReferences, setGuidedPromptTracksReferences] = useState(false);
   const [generatedVaultTarget, setGeneratedVaultTarget] = useState<GeneratedVaultTarget>('npc');
   const [generatedProfileName, setGeneratedProfileName] = useState('');
   const [generatedCastName, setGeneratedCastName] = useState('');
@@ -134,6 +136,7 @@ export function GenericImageLabPanel({
     const next = seedPrompt?.trim();
     if (!next) return;
     setPromptRaw(next);
+    setGuidedPromptTracksReferences(false);
     setUseRefinedPrompt(false);
     setError(null);
     setNotice('Visual Prep seeded Image Lab with the selected prompt.');
@@ -200,6 +203,13 @@ export function GenericImageLabPanel({
     return refined;
   }, [promptRaw, promptRefined, useRefinedPrompt]);
 
+  useEffect(() => {
+    if (!guidedPromptTracksReferences || !guidedHandoffContext) return;
+    setPromptRaw(buildGuidedImageWorkshopPromptForActiveReferences(guidedHandoffContext, stableRefs));
+    setPromptRefined('');
+    setUseRefinedPrompt(false);
+  }, [guidedHandoffContext, guidedPromptTracksReferences, stableRefs]);
+
   const generatedSaveProcessing = useMemo((): Record<string, unknown> => {
     const guidedTarget =
       guidedPanelTarget?.currentStep === 'art'
@@ -228,6 +238,7 @@ export function GenericImageLabPanel({
       setContext(result.context);
       if (result.prompt.trim()) {
         setPromptRaw(result.prompt);
+        setGuidedPromptTracksReferences(false);
         setUseRefinedPrompt(false);
       }
       setGeneratedSaveError(null);
@@ -255,6 +266,7 @@ export function GenericImageLabPanel({
     if (!handoff) return;
 
     setGuidedHandoffContext(handoff);
+    setGuidedPromptTracksReferences(false);
     const preload = getGuidedImageWorkshopPreload(handoff);
     const preloadSuffix =
       preload.allReferences.length > preload.slotUrls.length
@@ -269,6 +281,7 @@ export function GenericImageLabPanel({
       setPromptRaw(buildGuidedImageWorkshopPrompt(handoff));
       setPromptRefined('');
       setUseRefinedPrompt(false);
+      setGuidedPromptTracksReferences(true);
       setAspectRatio(getGuidedImageWorkshopAspectRatio(handoff));
       setError(null);
       setNotice(
@@ -814,7 +827,10 @@ export function GenericImageLabPanel({
         <textarea
           className="w-full min-h-[72px] rounded-lg bg-black/30 border border-white/15 p-2 text-xs font-mono"
           value={promptRaw}
-          onChange={(e) => setPromptRaw(e.target.value)}
+          onChange={(e) => {
+            setGuidedPromptTracksReferences(false);
+            setPromptRaw(e.target.value);
+          }}
           placeholder="Describe the image you want..."
         />
 

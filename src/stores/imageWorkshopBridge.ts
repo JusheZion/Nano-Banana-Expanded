@@ -90,6 +90,27 @@ function joinOptionalList(values: string[] | undefined): string {
   return labels.length > 0 ? labels.join(', ') : 'None specified';
 }
 
+function filterReferencesByActiveUrls(
+  references: GuidedImageWorkshopReference[],
+  activeReferenceUrls: string[],
+): GuidedImageWorkshopReference[] {
+  const activeUrls = new Set(activeReferenceUrls.map((url) => url.trim()).filter(Boolean));
+  if (activeUrls.size === 0) return [];
+  return references.filter((reference) => activeUrls.has(reference.imageUrl.trim()));
+}
+
+export function buildGuidedImageWorkshopPromptForActiveReferences(
+  handoff: GuidedImageWorkshopHandoff,
+  activeReferenceUrls: string[],
+): string {
+  return buildGuidedImageWorkshopPrompt({
+    ...handoff,
+    characters: filterReferencesByActiveUrls(handoff.characters, activeReferenceUrls),
+    locations: filterReferencesByActiveUrls(handoff.locations, activeReferenceUrls),
+    npcs: filterReferencesByActiveUrls(handoff.npcs, activeReferenceUrls),
+  });
+}
+
 function formatReferenceNeeds(needs: GuidedImageWorkshopReferenceNeeds | undefined): string {
   if (!needs) return '';
   return [
@@ -132,6 +153,7 @@ export function buildGuidedImageWorkshopPrompt(handoff: GuidedImageWorkshopHando
     artDirection?.colorMood.trim() ? `Color mood: ${artDirection.colorMood.trim()}` : '',
     artDirection?.lighting.trim() ? `Lighting: ${artDirection.lighting.trim()}` : '',
     artDirection?.continuityNotes.trim() ? `Continuity notes: ${artDirection.continuityNotes.trim()}` : '',
+    'Reference style lock: Match the active reference images for visual style, rendering treatment, palette, lighting, and design language. Use written art direction to clarify the references, not to drift into a different style.',
     'Do not include speech bubbles, captions, narration boxes, lettering, watermarks, or embedded text unless the user manually adds text to this prompt.',
     'Compose this as a polished comic-book panel with clear storytelling, consistent character design, readable action, and finished lighting.',
   ]

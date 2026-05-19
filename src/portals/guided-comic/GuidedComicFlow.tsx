@@ -553,6 +553,74 @@ export const GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS = GUIDED_WRITERS_WORKSHO
   (action) => action.label,
 );
 
+export const GUIDED_VISUAL_REFERENCE_ROW_CLASS =
+  'grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(190px,260px)_minmax(0,1fr)_minmax(104px,124px)] lg:items-start';
+export const GUIDED_VISUAL_REFERENCE_NAME_CLASS =
+  'line-clamp-2 break-words text-sm font-bold leading-snug text-white';
+export const GUIDED_VISUAL_REFERENCE_ACTION_LABEL = 'Add ref';
+export const GUIDED_VISUAL_REFERENCE_EMPTY_LABELS = {
+  character: 'No refs selected.',
+  location: 'No refs selected.',
+  npc: 'No refs selected.',
+} as const;
+
+function formatGuidedProgressElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function useGuidedProgressElapsed(active: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setSeconds(0);
+      return undefined;
+    }
+
+    setSeconds(0);
+    const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [active]);
+
+  return seconds;
+}
+
+type GuidedProgressButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  isLoading: boolean;
+  loadingLabel: string;
+  idleLabel: string;
+  icon?: React.ReactNode;
+};
+
+function GuidedProgressButton({
+  isLoading,
+  loadingLabel,
+  idleLabel,
+  icon,
+  className = '',
+  children,
+  ...buttonProps
+}: GuidedProgressButtonProps) {
+  const elapsedSeconds = useGuidedProgressElapsed(isLoading);
+  const label = isLoading ? `${loadingLabel} ${formatGuidedProgressElapsed(elapsedSeconds)}` : idleLabel;
+
+  return (
+    <button
+      {...buttonProps}
+      aria-busy={isLoading || undefined}
+      className={`guided-progress-button ${className}`}
+      data-loading={isLoading ? 'true' : 'false'}
+    >
+      <span className="guided-progress-button__content inline-flex min-w-0 items-center justify-center gap-2">
+        {icon}
+        <span className="min-w-0">{children ?? label}</span>
+      </span>
+    </button>
+  );
+}
+
 const STEPS: GuidedComicStep[] = [
   {
     id: 'setup',
@@ -3790,15 +3858,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     const loading = guidedAiLoadingAction === option.action;
                     return (
                       <Tooltip key={option.action} content={option.description}>
-                        <button
+                        <GuidedProgressButton
                           type="button"
+                          isLoading={loading}
+                          loadingLabel="Thinking..."
+                          idleLabel={option.label}
+                          icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
                           disabled={Boolean(guidedAiLoadingAction)}
                           onClick={() => void runGuidedComicAiAction(option.action)}
                           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-xs font-black text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                          {loading ? 'Thinking...' : option.label}
-                        </button>
+                        />
                       </Tooltip>
                     );
                   })}
@@ -4149,15 +4218,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           {GUIDED_STORY_PHASE_COPY.outlineGoal}
                         </p>
                       </div>
-                      <button
+                      <GuidedProgressButton
                         type="button"
+                        isLoading={guidedAiLoadingAction === 'generate_issue_outline'}
+                        loadingLabel="Thinking..."
+                        idleLabel="Generate issue outline"
+                        icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
                         disabled={Boolean(guidedAiLoadingAction)}
                         onClick={() => void runGuidedComicAiAction('generate_issue_outline')}
                         className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                        {guidedAiLoadingAction === 'generate_issue_outline' ? 'Thinking...' : 'Generate issue outline'}
-                      </button>
+                      />
                     </div>
                     <div className="mt-4 grid gap-3">
                       {outlineBeats.map((beat) => (
@@ -4205,27 +4275,29 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       >
                         {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.continueLocal}
                       </button>
-                      <button
+                      <GuidedProgressButton
                         type="button"
+                        isLoading={writerBridgeBusyAction === 'load'}
+                        loadingLabel="Loading..."
+                        idleLabel={GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop}
+                        icon={<BookOpenText className="h-3.5 w-3.5" aria-hidden />}
                         disabled={Boolean(writerBridgeBusyAction)}
                         onClick={() => {
                           setWriterBridgeExpanded(true);
                           void loadWriterBridgeOptions();
                         }}
                         className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <BookOpenText className="h-3.5 w-3.5" aria-hidden />
-                        {writerBridgeBusyAction === 'load' ? 'Loading...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.useWorkshop}
-                      </button>
-                      <button
+                      />
+                      <GuidedProgressButton
                         type="button"
+                        isLoading={writerBridgeBusyAction === 'import'}
+                        loadingLabel="Importing..."
+                        idleLabel={GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
+                        icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
                         disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
                         onClick={() => void importLatestLinkedWriterIssue()}
                         className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                        {writerBridgeBusyAction === 'import' ? 'Importing...' : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
-                      </button>
+                      />
                       <button
                         type="button"
                         disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
@@ -4288,14 +4360,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             >
                               {GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.linkSelected}
                             </button>
-                            <button
+                            <GuidedProgressButton
                               type="button"
+                              isLoading={writerBridgeBusyAction === 'create'}
+                              loadingLabel="Creating..."
+                              idleLabel="Create and link issue"
                               disabled={Boolean(writerBridgeBusyAction)}
                               onClick={() => void createLinkedWriterIssueFromGuidedStory()}
                               className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
-                            >
-                              {writerBridgeBusyAction === 'create' ? 'Creating...' : 'Create and link issue'}
-                            </button>
+                            />
                           </div>
                         </div>
                         <p className="min-w-0 break-words text-[11px] leading-relaxed text-white/48">
@@ -4325,30 +4398,28 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         </div>
                         <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-3">
                           <Tooltip content={GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.importHelp}>
-                            <button
+                            <GuidedProgressButton
                               type="button"
+                              isLoading={writerBridgeBusyAction === 'import'}
+                              loadingLabel="Importing..."
+                              idleLabel={GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
+                              icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
                               disabled={Boolean(writerBridgeBusyAction)}
                               onClick={() => void importLatestLinkedWriterIssue()}
                               className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/25 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                              {writerBridgeBusyAction === 'import'
-                                ? 'Importing...'
-                                : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.importLatest}
-                            </button>
+                            />
                           </Tooltip>
                           <Tooltip content={GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY.generateHelp}>
-                            <button
+                            <GuidedProgressButton
                               type="button"
+                              isLoading={writerBridgeBusyAction === 'page-beats'}
+                              loadingLabel="Generating..."
+                              idleLabel={GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.generateMissingPageBeats}
+                              icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
                               disabled={Boolean(writerBridgeBusyAction)}
                               onClick={() => void runGuidedWriterToolAction('page-beats')}
                               className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                            >
-                              <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                              {writerBridgeBusyAction === 'page-beats'
-                                ? 'Generating...'
-                                : GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS.generateMissingPageBeats}
-                            </button>
+                            />
                           </Tooltip>
                           <button
                             type="button"
@@ -4377,15 +4448,22 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           const loading = writerBridgeBusyAction === toolAction.action;
                           return (
                             <Tooltip key={toolAction.action} content={toolAction.description}>
-                              <button
+                              <GuidedProgressButton
                                 type="button"
+                                isLoading={loading}
+                                loadingLabel={
+                                  toolAction.action === 'pacing'
+                                    ? 'Reviewing...'
+                                    : toolAction.action === 'dialogue'
+                                      ? 'Drafting...'
+                                      : 'Generating...'
+                                }
+                                idleLabel={toolAction.label}
+                                icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
                                 disabled={Boolean(writerBridgeBusyAction) || !(writerIssueId || writerBridgeSelectedIssueId)}
                                 onClick={() => void runGuidedWriterToolAction(toolAction.action)}
                                 className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-sky-200/20 bg-black/25 px-3 py-2 text-center text-xs font-black leading-snug text-sky-50 transition hover:bg-sky-200/10 disabled:cursor-not-allowed disabled:opacity-45"
-                              >
-                                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                                {loading ? 'Running...' : toolAction.label}
-                              </button>
+                              />
                             </Tooltip>
                           );
                         })}
@@ -4555,12 +4633,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           const ready = references.length > 0;
                           const displayName = displayTitleCase(character);
                           return (
-                            <div
-                              key={character}
-                              className="grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(120px,150px)_minmax(0,1fr)_minmax(150px,190px)] lg:items-start"
-                            >
+                            <div key={character} className={GUIDED_VISUAL_REFERENCE_ROW_CLASS}>
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-white">{displayName}</p>
+                                <p className={GUIDED_VISUAL_REFERENCE_NAME_CLASS}>{displayName}</p>
                                 <span
                                   className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
                                   style={{
@@ -4576,7 +4651,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               </div>
                               <ReferenceThumbnailStrip
                                 references={references}
-                                emptyLabel="Add one or more character references."
+                                emptyLabel={GUIDED_VISUAL_REFERENCE_EMPTY_LABELS.character}
                                 onRemove={(referenceIndex) => removeCharacterReference(character, referenceIndex)}
                               />
                               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
@@ -4586,7 +4661,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                   className="rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
                                   style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
                                 >
-                                  Add reference
+                                  {GUIDED_VISUAL_REFERENCE_ACTION_LABEL}
                                 </button>
                               </div>
                             </div>
@@ -4617,12 +4692,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           const ready = references.length > 0;
                           const displayName = displayTitleCase(location);
                           return (
-                            <div
-                              key={location}
-                              className="grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(120px,150px)_minmax(0,1fr)_minmax(150px,190px)] lg:items-start"
-                            >
+                            <div key={location} className={GUIDED_VISUAL_REFERENCE_ROW_CLASS}>
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-white">{displayName}</p>
+                                <p className={GUIDED_VISUAL_REFERENCE_NAME_CLASS}>{displayName}</p>
                                 <span
                                   className="mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]"
                                   style={{
@@ -4638,7 +4710,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               </div>
                               <ReferenceThumbnailStrip
                                 references={references}
-                                emptyLabel="Add one or more location or asset references."
+                                emptyLabel={GUIDED_VISUAL_REFERENCE_EMPTY_LABELS.location}
                                 onRemove={(referenceIndex) => removeLocationReference(location, referenceIndex)}
                               />
                               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
@@ -4648,7 +4720,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                   className="rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
                                   style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
                                 >
-                                  Add reference
+                                  {GUIDED_VISUAL_REFERENCE_ACTION_LABEL}
                                 </button>
                               </div>
                             </div>
@@ -4704,12 +4776,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             const references = npcReferences[npcName] ?? [];
                             const ready = references.length > 0;
                             return (
-                              <div
-                                key={npcName}
-                                className="grid gap-3 rounded-xl border border-white/10 bg-black/25 p-3 lg:grid-cols-[minmax(120px,150px)_minmax(0,1fr)_minmax(150px,190px)] lg:items-start"
-                              >
+                              <div key={npcName} className={GUIDED_VISUAL_REFERENCE_ROW_CLASS}>
                                 <div className="min-w-0">
-                                  <p className="truncate text-sm font-bold text-white">
+                                  <p className={GUIDED_VISUAL_REFERENCE_NAME_CLASS}>
                                     {displayTitleCase(npcName)}
                                   </p>
                                   <span
@@ -4727,7 +4796,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                 </div>
                                 <ReferenceThumbnailStrip
                                   references={references}
-                                  emptyLabel="Add one or more NPC references."
+                                  emptyLabel={GUIDED_VISUAL_REFERENCE_EMPTY_LABELS.npc}
                                   onRemove={(referenceIndex) => removeNpcReference(npcName, referenceIndex)}
                                 />
                                 <button
@@ -4736,7 +4805,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                   className="rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
                                   style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
                                 >
-                                  Add another
+                                  {GUIDED_VISUAL_REFERENCE_ACTION_LABEL}
                                 </button>
                               </div>
                             );
@@ -6330,14 +6399,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 >
                   Replace with confirmation
                 </button>
-                <button
+                <GuidedProgressButton
                   type="button"
                   onClick={() => void runGuidedComicAiAction(guidedAiPreview.action, true)}
                   disabled={Boolean(guidedAiLoadingAction)}
+                  isLoading={Boolean(guidedAiLoadingAction)}
+                  loadingLabel="Regenerating..."
+                  idleLabel="Regenerate selected only"
                   className="rounded-xl border border-sky-300/25 bg-sky-300/10 px-4 py-2.5 text-xs font-bold text-sky-50 transition hover:bg-sky-300/15 disabled:opacity-45"
-                >
-                  Regenerate selected only
-                </button>
+                />
               </div>
             </section>
           </div>

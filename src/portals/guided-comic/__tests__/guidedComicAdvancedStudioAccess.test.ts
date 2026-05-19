@@ -5,6 +5,10 @@ import {
   GUIDED_LAYOUT_DISCLOSURE_LEVELS,
   GUIDED_STORY_INTAKE_ACTION_LABELS,
   GUIDED_STORY_PHASE_COPY,
+  GUIDED_VISUAL_REFERENCE_ACTION_LABEL,
+  GUIDED_VISUAL_REFERENCE_EMPTY_LABELS,
+  GUIDED_VISUAL_REFERENCE_NAME_CLASS,
+  GUIDED_VISUAL_REFERENCE_ROW_CLASS,
   GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS,
   GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY,
   GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS,
@@ -72,5 +76,14 @@ describe('guided comic Advanced Studio access', () => {
       'Generate page beats',
       'Draft selected page dialogue',
     ]);
+  });
+
+  it('keeps Visual Prep reference rows readable for long missing-reference names', () => {
+    expect(GUIDED_VISUAL_REFERENCE_ROW_CLASS).toContain('minmax(190px,260px)');
+    expect(GUIDED_VISUAL_REFERENCE_ROW_CLASS).toContain('minmax(104px,124px)');
+    expect(GUIDED_VISUAL_REFERENCE_NAME_CLASS).toContain('line-clamp-2');
+    expect(GUIDED_VISUAL_REFERENCE_NAME_CLASS).toContain('break-words');
+    expect(GUIDED_VISUAL_REFERENCE_ACTION_LABEL).toBe('Add ref');
+    expect(GUIDED_VISUAL_REFERENCE_EMPTY_LABELS.location).toBe('No refs selected.');
   });
 });

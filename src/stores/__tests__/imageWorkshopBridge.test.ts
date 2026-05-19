@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   buildGuidedImageWorkshopPrompt,
+  buildGuidedImageWorkshopPromptForActiveReferences,
   getGuidedImageWorkshopAspectRatio,
   getGuidedImageWorkshopPreload,
   useImageWorkshopBridge,
@@ -257,7 +258,50 @@ describe('useImageWorkshopBridge', () => {
     expect(prompt).toContain('NPC references: Storm Courier');
     expect(prompt).toContain('Panel layout intent: wide');
     expect(prompt).toContain('Art style: clean superhero comic');
+    expect(prompt).toContain('Reference style lock: Match the active reference images');
     expect(prompt).toContain('Do not include speech bubbles, captions, narration boxes, lettering, watermarks, or embedded text unless the user manually adds text to this prompt.');
+  });
+
+  it('rebuilds guided Imageshop prompts from the active reference slots', () => {
+    const handoff = {
+      source: 'guided-comic' as const,
+      currentStep: 'art' as const,
+      sourceLabel: 'Guided Comic Flow · Page 3, Panel 2',
+      characters: [
+        {
+          name: 'hayward',
+          displayName: 'Hayward profile',
+          imageUrl: 'https://example.com/hayward.png',
+          sourceType: 'character' as const,
+        },
+      ],
+      locations: [
+        {
+          name: 'spark chamber',
+          displayName: 'Spark Chamber',
+          imageUrl: 'https://example.com/spark-chamber.png',
+          sourceType: 'asset' as const,
+        },
+      ],
+      npcs: [
+        {
+          name: 'spark flame',
+          displayName: 'Contained Flame',
+          imageUrl: 'https://example.com/flame.png',
+          sourceType: 'npc' as const,
+        },
+      ],
+    };
+
+    const prompt = buildGuidedImageWorkshopPromptForActiveReferences(handoff, [
+      'https://example.com/spark-chamber.png',
+      'https://example.com/flame.png',
+    ]);
+
+    expect(prompt).toContain('Character references: None selected');
+    expect(prompt).toContain('Location / asset references: Spark Chamber');
+    expect(prompt).toContain('NPC references: Contained Flame');
+    expect(prompt).not.toContain('Hayward profile');
   });
 
   it('maps guided panel layout intent to the closest Imageshop aspect ratio', () => {

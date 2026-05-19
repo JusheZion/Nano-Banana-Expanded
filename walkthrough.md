@@ -3260,6 +3260,162 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ---
 
+## Guided AI Action Progress Indicators - 2026-05-18
+
+### What changed
+
+- Added a shared `GuidedProgressButton` for long-running Guided Comic AI and Writers Workshop bridge actions.
+- Added an animated indeterminate fill across loading buttons so users can see that an AI/Writer action is still active.
+- Added an elapsed timer to loading labels, such as `Loading... 0:00`, `Generating... 0:42`, `Importing... 1:15`, and `Drafting... 0:08`.
+- Applied the progress treatment to:
+  - Guided AI writing assist buttons.
+  - Story outline generation.
+  - Writer issue loading.
+  - Writer outline/page beat import.
+  - Writer issue creation.
+  - Post-link `Generate missing page beats`.
+  - Phase 4 Writer tool actions.
+  - Guided AI preview regeneration.
+- Added `aria-busy` to active loading buttons for assistive technology.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The progress indicator is intentionally indeterminate because the current Writer/AI APIs do not expose granular progress events.
+- The elapsed timer resets when the action completes or the loading state clears.
+- This is a UX feedback change only. It does not change the underlying AI calls, Writer tool requests, import behavior, local persistence, or Advanced Studio handoff.
+
+### Verification
+
+- `PATH=/usr/local/bin:$PATH npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed.
+- `PATH=/usr/local/bin:$PATH npm run lint` passed with existing warnings only.
+- `PATH=/usr/local/bin:$PATH npm run build` passed.
+- Browser smoke check against `http://localhost:5173/` confirmed the Story step renders 11 Guided progress-enabled AI/Writer buttons and the progress CSS pseudo-element is present.
+- Browser interaction check on the safe `Choose Writer issue` action confirmed the active button entered `data-loading="true"`, showed `Loading... 0:00`, and set `aria-busy="true"` with no console errors.
+
+### Outstanding issues
+
+- None for the visible loading feedback layer.
+
+### Risks or caveats
+
+- The fill is not a true percentage-complete indicator. It signals active work and elapsed time until the backend/API returns.
+- If a backend request hangs indefinitely, the timer will continue counting; a future pass could add timeout messaging or retry/cancel controls.
+
+### Operator follow-up
+
+- During human QA, run a longer Writer generation and confirm the elapsed timer remains visible for the full wait.
+
+### Next steps
+
+- Consider adding per-action timeout guidance such as “Still working...” after 60 seconds and “This is taking longer than usual” after several minutes.
+
+---
+
+## Guided Reference Character Vault Target Gate Fix - 2026-05-19
+
+### What changed
+
+- Fixed the Guided Comic Image Vault handoff path so Character Vault profile images can show the `Use for guided flow` action for any active guided reference target.
+- Added a regression test covering the screenshot path: a Guided Comic `location`/asset-style reference target is active, the user opens a Character Vault profile, and the profile image card still exposes the guided action.
+
+### Files touched
+
+- `src/components/ui/CharacterVault.tsx`
+- `src/components/ui/__tests__/CharacterVault.guided.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: `CharacterVault` only passed `guidedSelectionTarget` into `ProfileVaultModal` for `character` and `panel-art` targets. If Guided Comic was matching a `location` reference and the user switched to Character Vault or opened a profile image, the shared pending target still existed, but the profile modal suppressed the guided action.
+- The fix keeps the existing one-shot guided vault bridge behavior and only removes the overly narrow Character Vault target gate.
+- `AssetVault` already allowed any active guided target, so this brings Character Vault in line with the broader Image Vault behavior.
+
+### Verification
+
+- `npm run test -- --run src/components/ui/__tests__/CharacterVault.guided.test.tsx` passed.
+- `npm run test -- --run src/stores/__tests__/guidedComicVaultBridge.test.ts` passed.
+- `npm run lint` passed with 0 errors and the existing warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser smoke check opened `http://127.0.0.1:5173/` in a fresh in-app browser tab and confirmed the ARCS app title loads as `ARCS Expanded`.
+
+### Outstanding issues
+
+- None for the missing guided action on Character Vault profile cards.
+
+### Risks or caveats
+
+- This allows a user to intentionally choose a Character Vault image for a location/asset guided reference target after switching tabs. That is broader than the auto-routed default tab, but it matches the existing Asset Vault permissive behavior and preserves user choice.
+
+### Operator follow-up
+
+- In manual QA, from Guided Comic Visual Prep, click `Add reference` for an environment/asset row, switch to Characters if needed, open a profile, and confirm `Use for guided flow` appears on the image card and returns the selected image to Guided Comic.
+
+### Next steps
+
+- Consider applying the same broad target support to NPC Vault if supporting-reference images should be selectable for character/location/panel-art targets too.
+
+---
+
+## Guided Visual Prep Reference Readability and Imageshop Prompt Sync - 2026-05-19
+
+### What changed
+
+- Expanded Guided Comic Visual Prep reference rows so long missing-reference names get a wider label column and can wrap to two lines instead of being forced into a short truncation.
+- Shortened the empty reference strip copy and row action label to reduce horizontal pressure in the Visual Prep reference matcher.
+- Added a guided Imageshop prompt rebuild path that filters the prompt’s character/location/NPC reference labels from the active Imageshop reference slots.
+- Added a stronger reference-style instruction to guided Imageshop prompts so generated panel art is explicitly told to match the active reference images’ style, rendering, palette, lighting, and design language.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Visual Prep rows now use shared exported constants for the row grid, name text, empty labels, and action label. The desktop row gives the name column `minmax(190px,260px)`, keeps the reference strip flexible, and narrows the action column to `minmax(104px,124px)`.
+- Visual Prep names now use `line-clamp-2` plus `break-words` so titles such as “Non-divine First Contact” remain readable without taking over the row.
+- Imageshop now tracks whether the prompt is still guided-reference-linked. Guided art handoffs enable tracking; manually editing the prompt, seeding a prompt, or restoring a session result turns tracking off so user-authored prompt edits are preserved.
+- While tracking is enabled, reference-slot changes rebuild the guided prompt with only active slot URLs. Removing a reference therefore removes that reference label from the generated prompt text.
+- The prompt helper uses the original guided handoff as the source of truth for known reference labels and filters those labels by active slot URL. Arbitrary manually added URLs can still influence generation as reference images, but they do not invent new guided labels.
+
+### Verification
+
+- `npm run test -- --run src/stores/__tests__/imageWorkshopBridge.test.ts` passed.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed.
+- `npm run test -- --run src/stores/__tests__/imageWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 20 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- `git diff --check` passed.
+- Browser smoke check reloaded `http://127.0.0.1:5173/`, confirmed title `ARCS Expanded`, confirmed root content rendered, and found no captured console errors.
+
+### Outstanding issues
+
+- None for the annotated Visual Prep row readability and guided Imageshop prompt-sync behavior.
+
+### Risks or caveats
+
+- Active-reference prompt filtering only knows how to label URLs that came from the guided handoff. User-uploaded or pasted images still participate as reference images, but the prompt text cannot name them unless they were part of the guided reference payload.
+- The style-match instruction improves generation guidance, but final image style fidelity still depends on the image model and the quality/consistency of the supplied references.
+
+### Operator follow-up
+
+- In manual QA, open Guided Comic Visual Prep on a project with long missing-reference names and confirm the row names wrap cleanly while the `Add ref` button remains compact.
+- In Imageshop, open a guided art handoff with multiple references, remove one slot, and confirm the prompt text drops that reference label unless the prompt has already been manually edited.
+
+### Next steps
+
+- Consider showing a subtle “prompt linked to active refs” indicator in Imageshop if users need clearer feedback about when automatic prompt syncing is active.
+
 ## How to Use These Docs
 
 | File | Use |

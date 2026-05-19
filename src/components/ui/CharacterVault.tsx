@@ -80,13 +80,9 @@ export const CharacterVault: React.FC = () => {
           onVaultChanged={() => {
             void refresh();
           }}
-          guidedSelectionTarget={
-            guidedTarget?.type === 'character' || guidedTarget?.type === 'panel-art'
-              ? guidedTarget
-              : null
-          }
+          guidedSelectionTarget={guidedTarget}
           onUseForGuidedFlow={
-            guidedTarget?.type === 'character' || guidedTarget?.type === 'panel-art'
+            guidedTarget
               ? (item) => {
                   const castName = item.cast_name?.trim() || undefined;
                   const imageLabel = item.name?.trim() || undefined;
