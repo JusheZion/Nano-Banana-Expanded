@@ -3469,6 +3469,187 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Add richer readiness summaries around characters, assets/locations, art style, and layout intent once the shell has been manually validated.
 - Consider making the old guided sections collapsible after manual QA proves the new page-first workspace covers the primary production loop.
 
+---
+
+## Page-First Guided Comic Workspace UX Refinement - 2026-05-19
+
+### What changed
+
+- Refined the new Page-First Production Workspace so it reads more clearly as the central Guided Comics production surface.
+- Added reference readiness into production page status logic with a new `needs references` state.
+- Shortened the ready-for-studio navigator label to `Advanced-ready` while preserving the internal handoff meaning.
+- Made the Issue Pages navigator sticky at desktop widths so page switching remains available while working through the selected page workspace.
+- Added a compact workflow phase strip for `Story Foundation`, `Outline`, `Page Plan`, and `Production Workspace` to make the new mental model visible without exposing a giant writing dashboard.
+- Added selected-page summary cards for page beats, dialogue seeds, and reference readiness near the page preview.
+- Expanded Panel Focus with style continuity context, missing-reference messaging, `Previous panel`, `Next panel`, and a clearer `Mark panel complete` action.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The `needs references` state is derived from existing Visual Prep reference maps rather than a new storage layer. Page status only blocks on missing references when reference maps or NPC names are supplied to the production status helper.
+- `getGuidedProductionMissingReferences` was added as a testable helper for page-level character, location, and NPC readiness.
+- The selected-page workspace now surfaces beat/dialogue/reference summaries above the page preview so users can understand the current page without searching old vertical sections.
+- Panel Focus still uses existing image and handoff handlers. No Advanced Studio panel geometry, balloon, mask, clipping, layer, export, or save/load behavior was changed.
+- Earlier workflow phases are represented as a compact production path strip only. The old Guided Flow implementation remains below the shell until manual QA approves collapse or retirement.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed with 35 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- `git diff --check` passed.
+- Browser QA at `http://localhost:5173/` confirmed the Page-First shell renders the production path strip, Issue Pages navigator, page beat summary, dialogue summary, reference readiness summary, `Advanced-ready` label, `needs references` status, and a usable page 1 panel button rectangle.
+
+### Outstanding issues
+
+- The in-app browser viewport repeatedly collapsed to a 1x1 surface during deeper coordinate interaction, so this pass did not complete a reliable browser click-through check from page preview panel to Panel Focus after the latest refinement.
+- The old Guided Flow sections remain visible below the shell by design.
+
+### Risks or caveats
+
+- `needs references` is page-level because the current visual metadata reference needs are page-level in the Writers Workshop bridge. If future metadata becomes truly panel-specific, the production status helper should be narrowed to panel-level readiness.
+- Panel Focus still treats dialogue as seeds/metadata. It does not create final balloons automatically.
+
+### Operator follow-up
+
+- Manually QA panel click-through in the normal browser viewport: select a page, click a panel, confirm Panel Focus shows beat, dialogue, references, style continuity, image state, previous/next panel controls, Imageshop, vault, upload, paste, and Advanced Studio handoff.
+- After manual QA, decide which old vertical sections should become collapsed behind Story Foundation, Outline, Page Plan, and Production Workspace.
+
+### Next steps
+
+- Add a first-class production-mode toggle or collapse behavior once manual QA confirms the new shell is the preferred central workflow.
+- Consider moving reference readiness from page-level to panel-level if future visual metadata begins differentiating panel-specific references.
+
+---
+
+## Comic Production Prep Workspace - 2026-05-19
+
+### What changed
+
+- Added the first dedicated Comic Production Prep workspace between narrative generation and page/panel production.
+- Added Character Prep cards sourced from story/page character names with fields for role summary, visual description, costume notes, continuity notes, art style notes, recurring expressions/moods, visual tags, reference images, and ready state.
+- Added Location + Environment Prep cards sourced from story/page locations with fields for setting summary, mood/tone, environment notes, lighting/time-of-day notes, recurring visual motifs, reference images, and ready state.
+- Added Prop / Asset Continuity support with addable recurring prop cards, reference images, continuity notes, style notes, reuse tracking, and ready state.
+- Added Visual Style Direction controls in the prep layer using the existing `artDirection` state so overall art style, rendering style, color/mood, lighting, and continuity notes remain reusable.
+- Added production readiness counts with supportive “ready for production” language.
+- Added prep upload support for character, location, and prop references.
+- Added prop vault-target support so Asset Vault selections can return into prop prep without changing existing panel art, character, location, or NPC flows.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/components/ui/VaultChrome.tsx`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Production Prep metadata is additive and persists through the guided recovery draft and project-library snapshot via `characterPrep`, `locationPrep`, and `propPrep`.
+- The prep layer reuses existing reference maps where possible: character and location prep use `characterReferences` and `locationReferences`; prop prep owns its own reference list because recurring props were not previously represented as first-class guided references.
+- `buildGuidedProductionPrepContext` creates continuity text from character prep, location prep, prop prep, and project-wide art direction.
+- Panel Focus now shows prepared continuity context when available.
+- Imageshop handoffs now accept optional `props` references and `productionPrepContext`. Prompt generation includes prop references and production-prep continuity, and active-reference prompt rebuilding filters prop references along with character/location/NPC references.
+- Advanced Studio handoff remains behavior-preserving. Prep context is appended to guided visual prompt metadata sent through the existing `visualStoryMetadata` field rather than changing panel, balloon, mask, clipping, layer, export, or save/load internals.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts` passed with 64 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- `git diff --check` passed.
+- Browser QA at `http://127.0.0.1:5173/` confirmed Guided Comic Flow renders, Comic Production Prep appears, and the Character Prep, Location + Environment Prep, Visual Style Direction, Prop / Asset Continuity, and Page production workspace labels are present. The temporary browser viewport override was reset after QA.
+
+### Outstanding issues
+
+- Manual QA should still exercise the full reference assignment loop for prop prep through Asset Vault, including returning the selected vault asset to Guided Comics.
+- This first version does not infer prop names from scripts automatically; props are addable manually.
+
+### Risks or caveats
+
+- Prop references are stored in `propPrep` rather than the existing location reference map. This avoids overloading locations but means future shared reference tooling may need to include props explicitly.
+- Advanced Studio receives prep continuity as visual prompt metadata only. The protected Advanced Studio runtime was intentionally not refactored.
+
+### Operator follow-up
+
+- Manually QA: upload a character reference, assign a character from vault, prepare a location, add a prop, assign a vault asset to the prop, open Imageshop, and confirm the prompt includes prop references and production-prep continuity.
+- Manually QA: send a page to Advanced Studio and confirm existing panel images, geometry, balloons, masks, and exports continue to behave as before.
+
+### Next steps
+
+- Add first-class panel-specific prop detection once script or visual metadata can identify props per panel.
+- Consider making Production Prep the default “readying” step while collapsing older Visual Prep sections after manual QA.
+
+---
+
+## Guided Comics Production Workspace Layout Stabilization - 2026-05-19
+
+### What changed
+
+- Stabilized the Page-First Production Workspace layout so the issue page navigator, selected page/panel workspace, and guided controls no longer overlap.
+- Removed the desktop dependency on the old fixed right guided-step rail by hiding that fixed rail and removing the `xl:pr-80` page padding that was forcing the center workspace into awkward widths.
+- Moved guided-step/current-comic controls into the production workspace as a normal-flow right column.
+- Locked desktop production layout to explicit columns:
+  - left: Issue Pages navigator
+  - center: selected page workspace plus panel focus workspace
+  - right: guided-step/current-comic controls
+- Added explicit grid placement for the issue page rail, center page workspace, panel focus workspace, and right guided-control rail so CSS auto-placement cannot reorder the columns.
+- Kept the issue page navigator in normal layout flow with internal scrolling and sticky desktop behavior.
+- Kept the center workspace prioritized with `min-w-0`, contained cards, stable page preview sizing, and the panel focus editor below the selected page workspace.
+- Kept medium/narrow responsive behavior in normal flow: the right production rail hides and the existing compact guided-step nav remains available.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a layout stabilization pass only. No new production features were added.
+- Existing page selection, panel focus, beat editing, dialogue editing, image assignment, vault actions, Imageshop handoff, and Advanced Studio handoff logic were preserved.
+- The old fixed guided-step aside remains in the component tree but is now `hidden`; the active desktop guided controls are rendered inside the production workspace grid.
+- The production workspace now uses `xl:grid-cols-[260px_minmax(0,1fr)_240px]` and `2xl:grid-cols-[280px_minmax(720px,1fr)_260px]`, with explicit column/row starts for the left, center, and right areas.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/stores/__tests__/guidedComicLayoutBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts` passed with 64 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- `git diff --check` passed.
+- Browser QA at `http://127.0.0.1:5173/` measured the desktop production columns at 1440px wide and confirmed:
+  - the fixed legacy rail is not visible,
+  - the Issue Pages rail sits in the left column,
+  - the guided controls sit in the right column,
+  - no overlap between the page rail, center panel workspace, panel focus workspace, or right rail.
+- Browser QA selected page 1, page 3, and page 10 from the page navigator and confirmed the selected page heading changed correctly and the panel preview stayed in the center workspace without being covered by side rails.
+- Browser QA opened panel focus and confirmed the panel beat textarea, image preview, and actions for vault, upload, paste, Imageshop, mark complete, previous panel, and next panel are present.
+- Browser QA at 1024px wide confirmed the right production rail hides, the compact guided-step nav appears, and the page rail and panel focus workspace do not overlap.
+
+### Outstanding issues
+
+- None for the overlap/layout stabilization pass.
+
+### Risks or caveats
+
+- The hidden legacy fixed rail still exists in JSX for now. It can be removed after manual QA confirms the in-grid guided controls fully replace it on desktop.
+- The right rail is intentionally narrower and secondary; some library controls are simplified there compared with the older fixed rail, while full controls remain available in the compact/mobile control area and old Guided Flow below.
+
+### Operator follow-up
+
+- Manual QA should visually confirm page 1, page 3, and page 10 on the user’s normal desktop viewport and resize widths, especially any viewport near the `xl` breakpoint.
+
+### Next steps
+
+- After manual QA, consider deleting the hidden legacy fixed rail and consolidating the remaining duplicated mobile/desktop guided controls.
+
 ## How to Use These Docs
 
 | File | Use |

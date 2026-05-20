@@ -12,6 +12,8 @@ import {
   GUIDED_WRITERS_WORKSHOP_BRIDGE_ACTIONS,
   GUIDED_WRITERS_WORKSHOP_BRIDGE_COPY,
   GUIDED_WRITERS_WORKSHOP_TOOL_ACTION_LABELS,
+  buildGuidedProductionPrepContext,
+  getGuidedProductionMissingReferences,
   getGuidedProductionPagePanels,
   getGuidedProductionPageStatus,
   hasGuidedComicOutlineDraft,
@@ -135,9 +137,69 @@ describe('guided comic Advanced Studio access', () => {
             source: 'manual',
           },
         ],
+        characterReferences: {
+          Flux: [
+            {
+              imageUrl: 'data:image/png;base64,flux',
+              displayName: 'Flux reference',
+            },
+          ],
+        },
+        locationReferences: {
+          'Sky observatory': [],
+        },
+      }),
+    ).toBe('needs references');
+    expect(
+      getGuidedProductionMissingReferences(page, {
+        characterReferences: {
+          Flux: [
+            {
+              imageUrl: 'data:image/png;base64,flux',
+              displayName: 'Flux reference',
+            },
+          ],
+        },
+        locationReferences: {
+          'Sky observatory': [],
+        },
+      }),
+    ).toEqual(['Sky observatory']);
+    expect(
+      getGuidedProductionPageStatus(page, {
+        editableDialogueSeeds: [
+          {
+            id: 'seed-1',
+            pageNumber: 2,
+            panelNumber: 1,
+            order: 1,
+            kind: 'dialogue',
+            text: 'FLUX: We are here.',
+            originalText: 'FLUX: We are here.',
+            beatText: 'Wide reveal',
+            status: 'accepted',
+            source: 'manual',
+          },
+        ],
         panelArtStatuses: {
           'page-2-panel-1': 'ready',
           'page-2-panel-2': 'approved',
+        },
+        characterReferences: {
+          Flux: [
+            {
+              imageUrl: 'data:image/png;base64,flux',
+              displayName: 'Flux reference',
+            },
+          ],
+        },
+        locationReferences: {
+          'Sky observatory': [
+            {
+              imageUrl: 'data:image/png;base64,observatory',
+              displayName: 'Sky observatory reference',
+            },
+          ],
         },
       }),
     ).toBe('layout ready');
@@ -222,5 +284,60 @@ describe('guided comic Advanced Studio access', () => {
       status: 'ready',
       imageUrl: 'data:image/png;base64,panel2',
     });
+  });
+
+  it('builds production prep continuity context for panel handoffs', () => {
+    const context = buildGuidedProductionPrepContext({
+      characterNames: ['Flux'],
+      locationName: 'Sky Observatory',
+      characterPrep: {
+        Flux: {
+          roleSummary: 'Lead empath',
+          visualDescription: 'Red jacket, gold signal pendant',
+          costumeNotes: 'Keep the pendant visible',
+          continuityNotes: 'Same jacket across the scene',
+          artStyleNotes: 'Clean inked silhouette',
+          expressionsMoods: 'Focused, worried',
+          visualTags: 'red jacket, gold pendant',
+          ready: true,
+        },
+      },
+      locationPrep: {
+        'Sky Observatory': {
+          settingSummary: 'High glass dome above the city',
+          moodTone: 'Reverent and tense',
+          environmentNotes: 'Curved windows and brass instruments',
+          lightingNotes: 'Blue storm rim light',
+          visualMotifs: 'Star maps',
+          ready: true,
+        },
+      },
+      propPrep: {
+        'Signal pendant': {
+          name: 'Signal pendant',
+          continuityNotes: 'Gold pendant must match Flux reference',
+          styleNotes: 'Small but readable',
+          reuseTracking: 'Appears on pages 1-3',
+          references: [],
+          ready: true,
+        },
+      },
+      artDirection: {
+        artStyle: 'clean superhero comic',
+        defaultAspectRatio: 'Match panel layout',
+        renderingStyle: 'inked linework',
+        colorMood: 'electric blue and gold',
+        lighting: 'dramatic rim light',
+        continuityNotes: 'Keep reference style consistent',
+        excludeTextFromImages: true,
+      },
+    });
+
+    expect(context).toContain('Flux');
+    expect(context).toContain('red jacket');
+    expect(context).toContain('Location Sky Observatory');
+    expect(context).toContain('Blue storm rim light');
+    expect(context).toContain('Signal pendant');
+    expect(context).toContain('Project look');
   });
 });

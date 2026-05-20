@@ -34,6 +34,9 @@ export type GuidedComicProjectSnapshot = {
   characterReferences: Record<string, unknown[]>;
   locationReferences: Record<string, unknown[]>;
   npcReferences: Record<string, unknown[]>;
+  characterPrep?: Record<string, unknown>;
+  locationPrep?: Record<string, unknown>;
+  propPrep?: Record<string, unknown>;
   panelArtStatuses: Record<string, unknown>;
   panelArtImages: Record<string, unknown>;
   pageLayoutTemplates: Record<number, unknown>;

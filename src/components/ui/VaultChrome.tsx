@@ -90,6 +90,8 @@ export function guidedTargetTypeLabel(type: GuidedComicVaultTarget['type']): str
       return 'Character reference';
     case 'location':
       return 'Location / asset reference';
+    case 'prop':
+      return 'Prop / asset reference';
     case 'npc':
       return 'NPC reference';
     case 'panel-art':

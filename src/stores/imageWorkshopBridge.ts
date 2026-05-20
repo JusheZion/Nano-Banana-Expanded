@@ -38,6 +38,7 @@ export type GuidedImageWorkshopHandoff = {
   characters: GuidedImageWorkshopReference[];
   locations: GuidedImageWorkshopReference[];
   npcs: GuidedImageWorkshopReference[];
+  props?: GuidedImageWorkshopReference[];
   pageSummary?: string;
   panelId?: string;
   pageNumber?: number;
@@ -58,6 +59,7 @@ export type GuidedImageWorkshopHandoff = {
     continuityNotes: string;
     excludeTextFromImages: boolean;
   };
+  productionPrepContext?: string;
 };
 
 const IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT = 14;
@@ -68,9 +70,12 @@ export function getGuidedImageWorkshopPreload(handoff: GuidedImageWorkshopHandof
   overflowReferences: GuidedImageWorkshopReference[];
   context: 'character' | 'asset';
 } {
-  const allReferences = [...handoff.characters, ...handoff.locations, ...handoff.npcs].filter((reference) =>
-    reference.imageUrl.trim(),
-  );
+  const allReferences = [
+    ...handoff.characters,
+    ...handoff.locations,
+    ...handoff.npcs,
+    ...(handoff.props ?? []),
+  ].filter((reference) => reference.imageUrl.trim());
   const preloadedReferences = allReferences.slice(0, IMAGE_WORKSHOP_REFERENCE_SLOT_COUNT);
   return {
     allReferences,
@@ -108,6 +113,7 @@ export function buildGuidedImageWorkshopPromptForActiveReferences(
     characters: filterReferencesByActiveUrls(handoff.characters, activeReferenceUrls),
     locations: filterReferencesByActiveUrls(handoff.locations, activeReferenceUrls),
     npcs: filterReferencesByActiveUrls(handoff.npcs, activeReferenceUrls),
+    props: filterReferencesByActiveUrls(handoff.props ?? [], activeReferenceUrls),
   });
 }
 
@@ -143,6 +149,8 @@ export function buildGuidedImageWorkshopPrompt(handoff: GuidedImageWorkshopHando
     `Character references: ${joinDisplayNames(handoff.characters)}`,
     `Location / asset references: ${joinDisplayNames(handoff.locations)}`,
     `NPC references: ${joinDisplayNames(handoff.npcs)}`,
+    handoff.props?.length ? `Prop / asset references: ${joinDisplayNames(handoff.props)}` : '',
+    handoff.productionPrepContext?.trim() ? `Production prep continuity: ${handoff.productionPrepContext.trim()}` : '',
     panelLayout?.intent ? `Panel layout intent: ${panelLayout.intent}` : '',
     panelLayout?.columnSpan || panelLayout?.rowSpan
       ? `Panel layout span: ${panelLayout.columnSpan ?? 1} columns x ${panelLayout.rowSpan ?? 1} rows`

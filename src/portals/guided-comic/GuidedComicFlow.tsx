@@ -228,7 +228,7 @@ type StoryFormState = {
   endingGoal: string;
 };
 
-type ArtDirectionState = {
+export type ArtDirectionState = {
   artStyle: string;
   defaultAspectRatio: string;
   renderingStyle: string;
@@ -236,6 +236,35 @@ type ArtDirectionState = {
   lighting: string;
   continuityNotes: string;
   excludeTextFromImages: boolean;
+};
+
+export type CharacterPrepState = {
+  roleSummary: string;
+  visualDescription: string;
+  costumeNotes: string;
+  continuityNotes: string;
+  artStyleNotes: string;
+  expressionsMoods: string;
+  visualTags: string;
+  ready: boolean;
+};
+
+export type LocationPrepState = {
+  settingSummary: string;
+  moodTone: string;
+  environmentNotes: string;
+  lightingNotes: string;
+  visualMotifs: string;
+  ready: boolean;
+};
+
+export type PropPrepState = {
+  name: string;
+  continuityNotes: string;
+  styleNotes: string;
+  reuseTracking: string;
+  references: ReferenceImage[];
+  ready: boolean;
 };
 
 type OutlineBeatId = 'opening-hook' | 'rising-conflict' | 'midpoint-turn' | 'climax' | 'ending-beat';
@@ -291,6 +320,7 @@ type PanelArtImageState = {
 export type GuidedProductionPageStatus =
   | 'needs beats'
   | 'needs dialogue'
+  | 'needs references'
   | 'needs art'
   | 'layout ready'
   | 'ready for Advanced Studio';
@@ -304,6 +334,13 @@ export type GuidedProductionPanel = {
   imageUrl?: string;
   imageSource?: PanelArtImageState['source'];
   layoutIntent: GuidedComicLayoutIntent;
+};
+
+type GuidedProductionReferenceOptions = {
+  characterReferences?: Record<string, ReferenceImage[]>;
+  locationReferences?: Record<string, ReferenceImage[]>;
+  npcReferences?: Record<string, ReferenceImage[]>;
+  npcNames?: string[];
 };
 
 type ComicProjectMetadataForm = {
@@ -359,6 +396,9 @@ type GuidedComicDraftState = {
   characterReferences: Record<string, ReferenceImage[]>;
   locationReferences: Record<string, ReferenceImage[]>;
   npcReferences: Record<string, ReferenceImage[]>;
+  characterPrep: Record<string, CharacterPrepState>;
+  locationPrep: Record<string, LocationPrepState>;
+  propPrep: Record<string, PropPrepState>;
   selectedPanelId: string | null;
   panelArtStatuses: Record<string, PanelArtStatus>;
   panelArtImages: Record<string, PanelArtImageState>;
@@ -425,6 +465,35 @@ const DEFAULT_ART_DIRECTION: ArtDirectionState = {
   lighting: '',
   continuityNotes: '',
   excludeTextFromImages: true,
+};
+
+const DEFAULT_CHARACTER_PREP: CharacterPrepState = {
+  roleSummary: '',
+  visualDescription: '',
+  costumeNotes: '',
+  continuityNotes: '',
+  artStyleNotes: '',
+  expressionsMoods: '',
+  visualTags: '',
+  ready: false,
+};
+
+const DEFAULT_LOCATION_PREP: LocationPrepState = {
+  settingSummary: '',
+  moodTone: '',
+  environmentNotes: '',
+  lightingNotes: '',
+  visualMotifs: '',
+  ready: false,
+};
+
+const DEFAULT_PROP_PREP: PropPrepState = {
+  name: '',
+  continuityNotes: '',
+  styleNotes: '',
+  reuseTracking: '',
+  references: [],
+  ready: false,
 };
 
 const ASPECT_RATIO_OPTIONS = [
@@ -920,6 +989,53 @@ function normalizeReferenceMap(raw: unknown): Record<string, ReferenceImage[]> {
   }, {});
 }
 
+function normalizeCharacterPrepMap(raw: unknown): Record<string, CharacterPrepState> {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.entries(raw as Record<string, Partial<CharacterPrepState>>).reduce<Record<string, CharacterPrepState>>(
+    (next, [name, value]) => {
+      if (!name.trim() || !value || typeof value !== 'object') return next;
+      next[name] = { ...DEFAULT_CHARACTER_PREP, ...value, ready: Boolean(value.ready) };
+      return next;
+    },
+    {},
+  );
+}
+
+function normalizeLocationPrepMap(raw: unknown): Record<string, LocationPrepState> {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.entries(raw as Record<string, Partial<LocationPrepState>>).reduce<Record<string, LocationPrepState>>(
+    (next, [name, value]) => {
+      if (!name.trim() || !value || typeof value !== 'object') return next;
+      next[name] = { ...DEFAULT_LOCATION_PREP, ...value, ready: Boolean(value.ready) };
+      return next;
+    },
+    {},
+  );
+}
+
+function normalizePropPrepMap(raw: unknown): Record<string, PropPrepState> {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.entries(raw as Record<string, Partial<PropPrepState>>).reduce<Record<string, PropPrepState>>(
+    (next, [name, value]) => {
+      if (!name.trim() || !value || typeof value !== 'object') return next;
+      next[name] = {
+        ...DEFAULT_PROP_PREP,
+        ...value,
+        name: typeof value.name === 'string' && value.name.trim() ? value.name : name,
+        references: Array.isArray(value.references)
+          ? value.references.flatMap((item) => {
+              const normalized = normalizeReferenceImage(name, item);
+              return normalized ? [normalized] : [];
+            })
+          : [],
+        ready: Boolean(value.ready),
+      };
+      return next;
+    },
+    {},
+  );
+}
+
 function ReferenceThumbnailStrip({
   references,
   emptyLabel,
@@ -1029,6 +1145,9 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       characterReferences: normalizeReferenceMap(parsed.characterReferences),
       locationReferences: normalizeReferenceMap(parsed.locationReferences),
       npcReferences: normalizeReferenceMap(parsed.npcReferences),
+      characterPrep: normalizeCharacterPrepMap(parsed.characterPrep),
+      locationPrep: normalizeLocationPrepMap(parsed.locationPrep),
+      propPrep: normalizePropPrepMap(parsed.propPrep),
       selectedPanelId: typeof parsed.selectedPanelId === 'string' ? parsed.selectedPanelId : null,
       panelArtStatuses: parsed.panelArtStatuses ?? {},
       panelArtImages: parsed.panelArtImages ?? {},
@@ -1064,6 +1183,9 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     characterReferences: draft.characterReferences,
     locationReferences: draft.locationReferences,
     npcReferences: draft.npcReferences,
+    characterPrep: draft.characterPrep,
+    locationPrep: draft.locationPrep,
+    propPrep: draft.propPrep,
     panelArtStatuses: draft.panelArtStatuses,
     panelArtImages: draft.panelArtImages,
     pageLayoutTemplates: draft.pageLayoutTemplates,
@@ -1092,6 +1214,9 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     characterReferences: normalizeReferenceMap(snapshot.characterReferences),
     locationReferences: normalizeReferenceMap(snapshot.locationReferences),
     npcReferences: normalizeReferenceMap(snapshot.npcReferences),
+    characterPrep: normalizeCharacterPrepMap(snapshot.characterPrep),
+    locationPrep: normalizeLocationPrepMap(snapshot.locationPrep),
+    propPrep: normalizePropPrepMap(snapshot.propPrep),
     selectedPanelId: typeof snapshot.selectedPanelId === 'string' ? snapshot.selectedPanelId : null,
     panelArtStatuses: snapshot.panelArtStatuses as Record<string, PanelArtStatus>,
     panelArtImages: snapshot.panelArtImages as Record<string, PanelArtImageState>,
@@ -1208,11 +1333,103 @@ function guidedProductionStatusClass(status: GuidedProductionPageStatus): string
       return 'border-sky-300/30 bg-sky-300/10 text-sky-100';
     case 'needs art':
       return 'border-amber-300/30 bg-amber-300/10 text-amber-100';
+    case 'needs references':
+      return 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100';
     case 'needs dialogue':
       return 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100';
     case 'needs beats':
       return 'border-white/15 bg-white/[0.08] text-white/58';
   }
+}
+
+function guidedProductionStatusLabel(status: GuidedProductionPageStatus): string {
+  return status === 'ready for Advanced Studio' ? 'Advanced-ready' : status;
+}
+
+function hasAnyReferenceMap(options: GuidedProductionReferenceOptions): boolean {
+  return Boolean(
+    options.characterReferences ||
+      options.locationReferences ||
+      options.npcReferences ||
+      (options.npcNames && options.npcNames.length > 0),
+  );
+}
+
+export function getGuidedProductionMissingReferences(
+  page: PageCard,
+  options: GuidedProductionReferenceOptions,
+): string[] {
+  if (!hasAnyReferenceMap(options)) return [];
+  const missingCharacters = splitListText(page.keyCharacters).filter(
+    (name) => (options.characterReferences?.[name] ?? []).length === 0,
+  );
+  const missingLocations = splitListText(page.keyLocation).filter(
+    (name) => (options.locationReferences?.[name] ?? []).length === 0,
+  );
+  const missingNpcs = (options.npcNames ?? []).filter(
+    (name) => (options.npcReferences?.[name] ?? []).length === 0,
+  );
+  return [...missingCharacters, ...missingLocations, ...missingNpcs];
+}
+
+export function buildGuidedProductionPrepContext(options: {
+  characterNames?: string[];
+  locationName?: string;
+  characterPrep?: Record<string, CharacterPrepState>;
+  locationPrep?: Record<string, LocationPrepState>;
+  propPrep?: Record<string, PropPrepState>;
+  artDirection?: ArtDirectionState;
+}): string {
+  const characterNotes = (options.characterNames ?? [])
+    .map((name) => {
+      const prep = options.characterPrep?.[name];
+      if (!prep) return '';
+      const details = [
+        prep.visualDescription && `visual: ${prep.visualDescription}`,
+        prep.costumeNotes && `costume: ${prep.costumeNotes}`,
+        prep.continuityNotes && `continuity: ${prep.continuityNotes}`,
+        prep.expressionsMoods && `expressions: ${prep.expressionsMoods}`,
+        prep.visualTags && `tags: ${prep.visualTags}`,
+      ].filter(Boolean);
+      return details.length > 0 ? `${name} (${details.join('; ')})` : '';
+    })
+    .filter(Boolean);
+  const locationPrep = options.locationName ? options.locationPrep?.[options.locationName] : undefined;
+  const locationNotes =
+    options.locationName && locationPrep
+      ? [
+          locationPrep.settingSummary && `setting: ${locationPrep.settingSummary}`,
+          locationPrep.moodTone && `mood: ${locationPrep.moodTone}`,
+          locationPrep.environmentNotes && `environment: ${locationPrep.environmentNotes}`,
+          locationPrep.lightingNotes && `lighting: ${locationPrep.lightingNotes}`,
+          locationPrep.visualMotifs && `motifs: ${locationPrep.visualMotifs}`,
+        ].filter(Boolean)
+      : [];
+  const propNotes = Object.values(options.propPrep ?? {})
+    .map((prop) => {
+      const details = [
+        prop.continuityNotes && `continuity: ${prop.continuityNotes}`,
+        prop.styleNotes && `style: ${prop.styleNotes}`,
+        prop.reuseTracking && `reuse: ${prop.reuseTracking}`,
+      ].filter(Boolean);
+      return details.length > 0 ? `${prop.name} (${details.join('; ')})` : '';
+    })
+    .filter(Boolean);
+  const styleNotes = [
+    options.artDirection?.artStyle && `style: ${options.artDirection.artStyle}`,
+    options.artDirection?.renderingStyle && `rendering: ${options.artDirection.renderingStyle}`,
+    options.artDirection?.colorMood && `color: ${options.artDirection.colorMood}`,
+    options.artDirection?.lighting && `lighting: ${options.artDirection.lighting}`,
+    options.artDirection?.continuityNotes && `continuity: ${options.artDirection.continuityNotes}`,
+  ].filter(Boolean);
+  return [
+    characterNotes.length > 0 ? `Characters: ${characterNotes.join(' | ')}` : '',
+    locationNotes.length > 0 ? `Location ${options.locationName}: ${locationNotes.join('; ')}` : '',
+    propNotes.length > 0 ? `Props: ${propNotes.join(' | ')}` : '',
+    styleNotes.length > 0 ? `Project look: ${styleNotes.join('; ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function getGuidedProductionDialogueText(
@@ -1245,7 +1462,7 @@ export function getGuidedProductionPagePanels(
     panelArtImages?: Record<string, PanelArtImageState>;
     writerDialogueSeed?: GuidedComicBridgeDialogueSeed;
     editableDialogueSeeds?: GuidedComicEditableDialogueSeed[];
-  },
+  } & GuidedProductionReferenceOptions,
 ): GuidedProductionPanel[] {
   const layoutPanels = getGuidedComicLayoutPanels(page, options.layoutTemplateId ?? 'auto');
   return layoutPanels.map((panel) => {
@@ -1272,11 +1489,12 @@ export function getGuidedProductionPageStatus(
     panelArtImages?: Record<string, PanelArtImageState>;
     writerDialogueSeed?: GuidedComicBridgeDialogueSeed;
     editableDialogueSeeds?: GuidedComicEditableDialogueSeed[];
-  },
+  } & GuidedProductionReferenceOptions,
 ): GuidedProductionPageStatus {
   const panels = getGuidedProductionPagePanels(page, options);
   if (panels.length === 0 || !panels.some((panel) => panel.beatText.trim())) return 'needs beats';
   if (!panels.some((panel) => panel.dialogueText.trim())) return 'needs dialogue';
+  if (getGuidedProductionMissingReferences(page, options).length > 0) return 'needs references';
   const allPanelsHaveArt = panels.every((panel) => panel.status !== 'needs-art' || Boolean(panel.imageUrl));
   if (!allPanelsHaveArt) return 'needs art';
   if (options.layoutTemplateId) return 'ready for Advanced Studio';
@@ -1443,6 +1661,21 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [npcReferences, setNpcReferences] = useState<Record<string, ReferenceImage[]>>(
     () => restoredDraft?.npcReferences ?? {},
   );
+  const [characterPrep, setCharacterPrep] = useState<Record<string, CharacterPrepState>>(
+    () => restoredDraft?.characterPrep ?? {},
+  );
+  const [locationPrep, setLocationPrep] = useState<Record<string, LocationPrepState>>(
+    () => restoredDraft?.locationPrep ?? {},
+  );
+  const [propPrep, setPropPrep] = useState<Record<string, PropPrepState>>(
+    () => restoredDraft?.propPrep ?? {},
+  );
+  const [newPropName, setNewPropName] = useState('');
+  const [pendingPrepUpload, setPendingPrepUpload] = useState<{
+    type: 'character' | 'location' | 'prop';
+    name: string;
+  } | null>(null);
+  const prepUploadInputRef = useRef<HTMLInputElement | null>(null);
   const [npcReferenceName, setNpcReferenceName] = useState('');
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(() => restoredDraft?.selectedPanelId ?? null);
   const [panelArtStatuses, setPanelArtStatuses] = useState<Record<string, PanelArtStatus>>(
@@ -1520,6 +1753,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       characterReferences,
       locationReferences,
       npcReferences,
+      characterPrep,
+      locationPrep,
+      propPrep,
       panelArtStatuses,
       panelArtImages,
       pageLayoutTemplates,
@@ -1535,8 +1771,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     [
       activeStep.id,
       artDirection,
+      characterPrep,
       characterReferences,
       editableDialogueSeeds,
+      locationPrep,
       locationReferences,
       npcReferences,
       outlineBeats,
@@ -1547,6 +1785,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       panelArtImages,
       panelArtStatuses,
       promotedBalloonSeeds,
+      propPrep,
       selectedPanelId,
       setupForm,
       storyForm,
@@ -1613,6 +1852,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setCharacterReferences(draft.characterReferences);
     setLocationReferences(draft.locationReferences);
     setNpcReferences(draft.npcReferences);
+    setCharacterPrep(draft.characterPrep);
+    setLocationPrep(draft.locationPrep);
+    setPropPrep(draft.propPrep);
+    setNewPropName('');
     setNpcReferenceName('');
     setSelectedPanelId(draft.selectedPanelId);
     setPanelArtStatuses(draft.panelArtStatuses);
@@ -1688,6 +1931,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       characterReferences,
       locationReferences,
       npcReferences,
+      characterPrep,
+      locationPrep,
+      propPrep,
       selectedPanelId,
       panelArtStatuses,
       panelArtImages,
@@ -1708,8 +1954,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   }, [
     activeIndex,
     artDirection,
+    characterPrep,
     characterReferences,
     editableDialogueSeeds,
+    locationPrep,
     locationReferences,
     npcReferences,
     outlineBeats,
@@ -1720,6 +1968,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     panelArtImages,
     panelArtStatuses,
     promotedBalloonSeeds,
+    propPrep,
     selectedPanelId,
     setupForm,
     storyForm,
@@ -1766,6 +2015,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       setNpcReferences((current) => ({
         ...current,
         [selection.name]: [...(current[selection.name] ?? []), reference],
+      }));
+      return;
+    }
+
+    if (selection.type === 'prop') {
+      setPropPrep((current) => ({
+        ...current,
+        [selection.name]: {
+          ...DEFAULT_PROP_PREP,
+          ...(current[selection.name] ?? { name: selection.name }),
+          name: selection.name,
+          references: [...(current[selection.name]?.references ?? []), reference],
+        },
       }));
       return;
     }
@@ -2547,9 +2809,121 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const requestLocationVaultReference = (name: string) => {
     requestVaultSelection({ type: 'location', name });
   };
+  const requestPropVaultReference = (name: string) => {
+    requestVaultSelection({ type: 'prop', name });
+  };
   const requestNpcVaultReference = () => {
     const name = npcReferenceName.trim();
     requestVaultSelection({ type: 'npc', name: name || 'NPC reference' });
+  };
+  const updateCharacterPrep = <K extends keyof CharacterPrepState>(
+    name: string,
+    key: K,
+    value: CharacterPrepState[K],
+  ) => {
+    setCharacterPrep((current) => ({
+      ...current,
+      [name]: {
+        ...DEFAULT_CHARACTER_PREP,
+        ...(current[name] ?? {}),
+        [key]: value,
+      },
+    }));
+  };
+  const updateLocationPrep = <K extends keyof LocationPrepState>(
+    name: string,
+    key: K,
+    value: LocationPrepState[K],
+  ) => {
+    setLocationPrep((current) => ({
+      ...current,
+      [name]: {
+        ...DEFAULT_LOCATION_PREP,
+        ...(current[name] ?? {}),
+        [key]: value,
+      },
+    }));
+  };
+  const updatePropPrep = <K extends keyof PropPrepState>(name: string, key: K, value: PropPrepState[K]) => {
+    setPropPrep((current) => ({
+      ...current,
+      [name]: {
+        ...DEFAULT_PROP_PREP,
+        ...(current[name] ?? { name }),
+        name,
+        [key]: value,
+      },
+    }));
+  };
+  const addPropPrepItem = () => {
+    const name = newPropName.trim();
+    if (!name) return;
+    setPropPrep((current) => ({
+      ...current,
+      [name]: {
+        ...DEFAULT_PROP_PREP,
+        ...(current[name] ?? {}),
+        name,
+      },
+    }));
+    setNewPropName('');
+  };
+  const removePropReference = (name: string, referenceIndex: number) => {
+    setPropPrep((current) => {
+      const item = current[name];
+      if (!item) return current;
+      return {
+        ...current,
+        [name]: {
+          ...item,
+          references: item.references.filter((_, index) => index !== referenceIndex),
+        },
+      };
+    });
+  };
+  const requestPrepUpload = (type: 'character' | 'location' | 'prop', name: string) => {
+    setPendingPrepUpload({ type, name });
+    prepUploadInputRef.current?.click();
+  };
+  const handlePrepReferenceUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const target = pendingPrepUpload;
+    event.target.value = '';
+    setPendingPrepUpload(null);
+    if (!file || !target || !file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!imageUrl) return;
+      const reference: ReferenceImage = {
+        imageUrl,
+        displayName: file.name || `${target.name} reference`,
+        sourceLabel: file.name || 'Uploaded reference',
+      };
+      if (target.type === 'character') {
+        setCharacterReferences((current) => ({
+          ...current,
+          [target.name]: [...(current[target.name] ?? []), reference],
+        }));
+      } else if (target.type === 'location') {
+        setLocationReferences((current) => ({
+          ...current,
+          [target.name]: [...(current[target.name] ?? []), reference],
+        }));
+      } else {
+        setPropPrep((current) => ({
+          ...current,
+          [target.name]: {
+            ...DEFAULT_PROP_PREP,
+            ...(current[target.name] ?? { name: target.name }),
+            name: target.name,
+            references: [...(current[target.name]?.references ?? []), reference],
+          },
+        }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
   const removeCharacterReference = (name: string, referenceIndex: number) => {
     setCharacterReferences((current) => {
@@ -2815,6 +3189,28 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const layoutIntent = pageLayoutIntents[page.pageNumber];
     const layoutPanels = getGuidedComicLayoutPanels(page, layoutTemplate);
     const visualStoryMetadata = buildVisualMetadataForPage(page, layoutTemplate);
+    const visualStoryMetadataWithPrep = {
+      ...visualStoryMetadata,
+      panels: visualStoryMetadata.panels.map((panel) => {
+        const panelQueueItem = panelArtQueue.find(
+          (item) => item.pageNumber === page.pageNumber && item.panelNumber === panel.panelNumber,
+        );
+        const prepContext = buildGuidedProductionPrepContext({
+          characterNames: panelQueueItem?.characters ?? splitListText(page.keyCharacters),
+          locationName: panelQueueItem?.location || page.keyLocation.trim(),
+          characterPrep,
+          locationPrep,
+          propPrep,
+          artDirection,
+        });
+        return prepContext
+          ? {
+              ...panel,
+              visualPrompt: `${panel.visualPrompt} Production prep continuity: ${prepContext}`,
+            }
+          : panel;
+      }),
+    };
     const layoutGeometry = syncGuidedComicLayoutGeometry(
       page,
       pageLayoutGeometry[page.pageNumber],
@@ -2866,7 +3262,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         panelNumber: index + 1,
         beatText: layoutPanels.find((panel) => panel.panelId === panelId)?.beatText ?? '',
       })),
-      visualStoryMetadata,
+      visualStoryMetadata: visualStoryMetadataWithPrep,
       balloonSeeds: promotedBalloonSeeds[page.pageNumber] ?? [],
     });
     onOpenAdvancedStudio();
@@ -2890,6 +3286,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setCharacterReferences({});
     setLocationReferences({});
     setNpcReferences({});
+    setCharacterPrep({});
+    setLocationPrep({});
+    setPropPrep({});
+    setNewPropName('');
     setNpcReferenceName('');
     setSelectedPanelId(null);
     setPanelArtStatuses({});
@@ -2915,6 +3315,38 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     () => uniquePageCardTerms(pageCards.map((page) => page.keyLocation)),
     [pageCards],
   );
+  const prepCharacterNames = useMemo(
+    () => uniquePageCardTerms([...storyCharacters, ...pageCharacters, ...Object.keys(characterPrep)]),
+    [characterPrep, pageCharacters, storyCharacters],
+  );
+  const prepLocationNames = useMemo(
+    () => uniquePageCardTerms([...storyLocations, ...pageLocations, ...Object.keys(locationPrep)]),
+    [locationPrep, pageLocations, storyLocations],
+  );
+  const prepPropNames = useMemo(() => Object.keys(propPrep), [propPrep]);
+  const readyPrepCharacterCount = useMemo(
+    () =>
+      prepCharacterNames.filter(
+        (name) => (characterReferences[name] ?? []).length > 0 && Boolean(characterPrep[name]?.ready),
+      ).length,
+    [characterPrep, characterReferences, prepCharacterNames],
+  );
+  const readyPrepLocationCount = useMemo(
+    () =>
+      prepLocationNames.filter(
+        (name) => (locationReferences[name] ?? []).length > 0 && Boolean(locationPrep[name]?.ready),
+      ).length,
+    [locationPrep, locationReferences, prepLocationNames],
+  );
+  const readyPrepPropCount = useMemo(
+    () =>
+      prepPropNames.filter(
+        (name) => (propPrep[name]?.references ?? []).length > 0 && Boolean(propPrep[name]?.ready),
+      ).length,
+    [prepPropNames, propPrep],
+  );
+  const productionPrepReadyCount = readyPrepCharacterCount + readyPrepLocationCount + readyPrepPropCount;
+  const productionPrepTotalCount = prepCharacterNames.length + prepLocationNames.length + prepPropNames.length;
   const readyCharacterCount = useMemo(
     () => pageCharacters.filter((character) => (characterReferences[character] ?? []).length > 0).length,
     [characterReferences, pageCharacters],
@@ -2935,6 +3367,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const characters = mapReferencesForImageshop(characterReferences, 'character');
     const locations = mapReferencesForImageshop(locationReferences, 'asset');
     const npcs = mapReferencesForImageshop(npcReferences, 'npc');
+    const props = mapReferencesForImageshop(
+      Object.fromEntries(Object.entries(propPrep).map(([name, prep]) => [name, prep.references])),
+      'asset',
+    );
     const pageSummary = pageCards
       .map((page) => page.summary.trim())
       .filter(Boolean)
@@ -2947,13 +3383,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       characters,
       locations,
       npcs,
+      props,
       pageSummary: pageSummary || undefined,
+      productionPrepContext: buildGuidedProductionPrepContext({
+        characterNames: prepCharacterNames,
+        characterPrep,
+        locationPrep,
+        propPrep,
+        artDirection,
+      }),
     });
   }, [
+    artDirection,
     characterReferences,
+    characterPrep,
     locationReferences,
+    locationPrep,
     npcReferences,
     pageCards,
+    prepCharacterNames,
+    propPrep,
     requestGuidedComicHandoff,
   ]);
   const panelArtQueue = useMemo<PanelArtQueueItem[]>(
@@ -3133,14 +3582,41 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         panelArtStatuses,
         writerDialogueSeed: writerDialogueSeeds[selectedProductionPage.pageNumber],
         editableDialogueSeeds: editableDialogueSeeds[selectedProductionPage.pageNumber],
+        characterReferences,
+        locationReferences,
+        npcReferences,
+        npcNames: npcReferenceNames,
       })
     : [];
   const selectedProductionPanel =
     selectedProductionPanels.find((panel) => panel.panelId === selectedPanelId) ?? selectedProductionPanels[0] ?? null;
+  const selectedProductionVisualMetadata = selectedProductionPage
+    ? buildVisualMetadataForPage(selectedProductionPage, selectedLayoutTemplateId)
+    : null;
   const selectedProductionPanelMetadata =
-    selectedPanelVisualMetadata && selectedProductionPanel?.panelNumber === selectedPanelVisualMetadata.panelNumber
-      ? selectedPanelVisualMetadata
-      : null;
+    selectedProductionVisualMetadata?.panels.find((panel) => panel.panelNumber === selectedProductionPanel?.panelNumber) ??
+    null;
+  const selectedProductionMissingReferences = selectedProductionPage
+    ? getGuidedProductionMissingReferences(selectedProductionPage, {
+        characterReferences,
+        locationReferences,
+        npcReferences,
+        npcNames: npcReferenceNames,
+      })
+    : [];
+  const selectedProductionDialogueLines = selectedProductionPanels
+    .map((panel) => panel.dialogueText.trim())
+    .filter(Boolean);
+  const selectedProductionPrepContext = selectedPanel
+    ? buildGuidedProductionPrepContext({
+        characterNames: selectedPanel.characters,
+        locationName: selectedPanel.location,
+        characterPrep,
+        locationPrep,
+        propPrep,
+        artDirection,
+      })
+    : '';
   const selectProductionPage = (pageNumber: number) => {
     setActivePageNumber(pageNumber);
     const firstPanel = panelArtQueue.find((panel) => panel.pageNumber === pageNumber);
@@ -3313,6 +3789,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const characters = mapReferencesForImageshop(characterReferences, 'character');
     const locations = mapReferencesForImageshop(locationReferences, 'asset');
     const npcs = mapReferencesForImageshop(npcReferences, 'npc');
+    const props = mapReferencesForImageshop(
+      Object.fromEntries(Object.entries(propPrep).map(([name, prep]) => [name, prep.references])),
+      'asset',
+    );
     const visualStoryMetadata = page ? buildVisualMetadataForPage(page, layoutTemplate) : null;
     const visualPanelMetadata = visualStoryMetadata?.panels.find(
       (panel) => panel.panelNumber === selectedPanel.panelNumber,
@@ -3345,6 +3825,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       characters,
       locations,
       npcs,
+      props,
+      productionPrepContext: buildGuidedProductionPrepContext({
+        characterNames: selectedPanel.characters,
+        locationName: selectedPanel.location,
+        characterPrep,
+        locationPrep,
+        propPrep,
+        artDirection,
+      }),
     });
   };
   const layoutChecklistItems = useMemo(() => {
@@ -3479,15 +3968,368 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         ) : null}
 	      </section>
 	    ) : null;
+  const productionPrepWorkspace =
+    pageCards.length > 0 || prepCharacterNames.length > 0 || prepLocationNames.length > 0 ? (
+      <section className="rounded-2xl border border-cyan-300/20 bg-black/30 p-4 shadow-xl backdrop-blur-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Comic Production Prep</p>
+            <h2 className="mt-1 text-2xl font-black text-white">Prepare visual continuity before production</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/58">
+              Writers Workshop creates the story. Production Prep gets the recurring visual language ready before page and panel work begins.
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">Visual continuity prepared</p>
+            <p className="mt-1 text-2xl font-black text-cyan-100">
+              {productionPrepReadyCount}/{Math.max(1, productionPrepTotalCount)}
+            </p>
+            <p className="mt-1 text-xs text-white/45">ready for production</p>
+          </div>
+        </div>
+
+        <input
+          ref={prepUploadInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePrepReferenceUpload}
+        />
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_340px]">
+          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Character Prep</p>
+                <p className="mt-1 text-xs text-white/45">
+                  Reference coverage {readyPrepCharacterCount}/{Math.max(1, prepCharacterNames.length)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openImageshopWithGuidedReferences}
+                className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1.5 text-[11px] font-black text-cyan-100 transition hover:bg-cyan-300/15"
+              >
+                Imageshop refs
+              </button>
+            </div>
+            <div className="mt-3 grid max-h-[38rem] gap-3 overflow-y-auto pr-1 custom-scrollbar">
+              {prepCharacterNames.length > 0 ? (
+                prepCharacterNames.map((name) => {
+                  const prep = { ...DEFAULT_CHARACTER_PREP, ...(characterPrep[name] ?? {}) };
+                  return (
+                    <article key={name} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-black text-white">{name}</h3>
+                          <p className="mt-1 text-[11px] text-white/42">
+                            {(characterReferences[name] ?? []).length} reference{(characterReferences[name] ?? []).length === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                        <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-100">
+                          <input
+                            type="checkbox"
+                            checked={prep.ready}
+                            onChange={(event) => updateCharacterPrep(name, 'ready', event.target.checked)}
+                            className="rounded border-emerald-300/50 bg-black/40"
+                          />
+                          Ready
+                        </label>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        <input
+                          value={prep.roleSummary}
+                          onChange={(event) => updateCharacterPrep(name, 'roleSummary', event.target.value)}
+                          placeholder="Role summary"
+                          className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                        />
+                        <textarea
+                          value={prep.visualDescription}
+                          onChange={(event) => updateCharacterPrep(name, 'visualDescription', event.target.value)}
+                          placeholder="Visual description"
+                          rows={2}
+                          className="min-h-[4rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60"
+                        />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <textarea
+                            value={prep.costumeNotes}
+                            onChange={(event) => updateCharacterPrep(name, 'costumeNotes', event.target.value)}
+                            placeholder="Costume notes"
+                            rows={2}
+                            className="min-h-[3.5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60"
+                          />
+                          <textarea
+                            value={prep.continuityNotes}
+                            onChange={(event) => updateCharacterPrep(name, 'continuityNotes', event.target.value)}
+                            placeholder="Continuity notes"
+                            rows={2}
+                            className="min-h-[3.5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60"
+                          />
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            value={prep.expressionsMoods}
+                            onChange={(event) => updateCharacterPrep(name, 'expressionsMoods', event.target.value)}
+                            placeholder="Expressions / moods"
+                            className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                          />
+                          <input
+                            value={prep.visualTags}
+                            onChange={(event) => updateCharacterPrep(name, 'visualTags', event.target.value)}
+                            placeholder="Visual tags"
+                            className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <ReferenceThumbnailStrip
+                          references={characterReferences[name] ?? []}
+                          emptyLabel="No character references selected."
+                          onRemove={(index) => removeCharacterReference(name, index)}
+                        />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => requestPrepUpload('character', name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Upload ref</button>
+                        <button type="button" onClick={() => requestCharacterVaultReference(name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Assign from Vault</button>
+                        <button type="button" onClick={openImageshopWithGuidedReferences} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Open in Imageshop</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateCharacterPrep(name, 'roleSummary', prep.roleSummary || `Recurring character in ${setupForm.issueTitle || setupForm.seriesTitle || 'this comic'}.`);
+                            updateCharacterPrep(name, 'visualDescription', prep.visualDescription || `Define ${name}'s silhouette, face, hair, build, and signature visual features for consistent panel art.`);
+                          }}
+                          className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-2.5 py-1.5 text-[11px] font-bold text-cyan-100"
+                        >
+                          Regenerate guidance
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="rounded-lg border border-dashed border-white/15 bg-black/20 p-3 text-xs text-white/45">
+                  Import or draft page characters to start character prep.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Location + Environment Prep</p>
+                <p className="mt-1 text-xs text-white/45">
+                  Reference coverage {readyPrepLocationCount}/{Math.max(1, prepLocationNames.length)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openImageshopWithGuidedReferences}
+                className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1.5 text-[11px] font-black text-cyan-100 transition hover:bg-cyan-300/15"
+              >
+                Concept refs
+              </button>
+            </div>
+            <div className="mt-3 grid max-h-[38rem] gap-3 overflow-y-auto pr-1 custom-scrollbar">
+              {prepLocationNames.length > 0 ? (
+                prepLocationNames.map((name) => {
+                  const prep = { ...DEFAULT_LOCATION_PREP, ...(locationPrep[name] ?? {}) };
+                  return (
+                    <article key={name} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-black text-white">{name}</h3>
+                          <p className="mt-1 text-[11px] text-white/42">
+                            {(locationReferences[name] ?? []).length} reference{(locationReferences[name] ?? []).length === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                        <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-100">
+                          <input
+                            type="checkbox"
+                            checked={prep.ready}
+                            onChange={(event) => updateLocationPrep(name, 'ready', event.target.checked)}
+                            className="rounded border-emerald-300/50 bg-black/40"
+                          />
+                          Ready
+                        </label>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        <textarea
+                          value={prep.settingSummary}
+                          onChange={(event) => updateLocationPrep(name, 'settingSummary', event.target.value)}
+                          placeholder="Setting summary"
+                          rows={2}
+                          className="min-h-[3.5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60"
+                        />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <input
+                            value={prep.moodTone}
+                            onChange={(event) => updateLocationPrep(name, 'moodTone', event.target.value)}
+                            placeholder="Mood / tone"
+                            className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                          />
+                          <input
+                            value={prep.lightingNotes}
+                            onChange={(event) => updateLocationPrep(name, 'lightingNotes', event.target.value)}
+                            placeholder="Lighting / time of day"
+                            className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                          />
+                        </div>
+                        <textarea
+                          value={prep.environmentNotes}
+                          onChange={(event) => updateLocationPrep(name, 'environmentNotes', event.target.value)}
+                          placeholder="Architecture / environment notes"
+                          rows={2}
+                          className="min-h-[3.5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60"
+                        />
+                        <input
+                          value={prep.visualMotifs}
+                          onChange={(event) => updateLocationPrep(name, 'visualMotifs', event.target.value)}
+                          placeholder="Recurring visual motifs"
+                          className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                        />
+                      </div>
+                      <div className="mt-3">
+                        <ReferenceThumbnailStrip
+                          references={locationReferences[name] ?? []}
+                          emptyLabel="No environment references selected."
+                          onRemove={(index) => removeLocationReference(name, index)}
+                        />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => requestPrepUpload('location', name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Upload ref</button>
+                        <button type="button" onClick={() => requestLocationVaultReference(name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Assign asset</button>
+                        <button type="button" onClick={openImageshopWithGuidedReferences} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Generate concepts</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateLocationPrep(name, 'settingSummary', prep.settingSummary || `Prepare ${name} as a reusable production environment.`);
+                            updateLocationPrep(name, 'environmentNotes', prep.environmentNotes || `Define architecture, scale, landmark shapes, and recurring background details for ${name}.`);
+                          }}
+                          className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-2.5 py-1.5 text-[11px] font-bold text-cyan-100"
+                        >
+                          Regenerate guidance
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="rounded-lg border border-dashed border-white/15 bg-black/20 p-3 text-xs text-white/45">
+                  Import or draft page locations to start environment prep.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid min-w-0 gap-4 xl:col-span-2 2xl:col-span-1">
+            <div className="rounded-xl border border-white/10 bg-white/[0.055] p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Visual Style Direction</p>
+              <div className="mt-3 grid gap-2">
+                <input value={artDirection.artStyle} onChange={(event) => updateArtDirectionField('artStyle', event.target.value)} placeholder="Overall art style" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                <input value={artDirection.renderingStyle} onChange={(event) => updateArtDirectionField('renderingStyle', event.target.value)} placeholder="Rendering style" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                <input value={artDirection.colorMood} onChange={(event) => updateArtDirectionField('colorMood', event.target.value)} placeholder="Color / mood direction" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                <input value={artDirection.lighting} onChange={(event) => updateArtDirectionField('lighting', event.target.value)} placeholder="Cinematic tone / lighting" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                <textarea value={artDirection.continuityNotes} onChange={(event) => updateArtDirectionField('continuityNotes', event.target.value)} placeholder="Panel density, pacing style, continuity rules" rows={3} className="min-h-[5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60" />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.055] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Prop / Asset Continuity</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Reference coverage {readyPrepPropCount}/{Math.max(1, prepPropNames.length)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={newPropName}
+                  onChange={(event) => setNewPropName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addPropPrepItem();
+                    }
+                  }}
+                  placeholder="Add recurring prop or asset"
+                  className="min-w-0 flex-1 rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60"
+                />
+                <button type="button" onClick={addPropPrepItem} className="rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-black text-cyan-100">Add</button>
+              </div>
+              <div className="mt-3 grid max-h-[24rem] gap-3 overflow-y-auto pr-1 custom-scrollbar">
+                {prepPropNames.length > 0 ? (
+                  prepPropNames.map((name) => {
+                    const prep = { ...DEFAULT_PROP_PREP, ...(propPrep[name] ?? { name }) };
+                    return (
+                      <article key={name} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-black text-white">{name}</h3>
+                          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-100">
+                            <input type="checkbox" checked={prep.ready} onChange={(event) => updatePropPrep(name, 'ready', event.target.checked)} className="rounded border-emerald-300/50 bg-black/40" />
+                            Ready
+                          </label>
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                          <textarea value={prep.continuityNotes} onChange={(event) => updatePropPrep(name, 'continuityNotes', event.target.value)} placeholder="Continuity notes" rows={2} className="min-h-[3.5rem] resize-y rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs leading-relaxed text-white outline-none focus:border-cyan-300/60" />
+                          <input value={prep.styleNotes} onChange={(event) => updatePropPrep(name, 'styleNotes', event.target.value)} placeholder="Style notes" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                          <input value={prep.reuseTracking} onChange={(event) => updatePropPrep(name, 'reuseTracking', event.target.value)} placeholder="Reuse tracking" className="rounded-lg border border-white/12 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-cyan-300/60" />
+                        </div>
+                        <div className="mt-3">
+                          <ReferenceThumbnailStrip
+                            references={prep.references}
+                            emptyLabel="No prop references selected."
+                            onRemove={(index) => removePropReference(name, index)}
+                          />
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" onClick={() => requestPrepUpload('prop', name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Upload ref</button>
+                          <button type="button" onClick={() => requestPropVaultReference(name)} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Assign vault asset</button>
+                          <button type="button" onClick={openImageshopWithGuidedReferences} className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/78">Generate concept</button>
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-lg border border-dashed border-white/15 bg-black/20 p-3 text-xs text-white/45">
+                    Add recurring objects, symbols, uniforms, weapons, devices, or vehicles to track visual reuse.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    ) : null;
+
   const productionWorkspace =
     pageCards.length > 0 ? (
-      <section className="grid min-w-0 gap-4 rounded-2xl border border-amber-300/20 bg-black/30 p-4 shadow-xl backdrop-blur-sm xl:grid-cols-[220px_minmax(0,1fr)] 2xl:grid-cols-[230px_minmax(520px,1fr)_360px]">
-        <aside className="min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-3" aria-label="Comic production pages">
+      <section className="grid min-w-0 gap-4 overflow-hidden rounded-2xl border border-amber-300/20 bg-black/30 p-4 shadow-xl backdrop-blur-sm xl:grid-cols-[260px_minmax(0,1fr)_240px] 2xl:grid-cols-[280px_minmax(720px,1fr)_260px]">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3 xl:col-span-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {['Story Foundation', 'Outline', 'Page Plan', 'Production Workspace'].map((phase, index) => (
+              <span
+                key={phase}
+                className={[
+                  'rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.13em]',
+                  index === 3
+                    ? 'border-amber-300/45 bg-amber-300/15 text-amber-100'
+                    : 'border-white/10 bg-white/[0.055] text-white/48',
+                ].join(' ')}
+              >
+                {phase}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <aside className="min-w-0 shrink-0 rounded-xl border border-white/10 bg-white/[0.055] p-3 xl:sticky xl:top-4 xl:col-start-1 xl:row-start-2 xl:row-span-2 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-hidden" aria-label="Comic production pages">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
             Issue pages
           </p>
           <p className="mt-1 text-xs leading-relaxed text-white/48">Select a page directly. The old guided steps remain below.</p>
-          <div className="mt-3 grid max-h-[34rem] gap-2 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="mt-3 grid max-h-[34rem] gap-2 overflow-y-auto pr-1 custom-scrollbar xl:max-h-[calc(100vh-9rem)]">
             {pageCards.map((page) => {
               const selected = page.pageNumber === selectedProductionPage?.pageNumber;
               const status = getGuidedProductionPageStatus(page, {
@@ -3496,6 +4338,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 panelArtStatuses,
                 writerDialogueSeed: writerDialogueSeeds[page.pageNumber],
                 editableDialogueSeeds: editableDialogueSeeds[page.pageNumber],
+                characterReferences,
+                locationReferences,
+                npcReferences,
+                npcNames: npcReferenceNames,
               });
               return (
                 <button
@@ -3512,7 +4358,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   <span className="flex items-center justify-between gap-2">
                     <span className="text-sm font-black text-white">Page {page.pageNumber}</span>
                     <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] ${guidedProductionStatusClass(status)}`}>
-                      {status}
+                      {guidedProductionStatusLabel(status)}
                     </span>
                   </span>
                   <span className="mt-2 block line-clamp-2 text-xs leading-relaxed text-white/55">
@@ -3527,7 +4373,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           </div>
         </aside>
 
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.06] p-4">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.06] p-4 xl:col-start-2 xl:row-start-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">
@@ -3553,7 +4399,34 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           </div>
 
           {selectedProductionPage ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">Page beat summary</p>
+                <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-white/62">
+                  {selectedProductionPanels
+                    .map((panel) => panel.beatText.trim())
+                    .filter(Boolean)
+                    .join(' / ') || 'No panel beats staged yet.'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">Dialogue summary</p>
+                <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-relaxed text-white/62">
+                  {selectedProductionDialogueLines.slice(0, 3).join('\n') || 'No dialogue seeds staged yet.'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">Reference readiness</p>
+                <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-white/62">
+                  {selectedProductionMissingReferences.length > 0
+                    ? `Needs: ${selectedProductionMissingReferences.join(', ')}`
+                    : 'Character, location, and NPC references are ready for this page.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_260px]">
               <div
                 className="relative mx-auto aspect-[2/3] min-h-[24rem] w-full max-w-[520px] overflow-hidden rounded-xl border border-amber-300/25 bg-[#100e16]"
                 style={{
@@ -3655,6 +4528,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 })}
               </div>
             </div>
+            </>
           ) : (
             <p className="mt-4 rounded-lg border border-white/10 bg-black/25 p-3 text-sm text-white/50">
               Build page cards first to use the production workspace.
@@ -3662,7 +4536,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           )}
         </div>
 
-        <aside className="min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-4 xl:col-span-2 2xl:col-span-1" aria-label="Focused panel workspace">
+        <aside className="min-w-0 rounded-xl border border-white/10 bg-white/[0.055] p-4 xl:col-start-2 xl:row-start-3" aria-label="Focused panel workspace">
           {productionPanelFocusOpen && selectedProductionPage && selectedProductionPanel ? (
             <>
               <div className="flex items-start justify-between gap-3">
@@ -3801,15 +4675,25 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     onClick={() => updatePanelArtStatus(selectedProductionPanel.panelId, 'ready')}
                     className="rounded-lg border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/15"
                   >
-                    Mark panel ready
+                    Mark panel complete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectProductionPanelByOffset(-1)}
+                    disabled={selectedPanelQueueIndex <= 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                    Previous panel
                   </button>
                   <button
                     type="button"
                     onClick={() => selectProductionPanelByOffset(1)}
                     disabled={selectedPanelQueueIndex >= panelArtQueue.length - 1}
-                    className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Go to next panel
+                    Next panel
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
                 {panelPasteMessage ? <p className="mt-2 text-xs text-amber-50/70">{panelPasteMessage}</p> : null}
@@ -3840,6 +4724,42 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     </span>
                   ))}
                 </div>
+                {selectedProductionMissingReferences.length > 0 ? (
+                  <p className="mt-3 text-xs leading-relaxed text-cyan-100/70">
+                    Missing references: {selectedProductionMissingReferences.join(', ')}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Style continuity</p>
+                <div className="mt-3 grid gap-2 text-xs leading-relaxed text-white/58">
+                  <p>
+                    <span className="font-bold text-white/72">Intent:</span>{' '}
+                    {selectedProductionPanelMetadata?.layoutIntent ?? selectedProductionPanel.layoutIntent}
+                  </p>
+                  <p>
+                    <span className="font-bold text-white/72">Visual prompt:</span>{' '}
+                    {selectedProductionPanelMetadata?.visualPrompt || 'No visual prompt generated for this panel yet.'}
+                  </p>
+                  <p>
+                    <span className="font-bold text-white/72">Look:</span>{' '}
+                    {[artDirection.artStyle, artDirection.renderingStyle, artDirection.colorMood, artDirection.lighting]
+                      .map((value) => value.trim())
+                      .filter(Boolean)
+                      .join(' / ') || 'Use the current Visual Prep art direction.'}
+                  </p>
+                  {artDirection.continuityNotes.trim() ? (
+                    <p>
+                      <span className="font-bold text-white/72">Continuity:</span> {artDirection.continuityNotes.trim()}
+                    </p>
+                  ) : null}
+                  {selectedProductionPrepContext ? (
+                    <p className="whitespace-pre-wrap">
+                      <span className="font-bold text-white/72">Prepared context:</span> {selectedProductionPrepContext}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </>
           ) : (
@@ -3851,6 +4771,140 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             </div>
           )}
         </aside>
+
+        <aside className="hidden min-w-0 shrink-0 flex-col rounded-xl border border-white/10 bg-white/[0.055] p-3 xl:sticky xl:top-4 xl:col-start-3 xl:row-start-2 xl:row-span-2 xl:flex xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto custom-scrollbar" aria-label="Production guided controls">
+          <div className="px-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+              Guided steps
+            </p>
+            <p className="mt-1 text-xs text-white/45">{activeIndex + 1} of {STEPS.length}</p>
+          </div>
+          <nav className="mt-3 flex flex-col gap-1.5">
+            {STEPS.map((step, index) => {
+              const selected = index === activeIndex;
+              const complete = index < activeIndex;
+              const StepIcon = step.Icon;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className="flex items-center gap-2 rounded-xl border px-2 py-2 text-left transition hover:bg-white/10"
+                  style={{
+                    background: selected ? ACCENT_BLUE_GRADIENT : complete ? 'rgba(252,246,186,0.08)' : 'transparent',
+                    borderColor: selected ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.12)',
+                    color: selected ? TEXT_ON_BLUE : 'rgba(255,255,255,0.76)',
+                  }}
+                  aria-current={selected ? 'step' : undefined}
+                >
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
+                    style={{
+                      background: selected || complete ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.06)',
+                      borderColor: selected || complete ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.16)',
+                      color: selected || complete ? TEXT_ON_GOLD : 'rgba(255,255,255,0.8)',
+                    }}
+                  >
+                    <StepIcon className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-black">{step.label}</span>
+                    <span className="block text-[10px] font-bold uppercase tracking-[0.14em] opacity-65">
+                      Step {index + 1}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
+            <div className="flex items-start gap-2">
+              <BookMarked className="mt-0.5 h-4 w-4 shrink-0" style={{ color: ACCENT_GOLD_LIGHT }} aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+                  Current comic
+                </p>
+                <p className="mt-1 truncate text-xs font-black text-white">{currentComicDisplayName}</p>
+              </div>
+            </div>
+            <span
+              className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                hasUnsavedProjectChanges
+                  ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+                  : 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100'
+              }`}
+            >
+              {hasUnsavedProjectChanges ? 'Unsaved changes' : 'Saved'}
+            </span>
+            {hasSavedLibraryProjects ? (
+              <select
+                value={activeProjectId ?? ''}
+                onChange={(event) => switchCurrentComic(event.target.value)}
+                className="mt-3 w-full min-w-0 truncate rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold text-white outline-none"
+                aria-label="Comic Library"
+              >
+                <option value="" disabled={Boolean(activeProjectId)}>
+                  Unsaved local comic
+                </option>
+                {projectLibrary?.projects.map((project) => (
+                  <option key={project.projectId} value={project.projectId}>
+                    {getGuidedComicProjectDisplayName(project)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={saveCurrentComic}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+              >
+                <Save className="h-3.5 w-3.5" aria-hidden />
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={openSaveAsDialog}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
+              >
+                <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+                Save as
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={openBlankAdvancedStudio}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
+              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
+            >
+              <LayoutTemplate className="h-4 w-4" aria-hidden />
+              {ADVANCED_STUDIO_ACTION_LABELS.openBlank}
+            </button>
+          </div>
+
+          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={atStart}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={atEnd}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </aside>
       </section>
     ) : null;
 
@@ -3859,7 +4913,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       className="min-h-full w-full overflow-y-auto custom-scrollbar text-white"
       style={{ background: PRIMARY_BG }}
     >
-      <div className="flex w-full max-w-none flex-col gap-6 px-5 py-6 lg:px-8 xl:pr-80">
+      <div className="flex w-full max-w-none flex-col gap-6 px-5 py-6 lg:px-8">
         <header
           className="overflow-hidden rounded-2xl border shadow-2xl"
           style={{
@@ -3892,7 +4946,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         </header>
 
         <aside
-          className="fixed bottom-6 right-6 top-6 z-20 hidden w-56 flex-col overflow-y-auto rounded-2xl border border-white/10 bg-black/70 p-3 shadow-2xl backdrop-blur-xl custom-scrollbar xl:flex"
+          className="hidden"
           aria-label="Persistent guided comic steps"
         >
           <div className="mb-3 px-2">
@@ -4266,6 +5320,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 	        </div>
 
+        {productionPrepWorkspace}
         {productionWorkspace}
 
 	        <main className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">

@@ -168,11 +168,19 @@ describe('useImageWorkshopBridge', () => {
         imageUrl: `https://example.com/npc-${index + 1}.png`,
         sourceType: 'npc' as const,
       })),
+      props: [
+        {
+          name: 'signal pendant',
+          displayName: 'Signal Pendant',
+          imageUrl: 'https://example.com/pendant.png',
+          sourceType: 'asset' as const,
+        },
+      ],
     };
 
     const preload = getGuidedImageWorkshopPreload(handoff);
 
-    expect(preload.allReferences).toHaveLength(17);
+    expect(preload.allReferences).toHaveLength(18);
     expect(preload.slotUrls).toHaveLength(14);
     expect(preload.slotUrls[0]).toBe('https://example.com/hero-1.png');
     expect(preload.slotUrls[12]).toBe('https://example.com/location-5.png');
@@ -182,6 +190,7 @@ describe('useImageWorkshopBridge', () => {
       'NPC 2',
       'NPC 3',
       'NPC 4',
+      'Signal Pendant',
     ]);
     expect(preload.context).toBe('character');
   });
@@ -244,6 +253,15 @@ describe('useImageWorkshopBridge', () => {
           sourceType: 'npc',
         },
       ],
+      props: [
+        {
+          name: 'signal pendant',
+          displayName: 'Signal Pendant',
+          imageUrl: 'https://example.com/pendant.png',
+          sourceType: 'asset',
+        },
+      ],
+      productionPrepContext: 'Characters: Flux (costume: red jacket); Props: Signal pendant (continuity: gold pendant stays visible)',
     });
 
     expect(prompt).toContain('Image objective: A wide establishing shot of Flux entering the sky observatory.');
@@ -256,6 +274,8 @@ describe('useImageWorkshopBridge', () => {
     expect(prompt).toContain('Character references: Flux hero ref');
     expect(prompt).toContain('Location / asset references: Sky Observatory exterior');
     expect(prompt).toContain('NPC references: Storm Courier');
+    expect(prompt).toContain('Prop / asset references: Signal Pendant');
+    expect(prompt).toContain('Production prep continuity: Characters: Flux');
     expect(prompt).toContain('Panel layout intent: wide');
     expect(prompt).toContain('Art style: clean superhero comic');
     expect(prompt).toContain('Reference style lock: Match the active reference images');
