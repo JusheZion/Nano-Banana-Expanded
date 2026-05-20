@@ -1794,7 +1794,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [layoutDisclosureMode, setLayoutDisclosureMode] = useState<GuidedLayoutDisclosureMode>('simple');
   const [activeLayoutEdit, setActiveLayoutEdit] = useState<ActiveLayoutEdit | null>(null);
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
-  const [productionPanelFocusOpen, setProductionPanelFocusOpen] = useState(() => workspaceMode === 'panel-focus');
+  const [, setProductionPanelFocusOpen] = useState(() => workspaceMode === 'panel-focus');
   const [primaryActionMessage, setPrimaryActionMessage] = useState<string | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(() => restoredDraft?.savedAt ?? null);
   const [guidedAiLoadingAction, setGuidedAiLoadingAction] = useState<GuidedComicAssistAction | null>(null);
@@ -3810,16 +3810,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const nextPanel = panelArtQueue[selectedPanelQueueIndex + offset];
     if (nextPanel) setSelectedPanelId(nextPanel.id);
   };
-  const selectProductionPanelByOffset = (offset: number) => {
-    if (selectedPanelQueueIndex < 0) return;
-    const nextPanel = panelArtQueue[selectedPanelQueueIndex + offset];
-    if (!nextPanel) return;
-    setActivePageNumber(nextPanel.pageNumber);
-    setSelectedPanelId(nextPanel.id);
-    setProductionPanelFocusOpen(true);
-    setWorkspaceMode('panel-focus');
-    setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
-  };
   const selectProductionPagePanelByOffset = (offset: number) => {
     if (!selectedProductionPage || selectedProductionPagePanelIndex < 0) return;
     const nextPanel = selectedProductionPanels[selectedProductionPagePanelIndex + offset];
@@ -4762,7 +4752,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   key={page.pageNumber}
                   type="button"
                   onClick={() => selectProductionPage(page.pageNumber)}
-                  aria-label={`Page ${page.pageNumber}: ${guidedProductionStatusLabel(status)}. ${page.summary.trim() || 'No page summary yet.'}`}
+                  aria-label={`Select page ${page.pageNumber} (${guidedProductionStatusLabel(status)})`}
                   title={`Page ${page.pageNumber}: ${guidedProductionStatusLabel(status)}`}
                   className="flex h-12 min-w-0 items-center justify-center rounded-xl border text-left transition hover:border-amber-300/55 hover:bg-amber-300/10"
                   style={{
@@ -4947,375 +4937,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           )}
         </div>
 
-        <aside className="hidden" aria-label="Focused panel workspace">
-          {productionPanelFocusOpen && selectedProductionPage && selectedProductionPanel ? (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">Panel focus</p>
-                  <h3 className="mt-1 text-xl font-black text-white">
-                    Page {selectedProductionPage.pageNumber}, Panel {selectedProductionPanel.panelNumber}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setProductionPanelFocusOpen(false)}
-                  className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-bold text-white/70 transition hover:bg-white/10"
-                >
-                  Return to page
-                </button>
-              </div>
-
-              <input
-                ref={panelUploadInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePanelArtUpload}
-              />
-
-              <label className="mt-4 block text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-                Panel beat
-                <textarea
-                  value={selectedProductionPanel.beatText}
-                  onChange={(event) =>
-                    updatePagePanelBeat(
-                      selectedProductionPage.pageNumber,
-                      selectedProductionPanel.panelNumber - 1,
-                      event.target.value,
-                    )
-                  }
-                  rows={4}
-                  className="mt-2 min-h-[6rem] w-full resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
-                />
-              </label>
-
-              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Dialogue seed</p>
-                  <button
-                    type="button"
-                    onClick={addManualDialogueSeedForSelectedPanel}
-                    className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white/72 transition hover:bg-white/15"
-                  >
-                    Add local seed
-                  </button>
-                </div>
-                {selectedPanelDialogueSeeds.length > 0 ? (
-                  <div className="mt-3 grid gap-2">
-                    {selectedPanelDialogueSeeds.map((seed) => (
-                      <label key={seed.id} className="block text-[10px] font-bold uppercase tracking-[0.12em] text-white/40">
-                        {seed.kind === 'narration' ? 'Narration' : 'Dialogue'} · {seed.status}
-                        <textarea
-                          value={seed.text}
-                          onChange={(event) => updateDialogueSeedText(seed.pageNumber, seed.id, event.target.value)}
-                          rows={2}
-                          className="mt-1 min-h-[4rem] w-full resize-y rounded-lg border border-white/15 bg-black/35 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-xs leading-relaxed text-white/48">
-                    No dialogue seed is staged for this panel yet.
-                  </p>
-                )}
-                <p className="mt-3 text-xs leading-relaxed text-white/48">
-                  Narration/SFX notes remain metadata here. Final balloons and lettering stay in Advanced Studio.
-                </p>
-              </div>
-
-              <div className="mt-4 overflow-hidden rounded-lg border border-white/10 bg-black/30">
-                {selectedProductionPanel.imageUrl ? (
-                  <VaultImageWithFallback
-                    src={selectedProductionPanel.imageUrl}
-                    alt={`Assigned art for page ${selectedProductionPage.pageNumber}, panel ${selectedProductionPanel.panelNumber}`}
-                    frameClassName="min-h-[12rem] w-full"
-                    imgClassName="max-h-[22rem] w-full object-contain"
-                  />
-                ) : (
-                  <div className="flex min-h-[12rem] items-center justify-center p-4 text-center text-sm font-semibold text-white/42">
-                    No image assigned yet
-                  </div>
-                )}
-              </div>
-
-              <div
-                ref={panelPasteTargetRef}
-                tabIndex={0}
-                onPaste={handlePanelArtPaste}
-                className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 outline-none focus:border-amber-300/55 focus:bg-amber-300/10"
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Panel actions</p>
-                <div className="mt-3 grid gap-2">
-                  <button
-                    type="button"
-                    onClick={requestPanelArtVaultImage}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                  >
-                    <BookOpenText className="h-3.5 w-3.5" aria-hidden />
-                    Use image from vault
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => panelUploadInputRef.current?.click()}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                  >
-                    <Upload className="h-3.5 w-3.5" aria-hidden />
-                    Upload image
-                  </button>
-                  <button
-                    type="button"
-                    onClick={focusPanelPasteTarget}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15"
-                  >
-                    <Clipboard className="h-3.5 w-3.5" aria-hidden />
-                    Paste image
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openImageshopWithSelectedPanel}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99]"
-                    style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
-                  >
-                    <ImagePlus className="h-3.5 w-3.5" aria-hidden />
-                    Generate/open in Imageshop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updatePanelArtStatus(selectedProductionPanel.panelId, 'ready')}
-                    className="rounded-lg border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/15"
-                  >
-                    Mark panel complete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectProductionPanelByOffset(-1)}
-                    disabled={selectedPanelQueueIndex <= 0}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                    Previous panel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectProductionPanelByOffset(1)}
-                    disabled={selectedPanelQueueIndex >= panelArtQueue.length - 1}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Next panel
-                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </div>
-                {panelPasteMessage ? <p className="mt-2 text-xs text-amber-50/70">{panelPasteMessage}</p> : null}
-              </div>
-
-              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Reference context</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {[
-                    ...(selectedProductionPanelMetadata?.referenceNeeds.characters ?? selectedPanel?.characters ?? []).map((name) => ({
-                      key: `character-${name}`,
-                      label: name,
-                      className: 'border-amber-300/25 bg-amber-300/10 text-amber-100',
-                    })),
-                    ...(selectedProductionPanelMetadata?.referenceNeeds.locations ?? (selectedPanel?.location ? [selectedPanel.location] : [])).map((name) => ({
-                      key: `location-${name}`,
-                      label: name,
-                      className: 'border-sky-300/25 bg-sky-300/10 text-sky-100',
-                    })),
-                    ...(selectedProductionPanelMetadata?.referenceNeeds.npcs ?? npcReferenceNames).map((name) => ({
-                      key: `npc-${name}`,
-                      label: name,
-                      className: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100',
-                    })),
-                  ].map((chip) => (
-                    <span key={chip.key} className={`rounded-full border px-2 py-1 text-[11px] ${chip.className}`}>
-                      {chip.label}
-                    </span>
-                  ))}
-                </div>
-                {selectedProductionMissingReferences.length > 0 ? (
-                  <p className="mt-3 text-xs leading-relaxed text-cyan-100/70">
-                    Missing references: {selectedProductionMissingReferences.join(', ')}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Style continuity</p>
-                <div className="mt-3 grid gap-2 text-xs leading-relaxed text-white/58">
-                  <p>
-                    <span className="font-bold text-white/72">Intent:</span>{' '}
-                    {selectedProductionPanelMetadata?.layoutIntent ?? selectedProductionPanel.layoutIntent}
-                  </p>
-                  <p>
-                    <span className="font-bold text-white/72">Visual prompt:</span>{' '}
-                    {selectedProductionPanelMetadata?.visualPrompt || 'No visual prompt generated for this panel yet.'}
-                  </p>
-                  <p>
-                    <span className="font-bold text-white/72">Look:</span>{' '}
-                    {[artDirection.artStyle, artDirection.renderingStyle, artDirection.colorMood, artDirection.lighting]
-                      .map((value) => value.trim())
-                      .filter(Boolean)
-                      .join(' / ') || 'Use the current Visual Prep art direction.'}
-                  </p>
-                  {artDirection.continuityNotes.trim() ? (
-                    <p>
-                      <span className="font-bold text-white/72">Continuity:</span> {artDirection.continuityNotes.trim()}
-                    </p>
-                  ) : null}
-                  {selectedProductionPrepContext ? (
-                    <p className="whitespace-pre-wrap">
-                      <span className="font-bold text-white/72">Prepared context:</span> {selectedProductionPrepContext}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex min-h-[22rem] flex-col justify-center rounded-lg border border-dashed border-white/15 bg-black/20 p-4 text-center">
-              <p className="text-sm font-black text-white">Select a panel</p>
-              <p className="mt-2 text-xs leading-relaxed text-white/50">
-                Click a panel in the page preview to open beat, dialogue, reference, image, and handoff actions here.
-              </p>
-            </div>
-          )}
-        </aside>
-
-        <aside className="hidden" aria-label="Production guided controls">
-          <div className="px-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-              Guided steps
-            </p>
-            <p className="mt-1 text-xs text-white/45">{activeIndex + 1} of {STEPS.length}</p>
-          </div>
-          <nav className="mt-3 flex flex-col gap-1.5">
-            {STEPS.map((step, index) => {
-              const selected = index === activeIndex;
-              const complete = index < activeIndex;
-              const StepIcon = step.Icon;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => moveToStepIndex(index)}
-                  className="flex items-center gap-2 rounded-xl border px-2 py-2 text-left transition hover:bg-white/10"
-                  style={{
-                    background: selected ? ACCENT_BLUE_GRADIENT : complete ? 'rgba(252,246,186,0.08)' : 'transparent',
-                    borderColor: selected ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.12)',
-                    color: selected ? TEXT_ON_BLUE : 'rgba(255,255,255,0.76)',
-                  }}
-                  aria-current={selected ? 'step' : undefined}
-                >
-                  <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
-                    style={{
-                      background: selected || complete ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.06)',
-                      borderColor: selected || complete ? ACCENT_GOLD_SOLID : 'rgba(255,255,255,0.16)',
-                      color: selected || complete ? TEXT_ON_GOLD : 'rgba(255,255,255,0.8)',
-                    }}
-                  >
-                    <StepIcon className="h-3.5 w-3.5" aria-hidden />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs font-black">{step.label}</span>
-                    <span className="block text-[10px] font-bold uppercase tracking-[0.14em] opacity-65">
-                      Step {index + 1}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
-            <div className="flex items-start gap-2">
-              <BookMarked className="mt-0.5 h-4 w-4 shrink-0" style={{ color: ACCENT_GOLD_LIGHT }} aria-hidden />
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: ACCENT_GOLD_LIGHT }}>
-                  Current comic
-                </p>
-                <p className="mt-1 truncate text-xs font-black text-white">{currentComicDisplayName}</p>
-              </div>
-            </div>
-            <span
-              className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${
-                hasUnsavedProjectChanges
-                  ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
-                  : 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100'
-              }`}
-            >
-              {hasUnsavedProjectChanges ? 'Unsaved changes' : 'Saved'}
-            </span>
-            {hasSavedLibraryProjects ? (
-              <select
-                value={activeProjectId ?? ''}
-                onChange={(event) => switchCurrentComic(event.target.value)}
-                className="mt-3 w-full min-w-0 truncate rounded-lg border border-white/15 bg-black/35 px-2 py-2 text-xs font-bold text-white outline-none"
-                aria-label="Comic Library"
-              >
-                <option value="" disabled={Boolean(activeProjectId)}>
-                  Unsaved local comic
-                </option>
-                {projectLibrary?.projects.map((project) => (
-                  <option key={project.projectId} value={project.projectId}>
-                    {getGuidedComicProjectDisplayName(project)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={saveCurrentComic}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
-              >
-                <Save className="h-3.5 w-3.5" aria-hidden />
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={openSaveAsDialog}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10"
-              >
-                <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-                Save as
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={openBlankAdvancedStudio}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-[0.99]"
-              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: 'rgba(255,255,255,0.08)' }}
-            >
-              <LayoutTemplate className="h-4 w-4" aria-hidden />
-              {ADVANCED_STUDIO_ACTION_LABELS.openBlank}
-            </button>
-          </div>
-
-          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={atStart}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden />
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={atEnd}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black shadow-lg transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
-              style={{ background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
-        </aside>
       </section>
     ) : null;
 
@@ -5475,7 +5096,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                  Previous
+                  Previous panel
                 </button>
                 <button
                   type="button"
@@ -5484,7 +5105,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:hover:scale-100"
                   style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
                 >
-                  Next
+                  Next panel
                   <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                 </button>
               </div>
@@ -5620,6 +5241,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     .filter(Boolean)
                     .join(' / ') || 'Use the current Visual Prep art direction.'}
                 </p>
+                {selectedProductionPrepContext ? (
+                  <p className="whitespace-pre-wrap">
+                    <span className="font-bold text-white/72">Prepared context:</span> {selectedProductionPrepContext}
+                  </p>
+                ) : null}
               </div>
             </details>
 

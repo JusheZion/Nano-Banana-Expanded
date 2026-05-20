@@ -3947,6 +3947,118 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - If the new focus flow still feels too hidden, consider making `Issue Lightbox` the default visual re-entry for saved comics with pages while preserving the user's explicit reopen preference.
 
+---
+
+## Guided Comics Focus Choreography UX Polish Plan Adjustment - 2026-05-20
+
+### What changed
+
+- Added a focused implementation plan for the remaining Guided Comics focus choreography polish work.
+- Folded in the previous agent's source plan for the `Issue Lightbox -> Page Production -> Panel Focus` creative rhythm.
+- Updated the refactor direction to explicitly use `frontend-house-style` as the design gate before visible UI passes.
+- Updated the refactor direction to explicitly use `ui-critic` as the review gate after React/CSS UI changes and before declaring a visual pass complete.
+- Added the previous plan's UX resource stack to the continuation doc: `superpowers:brainstorming`, `build-web-apps:frontend-app-builder`, `react-best-practices`, `browser`, and `frontend-testing-debugging`.
+- Reframed the remaining work into gated phases: full-flow manual QA, safe React structure cleanup, safe legacy dashboard JSX cleanup, saved-comic re-entry decision, transition/motion polish, responsive/content stress QA, and regression coverage.
+
+### Files touched
+
+- `docs/plans/2026-05-20-guided-comics-focus-choreography-ux-polish.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a planning/documentation adjustment only. No Guided Comics runtime, CSS, routing, portal type, ComicEditor, Supabase/schema, Imageshop, Image Vault, Advanced Studio, save/load, export, panel geometry, shapes, balloons, or image preservation behavior changed.
+- The new plan keeps the current focus modes as the core choreography: `story-prep`, `issue-lightbox`, `page-production`, and `panel-focus`.
+- The plan makes the intended hierarchy explicit: Panel Focus should prioritize the selected panel, Page Production should prioritize the page/stage, Issue Lightbox should prioritize page-first re-entry, and Story/Prep should keep production on-ramps visible only when page cards exist.
+- The plan preserves the previous agent's default reopen direction: last active creative state by default, with Issue Lightbox as the safest fallback when last active state is missing and page cards exist.
+- The `ui-critic` gate is positioned after actual UI implementation changes rather than approving this documentation-only pass.
+
+### Verification
+
+- Targeted file check confirmed the new plan file exists.
+- Targeted walkthrough check confirmed this section was appended to `walkthrough.md`.
+
+### Outstanding issues
+
+- The full deployed manual QA flow is still pending: Story/Prep -> Issue Lightbox -> Page Production -> Panel Focus -> Next Panel -> Return to Page -> Pull Back to Issue.
+
+### Risks or caveats
+
+- The plan has not yet removed legacy JSX or changed saved-comic default re-entry behavior. Those remain implementation decisions for a later pass.
+
+### Operator follow-up
+
+- Use the new plan as the checklist for the next Guided Comics UI polish implementation pass.
+- Run `ui-critic` after the next React/CSS change, ideally with local browser evidence or screenshots.
+
+### Next steps
+
+- Start with the full-flow manual QA pass before deleting any hidden legacy dashboard JSX.
+
+---
+
+## Guided Comics Full-Flow UX QA and Focus Repair Pass - 2026-05-20
+
+### What changed
+
+- Ran a QA-first Guided Comics focus choreography pass against the authenticated local app.
+- Verified the full creative rhythm: Story/Prep -> Issue Lightbox -> Page Production -> Panel Focus -> Next Panel -> Return to Page -> Pull Back to Issue.
+- Removed hidden legacy Page Production JSX blocks that still contained the old hidden panel-focus workspace and old hidden guided-controls dashboard.
+- Updated visible Panel Focus momentum controls from `Previous` / `Next` to `Previous panel` / `Next panel`.
+- Shortened Page Production page-rail accessible labels so the rail exposes concise page/status names instead of full page-summary metadata walls.
+- Kept prepared visual continuity context available in the visible Panel Focus reference/style drawer after removing the hidden legacy copy.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This pass stayed inside the existing Guided Comics focus modes: `story-prep`, `issue-lightbox`, `page-production`, and `panel-focus`.
+- No portal type, routing, ComicEditor, Supabase/schema, Advanced Studio, Imageshop, Image Vault, save/load, export, panel geometry, shapes, balloons, or image-preservation contracts changed.
+- The removed JSX was already hidden with `className="hidden"` and duplicated behavior now owned by the visible focus-mode surfaces.
+- The Page Production rail still looks compact and numeric, but its accessible button names now follow `Select page N (status)` instead of including long page summaries.
+- The `.agent` -> `.agents` rename remains user-owned and was not reverted or modified by this pass.
+
+### Verification
+
+- Browser QA used the in-app Browser plugin against `http://127.0.0.1:5173/`, which had an active signed-in session.
+- `http://127.0.0.1:5174/` was checked first but was blocked by the expected `Sign in to continue` gate, so it was not used for the full flow.
+- Browser QA confirmed:
+  - Story/Prep renders the focus re-entry strip and Comic Production Prep.
+  - Issue Lightbox renders without Page Production, Panel Focus, or Production Prep stacked underneath.
+  - Page Production renders without Issue Lightbox, Panel Focus, or Production Prep.
+  - Panel Focus renders without Page Production, Issue Lightbox, or Production Prep.
+  - `Next panel` moves from Page 1 Panel 1 to Page 1 Panel 2 and updates `Moment 2/3`.
+  - `Return to page` restores Page Production while preserving Panel 2 context.
+  - `Pull back to issue` restores Issue Lightbox and shows `Resume Panel 2`.
+  - Page Production rail labels no longer include long page summaries.
+  - No relevant browser console errors or warnings were captured during the QA loop.
+- Browser screenshot capture was attempted but `Page.captureScreenshot` timed out in the Browser runtime again, so this pass used DOM snapshots, interaction checks, and console logs for rendered evidence.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 15 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large `ComicPortal` chunk warning remains.
+
+### Outstanding issues
+
+- None for this focus-repair pass.
+
+### Risks or caveats
+
+- Browser visual screenshots could not be captured because the Browser runtime screenshot command timed out.
+- This pass did not perform deployed-site QA; only the local authenticated app was exercised.
+- Story/Prep intentionally still contains the full Production Prep surface because that is the prep mode owner.
+
+### Operator follow-up
+
+- Repeat the same full-flow QA after deployment.
+- If screenshots are required for sign-off, capture them outside the current Browser runtime or retry in a fresh browser session.
+
+### Next steps
+
+- Continue with responsive/content stress QA for generated art, long dialogue, many pages, and missing references.
+
 ## How to Use These Docs
 
 | File | Use |
