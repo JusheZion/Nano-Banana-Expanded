@@ -91,7 +91,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     theme: 'obsidian',
     navLabel: 'Comic Creator',
     cardTitle: 'Comic Creator',
-    cardSubtitle: 'Create Customizable Panels & Balloons Using Your Images',
+    cardSubtitle: 'Guided Comics: Issue Lightbox, Page Production, and cinematic Panel Focus',
     accentHex: '#2563eb',
     Icon: MessageCircle,
     cardImageUrl: '/assets/images/Aries%20In%20the%20Observatory.jpeg',

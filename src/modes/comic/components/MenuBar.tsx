@@ -430,7 +430,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       ))}
       {props.guidedWorkflowSteps?.length && props.onOpenGuidedWorkflowStep ? menuWithDropdown('workflow', 'Workflow', null, (
         <div className={`${dropdownPanelClass} min-w-[240px]`} style={dropdownPanelStyle}>
-          <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Guided Comic Flow</div>
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Guided Comics focus flow</div>
           {props.guidedWorkflowSteps.map((step) => (
             <button
               key={step.id}

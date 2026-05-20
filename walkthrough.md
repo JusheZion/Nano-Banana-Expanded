@@ -3838,6 +3838,58 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Continue reducing old hidden dashboard JSX once the new mode surfaces are manually approved.
 - Consider a later keyboard/motion pass for arrow-key panel navigation and more explicit zoom/pullback choreography, if desired.
 
+---
+
+## Guided Comics Hub Entry Copy Alignment - 2026-05-20
+
+### What changed
+
+- Updated the home hub Comic Creator card subtitle so the entry point now describes the new Guided Comics focus flow instead of the older panel/balloon canvas framing.
+- Updated the Advanced Studio Workflow dropdown heading from `Guided Comic Flow` to `Guided Comics focus flow` so return links from the power-user editor also use the new focus-state language.
+- Verified the deployed Workers bundle already contains the Page Production and Panel Focus UX updates, including `CINEMATIC PANEL FOCUS`, `MOMENT 1/4`, and `PANEL MOMENTUM 1/4`.
+
+### Files touched
+
+- `src/shared/portalCatalog.ts`
+- `src/modes/comic/components/MenuBar.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a copy/routing-context alignment pass only. No portal routing, Guided Comic state, Advanced Studio behavior, Imageshop behavior, Image Vault behavior, geometry, save/load, or export contracts changed.
+- The hub subtitle now reads: `Guided Comics: Issue Lightbox, Page Production, and cinematic Panel Focus`.
+- The prior deployed-site confusion was not caused by a stale deploy. Browser and bundle checks confirmed the deployed app was current; the new UX appears once the user enters the Page Production/Panel Focus path.
+
+### Verification
+
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA through the in-app browser confirmed the local hub at `http://localhost:5174/` shows the new Comic Creator subtitle and no longer shows `Create Customizable Panels & Balloons Using Your Images`.
+- Bundle inspection confirmed the deployed `ComicPortal` asset includes the new Panel Focus strings and CSS class names.
+- Browser QA on `https://asset-reference-comics-studio.onyxzion.workers.dev/` confirmed:
+  - Comic Creator opens Page Production,
+  - clicking a page panel opens Panel Focus,
+  - Panel Focus shows `CINEMATIC PANEL FOCUS`, `MOMENT 1/4`, and visible panel momentum `1/4`,
+  - the old issue-wide `1/88` momentum leak is absent,
+  - Production Prep and the Page Production workspace are not simultaneously visible in Panel Focus.
+
+### Outstanding issues
+
+- None for this hub entry copy alignment pass.
+
+### Risks or caveats
+
+- The updated hub copy is local until the next deployment.
+- The deployed browser screenshot attempt timed out in the Browser runtime, so deployed verification used DOM/text evidence rather than screenshot evidence.
+
+### Operator follow-up
+
+- Deploy this small hub-copy pass when ready so the deployed hub entry matches the already-deployed Guided Comics UX.
+
+### Next steps
+
+- If users still miss the new UX, consider adding a first-run Page Production resume action or a compact in-flow cue from Story/Prep into Page Production once page cards exist.
+
 ## How to Use These Docs
 
 | File | Use |
