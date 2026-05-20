@@ -4510,6 +4510,55 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     </nav>
   );
 
+  const focusReentryStrip =
+    pageCards.length > 0 ? (
+      <section className="rounded-2xl border border-amber-300/18 bg-black/35 p-3 shadow-xl backdrop-blur-sm lg:p-4" aria-label="Guided Comics focus re-entry">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: ACCENT_GOLD_LIGHT }}>
+              Continue in focus mode
+            </p>
+            <p className="mt-1 text-sm leading-relaxed text-white/58">
+              Page {selectedProductionPage?.pageNumber ?? activePageNumber ?? 1}
+              {selectedProductionPanel ? ` / Panel ${selectedProductionPanel.panelNumber}` : ''} is ready for the production workspace.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[28rem]">
+            <button
+              type="button"
+              onClick={openIssueLightbox}
+              className="rounded-xl border border-white/12 bg-white/[0.055] px-3 py-3 text-left transition hover:border-amber-300/45 hover:bg-amber-300/10"
+            >
+              <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/42">Overview</span>
+              <span className="mt-1 block text-sm font-black text-white">Issue Lightbox</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPageProduction(selectedProductionPage?.pageNumber ?? activePageNumber ?? undefined)}
+              className="rounded-xl border px-3 py-3 text-left transition hover:scale-[1.01] active:scale-[0.99] motion-reduce:hover:scale-100"
+              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+            >
+              <span className="block text-[10px] font-black uppercase tracking-[0.16em] opacity-70">Create</span>
+              <span className="mt-1 block text-sm font-black">Page Production</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedProductionPage && selectedProductionPanel) {
+                  selectProductionPanel(selectedProductionPage.pageNumber, selectedProductionPanel.panelId);
+                }
+              }}
+              disabled={!selectedProductionPage || !selectedProductionPanel}
+              className="rounded-xl border border-white/12 bg-white/[0.055] px-3 py-3 text-left transition hover:border-amber-300/45 hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/42">Detail</span>
+              <span className="mt-1 block text-sm font-black text-white">Panel Focus</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    ) : null;
+
   const issueLightboxWorkspace =
     pageCards.length > 0 ? (
       <section className="guided-focus-surface min-w-0 overflow-hidden rounded-2xl border border-amber-300/20 bg-black/35 p-4 shadow-2xl backdrop-blur-md lg:p-6">
@@ -6020,6 +6069,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 	        </div>
 
+        {workspaceMode === 'story-prep' ? focusReentryStrip : null}
         {workspaceMode === 'story-prep' ? productionPrepWorkspace : null}
         {workspaceMode === 'issue-lightbox' ? issueLightboxWorkspace : null}
         {workspaceMode === 'page-production' ? productionWorkspace : null}

@@ -3890,6 +3890,63 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - If users still miss the new UX, consider adding a first-run Page Production resume action or a compact in-flow cue from Story/Prep into Page Production once page cards exist.
 
+---
+
+## Guided Comics Story Prep Focus Re-entry Strip - 2026-05-20
+
+### What changed
+
+- Added a compact `Continue in focus mode` strip to Story/Prep when page cards already exist.
+- The strip gives creators three direct doors into the new focus choreography:
+  - `Issue Lightbox`
+  - `Page Production`
+  - `Panel Focus`
+- The strip appears above Production Prep, so creators who re-enter Story/Prep can immediately see the new Page/Panel production workspace without hunting through step navigation.
+- The strip uses the currently selected page and panel context, for example `Page 1 / Panel 1 is ready for the production workspace.`
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This pass did not add routing, persistence, portal types, Supabase state, ComicEditor changes, or new bridge contracts.
+- `focusReentryStrip` reuses the existing focus-mode actions: `openIssueLightbox()`, `openPageProduction()`, and `selectProductionPanel()`.
+- The strip only renders in `story-prep` mode and only when `pageCards.length > 0`, preserving the lightweight prep experience for brand-new comics.
+- Page Production and Panel Focus still own the screen after activation; Production Prep does not remain visible after entering those modes.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 15 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA through the in-app browser at `http://localhost:5174/` confirmed:
+  - Story/Prep renders the `CONTINUE IN FOCUS MODE` strip when page cards exist,
+  - the strip shows `Issue Lightbox`, `Page Production`, and `Panel Focus`,
+  - clicking `Page Production` opens the Page Production workspace,
+  - Production Prep is hidden after entering Page Production,
+  - clicking a page panel opens `CINEMATIC PANEL FOCUS`,
+  - the Page Production workspace is hidden after entering Panel Focus,
+  - no relevant console errors were captured.
+
+### Outstanding issues
+
+- None for this focus re-entry strip pass.
+
+### Risks or caveats
+
+- The strip was verified with the current local recovery draft. Manual QA should confirm the copy feels right on projects with different selected page/panel state.
+- The deployed Workers site has not been updated with this pass yet.
+
+### Operator follow-up
+
+- Deploy this pass when ready so the hub-copy update and Story/Prep focus on-ramp land together.
+
+### Next steps
+
+- If the new focus flow still feels too hidden, consider making `Issue Lightbox` the default visual re-entry for saved comics with pages while preserving the user's explicit reopen preference.
+
 ## How to Use These Docs
 
 | File | Use |
