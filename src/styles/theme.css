@@ -218,6 +218,35 @@ body.theme-wiki {
   z-index: 1;
 }
 
+@keyframes guidedFocusLift {
+  from {
+    opacity: 0.82;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.guided-focus-surface {
+  animation: guidedFocusLift 360ms ease-out both;
+}
+
+.guided-comic-stage {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(252, 246, 186, 0.14), transparent 34%),
+    radial-gradient(circle at 50% 52%, rgba(56, 189, 248, 0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guided-focus-surface {
+    animation: none;
+  }
+}
+
 /* Landing hero — soft color wash over imagery (pairs with hero parallax image) */
 .landing-hero-aurora {
   background:

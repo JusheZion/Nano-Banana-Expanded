@@ -56,6 +56,8 @@ export type GuidedComicProjectSnapshot = {
   };
   currentStep: GuidedComicProjectStepId;
   selectedPanelId?: string | null;
+  activePageNumber?: number | null;
+  workspaceMode?: 'issue-lightbox' | 'story-prep' | 'page-production' | 'panel-focus';
 };
 
 export type GuidedComicProject = {

@@ -3650,6 +3650,134 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - After manual QA, consider deleting the hidden legacy fixed rail and consolidating the remaining duplicated mobile/desktop guided controls.
 
+---
+
+## Guided Comics Focus Choreography Mode Isolation - 2026-05-20
+
+### What changed
+
+- Refactored Guided Comic Flow around explicit creative focus modes instead of simultaneous dashboard exposure.
+- Added workspace modes for `issue-lightbox`, `story-prep`, `page-production`, and `panel-focus`.
+- Added a local reopen preference for `last-active`, `issue-lightbox`, or `page-production`, and persisted the active page/workspace mode through local draft and comic library snapshots.
+- Turned Issue Lightbox into a page-first re-entry hub with a compact page rail, current page preview, current page context, and direct actions to enter Page Production or resume the selected panel.
+- Reworked Page Production so the comic page/page layout owns the center workspace, with prep surfaces, old guided-step dashboards, and production metadata walls gated out of the mode.
+- Replaced the old phase-chip production header with a compact `Issue / Page / Panel` creative breadcrumb and a small Page Production mode marker.
+- Added an immersive Panel Focus workspace that centers the selected panel, shows only panel beat/dialogue/image/reference/style/review controls, and includes Previous, Next, Return to page, and Pull back to issue momentum controls.
+- Routed step navigation through a mode-aware helper so moving from prep steps into art/layout/export changes the workspace mode instead of leaving the old story dashboard visible.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Existing Guided Comic local state remains local React/localStorage state; no routing, portal type, Supabase, or ComicEditor changes were introduced.
+- Existing Advanced Studio handoff labels and contracts were preserved; the Page Production action still sends the selected page through the existing guided layout bridge.
+- Existing Imageshop, Image Vault, upload, paste, panel image assignment, panel statuses, dialogue editing, layout geometry, and balloon seed state are preserved.
+- `getGuidedComicWorkspaceMode()` is the central mode-selection helper. It keeps empty projects in Story/Prep, maps prep steps to `story-prep`, maps art/layout/export to `page-production`, and lets explicit Issue/Page/Panel requests own the screen once pages exist.
+- `activePageNumber` and `workspaceMode` now persist into the recovery draft and saved project snapshots so the default reopen behavior can resume the last active creative state.
+- `normalizeGuidedComicWorkspaceMode()` and `normalizeGuidedComicReopenPreference()` are exported for focused unit coverage.
+- Old hidden production focus/dashboard surfaces were kept non-rendered or hidden rather than deleting related functionality during this UX refactor phase.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 15 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA via the in-app browser at `http://127.0.0.1:5173/` confirmed:
+  - the app loads with title `ARCS Expanded` and no relevant console errors,
+  - Comic Creator opens the guided flow,
+  - Story/Prep shows Production Prep while production modes are not stacked underneath,
+  - clicking Art enters Page Production and hides Comic Production Prep, the old Guided Flow hero, old phase chips, and old guided-step production controls,
+  - Page Production shows the `Issue / Page / Panel` breadcrumb, compact page rail, selected page workspace, page context disclosure, panel previews, and Advanced Studio handoff,
+  - clicking a page panel enters Panel Focus,
+  - Panel Focus hides the page rail, Production Prep, and Page Production workspace while showing only selected-panel beat, dialogue, image, reference/style, review, and momentum controls,
+  - Pull back to issue enters Issue Lightbox without rendering production prep, page workspace, or panel focus at the same time.
+- Browser screenshot capture was attempted through the in-app Browser runtime, but `Page.captureScreenshot` timed out in this session. DOM snapshots and interaction checks were used for rendered QA evidence instead.
+- The temporary dev server started for QA on `http://127.0.0.1:5173/` was stopped afterward.
+
+### Outstanding issues
+
+- None for the Phase 1 focus-mode isolation pass.
+
+### Risks or caveats
+
+- This is still a large `GuidedComicFlow.tsx` component. The refactor intentionally avoided a ComicEditor or portal architecture rewrite, so follow-up cleanup should extract mode surfaces only after manual QA confirms the new choreography.
+- Visual screenshot evidence could not be captured from the in-app browser due to the Browser runtime screenshot timeout, even though DOM and interaction validation succeeded.
+
+### Operator follow-up
+
+- Manual QA should visually confirm the feel of Issue Lightbox, Page Production, and Panel Focus on the user’s normal desktop viewport and the deployed environment after the next deployment.
+- Pay special attention to whether the Page Production center page now feels dominant enough and whether the Issue page rail is quiet enough for large issues.
+
+### Next steps
+
+- Phase 2 can further tune page scale, animation timing, reduced-motion behavior, and inspector density now that simultaneous surface exposure is gated by mode.
+
+---
+
+## Guided Comics Focus Choreography Visual Polish Pass - 2026-05-20
+
+### What changed
+
+- Added a subtle focus-entry animation and shared lit comic stage styling for Issue Lightbox, Page Production, and Panel Focus.
+- Rebalanced Page Production from a dashboard-like multi-column workspace into a calmer comic-stage layout with a narrow page-number rail and a visually dominant center page.
+- Enlarged and elevated the production comic page so the page canvas is the first visual object in the workspace instead of being surrounded by competing metadata.
+- Converted the in-panel production status label into a compact status dot to avoid visual collisions with panel labels while preserving status visibility.
+- Reworked Panel Focus into a more cinematic two-column editing view at the app's real desktop content width, with the selected panel dominant and a compact sticky inspector beside it.
+- Applied the same focus-surface treatment to Issue Lightbox so the overview feels like a re-entry lens instead of a permanent dashboard.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This pass stayed visual and structural. No Advanced Studio, Imageshop, Image Vault, panel geometry, save/load, export, routing, Supabase, or ComicEditor contracts were changed.
+- The Page Production split now starts at the `lg` breakpoint because the live app shell reduces the usable content width enough that the earlier `xl` split left the page rail full-width and pushed the comic page below the fold.
+- The page rail now behaves as quiet navigation: page number, status dot, accessible title/label, and selected-state glow rather than repeated page metadata.
+- The production panel cards were moved below the stage as a secondary strip so the page remains the hero and panel-by-panel work still stays reachable.
+- Panel Focus now uses a large dark stage plus a sticky contextual inspector so beat, dialogue, reference, continuity, and panel actions support the selected panel without competing with it.
+- The new focus animation respects `prefers-reduced-motion` by disabling transform-based entry motion for users who request reduced motion.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 15 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA through the in-app browser at `http://localhost:5174/` confirmed:
+  - the local app loads as `ARCS Expanded` with no relevant console errors,
+  - Story/Prep remains compact and does not stack production/panel surfaces underneath,
+  - clicking `Step 5 Art` enters Page Production,
+  - Page Production shows a narrow page rail and a large center comic stage in the first viewport,
+  - the compact status dot avoids the previous in-panel label collision,
+  - clicking a panel enters Panel Focus,
+  - Panel Focus shows the selected panel as the dominant object with the contextual inspector beside it,
+  - prep, page rail, and page-production workspace surfaces are not simultaneously exposed in Panel Focus.
+
+### Outstanding issues
+
+- None for this visual polish pass.
+
+### Risks or caveats
+
+- This pass was verified against the current local draft content. Manual QA should still inspect richer pages with final/generated art to confirm the enlarged stage framing remains strong.
+- The deployed Workers site has not been updated by this pass yet.
+
+### Operator follow-up
+
+- After deployment, repeat the Page Production and Panel Focus visual QA on the deployed site.
+- Confirm the page feels dominant enough across the user's normal desktop viewport and any narrower laptop widths near the `lg` breakpoint.
+
+### Next steps
+
+- Continue with finer motion choreography timing, additional inspector density tuning, and eventual removal of old hidden dashboard JSX once manual QA confirms the new focus states are stable.
+
 ## How to Use These Docs
 
 | File | Use |
