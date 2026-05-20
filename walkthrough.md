@@ -3778,6 +3778,66 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with finer motion choreography timing, additional inspector density tuning, and eventual removal of old hidden dashboard JSX once manual QA confirms the new focus states are stable.
 
+---
+
+## Guided Comics Panel Momentum Focus Pass - 2026-05-20
+
+### What changed
+
+- Refined Panel Focus around page-local creative momentum instead of issue-wide production accounting.
+- Added a compact panel strip inside the cinematic panel stage so creators can move across the current page's panels without returning to the page dashboard.
+- Added a cinematic frame treatment for the selected panel preview, including subtle inset focus shading that preserves the panel as the dominant object.
+- Reduced explanatory helper copy in the Panel Focus header and replaced it with compact status chips for moment position, art status, and layout intent.
+- Updated the visible Panel Focus momentum controls to show current-page sequencing, such as `1/4`, instead of the full issue panel queue, such as `1/88`.
+- Kept previous/next momentum inside the visible Panel Focus inspector scoped to the current page, while preserving the older global queue helper for hidden legacy surfaces.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This pass did not introduce new persistence, routing, Advanced Studio, Imageshop, Image Vault, panel geometry, save/load, export, or ComicEditor changes.
+- `selectedProductionPagePanelIndex` now tracks the focused panel's index within the selected page's production panels.
+- `selectProductionPagePanelByOffset()` moves Panel Focus through panels on the current page only, matching the Page -> Panel -> Next Panel creative loop.
+- The new panel strip uses existing `GuidedProductionPanel` state, including `panelId`, `panelNumber`, `status`, and `imageUrl`; it does not create a new panel data model.
+- New CSS helpers `guided-panel-cinema-frame` and `guided-panel-strip` live in `src/styles/theme.css` beside the prior focus-stage helpers.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts` passed with 15 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large creative-portal chunk warning remains.
+- Browser QA through the in-app browser at `http://localhost:5174/` confirmed:
+  - Comic Creator opens without relevant console errors,
+  - `Step 5 Art` enters Page Production,
+  - clicking page 1 panel 1 enters Panel Focus,
+  - Panel Focus shows `Moment 1/4` and visible panel momentum `1/4`,
+  - the previous issue-wide `1/88` visible momentum leak is gone,
+  - the current page panel strip shows panels 1-4,
+  - Production Prep and Page Production workspace surfaces are not simultaneously visible inside Panel Focus.
+- Browser screenshot evidence was captured for Page Production and Panel Focus during the QA pass.
+
+### Outstanding issues
+
+- None for this panel momentum pass.
+
+### Risks or caveats
+
+- The panel strip was validated with the current local draft's placeholder panel art. Manual QA should also inspect pages with generated art to confirm thumbnail contrast and cropping remain polished.
+- The deployed Workers site has not been updated by this pass yet.
+
+### Operator follow-up
+
+- After deployment, verify Page Production -> Panel Focus -> Next panel -> Return to page on the deployed site.
+
+### Next steps
+
+- Continue reducing old hidden dashboard JSX once the new mode surfaces are manually approved.
+- Consider a later keyboard/motion pass for arrow-key panel navigation and more explicit zoom/pullback choreography, if desired.
+
 ## How to Use These Docs
 
 | File | Use |
