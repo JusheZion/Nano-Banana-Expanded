@@ -1,0 +1,77 @@
+<h2>Guided Comics: Series And Issue Entry Layer</h2>
+<p class="subtitle">Three possible structures for the new cover-led entry flow before Issue Lightbox, Page Production, and Panel Focus.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:12px;height:260px;padding:14px;background:#151a20;border-radius:18px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:center;">
+          <div style="height:126px;background:linear-gradient(145deg,#e3c98b,#5a3040);border-radius:8px;box-shadow:0 14px 28px rgba(0,0,0,.32);"></div>
+          <div style="height:150px;background:linear-gradient(145deg,#7ec6d9,#182c4a);border-radius:8px;box-shadow:0 18px 32px rgba(0,0,0,.38);"></div>
+          <div style="height:120px;background:linear-gradient(145deg,#f4f0e7,#6e2323);border-radius:8px;box-shadow:0 12px 24px rgba(0,0,0,.28);"></div>
+          <div style="height:132px;background:linear-gradient(145deg,#a7d36d,#23331c);border-radius:8px;box-shadow:0 14px 28px rgba(0,0,0,.32);"></div>
+          <div style="height:150px;border:2px dashed rgba(255,255,255,.38);border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.58);font-size:28px;">+</div>
+          <div style="height:124px;background:linear-gradient(145deg,#d98f7e,#231826);border-radius:8px;box-shadow:0 12px 24px rgba(0,0,0,.28);"></div>
+        </div>
+        <div style="align-self:center;border-left:1px solid rgba(255,255,255,.12);padding-left:14px;">
+          <div style="font-size:12px;color:#9aa3af;text-transform:uppercase;letter-spacing:.08em;">Entry</div>
+          <div style="font-size:22px;font-weight:800;color:white;margin-top:6px;">Series Cover Gallery</div>
+          <div style="height:8px;"></div>
+          <div style="height:8px;width:88%;background:rgba(255,255,255,.24);border-radius:999px;"></div>
+          <div style="height:8px;width:68%;background:rgba(255,255,255,.14);border-radius:999px;margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Cover Gallery First</h3>
+      <p>Opening the comic portal always shows a gallery of series covers, including a blank “new series” cover. Selecting one pushes it into a focused series stage.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:260px;padding:14px;background:#151a20;border-radius:18px;display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:10px;align-items:center;">
+        <div style="opacity:.54;transform:scale(.86);height:190px;background:linear-gradient(145deg,#d98f7e,#231826);border-radius:8px;"></div>
+        <div style="height:246px;background:linear-gradient(145deg,#f4f0e7,#6e2323);border-radius:10px;box-shadow:0 24px 42px rgba(0,0,0,.46);"></div>
+        <div style="display:grid;gap:9px;">
+          <div style="height:42px;background:rgba(255,255,255,.18);border-radius:8px;"></div>
+          <div style="height:42px;background:rgba(255,255,255,.12);border-radius:8px;"></div>
+          <div style="height:78px;border:1px solid rgba(255,255,255,.18);border-radius:10px;"></div>
+          <div style="height:36px;background:#d9b66f;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Last Series First</h3>
+      <p>The portal reopens directly to the last active series focus stage, with a smaller “All series” gallery affordance nearby.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:260px;padding:14px;background:#151a20;border-radius:18px;display:grid;grid-template-columns:1.2fr .8fr;gap:12px;">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+          <div style="height:112px;background:linear-gradient(145deg,#e3c98b,#5a3040);border-radius:8px;"></div>
+          <div style="height:112px;background:linear-gradient(145deg,#7ec6d9,#182c4a);border-radius:8px;"></div>
+          <div style="height:112px;background:linear-gradient(145deg,#f4f0e7,#6e2323);border-radius:8px;"></div>
+          <div style="height:112px;border:2px dashed rgba(255,255,255,.38);border-radius:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.58);font-size:28px;">+</div>
+        </div>
+        <div style="display:grid;gap:9px;align-content:center;">
+          <div style="font-size:11px;color:#9aa3af;text-transform:uppercase;letter-spacing:.08em;">Split entry</div>
+          <div style="font-size:19px;font-weight:800;color:white;">Series + Recent Issue</div>
+          <div style="height:80px;background:rgba(255,255,255,.12);border-radius:10px;"></div>
+          <div style="height:34px;background:#d9b66f;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Hybrid Shelf</h3>
+      <p>A persistent shelf combines series covers and recent issues in one entry screen, then opens the selected context.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>My recommendation</h3>
+  <p>Start with <strong>A. Cover Gallery First</strong>. It best matches your “actual gallery of comic covers” idea, keeps the portal emotionally visual before exposing controls, and gives the blank new-series cover a natural permanent place without turning the entry screen into a dashboard.</p>
+</div>

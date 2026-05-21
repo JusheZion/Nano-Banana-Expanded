@@ -93,6 +93,17 @@ import {
   type GuidedComicProjectSnapshot,
 } from '@/portals/guided-comic/guidedComicProjectLibrary';
 import {
+  getGuidedComicLibrarySeriesGroups,
+  getGuidedComicProjectCoverImageUrl,
+} from '@/portals/guided-comic/guidedComicLibraryView';
+import {
+  normalizeGuidedComicLibraryEntryLayout,
+  readGuidedComicLibraryPreferences,
+  writeGuidedComicLibraryPreferences,
+  type GuidedComicLibraryEntryLayout,
+  type GuidedComicLibraryPreferences,
+} from '@/portals/guided-comic/guidedComicLibraryPreferences';
+import {
   applyGuidedComicAiResult,
   buildGuidedComicAiContext,
   getGuidedComicPacingChecks,
@@ -155,6 +166,8 @@ export function getGuidedPageNavigatorButtonLabel(pageNumber: number): string {
 
 export type GuidedComicWorkspaceMode = 'issue-lightbox' | 'story-prep' | 'page-production' | 'panel-focus';
 
+type GuidedComicLibraryStage = 'series-gallery' | 'series-focus' | 'issue-gallery' | 'issue-workspace';
+
 export type GuidedComicReopenPreference = 'last-active' | 'issue-lightbox' | 'page-production';
 
 export const GUIDED_COMIC_REOPEN_PREFERENCE_LABELS: Record<GuidedComicReopenPreference, string> = {
@@ -162,6 +175,18 @@ export const GUIDED_COMIC_REOPEN_PREFERENCE_LABELS: Record<GuidedComicReopenPref
   'issue-lightbox': 'Issue Lightbox',
   'page-production': 'Page Production',
 };
+
+const GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_LABELS: Record<GuidedComicLibraryEntryLayout, string> = {
+  'cover-gallery': 'Cover Gallery',
+  'last-series': 'Last Series',
+  'hybrid-shelf': 'Hybrid Shelf',
+};
+
+const GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_OPTIONS: GuidedComicLibraryEntryLayout[] = [
+  'cover-gallery',
+  'last-series',
+  'hybrid-shelf',
+];
 
 const GUIDED_COMIC_REOPEN_PREFERENCE_STORAGE_KEY = 'arcs.guidedComicReopenPreference.v1';
 
@@ -1643,6 +1668,43 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
   };
 }
 
+function getInitialGuidedComicLibrarySeriesKey(projects: GuidedComicProject[]): string | null {
+  return getGuidedComicLibrarySeriesGroups(projects)[0]?.seriesKey ?? null;
+}
+
+function getInitialGuidedComicLibraryStage(
+  preferences: GuidedComicLibraryPreferences,
+  selectedSeriesKey: string | null,
+  requestedStepId?: GuidedComicStepId | null,
+): GuidedComicLibraryStage {
+  if (requestedStepId) return 'issue-workspace';
+  if (preferences.entryLayout === 'last-series' && selectedSeriesKey) return 'series-focus';
+  return 'series-gallery';
+}
+
+function getGuidedComicNextIssueNumber(projects: GuidedComicProject[]): string {
+  const highestIssueNumber = projects.reduce((highest, project) => {
+    const parsed = Number.parseFloat(project.issueNumber || project.snapshot.setupForm.issueNumber);
+    return Number.isFinite(parsed) ? Math.max(highest, parsed) : highest;
+  }, 0);
+
+  return String(Math.max(1, Math.floor(highestIssueNumber) + 1));
+}
+
+const GUIDED_COMIC_PLACEHOLDER_COVER_BACKGROUNDS = [
+  'linear-gradient(155deg,#f4d06f 0%,#5c2037 46%,#121421 100%)',
+  'linear-gradient(155deg,#8dd8e8 0%,#193b68 52%,#070b17 100%)',
+  'linear-gradient(155deg,#f0efe4 0%,#27707d 48%,#131f29 100%)',
+  'linear-gradient(155deg,#d9a56b 0%,#6b2b22 50%,#181018 100%)',
+  'linear-gradient(155deg,#b8d86f 0%,#244226 48%,#0d1512 100%)',
+  'linear-gradient(155deg,#bca0f0 0%,#39265f 48%,#12101d 100%)',
+];
+
+function getGuidedComicPlaceholderCoverBackground(seed: string): string {
+  const hash = Array.from(seed || 'untitled').reduce((total, character) => total + character.charCodeAt(0), 0);
+  return GUIDED_COMIC_PLACEHOLDER_COVER_BACKGROUNDS[hash % GUIDED_COMIC_PLACEHOLDER_COVER_BACKGROUNDS.length];
+}
+
 export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, requestedStepId }: GuidedComicFlowProps) {
   const skipNextDraftSaveRef = useRef(false);
   const pageSectionRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -1691,6 +1753,19 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => restoredProjectState.activeProjectId);
   const [projectLibraryStatus, setProjectLibraryStatus] = useState<string | null>(() =>
     restoredProjectState.migratedDraft ? 'Recovered current draft into Comic Library.' : null,
+  );
+  const [libraryPreferences, setLibraryPreferences] = useState<GuidedComicLibraryPreferences>(() =>
+    readGuidedComicLibraryPreferences(),
+  );
+  const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(() =>
+    getInitialGuidedComicLibrarySeriesKey(restoredProjectState.library?.projects ?? []),
+  );
+  const [libraryStage, setLibraryStage] = useState<GuidedComicLibraryStage>(() =>
+    getInitialGuidedComicLibraryStage(
+      libraryPreferences,
+      getInitialGuidedComicLibrarySeriesKey(restoredProjectState.library?.projects ?? []),
+      requestedStepId,
+    ),
   );
   const [activeIndex, setActiveIndex] = useState(() => restoredDraft?.activeIndex ?? 0);
   const [writerIssueId, setWriterIssueId] = useState<string | null>(() => restoredDraft?.writerIssueId ?? null);
@@ -1814,6 +1889,21 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     () => projectLibrary?.projects.find((project) => project.projectId === activeProjectId) ?? null,
     [activeProjectId, projectLibrary],
   );
+  const librarySeriesGroups = useMemo(
+    () => getGuidedComicLibrarySeriesGroups(projectLibrary?.projects ?? []),
+    [projectLibrary],
+  );
+  const selectedSeriesGroup = useMemo(
+    () => librarySeriesGroups.find((group) => group.seriesKey === selectedSeriesKey) ?? librarySeriesGroups[0] ?? null,
+    [librarySeriesGroups, selectedSeriesKey],
+  );
+  const recentLibraryProjects = useMemo(
+    () =>
+      [...(projectLibrary?.projects ?? [])]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 4),
+    [projectLibrary],
+  );
   const guidedLayoutSettings = useMemo<GuidedComicLayoutSettings>(
     () => ({
       marginMode: setupForm.layoutMarginMode,
@@ -1912,6 +2002,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   }, [projectLibrary]);
 
   useEffect(() => {
+    if (librarySeriesGroups.length === 0) {
+      if (selectedSeriesKey !== null) setSelectedSeriesKey(null);
+      if (libraryStage === 'series-focus' || libraryStage === 'issue-gallery') setLibraryStage('series-gallery');
+      return;
+    }
+
+    if (selectedSeriesKey && librarySeriesGroups.some((group) => group.seriesKey === selectedSeriesKey)) return;
+    setSelectedSeriesKey(librarySeriesGroups[0]?.seriesKey ?? null);
+  }, [librarySeriesGroups, libraryStage, selectedSeriesKey]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(GUIDED_COMIC_REOPEN_PREFERENCE_STORAGE_KEY, reopenPreference);
@@ -2001,6 +2102,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (!requestedStepId) return;
     const requestedIndex = STEPS.findIndex((step) => step.id === requestedStepId);
     if (requestedIndex === -1) return;
+    setLibraryStage('issue-workspace');
     setActiveIndex(requestedIndex);
     setProductionPanelFocusOpen(false);
     setWorkspaceMode(getGuidedComicWorkspaceMode(STEPS[requestedIndex]?.id ?? 'setup', pageCards.length, false));
@@ -2490,21 +2592,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         ? 'Start a new guided comic? Unsaved changes in the current comic will stay in the recovery draft, but they will not be saved to the Comic Library.'
         : 'Start a new guided comic?',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     setActiveProjectId(null);
     applyGuidedComicProjectSnapshot(buildEmptyGuidedComicProjectSnapshot(), null);
     setProjectLibraryStatus('Started a new unsaved guided comic.');
+    return true;
   };
   const switchCurrentComic = (projectId: string) => {
-    if (!projectLibrary || projectId === activeProjectId) return;
+    if (!projectLibrary) return false;
+    if (projectId === activeProjectId) return true;
     const project = projectLibrary.projects.find((candidate) => candidate.projectId === projectId);
-    if (!project) return;
+    if (!project) return false;
     if (hasUnsavedProjectChanges) {
       const confirmed = window.confirm(
         'Switch comics without saving current changes to the Comic Library? The recovery draft will still keep the latest browser state.',
       );
-      if (!confirmed) return;
+      if (!confirmed) return false;
     }
     setActiveProjectId(project.projectId);
     setProjectLibrary({
@@ -2514,6 +2618,57 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     });
     applyGuidedComicProjectSnapshot(project.snapshot, project.updatedAt);
     setProjectLibraryStatus(`Loaded ${getGuidedComicProjectDisplayName(project)}.`);
+    return true;
+  };
+  const openLibrarySeriesFocus = (seriesKey: string) => {
+    setSelectedSeriesKey(seriesKey);
+    setLibraryStage('series-focus');
+  };
+  const openLibraryIssueGallery = (seriesKey = selectedSeriesGroup?.seriesKey) => {
+    if (seriesKey) setSelectedSeriesKey(seriesKey);
+    setLibraryStage('issue-gallery');
+  };
+  const openLibraryIssueWorkspace = (projectId: string) => {
+    if (switchCurrentComic(projectId)) setLibraryStage('issue-workspace');
+  };
+  const startLibraryNewSeries = () => {
+    if (!startNewComic()) return;
+    setSelectedSeriesKey(null);
+    setWorkspaceMode('story-prep');
+    setLibraryStage('issue-workspace');
+  };
+  const startLibraryNewIssue = () => {
+    if (!selectedSeriesGroup) return;
+    const snapshot: GuidedComicProjectSnapshot = {
+      ...buildEmptyGuidedComicProjectSnapshot(),
+      setupForm: {
+        ...DEFAULT_SETUP_FORM,
+        seriesTitle: selectedSeriesGroup.seriesTitle,
+        issueNumber: getGuidedComicNextIssueNumber(selectedSeriesGroup.projects),
+      },
+    };
+
+    setActiveProjectId(null);
+    applyGuidedComicProjectSnapshot(snapshot, null);
+    setWorkspaceMode('story-prep');
+    setProjectLibraryStatus(`Started a new ${selectedSeriesGroup.seriesTitle} issue.`);
+    setLibraryStage('issue-workspace');
+  };
+  const updateLibraryEntryLayout = (value: unknown) => {
+    const entryLayout = normalizeGuidedComicLibraryEntryLayout(value);
+    const nextPreferences = {
+      ...libraryPreferences,
+      entryLayout,
+    };
+    setLibraryPreferences(nextPreferences);
+    writeGuidedComicLibraryPreferences(nextPreferences);
+
+    if (entryLayout === 'last-series' && selectedSeriesGroup) {
+      setLibraryStage('series-focus');
+      return;
+    }
+
+    setLibraryStage('series-gallery');
   };
   const deleteCurrentComic = () => {
     if (!projectLibrary || !currentProject) return;
@@ -5273,14 +5428,365 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       </section>
     ) : null;
 
+  const isIssueWorkspaceOpen = libraryStage === 'issue-workspace';
+  const comicLibraryReturnStrip = isIssueWorkspaceOpen ? (
+    <section className="flex flex-col gap-3 border border-amber-200/14 bg-black/24 px-4 py-3 shadow-xl sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/58">Comic Library</p>
+        <p className="mt-1 truncate text-sm font-black text-white">{currentComicDisplayName}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setLibraryStage('series-gallery')}
+          className="border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-black text-white/78 transition hover:border-amber-200/45 hover:bg-amber-200/10 focus:outline-none focus:ring-2 focus:ring-amber-200/60 motion-reduce:transition-none"
+        >
+          All Series
+        </button>
+        {selectedSeriesGroup ? (
+          <button
+            type="button"
+            onClick={() => setLibraryStage('issue-gallery')}
+            className="border border-white/15 bg-white/[0.06] px-3 py-2 text-xs font-black text-white/78 transition hover:border-amber-200/45 hover:bg-amber-200/10 focus:outline-none focus:ring-2 focus:ring-amber-200/60 motion-reduce:transition-none"
+          >
+            Choose Issue
+          </button>
+        ) : null}
+      </div>
+    </section>
+  ) : null;
+  const libraryEntryView =
+    libraryStage !== 'issue-workspace' ? (
+      <section
+        className="relative min-h-[calc(100vh-3rem)] overflow-hidden bg-[#091635] shadow-2xl"
+        style={{
+          background:
+            'radial-gradient(circle at 18% 12%, rgba(252, 211, 77, 0.2), transparent 26%), radial-gradient(circle at 86% 4%, rgba(56, 189, 248, 0.13), transparent 30%), linear-gradient(145deg, #07132d 0%, #0e2451 48%, #061025 100%)',
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-x-[-8%] bottom-[-16rem] h-[34rem] shadow-[0_-32px_90px_rgba(0,0,0,0.46)]"
+          style={{
+            background:
+              'radial-gradient(ellipse at 50% 6%, rgba(255,255,255,0.16), transparent 28%), linear-gradient(105deg,#5f4825,#302317 48%,#191411)',
+            transform: 'perspective(900px) rotateX(58deg)',
+            transformOrigin: 'bottom center',
+          }}
+          aria-hidden
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(90deg,rgba(252,211,77,0.08)_1px,transparent_1px),linear-gradient(0deg,rgba(252,211,77,0.06)_1px,transparent_1px)] bg-[size:42px_42px] opacity-40" />
+        <div className="relative grid gap-7 p-5 lg:p-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/65">Comic Library</p>
+              <h1 className="mt-2 text-2xl font-black leading-tight text-white md:text-4xl">Series Gallery</h1>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-sky-50/58">
+                Open a saved issue, start the next one, or begin a new series from the tabletop.
+              </p>
+            </div>
+            <label className="flex w-full max-w-[13rem] flex-col gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52">
+              Entry layout
+              <select
+                value={libraryPreferences.entryLayout}
+                onChange={(event) => updateLibraryEntryLayout(event.target.value)}
+                className="border border-amber-200/20 bg-black/35 px-3 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none transition focus:border-amber-200/75 motion-reduce:transition-none"
+              >
+                {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_OPTIONS.map((entryLayout) => (
+                  <option key={entryLayout} value={entryLayout}>
+                    {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_LABELS[entryLayout]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {libraryPreferences.entryLayout === 'hybrid-shelf' && recentLibraryProjects.length > 0 ? (
+            <div className="grid gap-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/52">Recent issue stack</p>
+              <div className="flex min-w-0 gap-3 overflow-x-auto pb-2">
+                {recentLibraryProjects.map((project, index) => {
+                  const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
+                  return (
+                    <button
+                      key={project.projectId}
+                      type="button"
+                      onClick={() => openLibraryIssueWorkspace(project.projectId)}
+                      className="group grid w-28 shrink-0 gap-2 text-left outline-none"
+                    >
+                      <span
+                        className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'})` }}
+                      >
+                        {coverImageUrl ? (
+                          <VaultImageWithFallback
+                            src={coverImageUrl}
+                            alt={`${getGuidedComicProjectDisplayName(project)} cover`}
+                            frameClassName="h-full w-full overflow-hidden bg-black/35"
+                            imgClassName="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span
+                            className="flex h-full flex-col justify-between p-2"
+                            style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
+                          >
+                            <span className="text-[9px] font-black uppercase tracking-[0.14em] text-white/74">
+                              Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                            </span>
+                            <span className="text-xs font-black leading-none text-white">{project.issueTitle || 'Untitled issue'}</span>
+                          </span>
+                        )}
+                        <span className="absolute inset-y-0 left-0 w-1.5 bg-white/[0.14]" />
+                      </span>
+                      <span className="truncate text-[11px] font-black text-white/74">{project.issueTitle || getGuidedComicProjectDisplayName(project)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {libraryStage === 'series-gallery' ? (
+            <div className="grid gap-6">
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7">
+                {librarySeriesGroups.map((group, index) => (
+                  <button
+                    key={group.seriesKey}
+                    type="button"
+                    onClick={() => openLibrarySeriesFocus(group.seriesKey)}
+                    className="group min-w-0 text-left outline-none"
+                    style={{ perspective: '900px' }}
+                  >
+                    <span
+                      className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                      style={{
+                        transform: `rotateZ(${index % 2 === 0 ? '-1.5deg' : '1.3deg'}) rotateX(2deg)`,
+                      }}
+                    >
+                      {group.coverImageUrl ? (
+                        <VaultImageWithFallback
+                          src={group.coverImageUrl}
+                          alt={`${group.seriesTitle} cover`}
+                          frameClassName="h-full w-full overflow-hidden bg-black/35"
+                          imgClassName="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="flex h-full flex-col justify-between p-3"
+                          style={{ background: getGuidedComicPlaceholderCoverBackground(group.seriesKey) }}
+                        >
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/76">Series</span>
+                          <span className="text-lg font-black leading-none text-white drop-shadow">{group.seriesTitle}</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/68">
+                            {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                      )}
+                      <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
+                    </span>
+                    <span className="mt-3 block truncate text-sm font-black text-white">{group.seriesTitle}</span>
+                    <span className="mt-1 block text-xs font-bold text-amber-100/52">
+                      {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={startLibraryNewSeries}
+                  className="group min-w-0 text-left outline-none"
+                  style={{ perspective: '900px' }}
+                >
+                  <span className="relative flex aspect-[2/3] flex-col justify-between overflow-hidden rounded-[3px] border border-dashed border-amber-200/45 bg-[linear-gradient(145deg,rgba(252,211,77,0.2),rgba(8,22,52,0.92)_46%,rgba(252,211,77,0.11))] p-3 shadow-[0_22px_38px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_28px_46px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/75">Blank cover</span>
+                    <span className="text-2xl font-black leading-none text-white">Start New Series</span>
+                    <span className="inline-flex h-10 w-10 items-center justify-center border border-amber-100/35 bg-black/25 text-amber-50">
+                      <FilePlus className="h-5 w-5" aria-hidden />
+                    </span>
+                  </span>
+                  <span className="mt-3 block text-sm font-black text-white">Start New Series</span>
+                  <span className="mt-1 block text-xs font-bold text-amber-100/52">Blank guided comic</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {libraryStage === 'series-focus' && selectedSeriesGroup ? (
+            <div className="grid gap-6 lg:grid-cols-[minmax(220px,340px)_minmax(0,1fr)]">
+              <div className="max-w-[340px]" style={{ perspective: '1000px' }}>
+                <div
+                  className="relative aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/40 bg-[#10265b] shadow-[0_34px_70px_rgba(0,0,0,0.62)]"
+                  style={{ transform: 'rotateZ(-1deg) rotateX(2deg)' }}
+                >
+                  {selectedSeriesGroup.coverImageUrl ? (
+                    <VaultImageWithFallback
+                      src={selectedSeriesGroup.coverImageUrl}
+                      alt={`${selectedSeriesGroup.seriesTitle} cover`}
+                      frameClassName="h-full w-full overflow-hidden bg-black/35"
+                      imgClassName="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-full flex-col justify-between p-5"
+                      style={{ background: getGuidedComicPlaceholderCoverBackground(selectedSeriesGroup.seriesKey) }}
+                    >
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-white/76">Selected series</p>
+                      <p className="text-4xl font-black leading-none text-white drop-shadow">{selectedSeriesGroup.seriesTitle}</p>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-white/70">Guided Comics</p>
+                    </div>
+                  )}
+                  <span className="absolute inset-y-0 left-0 w-3 bg-white/[0.14]" />
+                </div>
+              </div>
+              <div className="grid content-center gap-5 pl-0 lg:border-l lg:border-amber-200/14 lg:pl-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/58">Series Focus</p>
+                  <h2 className="mt-2 text-3xl font-black leading-tight text-white md:text-5xl">
+                    {selectedSeriesGroup.seriesTitle}
+                  </h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-relaxed text-sky-50/62">
+                    {selectedSeriesGroup.premise || 'No premise saved yet.'}
+                  </p>
+                </div>
+                <div className="grid gap-2 border-l-2 border-amber-200/35 pl-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/42">Studio notes</p>
+                  <p className="text-sm font-bold text-white/78">
+                    {selectedSeriesGroup.projects.length} issue{selectedSeriesGroup.projects.length === 1 ? '' : 's'} in this series
+                  </p>
+                  <p className="text-sm font-bold text-white/62">
+                    Current issue:{' '}
+                    <span className="text-white/88">
+                      {selectedSeriesGroup.lastUpdatedProject
+                        ? getGuidedComicProjectDisplayName(selectedSeriesGroup.lastUpdatedProject)
+                        : 'No issue yet'}
+                    </span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      selectedSeriesGroup.lastUpdatedProject
+                        ? openLibraryIssueWorkspace(selectedSeriesGroup.lastUpdatedProject.projectId)
+                        : undefined
+                    }
+                    disabled={!selectedSeriesGroup.lastUpdatedProject}
+                    className="inline-flex items-center justify-center gap-2 border px-5 py-3 text-sm font-black shadow-xl transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none"
+                    style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                  >
+                    <BookOpenText className="h-4 w-4" aria-hidden />
+                    Open Current Issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openLibraryIssueGallery(selectedSeriesGroup.seriesKey)}
+                    className="px-3 py-2 text-xs font-black text-white/74 underline decoration-amber-200/30 underline-offset-4 transition hover:text-white hover:decoration-amber-200/70 motion-reduce:transition-none"
+                  >
+                    Choose Issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLibraryStage('series-gallery')}
+                    className="px-3 py-2 text-xs font-black text-white/60 underline decoration-white/20 underline-offset-4 transition hover:text-white hover:decoration-white/50 motion-reduce:transition-none"
+                  >
+                    All Series
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {libraryStage === 'issue-gallery' && selectedSeriesGroup ? (
+            <div className="grid gap-5">
+              <div className="flex flex-col gap-3 border-b border-amber-200/12 pb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/58">Issue Gallery</p>
+                  <h2 className="mt-1 text-3xl font-black text-white">{selectedSeriesGroup.seriesTitle}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLibraryStage('series-focus')}
+                  className="border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white/70 transition hover:bg-white/10 motion-reduce:transition-none"
+                >
+                  Back to Series
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-6 2xl:grid-cols-8">
+                {selectedSeriesGroup.projects.map((project, index) => {
+                  const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
+                  return (
+                    <button
+                      key={project.projectId}
+                      type="button"
+                      onClick={() => openLibraryIssueWorkspace(project.projectId)}
+                      className="group min-w-0 text-left outline-none"
+                      style={{ perspective: '800px' }}
+                    >
+                      <span
+                        className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/30 bg-[#11265b] shadow-[0_20px_34px_rgba(0,0,0,0.44)] transition duration-200 group-hover:border-amber-100/65 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.55)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'})` }}
+                      >
+                        {coverImageUrl ? (
+                          <VaultImageWithFallback
+                            src={coverImageUrl}
+                            alt={`${getGuidedComicProjectDisplayName(project)} cover`}
+                            frameClassName="h-full w-full overflow-hidden bg-black/35"
+                            imgClassName="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span
+                            className="flex h-full flex-col justify-between p-3"
+                            style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/74">
+                              Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                            </span>
+                            <span className="text-lg font-black leading-none text-white">
+                              {project.issueTitle || 'Untitled issue'}
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/64">
+                              {selectedSeriesGroup.seriesTitle}
+                            </span>
+                          </span>
+                        )}
+                        <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
+                      </span>
+                      <span className="mt-3 block truncate text-sm font-black text-white">{getGuidedComicProjectDisplayName(project)}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={startLibraryNewIssue}
+                  className="group min-w-0 text-left outline-none"
+                  style={{ perspective: '800px' }}
+                >
+                  <span className="relative flex aspect-[2/3] flex-col justify-between overflow-hidden rounded-[3px] border border-dashed border-amber-200/45 bg-[linear-gradient(145deg,rgba(252,211,77,0.18),rgba(8,22,52,0.92)_48%,rgba(252,211,77,0.1))] p-3 shadow-[0_20px_34px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/74">Blank issue</span>
+                    <span className="text-2xl font-black leading-none text-white">Start New Issue</span>
+                    <span className="text-xs font-black text-white/60">#{getGuidedComicNextIssueNumber(selectedSeriesGroup.projects)}</span>
+                  </span>
+                  <span className="mt-3 block text-sm font-black text-white">Start New Issue</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    ) : null;
+
 	  return (
     <div
       className="min-h-full w-full overflow-y-auto custom-scrollbar text-white"
       style={{ background: PRIMARY_BG }}
     >
       <div className="flex w-full max-w-none flex-col gap-6 px-5 py-6 lg:px-8">
+        {libraryEntryView}
+        {comicLibraryReturnStrip}
+
         <header
-          className={workspaceMode === 'story-prep' ? 'overflow-hidden rounded-2xl border shadow-2xl' : 'hidden'}
+          className={isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? 'overflow-hidden rounded-2xl border shadow-2xl' : 'hidden'}
           style={{
             background: `linear-gradient(135deg, ${PRIMARY_BG_FLAT} 0%, ${PRIMARY_BG_DARK} 62%, #1b2450 100%)`,
             borderColor: `${ACCENT_GOLD_SOLID}66`,
@@ -5535,7 +6041,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
         <nav
           className={
-            workspaceMode === 'story-prep'
+            isIssueWorkspaceOpen && workspaceMode === 'story-prep'
               ? 'grid gap-2 rounded-2xl border border-white/10 bg-black/30 p-2 shadow-xl backdrop-blur-sm md:grid-cols-7 xl:hidden'
               : 'hidden'
           }
@@ -5581,7 +6087,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
         <div
           className={
-            workspaceMode === 'story-prep'
+            isIssueWorkspaceOpen && workspaceMode === 'story-prep'
               ? 'grid gap-3 rounded-2xl border border-white/10 bg-black/30 p-3 shadow-xl backdrop-blur-sm xl:hidden'
               : 'hidden'
           }
@@ -5695,13 +6201,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 	        </div>
 
-        {workspaceMode === 'story-prep' ? focusReentryStrip : null}
-        {workspaceMode === 'story-prep' ? productionPrepWorkspace : null}
-        {workspaceMode === 'issue-lightbox' ? issueLightboxWorkspace : null}
-        {workspaceMode === 'page-production' ? productionWorkspace : null}
-        {workspaceMode === 'panel-focus' ? panelFocusWorkspace : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? focusReentryStrip : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? productionPrepWorkspace : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'issue-lightbox' ? issueLightboxWorkspace : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'page-production' ? productionWorkspace : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'panel-focus' ? panelFocusWorkspace : null}
 
-        {workspaceMode === 'story-prep' ? (
+        {isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? (
 	        <main className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.07] p-5 shadow-xl backdrop-blur-md lg:p-7">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">

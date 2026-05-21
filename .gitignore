@@ -37,6 +37,9 @@ dist-ssr
 nano-banana-expanded@0.0.0
 vite
 
+# Superpowers brainstorm runtime state
+.superpowers/brainstorm/*/state/
+
 # Supabase CLI local artifacts
 supabase/.temp/
 

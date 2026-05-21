@@ -1,0 +1,76 @@
+<h2>Comic Library Navigation Model</h2>
+<p class="subtitle">A cover-led entry layer that sits before the existing Issue Lightbox → Page Production → Panel Focus rhythm.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Proposed Flow</div>
+  <div class="mockup-body">
+    <div style="display:grid;gap:18px;">
+      <div style="display:grid;grid-template-columns:1.1fr .18fr 1.1fr .18fr 1.1fr;gap:12px;align-items:center;">
+        <div style="min-height:210px;background:#14191f;border-radius:18px;padding:18px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.1em;">Portal opens here</div>
+          <div style="font-size:24px;font-weight:850;color:white;margin-top:8px;">Series Cover Gallery</div>
+          <div style="display:flex;gap:10px;margin-top:18px;align-items:end;">
+            <div style="width:56px;height:86px;background:linear-gradient(145deg,#e5c978,#4e2638);box-shadow:0 12px 24px rgba(0,0,0,.38);border-radius:2px;"></div>
+            <div style="width:68px;height:106px;background:linear-gradient(145deg,#7fd1dc,#172b48);box-shadow:0 16px 30px rgba(0,0,0,.42);border-radius:2px;"></div>
+            <div style="width:56px;height:86px;background:linear-gradient(145deg,#efe7d6,#6b2424);box-shadow:0 12px 24px rgba(0,0,0,.38);border-radius:2px;"></div>
+            <div style="width:60px;height:92px;border:2px dashed rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:white;font-size:24px;border-radius:2px;">+</div>
+          </div>
+        </div>
+        <div style="font-size:26px;color:#94a3b8;text-align:center;">→</div>
+        <div style="min-height:210px;background:#161b22;border-radius:18px;padding:18px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.1em;">Selected series</div>
+          <div style="font-size:24px;font-weight:850;color:white;margin-top:8px;">Series Focus Stage</div>
+          <div style="display:grid;grid-template-columns:.86fr 1fr;gap:14px;margin-top:16px;align-items:center;">
+            <div style="height:136px;background:linear-gradient(145deg,#7fd1dc,#172b48);box-shadow:0 18px 34px rgba(0,0,0,.46);border-radius:2px;"></div>
+            <div style="display:grid;gap:8px;">
+              <div style="height:10px;width:88%;background:rgba(255,255,255,.34);border-radius:999px;"></div>
+              <div style="height:8px;width:72%;background:rgba(255,255,255,.2);border-radius:999px;"></div>
+              <div style="height:8px;width:54%;background:rgba(255,255,255,.14);border-radius:999px;"></div>
+              <div style="height:34px;background:#d9b66f;border-radius:7px;margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:26px;color:#94a3b8;text-align:center;">→</div>
+        <div style="min-height:210px;background:#14191f;border-radius:18px;padding:18px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.1em;">Series issues</div>
+          <div style="font-size:24px;font-weight:850;color:white;margin-top:8px;">Issue Cover Gallery</div>
+          <div style="display:flex;gap:10px;margin-top:18px;align-items:end;">
+            <div style="width:62px;height:94px;background:linear-gradient(145deg,#efe7d6,#6b2424);box-shadow:0 12px 24px rgba(0,0,0,.38);border-radius:2px;"></div>
+            <div style="width:72px;height:112px;background:linear-gradient(145deg,#e5c978,#4e2638);box-shadow:0 16px 30px rgba(0,0,0,.42);border-radius:2px;"></div>
+            <div style="width:62px;height:94px;border:2px dashed rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;color:white;font-size:24px;border-radius:2px;">+</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:rgba(255,255,255,.12);"></div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <div style="background:#10151b;border-radius:14px;padding:14px;">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.09em;">Data rule</div>
+          <div style="font-size:18px;font-weight:800;color:white;margin-top:6px;">Every issue has a series title</div>
+          <p style="color:#b6beca;font-size:13px;line-height:1.45;">One-shots use a series container too, preserving organization and metadata consistency.</p>
+        </div>
+        <div style="background:#10151b;border-radius:14px;padding:14px;">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.09em;">Default layout</div>
+          <div style="font-size:18px;font-weight:800;color:white;margin-top:6px;">Cover Gallery First</div>
+          <p style="color:#b6beca;font-size:13px;line-height:1.45;">The portal opens as a true comic-cover gallery with a permanent blank new-series cover.</p>
+        </div>
+        <div style="background:#10151b;border-radius:14px;padding:14px;">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.09em;">Preferences</div>
+          <div style="font-size:18px;font-weight:800;color:white;margin-top:6px;">Last Series or Hybrid Shelf</div>
+          <p style="color:#b6beca;font-size:13px;line-height:1.45;">The other layouts become user preferences without changing the underlying library model.</p>
+        </div>
+        <div style="background:#10151b;border-radius:14px;padding:14px;">
+          <div style="font-size:12px;color:#aeb6c2;text-transform:uppercase;letter-spacing:.09em;">Later reward</div>
+          <div style="font-size:18px;font-weight:800;color:white;margin-top:6px;">Living Panel Collage</div>
+          <p style="color:#b6beca;font-size:13px;line-height:1.45;">After four completed issues, the desk can gain a faint shifting collage from completed comic panels.</p>
+        </div>
+      </div>
+
+      <div style="background:#111820;border-left:4px solid #d9b66f;padding:14px 16px;border-radius:8px;">
+        <strong style="color:white;">Next transition:</strong>
+        <span style="color:#c5ccd7;"> selecting an issue cover enters the existing Issue Lightbox, then Page Production, then Panel Focus.</span>
+      </div>
+    </div>
+  </div>
+</div>

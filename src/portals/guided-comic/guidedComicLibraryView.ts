@@ -1,0 +1,138 @@
+import type { GuidedComicProject } from '@/portals/guided-comic/guidedComicProjectLibrary';
+
+export type GuidedComicSeriesGroup = {
+  seriesKey: string;
+  seriesTitle: string;
+  premise: string;
+  projects: GuidedComicProject[];
+  defaultCoverProject: GuidedComicProject | null;
+  lastUpdatedProject: GuidedComicProject | null;
+  coverImageUrl: string | null;
+};
+
+function normalizeSeriesTitle(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+}
+
+export function getGuidedComicSeriesTitle(value: unknown): string {
+  return normalizeSeriesTitle(value) || 'Untitled series';
+}
+
+export function getGuidedComicSeriesKey(value: unknown): string {
+  const key = getGuidedComicSeriesTitle(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return key || 'untitled-series';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function cleanOptionalUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+export function getGuidedComicProjectCoverImageUrl(project: GuidedComicProject): string | null {
+  const panelArtImages = project.snapshot.panelArtImages;
+  if (!isRecord(panelArtImages)) return null;
+
+  for (const candidate of Object.values(panelArtImages)) {
+    if (!isRecord(candidate)) continue;
+
+    const imageUrl = cleanOptionalUrl(candidate.imageUrl);
+    if (imageUrl) return imageUrl;
+
+    const url = cleanOptionalUrl(candidate.url);
+    if (url) return url;
+  }
+
+  return null;
+}
+
+export function getGuidedComicCompletedIssueCount(projects: GuidedComicProject[]): number {
+  return projects.filter((project) => project.snapshot.currentStep === 'export').length;
+}
+
+function getSeriesTitleSource(project: GuidedComicProject): string {
+  return normalizeSeriesTitle(project.seriesTitle) || normalizeSeriesTitle(project.snapshot.setupForm.seriesTitle);
+}
+
+function getIssueNumberSortValue(project: GuidedComicProject): number {
+  const parsed = Number.parseFloat(project.issueNumber || project.snapshot.setupForm.issueNumber);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function compareProjectsForSeries(a: GuidedComicProject, b: GuidedComicProject): number {
+  const issueDelta = getIssueNumberSortValue(a) - getIssueNumberSortValue(b);
+  if (issueDelta !== 0) return issueDelta;
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
+function getLatestUpdatedProject(projects: GuidedComicProject[]): GuidedComicProject | null {
+  return (
+    projects.reduce<GuidedComicProject | null>(
+      (latest, project) => (!latest || project.updatedAt.localeCompare(latest.updatedAt) > 0 ? project : latest),
+      null,
+    ) ?? null
+  );
+}
+
+function getSeriesPremise(defaultCoverProject: GuidedComicProject | null): string {
+  if (!defaultCoverProject) return '';
+  return defaultCoverProject.snapshot.storyForm.premise || defaultCoverProject.snapshot.setupForm.premise || '';
+}
+
+function getSeriesCoverImageUrl(projects: GuidedComicProject[]): string | null {
+  for (const project of projects) {
+    const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
+    if (coverImageUrl) return coverImageUrl;
+  }
+
+  return null;
+}
+
+export function getGuidedComicLibrarySeriesGroups(projects: GuidedComicProject[]): GuidedComicSeriesGroup[] {
+  const groupedProjects = new Map<string, GuidedComicProject[]>();
+  const titlesByKey = new Map<string, string>();
+
+  for (const project of projects) {
+    const seriesTitleSource = getSeriesTitleSource(project);
+    const seriesKey = getGuidedComicSeriesKey(seriesTitleSource);
+    const seriesTitle = getGuidedComicSeriesTitle(seriesTitleSource);
+    const existingProjects = groupedProjects.get(seriesKey);
+
+    if (existingProjects) {
+      existingProjects.push(project);
+    } else {
+      groupedProjects.set(seriesKey, [project]);
+      titlesByKey.set(seriesKey, seriesTitle);
+    }
+  }
+
+  return Array.from(groupedProjects.entries())
+    .map(([seriesKey, seriesProjects]) => {
+      const sortedProjects = [...seriesProjects].sort(compareProjectsForSeries);
+      const defaultCoverProject = sortedProjects[0] ?? null;
+      const lastUpdatedProject = getLatestUpdatedProject(sortedProjects);
+
+      return {
+        seriesKey,
+        seriesTitle: titlesByKey.get(seriesKey) ?? 'Untitled series',
+        premise: getSeriesPremise(defaultCoverProject),
+        projects: sortedProjects,
+        defaultCoverProject,
+        lastUpdatedProject,
+        coverImageUrl: getSeriesCoverImageUrl(sortedProjects),
+      };
+    })
+    .sort((a, b) => {
+      const aUpdatedAt = a.lastUpdatedProject?.updatedAt ?? '';
+      const bUpdatedAt = b.lastUpdatedProject?.updatedAt ?? '';
+      return bUpdatedAt.localeCompare(aUpdatedAt);
+    });
+}

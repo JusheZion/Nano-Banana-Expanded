@@ -4059,6 +4059,160 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with responsive/content stress QA for generated art, long dialogue, many pages, and missing references.
 
+## Guided Comics Comic Library Entry Spec and Checklist Plan - 2026-05-21
+
+### What changed
+
+- Captured the approved Comic Library entry direction as a formal design spec.
+- Added a pass-by-pass implementation checklist so future status reports can clearly say what changed visually, what changed under the hood, what should now be visible, what was verified, and what remains pending.
+- Defined the new entry rhythm as `Series Cover Gallery -> Series Focus -> Issue Cover Gallery -> Issue Lightbox -> Page Production -> Panel Focus`.
+- Preserved the existing issue-level focus choreography after an issue is selected: `Issue Lightbox -> Page Production -> Panel Focus`.
+- Documented that the portal should use a blue/gold studio tabletop identity while keeping covers as physical comic-cover objects rather than rounded UI cards.
+- Documented the rule that every guided comic, including one-shots, must belong to a series container through `seriesTitle`.
+
+### Files touched
+
+- `docs/superpowers/specs/2026-05-21-guided-comics-comic-library-entry-design.md`
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a planning/documentation pass only. No runtime React, CSS, persistence, routing, portal type, ComicEditor, Supabase/schema, Advanced Studio, Imageshop, Image Vault, save/load, export, panel geometry, shapes, balloons, or image-preservation behavior changed.
+- The plan keeps the current Guided Comic Library as the issue-level source of truth and derives series groups from existing `seriesTitle` metadata.
+- The plan introduces local-only preferences for portal entry layout, selected series cover, and the later living-archive background state.
+- The first implementation pass is intentionally non-visual: it adds helper tests and helper modules for grouping saved comics into series, deriving cover image candidates, and counting completed/export-stage issues for the archive unlock.
+- The visible passes are split into Series Cover Gallery, Series Focus, Issue Cover Gallery, issue workflow handoff, motion/reduced-motion, and full QA/regression.
+- The checklist is intended to be copied into future progress reports so the user can tell where implementation stands even when a pass does not immediately produce a visible UI change.
+
+### Verification
+
+- Reviewed the existing `GuidedComicFlow.tsx` project-library state, saved-comic switching, metadata dialog, and current Issue Lightbox/Page Production/Panel Focus gates before writing the plan.
+- Reviewed `guidedComicProjectLibrary.ts` and `guidedComicProjectLibrary.test.ts` to keep the plan compatible with the existing local project library contract.
+- Ran a placeholder scan against the new spec and plan with `rg -n "TBD|TODO|implement later|fill in|Similar to|appropriate error handling|add validation|Write tests for the above" ...`; no matches were found.
+- Self-review caught and corrected an initial coverage gap: cover image candidate helpers and completed-issue counting are now explicit in Pass 1.
+
+### Outstanding issues
+
+- None for the planning pass.
+
+### Risks or caveats
+
+- The `.superpowers/brainstorm/` visual companion artifacts are untracked session files and were not treated as durable project documentation.
+- The plan intentionally defers the full animated living panel-collage background until cover selection, panel-image sourcing, reduced motion, and legibility rules are safe.
+- The implementation will touch `GuidedComicFlow.tsx`, which is already large; the plan offsets this by placing grouping and preference logic into small helper modules first.
+
+### Operator follow-up
+
+- Review the spec and checklist plan before implementation begins.
+- Choose execution mode for implementation: subagent-driven pass-by-pass execution or inline execution in this thread.
+
+### Next steps
+
+- Start with Pass 1: Library Data Foundation.
+- Use the checklist in `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md` as the status tracker after each pass.
+
+## Guided Comics Comic Library Entry Foundation and First UI Pass - 2026-05-21
+
+### What changed
+
+- Implemented the first substantial Comic Library Entry pass using subagents for the independent foundation work.
+- Added library view helpers for grouping saved guided comics into series by `seriesTitle`, normalizing series titles/keys, deriving cover image candidates from existing panel art, and counting completed/export-stage issues for the later archive-background unlock.
+- Added local-only Comic Library entry preferences for `Cover Gallery`, `Last Series`, and `Hybrid Shelf`, including safe parsing, SSR-safe localStorage reads/writes, and immutable default preference handling.
+- Added a local Comic Library entry stage inside `GuidedComicFlow.tsx` without changing the existing issue workspace modes.
+- Added the first visible cover-led entry flow:
+  - Series Cover Gallery.
+  - Series Focus.
+  - Issue Cover Gallery.
+  - Blank `Start New Series` cover.
+  - Blank `Start New Issue` cover.
+  - Compact entry layout preference selector.
+  - Issue workspace return strip with `All Series` and `Choose Issue`.
+- Revised the first UI pass after review so the entry reads less like a dashboard: recent issues now render as mini cover objects, Series Focus metadata is treated as studio notes, placeholder covers use varied seeded palettes, and cover hover feedback no longer uses translate motion.
+
+### Checklist progress
+
+- [x] Pass 1: Library Data Foundation.
+- [x] Pass 2: Local Preferences.
+- [x] Pass 3: Entry Gate Wiring.
+- [x] Pass 4: Series Cover Gallery.
+- [x] Pass 5: Series Focus.
+- [x] Pass 6: Issue Cover Gallery.
+- [x] Pass 7: Issue Workflow Handoff.
+- [x] Pass 8: Motion And Reduced Motion baseline for this pass.
+- [x] Pass 9: QA And Regression baseline for this pass.
+- [ ] Future polish: stronger morph/parallax choreography between cover states.
+- [ ] Future polish: fuller pre-rendered tabletop/background asset treatment.
+- [ ] Future polish: living archive panel-collage unlock after four completed issues.
+- [ ] Future QA: responsive/mobile and deployed-site validation.
+
+### Files touched
+
+- `src/portals/guided-comic/guidedComicLibraryView.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts`
+- `src/portals/guided-comic/guidedComicLibraryPreferences.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The new Comic Library entry layer is local UI state only and is separate from `GuidedComicWorkspaceMode`; the existing issue modes remain `story-prep`, `issue-lightbox`, `page-production`, and `panel-focus`.
+- Series are derived from existing saved guided comic projects rather than a new schema or portal type.
+- One-shot comics still appear under a series container because grouping is based on `seriesTitle`.
+- Opening an issue uses the existing saved-comic switching path, then enters the existing issue workflow.
+- Starting a new issue uses the selected series title and the next issue number while keeping the user in the existing Story/Prep issue workflow.
+- `All Series` and `Choose Issue` are now visible from the issue workspace so users can return to cover browsing after opening an issue.
+- No Supabase/schema, ComicEditor, routing, Advanced Studio, Imageshop, Image Vault, save/load, export, panel geometry, shapes, balloons, or image-preservation contracts were intentionally changed.
+
+### Verification
+
+- Subagent implementation and review:
+  - Pass 1 helper worker added the library view helpers and tests.
+  - Pass 2 helper worker added the preferences helpers and tests.
+  - Spec-compliance review approved the foundation helpers.
+  - Code-quality review requested defensive handling for malformed `panelArtImages` and immutable default preference coverage.
+  - Workers added those fixes; focused re-review approved them.
+  - UI integration worker added the first visible entry flow.
+  - Spec/UI review requested a visible return path from issue workspace and reduced dashboard-like treatments.
+  - A focused repair added the return strip, mini cover recent issues, studio-note metadata, varied placeholder covers, and reduced-motion-safe hover behavior; focused re-review approved it.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts` passed with 12 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts` passed with 27 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed. The existing large `ComicPortal` chunk warning remains.
+- Browser QA against `http://127.0.0.1:5173/` in an authenticated session confirmed:
+  - Comic Creator opens to the Series Gallery by default.
+  - Series covers and the blank `Start New Series` cover render.
+  - Clicking a series opens Series Focus.
+  - `Choose Issue` opens the selected series Issue Gallery.
+  - Clicking an issue enters the existing issue workspace.
+  - The issue workspace shows `All Series` and `Choose Issue`.
+  - `All Series` returns to the Series Gallery without leaving issue workflow scaffolding visible.
+  - Changing the entry layout preference to `Last Series` opens Series Focus, then changing back to `Cover Gallery` restores the gallery.
+  - No framework overlay markers such as internal server error, failed compile, uncaught, reference error, type error, or Vite plugin error were found.
+
+### Outstanding issues
+
+- None blocking for this implementation pass.
+
+### Risks or caveats
+
+- The entry layer is still an initial implementation of the tabletop metaphor. It now uses a CSS-backed desk/tabletop treatment, but a future pass should replace or enhance this with a stronger pre-rendered workspace background if desired.
+- Morph/parallax transitions are present only as baseline cover-state movement and reduced-motion-safe hover feedback; richer choreography remains a future polish pass.
+- The living archive collage unlock is supported by completed-issue counting helpers but the animated collage itself is intentionally deferred.
+- Browser QA was local only; deployed-site QA was not performed.
+
+### Operator follow-up
+
+- Visually inspect the new Comic Library entry screen and decide whether the tabletop treatment is strong enough for the next iteration or should move immediately to a generated/pre-rendered background asset.
+- Continue using the checklist status in future pass reports so visual and non-visual work stays easy to track.
+
+### Next steps
+
+- Run responsive QA for the new library entry layer.
+- Add richer cover transition choreography if the current baseline interaction feels too static.
+- Design and implement the eventual living archive background unlock after the cover library is stable.
+
 ## How to Use These Docs
 
 | File | Use |
