@@ -141,6 +141,62 @@ describe('guided comic library view helpers', () => {
     expect(getGuidedComicLibrarySeriesGroups([project])[0].coverImageUrl).toBe('https://example.com/panel-1.png');
   });
 
+  it('uses persisted series cover project ids when building series covers', () => {
+    const issueOne = makeProject({
+      projectId: 'astral-1',
+      createdAt: '2026-05-01T09:00:00.000Z',
+      updatedAt: '2026-05-01T09:00:00.000Z',
+      setupForm: {
+        ...makeSnapshot().setupForm,
+        issueNumber: '1',
+      },
+      panelArtImages: {
+        'page-1-panel-1': { imageUrl: 'https://example.com/issue-1.png' },
+      },
+    });
+    const issueTwo = makeProject({
+      projectId: 'astral-2',
+      createdAt: '2026-05-01T10:00:00.000Z',
+      updatedAt: '2026-05-01T10:00:00.000Z',
+      setupForm: {
+        ...makeSnapshot().setupForm,
+        issueTitle: 'Second Light',
+        issueNumber: '2',
+      },
+      panelArtImages: {
+        'page-2-panel-1': { imageUrl: 'https://example.com/issue-2.png' },
+      },
+    });
+
+    const [group] = getGuidedComicLibrarySeriesGroups([issueOne, issueTwo], {
+      'astral-city': 'astral-2',
+    });
+
+    expect(group.defaultCoverProject).toBe(issueOne);
+    expect(group.selectedCoverProject).toBe(issueTwo);
+    expect(group.coverProject).toBe(issueTwo);
+    expect(group.coverImageUrl).toBe('https://example.com/issue-2.png');
+  });
+
+  it('falls back to the default series cover when a persisted cover id is stale', () => {
+    const issueOne = makeProject({
+      projectId: 'astral-1',
+      createdAt: '2026-05-01T09:00:00.000Z',
+      updatedAt: '2026-05-01T09:00:00.000Z',
+      panelArtImages: {
+        'page-1-panel-1': { imageUrl: 'https://example.com/issue-1.png' },
+      },
+    });
+
+    const [group] = getGuidedComicLibrarySeriesGroups([issueOne], {
+      'astral-city': 'missing-project',
+    });
+
+    expect(group.selectedCoverProject).toBeNull();
+    expect(group.coverProject).toBe(issueOne);
+    expect(group.coverImageUrl).toBe('https://example.com/issue-1.png');
+  });
+
   it('derives cover image candidates from url fallback', () => {
     const project = makeProject({
       projectId: 'cover-url',

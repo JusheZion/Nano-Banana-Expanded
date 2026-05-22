@@ -4472,6 +4472,126 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Complete the manual/browser QA for the Living Archive states.
 - Continue with richer cover transition choreography only after the archive affordance is visually accepted.
 
+## Guided Comics Cover Motion Refinement - 2026-05-22
+
+### What changed
+
+- Refined Comic Library cover movement so series covers, recent issue covers, issue covers, blank covers, and the selected series hero cover share a reusable motion system.
+- Added `guided-library-cover-motion` CSS with transform variables for cover-specific rest and hover/focus states.
+- Added subtle lift, depth, sheen movement, and shadow response on hover/focus to make covers feel like physical objects on the desk.
+- Enriched the stage-entry keyframes for Series Gallery, Series Focus, and Issue Gallery with shallow perspective/rotation so state changes read as covers moving through space.
+- Preserved `prefers-reduced-motion` behavior by disabling cover transitions/transforms and stage animations when reduced motion is requested.
+- Updated the formal Comic Library plan to stop listing richer cover lift/parallax as deferred.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The pass is visual-only and stays inside the existing Guided Comics `comic` portal and Comic Library entry layer.
+- Cover transforms are still supplied per cover from the existing render loops, but CSS now owns the transition timing, hover/focus lift, shine, and reduced-motion behavior.
+- No project data, routes, Supabase/schema state, ComicEditor behavior, Advanced Studio behavior, Imageshop behavior, Image Vault behavior, save/load, export, geometry, shapes, balloons, or image preservation paths were changed.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 32 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run dev -- --host 127.0.0.1` started successfully and `curl -I http://127.0.0.1:5173/` returned HTTP 200.
+- Browser QA against `http://127.0.0.1:5173/?guidedComicLibraryFixture=many` confirmed:
+  - Comic Creator opened to `Cover Table`.
+  - The `many` fixture showed `Blue Meridian` and `Panel Saints`.
+  - Nine visible cover objects had the `guided-library-cover-motion` class.
+  - The first cover had computed 3D transform output and transition properties for `transform`, `border-color`, `box-shadow`, and `filter`.
+  - Browser console error log was empty after the check.
+
+### Outstanding issues
+
+- Full deployed QA remains open.
+- Broad Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, and image-preservation regression remains open.
+- The full animated Living Archive collage remains future work.
+
+### Risks or caveats
+
+- This pass verifies motion classes and DOM/computed style state, not subjective visual sign-off from screenshots or design review.
+- The local dev server was stopped after browser QA.
+
+### Operator follow-up
+
+- Manually hover/focus covers in Series Gallery, Series Focus, and Issue Gallery to approve the feel of the lift/parallax timing.
+- Manually verify reduced-motion mode if OS-level motion settings are part of the acceptance pass.
+
+### Next steps
+
+- Complete deployed QA and the broad regression matrix when ready.
+
+## Guided Comics Library Closure Gates - 2026-05-22
+
+### What changed
+
+- Closed Pass 2 by wiring selected series cover persistence through the existing local Comic Library preferences instead of leaving `seriesCoverProjectIds` as an unused stored field.
+- Updated series grouping so `getGuidedComicLibrarySeriesGroups` accepts persisted series cover selections, exposes `selectedCoverProject` and `coverProject`, falls back safely when a stored project id is stale, and uses the selected issue cover image when available.
+- Added an Issue Gallery control for `Use as series cover`, a disabled `Current series cover` state, a visible `Series cover` badge, and a Series Focus note showing which issue supplies the current cover.
+- Closed the remaining internal Pass 6 partial marker by adding Issue Gallery current-issue and last-updated metadata to issue cover cards.
+- Closed Pass 8 by replacing the static Living Archive wash with a reduced-opacity animated cover collage made from completed issue covers.
+- Preserved reduced-motion behavior by disabling the archive rail animation under `prefers-reduced-motion`.
+- Updated the Comic Library plan so Pass 2, Pass 8, and Pass 9 no longer remain partial because of completed or operator-owned items.
+
+### Files touched
+
+- `src/portals/guided-comic/guidedComicLibraryView.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The selected-cover preference remains local browser state only through `arcs.guidedComicLibraryPreferences.v1`; no Supabase/schema changes were made.
+- The selected-cover UI stays inside the existing Comic Library Issue Gallery and does not add a new portal type, route, workspace mode, or `ComicEditor` dependency.
+- The Living Archive collage uses already-derived completed issue cover URLs and remains decorative/background-only so it does not interfere with cover selection or issue workflow navigation.
+- No Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation surfaces were intentionally changed.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 3 files and 19 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 6 files and 43 tests.
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA against `http://127.0.0.1:5173/?guidedComicLibraryFixture=many` confirmed:
+  - Comic Creator opens to `Cover Table`.
+  - Selecting a Blue Meridian issue as series cover shows `Series cover` and `Current series cover`.
+  - Reloading the app preserves the selected Blue Meridian cover state.
+  - Issue cards show `Current issue` and updated-date metadata.
+  - Turning on `Living Archive` renders `.guided-library-living-archive-collage`.
+  - The archive collage contains 2 animated rails and 12 cover images, with `guidedLibraryArchiveDriftPrimary` computed on the first rail.
+  - Browser console error log was empty after the check.
+
+### Outstanding issues
+
+- None for Pass 2 selected-cover persistence or Pass 8 animated collage implementation.
+- Full deployed QA and broad Advanced Studio/Imageshop/Image Vault/save/load/export regression are operator QA, not remaining implementation blockers for this pass.
+
+### Risks or caveats
+
+- Selected cover persistence is intentionally browser-local. Clearing local storage resets the selected series cover map.
+- If a persisted selected-cover project id no longer exists, the series group safely falls back to the default first issue cover.
+- Browser QA used the dev-only `many` fixture; production saved-project data should follow the same local preference path but still needs operator QA.
+
+### Operator follow-up
+
+- Perform deployed and broad regression QA as the operator acceptance pass.
+
+### Next steps
+
+- None for Pass 2, Pass 8, or Pass 9 closure.
+
 ## How to Use These Docs
 
 | File | Use |

@@ -1712,6 +1712,19 @@ function getGuidedComicPlaceholderCoverBackground(seed: string): string {
   return GUIDED_COMIC_PLACEHOLDER_COVER_BACKGROUNDS[hash % GUIDED_COMIC_PLACEHOLDER_COVER_BACKGROUNDS.length];
 }
 
+function getGuidedComicCoverMotionStyle(restTransform: string, hoverTransform: string): React.CSSProperties {
+  return {
+    '--guided-cover-rest-transform': restTransform,
+    '--guided-cover-hover-transform': hoverTransform,
+  } as React.CSSProperties;
+}
+
+function formatGuidedComicLibraryUpdatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Updated recently';
+  return `Updated ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+}
+
 export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, requestedStepId }: GuidedComicFlowProps) {
   const skipNextDraftSaveRef = useRef(false);
   const pageSectionRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -1917,8 +1930,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     [activeProjectId, projectLibrary],
   );
   const librarySeriesGroups = useMemo(
-    () => getGuidedComicLibrarySeriesGroups(projectLibrary?.projects ?? []),
-    [projectLibrary],
+    () => getGuidedComicLibrarySeriesGroups(projectLibrary?.projects ?? [], libraryPreferences.seriesCoverProjectIds),
+    [libraryPreferences.seriesCoverProjectIds, projectLibrary],
   );
   const selectedSeriesGroup = useMemo(
     () => librarySeriesGroups.find((group) => group.seriesKey === selectedSeriesKey) ?? librarySeriesGroups[0] ?? null,
@@ -1946,7 +1959,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         .filter((project) => project.snapshot.currentStep === 'export')
         .map((project) => getGuidedComicProjectCoverImageUrl(project))
         .filter((coverImageUrl): coverImageUrl is string => Boolean(coverImageUrl))
-        .slice(0, 4),
+        .slice(0, 10),
     [projectLibrary],
   );
   const guidedLayoutSettings = useMemo<GuidedComicLayoutSettings>(
@@ -2733,6 +2746,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     };
     setLibraryPreferences(nextPreferences);
     writeGuidedComicLibraryPreferences(nextPreferences);
+  };
+  const updateLibrarySeriesCoverProject = (seriesKey: string, projectId: string) => {
+    const nextPreferences = {
+      ...libraryPreferences,
+      seriesCoverProjectIds: {
+        ...libraryPreferences.seriesCoverProjectIds,
+        [seriesKey]: projectId,
+      },
+    };
+    setLibraryPreferences(nextPreferences);
+    writeGuidedComicLibraryPreferences(nextPreferences);
+    setProjectLibraryStatus('Series cover updated.');
   };
   const deleteCurrentComic = () => {
     if (!projectLibrary || !currentProject) return;
@@ -5529,17 +5554,30 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         {livingArchiveEnabled ? (
           <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(251,191,36,0.18),transparent_32%),radial-gradient(circle_at_82%_20%,rgba(56,189,248,0.14),transparent_30%),linear-gradient(135deg,rgba(10,20,48,0.96),rgba(7,13,30,0.82))]" />
-            <div className="absolute inset-x-[-6%] top-10 hidden h-56 rotate-[-3deg] items-center justify-center gap-5 opacity-20 blur-[1px] sm:flex">
-              {livingArchiveCoverUrls.map((coverImageUrl, index) => (
-                <img
-                  key={`${coverImageUrl}-${index}`}
-                  src={coverImageUrl}
-                  alt=""
-                  className="h-44 w-28 border border-amber-100/20 object-cover shadow-[0_24px_70px_rgba(0,0,0,0.65)]"
-                  style={{ transform: `translateY(${index % 2 === 0 ? '12px' : '-8px'}) rotate(${index % 2 === 0 ? '-4deg' : '4deg'})` }}
-                />
-              ))}
-            </div>
+            {livingArchiveCoverUrls.length > 0 ? (
+              <div className="guided-library-living-archive-collage absolute inset-x-[-10%] top-4 hidden h-72 sm:block">
+                {[0, 1].map((railIndex) => (
+                  <div
+                    key={railIndex}
+                    className={`guided-library-living-archive-rail guided-library-living-archive-rail--${railIndex + 1}`}
+                  >
+                    {[...livingArchiveCoverUrls, ...livingArchiveCoverUrls].map((coverImageUrl, index) => (
+                      <img
+                        key={`${railIndex}-${coverImageUrl}-${index}`}
+                        src={coverImageUrl}
+                        alt=""
+                        className="guided-library-living-archive-cover"
+                        style={{
+                          transform: `translateY(${index % 2 === 0 ? '14px' : '-10px'}) rotate(${
+                            index % 3 === 0 ? '-5deg' : index % 3 === 1 ? '3deg' : '6deg'
+                          })`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="relative z-10 grid gap-7 p-4 sm:p-5 lg:p-7">
@@ -5608,8 +5646,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       className="group grid w-28 shrink-0 gap-2 text-left outline-none"
                     >
                       <span
-                        className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-hover:shadow-[0_20px_34px_rgba(0,0,0,0.54)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'})` }}
+                        className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-hover:shadow-[0_20px_34px_rgba(0,0,0,0.54)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        style={getGuidedComicCoverMotionStyle(
+                          `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'}) rotateX(1.5deg) translateY(${index % 2 === 0 ? '2px' : '-1px'})`,
+                          `rotateZ(${index % 2 === 0 ? '-0.4deg' : '0.4deg'}) rotateX(0deg) translateY(-7px) translateZ(18px)`,
+                        )}
                       >
                         {coverImageUrl ? (
                           <VaultImageWithFallback
@@ -5651,10 +5692,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     style={{ perspective: '900px' }}
                   >
                     <span
-                      className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                      style={{
-                        transform: `rotateZ(${index % 2 === 0 ? '-1.8deg' : '1.5deg'}) rotateX(2deg) translateY(${index % 3 === 0 ? '6px' : '0'})`,
-                      }}
+                      className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                      style={getGuidedComicCoverMotionStyle(
+                        `rotateZ(${index % 2 === 0 ? '-1.8deg' : '1.5deg'}) rotateX(2deg) translateY(${index % 3 === 0 ? '6px' : '0'})`,
+                        `rotateZ(${index % 2 === 0 ? '-0.7deg' : '0.7deg'}) rotateX(0deg) translateY(-9px) translateZ(22px)`,
+                      )}
                     >
                       {group.coverImageUrl ? (
                         <VaultImageWithFallback
@@ -5690,7 +5732,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="group min-w-0 text-left outline-none"
                   style={{ perspective: '900px' }}
                 >
-                  <span className="guided-library-cover guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_22px_38px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_28px_46px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                  <span
+                    className="guided-library-cover guided-library-cover-motion guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_22px_38px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_28px_46px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                    style={getGuidedComicCoverMotionStyle(
+                      'rotateZ(1.2deg) rotateX(2deg) translateY(4px)',
+                      'rotateZ(0.4deg) rotateX(0deg) translateY(-9px) translateZ(22px)',
+                    )}
+                  >
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#604421]">Blank cover</span>
                     <span className="text-2xl font-black leading-none">Start New Series</span>
                     <span className="inline-flex h-10 w-10 items-center justify-center border border-[#604421]/35 bg-white/30 text-[#604421]">
@@ -5708,8 +5756,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             <div className="guided-library-stage guided-library-stage--series-focus grid gap-6 lg:grid-cols-[minmax(220px,360px)_minmax(0,1fr)]">
               <div className="max-w-[340px]" style={{ perspective: '1000px' }}>
                 <div
-                  className="guided-library-cover relative aspect-[2/3] overflow-hidden border border-amber-200/40 bg-[#10265b] shadow-[0_34px_70px_rgba(0,0,0,0.62)]"
-                  style={{ transform: 'rotateZ(-1deg) rotateX(2deg)' }}
+                  className="guided-library-cover guided-library-cover-motion guided-library-cover-motion--hero relative aspect-[2/3] overflow-hidden border border-amber-200/40 bg-[#10265b] shadow-[0_34px_70px_rgba(0,0,0,0.62)]"
+                  style={getGuidedComicCoverMotionStyle(
+                    'rotateZ(-1deg) rotateX(2deg) translateY(0)',
+                    'rotateZ(-0.35deg) rotateX(0deg) translateY(-6px) translateZ(18px)',
+                  )}
                 >
                   {selectedSeriesGroup.coverImageUrl ? (
                     <VaultImageWithFallback
@@ -5752,6 +5803,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       {selectedSeriesGroup.lastUpdatedProject
                         ? getGuidedComicProjectDisplayName(selectedSeriesGroup.lastUpdatedProject)
                         : 'No issue yet'}
+                    </span>
+                  </p>
+                  <p className="text-sm font-bold text-white/62">
+                    Series cover:{' '}
+                    <span className="text-white/88">
+                      {selectedSeriesGroup.coverProject
+                        ? getGuidedComicProjectDisplayName(selectedSeriesGroup.coverProject)
+                        : 'No cover issue yet'}
                     </span>
                   </p>
                 </div>
@@ -5808,45 +5867,77 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <div className="grid grid-cols-[repeat(auto-fit,minmax(8.25rem,1fr))] gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] lg:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
                 {selectedSeriesGroup.projects.map((project, index) => {
                   const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
+                  const isSeriesCover = selectedSeriesGroup.coverProject?.projectId === project.projectId;
+                  const isCurrentIssue = selectedSeriesGroup.lastUpdatedProject?.projectId === project.projectId;
                   return (
-                    <button
+                    <article
                       key={project.projectId}
-                      type="button"
-                      onClick={() => openLibraryIssueWorkspace(project.projectId)}
-                      className="group min-w-0 text-left outline-none"
-                      style={{ perspective: '800px' }}
+                      className="group min-w-0 text-left"
                     >
-                      <span
-                        className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/30 bg-[#11265b] shadow-[0_20px_34px_rgba(0,0,0,0.44)] transition duration-200 group-hover:border-amber-100/65 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.55)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1.1deg' : '1deg'}) translateY(${index % 4 === 0 ? '5px' : '0'})` }}
+                      <button
+                        type="button"
+                        onClick={() => openLibraryIssueWorkspace(project.projectId)}
+                        className="group/issue block w-full text-left outline-none"
+                        style={{ perspective: '800px' }}
                       >
-                        {coverImageUrl ? (
-                          <VaultImageWithFallback
-                            src={coverImageUrl}
-                            alt={`${getGuidedComicProjectDisplayName(project)} cover`}
-                            frameClassName="h-full w-full overflow-hidden bg-black/35"
-                            imgClassName="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span
-                            className="flex h-full w-full flex-col justify-between p-3"
-                            style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
-                          >
-                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/74">
-                              Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                        <span
+                          className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/30 bg-[#11265b] shadow-[0_20px_34px_rgba(0,0,0,0.44)] transition duration-200 group-hover/issue:border-amber-100/65 group-hover/issue:shadow-[0_25px_42px_rgba(0,0,0,0.55)] group-focus-visible/issue:ring-2 group-focus-visible/issue:ring-amber-200 motion-reduce:transition-none"
+                          style={getGuidedComicCoverMotionStyle(
+                            `rotateZ(${index % 2 === 0 ? '-1.1deg' : '1deg'}) rotateX(1.5deg) translateY(${index % 4 === 0 ? '5px' : '0'})`,
+                            `rotateZ(${index % 2 === 0 ? '-0.3deg' : '0.3deg'}) rotateX(0deg) translateY(-8px) translateZ(20px)`,
+                          )}
+                        >
+                          {coverImageUrl ? (
+                            <VaultImageWithFallback
+                              src={coverImageUrl}
+                              alt={`${getGuidedComicProjectDisplayName(project)} cover`}
+                              frameClassName="h-full w-full overflow-hidden bg-black/35"
+                              imgClassName="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span
+                              className="flex h-full w-full flex-col justify-between p-3"
+                              style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
+                            >
+                              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/74">
+                                Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                              </span>
+                              <span className="text-lg font-black leading-none text-white">
+                                {project.issueTitle || 'Untitled issue'}
+                              </span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/64">
+                                {selectedSeriesGroup.seriesTitle}
+                              </span>
                             </span>
-                            <span className="text-lg font-black leading-none text-white">
-                              {project.issueTitle || 'Untitled issue'}
+                          )}
+                          <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
+                          {isCurrentIssue ? (
+                            <span className="absolute left-2 top-2 z-10 border border-sky-100/45 bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-sky-50 shadow-lg">
+                              Current issue
                             </span>
-                            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/64">
-                              {selectedSeriesGroup.seriesTitle}
+                          ) : null}
+                          {isSeriesCover ? (
+                            <span className="absolute bottom-2 right-2 z-10 border border-amber-200/55 bg-black/55 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-amber-100 shadow-lg">
+                              Series cover
                             </span>
-                          </span>
-                        )}
-                        <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
-                      </span>
-                      <span className="mt-3 block truncate text-sm font-black text-white">{getGuidedComicProjectDisplayName(project)}</span>
-                    </button>
+                          ) : null}
+                        </span>
+                        <span className="mt-3 block truncate text-sm font-black text-white">
+                          {getGuidedComicProjectDisplayName(project)}
+                        </span>
+                        <span className="mt-1 block text-[11px] font-bold text-sky-50/45">
+                          {formatGuidedComicLibraryUpdatedAt(project.updatedAt)}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateLibrarySeriesCoverProject(selectedSeriesGroup.seriesKey, project.projectId)}
+                        disabled={isSeriesCover}
+                        className="mt-2 inline-flex w-full items-center justify-center border border-amber-200/18 bg-black/18 px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/62 transition hover:border-amber-200/45 hover:bg-amber-200/10 hover:text-amber-50 disabled:cursor-default disabled:border-amber-200/35 disabled:bg-amber-200/10 disabled:text-amber-100 motion-reduce:transition-none"
+                      >
+                        {isSeriesCover ? 'Current series cover' : 'Use as series cover'}
+                      </button>
+                    </article>
                   );
                 })}
 
@@ -5856,7 +5947,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="group min-w-0 text-left outline-none"
                   style={{ perspective: '800px' }}
                 >
-                  <span className="guided-library-cover guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_20px_34px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                  <span
+                    className="guided-library-cover guided-library-cover-motion guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_20px_34px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                    style={getGuidedComicCoverMotionStyle(
+                      'rotateZ(1deg) rotateX(1.5deg) translateY(4px)',
+                      'rotateZ(0.25deg) rotateX(0deg) translateY(-8px) translateZ(20px)',
+                    )}
+                  >
                     <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#604421]">Blank issue</span>
                     <span className="text-2xl font-black leading-none">Start New Issue</span>
                     <span className="text-xs font-black text-[#604421]/75">#{getGuidedComicNextIssueNumber(selectedSeriesGroup.projects)}</span>

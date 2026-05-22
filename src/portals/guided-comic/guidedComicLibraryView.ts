@@ -6,6 +6,8 @@ export type GuidedComicSeriesGroup = {
   premise: string;
   projects: GuidedComicProject[];
   defaultCoverProject: GuidedComicProject | null;
+  selectedCoverProject: GuidedComicProject | null;
+  coverProject: GuidedComicProject | null;
   lastUpdatedProject: GuidedComicProject | null;
   coverImageUrl: string | null;
 };
@@ -93,8 +95,9 @@ function getSeriesPremise(defaultCoverProject: GuidedComicProject | null): strin
   return defaultCoverProject.snapshot.storyForm.premise || defaultCoverProject.snapshot.setupForm.premise || '';
 }
 
-function getSeriesCoverImageUrl(projects: GuidedComicProject[]): string | null {
+function getSeriesCoverImageUrl(projects: (GuidedComicProject | null)[]): string | null {
   for (const project of projects) {
+    if (!project) continue;
     const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
     if (coverImageUrl) return coverImageUrl;
   }
@@ -102,7 +105,10 @@ function getSeriesCoverImageUrl(projects: GuidedComicProject[]): string | null {
   return null;
 }
 
-export function getGuidedComicLibrarySeriesGroups(projects: GuidedComicProject[]): GuidedComicSeriesGroup[] {
+export function getGuidedComicLibrarySeriesGroups(
+  projects: GuidedComicProject[],
+  seriesCoverProjectIds: Record<string, string> = {},
+): GuidedComicSeriesGroup[] {
   const groupedProjects = new Map<string, GuidedComicProject[]>();
   const titlesByKey = new Map<string, string>();
 
@@ -124,6 +130,9 @@ export function getGuidedComicLibrarySeriesGroups(projects: GuidedComicProject[]
     .map(([seriesKey, seriesProjects]) => {
       const sortedProjects = [...seriesProjects].sort(compareProjectsForSeries);
       const defaultCoverProject = sortedProjects[0] ?? null;
+      const selectedCoverProject =
+        sortedProjects.find((project) => project.projectId === seriesCoverProjectIds[seriesKey]) ?? null;
+      const coverProject = selectedCoverProject ?? defaultCoverProject;
       const lastUpdatedProject = getLatestUpdatedProject(sortedProjects);
 
       return {
@@ -132,8 +141,12 @@ export function getGuidedComicLibrarySeriesGroups(projects: GuidedComicProject[]
         premise: getSeriesPremise(defaultCoverProject),
         projects: sortedProjects,
         defaultCoverProject,
+        selectedCoverProject,
+        coverProject,
         lastUpdatedProject,
-        coverImageUrl: getSeriesCoverImageUrl(sortedProjects),
+        coverImageUrl: selectedCoverProject
+          ? getGuidedComicProjectCoverImageUrl(selectedCoverProject)
+          : getSeriesCoverImageUrl(sortedProjects),
       };
     })
     .sort((a, b) => {
