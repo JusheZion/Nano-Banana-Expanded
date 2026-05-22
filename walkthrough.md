@@ -4213,6 +4213,135 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Add richer cover transition choreography if the current baseline interaction feels too static.
 - Design and implement the eventual living archive background unlock after the cover library is stable.
 
+## Guided Comics Comic Library Polish and QA Pass - 2026-05-21
+
+### What changed
+
+- Committed and pushed the completed Comic Library Entry baseline to `origin/main` with commit `1012134` (`feat: add guided comics cover library entry`).
+- Added a narrow `.gitignore` rule for `.superpowers/brainstorm/*/state/` so durable brainstorm HTML remains trackable while transient `server.pid` / `server-stopped` files stay out of git.
+- Strengthened the Comic Library tabletop layer with shared CSS for:
+  - the desk/background surface,
+  - sharper comic-cover object treatment,
+  - paper-like blank covers for new series/issues,
+  - baseline stage choreography for Series Gallery, Series Focus, Issue Gallery, and issue workspace return.
+- Reduced remaining app-shell feel in the entry header by replacing the larger preference block with a compact `Library View` control.
+- Improved cover-grid responsiveness by using auto-fitting cover columns for both series and issue galleries.
+- Addressed `ui-critic` findings by:
+  - preventing decorative cover sheen from washing out cover art/text,
+  - removing blur from stage transitions,
+  - strengthening the issue-workspace return strip into clearer library navigation,
+  - improving focus affordance and labeling for the library view selector.
+
+### Checklist status
+
+- [x] Commit current Comic Library Entry baseline.
+- [x] Push baseline to `origin/main`.
+- [x] Preserve durable `.superpowers/brainstorm/*/content/*.html`.
+- [x] Ignore transient `.superpowers/brainstorm/*/state/`.
+- [x] Improve tabletop illusion without adding new assets or schema.
+- [x] Keep blue/gold as lighting and identity rather than making blank covers blue/gold panels.
+- [x] Add baseline cover-state choreography.
+- [x] Respect `prefers-reduced-motion`.
+- [x] Run `ui-critic` review and apply top-impact fixes.
+- [x] Run focused Vitest, lint, and build.
+- [x] Browser QA the main library path locally.
+- [x] Browser QA desktop and tablet widths.
+- [x] Browser QA narrow/mobile re-entry through compact navigation.
+- [~] Empty-library/no-saved-series QA: the blank `Start New Series` cover was observed earlier in the live local session, but the final browser session contained existing saved series.
+- [~] Many-series/many-issues QA: helper coverage and responsive grid behavior were verified structurally; the live browser session only exposed the currently saved local library, not an injected fixture.
+- [~] Missing-cover QA: existing saved series with missing/placeholder covers rendered through the placeholder cover path.
+
+### Files touched
+
+- `.gitignore`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This pass did not add new Guided Comic modes, portal types, routes, Supabase state, or ComicEditor changes.
+- The new motion is CSS-only and scoped to the library entry layer. It uses opacity/scale/translate without blur after review feedback, and disables animation under `prefers-reduced-motion`.
+- The shared `.guided-library-cover` treatment keeps cover content above decorative layers so real art and placeholder text remain readable.
+- The issue workspace return strip is now sticky and more navigational, preserving the user’s ability to return to `All Series` or `Choose Issue` without altering the underlying issue workflow.
+
+### Verification
+
+- Before baseline commit:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts` passed with 27 tests.
+  - `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+  - `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- After polish changes:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts` passed with 27 tests.
+  - `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+  - `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA against `http://127.0.0.1:5173/` confirmed:
+  - Comic Creator opens to the `Cover Table` / Series Gallery.
+  - Series Focus opens from a cover.
+  - `Choose Issue` opens the Issue Gallery.
+  - An existing issue opens into the current Guided issue workflow.
+  - `All Series` returns to the cover library.
+  - `Choose Issue` from the issue workspace returns to the issue cover gallery.
+  - Desktop (`1440x900`) and tablet (`820x900`) viewport checks preserved `Cover Table`, saved series, and blank cover markers.
+  - Narrow viewport (`390x820`) re-entry worked through the compact navigation `More` / `Comic Creator` path.
+  - Browser console error log was empty.
+
+### Outstanding issues
+
+- Screenshot capture in the in-app browser timed out after viewport switching, so final QA evidence was DOM/interaction based rather than screenshot-based.
+
+### Risks or caveats
+
+- The existing issue workflow still shows Story/Prep production surfaces when opening a saved issue whose saved state resolves there; this pass preserved that contract rather than changing issue-mode re-entry behavior.
+- The final live browser QA used the user’s current saved local library. A fuller many-series/many-issues visual fixture pass remains useful once we have a safe browser-storage seeding path or a dedicated test harness.
+
+### Operator follow-up
+
+- Review the live tabletop look visually and decide whether to keep the CSS-light desk for now or replace it with a generated/pre-rendered studio tabletop asset in the next visual pass.
+- Run deployed-site QA after the next deploy, especially for saved libraries with many cover images.
+
+### Next steps
+
+- Add a safe local QA fixture or storybook-style harness for many-series/many-issue gallery states.
+- Continue polishing cover-object choreography once the entry layer is visually approved.
+- Revisit saved-comic issue re-entry behavior separately from the cover-library entry pass.
+
+## Guided Comics Comic Library Task Tracker Sync - 2026-05-21
+
+### What changed
+
+- Updated `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md` so its original pass checklist reflects the completed Comic Library implementation and polish work.
+- Marked completed implementation passes as `[x]`.
+- Marked partially completed/deferred areas as `[~]` instead of treating them as fully complete.
+- Left the Living Archive affordance open because completed-issue counting exists, but the locked/unlocked background UI was intentionally deferred.
+- Left broad deployed QA and Advanced Studio/Imageshop/Image Vault/save/load/export regression open because the last pass verified the Comic Library path locally, not the full product regression matrix.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Verification
+
+- `rg -n "Pass 1: Library Data Foundation|Status note: entry-layout preference helpers|Guided Comics Comic Library Task Tracker Sync" docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md walkthrough.md`
+- `git status --short`
+
+### Outstanding issues
+
+- The formal plan still has open items for Living Archive UI, richer morph/parallax choreography, deployed QA, many-series fixture QA, and broad regression checks.
+
+### Risks or caveats
+
+- This was a documentation/task-tracker sync only; no app behavior changed.
+
+### Operator follow-up
+
+- Use the formal plan and the latest walkthrough checklist together: `[x]` means completed, `[~]` means partially complete with an explicit status note, and `[ ]` remains future work.
+
+### Next steps
+
+- Continue with either a commit for the current polish/docs delta or a dedicated QA fixture pass for many-series/many-issue states.
+
 ## How to Use These Docs
 
 | File | Use |

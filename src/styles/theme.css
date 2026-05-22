@@ -241,6 +241,137 @@ body.theme-wiki {
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
 }
 
+@keyframes guidedLibraryStageIn {
+  from {
+    opacity: 0.88;
+    transform: translateY(10px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes guidedLibraryFocusIn {
+  from {
+    opacity: 0.88;
+    transform: translateY(14px) scale(0.978);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes guidedLibraryPullbackIn {
+  from {
+    opacity: 0.88;
+    transform: translateY(-8px) scale(1.012);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.guided-library-stage {
+  animation: guidedLibraryStageIn 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: center 60%;
+}
+
+.guided-library-stage--series-focus {
+  animation-name: guidedLibraryFocusIn;
+  animation-duration: 440ms;
+}
+
+.guided-library-stage--issue-gallery {
+  animation-name: guidedLibraryPullbackIn;
+  animation-duration: 420ms;
+}
+
+.guided-library-stage--issue-workspace {
+  animation-duration: 300ms;
+}
+
+.guided-library-desk {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(252, 211, 77, 0.22), transparent 25%),
+    radial-gradient(circle at 86% 4%, rgba(56, 189, 248, 0.15), transparent 29%),
+    linear-gradient(145deg, #07132d 0%, #0e2451 48%, #061025 100%);
+}
+
+.guided-library-desk::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: auto -8% -16rem;
+  height: 34rem;
+  background:
+    radial-gradient(ellipse at 50% 6%, rgba(255, 255, 255, 0.16), transparent 28%),
+    linear-gradient(105deg, #6a4e28, #2f2216 48%, #17120f);
+  box-shadow: 0 -32px 90px rgba(0, 0, 0, 0.46);
+  transform: perspective(900px) rotateX(58deg);
+  transform-origin: bottom center;
+}
+
+.guided-library-desk::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: auto 0 0;
+  height: 8rem;
+  background:
+    linear-gradient(90deg, rgba(252, 211, 77, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(252, 211, 77, 0.06) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: 0.4;
+}
+
+.guided-library-cover {
+  position: relative;
+  border-radius: 3px;
+}
+
+.guided-library-cover::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 9%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 18% 8%, rgba(252, 246, 186, 0.18), transparent 24%);
+  opacity: 0.18;
+}
+
+.guided-library-cover > * {
+  position: relative;
+  z-index: 2;
+}
+
+.guided-library-cover::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow:
+    inset 8px 0 0 rgba(255, 255, 255, 0.13),
+    inset -1px 0 0 rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(252, 246, 186, 0.08);
+}
+
+.guided-library-blank-cover {
+  background:
+    linear-gradient(145deg, rgba(250, 241, 217, 0.98), rgba(226, 205, 162, 0.98) 58%, rgba(166, 130, 78, 0.96)),
+    repeating-linear-gradient(0deg, rgba(26, 20, 13, 0.05) 0 1px, transparent 1px 10px);
+}
+
 .guided-panel-cinema-frame {
   position: relative;
 }
@@ -263,6 +394,10 @@ body.theme-wiki {
 
 @media (prefers-reduced-motion: reduce) {
   .guided-focus-surface {
+    animation: none;
+  }
+
+  .guided-library-stage {
     animation: none;
   }
 }

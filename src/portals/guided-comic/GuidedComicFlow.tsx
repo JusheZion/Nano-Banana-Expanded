@@ -5430,9 +5430,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
   const isIssueWorkspaceOpen = libraryStage === 'issue-workspace';
   const comicLibraryReturnStrip = isIssueWorkspaceOpen ? (
-    <section className="flex flex-col gap-3 border border-amber-200/14 bg-black/24 px-4 py-3 shadow-xl sm:flex-row sm:items-center sm:justify-between">
+    <section className="guided-library-stage guided-library-stage--issue-workspace sticky top-0 z-20 flex flex-col gap-3 border border-amber-200/24 bg-[#071022]/90 px-4 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.34)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/58">Comic Library</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/62">
+          Cover Table{selectedSeriesGroup ? ` / ${selectedSeriesGroup.seriesTitle}` : ''}
+        </p>
         <p className="mt-1 truncate text-sm font-black text-white">{currentComicDisplayName}</p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -5458,38 +5460,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const libraryEntryView =
     libraryStage !== 'issue-workspace' ? (
       <section
-        className="relative min-h-[calc(100vh-3rem)] overflow-hidden bg-[#091635] shadow-2xl"
-        style={{
-          background:
-            'radial-gradient(circle at 18% 12%, rgba(252, 211, 77, 0.2), transparent 26%), radial-gradient(circle at 86% 4%, rgba(56, 189, 248, 0.13), transparent 30%), linear-gradient(145deg, #07132d 0%, #0e2451 48%, #061025 100%)',
-        }}
+        className="guided-library-desk relative min-h-[calc(100vh-3rem)] overflow-hidden bg-[#091635] shadow-2xl"
       >
-        <div
-          className="pointer-events-none absolute inset-x-[-8%] bottom-[-16rem] h-[34rem] shadow-[0_-32px_90px_rgba(0,0,0,0.46)]"
-          style={{
-            background:
-              'radial-gradient(ellipse at 50% 6%, rgba(255,255,255,0.16), transparent 28%), linear-gradient(105deg,#5f4825,#302317 48%,#191411)',
-            transform: 'perspective(900px) rotateX(58deg)',
-            transformOrigin: 'bottom center',
-          }}
-          aria-hidden
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(90deg,rgba(252,211,77,0.08)_1px,transparent_1px),linear-gradient(0deg,rgba(252,211,77,0.06)_1px,transparent_1px)] bg-[size:42px_42px] opacity-40" />
-        <div className="relative grid gap-7 p-5 lg:p-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="relative grid gap-7 p-4 sm:p-5 lg:p-7">
+          <div className="flex flex-col gap-4 border-b border-amber-100/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/65">Comic Library</p>
-              <h1 className="mt-2 text-2xl font-black leading-tight text-white md:text-4xl">Series Gallery</h1>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-sky-50/58">
-                Open a saved issue, start the next one, or begin a new series from the tabletop.
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/62">Comic Library</p>
+              <h1 className="mt-1 text-2xl font-black leading-tight text-white md:text-4xl">Cover Table</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50/58">
+                Series covers stay on the desk. Open one, choose an issue, then move into production.
               </p>
             </div>
-            <label className="flex w-full max-w-[13rem] flex-col gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52">
-              Entry layout
+            <label className="flex w-full max-w-[18rem] items-center justify-between gap-3 border border-amber-200/14 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52 shadow-[0_12px_30px_rgba(0,0,0,0.2)] transition focus-within:border-amber-200/65 focus-within:ring-2 focus-within:ring-amber-200/40 motion-reduce:transition-none sm:w-auto">
+              <span>Library View</span>
               <select
                 value={libraryPreferences.entryLayout}
                 onChange={(event) => updateLibraryEntryLayout(event.target.value)}
-                className="border border-amber-200/20 bg-black/35 px-3 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none transition focus:border-amber-200/75 motion-reduce:transition-none"
+                className="min-w-36 border-0 bg-transparent text-right text-xs font-bold normal-case tracking-normal text-white outline-none transition focus:text-amber-50 motion-reduce:transition-none"
               >
                 {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_OPTIONS.map((entryLayout) => (
                   <option key={entryLayout} value={entryLayout}>
@@ -5514,7 +5501,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       className="group grid w-28 shrink-0 gap-2 text-left outline-none"
                     >
                       <span
-                        className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-hover:shadow-[0_20px_34px_rgba(0,0,0,0.54)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
                         style={{ transform: `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'})` }}
                       >
                         {coverImageUrl ? (
@@ -5526,7 +5513,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           />
                         ) : (
                           <span
-                            className="flex h-full flex-col justify-between p-2"
+                            className="flex h-full w-full flex-col justify-between p-2"
                             style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
                           >
                             <span className="text-[9px] font-black uppercase tracking-[0.14em] text-white/74">
@@ -5546,8 +5533,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 
           {libraryStage === 'series-gallery' ? (
-            <div className="grid gap-6">
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7">
+            <div className="guided-library-stage guided-library-stage--series-gallery grid gap-6">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] lg:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
                 {librarySeriesGroups.map((group, index) => (
                   <button
                     key={group.seriesKey}
@@ -5557,9 +5544,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     style={{ perspective: '900px' }}
                   >
                     <span
-                      className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                      className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
                       style={{
-                        transform: `rotateZ(${index % 2 === 0 ? '-1.5deg' : '1.3deg'}) rotateX(2deg)`,
+                        transform: `rotateZ(${index % 2 === 0 ? '-1.8deg' : '1.5deg'}) rotateX(2deg) translateY(${index % 3 === 0 ? '6px' : '0'})`,
                       }}
                     >
                       {group.coverImageUrl ? (
@@ -5569,9 +5556,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           frameClassName="h-full w-full overflow-hidden bg-black/35"
                           imgClassName="h-full w-full object-cover"
                         />
-                      ) : (
+                        ) : (
                         <span
-                          className="flex h-full flex-col justify-between p-3"
+                          className="flex h-full w-full flex-col justify-between p-3"
                           style={{ background: getGuidedComicPlaceholderCoverBackground(group.seriesKey) }}
                         >
                           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/76">Series</span>
@@ -5596,10 +5583,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="group min-w-0 text-left outline-none"
                   style={{ perspective: '900px' }}
                 >
-                  <span className="relative flex aspect-[2/3] flex-col justify-between overflow-hidden rounded-[3px] border border-dashed border-amber-200/45 bg-[linear-gradient(145deg,rgba(252,211,77,0.2),rgba(8,22,52,0.92)_46%,rgba(252,211,77,0.11))] p-3 shadow-[0_22px_38px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_28px_46px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/75">Blank cover</span>
-                    <span className="text-2xl font-black leading-none text-white">Start New Series</span>
-                    <span className="inline-flex h-10 w-10 items-center justify-center border border-amber-100/35 bg-black/25 text-amber-50">
+                  <span className="guided-library-cover guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_22px_38px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_28px_46px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#604421]">Blank cover</span>
+                    <span className="text-2xl font-black leading-none">Start New Series</span>
+                    <span className="inline-flex h-10 w-10 items-center justify-center border border-[#604421]/35 bg-white/30 text-[#604421]">
                       <FilePlus className="h-5 w-5" aria-hidden />
                     </span>
                   </span>
@@ -5611,10 +5598,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 
           {libraryStage === 'series-focus' && selectedSeriesGroup ? (
-            <div className="grid gap-6 lg:grid-cols-[minmax(220px,340px)_minmax(0,1fr)]">
+            <div className="guided-library-stage guided-library-stage--series-focus grid gap-6 lg:grid-cols-[minmax(220px,360px)_minmax(0,1fr)]">
               <div className="max-w-[340px]" style={{ perspective: '1000px' }}>
                 <div
-                  className="relative aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/40 bg-[#10265b] shadow-[0_34px_70px_rgba(0,0,0,0.62)]"
+                  className="guided-library-cover relative aspect-[2/3] overflow-hidden border border-amber-200/40 bg-[#10265b] shadow-[0_34px_70px_rgba(0,0,0,0.62)]"
                   style={{ transform: 'rotateZ(-1deg) rotateX(2deg)' }}
                 >
                   {selectedSeriesGroup.coverImageUrl ? (
@@ -5626,7 +5613,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     />
                   ) : (
                     <div
-                      className="flex h-full flex-col justify-between p-5"
+                      className="flex h-full w-full flex-col justify-between p-5"
                       style={{ background: getGuidedComicPlaceholderCoverBackground(selectedSeriesGroup.seriesKey) }}
                     >
                       <p className="text-xs font-black uppercase tracking-[0.22em] text-white/76">Selected series</p>
@@ -5696,7 +5683,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           ) : null}
 
           {libraryStage === 'issue-gallery' && selectedSeriesGroup ? (
-            <div className="grid gap-5">
+            <div className="guided-library-stage guided-library-stage--issue-gallery grid gap-5">
               <div className="flex flex-col gap-3 border-b border-amber-200/12 pb-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/58">Issue Gallery</p>
@@ -5711,7 +5698,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-6 2xl:grid-cols-8">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(8.25rem,1fr))] gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] lg:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
                 {selectedSeriesGroup.projects.map((project, index) => {
                   const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
                   return (
@@ -5723,8 +5710,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       style={{ perspective: '800px' }}
                     >
                       <span
-                        className="relative block aspect-[2/3] overflow-hidden rounded-[3px] border border-amber-200/30 bg-[#11265b] shadow-[0_20px_34px_rgba(0,0,0,0.44)] transition duration-200 group-hover:border-amber-100/65 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.55)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'})` }}
+                        className="guided-library-cover relative block aspect-[2/3] overflow-hidden border border-amber-200/30 bg-[#11265b] shadow-[0_20px_34px_rgba(0,0,0,0.44)] transition duration-200 group-hover:border-amber-100/65 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.55)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        style={{ transform: `rotateZ(${index % 2 === 0 ? '-1.1deg' : '1deg'}) translateY(${index % 4 === 0 ? '5px' : '0'})` }}
                       >
                         {coverImageUrl ? (
                           <VaultImageWithFallback
@@ -5735,7 +5722,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           />
                         ) : (
                           <span
-                            className="flex h-full flex-col justify-between p-3"
+                            className="flex h-full w-full flex-col justify-between p-3"
                             style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
                           >
                             <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/74">
@@ -5762,10 +5749,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="group min-w-0 text-left outline-none"
                   style={{ perspective: '800px' }}
                 >
-                  <span className="relative flex aspect-[2/3] flex-col justify-between overflow-hidden rounded-[3px] border border-dashed border-amber-200/45 bg-[linear-gradient(145deg,rgba(252,211,77,0.18),rgba(8,22,52,0.92)_48%,rgba(252,211,77,0.1))] p-3 shadow-[0_20px_34px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
-                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/74">Blank issue</span>
-                    <span className="text-2xl font-black leading-none text-white">Start New Issue</span>
-                    <span className="text-xs font-black text-white/60">#{getGuidedComicNextIssueNumber(selectedSeriesGroup.projects)}</span>
+                  <span className="guided-library-cover guided-library-blank-cover relative flex aspect-[2/3] flex-col justify-between overflow-hidden border border-dashed border-amber-200/45 p-3 text-[#24180e] shadow-[0_20px_34px_rgba(0,0,0,0.4)] transition duration-200 group-hover:border-amber-200/75 group-hover:shadow-[0_25px_42px_rgba(0,0,0,0.52)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none">
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#604421]">Blank issue</span>
+                    <span className="text-2xl font-black leading-none">Start New Issue</span>
+                    <span className="text-xs font-black text-[#604421]/75">#{getGuidedComicNextIssueNumber(selectedSeriesGroup.projects)}</span>
                   </span>
                   <span className="mt-3 block text-sm font-black text-white">Start New Issue</span>
                 </button>

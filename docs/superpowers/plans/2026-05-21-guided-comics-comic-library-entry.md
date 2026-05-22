@@ -14,15 +14,15 @@
 
 Use this checklist in status reports after each implementation pass so the user can tell what changed even when a pass is mostly structural.
 
-- [ ] **Pass 1: Library Data Foundation** - Saved comics can be grouped into series, one-shots still have series containers, and cover candidates can be derived.
-- [ ] **Pass 2: Local Preferences** - Portal entry layout, selected series cover, and locked/unlocked background preference persist locally.
-- [ ] **Pass 3: Entry Gate Wiring** - Comic Portal can stop at the library entry layer before opening the issue workflow.
-- [ ] **Pass 4: Series Cover Gallery** - Default opening screen shows comic-cover objects on a blue/gold studio tabletop, including a blank new-series cover.
-- [ ] **Pass 5: Series Focus** - Clicking a series brings the cover forward and shows title, premise, current/last issue, and issue-gallery access.
-- [ ] **Pass 6: Issue Cover Gallery** - Selected series shows issue covers plus a blank new-issue cover.
-- [ ] **Pass 7: Issue Workflow Handoff** - Selecting an issue enters the existing Issue Lightbox, Page Production, and Panel Focus flow without breaking context.
-- [ ] **Pass 8: Motion And Reduced Motion** - Cover transitions use morph/parallax-style choreography and respect `prefers-reduced-motion`.
-- [ ] **Pass 9: QA And Regression** - Browser QA, focused Vitest, lint, and build pass; existing Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, and image preservation are preserved.
+- [x] **Pass 1: Library Data Foundation** - Saved comics can be grouped into series, one-shots still have series containers, and cover candidates can be derived.
+- [~] **Pass 2: Local Preferences** - Portal entry layout persists locally. Selected-cover persistence and locked/unlocked background preference remain deferred.
+- [x] **Pass 3: Entry Gate Wiring** - Comic Portal can stop at the library entry layer before opening the issue workflow.
+- [x] **Pass 4: Series Cover Gallery** - Default opening screen shows comic-cover objects on a blue/gold studio tabletop, including a blank new-series cover.
+- [x] **Pass 5: Series Focus** - Clicking a series brings the cover forward and shows title, premise, current/last issue, and issue-gallery access.
+- [x] **Pass 6: Issue Cover Gallery** - Selected series shows issue covers plus a blank new-issue cover.
+- [x] **Pass 7: Issue Workflow Handoff** - Selecting an issue enters the existing issue workflow without breaking context.
+- [~] **Pass 8: Motion And Reduced Motion** - Baseline cover-state choreography and `prefers-reduced-motion` support are implemented. Fuller morph/parallax and Living Archive unlock remain deferred.
+- [~] **Pass 9: QA And Regression** - Focused Vitest, lint, build, and local browser QA passed. Full deployed QA and broad Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
 
 ## Files And Responsibilities
 
@@ -59,7 +59,7 @@ Use this checklist in status reports after each implementation pass so the user 
 - Create: `src/portals/guided-comic/guidedComicLibraryView.ts`
 - Create: `src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts`
 
-- [ ] **Step 1: Write failing tests for series grouping**
+- [x] **Step 1: Write failing tests for series grouping**
 
 Create `guidedComicLibraryView.test.ts` with cases that expect:
 
@@ -174,7 +174,7 @@ describe('guided comic library view', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run:
 
@@ -184,7 +184,7 @@ npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.
 
 Expected: fail because `guidedComicLibraryView.ts` does not exist.
 
-- [ ] **Step 3: Implement minimal library view helpers**
+- [x] **Step 3: Implement minimal library view helpers**
 
 Create `guidedComicLibraryView.ts` with exported helpers:
 
@@ -276,7 +276,7 @@ export function getGuidedComicLibrarySeriesGroups(projects: GuidedComicProject[]
 }
 ```
 
-- [ ] **Step 4: Run tests and confirm pass**
+- [x] **Step 4: Run tests and confirm pass**
 
 Run:
 
@@ -292,7 +292,7 @@ Expected: pass.
 - Create: `src/portals/guided-comic/guidedComicLibraryPreferences.ts`
 - Create: `src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts`
 
-- [ ] **Step 1: Write failing preference tests**
+- [x] **Step 1: Write failing preference tests**
 
 Test default layout, malformed payloads, and normalization:
 
@@ -336,7 +336,9 @@ describe('guided comic library preferences', () => {
 });
 ```
 
-- [ ] **Step 2: Implement preference helpers**
+- [~] **Step 2: Implement preference helpers**
+
+Status note: entry-layout preference helpers are implemented and tested. Selected cover and Living Archive background preferences remain deferred.
 
 Create `guidedComicLibraryPreferences.ts`:
 
@@ -404,7 +406,7 @@ export function writeGuidedComicLibraryPreferences(preferences: GuidedComicLibra
 }
 ```
 
-- [ ] **Step 3: Run preference tests**
+- [x] **Step 3: Run preference tests**
 
 Run:
 
@@ -419,7 +421,7 @@ Expected: pass.
 **Files:**
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 
-- [ ] **Step 1: Add local entry-stage state without changing workspace modes**
+- [x] **Step 1: Add local entry-stage state without changing workspace modes**
 
 Add a component-local type near other local state types:
 
@@ -443,7 +445,7 @@ The existing `workspaceMode` values must remain only:
 'story-prep' | 'issue-lightbox' | 'page-production' | 'panel-focus'
 ```
 
-- [ ] **Step 2: Derive series groups from the existing project library**
+- [x] **Step 2: Derive series groups from the existing project library**
 
 Use:
 
@@ -456,7 +458,7 @@ const selectedComicSeries =
   comicSeriesGroups.find((group) => group.seriesKey === selectedSeriesKey) ?? comicSeriesGroups[0] ?? null;
 ```
 
-- [ ] **Step 3: Gate rendering before the existing issue workflow**
+- [x] **Step 3: Gate rendering before the existing issue workflow**
 
 Before returning the current issue workflow, compute:
 
@@ -466,7 +468,7 @@ const showComicLibraryEntry = libraryStage !== 'issue-workspace';
 
 Render the new entry surfaces when `showComicLibraryEntry` is true. Keep the existing issue workflow as the path when it is false.
 
-- [ ] **Step 4: Browser smoke check**
+- [x] **Step 4: Browser smoke check**
 
 Expected visible result:
 
@@ -479,7 +481,7 @@ Expected visible result:
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 - Optional modify: `src/styles/theme.css`
 
-- [ ] **Step 1: Add tabletop gallery surface**
+- [x] **Step 1: Add tabletop gallery surface**
 
 Create a local render block or small internal component in `GuidedComicFlow.tsx` named conceptually:
 
@@ -499,7 +501,7 @@ The production visual rules:
 - Use object shadows and slight transforms to imply covers on a desk.
 - Do not wrap each series in a large rounded dashboard card.
 
-- [ ] **Step 2: Add blank new-series cover action**
+- [x] **Step 2: Add blank new-series cover action**
 
 The blank cover should call the existing `startNewComic` flow, then leave the user in Story/Prep or a future series setup state:
 
@@ -511,7 +513,7 @@ The blank cover should call the existing `startNewComic` flow, then leave the us
 
 Copy should be on/inside the blank cover object, not in a separate card footer.
 
-- [ ] **Step 3: Add preference selector**
+- [x] **Step 3: Add preference selector**
 
 Add a compact control for:
 
@@ -521,7 +523,7 @@ Add a compact control for:
 
 Changing the preference must update local preferences through `writeGuidedComicLibraryPreferences`.
 
-- [ ] **Step 4: Browser QA**
+- [x] **Step 4: Browser QA**
 
 Expected visible result:
 
@@ -535,7 +537,7 @@ Expected visible result:
 **Files:**
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 
-- [ ] **Step 1: Add selected series behavior**
+- [x] **Step 1: Add selected series behavior**
 
 Clicking a series cover should:
 
@@ -544,7 +546,7 @@ setSelectedSeriesKey(group.seriesKey);
 setLibraryStage('series-focus');
 ```
 
-- [ ] **Step 2: Render Series Focus**
+- [x] **Step 2: Render Series Focus**
 
 Series Focus should show:
 
@@ -557,11 +559,11 @@ Series Focus should show:
 - Secondary action: `Choose Issue`.
 - Secondary action: `All Series`.
 
-- [ ] **Step 3: Preserve cover-object visual language**
+- [x] **Step 3: Preserve cover-object visual language**
 
 The dominant series cover should remain a cover object, not a modal card. Side frames can use denser flat panels, but the cover is the hero.
 
-- [ ] **Step 4: Browser QA**
+- [x] **Step 4: Browser QA**
 
 Expected visible result:
 
@@ -574,7 +576,7 @@ Expected visible result:
 **Files:**
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 
-- [ ] **Step 1: Add issue gallery stage**
+- [x] **Step 1: Add issue gallery stage**
 
 The `Choose Issue` action should:
 
@@ -582,7 +584,9 @@ The `Choose Issue` action should:
 setLibraryStage('issue-gallery');
 ```
 
-- [ ] **Step 2: Render issue covers for selected series**
+- [~] **Step 2: Render issue covers for selected series**
+
+Status note: issue covers render with issue number/title and cover imagery or placeholders. Last-updated/current-issue indicators remain available for a later metadata polish pass.
 
 Use `selectedComicSeries.projects` as the issue list. Each issue cover should show:
 
@@ -591,7 +595,7 @@ Use `selectedComicSeries.projects` as the issue list. Each issue cover should sh
 - Last updated signal.
 - Current/last issue indicator if relevant.
 
-- [ ] **Step 3: Add blank new-issue cover**
+- [x] **Step 3: Add blank new-issue cover**
 
 For first implementation, blank new issue may duplicate/start from the current series title:
 
@@ -609,7 +613,7 @@ setLibraryStage('issue-workspace');
 setWorkspaceMode('story-prep');
 ```
 
-- [ ] **Step 4: Browser QA**
+- [x] **Step 4: Browser QA**
 
 Expected visible result:
 
@@ -623,7 +627,7 @@ Expected visible result:
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 - Test: existing focused Guided Comics tests
 
-- [ ] **Step 1: Open selected issue through existing project switching**
+- [x] **Step 1: Open selected issue through existing project switching**
 
 Create a wrapper around existing `switchCurrentComic(projectId)`:
 
@@ -636,7 +640,7 @@ const openComicIssueFromLibrary = (projectId: string) => {
 
 Do not duplicate snapshot application logic.
 
-- [ ] **Step 2: Preserve existing reopen behavior after issue selection**
+- [x] **Step 2: Preserve existing reopen behavior after issue selection**
 
 When an issue opens, keep current saved-comic reopen behavior:
 
@@ -646,7 +650,7 @@ When an issue opens, keep current saved-comic reopen behavior:
 
 The new library entry preference controls portal entry, not issue-level workspace mode.
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -662,7 +666,7 @@ Expected: pass.
 - Modify: `src/portals/guided-comic/GuidedComicFlow.tsx`
 - Optional modify: `src/styles/theme.css`
 
-- [ ] **Step 1: Add motion classes for cover movement**
+- [x] **Step 1: Add motion classes for cover movement**
 
 Use short transitions for:
 
@@ -678,6 +682,8 @@ className="transition duration-500 motion-reduce:transition-none"
 
 - [ ] **Step 2: Add locked Living Archive affordance**
 
+Status note: completed-issue counting exists in helpers, but the locked/unlocked Living Archive UI was intentionally deferred.
+
 Show the background option only when the helper determines at least four completed issues exist. If fewer than four exist, show a quiet locked state:
 
 ```tsx
@@ -686,7 +692,9 @@ const livingArchiveUnlocked = completedIssueCount >= 4;
 
 Do not implement the full animated collage until enough panel-image selection logic is safe.
 
-- [ ] **Step 3: Browser QA**
+- [~] **Step 3: Browser QA**
+
+Status note: baseline stage choreography and reduced-motion support were browser-reviewed. Living Archive QA remains open because that affordance is not implemented yet.
 
 Expected visible result:
 
@@ -699,7 +707,9 @@ Expected visible result:
 **Files:**
 - Modify: `walkthrough.md`
 
-- [ ] **Step 1: Run focused tests**
+- [~] **Step 1: Run focused tests**
+
+Status note: the focused suite requested by the final pass was run and passed. This exact older five-file command, including `guidedComicProjectLibrary.test.ts`, was not rerun during the polish pass.
 
 Run:
 
@@ -709,7 +719,7 @@ npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.
 
 Expected: pass.
 
-- [ ] **Step 2: Run lint**
+- [x] **Step 2: Run lint**
 
 Run:
 
@@ -719,7 +729,7 @@ npm run lint
 
 Expected: 0 errors. Existing warnings may remain if unrelated.
 
-- [ ] **Step 3: Run build**
+- [x] **Step 3: Run build**
 
 Run:
 
@@ -729,7 +739,9 @@ npm run build
 
 Expected: pass. Existing large chunk warning may remain if unrelated.
 
-- [ ] **Step 4: Browser QA full flow**
+- [~] **Step 4: Browser QA full flow**
+
+Status note: Comic Library entry flow, issue handoff, return to all series, choose-issue return, desktop/tablet/narrow re-entry, and console errors were checked locally. Full deployed QA plus Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
 
 Check:
 
@@ -744,7 +756,7 @@ Check:
 - Imageshop/Image Vault entry points still exist.
 - Save/load/export surfaces are not removed.
 
-- [ ] **Step 5: Append walkthrough entry**
+- [x] **Step 5: Append walkthrough entry**
 
 Append a section to `walkthrough.md` listing:
 
