@@ -104,6 +104,10 @@ import {
   type GuidedComicLibraryPreferences,
 } from '@/portals/guided-comic/guidedComicLibraryPreferences';
 import {
+  getGuidedComicLibraryQaFixture,
+  readGuidedComicLibraryQaFixtureName,
+} from '@/portals/guided-comic/guidedComicLibraryQaFixtures';
+import {
   applyGuidedComicAiResult,
   buildGuidedComicAiContext,
   getGuidedComicPacingChecks,
@@ -1717,7 +1721,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
   const requestLayoutHandoff = useGuidedComicLayoutBridge((s) => s.requestLayoutHandoff);
   const requestWriterIssueOpen = useWriterWorkshopBridge((s) => s.requestIssueOpen);
+  const [libraryQaFixtureName] = useState(() => readGuidedComicLibraryQaFixtureName());
   const [restoredProjectState] = useState(() => {
+    const qaFixtureLibrary = getGuidedComicLibraryQaFixture(libraryQaFixtureName);
+    const qaFixtureProject =
+      qaFixtureLibrary?.projects.find((project) => project.projectId === qaFixtureLibrary.activeProjectId) ??
+      qaFixtureLibrary?.projects[0] ??
+      null;
+
+    if (libraryQaFixtureName) {
+      return {
+        draft: qaFixtureProject ? snapshotToGuidedComicDraft(qaFixtureProject.snapshot, qaFixtureProject.updatedAt) : null,
+        library: qaFixtureLibrary,
+        activeProjectId: qaFixtureProject?.projectId ?? null,
+        migratedDraft: false,
+      };
+    }
+
     const library = readGuidedComicProjectLibrary();
     const activeProject =
       library?.projects.find((project) => project.projectId === library.activeProjectId) ?? library?.projects[0] ?? null;
@@ -1752,7 +1772,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [projectLibrary, setProjectLibrary] = useState<GuidedComicProjectLibrary | null>(() => restoredProjectState.library);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => restoredProjectState.activeProjectId);
   const [projectLibraryStatus, setProjectLibraryStatus] = useState<string | null>(() =>
-    restoredProjectState.migratedDraft ? 'Recovered current draft into Comic Library.' : null,
+    libraryQaFixtureName
+      ? `Loaded local Comic Library QA fixture: ${libraryQaFixtureName}.`
+      : restoredProjectState.migratedDraft
+        ? 'Recovered current draft into Comic Library.'
+        : null,
   );
   const [libraryPreferences, setLibraryPreferences] = useState<GuidedComicLibraryPreferences>(() =>
     readGuidedComicLibraryPreferences(),
@@ -1997,9 +2021,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   );
 
   useEffect(() => {
+    if (libraryQaFixtureName) return;
     if (!projectLibrary) return;
     writeGuidedComicProjectLibrary(projectLibrary);
-  }, [projectLibrary]);
+  }, [libraryQaFixtureName, projectLibrary]);
 
   useEffect(() => {
     if (librarySeriesGroups.length === 0) {
@@ -2679,7 +2704,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const nextProject = nextLibrary.projects.find((project) => project.projectId === nextLibrary.activeProjectId) ?? null;
     setProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
     setActiveProjectId(nextProject?.projectId ?? null);
-    writeGuidedComicProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
+    if (!libraryQaFixtureName) writeGuidedComicProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
     applyGuidedComicProjectSnapshot(nextProject?.snapshot ?? buildEmptyGuidedComicProjectSnapshot(), nextProject?.updatedAt ?? null);
     setProjectLibraryStatus(nextProject ? `Deleted comic. Loaded ${getGuidedComicProjectDisplayName(nextProject)}.` : 'Deleted comic.');
   };
@@ -5470,6 +5495,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50/58">
                 Series covers stay on the desk. Open one, choose an issue, then move into production.
               </p>
+              {libraryQaFixtureName ? (
+                <p className="mt-2 max-w-2xl text-xs font-bold text-amber-100/64">
+                  Local QA fixture: {libraryQaFixtureName}. Real saved comics are not overwritten.
+                </p>
+              ) : null}
             </div>
             <label className="flex w-full max-w-[18rem] items-center justify-between gap-3 border border-amber-200/14 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52 shadow-[0_12px_30px_rgba(0,0,0,0.2)] transition focus-within:border-amber-200/65 focus-within:ring-2 focus-within:ring-amber-200/40 motion-reduce:transition-none sm:w-auto">
               <span>Library View</span>

@@ -22,7 +22,7 @@ Use this checklist in status reports after each implementation pass so the user 
 - [x] **Pass 6: Issue Cover Gallery** - Selected series shows issue covers plus a blank new-issue cover.
 - [x] **Pass 7: Issue Workflow Handoff** - Selecting an issue enters the existing issue workflow without breaking context.
 - [~] **Pass 8: Motion And Reduced Motion** - Baseline cover-state choreography and `prefers-reduced-motion` support are implemented. Fuller morph/parallax and Living Archive unlock remain deferred.
-- [~] **Pass 9: QA And Regression** - Focused Vitest, lint, build, and local browser QA passed. Full deployed QA and broad Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
+- [~] **Pass 9: QA And Regression** - Focused Vitest, lint, build, local browser QA, and dev-only fixture QA passed. Full deployed QA and broad Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
 
 ## Files And Responsibilities
 
@@ -741,7 +741,7 @@ Expected: pass. Existing large chunk warning may remain if unrelated.
 
 - [~] **Step 4: Browser QA full flow**
 
-Status note: Comic Library entry flow, issue handoff, return to all series, choose-issue return, desktop/tablet/narrow re-entry, and console errors were checked locally. Full deployed QA plus Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
+Status note: Comic Library entry flow, issue handoff, return to all series, choose-issue return, desktop/tablet/narrow re-entry, console errors, and dev-only fixtures for `many`, `missing-covers`, and `empty` library states were checked locally. Full deployed QA plus Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
 
 Check:
 

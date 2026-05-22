@@ -4342,6 +4342,75 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with either a commit for the current polish/docs delta or a dedicated QA fixture pass for many-series/many-issue states.
 
+## Guided Comics Comic Library QA Fixture Pass - 2026-05-21
+
+### What changed
+
+- Added a dev-only Comic Library QA fixture path for repeatable local browser checks without overwriting real saved comics.
+- Supported query-string fixtures:
+  - `?guidedComicLibraryFixture=many`
+  - `?guidedComicLibraryFixture=missing-covers`
+  - `?guidedComicLibraryFixture=empty`
+- Added synthetic library generation for:
+  - many series,
+  - many issues in one series,
+  - completed issues,
+  - missing cover images,
+  - empty library / blank-cover start state.
+- Added a persistent in-app QA note when a fixture is active: `Local QA fixture: ... Real saved comics are not overwritten.`
+- Skipped Comic Library localStorage writes while a QA fixture is active so fixture browsing does not replace the user’s real saved library.
+- Corrected the fixture page-card shape to match the existing Guided Comic flow expectations (`panelCount`, `keyCharacters`, `keyLocation`, `expanded`, and `panelBeats`) after browser QA exposed a runtime blank-screen failure from an under-shaped fixture.
+- Updated the formal Comic Library plan status note so fixture QA is no longer listed as merely structural.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLibraryQaFixtures.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts`
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The fixture path is guarded by `import.meta.env.DEV` and query-string detection, so it is a local QA tool rather than a production feature.
+- `many` exercises eight series, a twelve-issue series, generated cover data URLs, missing covers, and export-stage completed issue counts.
+- `missing-covers` exercises placeholder cover rendering by omitting cover images for every synthetic issue.
+- `empty` returns no synthetic projects so the blank `Start New Series` cover can be checked without clearing real browser storage.
+- The fixture uses the existing project-library shape and existing issue-opening path; it does not introduce a new portal type, route, schema, Supabase state, or ComicEditor behavior.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 31 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA against `http://127.0.0.1:5173/` confirmed:
+  - `?guidedComicLibraryFixture=many` shows the QA banner, `Blue Meridian`, `Panel Saints`, `12 issues`, and `Start New Series`.
+  - `?guidedComicLibraryFixture=missing-covers` shows the QA banner, placeholder series covers, and `Start New Series` without image-cover markers.
+  - `?guidedComicLibraryFixture=empty` shows the QA banner and `Start New Series` without synthetic series.
+  - Browser console error log was empty after fixture checks.
+
+### Outstanding issues
+
+- Full deployed QA remains open.
+- Broad Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, and image-preservation regression remains open.
+- Richer morph/parallax choreography and Living Archive UI remain future work.
+
+### Risks or caveats
+
+- The QA fixtures are development-only and query-string driven; they are meant for local verification, not user-facing production workflows.
+- Fixture browsing is intentionally in-memory. Saving while a fixture is active changes the in-memory fixture session but does not persist the fixture library to the real saved Comic Library.
+
+### Operator follow-up
+
+- Use `http://127.0.0.1:5173/?guidedComicLibraryFixture=many` for dense gallery QA.
+- Use `http://127.0.0.1:5173/?guidedComicLibraryFixture=missing-covers` for placeholder-cover QA.
+- Use `http://127.0.0.1:5173/?guidedComicLibraryFixture=empty` for blank-library QA.
+
+### Next steps
+
+- Run the broad product regression matrix when ready.
+- Continue with richer cover transition choreography or Living Archive UI once the library entry layer is visually approved.
+
 ## How to Use These Docs
 
 | File | Use |
