@@ -4411,6 +4411,67 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Run the broad product regression matrix when ready.
 - Continue with richer cover transition choreography or Living Archive UI once the library entry layer is visually approved.
 
+## Guided Comics Living Archive Unlock Affordance - 2026-05-22
+
+### What changed
+
+- Added the Comic Library Living Archive affordance inside the existing Cover Table header.
+- Added a quiet locked state below four completed export-stage issues: `Living Archive locked - 0/4 complete`.
+- Added an unlocked `Living Archive` background toggle once four or more completed issues exist.
+- Added a restrained static archive background wash when the toggle is enabled, using completed issue cover candidates at low opacity instead of a full animated collage.
+- Added a pure helper and regression coverage for the four-completed-issue unlock threshold.
+- Updated the dev-only `many` QA fixture so it has at least four export-stage issues and can exercise the unlocked archive path.
+- Updated the formal Comic Library plan to mark the Living Archive affordance as implemented while keeping richer morph/parallax and full collage work deferred.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLibraryView.ts`
+- `src/portals/guided-comic/guidedComicLibraryQaFixtures.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts`
+- `docs/superpowers/plans/2026-05-21-guided-comics-comic-library-entry.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The pass stays inside the existing Guided Comics `comic` portal and existing Comic Library entry surface.
+- The unlock uses `getGuidedComicCompletedIssueCount` / `isGuidedComicLivingArchiveUnlocked`; completed issues are still defined as saved projects whose snapshot `currentStep` is `export`.
+- `livingArchiveBackgroundEnabled` was already part of the local preferences shape; this pass wires it into the UI and keeps it disabled if the library drops below the unlock threshold.
+- The background is intentionally decorative and low-contrast. It does not change project data, route state, Supabase schema, ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 17 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts` passed with 32 tests.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA was attempted through the in-app browser, but localhost navigation was blocked by the browser client with `net::ERR_BLOCKED_BY_CLIENT`, so locked/unlocked archive states still need manual or refreshed-browser QA.
+
+### Outstanding issues
+
+- Manual/browser QA for the Living Archive locked and unlocked visual states remains open because the in-app browser could not navigate to local dev URLs in this session.
+- Full deployed QA remains open.
+- Broad Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, and image-preservation regression remains open.
+- Richer morph/parallax choreography and the full animated Living Archive collage remain future work.
+
+### Risks or caveats
+
+- The archive background is a static, low-opacity wash only; it is not the final animated collage.
+- The unlocked state depends on export-stage saved issues. Drafts that have not reached `export` do not count.
+- The dev-only `many` fixture now intentionally creates four completed issues in its first synthetic series to support unlock QA.
+
+### Operator follow-up
+
+- Re-run local browser QA after refreshing the browser bridge:
+  - `http://127.0.0.1:5173/?guidedComicLibraryFixture=empty` should show the locked state.
+  - `http://127.0.0.1:5173/?guidedComicLibraryFixture=many` should show the unlocked `Living Archive` toggle and switch to `Background on` when clicked.
+
+### Next steps
+
+- Complete the manual/browser QA for the Living Archive states.
+- Continue with richer cover transition choreography only after the archive affordance is visually accepted.
+
 ## How to Use These Docs
 
 | File | Use |

@@ -93,8 +93,11 @@ import {
   type GuidedComicProjectSnapshot,
 } from '@/portals/guided-comic/guidedComicProjectLibrary';
 import {
+  GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT,
+  getGuidedComicCompletedIssueCount,
   getGuidedComicLibrarySeriesGroups,
   getGuidedComicProjectCoverImageUrl,
+  isGuidedComicLivingArchiveUnlocked,
 } from '@/portals/guided-comic/guidedComicLibraryView';
 import {
   normalizeGuidedComicLibraryEntryLayout,
@@ -1928,6 +1931,24 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         .slice(0, 4),
     [projectLibrary],
   );
+  const completedLibraryIssueCount = useMemo(
+    () => getGuidedComicCompletedIssueCount(projectLibrary?.projects ?? []),
+    [projectLibrary],
+  );
+  const livingArchiveUnlocked = useMemo(
+    () => isGuidedComicLivingArchiveUnlocked(projectLibrary?.projects ?? []),
+    [projectLibrary],
+  );
+  const livingArchiveEnabled = livingArchiveUnlocked && libraryPreferences.livingArchiveBackgroundEnabled;
+  const livingArchiveCoverUrls = useMemo(
+    () =>
+      (projectLibrary?.projects ?? [])
+        .filter((project) => project.snapshot.currentStep === 'export')
+        .map((project) => getGuidedComicProjectCoverImageUrl(project))
+        .filter((coverImageUrl): coverImageUrl is string => Boolean(coverImageUrl))
+        .slice(0, 4),
+    [projectLibrary],
+  );
   const guidedLayoutSettings = useMemo<GuidedComicLayoutSettings>(
     () => ({
       marginMode: setupForm.layoutMarginMode,
@@ -2036,6 +2057,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (selectedSeriesKey && librarySeriesGroups.some((group) => group.seriesKey === selectedSeriesKey)) return;
     setSelectedSeriesKey(librarySeriesGroups[0]?.seriesKey ?? null);
   }, [librarySeriesGroups, libraryStage, selectedSeriesKey]);
+
+  useEffect(() => {
+    if (livingArchiveUnlocked || !libraryPreferences.livingArchiveBackgroundEnabled) return;
+    const nextPreferences = {
+      ...libraryPreferences,
+      livingArchiveBackgroundEnabled: false,
+    };
+    setLibraryPreferences(nextPreferences);
+    writeGuidedComicLibraryPreferences(nextPreferences);
+  }, [libraryPreferences, livingArchiveUnlocked]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2694,6 +2725,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     }
 
     setLibraryStage('series-gallery');
+  };
+  const updateLivingArchiveBackgroundEnabled = (enabled: boolean) => {
+    const nextPreferences = {
+      ...libraryPreferences,
+      livingArchiveBackgroundEnabled: livingArchiveUnlocked ? enabled : false,
+    };
+    setLibraryPreferences(nextPreferences);
+    writeGuidedComicLibraryPreferences(nextPreferences);
   };
   const deleteCurrentComic = () => {
     if (!projectLibrary || !currentProject) return;
@@ -5487,7 +5526,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       <section
         className="guided-library-desk relative min-h-[calc(100vh-3rem)] overflow-hidden bg-[#091635] shadow-2xl"
       >
-        <div className="relative grid gap-7 p-4 sm:p-5 lg:p-7">
+        {livingArchiveEnabled ? (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(251,191,36,0.18),transparent_32%),radial-gradient(circle_at_82%_20%,rgba(56,189,248,0.14),transparent_30%),linear-gradient(135deg,rgba(10,20,48,0.96),rgba(7,13,30,0.82))]" />
+            <div className="absolute inset-x-[-6%] top-10 hidden h-56 rotate-[-3deg] items-center justify-center gap-5 opacity-20 blur-[1px] sm:flex">
+              {livingArchiveCoverUrls.map((coverImageUrl, index) => (
+                <img
+                  key={`${coverImageUrl}-${index}`}
+                  src={coverImageUrl}
+                  alt=""
+                  className="h-44 w-28 border border-amber-100/20 object-cover shadow-[0_24px_70px_rgba(0,0,0,0.65)]"
+                  style={{ transform: `translateY(${index % 2 === 0 ? '12px' : '-8px'}) rotate(${index % 2 === 0 ? '-4deg' : '4deg'})` }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="relative z-10 grid gap-7 p-4 sm:p-5 lg:p-7">
           <div className="flex flex-col gap-4 border-b border-amber-100/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/62">Comic Library</p>
@@ -5501,20 +5556,42 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </p>
               ) : null}
             </div>
-            <label className="flex w-full max-w-[18rem] items-center justify-between gap-3 border border-amber-200/14 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52 shadow-[0_12px_30px_rgba(0,0,0,0.2)] transition focus-within:border-amber-200/65 focus-within:ring-2 focus-within:ring-amber-200/40 motion-reduce:transition-none sm:w-auto">
-              <span>Library View</span>
-              <select
-                value={libraryPreferences.entryLayout}
-                onChange={(event) => updateLibraryEntryLayout(event.target.value)}
-                className="min-w-36 border-0 bg-transparent text-right text-xs font-bold normal-case tracking-normal text-white outline-none transition focus:text-amber-50 motion-reduce:transition-none"
-              >
-                {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_OPTIONS.map((entryLayout) => (
-                  <option key={entryLayout} value={entryLayout}>
-                    {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_LABELS[entryLayout]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[18rem]">
+              <label className="flex w-full items-center justify-between gap-3 border border-amber-200/14 bg-black/20 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/52 shadow-[0_12px_30px_rgba(0,0,0,0.2)] transition focus-within:border-amber-200/65 focus-within:ring-2 focus-within:ring-amber-200/40 motion-reduce:transition-none">
+                <span>Library View</span>
+                <select
+                  value={libraryPreferences.entryLayout}
+                  onChange={(event) => updateLibraryEntryLayout(event.target.value)}
+                  className="min-w-36 border-0 bg-transparent text-right text-xs font-bold normal-case tracking-normal text-white outline-none transition focus:text-amber-50 motion-reduce:transition-none"
+                >
+                  {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_OPTIONS.map((entryLayout) => (
+                    <option key={entryLayout} value={entryLayout}>
+                      {GUIDED_COMIC_LIBRARY_ENTRY_LAYOUT_LABELS[entryLayout]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {livingArchiveUnlocked ? (
+                <button
+                  type="button"
+                  aria-pressed={livingArchiveEnabled}
+                  onClick={() => updateLivingArchiveBackgroundEnabled(!livingArchiveEnabled)}
+                  className="flex items-center justify-between gap-3 border border-sky-200/18 bg-sky-200/[0.08] px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.16em] text-sky-50/64 shadow-[0_12px_30px_rgba(0,0,0,0.16)] transition hover:border-amber-200/45 hover:bg-amber-200/10 focus:outline-none focus:ring-2 focus:ring-amber-200/50 motion-reduce:transition-none"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Sparkles className="h-3.5 w-3.5 text-amber-200/80" aria-hidden />
+                    Living Archive
+                  </span>
+                  <span className="text-xs normal-case tracking-normal text-white">
+                    {livingArchiveEnabled ? 'Background on' : 'Background off'}
+                  </span>
+                </button>
+              ) : (
+                <div className="border border-white/10 bg-black/16 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/38">
+                  Living Archive locked - {completedLibraryIssueCount}/{GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT} complete
+                </div>
+              )}
+            </div>
           </div>
 
           {libraryPreferences.entryLayout === 'hybrid-shelf' && recentLibraryProjects.length > 0 ? (

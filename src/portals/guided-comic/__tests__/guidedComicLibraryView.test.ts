@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT,
   getGuidedComicCompletedIssueCount,
   getGuidedComicLibrarySeriesGroups,
   getGuidedComicProjectCoverImageUrl,
   getGuidedComicSeriesKey,
   getGuidedComicSeriesTitle,
+  isGuidedComicLivingArchiveUnlocked,
 } from '@/portals/guided-comic/guidedComicLibraryView';
 import {
   createGuidedComicProject,
@@ -180,5 +182,21 @@ describe('guided comic library view helpers', () => {
     });
 
     expect(getGuidedComicCompletedIssueCount([pagesProject, exportProject])).toBe(1);
+  });
+
+  it('unlocks the living archive only after enough completed issues', () => {
+    const completedProjects = Array.from({ length: GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT }, (_, index) =>
+      makeProject({
+        projectId: `export-${index + 1}`,
+        createdAt: `2026-05-01T1${index}:00:00.000Z`,
+        updatedAt: `2026-05-01T1${index}:00:00.000Z`,
+        currentStep: 'export',
+      }),
+    );
+
+    expect(isGuidedComicLivingArchiveUnlocked(completedProjects.slice(0, GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT - 1))).toBe(
+      false,
+    );
+    expect(isGuidedComicLivingArchiveUnlocked(completedProjects)).toBe(true);
   });
 });

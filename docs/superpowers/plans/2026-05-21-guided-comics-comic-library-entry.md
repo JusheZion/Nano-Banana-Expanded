@@ -15,13 +15,13 @@
 Use this checklist in status reports after each implementation pass so the user can tell what changed even when a pass is mostly structural.
 
 - [x] **Pass 1: Library Data Foundation** - Saved comics can be grouped into series, one-shots still have series containers, and cover candidates can be derived.
-- [~] **Pass 2: Local Preferences** - Portal entry layout persists locally. Selected-cover persistence and locked/unlocked background preference remain deferred.
+- [~] **Pass 2: Local Preferences** - Portal entry layout and Living Archive background preference persist locally. Selected-cover persistence remains deferred.
 - [x] **Pass 3: Entry Gate Wiring** - Comic Portal can stop at the library entry layer before opening the issue workflow.
 - [x] **Pass 4: Series Cover Gallery** - Default opening screen shows comic-cover objects on a blue/gold studio tabletop, including a blank new-series cover.
 - [x] **Pass 5: Series Focus** - Clicking a series brings the cover forward and shows title, premise, current/last issue, and issue-gallery access.
 - [x] **Pass 6: Issue Cover Gallery** - Selected series shows issue covers plus a blank new-issue cover.
 - [x] **Pass 7: Issue Workflow Handoff** - Selecting an issue enters the existing issue workflow without breaking context.
-- [~] **Pass 8: Motion And Reduced Motion** - Baseline cover-state choreography and `prefers-reduced-motion` support are implemented. Fuller morph/parallax and Living Archive unlock remain deferred.
+- [~] **Pass 8: Motion And Reduced Motion** - Baseline cover-state choreography, `prefers-reduced-motion` support, and Living Archive locked/unlocked affordance are implemented. Fuller morph/parallax remains deferred.
 - [~] **Pass 9: QA And Regression** - Focused Vitest, lint, build, local browser QA, and dev-only fixture QA passed. Full deployed QA and broad Advanced Studio/Imageshop/Image Vault/save/load/export regression remain open.
 
 ## Files And Responsibilities
@@ -680,9 +680,9 @@ Respect existing reduced-motion patterns:
 className="transition duration-500 motion-reduce:transition-none"
 ```
 
-- [ ] **Step 2: Add locked Living Archive affordance**
+- [x] **Step 2: Add locked Living Archive affordance**
 
-Status note: completed-issue counting exists in helpers, but the locked/unlocked Living Archive UI was intentionally deferred.
+Status note: completed-issue counting now drives a quiet locked state below four completed issues and an unlocked background toggle at four or more completed issues.
 
 Show the background option only when the helper determines at least four completed issues exist. If fewer than four exist, show a quiet locked state:
 
@@ -690,11 +690,11 @@ Show the background option only when the helper determines at least four complet
 const livingArchiveUnlocked = completedIssueCount >= 4;
 ```
 
-Do not implement the full animated collage until enough panel-image selection logic is safe.
+The full animated collage remains deferred; the implemented background is a static, low-opacity cover wash that preserves cover legibility.
 
 - [~] **Step 3: Browser QA**
 
-Status note: baseline stage choreography and reduced-motion support were browser-reviewed. Living Archive QA remains open because that affordance is not implemented yet.
+Status note: baseline stage choreography and reduced-motion support were browser-reviewed. Living Archive browser QA should confirm the locked state and unlocked toggle with dev fixtures.
 
 Expected visible result:
 

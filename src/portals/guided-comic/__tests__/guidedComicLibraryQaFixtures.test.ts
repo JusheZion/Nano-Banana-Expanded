@@ -23,7 +23,7 @@ describe('guided comic library QA fixtures', () => {
 
     expect(fixture).not.toBeNull();
     expect(fixture?.projects.length).toBeGreaterThan(20);
-    expect(getGuidedComicCompletedIssueCount(fixture?.projects ?? [])).toBeGreaterThan(0);
+    expect(getGuidedComicCompletedIssueCount(fixture?.projects ?? [])).toBeGreaterThanOrEqual(4);
 
     const groups = getGuidedComicLibrarySeriesGroups(fixture?.projects ?? []);
     expect(groups.length).toBeGreaterThanOrEqual(8);

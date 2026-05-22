@@ -10,6 +10,8 @@ export type GuidedComicSeriesGroup = {
   coverImageUrl: string | null;
 };
 
+export const GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT = 4;
+
 function normalizeSeriesTitle(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 }
@@ -56,6 +58,10 @@ export function getGuidedComicProjectCoverImageUrl(project: GuidedComicProject):
 
 export function getGuidedComicCompletedIssueCount(projects: GuidedComicProject[]): number {
   return projects.filter((project) => project.snapshot.currentStep === 'export').length;
+}
+
+export function isGuidedComicLivingArchiveUnlocked(projects: GuidedComicProject[]): boolean {
+  return getGuidedComicCompletedIssueCount(projects) >= GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT;
 }
 
 function getSeriesTitleSource(project: GuidedComicProject): string {

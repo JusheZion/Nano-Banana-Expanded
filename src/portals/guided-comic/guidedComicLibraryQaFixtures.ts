@@ -139,7 +139,7 @@ function makeQaProject(options: {
     issueTitle: options.issueTitle,
     issueNumber: options.issueIndex,
     coverImageUrl: options.coverImageUrl,
-    currentStep: options.issueIndex % 5 === 0 ? 'export' : 'layout',
+    currentStep: options.seriesIndex === 0 && options.issueIndex % 3 === 0 ? 'export' : 'layout',
     pageCount: options.issueIndex % 2 === 0 ? 5 : 3,
   });
 
