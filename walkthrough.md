@@ -4592,6 +4592,236 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - None for Pass 2, Pass 8, or Pass 9 closure.
 
+## Guided Comics Issue Workspace Return Nav Condensing - 2026-05-23
+
+### What changed
+
+- Condensed the Comic Library return strip shown above the Guided Comics issue workspace.
+- Replaced the tall bordered/shadowed `section` with a slim sticky breadcrumb `nav`.
+- Kept the essential escape hatches visible: `All Series` and `Choose Issue`.
+- Reduced the visual weight so the Page Production workspace remains the dominant surface.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The change is presentation-only inside the existing Guided Comics Comic Library return navigation.
+- No route, portal type, Supabase/schema, ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation behavior was changed.
+
+### Verification
+
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA at `http://localhost:5174/` confirmed:
+  - Opening Comic Creator and `Open Current Issue` shows the compact `Comic Library return navigation`.
+  - The return nav is a `NAV` element with no box shadow, only a bottom divider, and approximately 41px height in the tested viewport.
+  - `All Series` and `Choose Issue` remain available.
+  - Page Production remains visible below the condensed nav.
+  - Browser console error log was empty.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The nav remains visible rather than fully hidden so users can still recover back to the library without losing workspace context.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- None.
+
+## Guided Comics Page Context Data Gating - 2026-05-23
+
+### What changed
+
+- Updated the Page Production `Page context` block so it only appears when there is real page context to show.
+- Stopped treating the starter panel beats (`Panel 1: Establishing shot`, `Panel 2: Character moment`, etc.) as real page context.
+- Removed empty/filler context cards from the starter state:
+  - `No dialogue seeds staged yet.`
+  - `Character, location, and NPC references are ready for this page.`
+- Kept real context visible when custom panel beats, actual dialogue seeds, missing references, or requested/ready references exist.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The change is scoped to the existing Guided Comics Page Production workspace.
+- No route, portal type, Supabase/schema, ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation behavior was changed.
+- The prior compact Comic Library return nav change remains preserved in the same working tree.
+
+### Verification
+
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA at `http://localhost:5174/` confirmed:
+  - Page Production remained visible.
+  - The starter/default `Page context` block no longer rendered.
+  - `Panel 1: Establishing shot` was not visible as page-context text.
+  - `No dialogue seeds staged yet.` was not visible.
+  - The prior fake ready reference message was not visible.
+  - Browser console error log was empty.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The Page Context section is intentionally hidden for starter/default pages. It will reappear only once the page has meaningful context data.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- None.
+
+## Guided Comics Page Context Source And Backcloth Refinement - 2026-05-23
+
+### What changed
+
+- Refined the Page Production `Page context` area so any rendered context now explains where it comes from and where it is used.
+- Changed context cards into flatter source rows instead of large rounded/pill-like cards.
+- Added source labels for:
+  - `Beats`: made in Pages or Panel Focus, used by layout and Advanced Studio handoff.
+  - `Dialogue`: made from dialogue seeds, used by balloon prep and Panel Focus.
+  - `References`: made in Visual Prep, used by Imageshop and page handoff.
+- Made the production backcloth more visible behind the comic page with a flatter stage surface and a quiet `Page backcloth` label.
+- Reduced the comic page frame radius from the larger pill-like treatment to a smaller `rounded-md` frame.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The previous data-gating remains in place: default starter beats still do not count as meaningful context.
+- The change is scoped to the existing Guided Comics Page Production workspace.
+- No route, portal type, Supabase/schema, ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation behavior was changed.
+- The prior compact Comic Library return nav and Page Context data-gating changes remain preserved in the same working tree.
+
+### Verification
+
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA at `http://localhost:5174/` confirmed:
+  - Page Production remained visible.
+  - The default starter beat summary string was not visible in Page Context.
+  - Source copy for real context was present when context rendered.
+  - `Page backcloth` was visible.
+  - `.guided-comic-stage` existed with `0px` border radius.
+  - `All Series` and `Choose Issue` remained available.
+  - Browser console error log was empty.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The source labels are intentionally concise to keep the production workspace dense.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- None.
+
+## Guided Comics Production Workspace Cleanup - 2026-05-23
+
+### What changed
+
+- Reworked the Guided Comics Page Production workspace into a canvas-first page workspace.
+- Removed the vertical page-number rail from Page Production and replaced it with compact previous/next controls plus a page selector.
+- Replaced the large pill breadcrumb chrome in Page Production and Panel Focus with compact text breadcrumbs.
+- Removed the duplicate bottom panel status cards from Page Production.
+- Added direct page-level panel actions:
+  - Select a panel without leaving the page workspace.
+  - Send the selected panel to Imageshop.
+  - Upload panel art from the page workspace.
+  - Assign selected panel art from the Vault through the shared panel-art vault request path.
+- Exposed page-level layout controls in the production workbar:
+  - Layout preset selector.
+  - Make selected panel bigger.
+  - Make selected panel wider.
+  - Apply safe margins.
+- Added visible panel resize handles for the selected page-production panel, backed by the existing layout geometry editing helpers.
+- Added a concise info note explaining that Writers' Workshop imports populate page/panel beats while Visual Prep references travel with the selected panel into Imageshop.
+- Reworked Panel Focus into a portrait-first canvas with bottom workbar controls instead of the previous right-side vertical inspector.
+- Removed the Panel Focus thumbnail/number strip.
+- Kept panel beat editing, dialogue seed editing, Imageshop, Vault, Upload, Paste, panel review status, return-to-page, and pull-back-to-issue actions available from the new bottom controls.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The implementation stays inside the existing Guided Comics flow and existing `comic` portal surface.
+- No new portal type was added.
+- No Supabase/schema changes were made.
+- `ComicEditor` was not refactored or modified.
+- Advanced Studio, Imageshop, Image Vault, save/load, export, geometry helpers, shapes, balloons, and image preservation were not intentionally changed.
+- The page-level Imageshop helper now accepts a target panel so page-workspace panel actions can hand off the correct panel without relying on a stale selected-panel render.
+- The page-level Vault helper now accepts a target panel while preserving the existing selected-panel behavior for Panel Focus.
+- The selected panel uses the existing `startLayoutPanelEdit` / resize geometry path, so resized production panels continue feeding the existing layout geometry state and Advanced Studio handoff.
+- The earlier uncommitted compact Comic Library return nav, Page Context data gating, source labeling, and backcloth refinements remain preserved.
+
+### Verification
+
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA at `http://localhost:5174/` confirmed:
+  - Page Production shows compact `ISSUE / PAGE 1 / PANEL 1` breadcrumb text instead of the large pill chrome.
+  - The vertical `Pages` rail is gone.
+  - Duplicate `NEEDS ART` panel status cards are gone.
+  - Page Production still shows the page backcloth and panel frames.
+  - Page Production exposes `Make selected bigger`, `Make selected wider`, `Apply safe margins`, `Focus panel`, `Imageshop`, `Vault`, and `Upload`.
+  - The Writers' Workshop / Visual Prep info note is visible in the production workbar.
+  - Panel Focus uses a portrait `2 / 3` frame.
+  - Panel Focus no longer has the right inspector `aside`.
+  - Panel Focus no longer has the numbered thumbnail strip.
+  - Panel Focus exposes visible Imageshop, Vault, Upload, and Paste actions under the canvas.
+  - Panel Focus still exposes the panel beat editor and dialogue seed action.
+  - Browser console error log was empty.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The page-production canvas is intentionally smaller than the prior oversized version so the bottom workbar is reachable in the first viewport.
+- The selected panel resize handles are compact and use the existing geometry behavior; precision editing remains better suited to the dedicated Layout step and Advanced Studio.
+
+### Operator follow-up
+
+- Review the smaller page-production canvas scale in a wide desktop viewport and decide whether it should become slightly larger once the bottom workbar is further condensed.
+
+### Next steps
+
+- Continue polishing the production workbar if the next QA pass asks for more density or different grouping.
+
 ## How to Use These Docs
 
 | File | Use |
