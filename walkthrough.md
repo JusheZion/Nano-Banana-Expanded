@@ -5012,6 +5012,9 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
   - Stage bottom landed at 995px in a 998px viewport, so the page-level workspace no longer spills below the visible screen at that tested size.
   - `PAGE LAYOUT` and `PANEL ACTIONS` rails were visible.
   - Browser console check returned no errors.
+- Commit `3f578fdd0b09afd713e5f68f15bf6e67a5b68435` was pushed to `main`.
+- Cloudflare API check after the push still reported the latest Worker deployment as `2026-05-24T15:38:08Z`, before this commit, so the live site had not updated yet.
+- Manual `npx wrangler deploy --config ./wrangler.jsonc` was attempted after approval but failed because `CLOUDFLARE_API_TOKEN` is not set in the local environment.
 
 ### Outstanding issues
 
@@ -5019,12 +5022,14 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 ### Risks or caveats
 
-- The live Cloudflare site will not show this change until the new commit is pushed and Cloudflare Workers Builds finishes deploying it.
+- The live Cloudflare site will not show this change until Cloudflare Workers Builds deploys the pushed commit or an operator runs Wrangler with a real `CLOUDFLARE_API_TOKEN`.
 - Smaller responsive widths still stack the rails around the page canvas rather than forcing the three-column desktop arrangement.
 
 ### Operator follow-up
 
-- After push, wait for Cloudflare Workers Builds to deploy `main`, then hard-refresh the live Worker if the older page-level view is still cached in the browser.
+- In Cloudflare, rerun the connected build for the latest `main` commit or confirm why the Git push did not trigger a new build.
+- If using local deploy instead, export a real `CLOUDFLARE_API_TOKEN` in the shell and rerun `npx wrangler deploy --config ./wrangler.jsonc`.
+- After deploy, hard-refresh the live Worker if the older page-level view is still cached in the browser.
 
 ### Next steps
 
