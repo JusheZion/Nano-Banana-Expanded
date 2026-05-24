@@ -39,6 +39,7 @@ export type GuidedComicProjectSnapshot = {
   propPrep?: Record<string, unknown>;
   panelArtStatuses: Record<string, unknown>;
   panelArtImages: Record<string, unknown>;
+  issueCoverImage?: unknown;
   pageLayoutTemplates: Record<number, unknown>;
   pageLayoutIntents?: Record<number, unknown>;
   pageLayoutGeometry?: Record<number, unknown[]>;
@@ -57,7 +58,7 @@ export type GuidedComicProjectSnapshot = {
   currentStep: GuidedComicProjectStepId;
   selectedPanelId?: string | null;
   activePageNumber?: number | null;
-  workspaceMode?: 'issue-lightbox' | 'story-prep' | 'page-production' | 'panel-focus';
+  workspaceMode?: 'issue-lightbox' | 'issue-cover' | 'story-prep' | 'page-production' | 'panel-focus';
 };
 
 export type GuidedComicProject = {

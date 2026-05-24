@@ -171,7 +171,7 @@ export function getGuidedPageNavigatorButtonLabel(pageNumber: number): string {
   return String(pageNumber);
 }
 
-export type GuidedComicWorkspaceMode = 'issue-lightbox' | 'story-prep' | 'page-production' | 'panel-focus';
+export type GuidedComicWorkspaceMode = 'issue-lightbox' | 'issue-cover' | 'story-prep' | 'page-production' | 'panel-focus';
 
 type GuidedComicLibraryStage = 'series-gallery' | 'series-focus' | 'issue-gallery' | 'issue-workspace';
 
@@ -207,13 +207,18 @@ export function getGuidedComicWorkspaceMode(
 ): GuidedComicWorkspaceMode {
   if (pageCount <= 0) return 'story-prep';
   if (requestedMode === 'issue-lightbox') return 'issue-lightbox';
+  if (requestedMode === 'issue-cover') return 'issue-cover';
   if (productionPanelFocusOpen || requestedMode === 'panel-focus') return 'panel-focus';
   if (requestedMode === 'page-production') return 'page-production';
   return STORY_PREP_STEP_IDS.has(stepId) ? 'story-prep' : 'page-production';
 }
 
 export function normalizeGuidedComicWorkspaceMode(value: unknown): GuidedComicWorkspaceMode | null {
-  return value === 'issue-lightbox' || value === 'story-prep' || value === 'page-production' || value === 'panel-focus'
+  return value === 'issue-lightbox' ||
+    value === 'issue-cover' ||
+    value === 'story-prep' ||
+    value === 'page-production' ||
+    value === 'panel-focus'
     ? value
     : null;
 }
@@ -462,6 +467,17 @@ type ActiveLayoutEdit = {
   startGeometry: GuidedComicPanelGeometry[];
 };
 
+type ActiveImageFramingDrag = {
+  pageNumber: number;
+  panelId: string;
+  startClientX: number;
+  startClientY: number;
+  frameWidth: number;
+  frameHeight: number;
+  startFocusX: number;
+  startFocusY: number;
+};
+
 type GuidedComicDraftState = {
   version: 1;
   savedAt: string;
@@ -489,6 +505,7 @@ type GuidedComicDraftState = {
   writerDialogueSeeds: Record<number, GuidedComicBridgeDialogueSeed>;
   editableDialogueSeeds: Record<number, GuidedComicEditableDialogueSeed[]>;
   promotedBalloonSeeds: Record<number, GuidedComicBalloonSeed[]>;
+  issueCoverImage?: PanelArtImageState | null;
 };
 
 const GUIDED_COMIC_DRAFT_STORAGE_KEY = 'arcs.guidedComicFlowDraft.v1';
@@ -1237,6 +1254,7 @@ function readGuidedComicDraft(): GuidedComicDraftState | null {
       selectedPanelId: typeof parsed.selectedPanelId === 'string' ? parsed.selectedPanelId : null,
       panelArtStatuses: parsed.panelArtStatuses ?? {},
       panelArtImages: parsed.panelArtImages ?? {},
+      issueCoverImage: parsed.issueCoverImage ?? null,
       pageLayoutTemplates: parsed.pageLayoutTemplates ?? {},
       pageLayoutIntents: parsed.pageLayoutIntents ?? {},
       pageLayoutGeometry: parsed.pageLayoutGeometry ?? {},
@@ -1274,6 +1292,7 @@ function draftToGuidedComicProjectSnapshot(draft: GuidedComicDraftState): Guided
     propPrep: draft.propPrep,
     panelArtStatuses: draft.panelArtStatuses,
     panelArtImages: draft.panelArtImages,
+    issueCoverImage: draft.issueCoverImage ?? null,
     pageLayoutTemplates: draft.pageLayoutTemplates,
     pageLayoutIntents: draft.pageLayoutIntents,
     pageLayoutGeometry: draft.pageLayoutGeometry,
@@ -1313,6 +1332,7 @@ function snapshotToGuidedComicDraft(snapshot: GuidedComicProjectSnapshot, savedA
     selectedPanelId: typeof snapshot.selectedPanelId === 'string' ? snapshot.selectedPanelId : null,
     panelArtStatuses: snapshot.panelArtStatuses as Record<string, PanelArtStatus>,
     panelArtImages: snapshot.panelArtImages as Record<string, PanelArtImageState>,
+    issueCoverImage: snapshot.issueCoverImage as PanelArtImageState | null | undefined,
     pageLayoutTemplates: snapshot.pageLayoutTemplates as Record<number, LayoutTemplateId>,
     pageLayoutIntents: (snapshot.pageLayoutIntents ?? {}) as Record<number, GuidedComicLayoutIntent>,
     pageLayoutGeometry: (snapshot.pageLayoutGeometry ?? {}) as Record<number, GuidedComicPanelGeometry[]>,
@@ -1646,6 +1666,7 @@ function buildEmptyGuidedComicProjectSnapshot(): GuidedComicProjectSnapshot {
     npcReferences: {},
     panelArtStatuses: {},
     panelArtImages: {},
+    issueCoverImage: null,
     pageLayoutTemplates: {},
     pageLayoutIntents: {},
     pageLayoutGeometry: {},
@@ -1866,7 +1887,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [panelArtImages, setPanelArtImages] = useState<Record<string, PanelArtImageState>>(
     () => restoredDraft?.panelArtImages ?? {},
   );
+  const [issueCoverImage, setIssueCoverImage] = useState<PanelArtImageState | null>(
+    () => restoredDraft?.issueCoverImage ?? null,
+  );
   const [panelPasteMessage, setPanelPasteMessage] = useState<string | null>(null);
+  const [coverPasteMessage, setCoverPasteMessage] = useState<string | null>(null);
   const [pageLayoutTemplates, setPageLayoutTemplates] = useState<Record<number, LayoutTemplateId>>(
     () => restoredDraft?.pageLayoutTemplates ?? {},
   );
@@ -1897,6 +1922,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [writerBridgeError, setWriterBridgeError] = useState<string | null>(null);
   const [layoutDisclosureMode, setLayoutDisclosureMode] = useState<GuidedLayoutDisclosureMode>('simple');
   const [activeLayoutEdit, setActiveLayoutEdit] = useState<ActiveLayoutEdit | null>(null);
+  const [activeImageFramingDrag, setActiveImageFramingDrag] = useState<ActiveImageFramingDrag | null>(null);
   const [pageNavigatorVisible, setPageNavigatorVisible] = useState(true);
   const [, setProductionPanelFocusOpen] = useState(() => workspaceMode === 'panel-focus');
   const [primaryActionMessage, setPrimaryActionMessage] = useState<string | null>(null);
@@ -1914,6 +1940,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     GuidedComicAssistResult,
     'pacingNotes' | 'referenceNeeds' | 'dialogueNotes' | 'narrationNotes'
   > | null>(null);
+  const coverUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const coverPasteTargetRef = useRef<HTMLDivElement | null>(null);
   const currentProject = useMemo(
     () => projectLibrary?.projects.find((project) => project.projectId === activeProjectId) ?? null,
     [activeProjectId, projectLibrary],
@@ -1973,6 +2001,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       propPrep,
       panelArtStatuses,
       panelArtImages,
+      issueCoverImage,
       pageLayoutTemplates,
       pageLayoutIntents,
       pageLayoutGeometry,
@@ -1992,6 +2021,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       characterPrep,
       characterReferences,
       editableDialogueSeeds,
+      issueCoverImage,
       locationPrep,
       locationReferences,
       npcReferences,
@@ -2112,6 +2142,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setSelectedPanelId(draft.selectedPanelId);
     setPanelArtStatuses(draft.panelArtStatuses);
     setPanelArtImages(draft.panelArtImages);
+    setIssueCoverImage(draft.issueCoverImage ?? null);
+    setCoverPasteMessage(null);
     setPageLayoutTemplates(draft.pageLayoutTemplates);
     setPageLayoutIntents(draft.pageLayoutIntents);
     setPageLayoutGeometry(draft.pageLayoutGeometry);
@@ -2194,6 +2226,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       selectedPanelId,
       panelArtStatuses,
       panelArtImages,
+      issueCoverImage,
       pageLayoutTemplates,
       pageLayoutIntents,
       pageLayoutGeometry,
@@ -2215,6 +2248,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     characterPrep,
     characterReferences,
     editableDialogueSeeds,
+    issueCoverImage,
     locationPrep,
     locationReferences,
     npcReferences,
@@ -2249,6 +2283,21 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         source: 'vault',
         sourceLabel: selection.sourceLabel,
       });
+      return;
+    }
+
+    if (selection.type === 'cover') {
+      setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
+      setWorkspaceMode('issue-cover');
+      setProductionPanelFocusOpen(false);
+      setIssueCoverImage({
+        imageId: selection.referenceId,
+        imageUrl: selection.imageUrl,
+        source: 'vault',
+        sourceLabel: selection.sourceLabel,
+        returnedAt: new Date().toISOString(),
+      });
+      setCoverPasteMessage(`Assigned ${selection.displayName || selection.sourceLabel} as the issue cover.`);
       return;
     }
 
@@ -2687,7 +2736,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setLibraryStage('issue-gallery');
   };
   const openLibraryIssueWorkspace = (projectId: string) => {
-    if (switchCurrentComic(projectId)) setLibraryStage('issue-workspace');
+    if (switchCurrentComic(projectId)) {
+      setWorkspaceMode('issue-cover');
+      setProductionPanelFocusOpen(false);
+      setLibraryStage('issue-workspace');
+    }
   };
   const startLibraryNewSeries = () => {
     if (!startNewComic()) return;
@@ -3376,9 +3429,30 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     };
     reader.readAsDataURL(file);
   };
+  const readIssueCoverFile = (file: File, source: 'upload' | 'paste') => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!imageUrl) return;
+      setIssueCoverImage({
+        imageUrl,
+        source,
+        sourceLabel: file.name || (source === 'paste' ? 'Pasted cover image' : 'Uploaded cover image'),
+        returnedAt: new Date().toISOString(),
+      });
+      setCoverPasteMessage(source === 'paste' ? 'Pasted cover image assigned to this issue.' : 'Cover image assigned.');
+    };
+    reader.readAsDataURL(file);
+  };
   const handlePanelArtUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     if (file) readPanelArtFile(file, 'upload');
+    event.currentTarget.value = '';
+  };
+  const handleIssueCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (file) readIssueCoverFile(file, 'upload');
     event.currentTarget.value = '';
   };
   const focusPanelPasteTarget = () => {
@@ -3393,6 +3467,35 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     }
     event.preventDefault();
     readPanelArtFile(imageFile, 'paste');
+  };
+  const focusCoverPasteTarget = () => {
+    setCoverPasteMessage('Paste a cover image now with Command+V or Ctrl+V.');
+    coverPasteTargetRef.current?.focus();
+  };
+  const handleIssueCoverPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const imageFile = Array.from(event.clipboardData.files).find((file) => file.type.startsWith('image/'));
+    if (!imageFile) {
+      setCoverPasteMessage('Clipboard did not include an image file.');
+      return;
+    }
+    event.preventDefault();
+    readIssueCoverFile(imageFile, 'paste');
+  };
+  const useFirstPanelArtAsIssueCover = () => {
+    const firstPanelImage =
+      (selectedProductionPanel?.imageUrl && selectedProductionPanel.imageUrl
+        ? panelArtImages[selectedProductionPanel.panelId]
+        : null) ?? Object.values(panelArtImages).find((image) => image.imageUrl.trim());
+    if (!firstPanelImage) {
+      setCoverPasteMessage('No panel art is available yet.');
+      return;
+    }
+    setIssueCoverImage({
+      ...firstPanelImage,
+      sourceLabel: firstPanelImage.sourceLabel || 'Panel art cover source',
+      returnedAt: new Date().toISOString(),
+    });
+    setCoverPasteMessage('Used existing panel art as the issue cover image.');
   };
   const updatePageLayoutTemplate = (pageNumber: number, templateId: LayoutTemplateId) => {
     setPageLayoutTemplates((current) => ({ ...current, [pageNumber]: templateId }));
@@ -3429,7 +3532,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     });
     setPrimaryActionMessage(`Applied the safe margin guide to page ${page.pageNumber}.`);
   };
-  const updateLayoutPanelFraming = (
+  const updateLayoutPanelFraming = useCallback((
     pageNumber: number,
     panelId: string,
     updates: Partial<Pick<GuidedComicPanelGeometry, 'imageFit' | 'imageFocusX' | 'imageFocusY' | 'imageZoom'>>,
@@ -3452,11 +3555,31 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               imageZoom:
                 updates.imageZoom === undefined
                   ? panel.imageZoom
-                  : Math.min(2, Math.max(1, updates.imageZoom)),
+                  : Math.min(3, Math.max(1, updates.imageZoom)),
             }
           : panel,
       ),
     }));
+  }, []);
+  const startImageFramingDrag = (
+    event: React.PointerEvent,
+    pageNumber: number,
+    panel: GuidedComicPanelGeometry,
+  ) => {
+    if (!panel.imageUrl || panel.imageFit === 'stretch') return;
+    const frameRect = event.currentTarget.getBoundingClientRect();
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveImageFramingDrag({
+      pageNumber,
+      panelId: panel.panelId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      frameWidth: frameRect.width,
+      frameHeight: frameRect.height,
+      startFocusX: panel.imageFocusX ?? 0.5,
+      startFocusY: panel.imageFocusY ?? 0.5,
+    });
   };
   const startLayoutPanelEdit = (
     event: React.PointerEvent,
@@ -3534,6 +3657,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [activeLayoutEdit, guidedLayoutSettings]);
+  useEffect(() => {
+    if (!activeImageFramingDrag) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const dx = (event.clientX - activeImageFramingDrag.startClientX) / activeImageFramingDrag.frameWidth;
+      const dy = (event.clientY - activeImageFramingDrag.startClientY) / activeImageFramingDrag.frameHeight;
+      updateLayoutPanelFraming(activeImageFramingDrag.pageNumber, activeImageFramingDrag.panelId, {
+        imageFocusX: activeImageFramingDrag.startFocusX - dx,
+        imageFocusY: activeImageFramingDrag.startFocusY - dy,
+      });
+    };
+    const handlePointerUp = () => setActiveImageFramingDrag(null);
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [activeImageFramingDrag, updateLayoutPanelFraming]);
   const openBlankAdvancedStudio = () => {
     const confirmed = window.confirm('Open a blank Advanced Comics Studio workspace? Save this guided comic first if you want the latest guided changes in the library.');
     if (!confirmed) return;
@@ -3956,6 +4099,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     : [];
   const selectedProductionPanel =
     selectedProductionPanels.find((panel) => panel.panelId === selectedPanelId) ?? selectedProductionPanels[0] ?? null;
+  const selectedProductionPanelGeometry =
+    selectedProductionPanel
+      ? selectedLayoutGeometry.find((panel) => panel.panelId === selectedProductionPanel.panelId) ?? selectedLayoutPanel
+      : selectedLayoutPanel;
   const selectedProductionPageIndex = selectedProductionPage
     ? pageCards.findIndex((page) => page.pageNumber === selectedProductionPage.pageNumber)
     : -1;
@@ -4058,6 +4205,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (firstPanel) setSelectedPanelId(firstPanel.id);
     setProductionPanelFocusOpen(false);
     setWorkspaceMode('page-production');
+    setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
+  };
+  const openIssueCoverWorkspace = () => {
+    setProductionPanelFocusOpen(false);
+    setWorkspaceMode('issue-cover');
     setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
   };
   const selectProductionPageByOffset = (offset: number) => {
@@ -4784,6 +4936,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       <span className="text-white/25">/</span>
       <button
         type="button"
+        onClick={openIssueCoverWorkspace}
+        className={`rounded-full border px-3 py-1.5 transition ${
+          workspaceMode === 'issue-cover'
+            ? 'border-amber-200/55 bg-amber-300/[0.18] text-amber-50'
+            : 'border-white/10 bg-white/[0.055] text-white/48 hover:bg-white/10'
+        }`}
+      >
+        Cover
+      </button>
+      <span className="text-white/25">/</span>
+      <button
+        type="button"
         onClick={() => openPageProduction()}
         className={`rounded-full border px-3 py-1.5 transition ${
           workspaceMode === 'page-production'
@@ -4826,7 +4990,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               {selectedProductionPanel ? ` / Panel ${selectedProductionPanel.panelNumber}` : ''} is ready for the production workspace.
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[28rem]">
+          <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[34rem] xl:grid-cols-4">
             <button
               type="button"
               onClick={openIssueLightbox}
@@ -4834,6 +4998,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             >
               <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/42">Overview</span>
               <span className="mt-1 block text-sm font-black text-white">Issue Lightbox</span>
+            </button>
+            <button
+              type="button"
+              onClick={openIssueCoverWorkspace}
+              className="rounded-xl border border-white/12 bg-white/[0.055] px-3 py-3 text-left transition hover:border-amber-300/45 hover:bg-amber-300/10"
+            >
+              <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-white/42">Setup</span>
+              <span className="mt-1 block text-sm font-black text-white">Issue Cover</span>
             </button>
             <button
               type="button"
@@ -4858,6 +5030,314 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <span className="mt-1 block text-sm font-black text-white">Panel Focus</span>
             </button>
           </div>
+        </div>
+      </section>
+    ) : null;
+
+  const issueCoverWorkspace =
+    pageCards.length > 0 ? (
+      <section className="guided-focus-surface min-w-0 overflow-hidden border border-amber-300/20 bg-[#05070d] p-4 shadow-2xl backdrop-blur-md lg:p-5">
+        <input
+          ref={coverUploadInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleIssueCoverUpload}
+        />
+
+        <div className="flex flex-col gap-4 border-b border-white/10 pb-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            {creativeBreadcrumb}
+            <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-amber-100/55">
+              Issue properties / cover workspace
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white md:text-4xl">
+              {setupForm.issueTitle.trim() || `${setupForm.seriesTitle.trim() || 'Untitled series'} #${setupForm.issueNumber || 1}`}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/58">
+              Set the issue shell, cover art, references, and Writer page-beat import before moving into page production.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => openPageProduction(selectedProductionPage?.pageNumber)}
+              className="rounded-md border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] motion-reduce:hover:scale-100"
+              style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+            >
+              Page Workspace
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedProductionPage && selectedProductionPanel) {
+                  selectProductionPanel(selectedProductionPage.pageNumber, selectedProductionPanel.panelId);
+                }
+              }}
+              disabled={!selectedProductionPage || !selectedProductionPanel}
+              className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Panel Workspace
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedProductionPage) openPageInAdvancedStudio(selectedProductionPage);
+              }}
+              disabled={!selectedProductionPage}
+              className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-50 transition hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Advanced Studio
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(260px,0.86fr)_minmax(360px,auto)_minmax(260px,0.86fr)] xl:items-start">
+          <div className="grid content-start gap-4">
+            <div className="border border-white/10 bg-black/25 p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Issue setup</p>
+              <div className="mt-3 grid gap-3">
+                <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                  Series
+                  <input
+                    value={setupForm.seriesTitle}
+                    onChange={(event) => updateSetupField('seriesTitle', event.target.value)}
+                    className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                  />
+                </label>
+                <div className="grid gap-3">
+                  <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Issue title
+                    <input
+                      value={setupForm.issueTitle}
+                      onChange={(event) => updateSetupField('issueTitle', event.target.value)}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Issue number
+                    <input
+                      value={setupForm.issueNumber}
+                      onChange={(event) => updateSetupField('issueNumber', event.target.value)}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3">
+                  <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Pages
+                    <input
+                      value={setupForm.targetPageCount}
+                      onChange={(event) => updateSetupField('targetPageCount', event.target.value)}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Genre
+                    <select
+                      value={setupForm.genre}
+                      onChange={(event) => updateSetupField('genre', event.target.value)}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    >
+                      {GENRE_OPTIONS.map((genre) => (
+                        <option key={genre} value={genre}>
+                          {genre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Tone
+                    <select
+                      value={setupForm.tone}
+                      onChange={(event) => updateSetupField('tone', event.target.value)}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    >
+                      {TONE_OPTIONS.map((tone) => (
+                        <option key={tone} value={tone}>
+                          {tone}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-cyan-300/18 bg-cyan-300/[0.06] p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100/65">
+                Writers' Workshop sync
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-white/55">
+                Page beats imported here become Guided page cards and panel beats; local edits remain available in Page and Panel workspaces.
+              </p>
+              <div className="mt-3 grid gap-2">
+                <button
+                  type="button"
+                  onClick={createLinkedWriterIssueFromGuidedStory}
+                  disabled={writerBridgeBusyAction !== null}
+                  className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Create / link Writer issue
+                </button>
+                <button
+                  type="button"
+                  onClick={importLatestLinkedWriterIssue}
+                  disabled={writerBridgeBusyAction !== null || (!writerIssueId && !writerBridgeSelectedIssueId)}
+                  className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Import latest page beats
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runGuidedWriterToolAction('page-beats')}
+                  disabled={writerBridgeBusyAction !== null || (!writerIssueId && !writerBridgeSelectedIssueId)}
+                  className="rounded-md border border-cyan-200/25 bg-cyan-300/10 px-3 py-2 text-xs font-bold text-cyan-50 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Generate / update page beats
+                </button>
+              </div>
+              {writerBridgeMessage ? <p className="mt-3 text-xs leading-relaxed text-cyan-50/70">{writerBridgeMessage}</p> : null}
+              {writerBridgeError ? <p className="mt-3 text-xs leading-relaxed text-rose-100/80">{writerBridgeError}</p> : null}
+            </div>
+          </div>
+
+          <div
+            ref={coverPasteTargetRef}
+            tabIndex={0}
+            onPaste={handleIssueCoverPaste}
+            className="outline-none focus:ring-2 focus:ring-amber-200/70"
+          >
+            <div className="relative mx-auto aspect-[2/3] h-[min(66vh,720px)] min-h-[30rem] w-auto max-w-full overflow-hidden border border-amber-200/50 bg-[#101018] shadow-[0_34px_120px_rgba(0,0,0,0.72)]">
+              {issueCoverImage?.imageUrl ? (
+                <VaultImageWithFallback
+                  src={issueCoverImage.imageUrl}
+                  alt={`${setupForm.seriesTitle || 'Comic'} issue cover`}
+                  frameClassName="h-full w-full"
+                  imgClassName="h-full w-full object-cover"
+                />
+              ) : (
+                <div
+                  className="flex h-full flex-col justify-between p-6"
+                  style={{ background: getGuidedComicPlaceholderCoverBackground(`${setupForm.seriesTitle}-${setupForm.issueNumber}`) }}
+                >
+                  <span className="w-fit border border-black/20 bg-white/70 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#2a1b0d]">
+                    Cover design
+                  </span>
+                  <div>
+                    <p className="text-4xl font-black leading-none text-white drop-shadow md:text-5xl">
+                      {setupForm.seriesTitle.trim() || 'Untitled Series'}
+                    </p>
+                    <p className="mt-3 max-w-sm text-base font-black uppercase tracking-[0.18em] text-amber-50/85">
+                      {setupForm.issueTitle.trim() || `Issue #${setupForm.issueNumber || 1}`}
+                    </p>
+                  </div>
+                  <span className="w-fit border border-white/20 bg-black/45 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">
+                    Upload, paste, or use panel art
+                  </span>
+                </div>
+              )}
+              <div className="absolute inset-x-3 bottom-3 border border-white/12 bg-black/70 p-2 shadow-2xl backdrop-blur-md">
+                <p className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-amber-50/68">Cover source</p>
+                <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-5">
+                  <button
+                    type="button"
+                    onClick={openImageshopWithGuidedReferences}
+                    className="rounded-md border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] motion-reduce:hover:scale-100"
+                    style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                  >
+                    Imageshop
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => requestVaultSelection({ type: 'cover', name: 'Issue cover' })}
+                    className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15"
+                  >
+                    Vault
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => coverUploadInputRef.current?.click()}
+                    className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15"
+                  >
+                    Upload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={focusCoverPasteTarget}
+                    className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15"
+                  >
+                    Paste
+                  </button>
+                  <button
+                    type="button"
+                    onClick={useFirstPanelArtAsIssueCover}
+                    className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15"
+                  >
+                    Panel art
+                  </button>
+                </div>
+              </div>
+            </div>
+            {coverPasteMessage ? <p className="mt-2 text-xs leading-relaxed text-amber-50/72">{coverPasteMessage}</p> : null}
+          </div>
+
+          <aside className="grid content-start gap-3">
+            <div className="border border-amber-300/20 bg-amber-300/[0.06] p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/70">
+                Production readiness
+              </p>
+              <div className="mt-3 grid gap-2 text-sm font-bold text-white/82">
+                <div className="flex items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2">
+                  <span>Cover art</span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-white/50">
+                    {issueCoverImage?.imageUrl ? 'ready' : 'needed'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2">
+                  <span>Pages</span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-white/50">
+                    {pageCards.length}/{targetPageCountFromInput(setupForm.targetPageCount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2">
+                  <span>References</span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-white/50">
+                    {readyVisualReferences}/{Math.max(1, totalVisualReferences)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 border border-white/10 bg-black/20 px-3 py-2">
+                  <span>Writer link</span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-white/50">
+                    {writerIssueId ? 'linked' : 'local'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="border border-white/10 bg-black/25 p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Cover direction</p>
+              <label className="mt-3 grid gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                Art style
+                <textarea
+                  value={artDirection.artStyle}
+                  onChange={(event) => updateArtDirectionField('artStyle', event.target.value)}
+                  rows={3}
+                  className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
+                  placeholder="Cover rendering style, genre language, logo treatment notes"
+                />
+              </label>
+              <label className="mt-3 grid gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                Continuity notes
+                <textarea
+                  value={artDirection.continuityNotes}
+                  onChange={(event) => updateArtDirectionField('continuityNotes', event.target.value)}
+                  rows={4}
+                  className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
+                  placeholder="Series logo, issue logo, character/reference locks, motifs"
+                />
+              </label>
+            </div>
+          </aside>
         </div>
       </section>
     ) : null;
@@ -4955,7 +5435,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           src={productionPanel.imageUrl}
                           alt={`Page ${selectedProductionPage.pageNumber}, panel ${panel.order + 1}`}
                           frameClassName="h-full w-full overflow-hidden"
-                          imgClassName="h-full w-full object-cover"
+                          imgClassName="h-full w-full"
+                          imgStyle={{
+                            objectFit:
+                              panel.imageFit === 'stretch'
+                                ? 'fill'
+                                : panel.imageFit === 'contain'
+                                  ? 'contain'
+                                  : 'cover',
+                            objectPosition: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                            transform: (panel.imageZoom ?? 1) > 1 ? `scale(${panel.imageZoom})` : undefined,
+                            transformOrigin: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                          }}
                         />
                       ) : (
                         <span className="flex h-full min-h-[5rem] flex-col justify-between bg-black/25 p-2">
@@ -5226,7 +5717,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           src={productionPanel.imageUrl}
                           alt={`Page ${selectedProductionPage.pageNumber}, panel ${panel.order + 1}`}
                           frameClassName="h-full w-full overflow-hidden"
-                          imgClassName="h-full w-full object-cover"
+                          imgClassName="h-full w-full"
+                          imgStyle={{
+                            objectFit:
+                              panel.imageFit === 'stretch'
+                                ? 'fill'
+                                : panel.imageFit === 'contain'
+                                  ? 'contain'
+                                  : 'cover',
+                            objectPosition: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                            transform: (panel.imageZoom ?? 1) > 1 ? `scale(${panel.imageZoom})` : undefined,
+                            transformOrigin: `${(panel.imageFocusX ?? 0.5) * 100}% ${(panel.imageFocusY ?? 0.5) * 100}%`,
+                          }}
                         />
                       ) : (
                         <span className="flex h-full min-h-[5rem] flex-col justify-between bg-black/20 p-2">
@@ -5477,6 +5979,99 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 </button>
               </div>
               {panelPasteMessage ? <p className="mt-2 text-xs text-amber-50/70">{panelPasteMessage}</p> : null}
+              {selectedProductionPanelGeometry ? (
+                <div className="mt-4 border-t border-white/10 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Image framing</p>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">
+                      drag art to reframe
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {(['cover', 'contain', 'stretch'] as GuidedComicImageFit[]).map((fit) => {
+                      const selected = (selectedProductionPanelGeometry.imageFit ?? 'cover') === fit;
+                      return (
+                        <button
+                          key={fit}
+                          type="button"
+                          disabled={!selectedProductionPanel.imageUrl}
+                          onClick={() =>
+                            updateLayoutPanelFraming(selectedProductionPage.pageNumber, selectedProductionPanelGeometry.panelId, {
+                              imageFit: fit,
+                            })
+                          }
+                          className="rounded-md border px-2 py-1.5 text-[11px] font-black capitalize transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                          style={{
+                            borderColor: selected ? `${ACCENT_GOLD_SOLID}dd` : 'rgba(255,255,255,0.14)',
+                            background: selected ? ACCENT_GOLD_GRADIENT : 'rgba(255,255,255,0.07)',
+                            color: selected ? TEXT_ON_GOLD : 'rgba(255,255,255,0.76)',
+                          }}
+                        >
+                          {fit}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label className="mt-3 flex flex-col gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                    Zoom
+                    <input
+                      type="range"
+                      min="1"
+                      max="3"
+                      step="0.05"
+                      value={selectedProductionPanelGeometry.imageZoom ?? 1}
+                      disabled={!selectedProductionPanel.imageUrl || selectedProductionPanelGeometry.imageFit === 'stretch'}
+                      onChange={(event) =>
+                        updateLayoutPanelFraming(selectedProductionPage.pageNumber, selectedProductionPanelGeometry.panelId, {
+                          imageZoom: Number(event.target.value),
+                        })
+                      }
+                      className="w-full accent-amber-300 disabled:opacity-45"
+                    />
+                  </label>
+                  <div className="mt-3 grid grid-cols-3 gap-1">
+                    {[
+                      [0, 0],
+                      [0.5, 0],
+                      [1, 0],
+                      [0, 0.5],
+                      [0.5, 0.5],
+                      [1, 0.5],
+                      [0, 1],
+                      [0.5, 1],
+                      [1, 1],
+                    ].map(([focusX, focusY]) => {
+                      const selected =
+                        Math.abs((selectedProductionPanelGeometry.imageFocusX ?? 0.5) - focusX) < 0.01 &&
+                        Math.abs((selectedProductionPanelGeometry.imageFocusY ?? 0.5) - focusY) < 0.01;
+                      return (
+                        <button
+                          key={`${focusX}-${focusY}`}
+                          type="button"
+                          aria-label={`Focus image ${focusX * 100}% ${focusY * 100}%`}
+                          disabled={!selectedProductionPanel.imageUrl || selectedProductionPanelGeometry.imageFit === 'stretch'}
+                          onClick={() =>
+                            updateLayoutPanelFraming(selectedProductionPage.pageNumber, selectedProductionPanelGeometry.panelId, {
+                              imageFocusX: focusX,
+                              imageFocusY: focusY,
+                            })
+                          }
+                          className="flex aspect-square items-center justify-center rounded-md border transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+                          style={{
+                            borderColor: selected ? `${ACCENT_GOLD_SOLID}` : 'rgba(255,255,255,0.14)',
+                            background: selected ? 'rgba(252,246,186,0.18)' : 'rgba(255,255,255,0.06)',
+                          }}
+                        >
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ background: selected ? ACCENT_GOLD_LIGHT : 'rgba(255,255,255,0.45)' }}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <label className="block text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
@@ -5539,13 +6134,39 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               aria-hidden
             />
             <div className="relative mx-auto flex min-h-[30rem] items-center justify-center xl:h-full xl:min-h-0">
-              <div className="guided-panel-cinema-frame relative aspect-[2/3] h-[min(62vh,620px)] min-h-[28rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/55 bg-black/35 shadow-[0_38px_140px_rgba(0,0,0,0.78)] transition duration-500 motion-reduce:transition-none xl:h-full xl:min-h-0">
+              <div
+                onPointerDown={(event) => {
+                  if (selectedProductionPanelGeometry) {
+                    startImageFramingDrag(event, selectedProductionPage.pageNumber, selectedProductionPanelGeometry);
+                  }
+                }}
+                className={[
+                  'guided-panel-cinema-frame relative aspect-[2/3] h-[min(62vh,620px)] min-h-[28rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/55 bg-black/35 shadow-[0_38px_140px_rgba(0,0,0,0.78)] transition duration-500 motion-reduce:transition-none xl:h-full xl:min-h-0',
+                  selectedProductionPanel.imageUrl && selectedProductionPanelGeometry?.imageFit !== 'stretch'
+                    ? 'cursor-grab active:cursor-grabbing'
+                    : '',
+                ].join(' ')}
+              >
                 {selectedProductionPanel.imageUrl ? (
                   <VaultImageWithFallback
                     src={selectedProductionPanel.imageUrl}
                     alt={`Assigned art for page ${selectedProductionPage.pageNumber}, panel ${selectedProductionPanel.panelNumber}`}
                     frameClassName="h-full w-full"
-                    imgClassName="h-full w-full object-contain"
+                    imgClassName="h-full w-full select-none"
+                    imgStyle={{
+                      objectFit:
+                        selectedProductionPanelGeometry?.imageFit === 'stretch'
+                          ? 'fill'
+                          : selectedProductionPanelGeometry?.imageFit === 'contain'
+                            ? 'contain'
+                            : 'cover',
+                      objectPosition: `${(selectedProductionPanelGeometry?.imageFocusX ?? 0.5) * 100}% ${(selectedProductionPanelGeometry?.imageFocusY ?? 0.5) * 100}%`,
+                      transform:
+                        (selectedProductionPanelGeometry?.imageZoom ?? 1) > 1
+                          ? `scale(${selectedProductionPanelGeometry?.imageZoom})`
+                          : undefined,
+                      transformOrigin: `${(selectedProductionPanelGeometry?.imageFocusX ?? 0.5) * 100}% ${(selectedProductionPanelGeometry?.imageFocusY ?? 0.5) * 100}%`,
+                    }}
                   />
                 ) : (
                   <div
@@ -6540,6 +7161,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         {isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? focusReentryStrip : null}
         {isIssueWorkspaceOpen && workspaceMode === 'story-prep' ? productionPrepWorkspace : null}
         {isIssueWorkspaceOpen && workspaceMode === 'issue-lightbox' ? issueLightboxWorkspace : null}
+        {isIssueWorkspaceOpen && workspaceMode === 'issue-cover' ? issueCoverWorkspace : null}
         {isIssueWorkspaceOpen && workspaceMode === 'page-production' ? productionWorkspace : null}
         {isIssueWorkspaceOpen && workspaceMode === 'panel-focus' ? panelFocusWorkspace : null}
 

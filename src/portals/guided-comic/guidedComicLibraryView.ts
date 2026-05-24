@@ -42,6 +42,14 @@ function cleanOptionalUrl(value: unknown): string | null {
 }
 
 export function getGuidedComicProjectCoverImageUrl(project: GuidedComicProject): string | null {
+  if (isRecord(project.snapshot.issueCoverImage)) {
+    const coverImageUrl = cleanOptionalUrl(project.snapshot.issueCoverImage.imageUrl);
+    if (coverImageUrl) return coverImageUrl;
+
+    const coverUrl = cleanOptionalUrl(project.snapshot.issueCoverImage.url);
+    if (coverUrl) return coverUrl;
+  }
+
   const panelArtImages = project.snapshot.panelArtImages;
   if (!isRecord(panelArtImages)) return null;
 

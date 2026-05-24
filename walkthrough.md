@@ -5035,6 +5035,77 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - If the deployed site still appears stale after the next Cloudflare build, compare the live bundle against the pushed commit SHA and inspect the Cloudflare build log.
 
+## Guided Comics Issue Cover Workspace And Panel Image Framing - 2026-05-24
+
+### What changed
+
+- Added an Issue / Cover workspace to the existing Guided Comics issue flow so reopening an issue now follows `Series -> Issue / Cover Workspace -> Page Workspace -> Panel Workspace`.
+- Added issue setup controls for series title, issue title, issue number, page count, genre, and tone inside the cover workspace.
+- Added Writers' Workshop sync controls in the cover workspace for creating/linking a Writer issue, importing latest page beats, and generating/updating page beats.
+- Added a portrait cover design canvas with cover source actions for Imageshop, Vault, Upload, Paste, and using existing panel art.
+- Added production readiness checks for cover art, pages, references, and Writer link state.
+- Added cover direction fields for art style and continuity notes so series logo, issue logo, character/reference locks, and motifs can be captured before page production.
+- Persisted the issue cover image in Guided Comic draft/project snapshots and made Comic Library cover selection prefer the explicit issue cover before falling back to panel art.
+- Added Guided Image Vault support for assigning a selected vault image as the issue cover.
+- Added Panel Focus image framing controls for assigned panel art: cover/contain/stretch fit, zoom up to 3x, focus grid, and drag-to-reframe support.
+- Updated page and issue previews to respect stored panel image fit, focus, and zoom values.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicProjectLibrary.ts`
+- `src/portals/guided-comic/guidedComicLibraryView.ts`
+- `src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts`
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/components/ui/VaultChrome.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The new cover layer is an additional workspace mode inside the existing Guided Comics flow, not a new portal type.
+- Opening the current issue from the series library now lands on `issue-cover` instead of jumping straight to page production.
+- Writer page-beat import still uses the existing `importLatestLinkedWriterIssue`, `runGuidedWriterToolAction('page-beats')`, and bridge mapping/merge path.
+- Cover images are local Guided Comic snapshot state only; no Supabase tables, migrations, or schema changes were added.
+- The cover Vault path reuses the existing Guided Comic vault bridge with a new `cover` target label.
+- Panel image framing is stored on existing layout geometry fields and does not change Advanced Studio, ComicEditor, save/load/export contracts, shapes, balloons, or image preservation.
+
+### Verification
+
+- `git diff --check`
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed: 4 files, 25 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts src/stores/__tests__/guidedComicVaultBridge.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed: 5 files, 31 tests.
+- Local browser QA at `http://localhost:5174/` followed:
+  - `Comic Creator -> Untitled series -> Open Current Issue`
+  - Confirmed the Issue / Cover workspace opened first.
+  - Confirmed `Page Workspace`, `Panel Workspace`, `Advanced Studio`, `Writers' Workshop sync`, page-beat import/update controls, `Production readiness`, and `Cover source` controls were visible.
+  - Confirmed cover source buttons were visible in the viewport at a 1375px by 998px viewport.
+  - Confirmed `Page Workspace` still opened the tall page-level workspace with `Page backcloth`, `Advanced Studio`, and Imageshop controls.
+  - Confirmed `Focus panel` still opened Panel Focus and exposed `Image framing`, cover/contain/stretch, zoom, focus grid, and the drag-to-reframe hint.
+  - Browser console check returned no errors.
+- QA screenshots were captured locally:
+  - `/private/tmp/guided-cover-workspace-qa.png`
+  - `/private/tmp/guided-panel-framing-qa.png`
+
+### Outstanding issues
+
+- Imageshop can be launched from the cover workspace with Guided references, but a generated Imageshop result does not yet have a dedicated return target that assigns directly into `issueCoverImage`.
+
+### Risks or caveats
+
+- Panel image framing controls are active for assigned panel images; the local browser fixture used for QA showed the controls on a placeholder/no-art panel.
+- Smaller responsive widths will stack the cover workspace rails instead of keeping the three-column desktop bench.
+
+### Operator follow-up
+
+- After deployment, verify the live path `Comic Creator -> series -> Open Current Issue` lands on the Issue / Cover workspace before entering Page Workspace.
+- If a dedicated Imageshop-to-cover return path is needed, add it as a narrow follow-up without changing the broader Imageshop or ComicEditor contracts.
+
+### Next steps
+
+- Deploy the pushed commit through the existing Cloudflare Workers Builds path and verify the live Worker shows the new cover workspace.
+
 ## How to Use These Docs
 
 | File | Use |

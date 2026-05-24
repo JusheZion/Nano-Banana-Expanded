@@ -36,12 +36,14 @@ describe('guided comic focus choreography modes', () => {
 
   it('honors explicit focus requests once pages exist', () => {
     expect(getGuidedComicWorkspaceMode('art', 3, false, 'issue-lightbox')).toBe('issue-lightbox');
+    expect(getGuidedComicWorkspaceMode('art', 3, false, 'issue-cover')).toBe('issue-cover');
     expect(getGuidedComicWorkspaceMode('story', 3, false, 'page-production')).toBe('page-production');
     expect(getGuidedComicWorkspaceMode('art', 3, false, 'panel-focus')).toBe('panel-focus');
     expect(getGuidedComicWorkspaceMode('art', 3, true)).toBe('panel-focus');
   });
 
   it('normalizes persisted workspace and reopen preference values', () => {
+    expect(normalizeGuidedComicWorkspaceMode('issue-cover')).toBe('issue-cover');
     expect(normalizeGuidedComicWorkspaceMode('panel-focus')).toBe('panel-focus');
     expect(normalizeGuidedComicWorkspaceMode('dashboard')).toBeNull();
     expect(normalizeGuidedComicReopenPreference('issue-lightbox')).toBe('issue-lightbox');

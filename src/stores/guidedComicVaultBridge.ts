@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Portal } from '@/shared/portals';
 
-export type GuidedComicVaultTargetType = 'character' | 'location' | 'npc' | 'prop' | 'panel-art';
+export type GuidedComicVaultTargetType = 'character' | 'location' | 'npc' | 'prop' | 'panel-art' | 'cover';
 export type GuidedComicVaultSourceType = 'character' | 'asset' | 'npc';
 
 export type GuidedComicVaultTarget = {

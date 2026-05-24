@@ -96,6 +96,8 @@ export function guidedTargetTypeLabel(type: GuidedComicVaultTarget['type']): str
       return 'NPC reference';
     case 'panel-art':
       return 'Panel art image';
+    case 'cover':
+      return 'Cover image';
   }
 }
 
