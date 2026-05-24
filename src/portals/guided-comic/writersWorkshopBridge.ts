@@ -369,26 +369,76 @@ function readStringField(record: Record<string, unknown>, keys: string[]): strin
   return undefined;
 }
 
+const SEMANTIC_PANEL_BEAT_KEYS = [
+  'panels',
+  'panel_beats',
+  'panelBeats',
+  'beats',
+  'indices',
+  'indexed_beats',
+  'indexedBeats',
+  'page_beats',
+  'pageBeats',
+];
+
+function coerceSemanticPanelBeatEntry(value: unknown, index: number): unknown {
+  if (typeof value === 'string' && value.trim()) {
+    return { index, action: value.trim() };
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const record = value as Record<string, unknown>;
+  const action = readStringField(record, ['action', 'summary', 'description', 'beat', 'visual', 'notes', 'dialogue']);
+  return {
+    ...record,
+    index: coercePositiveInteger(record.index) ?? index,
+    ...(action ? { action } : {}),
+    ...(typeof record.dialogue_placeholder === 'string' || typeof record.dialogue !== 'string'
+      ? {}
+      : { dialogue_placeholder: record.dialogue }),
+  };
+}
+
+function getIndexedSemanticPanelBeatItems(record: Record<string, unknown>): unknown[] {
+  return Object.entries(record)
+    .map(([key, value]) => {
+      const index = coercePositiveInteger(Number(key));
+      return index === null ? null : coerceSemanticPanelBeatEntry(value, index);
+    })
+    .filter((value): value is unknown => value !== null)
+    .sort((a, b) => {
+      const aIndex =
+        a && typeof a === 'object' && !Array.isArray(a) ? coercePositiveInteger((a as Record<string, unknown>).index) : null;
+      const bIndex =
+        b && typeof b === 'object' && !Array.isArray(b) ? coercePositiveInteger((b as Record<string, unknown>).index) : null;
+      return (aIndex ?? 0) - (bIndex ?? 0);
+    });
+}
+
+function getSemanticPanelBeatItems(record: Record<string, unknown>): unknown[] | null {
+  for (const key of SEMANTIC_PANEL_BEAT_KEYS) {
+    const value = record[key];
+    if (Array.isArray(value)) return value.map((entry, index) => coerceSemanticPanelBeatEntry(entry, index + 1));
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const entries = getIndexedSemanticPanelBeatItems(value as Record<string, unknown>);
+      if (entries.length > 0) return entries;
+    }
+  }
+
+  const numericEntries = getIndexedSemanticPanelBeatItems(record);
+  return numericEntries.length > 0 ? numericEntries : null;
+}
+
 function normalizePageBeatsJson(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
-  if (!Array.isArray(record.panels)) return value;
+  const semanticPanels = getSemanticPanelBeatItems(record);
+  if (!semanticPanels) return value;
 
   return {
     ...record,
-    panels: record.panels.map((panel, index) => {
-      if (!panel || typeof panel !== 'object' || Array.isArray(panel)) return panel;
-      const panelRecord = panel as Record<string, unknown>;
-      const action = readStringField(panelRecord, ['action', 'summary', 'description', 'beat', 'visual', 'notes', 'dialogue']);
-      return {
-        ...panelRecord,
-        index: typeof panelRecord.index === 'number' ? panelRecord.index : index + 1,
-        ...(action ? { action } : {}),
-        ...(typeof panelRecord.dialogue_placeholder === 'string' || typeof panelRecord.dialogue !== 'string'
-          ? {}
-          : { dialogue_placeholder: panelRecord.dialogue }),
-      };
-    }),
+    panels: semanticPanels.map((panel, index) => coerceSemanticPanelBeatEntry(panel, index + 1)),
   };
 }
 
@@ -409,11 +459,11 @@ export function getWriterPageBeatImportStats(pages: WriterPageBridgeRow[]): Guid
         };
       }
 
-      const rawPanels =
+      const rawPanelItems =
         page.beats_json && typeof page.beats_json === 'object' && !Array.isArray(page.beats_json)
-          ? (page.beats_json as { panels?: unknown }).panels
+          ? getSemanticPanelBeatItems(page.beats_json as Record<string, unknown>)
           : null;
-      if (Array.isArray(rawPanels) && rawPanels.length > 0) {
+      if (rawPanelItems && rawPanelItems.length > 0) {
         return {
           ...stats,
           invalidPageNumbers: [...stats.invalidPageNumbers, page.page_number],

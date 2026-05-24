@@ -5164,6 +5164,53 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - After this is committed and deployed, verify the live site with a Writer issue that has known saved `writer_pages.beats_json.panels` data.
 
+## Guided Comics Indexed Writer Beat Import Normalization - 2026-05-24
+
+### What changed
+
+- Made the Guided Comics Writer import bridge treat semantic Writer beat collections as panel beats even when the collection is not literally named `panels`.
+- Added normalization for `panels`, `panel_beats`, `panelBeats`, `beats`, `indices`, `indexed_beats`, `indexedBeats`, `page_beats`, `pageBeats`, and top-level numeric beat maps.
+- Converted string beats and numeric-keyed beat records into the existing Guided `panels[].action` shape before validation.
+- Preserved existing alias handling for edited Writer beat objects, including `summary`, `description`, `beat`, `visual`, `notes`, and `dialogue`.
+- Updated import stats so indexed semantic beat payloads count as usable saved panel beats instead of being reported as empty.
+
+### Files touched
+
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: Guided's bridge previously normalized panel beat objects only after finding a top-level `panels` array. Writer payloads that represented panel beats as indexed beat collections could be semantically correct but invisible to Guided because they never entered the `PageBeatsJson` parser.
+- The fix stays in the existing bridge layer and still maps into the same local Guided `pageCards.panelBeats` state used by the Page Workspace and Panel Focus views.
+- No new portal type, Supabase/schema changes, ComicEditor refactor, Advanced Studio changes, Imageshop changes, Image Vault rewrites, save/load/export changes, geometry changes, shapes, balloons, or image preservation changes were introduced.
+
+### Verification
+
+- `git diff --check`
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed: 1 file, 20 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed: 4 files, 40 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+
+### Outstanding issues
+
+- This pass did not inspect live Writer rows directly. It fixes the bridge so indexed semantic beat payloads import correctly when present.
+
+### Risks or caveats
+
+- The importer is now intentionally more tolerant of Writer payload labels. If a future Writer payload uses one of these semantic keys for non-panel data, it may be treated as panel beat data and then either imported or reported as invalid.
+
+### Operator follow-up
+
+- Re-run `Import latest page beats` on the linked Guided issue after deployment.
+- If the Writer issue already has indexed beat payloads under `beats` or `indices`, they should now populate the Page Workspace and Panel Focus beat fields.
+
+### Next steps
+
+- If live import still reports no saved panel beats after this deploy, inspect the actual `writer_pages.beats_json` shape for that issue and add one targeted normalizer/test for that shape.
+
 ## How to Use These Docs
 
 | File | Use |

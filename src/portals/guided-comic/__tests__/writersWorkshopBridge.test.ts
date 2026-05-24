@@ -392,12 +392,67 @@ describe('writersWorkshopBridge', () => {
     ]);
   });
 
+  it('maps indexed Writers Workshop beats into Guided panel beats even when they are not named panels', () => {
+    const cards = mapWriterPagesToGuidedPageCards([
+      makeWriterPage({
+        beats_json: {
+          one_line_hook: 'Indexed page hook.',
+          indices: [
+            { index: 1, beat: 'Indexed beat one becomes panel one.' },
+            { index: 2, summary: 'Indexed beat two becomes panel two.' },
+          ],
+        },
+      }),
+    ]);
+
+    expect(cards[0]).toMatchObject({
+      summary: 'Indexed page hook.',
+      panelCount: '2',
+    });
+    expect(cards[0].panelBeats).toEqual([
+      'Panel 1: Indexed beat one becomes panel one.',
+      'Panel 2: Indexed beat two becomes panel two.',
+    ]);
+  });
+
+  it('maps numeric Writer beat records into Guided panel beats', () => {
+    const cards = mapWriterPagesToGuidedPageCards([
+      makeWriterPage({
+        beats_json: {
+          one_line_hook: 'Numeric page hook.',
+          beats: {
+            1: 'First numeric beat becomes a panel action.',
+            2: {
+              description: 'Second numeric beat keeps its indexed order.',
+              dialogue: 'SOL: There.',
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(cards[0].panelBeats).toEqual([
+      'Panel 1: First numeric beat becomes a panel action.',
+      'Panel 2: Second numeric beat keeps its indexed order. Dialogue: SOL: There.',
+    ]);
+  });
+
   it('counts only usable Writer page-beat payloads for import messaging', () => {
     const stats = getWriterPageBeatImportStats([
       makeWriterPage({
         page_number: 1,
         beats_json: {
           panels: [{ action: 'Usable beat.' }, { description: 'Usable alias beat.' }],
+        },
+      }),
+      makeWriterPage({
+        id: 'page-1b',
+        page_number: 4,
+        beats_json: {
+          indices: {
+            1: 'Usable indexed beat.',
+            2: { summary: 'Usable indexed alias beat.' },
+          },
         },
       }),
       makeWriterPage({
@@ -413,9 +468,9 @@ describe('writersWorkshopBridge', () => {
     ]);
 
     expect(stats).toEqual({
-      pageRows: 3,
-      pagesWithPanelBeats: 1,
-      panelBeatCount: 2,
+      pageRows: 4,
+      pagesWithPanelBeats: 2,
+      panelBeatCount: 4,
       emptyPageNumbers: [3],
       invalidPageNumbers: [2],
     });
