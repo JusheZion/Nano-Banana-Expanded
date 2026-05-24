@@ -4822,6 +4822,62 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue polishing the production workbar if the next QA pass asks for more density or different grouping.
 
+## Guided Comics Panel Focus Full-Height Side Workspace - 2026-05-23
+
+### What changed
+
+- Reworked Panel Focus from a portrait canvas with bottom controls into a three-column desktop workspace.
+- Made the portrait panel canvas the center of the workspace and sized it against the visible viewport height.
+- Moved panel image actions, page/panel beat editing, and dialogue seeds into a left-side vertical tool stack.
+- Moved panel momentum, review status, and reference/style context into a right-side vertical tool stack.
+- Kept narrow layouts responsive by showing the panel canvas first, followed by the tool stacks.
+- Changed Panel Focus momentum and review controls to stack vertically on desktop so the side rail reads as a tool column instead of a cramped toolbar.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The change stays inside the existing Guided Comics flow and existing `comic` portal surface.
+- No new portal type was added.
+- No Supabase/schema changes were made.
+- `ComicEditor` was not refactored or modified.
+- Advanced Studio, Imageshop, Image Vault, save/load, export, geometry helpers, shapes, balloons, and image preservation were not intentionally changed.
+- Existing Panel Focus actions were preserved: Imageshop, Vault, Upload, Paste, beat editing, dialogue seed editing, previous/next panel, review status, return-to-page, and pull-back-to-issue.
+- The desktop grid uses side rails with their own max-height and overflow so tools can scroll without shrinking the central panel canvas.
+
+### Verification
+
+- `git diff --check` passed.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- Browser QA at `http://localhost:5174/` with a 1488x998 desktop viewport confirmed:
+  - Panel Focus renders as three columns with left tools, center canvas, and right tools.
+  - The center panel frame remains a portrait `2 / 3` frame.
+  - The measured center panel frame was 493px by 740px, using most of the visible workspace height.
+  - Panel image, page/panel beat, dialogue, panel momentum, and reference/style controls all remain visible.
+  - The page reported one panel stage and one panel focus frame.
+  - The browser QA console error check returned an empty error list.
+
+### Outstanding issues
+
+- None.
+
+### Risks or caveats
+
+- The desktop QA used an explicit 1488x998 viewport override to match the user's wide-screen browser evidence.
+- Further polishing may still be needed if the user wants the issue/cover workspace added next; this pass only changes Panel Focus.
+
+### Operator follow-up
+
+- Review the side-rail density in the live app and decide whether any rail sections should collapse by default after the core workspace shape is approved.
+
+### Next steps
+
+- Continue with the issue/cover properties workspace if the next pass targets the missing series -> issue/cover -> page -> panel workflow layer.
+
 ## How to Use These Docs
 
 | File | Use |

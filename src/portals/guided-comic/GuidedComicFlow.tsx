@@ -5359,7 +5359,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
   const panelFocusWorkspace =
     selectedProductionPage && selectedProductionPanel ? (
-      <section className="guided-focus-surface min-w-0 overflow-hidden border border-amber-200/30 bg-[#05060c] p-4 shadow-2xl backdrop-blur-md lg:p-5">
+      <section className="guided-focus-surface flex min-w-0 flex-col overflow-hidden border border-amber-200/30 bg-[#05060c] p-4 shadow-2xl backdrop-blur-md lg:p-5">
         <div className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/42">
@@ -5407,77 +5407,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
           onChange={handlePanelArtUpload}
         />
 
-        <div className="mt-4 grid min-w-0 gap-4">
-          <div className="guided-comic-stage relative overflow-hidden border border-amber-200/24 bg-[#071022] p-4 shadow-2xl">
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(circle at 50% 46%, rgba(252,246,186,0.14), transparent 36%), radial-gradient(circle at 50% 50%, rgba(0,0,0,0.25), transparent 60%)',
-              }}
-              aria-hidden
-            />
-            <div className="relative mx-auto flex min-h-[30rem] items-center justify-center">
-              <div className="guided-panel-cinema-frame relative aspect-[2/3] h-[min(48vh,560px)] min-h-[28rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/55 bg-black/35 shadow-[0_38px_140px_rgba(0,0,0,0.78)] transition duration-500 motion-reduce:transition-none">
-                {selectedProductionPanel.imageUrl ? (
-                  <VaultImageWithFallback
-                    src={selectedProductionPanel.imageUrl}
-                    alt={`Assigned art for page ${selectedProductionPage.pageNumber}, panel ${selectedProductionPanel.panelNumber}`}
-                    frameClassName="h-full w-full"
-                    imgClassName="h-full w-full object-contain"
-                  />
-                ) : (
-                  <div
-                    className="flex h-full flex-col justify-between p-6"
-                    style={{
-                      backgroundImage:
-                        'linear-gradient(90deg, rgba(252,211,77,0.07) 1px, transparent 1px), linear-gradient(180deg, rgba(252,211,77,0.07) 1px, transparent 1px)',
-                      backgroundSize: '10% 10%',
-                    }}
-                  >
-                    <span className="w-fit rounded-full border border-amber-200/45 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-50">
-                      Panel {selectedProductionPanel.panelNumber}
-                    </span>
-                    <p className="max-w-2xl text-2xl font-black leading-tight text-white md:text-4xl">
-                      {selectedProductionPanel.beatText || 'Add the beat that makes this moment land.'}
-                    </p>
-                    <span className="w-fit rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
-                      {selectedProductionPanel.layoutIntent}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 border-t border-white/10 pt-3 xl:grid-cols-[minmax(280px,1.1fr)_minmax(260px,0.9fr)_minmax(240px,0.8fr)]">
-            <label className="order-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-              Page / panel beat
-              <textarea
-                value={selectedProductionPanel.beatText}
-                onChange={(event) =>
-                  updatePagePanelBeat(
-                    selectedProductionPage.pageNumber,
-                    selectedProductionPanel.panelNumber - 1,
-                    event.target.value,
-                  )
-                }
-                rows={5}
-                className="mt-2 min-h-[8rem] w-full resize-y rounded-md border border-white/15 bg-black/35 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
-              />
-              <span className="mt-2 block text-xs font-medium normal-case leading-relaxed tracking-normal text-white/42">
-                Writer imports fill page and panel beats here. References are assigned in Visual Prep and are included when this panel opens in Imageshop.
-              </span>
-            </label>
-
+        <div className="mt-4 grid min-w-0 flex-1 gap-4 xl:grid-cols-[minmax(240px,0.82fr)_minmax(360px,58vh)_minmax(240px,0.82fr)] xl:items-stretch">
+          <div className="order-2 grid content-start gap-3 xl:order-1 xl:max-h-[calc(100vh-14rem)] xl:overflow-y-auto xl:pr-1">
             <div
               ref={panelPasteTargetRef}
               tabIndex={0}
               onPaste={handlePanelArtPaste}
-              className="order-1 border border-white/10 bg-black/25 p-3 outline-none focus:border-amber-300/55 focus:bg-amber-300/10"
+              className="border border-white/10 bg-black/25 p-3 outline-none focus:border-amber-300/55 focus:bg-amber-300/10"
             >
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Panel image</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 grid gap-2">
                 <button
                   type="button"
                   onClick={openImageshopWithSelectedPanel}
@@ -5515,50 +5454,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               {panelPasteMessage ? <p className="mt-2 text-xs text-amber-50/70">{panelPasteMessage}</p> : null}
             </div>
 
-            <div className="order-3 grid gap-2 border border-amber-300/20 bg-amber-300/[0.06] p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/70">Panel momentum</p>
-                <span className="text-xs font-black text-white">
-                  {selectedProductionPagePanelIndex + 1}/{selectedProductionPanels.length}
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => selectProductionPagePanelByOffset(-1)}
-                  disabled={selectedProductionPagePanelIndex <= 0}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                  Previous panel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectProductionPagePanelByOffset(1)}
-                  disabled={selectedProductionPagePanelIndex >= selectedProductionPanels.length - 1}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:hover:scale-100"
-                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
-                >
-                  Next panel
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {(['ready', 'approved', 'needs-art'] as PanelArtStatus[]).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() => updatePanelArtStatus(selectedProductionPanel.panelId, status)}
-                    className="rounded-md border px-3 py-2 text-xs font-black transition hover:brightness-110 active:scale-[0.99]"
-                    style={panelArtStatusButtonStyle(status, selectedPanelStatus)}
-                  >
-                    {status === 'ready' ? 'Ready' : status === 'approved' ? 'Approve' : 'Revise'}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <label className="block text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+              Page / panel beat
+              <textarea
+                value={selectedProductionPanel.beatText}
+                onChange={(event) =>
+                  updatePagePanelBeat(
+                    selectedProductionPage.pageNumber,
+                    selectedProductionPanel.panelNumber - 1,
+                    event.target.value,
+                  )
+                }
+                rows={6}
+                className="mt-2 min-h-[10rem] w-full resize-y rounded-md border border-white/15 bg-black/35 px-3 py-2 text-sm font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
+              />
+              <span className="mt-2 block text-xs font-medium normal-case leading-relaxed tracking-normal text-white/42">
+                Writer imports fill page and panel beats here. References are assigned in Visual Prep and are included when this panel opens in Imageshop.
+              </span>
+            </label>
 
-            <details className="order-4 border border-white/10 bg-black/25 p-3 xl:col-span-2" open>
+            <details className="border border-white/10 bg-black/25 p-3" open>
               <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
                 Dialogue
               </summary>
@@ -5587,8 +5502,95 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 )}
               </div>
             </details>
+          </div>
 
-            <details className="order-5 border border-white/10 bg-black/25 p-3">
+          <div className="guided-comic-stage relative order-1 overflow-hidden border border-amber-200/24 bg-[#071022] p-4 shadow-2xl xl:order-2 xl:h-[calc(100vh-14rem)] xl:min-h-[34rem]">
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 50% 46%, rgba(252,246,186,0.14), transparent 36%), radial-gradient(circle at 50% 50%, rgba(0,0,0,0.25), transparent 60%)',
+              }}
+              aria-hidden
+            />
+            <div className="relative mx-auto flex min-h-[30rem] items-center justify-center xl:h-full xl:min-h-0">
+              <div className="guided-panel-cinema-frame relative aspect-[2/3] h-[min(62vh,620px)] min-h-[28rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/55 bg-black/35 shadow-[0_38px_140px_rgba(0,0,0,0.78)] transition duration-500 motion-reduce:transition-none xl:h-full xl:min-h-0">
+                {selectedProductionPanel.imageUrl ? (
+                  <VaultImageWithFallback
+                    src={selectedProductionPanel.imageUrl}
+                    alt={`Assigned art for page ${selectedProductionPage.pageNumber}, panel ${selectedProductionPanel.panelNumber}`}
+                    frameClassName="h-full w-full"
+                    imgClassName="h-full w-full object-contain"
+                  />
+                ) : (
+                  <div
+                    className="flex h-full flex-col justify-between p-6"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(90deg, rgba(252,211,77,0.07) 1px, transparent 1px), linear-gradient(180deg, rgba(252,211,77,0.07) 1px, transparent 1px)',
+                      backgroundSize: '10% 10%',
+                    }}
+                  >
+                    <span className="w-fit rounded-full border border-amber-200/45 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-50">
+                      Panel {selectedProductionPanel.panelNumber}
+                    </span>
+                    <p className="max-w-2xl text-2xl font-black leading-tight text-white md:text-4xl">
+                      {selectedProductionPanel.beatText || 'Add the beat that makes this moment land.'}
+                    </p>
+                    <span className="w-fit rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+                      {selectedProductionPanel.layoutIntent}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="order-3 grid content-start gap-3 xl:max-h-[calc(100vh-14rem)] xl:overflow-y-auto xl:pl-1">
+            <div className="grid gap-2 border border-amber-300/20 bg-amber-300/[0.06] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/70">Panel momentum</p>
+                <span className="text-xs font-black text-white">
+                  {selectedProductionPagePanelIndex + 1}/{selectedProductionPanels.length}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => selectProductionPagePanelByOffset(-1)}
+                  disabled={selectedProductionPagePanelIndex <= 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                  Previous panel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectProductionPagePanelByOffset(1)}
+                  disabled={selectedProductionPagePanelIndex >= selectedProductionPanels.length - 1}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-black transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:hover:scale-100"
+                  style={{ borderColor: `${ACCENT_GOLD_SOLID}88`, background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD }}
+                >
+                  Next panel
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
+                {(['ready', 'approved', 'needs-art'] as PanelArtStatus[]).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => updatePanelArtStatus(selectedProductionPanel.panelId, status)}
+                    className="rounded-md border px-3 py-2 text-xs font-black transition hover:brightness-110 active:scale-[0.99]"
+                    style={panelArtStatusButtonStyle(status, selectedPanelStatus)}
+                  >
+                    {status === 'ready' ? 'Ready' : status === 'approved' ? 'Approve' : 'Revise'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <details className="border border-white/10 bg-black/25 p-3" open>
               <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
                 Reference and style context
               </summary>
