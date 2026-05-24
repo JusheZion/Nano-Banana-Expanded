@@ -40,6 +40,7 @@ import type { Portal } from '@/shared/portals';
 import {
   createWriterIssue,
   createWriterSeries,
+  deleteWriterIssue,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -1917,7 +1918,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const [writerBridgeSelectedSeriesId, setWriterBridgeSelectedSeriesId] = useState<string>('');
   const [writerBridgeSelectedIssueId, setWriterBridgeSelectedIssueId] = useState<string>(() => restoredDraft?.writerIssueId ?? '');
   const [writerBridgeBusyAction, setWriterBridgeBusyAction] = useState<
-    'load' | 'create' | 'link' | 'import' | 'open' | GuidedWriterToolAction | null
+    'load' | 'create' | 'delete' | 'link' | 'import' | 'open' | GuidedWriterToolAction | null
   >(null);
   const [writerBridgeMessage, setWriterBridgeMessage] = useState<string | null>(null);
   const [writerBridgeError, setWriterBridgeError] = useState<string | null>(null);
@@ -2860,6 +2861,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       conflict: storyForm.conflict,
       endingGoal: storyForm.endingGoal,
     });
+  const linkWriterIssueRow = (issue: WriterIssueRow, seriesTitle: string, message: string) => {
+    setWriterIssueId(issue.id);
+    setWriterBridgeSelectedIssueId(issue.id);
+    applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(issue));
+    setWriterBridgeError(null);
+    setWriterBridgeMessage(message || `Linked ${seriesTitle} #${issue.issue_number}.`);
+  };
   const loadWriterBridgeOptions = async (preferredIssueId = writerIssueId ?? writerBridgeSelectedIssueId) => {
     setWriterBridgeError(null);
     if (!isSupabaseConfigured()) {
@@ -2900,13 +2908,46 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       setWriterBridgeError('Select a Writer issue first, or create one from this story foundation.');
       return;
     }
-    setWriterIssueId(issueOption.issue.id);
-    setWriterBridgeSelectedIssueId(issueOption.issue.id);
-    applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(issueOption.issue));
-    setWriterBridgeError(null);
-    setWriterBridgeMessage(
+    linkWriterIssueRow(
+      issueOption.issue,
+      issueOption.seriesTitle,
       `Linked ${issueOption.seriesTitle} #${issueOption.issue.issue_number}. No page or panel beats were imported yet.`,
     );
+  };
+  const deleteSelectedWriterIssue = async () => {
+    const issueOption = selectedWriterBridgeIssue;
+    if (!issueOption) {
+      setWriterBridgeError('Select a Writer issue before deleting.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete Writer issue #${issueOption.issue.issue_number}${
+        issueOption.issue.title ? `: ${issueOption.issue.title}` : ''
+      }? This also removes its saved pages, beats, dialogue, outlines, and shot plans.`,
+    );
+    if (!confirmed) return;
+
+    setWriterBridgeBusyAction('delete');
+    setWriterBridgeError(null);
+    const ok = await deleteWriterIssue(issueOption.issue.id);
+    if (!ok) {
+      setWriterBridgeBusyAction(null);
+      setWriterBridgeError('Could not delete the Writer issue. Confirm you are signed in and own this Writer series.');
+      return;
+    }
+
+    const nextIssues = writerBridgeIssues.filter((issue) => issue.id !== issueOption.issue.id);
+    setWriterBridgeIssues(nextIssues);
+    if (writerIssueId === issueOption.issue.id) {
+      setWriterIssueId(null);
+    }
+    const nextIssueId =
+      nextIssues.find((issue) => issue.series_id === issueOption.issue.series_id)?.id ?? nextIssues[0]?.id ?? '';
+    setWriterBridgeSelectedIssueId(nextIssueId);
+    setWriterBridgeBusyAction(null);
+    await loadWriterBridgeOptions(nextIssueId);
+    setWriterBridgeMessage(`Deleted Writer issue #${issueOption.issue.issue_number}.`);
   };
   const createLinkedWriterIssueFromGuidedStory = async () => {
     setWriterBridgeError(null);
@@ -2938,14 +2979,56 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const issueNumber =
       draft.issueNumber ??
       Math.max(0, ...writerBridgeIssues.filter((issue) => issue.series_id === seriesRow.id).map((issue) => issue.issue_number)) + 1;
+    const existingLocalIssue = writerBridgeIssues.find(
+      (issue) => issue.series_id === seriesRow.id && issue.issue_number === issueNumber,
+    );
+    if (existingLocalIssue) {
+      await updateWriterIssue(existingLocalIssue.id, {
+        title: draft.title || existingLocalIssue.title,
+        synopsis: draft.synopsis || existingLocalIssue.synopsis,
+        notes: {
+          ...existingLocalIssue.notes,
+          ...draft.notes,
+        },
+      });
+      if (draft.notes.guidedComic.targetPageCount) {
+        await ensureWriterPagesToCount(existingLocalIssue.id, draft.notes.guidedComic.targetPageCount);
+      }
+      setWriterBridgeBusyAction(null);
+      linkWriterIssueRow(
+        existingLocalIssue,
+        seriesRow.title || 'Untitled series',
+        `Linked existing Writer issue #${existingLocalIssue.issue_number}; that issue number already existed for this series.`,
+      );
+      await loadWriterBridgeOptions(existingLocalIssue.id);
+      return;
+    }
     const issue = await createWriterIssue({
       series_id: seriesRow.id,
       issue_number: issueNumber,
       title: draft.title,
     });
     if (!issue) {
+      const refreshedIssues = await listWriterIssues(seriesRow.id);
+      const existingIssue = refreshedIssues.find((row) => row.issue_number === issueNumber);
+      if (existingIssue) {
+        setWriterBridgeIssues((current) => [
+          ...current.filter((row) => row.series_id !== seriesRow.id),
+          ...refreshedIssues,
+        ]);
+        setWriterBridgeBusyAction(null);
+        linkWriterIssueRow(
+          existingIssue,
+          seriesRow.title || 'Untitled series',
+          `Linked existing Writer issue #${existingIssue.issue_number}; the create request found that issue already exists.`,
+        );
+        await loadWriterBridgeOptions(existingIssue.id);
+        return;
+      }
       setWriterBridgeBusyAction(null);
-      setWriterBridgeError('Could not create the Writer issue. Check writer_issues permissions and issue number uniqueness.');
+      setWriterBridgeError(
+        `Could not create Writer issue #${issueNumber}. Confirm you are signed in with access to this Writer series, or pick an existing issue / unused issue number.`,
+      );
       return;
     }
 
@@ -5188,11 +5271,50 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <div className="mt-3 grid gap-2">
                 <button
                   type="button"
-                  onClick={createLinkedWriterIssueFromGuidedStory}
+                  onClick={() => void loadWriterBridgeOptions()}
                   disabled={writerBridgeBusyAction !== null}
                   className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  Create / link Writer issue
+                  Load / choose Writer issue
+                </button>
+                {writerBridgeIssueOptions.length > 0 ? (
+                  <label className="grid gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Existing Writer issue
+                    <select
+                      value={writerBridgeSelectedIssueId}
+                      onChange={(event) => {
+                        const issueId = event.target.value;
+                        setWriterBridgeSelectedIssueId(issueId);
+                        const issue = writerBridgeIssues.find((row) => row.id === issueId);
+                        if (issue) setWriterBridgeSelectedSeriesId(issue.series_id);
+                      }}
+                      className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none focus:border-cyan-200/70"
+                    >
+                      <option value="">Select issue to link or delete</option>
+                      {writerBridgeIssueOptions.map((option) => (
+                        <option key={option.issue.id} value={option.issue.id}>
+                          {option.seriesTitle} #{option.issue.issue_number}
+                          {option.issue.title ? `: ${option.issue.title}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={linkSelectedWriterIssue}
+                  disabled={writerBridgeBusyAction !== null || !selectedWriterBridgeIssue}
+                  className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/78 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Link selected Writer issue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void createLinkedWriterIssueFromGuidedStory()}
+                  disabled={writerBridgeBusyAction !== null}
+                  className="rounded-md border border-emerald-200/25 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-50 transition hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Create missing Writer issue
                 </button>
                 <button
                   type="button"
@@ -5209,6 +5331,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="rounded-md border border-cyan-200/25 bg-cyan-300/10 px-3 py-2 text-xs font-bold text-cyan-50 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Generate / update page beats
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteSelectedWriterIssue()}
+                  disabled={writerBridgeBusyAction !== null || !selectedWriterBridgeIssue}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Delete selected Writer issue
                 </button>
               </div>
               {writerBridgeMessage ? <p className="mt-3 text-xs leading-relaxed text-cyan-50/70">{writerBridgeMessage}</p> : null}
@@ -6343,6 +6474,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         <span className="truncate font-black text-white/78">{currentComicDisplayName}</span>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={saveCurrentComic}
+          className="inline-flex items-center gap-1 rounded-md border border-amber-200/30 bg-amber-200/10 px-2 py-1 text-[11px] font-black text-amber-50 transition hover:border-amber-200/65 hover:bg-amber-200/16 focus:outline-none focus:ring-2 focus:ring-amber-200/50 motion-reduce:transition-none"
+        >
+          <Save className="h-3.5 w-3.5" aria-hidden />
+          Save
+        </button>
+        <span
+          className={`hidden rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:inline-flex ${
+            hasUnsavedProjectChanges
+              ? 'border-amber-200/28 bg-amber-200/10 text-amber-50/72'
+              : 'border-emerald-200/22 bg-emerald-200/10 text-emerald-50/70'
+          }`}
+        >
+          {hasUnsavedProjectChanges ? 'Unsaved' : 'Saved'}
+        </span>
         <button
           type="button"
           onClick={() => setLibraryStage('series-gallery')}
@@ -7829,6 +7977,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                               disabled={Boolean(writerBridgeBusyAction)}
                               onClick={() => void createLinkedWriterIssueFromGuidedStory()}
                               className="inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 px-3 py-2 text-center text-xs font-black leading-snug text-emerald-50 transition hover:bg-emerald-200/15 disabled:cursor-not-allowed disabled:opacity-45"
+                            />
+                            <GuidedProgressButton
+                              type="button"
+                              isLoading={writerBridgeBusyAction === 'delete'}
+                              loadingLabel="Deleting..."
+                              idleLabel="Delete selected issue"
+                              icon={<Trash2 className="h-3.5 w-3.5" aria-hidden />}
+                              disabled={Boolean(writerBridgeBusyAction) || !selectedWriterBridgeIssue}
+                              onClick={() => void deleteSelectedWriterIssue()}
+                              className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-center text-xs font-black leading-snug text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-45"
                             />
                           </div>
                         </div>

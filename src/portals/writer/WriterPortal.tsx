@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, Trash2 } from 'lucide-react';
 import {
   clearWriterPagesBeatsJson,
   clearWriterPagesScriptText,
@@ -8,6 +8,7 @@ import {
   createWriterLoreCard,
   createWriterSeries,
   deleteLatestWriterOutline,
+  deleteWriterIssue,
   deleteWriterLoreCard,
   deleteWriterPages,
   ensureWriterPagesToCount,
@@ -358,6 +359,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [createSeriesBusy, setCreateSeriesBusy] = useState(false);
   const [createIssueBusy, setCreateIssueBusy] = useState(false);
+  const [deleteIssueBusy, setDeleteIssueBusy] = useState(false);
   const [createPageBusy, setCreatePageBusy] = useState(false);
   const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
@@ -553,6 +555,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setDockCollapsed(false);
     pushHistory(`created issue #${row.issue_number}`);
   }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries, pushHistory]);
+
+  const handleDeleteWriterIssue = useCallback(
+    async (issue: WriterIssueRow) => {
+      if (!selectedSeriesId) return;
+      const confirmed = window.confirm(
+        `Delete Writer issue #${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}? This also removes its saved pages, beats, dialogue, outlines, and shot plans.`,
+      );
+      if (!confirmed) return;
+
+      setBootstrapError(null);
+      setDeleteIssueBusy(true);
+      const ok = await deleteWriterIssue(issue.id);
+      setDeleteIssueBusy(false);
+      if (!ok) {
+        setBootstrapError('Could not delete the Writer issue. Confirm you are signed in and own this series.');
+        pushHistory(`error: delete issue #${issue.issue_number}`);
+        return;
+      }
+
+      const rows = await listWriterIssues(selectedSeriesId);
+      setIssues(rows);
+      setSelectedIssueId((current) =>
+        current && current !== issue.id && rows.some((row) => row.id === current) ? current : rows[0]?.id ?? null,
+      );
+      if (selectedIssueId === issue.id) {
+        setPages([]);
+        setSelectedPageId(null);
+      }
+      pushHistory(`deleted issue #${issue.issue_number}`);
+    },
+    [pushHistory, selectedIssueId, selectedSeriesId],
+  );
 
   useEffect(() => {
     if (!selectedSeriesId) {
@@ -2130,20 +2164,36 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ) : null}
         <div className="flex-1 min-h-[80px] max-h-40 overflow-y-auto custom-scrollbar space-y-1">
           {issues.map((i) => (
-            <Tooltip key={i.id} content={`Open issue #${i.issue_number}`} side="left">
-              <button
-                type="button"
-                onClick={() => setSelectedIssueId(i.id)}
-                className={`w-full text-left rounded-lg px-2 py-1 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                  selectedIssueId === i.id
-                    ? 'bg-black/15 text-black ring-1 ring-black/20'
-                    : 'text-black/65 hover:bg-black/10'
-                }`}
-              >
-                #{i.issue_number}
-                {i.title ? ` — ${i.title}` : ''}
-              </button>
-            </Tooltip>
+            <div
+              key={i.id}
+              className={`flex items-center gap-1 rounded-lg ${
+                selectedIssueId === i.id ? 'bg-black/15 ring-1 ring-black/20' : 'hover:bg-black/10'
+              }`}
+            >
+              <Tooltip content={`Open issue #${i.issue_number}`} side="left">
+                <button
+                  type="button"
+                  onClick={() => setSelectedIssueId(i.id)}
+                  className={`min-w-0 flex-1 rounded-lg px-2 py-1 text-left text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                    selectedIssueId === i.id ? 'text-black' : 'text-black/65'
+                  }`}
+                >
+                  #{i.issue_number}
+                  {i.title ? ` — ${i.title}` : ''}
+                </button>
+              </Tooltip>
+              <Tooltip content={`Delete issue #${i.issue_number}`} side="left">
+                <button
+                  type="button"
+                  disabled={deleteIssueBusy}
+                  onClick={() => void handleDeleteWriterIssue(i)}
+                  className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-800/70 transition hover:bg-red-500/15 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={`Delete issue #${i.issue_number}`}
+                >
+                  <Trash2 size={12} aria-hidden />
+                </button>
+              </Tooltip>
+            </div>
           ))}
         </div>
       </div>

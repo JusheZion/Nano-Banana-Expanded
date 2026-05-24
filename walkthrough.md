@@ -5211,6 +5211,60 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - If live import still reports no saved panel beats after this deploy, inspect the actual `writer_pages.beats_json` shape for that issue and add one targeted normalizer/test for that shape.
 
+## Guided Comics Writer Issue Link Safety and Cleanup - 2026-05-24
+
+### What changed
+
+- Made Guided Comics link existing Writer issues instead of failing when the selected series already has the requested issue number.
+- Added a safer Cover Workspace Writer sync flow:
+  - `Load / choose Writer issue` loads existing Writer issues without creating a new one.
+  - `Link selected Writer issue` links the selected existing issue.
+  - `Create missing Writer issue` is now the explicit creation path.
+  - `Delete selected Writer issue` removes an accidentally created Writer issue after confirmation.
+- Added a persistent `Save` button and saved/unsaved status pill to the issue-workspace top strip so save is visible from Cover, Page, and Panel workspaces.
+- Added Writer issue delete support to Writers' Workshop issue lists with a small trash action per issue.
+- Added the shared `deleteWriterIssue` API helper, relying on the existing `writer_issues` cascade relationships for pages, beats, dialogue, outlines, and shot plans.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/shared/api/arcsWriterRoom.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: the Cover Workspace used a single `Create / link Writer issue` action that looked like a linker but could create a new Writer issue. If the Guided issue number was reused, the earlier implementation could also hit the `writer_issues` unique constraint instead of linking the existing row.
+- The create path now checks local and refreshed Writer issue lists for an existing `(series_id, issue_number)` match and links that existing issue before reporting an error.
+- Deletion is intentionally confirmed and scoped to existing Writer issue rows. No Supabase schema, RLS, or migration changes were introduced.
+- This pass does not alter ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load/export, geometry, shapes, balloons, or image preservation behavior.
+
+### Verification
+
+- `git diff --check`
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed: 2 files, 29 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Browser QA at `http://localhost:5174/?writer-beat-import-qa=1` confirmed:
+  - persistent top-strip `Save` button and unsaved status appear in the issue workspace.
+  - Cover Workspace Writer sync shows `Load / choose Writer issue`, `Link selected Writer issue`, `Create missing Writer issue`, and `Delete selected Writer issue`.
+
+### Outstanding issues
+
+- The operator still needs to delete any duplicate live Writer issues manually using the new trash/delete controls after this deploy.
+
+### Risks or caveats
+
+- Deleting a Writer issue removes dependent Writer pages, beats, dialogue, outlines, and shot plans through existing database cascades. The confirmation copy states this before deletion.
+
+### Operator follow-up
+
+- After deployment, open Writers' Workshop or the Guided Cover Workspace, load the relevant Writer issues, and delete any accidental duplicate issues.
+
+### Next steps
+
+- Re-test the live Guided Cover Workspace link flow against the real Writer series: load existing issues first, link the intended issue, then import or generate page beats.
+
 ## How to Use These Docs
 
 | File | Use |

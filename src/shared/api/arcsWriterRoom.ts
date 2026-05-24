@@ -157,6 +157,17 @@ export async function updateWriterIssue(
   return true;
 }
 
+/** Delete a Writer issue and its dependent pages/outlines through database cascades. */
+export async function deleteWriterIssue(issueId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from('writer_issues').delete().eq('id', issueId);
+  if (error) {
+    console.warn('[arcsWriterRoom] deleteWriterIssue', error.message);
+    return false;
+  }
+  return true;
+}
+
 /** Update the JSON payload of a saved outline row (manual edit in UI). */
 export async function updateWriterIssueOutlineJson(
   outlineId: string,
