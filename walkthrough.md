@@ -4878,6 +4878,54 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with the issue/cover properties workspace if the next pass targets the missing series -> issue/cover -> page -> panel workflow layer.
 
+## GitHub Actions Cloudflare Worker Deploy - 2026-05-24
+
+### What changed
+
+- Added a repo-owned GitHub Actions workflow for Cloudflare Worker deploys.
+- The workflow runs on pushes to `main` and can also be started manually with `workflow_dispatch`.
+- The workflow installs dependencies with `npm ci`, builds the app with `npm run build`, verifies that `CLOUDFLARE_API_TOKEN` is present, then deploys with `npx wrangler deploy --config ./wrangler.jsonc`.
+- Updated the Cloudflare deployment checklist with a GitHub Actions option and the required repository secret.
+- Updated `tasks.md` so the deploy automation record no longer depends only on hidden Cloudflare dashboard configuration.
+
+### Files touched
+
+- `.github/workflows/deploy-cloudflare-worker.yml`
+- `CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The workflow uses the existing `wrangler.jsonc` Worker name and static assets configuration.
+- The workflow intentionally fails before deploy if the GitHub secret `CLOUDFLARE_API_TOKEN` is missing, preventing a quiet stale-site state.
+- The workflow does not add Supabase deploy steps and does not change app runtime code.
+- No new portal type, Supabase/schema changes, or ComicEditor changes were made.
+
+### Verification
+
+- `git diff --check` passed.
+- Workflow file was inspected directly after creation.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+
+### Outstanding issues
+
+- The GitHub repository still needs the `CLOUDFLARE_API_TOKEN` Actions secret before the workflow can deploy successfully.
+
+### Risks or caveats
+
+- The first push after this workflow lands will run the workflow. If the secret is missing, the run should fail with the explicit token error added in the workflow.
+- If Cloudflare later requires account disambiguation for the token, add the account to Wrangler configuration or a repository secret in a follow-up pass.
+
+### Operator follow-up
+
+- Add `CLOUDFLARE_API_TOKEN` in GitHub repository settings under Secrets and variables -> Actions.
+- After the secret is present, manually run the `Deploy Cloudflare Worker` workflow once or push a small follow-up commit to confirm the deploy path.
+
+### Next steps
+
+- Watch the first GitHub Actions run after push and verify the live Worker serves the new bundle.
+
 ## How to Use These Docs
 
 | File | Use |

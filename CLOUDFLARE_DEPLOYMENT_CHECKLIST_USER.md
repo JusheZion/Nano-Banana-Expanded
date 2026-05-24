@@ -70,6 +70,8 @@ Complete these so you are not hunting mid-setup.
   If **Build command** stays **`None`**, the checkout has **no `dist/`**, deploy fails or stays stale, and the UI shows **“Your last build failed.”**  
   **Static assets only** on the Worker is **expected** for this SPA — there is no Worker script, only uploaded **`dist/`** files. **`VITE_*`** values are baked in at **build** time; add them under the **build / CI environment variables** for this Worker’s Git builds (Cloudflare’s UI may label this **Variables** on the **Build** configuration, not “Worker secrets”). Without them, the app may build but show blank / missing Supabase in production.
 
+- [ ] **D4f. GitHub Actions deploy (repo-owned pipeline):** This repo now includes [`.github/workflows/deploy-cloudflare-worker.yml`](.github/workflows/deploy-cloudflare-worker.yml), which runs on pushes to **`main`** and on manual **workflow_dispatch**. Add a repository secret named **`CLOUDFLARE_API_TOKEN`** under **GitHub → Settings → Secrets and variables → Actions**. The workflow runs **`npm ci`**, **`npm run build`**, then **`npx wrangler deploy --config ./wrangler.jsonc`**. If the secret is missing, the workflow intentionally fails before deploy with a clear error.
+
 - [x] **D5.** I clicked **Save and Deploy** (or equivalent) and waited for the first build to finish.
 
 ---
