@@ -4976,6 +4976,60 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - If automatic deploys fail again, inspect the Cloudflare build log for the commit SHA and compare it with `git rev-parse origin/main`.
 
+## Guided Comics Page Production Tall Workspace - 2026-05-24
+
+### What changed
+
+- Reworked the Guided Comics Page Production workspace reached from `Comic Creator -> series -> Open Current Issue -> Page Production` so the page-level canvas is a tall portrait workspace instead of reading as a widescreen/landscape backcloth.
+- Moved page layout controls into a left vertical rail beside the page canvas.
+- Moved selected-panel status and panel actions into a right vertical rail beside the page canvas.
+- Removed the wide bottom workbar from Page Production so the central page remains the dominant working surface.
+- Tightened the desktop height calculation so the page-level workspace fits inside the visible viewport without clipping the bottom of the stage at the tested desktop size.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The changed surface is Page Production, not Panel Focus.
+- The page canvas keeps a `2 / 3` portrait aspect ratio and now sits between vertical tool rails on xl desktop layouts.
+- Page layout tools remain local to Guided Comics and continue to use the existing layout helpers.
+- Panel actions still call the existing Focus Panel, Imageshop, Vault, and Upload paths.
+- This pass did not add a new portal type, Supabase/schema changes, a ComicEditor refactor, or changes to Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation.
+
+### Verification
+
+- `git diff --check`
+- `npm run build` passed with the existing large chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Local browser QA at `http://localhost:5174/` followed the user path:
+  - `Comic Creator -> Untitled series -> Open Current Issue -> Page Production`
+  - Page Production stage used CSS grid with three desktop columns.
+  - Page canvas measured 473px by 710px at a 1375px by 998px viewport.
+  - Page canvas retained a 1.5 height-to-width ratio, matching the `2 / 3` portrait page.
+  - Stage bottom landed at 995px in a 998px viewport, so the page-level workspace no longer spills below the visible screen at that tested size.
+  - `PAGE LAYOUT` and `PANEL ACTIONS` rails were visible.
+  - Browser console check returned no errors.
+
+### Outstanding issues
+
+- None for this page-level portrait workspace pass.
+
+### Risks or caveats
+
+- The live Cloudflare site will not show this change until the new commit is pushed and Cloudflare Workers Builds finishes deploying it.
+- Smaller responsive widths still stack the rails around the page canvas rather than forcing the three-column desktop arrangement.
+
+### Operator follow-up
+
+- After push, wait for Cloudflare Workers Builds to deploy `main`, then hard-refresh the live Worker if the older page-level view is still cached in the browser.
+
+### Next steps
+
+- If the deployed site still appears stale after the next Cloudflare build, compare the live bundle against the pushed commit SHA and inspect the Cloudflare build log.
+
 ## How to Use These Docs
 
 | File | Use |

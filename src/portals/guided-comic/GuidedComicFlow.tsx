@@ -5121,7 +5121,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               </details>
             ) : null}
 
-            <div className="guided-comic-stage relative mt-4 flex min-w-0 flex-col items-center gap-4 overflow-hidden border border-amber-200/18 bg-[#070b16] p-4 lg:p-5">
+            <div className="guided-comic-stage relative mt-4 grid min-w-0 gap-4 overflow-hidden border border-amber-200/18 bg-[#070b16] p-4 lg:p-5 xl:grid-cols-[minmax(220px,0.78fr)_minmax(360px,auto)_minmax(220px,0.78fr)] xl:items-stretch">
               <div
                 className="pointer-events-none absolute inset-0 opacity-80"
                 aria-hidden
@@ -5133,11 +5133,58 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <span className="pointer-events-none absolute left-4 top-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/24">
                 Page backcloth
               </span>
+
+              <div className="relative z-10 order-2 grid content-start gap-3 xl:order-1 xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto xl:pr-1">
+                <div className="border border-white/10 bg-black/25 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">Page layout</p>
+                  <label className="mt-3 flex flex-col gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-white/45">
+                    Layout preset
+                    <select
+                      value={selectedLayoutTemplateId}
+                      onChange={(event) => updatePageLayoutTemplate(selectedProductionPage.pageNumber, event.target.value as LayoutTemplateId)}
+                      className="rounded-md border border-white/15 bg-black/45 px-3 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
+                    >
+                      {LAYOUT_TEMPLATE_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="mt-3 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjustSelectedLayoutPanel(selectedProductionPage, 'bigger')}
+                      className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-50 transition hover:bg-amber-300/15"
+                    >
+                      Make selected bigger
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustSelectedLayoutPanel(selectedProductionPage, 'wider')}
+                      className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-50 transition hover:bg-amber-300/15"
+                    >
+                      Make selected wider
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applySafeMarginsToPageLayout(selectedProductionPage)}
+                      className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/72 transition hover:bg-white/15"
+                    >
+                      Apply safe margins
+                    </button>
+                  </div>
+                </div>
+                <p className="border-l-2 border-amber-200/28 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/42">
+                  Beats imported from Writers' Workshop land in the page and panel beat fields. Visual Prep references stay separate, then travel with the selected panel when it opens in Imageshop.
+                </p>
+              </div>
+
               <div
                 ref={(node) => {
                   layoutCanvasRefs.current[selectedProductionPage.pageNumber] = node;
                 }}
-                className="relative z-10 mx-auto aspect-[2/3] h-[min(52vh,580px)] min-h-[22rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/45 bg-[#100e16] shadow-[0_32px_120px_rgba(0,0,0,0.72)]"
+                className="relative z-10 order-1 mx-auto aspect-[2/3] h-[min(70vh,720px)] min-h-[30rem] w-auto max-w-full overflow-hidden rounded-md border border-amber-200/45 bg-[#100e16] shadow-[0_32px_120px_rgba(0,0,0,0.72)] xl:order-2 xl:h-[calc(100vh-18rem)] xl:min-h-[32rem]"
                 style={{
                   backgroundImage:
                     'linear-gradient(90deg, rgba(252,211,77,0.06) 1px, transparent 1px), linear-gradient(180deg, rgba(252,211,77,0.06) 1px, transparent 1px)',
@@ -5269,45 +5316,26 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                 })}
               </div>
 
-              <div className="relative z-10 grid w-full max-w-6xl gap-3 border-t border-white/10 pt-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  <label className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[0.14em] text-white/45">
-                    Page layout
-                    <select
-                      value={selectedLayoutTemplateId}
-                      onChange={(event) => updatePageLayoutTemplate(selectedProductionPage.pageNumber, event.target.value as LayoutTemplateId)}
-                      className="rounded-md border border-white/15 bg-black/45 px-3 py-2 text-xs font-bold normal-case tracking-normal text-white outline-none focus:border-amber-300/70"
-                    >
-                      {LAYOUT_TEMPLATE_OPTIONS.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => adjustSelectedLayoutPanel(selectedProductionPage, 'bigger')}
-                    className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-50 transition hover:bg-amber-300/15"
-                  >
-                    Make selected bigger
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => adjustSelectedLayoutPanel(selectedProductionPage, 'wider')}
-                    className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-50 transition hover:bg-amber-300/15"
-                  >
-                    Make selected wider
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applySafeMarginsToPageLayout(selectedProductionPage)}
-                    className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white/72 transition hover:bg-white/15"
-                  >
-                    Apply safe margins
-                  </button>
+              <div className="relative z-10 order-3 grid content-start gap-3 xl:max-h-[calc(100vh-18rem)] xl:overflow-y-auto xl:pl-1">
+                <div className="border border-amber-300/20 bg-amber-300/[0.06] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-100/70">Selected panel</p>
+                      <p className="mt-1 text-sm font-black text-white">
+                        Panel {selectedProductionPanel?.panelNumber ?? 1}
+                      </p>
+                    </div>
+                    <span className="border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/52">
+                      {selectedProductionPanel?.layoutIntent ?? 'normal'}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-white/58">
+                    {selectedProductionPanel?.beatText || 'Select a panel on the page to edit its production moment.'}
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+
+                <div className="grid gap-2 border border-white/10 bg-black/25 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">Panel actions</p>
                   <button
                     type="button"
                     onClick={() =>
@@ -5343,9 +5371,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                     Upload
                   </button>
                 </div>
-                <p className="text-xs leading-relaxed text-white/42 lg:col-span-2">
-                  Beats imported from Writers' Workshop land in the page and panel beat fields; Visual Prep references remain separate, then travel with the selected panel when you open Imageshop.
-                </p>
               </div>
             </div>
           </>
