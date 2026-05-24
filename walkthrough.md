@@ -4926,6 +4926,56 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Watch the first GitHub Actions run after push and verify the live Worker serves the new bundle.
 
+## Cloudflare Builds Deploy Path Correction - 2026-05-24
+
+### What changed
+
+- Removed the redundant GitHub Actions Cloudflare deploy workflow.
+- Updated the Cloudflare deployment checklist to clarify that Cloudflare-managed Workers Builds API token names are not token values to paste into GitHub.
+- Updated `tasks.md` to record the active deploy path as Cloudflare Workers Builds connected to `JusheZion/Nano-Banana-Expanded` on `main`.
+- Kept the repo-side Wrangler scripts and Cloudflare build/deploy commands aligned with the existing Worker setup.
+
+### Files touched
+
+- `.github/workflows/deploy-cloudflare-worker.yml`
+- `CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The GitHub Actions workflow was removed because the Cloudflare dashboard already shows the Worker connected to the GitHub repo with Cloudflare-managed build credentials.
+- The Cloudflare API still reports no deploy hooks and no `builds/workers` records for this Worker, but Worker deployment/version records do show fresh deployments.
+- The current canonical Worker target remains `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- No app runtime code, Supabase/schema files, or ComicEditor files were changed.
+
+### Verification
+
+- Cloudflare API reported the latest Worker deployment as version `158`, created `2026-05-24T13:38:49Z`, after the GitHub pushes.
+- Live browser QA on `https://asset-reference-comics-studio.onyxzion.workers.dev/` confirmed the deployed Panel Focus workspace:
+  - `Comic Creator -> Untitled series -> Open Current Issue -> Focus panel`
+  - Three-column side-rail layout was present.
+  - Center panel frame measured 493px by 740px.
+  - Center panel frame retained `2 / 3` aspect ratio.
+  - `Panel image`, `Page / panel beat`, `Dialogue`, `Panel momentum`, and `Reference and style context` were present.
+
+### Outstanding issues
+
+- The user may still be looking at Page Production or another URL/domain when expecting the Panel Focus side-rail changes.
+
+### Risks or caveats
+
+- Cloudflare's dashboard Build connection and API deployment records do not expose the same shape of data; deployment/version records are the reliable evidence seen in this pass.
+
+### Operator follow-up
+
+- Use the Cloudflare dashboard build/retry controls for future deploy failures.
+- If the live UI appears stale, verify the exact URL and click `Focus panel` from Page Production before assuming the bundle is stale.
+
+### Next steps
+
+- If automatic deploys fail again, inspect the Cloudflare build log for the commit SHA and compare it with `git rev-parse origin/main`.
+
 ## How to Use These Docs
 
 | File | Use |

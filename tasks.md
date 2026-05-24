@@ -414,8 +414,8 @@ Checklist for current and upcoming phases. Update as work completes.
 ## Cloudflare Workers Builds — Version / Deploy commands (2026-04-16) — OPERATOR DASHBOARD
 
 - [x] **Repo:** [`package.json`](package.json) — **`deploy`** / **`preview`** use **`--config ./wrangler.jsonc`**; **`cf:versions-upload`** for CI. Docs: [`CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md`](CLOUDFLARE_DEPLOYMENT_CHECKLIST_USER.md) **D4e**. **Verify:** `npm run build`, `npm run cf:versions-upload` (passes locally).
-- [x] **Repo-owned GitHub Actions deploy:** [`.github/workflows/deploy-cloudflare-worker.yml`](.github/workflows/deploy-cloudflare-worker.yml) deploys pushes to **`main`** and manual workflow runs with **`npm ci`** → **`npm run build`** → **`npx wrangler deploy --config ./wrangler.jsonc`**. Requires GitHub Actions secret **`CLOUDFLARE_API_TOKEN`**.
-- [ ] **Operator:** In Cloudflare **Workers** project **Settings → Build**: set **Deploy command** to **`npx wrangler deploy --config ./wrangler.jsonc`** and **Version command** to **`npm run cf:versions-upload`**. Push/retry the branch build after pulling these changes.
+- [x] **Cloudflare Builds connected:** Cloudflare **Workers → Settings → Build** is connected to `JusheZion/Nano-Banana-Expanded`, production branch **`main`**, build command **`npm ci && npm run build`**, deploy command **`npx wrangler deploy --config ./wrangler.jsonc`**, root directory **`/`**. Cloudflare manages the build API token; do not duplicate this with a GitHub Actions deploy token unless intentionally switching pipelines.
+- [ ] **Operator:** In Cloudflare **Workers** project **Settings → Build**, confirm the **Version command** is **`npm run cf:versions-upload`** or **`npx wrangler versions upload --config ./wrangler.jsonc`** if preview/branch builds are enabled later.
 
 ## Git + Cloudflare deploy alignment (2026-04-15) — COMPLETE
 
