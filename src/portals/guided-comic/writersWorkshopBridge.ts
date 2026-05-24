@@ -170,6 +170,14 @@ type PageCardOptions = {
   existingCards?: GuidedComicBridgePageCard[];
 };
 
+export type GuidedWriterPageBeatImportStats = {
+  pageRows: number;
+  pagesWithPanelBeats: number;
+  panelBeatCount: number;
+  emptyPageNumbers: number[];
+  invalidPageNumbers: number[];
+};
+
 type GuidedComicNotes = WriterIssueBridgeDraft['notes']['guidedComic'];
 
 const GUIDED_OUTLINE_BEAT_SLOTS: Array<Pick<GuidedComicBridgeOutlineBeat, 'id' | 'title'>> = [
@@ -353,9 +361,78 @@ function formatOutlineBeatSummary(beat: IssueOutlinePageBeat): string {
   return lines.filter(Boolean).join('\n\n');
 }
 
+function readStringField(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function normalizePageBeatsJson(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.panels)) return value;
+
+  return {
+    ...record,
+    panels: record.panels.map((panel, index) => {
+      if (!panel || typeof panel !== 'object' || Array.isArray(panel)) return panel;
+      const panelRecord = panel as Record<string, unknown>;
+      const action = readStringField(panelRecord, ['action', 'summary', 'description', 'beat', 'visual', 'notes', 'dialogue']);
+      return {
+        ...panelRecord,
+        index: typeof panelRecord.index === 'number' ? panelRecord.index : index + 1,
+        ...(action ? { action } : {}),
+        ...(typeof panelRecord.dialogue_placeholder === 'string' || typeof panelRecord.dialogue !== 'string'
+          ? {}
+          : { dialogue_placeholder: panelRecord.dialogue }),
+      };
+    }),
+  };
+}
+
 function getPageBeatsJson(value: unknown): PageBeatsJson | null {
-  const parsed = pageBeatsJsonSchema.safeParse(value);
+  const parsed = pageBeatsJsonSchema.safeParse(normalizePageBeatsJson(value));
   return parsed.success ? parsed.data : null;
+}
+
+export function getWriterPageBeatImportStats(pages: WriterPageBridgeRow[]): GuidedWriterPageBeatImportStats {
+  return pages.reduce<GuidedWriterPageBeatImportStats>(
+    (stats, page) => {
+      const beatsJson = getPageBeatsJson(page.beats_json);
+      if (beatsJson) {
+        return {
+          ...stats,
+          pagesWithPanelBeats: stats.pagesWithPanelBeats + 1,
+          panelBeatCount: stats.panelBeatCount + beatsJson.panels.length,
+        };
+      }
+
+      const rawPanels =
+        page.beats_json && typeof page.beats_json === 'object' && !Array.isArray(page.beats_json)
+          ? (page.beats_json as { panels?: unknown }).panels
+          : null;
+      if (Array.isArray(rawPanels) && rawPanels.length > 0) {
+        return {
+          ...stats,
+          invalidPageNumbers: [...stats.invalidPageNumbers, page.page_number],
+        };
+      }
+
+      return {
+        ...stats,
+        emptyPageNumbers: [...stats.emptyPageNumbers, page.page_number],
+      };
+    },
+    {
+      pageRows: pages.length,
+      pagesWithPanelBeats: 0,
+      panelBeatCount: 0,
+      emptyPageNumbers: [],
+      invalidPageNumbers: [],
+    },
+  );
 }
 
 function formatWriterPanelBeat(panel: PageBeatsJson['panels'][number], fallbackIndex: number): string {

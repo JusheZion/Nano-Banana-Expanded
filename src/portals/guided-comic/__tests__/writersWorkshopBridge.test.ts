@@ -7,6 +7,7 @@ import {
   analyzeGuidedDialogueSeedDensity,
   createEditableDialogueSeedsFromWriterSeed,
   getGuidedWriterPageBeatBatchOffsets,
+  getWriterPageBeatImportStats,
   buildGuidedComicVisualPageMetadata,
   mapWriterDialogueToGuidedDialogueSeeds,
   mapWriterIssueToGuidedStoryFoundation,
@@ -370,6 +371,54 @@ describe('writersWorkshopBridge', () => {
       'Panel 1: Wide shot of the gate opening above the city. Composition: wide establishing panel. Emotion: awe. Dialogue: MARA: It is awake.',
       'Panel 2: Sol reaches for the failing controls. SFX: KRAK.',
     ]);
+  });
+
+  it('maps common edited Writer beat aliases into Guided panel beats', () => {
+    const cards = mapWriterPagesToGuidedPageCards([
+      makeWriterPage({
+        beats_json: {
+          one_line_hook: 'A revised page hook.',
+          panels: [
+            { index: 1, summary: 'Alias summary becomes a panel action.' },
+            { index: 2, description: 'Alias description also becomes a panel action.', dialogue: 'MARA: Keep moving.' },
+          ],
+        },
+      }),
+    ]);
+
+    expect(cards[0].panelBeats).toEqual([
+      'Panel 1: Alias summary becomes a panel action.',
+      'Panel 2: Alias description also becomes a panel action. Dialogue: MARA: Keep moving.',
+    ]);
+  });
+
+  it('counts only usable Writer page-beat payloads for import messaging', () => {
+    const stats = getWriterPageBeatImportStats([
+      makeWriterPage({
+        page_number: 1,
+        beats_json: {
+          panels: [{ action: 'Usable beat.' }, { description: 'Usable alias beat.' }],
+        },
+      }),
+      makeWriterPage({
+        id: 'page-2',
+        page_number: 2,
+        beats_json: { panels: [{ sfx: 'BOOM' }] },
+      }),
+      makeWriterPage({
+        id: 'page-3',
+        page_number: 3,
+        beats_json: null,
+      }),
+    ]);
+
+    expect(stats).toEqual({
+      pageRows: 3,
+      pagesWithPanelBeats: 1,
+      panelBeatCount: 2,
+      emptyPageNumbers: [3],
+      invalidPageNumbers: [2],
+    });
   });
 
   it('creates new Guided page cards from Writers Workshop page beats when no local card exists', () => {

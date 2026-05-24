@@ -5106,6 +5106,64 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Deploy the pushed commit through the existing Cloudflare Workers Builds path and verify the live Worker shows the new cover workspace.
 
+## Guided Comics Writer Beat Import Visibility Fix - 2026-05-24
+
+### What changed
+
+- Added visible `Writer-imported beats` fields to the Page Workspace left rail.
+- Added an editable Page beat textarea plus editable Panel beat textareas for every active panel on the page.
+- Reworded the old vague Writer import helper copy so it points to the actual fields shown directly below it.
+- Made the Writers' Workshop import bridge count actual usable saved panel beats, not just Writer page rows.
+- Made the Writer beat parser tolerate common edited beat aliases such as `summary`, `description`, `beat`, `visual`, `notes`, and `dialogue` by normalizing them into the expected `action`/`dialogue_placeholder` shape before mapping into Guided Comics.
+- Updated the import success message to report Writer page rows, usable panel-beat count, pages with usable panel beats, dialogue seeds, and whether no saved panel beats were found.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: the import status was row-count oriented. It could say Writer pages were imported even when `writer_pages.beats_json` contained no valid saved panel beats for Guided Comics to render.
+- A second UX issue compounded the bug: Page Workspace had explanatory copy about page/panel beat fields, but the actual editable beat fields were not visible there; the clearest field was in Panel Focus.
+- The bridge still uses the existing Writer Workshop `writer_pages.beats_json` path and existing Guided `pageCards` state.
+- No new portal type, Supabase/schema changes, ComicEditor refactor, Advanced Studio changes, Imageshop changes, Image Vault rewrites, save/load/export changes, geometry changes, shapes, balloons, or image preservation changes were introduced.
+
+### Verification
+
+- `git diff --check`
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts` passed: 2 files, 24 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/stores/__tests__/guidedComicLayoutImport.test.ts` passed: 4 files, 38 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Local browser QA at `http://localhost:5174/` followed:
+  - `Comic Creator -> Untitled series -> Open Current Issue -> Page Workspace`
+  - Confirmed `Writer-imported beats` appears.
+  - Confirmed `Page beat`, `Panel 1 beat`, `Panel 2 beat`, `Panel 3 beat`, and `Panel 4 beat` fields appear in Page Workspace.
+  - Confirmed the old vague copy no longer appears.
+  - Confirmed no browser console errors.
+- Browser screenshot capture timed out twice through the in-app browser, so DOM snapshot evidence was used for the rendered QA proof.
+
+### Outstanding issues
+
+- This pass did not query the user's live Writer issue rows directly, so it cannot say whether their current Writer issue has empty, invalid, or valid `beats_json`; the UI will now report that distinction in the import message.
+
+### Risks or caveats
+
+- Page Workspace is denser because the Writer-imported beat fields are now visible there. This is intentional to remove ambiguity about where imported beats landed.
+
+### Operator follow-up
+
+- Re-run `Import latest page beats` on the linked Guided issue.
+- If the message says `0 saved panel beats`, run `Generate / update page beats` first, then import again.
+- If the message reports unreadable beat JSON, inspect the relevant Writer page rows or regenerate those page beats.
+
+### Next steps
+
+- After this is committed and deployed, verify the live site with a Writer issue that has known saved `writer_pages.beats_json.panels` data.
+
 ## How to Use These Docs
 
 | File | Use |

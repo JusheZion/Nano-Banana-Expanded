@@ -123,6 +123,7 @@ import {
   createEditableDialogueSeedsFromWriterSeed,
   createWriterIssueDraftFromGuidedStoryFoundation,
   getGuidedWriterPageBeatBatchOffsets,
+  getWriterPageBeatImportStats,
   mapWriterDialogueToGuidedDialogueSeeds,
   mapWriterIssueToGuidedStoryFoundation,
   mapWriterOutlineToGuidedOutlineBeats,
@@ -3005,6 +3006,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     nextPageCards = mergeWriterPagesIntoGuidedPageCards(nextPageCards, pageRows, {
       defaultPanelCount: pageCards[0]?.panelCount ?? 3,
     }) as PageCard[];
+    const pageBeatStats = getWriterPageBeatImportStats(pageRows);
     const dialogueSeeds = mapWriterDialogueToGuidedDialogueSeeds(pageRows);
     setPageCards(nextPageCards);
     setWriterDialogueSeeds(Object.fromEntries(dialogueSeeds.map((seed) => [seed.pageNumber, seed])));
@@ -3021,11 +3023,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setWriterBridgeSelectedIssueId(issueId);
     setActivePageNumber(nextPageCards[0]?.pageNumber ?? null);
     setWriterBridgeBusyAction(null);
+    const pageBeatStatus =
+      pageBeatStats.panelBeatCount > 0
+        ? `${pageBeatStats.panelBeatCount} panel beat${pageBeatStats.panelBeatCount === 1 ? '' : 's'} from ${
+            pageBeatStats.pagesWithPanelBeats
+          } page${pageBeatStats.pagesWithPanelBeats === 1 ? '' : 's'}`
+        : '0 saved panel beats';
+    const skippedBeatStatus =
+      pageBeatStats.panelBeatCount === 0 && pageBeatStats.pageRows > 0
+        ? ' Run Generate / update page beats, then import again.'
+        : pageBeatStats.invalidPageNumbers.length > 0
+          ? ` ${pageBeatStats.invalidPageNumbers.length} page${pageBeatStats.invalidPageNumbers.length === 1 ? '' : 's'} had unreadable beat JSON.`
+          : '';
     setWriterBridgeMessage(
-      `Imported ${importedOutline ? 'outline, ' : ''}${pageRows.length} Writer page${pageRows.length === 1 ? '' : 's'} and ${dialogueSeeds.reduce(
+      `Imported ${importedOutline ? 'outline, ' : ''}${pageRows.length} Writer page${pageRows.length === 1 ? '' : 's'}, ${pageBeatStatus}, and ${dialogueSeeds.reduce(
         (total, seed) => total + seed.panelSeeds.length,
         0,
-      )} dialogue seed${dialogueSeeds.length === 1 ? '' : 's'}.`,
+      )} dialogue seed${dialogueSeeds.length === 1 ? '' : 's'}.${skippedBeatStatus}`,
     );
   };
   const writerToolErrorMessage = (res: { error: string; details?: string }) =>
@@ -5667,8 +5681,44 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </div>
                 </div>
                 <p className="border-l-2 border-amber-200/28 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/42">
-                  Beats imported from Writers' Workshop land in the page and panel beat fields. Visual Prep references stay separate, then travel with the selected panel when it opens in Imageshop.
+                  Imported Writer beats are shown in the editable fields below. Visual Prep references stay separate, then travel with the selected panel when it opens in Imageshop.
                 </p>
+                <div className="border border-white/10 bg-black/25 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">Writer-imported beats</p>
+                  <label className="mt-3 block text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                    Page beat
+                    <textarea
+                      value={selectedProductionPage.summary}
+                      onChange={(event) =>
+                        updatePageCard(selectedProductionPage.pageNumber, {
+                          summary: event.target.value,
+                        })
+                      }
+                      rows={4}
+                      className="mt-2 min-h-[7rem] w-full resize-y rounded-md border border-white/15 bg-black/35 px-3 py-2 text-xs font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
+                      placeholder="Writer page beat or one-line hook"
+                    />
+                  </label>
+                  <div className="mt-3 grid gap-2">
+                    {getGuidedComicExistingPanelBeats(selectedProductionPage).map((beat, panelIndex) => (
+                      <label
+                        key={`${selectedProductionPage.pageNumber}-writer-panel-beat-${panelIndex}`}
+                        className="block text-[10px] font-bold uppercase tracking-[0.14em] text-white/45"
+                      >
+                        Panel {panelIndex + 1} beat
+                        <textarea
+                          value={beat}
+                          onChange={(event) =>
+                            updatePagePanelBeat(selectedProductionPage.pageNumber, panelIndex, event.target.value)
+                          }
+                          rows={3}
+                          className="mt-1 min-h-[5.5rem] w-full resize-y rounded-md border border-white/15 bg-black/35 px-3 py-2 text-xs font-medium normal-case leading-relaxed tracking-normal text-white outline-none focus:border-amber-300/70"
+                          placeholder={`Writer beat for panel ${panelIndex + 1}`}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div
