@@ -96,9 +96,12 @@ import {
 import {
   GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT,
   getGuidedComicCompletedIssueCount,
+  getGuidedComicDeleteIssueLabel,
+  getGuidedComicDeleteSeriesLabel,
   getGuidedComicLibrarySeriesGroups,
   getGuidedComicProjectCoverImageUrl,
   isGuidedComicLivingArchiveUnlocked,
+  type GuidedComicSeriesGroup,
 } from '@/portals/guided-comic/guidedComicLibraryView';
 import {
   normalizeGuidedComicLibraryEntryLayout,
@@ -2862,16 +2865,16 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setLibraryStage(sameSeriesStillExists ? nextStage : 'series-gallery');
     if (!sameSeriesStillExists) setSelectedSeriesKey(remainingGroups[0]?.seriesKey ?? null);
   };
-  const deleteLibrarySeries = () => {
-    if (!projectLibrary || !selectedSeriesGroup) return;
+  const deleteLibrarySeries = (seriesGroup: GuidedComicSeriesGroup | null = selectedSeriesGroup) => {
+    if (!projectLibrary || !seriesGroup) return;
     const confirmed = window.confirm(
-      `Delete Guided series "${selectedSeriesGroup.seriesTitle}" and all ${selectedSeriesGroup.projects.length} issue${
-        selectedSeriesGroup.projects.length === 1 ? '' : 's'
+      `Delete Guided series "${seriesGroup.seriesTitle}" and all ${seriesGroup.projects.length} issue${
+        seriesGroup.projects.length === 1 ? '' : 's'
       } from this browser?`,
     );
     if (!confirmed) return;
 
-    const deletedProjectIds = new Set(selectedSeriesGroup.projects.map((project) => project.projectId));
+    const deletedProjectIds = new Set(seriesGroup.projects.map((project) => project.projectId));
     const nextProjects = projectLibrary.projects.filter((project) => !deletedProjectIds.has(project.projectId));
     const activeProjectWasDeleted = Boolean(activeProjectId && deletedProjectIds.has(activeProjectId));
     const nextActiveProjectId =
@@ -2887,7 +2890,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     applyGuidedLibraryDeletion(
       nextLibrary,
       activeProjectWasDeleted,
-      `Deleted Guided series ${selectedSeriesGroup.seriesTitle}.`,
+      `Deleted Guided series ${seriesGroup.seriesTitle}.`,
     );
 
     const nextGroups = getGuidedComicLibrarySeriesGroups(nextProjects, libraryPreferences.seriesCoverProjectIds);
@@ -6690,42 +6693,53 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
               <div className="flex min-w-0 gap-3 overflow-x-auto pb-2">
                 {recentLibraryProjects.map((project, index) => {
                   const coverImageUrl = getGuidedComicProjectCoverImageUrl(project);
+                  const projectDisplayName = getGuidedComicProjectDisplayName(project);
                   return (
-                    <button
-                      key={project.projectId}
-                      type="button"
-                      onClick={() => openLibraryIssueWorkspace(project.projectId)}
-                      className="group grid w-28 shrink-0 gap-2 text-left outline-none"
-                    >
-                      <span
-                        className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-hover:shadow-[0_20px_34px_rgba(0,0,0,0.54)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                        style={getGuidedComicCoverMotionStyle(
-                          `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'}) rotateX(1.5deg) translateY(${index % 2 === 0 ? '2px' : '-1px'})`,
-                          `rotateZ(${index % 2 === 0 ? '-0.4deg' : '0.4deg'}) rotateX(0deg) translateY(-7px) translateZ(18px)`,
-                        )}
+                    <article key={project.projectId} className="group grid w-28 shrink-0 gap-2 text-left">
+                      <button
+                        type="button"
+                        onClick={() => openLibraryIssueWorkspace(project.projectId)}
+                        className="grid gap-2 text-left outline-none"
                       >
-                        {coverImageUrl ? (
-                          <VaultImageWithFallback
-                            src={coverImageUrl}
-                            alt={`${getGuidedComicProjectDisplayName(project)} cover`}
-                            frameClassName="h-full w-full overflow-hidden bg-black/35"
-                            imgClassName="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span
-                            className="flex h-full w-full flex-col justify-between p-2"
-                            style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
-                          >
-                            <span className="text-[9px] font-black uppercase tracking-[0.14em] text-white/74">
-                              Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                        <span
+                          className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/28 bg-[#11265b] shadow-[0_16px_26px_rgba(0,0,0,0.42)] transition duration-200 group-hover:border-amber-200/55 group-hover:shadow-[0_20px_34px_rgba(0,0,0,0.54)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                          style={getGuidedComicCoverMotionStyle(
+                            `rotateZ(${index % 2 === 0 ? '-1deg' : '1deg'}) rotateX(1.5deg) translateY(${index % 2 === 0 ? '2px' : '-1px'})`,
+                            `rotateZ(${index % 2 === 0 ? '-0.4deg' : '0.4deg'}) rotateX(0deg) translateY(-7px) translateZ(18px)`,
+                          )}
+                        >
+                          {coverImageUrl ? (
+                            <VaultImageWithFallback
+                              src={coverImageUrl}
+                              alt={`${projectDisplayName} cover`}
+                              frameClassName="h-full w-full overflow-hidden bg-black/35"
+                              imgClassName="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span
+                              className="flex h-full w-full flex-col justify-between p-2"
+                              style={{ background: getGuidedComicPlaceholderCoverBackground(project.projectId) }}
+                            >
+                              <span className="text-[9px] font-black uppercase tracking-[0.14em] text-white/74">
+                                Issue {project.issueNumber || project.snapshot.setupForm.issueNumber || '?'}
+                              </span>
+                              <span className="text-xs font-black leading-none text-white">{project.issueTitle || 'Untitled issue'}</span>
                             </span>
-                            <span className="text-xs font-black leading-none text-white">{project.issueTitle || 'Untitled issue'}</span>
-                          </span>
-                        )}
-                        <span className="absolute inset-y-0 left-0 w-1.5 bg-white/[0.14]" />
-                      </span>
-                      <span className="truncate text-[11px] font-black text-white/74">{project.issueTitle || getGuidedComicProjectDisplayName(project)}</span>
-                    </button>
+                          )}
+                          <span className="absolute inset-y-0 left-0 w-1.5 bg-white/[0.14]" />
+                        </span>
+                        <span className="truncate text-[11px] font-black text-white/74">{project.issueTitle || projectDisplayName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={getGuidedComicDeleteIssueLabel(projectDisplayName)}
+                        onClick={() => deleteLibraryIssue(project, 'series-gallery')}
+                        className="inline-flex items-center justify-center gap-1 rounded border border-rose-200/20 bg-rose-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-rose-100/74 transition hover:bg-rose-500/15 hover:text-rose-50 motion-reduce:transition-none"
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden />
+                        Delete
+                      </button>
+                    </article>
                   );
                 })}
               </div>
@@ -6736,46 +6750,55 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
             <div className="guided-library-stage guided-library-stage--series-gallery grid gap-6">
               <div className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] lg:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
                 {librarySeriesGroups.map((group, index) => (
-                  <button
-                    key={group.seriesKey}
-                    type="button"
-                    onClick={() => openLibrarySeriesFocus(group.seriesKey)}
-                    className="group min-w-0 text-left outline-none"
-                    style={{ perspective: '900px' }}
-                  >
-                    <span
-                      className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
-                      style={getGuidedComicCoverMotionStyle(
-                        `rotateZ(${index % 2 === 0 ? '-1.8deg' : '1.5deg'}) rotateX(2deg) translateY(${index % 3 === 0 ? '6px' : '0'})`,
-                        `rotateZ(${index % 2 === 0 ? '-0.7deg' : '0.7deg'}) rotateX(0deg) translateY(-9px) translateZ(22px)`,
-                      )}
+                  <article key={group.seriesKey} className="group min-w-0 text-left" style={{ perspective: '900px' }}>
+                    <button
+                      type="button"
+                      onClick={() => openLibrarySeriesFocus(group.seriesKey)}
+                      className="block w-full text-left outline-none"
                     >
-                      {group.coverImageUrl ? (
-                        <VaultImageWithFallback
-                          src={group.coverImageUrl}
-                          alt={`${group.seriesTitle} cover`}
-                          frameClassName="h-full w-full overflow-hidden bg-black/35"
-                          imgClassName="h-full w-full object-cover"
-                        />
-                        ) : (
-                        <span
-                          className="flex h-full w-full flex-col justify-between p-3"
-                          style={{ background: getGuidedComicPlaceholderCoverBackground(group.seriesKey) }}
-                        >
-                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/76">Series</span>
-                          <span className="text-lg font-black leading-none text-white drop-shadow">{group.seriesTitle}</span>
-                          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/68">
-                            {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
+                      <span
+                        className="guided-library-cover guided-library-cover-motion relative block aspect-[2/3] overflow-hidden border border-amber-200/35 bg-[#11265b] shadow-[0_24px_42px_rgba(0,0,0,0.46)] transition duration-200 group-hover:border-amber-100/70 group-hover:shadow-[0_30px_52px_rgba(0,0,0,0.58)] group-focus-visible:ring-2 group-focus-visible:ring-amber-200 motion-reduce:transition-none"
+                        style={getGuidedComicCoverMotionStyle(
+                          `rotateZ(${index % 2 === 0 ? '-1.8deg' : '1.5deg'}) rotateX(2deg) translateY(${index % 3 === 0 ? '6px' : '0'})`,
+                          `rotateZ(${index % 2 === 0 ? '-0.7deg' : '0.7deg'}) rotateX(0deg) translateY(-9px) translateZ(22px)`,
+                        )}
+                      >
+                        {group.coverImageUrl ? (
+                          <VaultImageWithFallback
+                            src={group.coverImageUrl}
+                            alt={`${group.seriesTitle} cover`}
+                            frameClassName="h-full w-full overflow-hidden bg-black/35"
+                            imgClassName="h-full w-full object-cover"
+                          />
+                          ) : (
+                          <span
+                            className="flex h-full w-full flex-col justify-between p-3"
+                            style={{ background: getGuidedComicPlaceholderCoverBackground(group.seriesKey) }}
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/76">Series</span>
+                            <span className="text-lg font-black leading-none text-white drop-shadow">{group.seriesTitle}</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/68">
+                              {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
+                            </span>
                           </span>
-                        </span>
-                      )}
-                      <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
-                    </span>
-                    <span className="mt-3 block truncate text-sm font-black text-white">{group.seriesTitle}</span>
-                    <span className="mt-1 block text-xs font-bold text-amber-100/52">
-                      {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
-                    </span>
-                  </button>
+                        )}
+                        <span className="absolute inset-y-0 left-0 w-2 bg-white/[0.14]" />
+                      </span>
+                      <span className="mt-3 block truncate text-sm font-black text-white">{group.seriesTitle}</span>
+                      <span className="mt-1 block text-xs font-bold text-amber-100/52">
+                        {group.projects.length} issue{group.projects.length === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={getGuidedComicDeleteSeriesLabel(group.seriesTitle)}
+                      onClick={() => deleteLibrarySeries(group)}
+                      className="mt-2 inline-flex w-full items-center justify-center gap-1.5 border border-rose-200/20 bg-rose-500/10 px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-rose-100/72 transition hover:bg-rose-500/15 hover:text-rose-50 motion-reduce:transition-none"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                      Delete Series
+                    </button>
+                  </article>
                 ))}
 
                 <button
@@ -6897,7 +6920,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </button>
                   <button
                     type="button"
-                    onClick={deleteLibrarySeries}
+                    aria-label={getGuidedComicDeleteSeriesLabel(selectedSeriesGroup.seriesTitle)}
+                    onClick={() => deleteLibrarySeries()}
                     className="inline-flex items-center justify-center gap-2 border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/15 motion-reduce:transition-none"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -6925,7 +6949,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   </button>
                   <button
                     type="button"
-                    onClick={deleteLibrarySeries}
+                    aria-label={getGuidedComicDeleteSeriesLabel(selectedSeriesGroup.seriesTitle)}
+                    onClick={() => deleteLibrarySeries()}
                     className="inline-flex items-center justify-center gap-2 border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/15 motion-reduce:transition-none"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -7009,6 +7034,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                       </button>
                       <button
                         type="button"
+                        aria-label={getGuidedComicDeleteIssueLabel(getGuidedComicProjectDisplayName(project))}
                         onClick={() => deleteLibraryIssue(project, 'issue-gallery')}
                         className="mt-2 inline-flex w-full items-center justify-center gap-1.5 border border-rose-200/20 bg-rose-500/10 px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-rose-100/72 transition hover:bg-rose-500/15 hover:text-rose-50 motion-reduce:transition-none"
                       >

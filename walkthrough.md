@@ -5432,6 +5432,66 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
 
+## Guided Library Delete Tools on Visible Shelves - 2026-05-25
+
+### What changed
+
+- Exposed Guided delete controls on the visible Comic Library entry surfaces:
+  - Recent issue cards in the Hybrid Shelf now show a `Delete` issue button.
+  - Series cards in the Series Gallery now show a `Delete Series` button.
+- Kept the existing delete controls in Series Focus, Issue Gallery, and the issue workspace.
+- Added accessible delete-label helpers so visible card buttons announce the specific issue or series they delete.
+- Updated the series delete handler so it can delete a specific series card directly instead of only deleting the currently selected series.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/guidedComicLibraryView.ts`
+- `src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: the previous delete pass added controls to Series Focus and Issue Gallery, but the user-visible Hybrid Shelf / Cover Table entry view still rendered recent issues and series covers as large open-only cards.
+- Recent issue cards were changed from one all-in button into an `article` with a dedicated open button and a separate delete button, avoiding nested buttons.
+- Series gallery cards were changed from one all-in button into an `article` with a dedicated open button and a separate `Delete Series` button.
+- Existing confirmation prompts and local Guided Comic Library deletion logic are reused. No Supabase/schema change was made.
+- No new portal type, ComicEditor refactor, Advanced Studio change, Imageshop change, Image Vault change, save/load/export change, geometry change, shapes/balloons change, or image preservation change was introduced.
+
+### Verification
+
+- Added failing regression coverage first:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts` failed because `getGuidedComicDeleteIssueLabel` and `getGuidedComicDeleteSeriesLabel` did not exist yet.
+- After implementation:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed: 2 files, 19 tests.
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryPreferences.test.ts` passed: 3 files, 25 tests.
+  - `git diff --check` passed.
+  - `npm run build` passed with the existing large `ComicPortal` chunk warning.
+  - `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Browser QA at `http://localhost:5174/?writer-beat-import-qa=1` confirmed:
+  - Cover Table renders a series-card `Delete Series` control in the visible Series Gallery.
+  - Switching Library View to `Hybrid Shelf` renders the `Recent issue stack`.
+  - Hybrid Shelf shows a recent issue delete control with an accessible name like `Delete issue #1`.
+  - Hybrid Shelf still shows the visible series-card `Delete Series` control.
+  - Browser console check reported 0 errors/warnings during the flow.
+
+### Outstanding issues
+
+- None for the missing visible Guided delete controls.
+
+### Risks or caveats
+
+- Delete buttons still require browser confirmation before removing local Guided Comic Library data.
+- Guided delete controls delete local Guided Comic Library entries only; Writer Workshop deletes remain separate.
+
+### Operator follow-up
+
+- After deployment, verify the live Cover Table in both Series Gallery and Hybrid Shelf views and delete any unwanted local Guided series/issues from those visible controls.
+
+### Next steps
+
+- Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
+
 ## How to Use These Docs
 
 | File | Use |

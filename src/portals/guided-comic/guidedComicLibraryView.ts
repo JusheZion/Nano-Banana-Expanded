@@ -74,6 +74,16 @@ export function isGuidedComicLivingArchiveUnlocked(projects: GuidedComicProject[
   return getGuidedComicCompletedIssueCount(projects) >= GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT;
 }
 
+export function getGuidedComicDeleteIssueLabel(issueName: string): string {
+  const trimmed = issueName.trim();
+  return trimmed ? `Delete issue ${trimmed}` : 'Delete issue';
+}
+
+export function getGuidedComicDeleteSeriesLabel(seriesTitle: string): string {
+  const trimmed = seriesTitle.trim();
+  return trimmed ? `Delete series ${trimmed}` : 'Delete series';
+}
+
 function getSeriesTitleSource(project: GuidedComicProject): string {
   return normalizeSeriesTitle(project.seriesTitle) || normalizeSeriesTitle(project.snapshot.setupForm.seriesTitle);
 }

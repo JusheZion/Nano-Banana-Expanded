@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   GUIDED_COMIC_LIVING_ARCHIVE_UNLOCK_COUNT,
+  getGuidedComicDeleteIssueLabel,
+  getGuidedComicDeleteSeriesLabel,
   getGuidedComicCompletedIssueCount,
   getGuidedComicLibrarySeriesGroups,
   getGuidedComicProjectCoverImageUrl,
@@ -76,6 +78,13 @@ describe('guided comic library view helpers', () => {
     expect(getGuidedComicSeriesTitle(null)).toBe('Untitled series');
     expect(getGuidedComicSeriesKey('  The   Neon\nArchive!!!  ')).toBe('the-neon-archive');
     expect(getGuidedComicSeriesKey(null)).toBe('untitled-series');
+  });
+
+  it('builds accessible delete labels for visible library cards', () => {
+    expect(getGuidedComicDeleteIssueLabel('  Gate of the First Sun  ')).toBe('Delete issue Gate of the First Sun');
+    expect(getGuidedComicDeleteSeriesLabel('  Astral City  ')).toBe('Delete series Astral City');
+    expect(getGuidedComicDeleteIssueLabel('   ')).toBe('Delete issue');
+    expect(getGuidedComicDeleteSeriesLabel('   ')).toBe('Delete series');
   });
 
   it('groups issue-level projects into series containers, including one-shot series', () => {
