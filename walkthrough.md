@@ -5376,6 +5376,62 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue the next pass with the remaining Guided workflow items: cover workspace access polish, Writer beat import semantics, and panel image fit/position handles.
 
+## Guided Page Panel Direct Move Drag - 2026-05-25
+
+### What changed
+
+- Added direct drag-to-move behavior for panels in the Guided Comics Page Production workspace.
+- Reused the existing `startLayoutPanelEdit(..., 'move')` and `moveGuidedComicPanelGeometry` path instead of adding a second geometry model.
+- Added a small drag-target guard so dragging starts from ordinary panel content, while panel action buttons, form controls, sliders, and resize handles remain usable as controls.
+- Kept the existing Layout workspace body-drag behavior but applied the same drag-target guard there as well.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The root cause was not missing geometry math. The shared move helper already existed and the Layout workspace already used it.
+- The Page Production panel body only selected panels and exposed resize handles, so users could resize from the corners but could not grab the body to move the panel.
+- Page Production panel cards now start a move edit from `onPointerDown` when the pointer target is regular panel content.
+- The drag guard prevents nested buttons and editable controls from triggering movement, preserving Imageshop, Upload, resize handles, and text/form interactions.
+- `touchAction: 'none'` is applied to draggable panel cards so pointer drags are not swallowed by default touch/scroll behavior.
+- No new portal type, Supabase/schema changes, ComicEditor refactor, Advanced Studio changes, Imageshop changes, Image Vault changes, save/load/export changes, shape/balloon changes, or image preservation changes were introduced.
+
+### Verification
+
+- Added failing regression coverage first:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts` failed because `shouldStartGuidedPanelMoveDrag` did not exist yet.
+- After implementation:
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts` passed: 1 file, 8 tests.
+  - `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicLayoutPlan.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed: 3 files, 37 tests.
+  - `git diff --check` passed.
+  - `npm run build` passed with the existing large `ComicPortal` chunk warning.
+  - `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Browser QA at `http://localhost:5174/?writer-beat-import-qa=1` confirmed:
+  - Opened Comic Creator, opened the QA issue, and entered Page Workspace.
+  - The first Page Production panel reported `cursor: move` and `touch-action: none`.
+  - A direct drag on `Select page 1, panel 1` moved the panel about 62px right and 36px down without using a resize handle.
+  - Browser console check reported 0 errors/warnings during the flow.
+
+### Outstanding issues
+
+- None for direct page-panel movement.
+
+### Risks or caveats
+
+- Panel body dragging now begins immediately on pointer down in Page Production. Nested action buttons are guarded, but any future interactive element placed inside a panel should either be a native interactive element or use `data-guided-panel-drag-exempt="true"`.
+
+### Operator follow-up
+
+- After deployment, verify on the live site by opening Page Workspace and dragging a panel from its body, not the corner handle.
+
+### Next steps
+
+- Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
+
 ## How to Use These Docs
 
 | File | Use |

@@ -4,6 +4,7 @@ import {
   getGuidedPageNavigatorButtonLabel,
   normalizeGuidedComicReopenPreference,
   normalizeGuidedComicWorkspaceMode,
+  shouldStartGuidedPanelMoveDrag,
   shouldRenderGuidedPageNavigator,
 } from '@/portals/guided-comic/GuidedComicFlow';
 
@@ -49,5 +50,22 @@ describe('guided comic focus choreography modes', () => {
     expect(normalizeGuidedComicReopenPreference('issue-lightbox')).toBe('issue-lightbox');
     expect(normalizeGuidedComicReopenPreference('page-production')).toBe('page-production');
     expect(normalizeGuidedComicReopenPreference('invalid')).toBe('last-active');
+  });
+});
+
+describe('guided comic panel move drag targets', () => {
+  it('allows dragging from regular panel content', () => {
+    const panelBody = document.createElement('div');
+    panelBody.textContent = 'Panel beat';
+
+    expect(shouldStartGuidedPanelMoveDrag(panelBody)).toBe(true);
+  });
+
+  it('keeps buttons and form controls from starting panel move drags', () => {
+    const button = document.createElement('button');
+    const textarea = document.createElement('textarea');
+
+    expect(shouldStartGuidedPanelMoveDrag(button)).toBe(false);
+    expect(shouldStartGuidedPanelMoveDrag(textarea)).toBe(false);
   });
 });

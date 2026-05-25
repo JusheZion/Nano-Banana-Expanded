@@ -173,6 +173,12 @@ export function getGuidedPageNavigatorButtonLabel(pageNumber: number): string {
   return String(pageNumber);
 }
 
+export function shouldStartGuidedPanelMoveDrag(target: EventTarget | null): boolean {
+  if (typeof Element === 'undefined') return false;
+  if (!(target instanceof Element)) return false;
+  return !target.closest('button,input,textarea,select,a,[role="slider"],[data-guided-panel-drag-exempt="true"]');
+}
+
 export type GuidedComicWorkspaceMode = 'issue-lightbox' | 'issue-cover' | 'story-prep' | 'page-production' | 'panel-focus';
 
 type GuidedComicLibraryStage = 'series-gallery' | 'series-focus' | 'issue-gallery' | 'issue-workspace';
@@ -5956,6 +5962,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                           selectProductionPanelOnPage(selectedProductionPage.pageNumber, panel.panelId);
                         }
                       }}
+                      onPointerDown={(event) => {
+                        if (!shouldStartGuidedPanelMoveDrag(event.target)) return;
+                        startLayoutPanelEdit(event, selectedProductionPage.pageNumber, panel, 'move');
+                      }}
                       className="absolute min-h-0 overflow-hidden rounded-md border bg-amber-300/[0.055] text-left shadow-lg transition duration-300 hover:border-amber-200 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-200/60 motion-reduce:transition-none"
                       style={{
                         left: `${panel.x * 100}%`,
@@ -5963,6 +5973,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         width: `${panel.w * 100}%`,
                         height: `${panel.h * 100}%`,
                         borderColor: selected ? ACCENT_GOLD_SOLID : 'rgba(252,211,77,0.52)',
+                        cursor: panel.locked ? 'default' : 'move',
+                        touchAction: 'none',
                         boxShadow: selected
                           ? '0 0 0 2px rgba(252,246,186,0.25), 0 18px 40px rgba(0,0,0,0.35)'
                           : '0 0 0 1px rgba(0,0,0,0.32), 0 12px 30px rgba(0,0,0,0.28)',
@@ -9193,7 +9205,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                       setSelectedPanelId(panelId);
                                     }}
                                     onPointerDown={(event) => {
-                                      if (layoutDisclosureMode === 'edit') {
+                                      if (layoutDisclosureMode === 'edit' && shouldStartGuidedPanelMoveDrag(event.target)) {
                                         startLayoutPanelEdit(event, page.pageNumber, panel, 'move');
                                       }
                                     }}
@@ -9205,6 +9217,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                       height: `${panel.h * 100}%`,
                                       borderColor: selected ? `${ACCENT_GOLD_SOLID}` : 'rgba(252,211,77,0.52)',
                                       cursor: panel.locked ? 'default' : layoutDisclosureMode === 'edit' ? 'move' : 'pointer',
+                                      touchAction: layoutDisclosureMode === 'edit' ? 'none' : undefined,
                                       boxShadow: selected
                                         ? '0 0 0 2px rgba(252,246,186,0.28), 0 18px 40px rgba(0,0,0,0.34)'
                                         : '0 0 0 1px rgba(0,0,0,0.32), 0 12px 30px rgba(0,0,0,0.28)',
