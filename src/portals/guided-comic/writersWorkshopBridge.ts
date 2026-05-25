@@ -168,6 +168,11 @@ type PageCardOptions = {
   targetPageCount?: number;
   defaultPanelCount?: number | string;
   existingCards?: GuidedComicBridgePageCard[];
+  refreshImportedText?: boolean;
+};
+
+type PageCardMergeOptions = Pick<PageCardOptions, 'refreshImportedText'> & {
+  refreshImportedPanelBeats?: boolean;
 };
 
 export type GuidedWriterPageBeatImportStats = {
@@ -504,11 +509,17 @@ function pageCardFromExistingOrDefault(
 ): GuidedComicBridgePageCard {
   const existing = options.existingCards?.find((card) => card.pageNumber === pageNumber);
   const panelBeats = beatsJson?.panels.map((panel, index) => formatWriterPanelBeat(panel, index + 1)) ?? [];
+  const importedSummary = beatsJson?.one_line_hook?.trim() ?? '';
   const panelCount = existing?.panelCount ?? String(beatsJson?.panels.length || defaultPanelCountValue(options.defaultPanelCount));
 
   return {
     pageNumber,
-    summary: existing?.summary?.trim() ? existing.summary : beatsJson?.one_line_hook?.trim() ?? '',
+    summary:
+      options.refreshImportedText && importedSummary
+        ? importedSummary
+        : existing?.summary?.trim()
+          ? existing.summary
+          : importedSummary,
     panelCount,
     keyCharacters: existing?.keyCharacters ?? '',
     keyLocation: existing?.keyLocation ?? '',
@@ -564,22 +575,35 @@ function sortPageCards(cards: GuidedComicBridgePageCard[]): GuidedComicBridgePag
 function mergePageCardWithImport(
   existing: GuidedComicBridgePageCard | undefined,
   imported: GuidedComicBridgePageCard,
+  options: PageCardMergeOptions = {},
 ): GuidedComicBridgePageCard {
   if (!existing) return imported;
+  const refreshPanelBeats = options.refreshImportedText || options.refreshImportedPanelBeats;
   return {
     pageNumber: imported.pageNumber,
-    summary: existing.summary.trim() ? existing.summary : imported.summary,
+    summary:
+      options.refreshImportedText && imported.summary.trim()
+        ? imported.summary
+        : existing.summary.trim()
+          ? existing.summary
+          : imported.summary,
     panelCount: existing.panelCount.trim() ? existing.panelCount : imported.panelCount,
     keyCharacters: existing.keyCharacters.trim() ? existing.keyCharacters : imported.keyCharacters,
     keyLocation: existing.keyLocation.trim() ? existing.keyLocation : imported.keyLocation,
     expanded: existing.expanded,
-    panelBeats: existing.panelBeats.length > 0 ? existing.panelBeats : imported.panelBeats,
+    panelBeats:
+      refreshPanelBeats && imported.panelBeats.length > 0
+        ? imported.panelBeats
+        : existing.panelBeats.length > 0
+          ? existing.panelBeats
+          : imported.panelBeats,
   };
 }
 
 export function mergeWriterOutlineIntoGuidedPageCards(
   existingCards: GuidedComicBridgePageCard[],
   outlineCards: GuidedComicBridgePageCard[],
+  options: Pick<PageCardOptions, 'refreshImportedText'> = {},
 ): GuidedComicBridgePageCard[] {
   const existingByPage = new Map(existingCards.map((card) => [card.pageNumber, card]));
   const importedByPage = new Map(outlineCards.map((card) => [card.pageNumber, card]));
@@ -589,7 +613,7 @@ export function mergeWriterOutlineIntoGuidedPageCards(
     Array.from(pageNumbers).map((pageNumber) => {
       const existing = existingByPage.get(pageNumber);
       const imported = importedByPage.get(pageNumber);
-      return imported ? mergePageCardWithImport(existing, imported) : existing!;
+      return imported ? mergePageCardWithImport(existing, imported, options) : existing!;
     }),
   );
 }
@@ -608,7 +632,16 @@ export function mergeWriterPagesIntoGuidedPageCards(
   const pageNumbers = new Set([...existingByPage.keys(), ...importedByPage.keys()]);
 
   return sortPageCards(
-    Array.from(pageNumbers).map((pageNumber) => importedByPage.get(pageNumber) ?? existingByPage.get(pageNumber)!),
+    Array.from(pageNumbers).map((pageNumber) => {
+      const existing = existingByPage.get(pageNumber);
+      const imported = importedByPage.get(pageNumber);
+      return imported
+        ? mergePageCardWithImport(existing, imported, {
+            ...options,
+            refreshImportedPanelBeats: true,
+          })
+        : existing!;
+    }),
   );
 }
 

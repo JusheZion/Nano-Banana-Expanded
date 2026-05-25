@@ -5492,6 +5492,55 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
 
+## Guided Writer Beat Reimport Refresh - 2026-05-25
+
+### What changed
+
+- Fixed linked Writers Workshop reimports so updated Writer outline/page-beat text refreshes the visible Guided Comics page and panel beat fields.
+- Added an explicit Writer-text refresh mode to the bridge merge helpers instead of relying on the older fill-empty-only behavior.
+- Updated the Guided import action to use the refresh mode when importing the latest linked Writer issue.
+- Added regression coverage for both updated Writer outline summaries and updated Writer page/panel beats.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/writersWorkshopBridge.ts`
+- `src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Root cause: the Writer bridge had two different merge semantics. Saved Writer page rows refreshed panel beats, but imported outline/page summaries reused existing Guided text when those fields were non-empty. That meant a linked issue could report a successful import while the visible Guided page beat text stayed stale.
+- `refreshImportedText` now lets the import path treat Writer outline summaries and Writer page beat summaries as the current source of truth for text refreshes.
+- Writer page-beat imports still refresh imported panel beats by default, and they now avoid clearing existing Guided panel beats when the imported Writer row has no usable panel beat payload.
+- Local production metadata remains preserved during refresh: panel count, key characters, key location, expansion state, and local-only pages are kept.
+- No Supabase/schema changes, no new portal type, no ComicEditor refactor, and no Advanced Studio, Imageshop, Image Vault, save/load, export, geometry, shapes, balloons, or image preservation changes were introduced.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed: 1 file, 22 tests.
+- `npm run test -- --run src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts` passed: 2 files, 31 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+
+### Outstanding issues
+
+- None for the linked Writer beat reimport refresh bug.
+
+### Risks or caveats
+
+- Reimporting a linked Writer issue now intentionally refreshes Guided text fields from Writer data. Operators should treat the Writer issue as the source of truth before pressing import.
+- Manual Guided-only page or panel text can still be overwritten by a later linked Writer reimport, which matches the requested update behavior for linked books.
+
+### Operator follow-up
+
+- After deployment, update a linked issue's page/beat text in Writers Workshop, run Import/Update in Guided Comics, and verify the Guided page and panel beat fields show the revised Writer text.
+
+### Next steps
+
+- Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
+
 ## How to Use These Docs
 
 | File | Use |

@@ -3164,7 +3164,9 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         targetPageCount: targetPageCountFromInput(setupForm.targetPageCount),
         defaultPanelCount: pageCards[0]?.panelCount ?? 3,
       }) as PageCard[];
-      nextPageCards = mergeWriterOutlineIntoGuidedPageCards(nextPageCards, outlineCards) as PageCard[];
+      nextPageCards = mergeWriterOutlineIntoGuidedPageCards(nextPageCards, outlineCards, {
+        refreshImportedText: true,
+      }) as PageCard[];
       const linkedIssue = writerBridgeIssues.find((issue) => issue.id === issueId);
       if (linkedIssue) {
         applyWriterFoundationToEmptyLocalFields(mapWriterIssueToGuidedStoryFoundation(linkedIssue, { outline }));
@@ -3173,6 +3175,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
 
     nextPageCards = mergeWriterPagesIntoGuidedPageCards(nextPageCards, pageRows, {
       defaultPanelCount: pageCards[0]?.panelCount ?? 3,
+      refreshImportedText: true,
     }) as PageCard[];
     const pageBeatStats = getWriterPageBeatImportStats(pageRows);
     const dialogueSeeds = mapWriterDialogueToGuidedDialogueSeeds(pageRows);

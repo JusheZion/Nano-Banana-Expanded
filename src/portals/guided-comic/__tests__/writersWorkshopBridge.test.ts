@@ -319,6 +319,46 @@ describe('writersWorkshopBridge', () => {
     ]);
   });
 
+  it('can refresh Guided page summaries from updated linked Writers Workshop outline beats', () => {
+    const merged = mergeWriterOutlineIntoGuidedPageCards(
+      [
+        {
+          pageNumber: 1,
+          summary: 'Old imported page summary.',
+          panelCount: '4',
+          keyCharacters: 'Mara',
+          keyLocation: 'Gate',
+          expanded: false,
+          panelBeats: ['Keep existing panel beat when outline has no panel details'],
+        },
+      ],
+      [
+        {
+          pageNumber: 1,
+          summary: 'Updated Writer outline summary.',
+          panelCount: '3',
+          keyCharacters: '',
+          keyLocation: 'Writer location',
+          expanded: true,
+          panelBeats: [],
+        },
+      ],
+      { refreshImportedText: true },
+    );
+
+    expect(merged).toEqual([
+      {
+        pageNumber: 1,
+        summary: 'Updated Writer outline summary.',
+        panelCount: '4',
+        keyCharacters: 'Mara',
+        keyLocation: 'Gate',
+        expanded: false,
+        panelBeats: ['Keep existing panel beat when outline has no panel details'],
+      },
+    ]);
+  });
+
   it('maps Writers Workshop page beats into Guided panel beats while preserving existing page settings', () => {
     const pages = [
       makeWriterPage({
@@ -555,6 +595,62 @@ describe('writersWorkshopBridge', () => {
       summary: 'Local-only page.',
       panelBeats: ['Keep local beat'],
     });
+  });
+
+  it('refreshes Guided text from updated linked Writers Workshop page beats on reimport', () => {
+    const merged = mergeWriterPagesIntoGuidedPageCards(
+      [
+        {
+          pageNumber: 1,
+          summary: 'Old imported Writer summary.',
+          panelCount: '4',
+          keyCharacters: 'Mara',
+          keyLocation: 'Gate',
+          expanded: false,
+          panelBeats: ['Panel 1: Old imported beat.'],
+        },
+        {
+          pageNumber: 2,
+          summary: 'Local-only page.',
+          panelCount: '2',
+          keyCharacters: '',
+          keyLocation: '',
+          expanded: true,
+          panelBeats: ['Keep local beat'],
+        },
+      ],
+      [
+        makeWriterPage({
+          page_number: 1,
+          beats_json: {
+            one_line_hook: 'Updated Writer summary.',
+            panels: [{ index: 1, action: 'Updated Writer panel beat.' }],
+          },
+        }),
+      ],
+      { refreshImportedText: true },
+    );
+
+    expect(merged).toEqual([
+      {
+        pageNumber: 1,
+        summary: 'Updated Writer summary.',
+        panelCount: '4',
+        keyCharacters: 'Mara',
+        keyLocation: 'Gate',
+        expanded: false,
+        panelBeats: ['Panel 1: Updated Writer panel beat.'],
+      },
+      {
+        pageNumber: 2,
+        summary: 'Local-only page.',
+        panelCount: '2',
+        keyCharacters: '',
+        keyLocation: '',
+        expanded: true,
+        panelBeats: ['Keep local beat'],
+      },
+    ]);
   });
 
   it('extracts dialogue seeds from Writers Workshop comic script pages', () => {
