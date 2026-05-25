@@ -64,6 +64,36 @@ describe('useGuidedComicVaultBridge', () => {
     });
   });
 
+  it('preserves the requested guided panel target when selecting a vault image', () => {
+    useGuidedComicVaultBridge.getState().requestVaultSelection({
+      type: 'panel-art',
+      name: 'page-4-panel-2',
+      pageNumber: 4,
+      panelNumber: 2,
+    });
+
+    useGuidedComicVaultBridge.getState().selectVaultReference({
+      type: 'panel-art',
+      name: 'page-4-panel-2',
+      referenceId: 'vault-image-4-2',
+      imageUrl: 'https://example.com/page-4-panel-2.png',
+      sourceType: 'asset',
+      sourceLabel: 'Rendered panel',
+      displayName: 'Rendered panel',
+      collectionName: 'Page renders',
+      imageLabel: 'Rendered panel',
+    });
+
+    expect(useGuidedComicVaultBridge.getState().consumeSelection()).toMatchObject({
+      type: 'panel-art',
+      name: 'page-4-panel-2',
+      pageNumber: 4,
+      panelNumber: 2,
+      referenceId: 'vault-image-4-2',
+      imageUrl: 'https://example.com/page-4-panel-2.png',
+    });
+  });
+
   it('returns a selected NPC Vault image to the comic portal', () => {
     useGuidedComicVaultBridge.getState().selectVaultReference({
       type: 'npc',

@@ -1382,6 +1382,16 @@ function panelArtQueueId(pageNumber: number, panelNumber: number): string {
   return `page-${pageNumber}-panel-${panelNumber}`;
 }
 
+function parsePanelArtQueueId(panelId: string): { pageNumber: number; panelNumber: number } | null {
+  const match = panelId.match(/^page-(\d+)-panel-(\d+)$/i);
+  if (!match) return null;
+
+  return {
+    pageNumber: Number.parseInt(match[1], 10),
+    panelNumber: Number.parseInt(match[2], 10),
+  };
+}
+
 function panelArtStatusLabel(status: PanelArtStatus): string {
   switch (status) {
     case 'approved':
@@ -2276,6 +2286,11 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     if (!selection) return;
 
     if (selection.type === 'panel-art') {
+      const fallbackPanelContext = parsePanelArtQueueId(selection.name);
+      const selectionPageNumber = selection.pageNumber ?? fallbackPanelContext?.pageNumber ?? activePageNumber;
+
+      setLibraryStage('issue-workspace');
+      if (selectionPageNumber) setActivePageNumber(selectionPageNumber);
       setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
       setWorkspaceMode('panel-focus');
       setProductionPanelFocusOpen(true);
@@ -2289,6 +2304,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     }
 
     if (selection.type === 'cover') {
+      setLibraryStage('issue-workspace');
       setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
       setWorkspaceMode('issue-cover');
       setProductionPanelFocusOpen(false);
@@ -2303,6 +2319,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       return;
     }
 
+    setLibraryStage('issue-workspace');
     setActiveIndex(STEPS.findIndex((step) => step.id === 'visual-prep'));
     setWorkspaceMode('story-prep');
     setProductionPanelFocusOpen(false);
@@ -2350,7 +2367,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       ...current,
       [selection.name]: [...(current[selection.name] ?? []), reference],
     }));
-  }, [assignPanelArtImage, consumeVaultSelection]);
+  }, [activePageNumber, assignPanelArtImage, consumeVaultSelection]);
 
   useEffect(() => {
     const panelReturn = consumeGuidedComicPanelImageReturn();

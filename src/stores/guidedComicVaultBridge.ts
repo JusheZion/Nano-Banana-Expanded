@@ -51,8 +51,14 @@ export const useGuidedComicVaultBridge = create<GuidedComicVaultBridgeState>((se
   clearPortalRequest: () => set({ portalToOpen: null }),
 
   selectVaultReference: (selection) => {
+    const pendingTarget = get().pendingTarget;
+    const nextSelection =
+      pendingTarget && pendingTarget.type === selection.type && pendingTarget.name === selection.name
+        ? { ...pendingTarget, ...selection }
+        : selection;
+
     set({
-      selection,
+      selection: nextSelection,
       pendingTarget: null,
       portalToOpen: 'comic',
     });

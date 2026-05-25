@@ -5320,6 +5320,62 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Re-check the live cleanup flow after deployment with real Writer rows and confirm the duplicate issues can be removed without leaving the selected Guided issue linked to a deleted Writer row.
 
+## Guided Vault Return to Panel Fix - 2026-05-25
+
+### What changed
+
+- Fixed the Guided Comic Portal Image Vault return path so selecting `Use for guided flow` from the Vault returns to the active issue workspace and panel focus instead of falling back to the Comic Library / series selection screen.
+- Preserved the original Guided Vault request metadata in the bridge so returned panel-art selections keep their `pageNumber` and `panelNumber`.
+- Restored the active page before assigning the selected Vault image to the panel.
+- Added a regression test for preserving Guided panel target metadata during a Vault selection.
+
+### Files touched
+
+- `src/stores/guidedComicVaultBridge.ts`
+- `src/stores/__tests__/guidedComicVaultBridge.test.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- `selectVaultReference` now merges the selected Vault image payload with the pending Guided target when the target type/name match. This keeps page and panel context centralized in the bridge rather than requiring every Vault surface to remember every Guided target field.
+- The Guided Vault selection consumer now calls `setLibraryStage('issue-workspace')` for returned panel art, cover art, and visual-prep references.
+- Panel-art returns parse `page-N-panel-M` as a fallback when the explicit page metadata is unavailable, then reopen `panel-focus` and assign the selected image through the existing `assignPanelArtImage` path.
+- No new portal type, Supabase/schema changes, ComicEditor refactor, Advanced Studio changes, Imageshop changes, geometry changes, or image preservation changes were introduced.
+
+### Verification
+
+- Added failing regression coverage first, then fixed it:
+  - `npm run test -- --run src/stores/__tests__/guidedComicVaultBridge.test.ts` failed before the bridge fix because the returned selection dropped `pageNumber` and `panelNumber`.
+  - `npm run test -- --run src/stores/__tests__/guidedComicVaultBridge.test.ts` passed after the fix: 1 file, 6 tests.
+- `npm run test -- --run src/stores/__tests__/guidedComicVaultBridge.test.ts src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts` passed: 4 files, 30 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- `git diff --check` passed.
+- Browser QA at `http://localhost:5174/?writer-beat-import-qa=1` confirmed:
+  - Comic Creator opened to the QA library.
+  - Opening the current issue showed the issue workspace and panel workspace controls.
+  - From `Page 1, Panel 1`, clicking `Vault` opened the Asset Vault in Guided Mode for `Page 1, Panel 1`.
+  - Opening a Vault collection and clicking `Use for guided flow` returned to `Page 1, Panel 1`, showed the assigned panel image, marked the panel `Ready`, exposed `Save`, and did not fall back to the series screen.
+  - Browser console check reported 0 errors/warnings during the flow.
+  - Screenshot capture timed out in the browser bridge, so the proof for this pass is DOM/state-based rather than screenshot-based.
+
+### Outstanding issues
+
+- None for this Vault return bug.
+
+### Risks or caveats
+
+- The selected Vault image still requires the user to click `Save` to persist into the saved Comic Library entry, matching the existing save model. The local recovery draft updates immediately through the existing draft save effect.
+
+### Operator follow-up
+
+- After deployment, verify the live panel workspace by selecting any existing Vault image through `Use for guided flow` and clicking `Save` once the returned panel image is visible.
+
+### Next steps
+
+- Continue the next pass with the remaining Guided workflow items: cover workspace access polish, Writer beat import semantics, and panel image fit/position handles.
+
 ## How to Use These Docs
 
 | File | Use |
