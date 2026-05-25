@@ -230,6 +230,17 @@ export async function updateWriterSeries(
   return true;
 }
 
+/** Delete a Writer series and its dependent issues/pages through database cascades. */
+export async function deleteWriterSeries(seriesId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from('writer_series').delete().eq('id', seriesId);
+  if (error) {
+    console.warn('[arcsWriterRoom] deleteWriterSeries', error.message);
+    return false;
+  }
+  return true;
+}
+
 export async function listWriterIssues(seriesId: string): Promise<WriterIssueRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase

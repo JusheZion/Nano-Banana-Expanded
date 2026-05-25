@@ -5265,6 +5265,61 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Re-test the live Guided Cover Workspace link flow against the real Writer series: load existing issues first, link the intended issue, then import or generate page beats.
 
+## Guided and Writer Series / Issue Delete Tools - 2026-05-24
+
+### What changed
+
+- Added Guided Comic Portal delete tools:
+  - `Delete Series` in Series Focus and Issue Gallery removes every saved local Guided issue in that series.
+  - `Delete Issue` on each Issue Gallery card removes that saved local Guided comic issue.
+  - Existing workspace-level delete now reuses the same local Guided issue deletion path.
+- Added Writers' Workshop delete tools:
+  - Series rows now expose a trash action that deletes the Writer series.
+  - Issue rows retain the trash action for deleting individual Writer issues.
+- Added `deleteWriterSeries` to the shared Writer API helper layer.
+- Kept all delete actions behind browser confirmation prompts that describe dependent data removal.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/shared/api/arcsWriterRoom.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Guided deletes are local Comic Library deletes only. They update the saved browser library and active project selection without changing Supabase.
+- Writer deletes use existing Supabase table relationships and database cascades. No schema, RLS, or migration changes were introduced.
+- Deleting a Writer series removes its dependent Writer issues/pages/outlines/lore/location/style/shot-plan data through existing database cascades.
+- No ComicEditor, Advanced Studio, Imageshop, Image Vault, save/load/export, geometry, shapes, balloons, or image preservation changes were introduced.
+
+### Verification
+
+- `git diff --check`
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicProjectLibrary.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryView.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed: 3 files, 38 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Browser QA at `http://localhost:5174/?writer-beat-import-qa=1` confirmed Guided Issue Gallery shows `Delete Series` and `Delete Issue`.
+- Browser QA could not visually confirm Writers' Workshop row-level delete buttons because the local browser state had no Writer series rows; the TypeScript build verified the row controls compile.
+
+### Outstanding issues
+
+- Live cleanup still needs to be performed by the operator after deployment, using the new delete controls.
+
+### Risks or caveats
+
+- Writer series deletion is intentionally broad because it deletes the whole Writer series and dependent rows. The confirmation prompt states this before the delete runs.
+- Guided series deletion removes only local Guided Comic Library projects from the browser; it does not delete linked Writer rows unless the operator uses the Writers' Workshop delete tools separately.
+
+### Operator follow-up
+
+- After deployment, use Guided Comic Portal to remove unwanted local Guided series/issues.
+- Use Writers' Workshop to remove duplicate Writer series/issues from Supabase.
+
+### Next steps
+
+- Re-check the live cleanup flow after deployment with real Writer rows and confirm the duplicate issues can be removed without leaving the selected Guided issue linked to a deleted Writer row.
+
 ## How to Use These Docs
 
 | File | Use |

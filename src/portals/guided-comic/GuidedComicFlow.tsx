@@ -2803,18 +2803,77 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     writeGuidedComicLibraryPreferences(nextPreferences);
     setProjectLibraryStatus('Series cover updated.');
   };
-  const deleteCurrentComic = () => {
-    if (!projectLibrary || !currentProject) return;
-    const confirmed = window.confirm(`Delete "${getGuidedComicProjectDisplayName(currentProject)}" from this browser?`);
+  const applyGuidedLibraryDeletion = (
+    nextLibrary: GuidedComicProjectLibrary,
+    deletedActiveProject: boolean,
+    message: string,
+  ) => {
+    const savedLibrary = nextLibrary.projects.length > 0 ? nextLibrary : null;
+    const nextProject = savedLibrary?.projects.find((project) => project.projectId === savedLibrary.activeProjectId) ?? null;
+    setProjectLibrary(savedLibrary);
+    setActiveProjectId(nextProject?.projectId ?? null);
+    if (!libraryQaFixtureName) writeGuidedComicProjectLibrary(savedLibrary);
+    if (deletedActiveProject || !nextProject) {
+      applyGuidedComicProjectSnapshot(nextProject?.snapshot ?? buildEmptyGuidedComicProjectSnapshot(), nextProject?.updatedAt ?? null);
+    }
+    setProjectLibraryStatus(message);
+  };
+  const deleteLibraryIssue = (project: GuidedComicProject, nextStage: GuidedComicLibraryStage = libraryStage) => {
+    if (!projectLibrary) return;
+    const confirmed = window.confirm(`Delete Guided issue "${getGuidedComicProjectDisplayName(project)}" from this browser?`);
     if (!confirmed) return;
 
-    const nextLibrary = deleteGuidedComicProject(projectLibrary, currentProject.projectId);
-    const nextProject = nextLibrary.projects.find((project) => project.projectId === nextLibrary.activeProjectId) ?? null;
-    setProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
-    setActiveProjectId(nextProject?.projectId ?? null);
-    if (!libraryQaFixtureName) writeGuidedComicProjectLibrary(nextLibrary.projects.length > 0 ? nextLibrary : null);
-    applyGuidedComicProjectSnapshot(nextProject?.snapshot ?? buildEmptyGuidedComicProjectSnapshot(), nextProject?.updatedAt ?? null);
-    setProjectLibraryStatus(nextProject ? `Deleted comic. Loaded ${getGuidedComicProjectDisplayName(nextProject)}.` : 'Deleted comic.');
+    const nextLibrary = deleteGuidedComicProject(projectLibrary, project.projectId);
+    const deletedActiveProject = activeProjectId === project.projectId;
+    applyGuidedLibraryDeletion(
+      nextLibrary,
+      deletedActiveProject,
+      `Deleted Guided issue ${getGuidedComicProjectDisplayName(project)}.`,
+    );
+
+    const remainingGroups = getGuidedComicLibrarySeriesGroups(
+      nextLibrary.projects,
+      libraryPreferences.seriesCoverProjectIds,
+    );
+    const sameSeriesStillExists = remainingGroups.some((group) => group.seriesKey === selectedSeriesKey);
+    setLibraryStage(sameSeriesStillExists ? nextStage : 'series-gallery');
+    if (!sameSeriesStillExists) setSelectedSeriesKey(remainingGroups[0]?.seriesKey ?? null);
+  };
+  const deleteLibrarySeries = () => {
+    if (!projectLibrary || !selectedSeriesGroup) return;
+    const confirmed = window.confirm(
+      `Delete Guided series "${selectedSeriesGroup.seriesTitle}" and all ${selectedSeriesGroup.projects.length} issue${
+        selectedSeriesGroup.projects.length === 1 ? '' : 's'
+      } from this browser?`,
+    );
+    if (!confirmed) return;
+
+    const deletedProjectIds = new Set(selectedSeriesGroup.projects.map((project) => project.projectId));
+    const nextProjects = projectLibrary.projects.filter((project) => !deletedProjectIds.has(project.projectId));
+    const activeProjectWasDeleted = Boolean(activeProjectId && deletedProjectIds.has(activeProjectId));
+    const nextActiveProjectId =
+      activeProjectWasDeleted || !nextProjects.some((project) => project.projectId === projectLibrary.activeProjectId)
+        ? nextProjects[0]?.projectId ?? null
+        : projectLibrary.activeProjectId;
+    const nextLibrary: GuidedComicProjectLibrary = {
+      ...projectLibrary,
+      activeProjectId: nextActiveProjectId,
+      updatedAt: new Date().toISOString(),
+      projects: nextProjects,
+    };
+    applyGuidedLibraryDeletion(
+      nextLibrary,
+      activeProjectWasDeleted,
+      `Deleted Guided series ${selectedSeriesGroup.seriesTitle}.`,
+    );
+
+    const nextGroups = getGuidedComicLibrarySeriesGroups(nextProjects, libraryPreferences.seriesCoverProjectIds);
+    setSelectedSeriesKey(nextGroups[0]?.seriesKey ?? null);
+    setLibraryStage('series-gallery');
+  };
+  const deleteCurrentComic = () => {
+    if (!projectLibrary || !currentProject) return;
+    deleteLibraryIssue(currentProject, 'series-gallery');
   };
   const updateSetupField = <K extends keyof SetupFormState>(field: K, value: SetupFormState[K]) => {
     setSetupForm((current) => ({ ...current, [field]: value }));
@@ -6807,6 +6866,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   >
                     All Series
                   </button>
+                  <button
+                    type="button"
+                    onClick={deleteLibrarySeries}
+                    className="inline-flex items-center justify-center gap-2 border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/15 motion-reduce:transition-none"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    Delete Series
+                  </button>
                 </div>
               </div>
             </div>
@@ -6819,13 +6886,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-100/58">Issue Gallery</p>
                   <h2 className="mt-1 text-3xl font-black text-white">{selectedSeriesGroup.seriesTitle}</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setLibraryStage('series-focus')}
-                  className="border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white/70 transition hover:bg-white/10 motion-reduce:transition-none"
-                >
-                  Back to Series
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLibraryStage('series-focus')}
+                    className="border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white/70 transition hover:bg-white/10 motion-reduce:transition-none"
+                  >
+                    Back to Series
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteLibrarySeries}
+                    className="inline-flex items-center justify-center gap-2 border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/15 motion-reduce:transition-none"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    Delete Series
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-[repeat(auto-fit,minmax(8.25rem,1fr))] gap-x-5 gap-y-7 sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] lg:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
@@ -6900,6 +6977,14 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                         className="mt-2 inline-flex w-full items-center justify-center border border-amber-200/18 bg-black/18 px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-100/62 transition hover:border-amber-200/45 hover:bg-amber-200/10 hover:text-amber-50 disabled:cursor-default disabled:border-amber-200/35 disabled:bg-amber-200/10 disabled:text-amber-100 motion-reduce:transition-none"
                       >
                         {isSeriesCover ? 'Current series cover' : 'Use as series cover'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteLibraryIssue(project, 'issue-gallery')}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-1.5 border border-rose-200/20 bg-rose-500/10 px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-rose-100/72 transition hover:bg-rose-500/15 hover:text-rose-50 motion-reduce:transition-none"
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden />
+                        Delete Issue
                       </button>
                     </article>
                   );

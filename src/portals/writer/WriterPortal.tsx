@@ -11,6 +11,7 @@ import {
   deleteWriterIssue,
   deleteWriterLoreCard,
   deleteWriterPages,
+  deleteWriterSeries,
   ensureWriterPagesToCount,
   listWriterIssues,
   listWriterOutlinesForIssue,
@@ -358,6 +359,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [aiHistory, setAiHistory] = useState<string[]>([]);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [createSeriesBusy, setCreateSeriesBusy] = useState(false);
+  const [deleteSeriesBusy, setDeleteSeriesBusy] = useState(false);
   const [createIssueBusy, setCreateIssueBusy] = useState(false);
   const [deleteIssueBusy, setDeleteIssueBusy] = useState(false);
   const [createPageBusy, setCreatePageBusy] = useState(false);
@@ -479,6 +481,40 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setDockTab('library');
     pushHistory(`created series “${row.title || 'Untitled'}”`);
   }, [pushHistory]);
+
+  const handleDeleteWriterSeries = useCallback(
+    async (series: WriterSeriesRow) => {
+      const confirmed = window.confirm(
+        `Delete Writer series "${series.title || 'Untitled series'}"? This also removes its issues, saved pages, beats, dialogue, outlines, lore cards, locations, style bibles, and shot plans.`,
+      );
+      if (!confirmed) return;
+
+      setBootstrapError(null);
+      setDeleteSeriesBusy(true);
+      const ok = await deleteWriterSeries(series.id);
+      setDeleteSeriesBusy(false);
+      if (!ok) {
+        setBootstrapError('Could not delete the Writer series. Confirm you are signed in and own this series.');
+        pushHistory(`error: delete series “${series.title || 'Untitled'}”`);
+        return;
+      }
+
+      const rows = await listWriterSeries();
+      setSeriesList(rows);
+      const nextSeriesId = rows[0]?.id ?? null;
+      setSelectedSeriesId((current) =>
+        current && current !== series.id && rows.some((row) => row.id === current) ? current : nextSeriesId,
+      );
+      if (selectedSeriesId === series.id) {
+        setIssues([]);
+        setSelectedIssueId(null);
+        setPages([]);
+        setSelectedPageId(null);
+      }
+      pushHistory(`deleted series “${series.title || 'Untitled'}”`);
+    },
+    [pushHistory, selectedSeriesId],
+  );
 
   useEffect(() => {
     if (authUser) setAiAuthBannerDismissed(false);
@@ -2109,23 +2145,39 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </div>
           )}
           {seriesList.map((s) => (
-            <Tooltip key={s.id} content="Switch series" side="left">
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedSeriesId === s.id) return;
-                  setSelectedSeriesId(s.id);
-                  setSelectedIssueId(null);
-                }}
-                className={`w-full text-left rounded-lg px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                  selectedSeriesId === s.id
-                    ? 'bg-black/15 text-black ring-1 ring-black/20'
-                    : 'text-black/70 hover:bg-black/10'
-                }`}
-              >
-                {s.title || 'Untitled series'}
-              </button>
-            </Tooltip>
+            <div
+              key={s.id}
+              className={`flex items-center gap-1 rounded-lg ${
+                selectedSeriesId === s.id ? 'bg-black/15 ring-1 ring-black/20' : 'hover:bg-black/10'
+              }`}
+            >
+              <Tooltip content="Switch series" side="left">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedSeriesId === s.id) return;
+                    setSelectedSeriesId(s.id);
+                    setSelectedIssueId(null);
+                  }}
+                  className={`min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                    selectedSeriesId === s.id ? 'text-black' : 'text-black/70'
+                  }`}
+                >
+                  {s.title || 'Untitled series'}
+                </button>
+              </Tooltip>
+              <Tooltip content={`Delete series ${s.title || 'Untitled series'}`} side="left">
+                <button
+                  type="button"
+                  disabled={deleteSeriesBusy}
+                  onClick={() => void handleDeleteWriterSeries(s)}
+                  className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-800/70 transition hover:bg-red-500/15 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={`Delete series ${s.title || 'Untitled series'}`}
+                >
+                  <Trash2 size={12} aria-hidden />
+                </button>
+              </Tooltip>
+            </div>
           ))}
         </div>
       </div>
