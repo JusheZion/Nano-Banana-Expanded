@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HelpCircle, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, HelpCircle, Loader2, Trash2 } from 'lucide-react';
 import {
   clearWriterPagesBeatsJson,
   clearWriterPagesScriptText,
@@ -106,6 +106,16 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   id,
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
+
+type WriterProductionStage = {
+  id: string;
+  label: string;
+  tab: WriterWorkspaceTabId;
+  eyebrow: string;
+  detail: string;
+  done: boolean;
+  current: boolean;
+};
 
 type WriterCockpitPanelView =
   | 'outline'
@@ -2577,22 +2587,183 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const cockpitColumnPreview = (view: WriterCockpitPanelView) =>
     buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
 
+  const selectedSeries = seriesList.find((s) => s.id === selectedSeriesId) ?? null;
+  const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
+  const productionStages: WriterProductionStage[] = [
+    {
+      id: 'foundation',
+      label: 'Foundation',
+      tab: 'outline',
+      eyebrow: 'Project',
+      detail: selectedSeriesId && selectedIssueId ? 'Container ready' : 'Choose series + issue',
+      done: Boolean(selectedSeriesId && selectedIssueId),
+      current: activeTab === 'outline' && !latestOutline,
+    },
+    {
+      id: 'structure',
+      label: 'Structure',
+      tab: 'outline',
+      eyebrow: 'Outline',
+      detail: latestOutline ? `v${latestOutline.version}` : 'Premise to hierarchy',
+      done: Boolean(latestOutline),
+      current: activeTab === 'outline' && Boolean(latestOutline),
+    },
+    {
+      id: 'world',
+      label: 'Canon',
+      tab: 'lore',
+      eyebrow: 'Lore',
+      detail: `${loreCards.length} reference ${loreCards.length === 1 ? 'card' : 'cards'}`,
+      done: loreCards.length > 0,
+      current: activeTab === 'lore',
+    },
+    {
+      id: 'beats',
+      label: 'Beats',
+      tab: 'beats',
+      eyebrow: 'Pages',
+      detail: `${pagesWithBeatsCount}/${Math.max(sortedPages.length, targetPageCount)} paced`,
+      done: sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length,
+      current: activeTab === 'beats',
+    },
+    {
+      id: 'dialogue',
+      label: 'Dialogue',
+      tab: 'dialogue',
+      eyebrow: 'Script',
+      detail: `${pagesWithScriptCount}/${Math.max(sortedPages.length, pagesWithBeatsCount)} scripted`,
+      done: sortedPages.length > 0 && pagesWithScriptCount >= pagesWithBeatsCount && pagesWithBeatsCount > 0,
+      current: activeTab === 'dialogue',
+    },
+    {
+      id: 'visual',
+      label: 'Visual',
+      tab: 'video',
+      eyebrow: 'Prep',
+      detail: latestShotPlan ? 'Shot plan saved' : 'Plan shots + images',
+      done: Boolean(latestShotPlan),
+      current: activeTab === 'video',
+    },
+    {
+      id: 'audit',
+      label: 'Audit',
+      tab: 'arc',
+      eyebrow: 'Health',
+      detail: reviewReady ? 'Review cached' : 'Pacing + canon',
+      done: reviewReady,
+      current: activeTab === 'arc',
+    },
+    {
+      id: 'export',
+      label: 'Export',
+      tab: 'scripts',
+      eyebrow: 'Pipeline',
+      detail: 'Issue pack + prompts',
+      done: false,
+      current: activeTab === 'scripts' || activeTab === 'cockpit',
+    },
+  ];
+  const activeStage = productionStages.find((stage) => stage.current) ?? productionStages.find((stage) => stage.tab === activeTab);
+  const completedStageCount = productionStages.filter((stage) => stage.done).length;
+  const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
+  const workspaceHeading = TABS.find((x) => x.id === activeTab)?.label ?? 'Workspace';
+  const writerPhaseRail = (
+    <div className="flex flex-col gap-1">
+      {productionStages.map((stage, index) => (
+        <button
+          key={stage.id}
+          type="button"
+          onClick={() => setActiveTab(stage.tab)}
+          className={`group grid grid-cols-[1.35rem_minmax(0,1fr)] gap-2 border-l-2 px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40 ${
+            stage.current
+              ? 'border-amber-700 bg-amber-100/85 text-black shadow-sm'
+              : stage.done
+                ? 'border-emerald-500/70 bg-white/45 text-black/75 hover:bg-white/70'
+                : 'border-black/10 bg-white/25 text-black/58 hover:bg-white/50'
+          }`}
+        >
+          <span className="pt-0.5 text-[10px] font-black tabular-nums text-black/45">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5">
+              {stage.done ? (
+                <CheckCircle2 size={13} className="shrink-0 text-emerald-700" aria-hidden />
+              ) : (
+                <Circle size={12} className="shrink-0 text-black/30" aria-hidden />
+              )}
+              <span className="truncate text-[11px] font-black uppercase tracking-wide">{stage.label}</span>
+            </span>
+            <span className="mt-0.5 block truncate text-[10px] font-semibold text-black/50">
+              {stage.eyebrow} · {stage.detail}
+            </span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div
       className="flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
       style={{ background: WRITERS_WORKSHOP_BG }}
     >
       <header
-        className="flex-shrink-0 flex items-center justify-between gap-4 px-4 py-2 border-b border-black/10"
+        className="flex-shrink-0 border-b border-black/10"
         style={{ background: WRITERS_GOLD_SLANT }}
       >
-        <div className="min-w-0 flex items-baseline gap-3">
-          <h1 className="text-lg font-black tracking-tight truncate" style={titleTextStyle}>
-            WRITERS&apos; WORKSHOP
-          </h1>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-black/50 hidden sm:inline">
-            Series → Issues → Pages
-          </span>
+        <div className="grid gap-2 px-3 py-2 lg:grid-cols-[minmax(240px,1.1fr)_minmax(360px,1.5fr)_minmax(220px,auto)] lg:items-center">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-black/45">
+              Narrative Production System
+            </p>
+            <h1 className="truncate text-lg font-black tracking-tight" style={titleTextStyle}>
+              Writers&apos; Workshop
+            </h1>
+            <p className="mt-0.5 truncate text-[11px] font-semibold text-black/55">
+              {selectedSeries?.title?.trim() || 'No series selected'} ·{' '}
+              {selectedIssue ? `Issue ${selectedIssue.issue_number}${selectedIssue.title ? `: ${selectedIssue.title}` : ''}` : 'No issue selected'} ·{' '}
+              {selectedPageLabel}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-8">
+            {[
+              { label: 'Stages', value: `${completedStageCount}/${productionStages.length}` },
+              { label: 'Pages', value: sortedPages.length || targetPageCount },
+              { label: 'Beats', value: pagesWithBeatsCount },
+              { label: 'Script', value: pagesWithScriptCount },
+              { label: 'Lore', value: loreCards.length },
+              { label: 'Shots', value: latestShotPlan ? 1 : 0 },
+              { label: 'Audit', value: reviewReady ? 1 : 0 },
+              { label: 'Tab', value: activeStage?.label ?? workspaceHeading },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="min-w-0 border-l border-black/15 bg-white/30 px-2 py-1 text-black/75"
+              >
+                <p className="truncate text-[8px] font-black uppercase tracking-wider text-black/42">{item.label}</p>
+                <p className="truncate text-[12px] font-black leading-tight text-black">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex min-w-0 items-center gap-2 lg:justify-end">
+            <div className="hidden min-w-0 text-right lg:block">
+              <p className="truncate text-[10px] font-bold uppercase tracking-wide text-black/45">Next action</p>
+              <p className="max-w-[260px] truncate text-[11px] font-semibold text-black/65">{quickGenerateNextHint}</p>
+            </div>
+            <button
+              type="button"
+              disabled={quickGenerateDisabled}
+              onClick={() => void quickGenerate()}
+              className="inline-flex min-h-[34px] shrink-0 items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: ACCENT_GOLD_GRADIENT }}
+            >
+              {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
+              {quickGenerateLabel}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -2673,62 +2844,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         quickGenerateNextHint={quickGenerateNextHint}
       />
 
-      <div
-        className="flex-shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 border-b border-white/20 bg-teal-950/15 text-[10px] text-black/80"
-        aria-label="Workflow steps"
-      >
-        <span className="font-bold uppercase tracking-wider text-black/50 shrink-0">Pipeline</span>
-        {WRITER_WORKSPACE_TAB_ORDER.map((id) => {
-          const done =
-            id === 'scripts'
-              ? false
-              : id === 'cockpit'
-                ? Boolean(
-                    latestOutline &&
-                      sortedPages.length > 0 &&
-                      pagesWithBeatsCount >= sortedPages.length &&
-                      pagesWithBeatsCount > 0 &&
-                      pagesWithScriptCount >= pagesWithBeatsCount &&
-                      loreCards.length > 0 &&
-                      latestShotPlan &&
-                      (pacingSaved?.result ?? canonSaved?.result),
-                  )
-              : id === 'outline'
-                ? Boolean(latestOutline)
-                : id === 'lore'
-                  ? loreCards.length > 0
-                : id === 'beats'
-                  ? sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length
-                  : id === 'dialogue'
-                    ? sortedPages.length > 0 &&
-                      pagesWithScriptCount >= pagesWithBeatsCount &&
-                      pagesWithBeatsCount > 0
-                    : id === 'video'
-                      ? Boolean(latestShotPlan)
-                      : id === 'arc'
-                        ? Boolean(pacingSaved?.result ?? canonSaved?.result)
-                        : false;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`rounded-full px-2.5 py-1 font-bold uppercase tracking-wide border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                activeTab === id
-                  ? 'border-amber-700 bg-amber-100 text-black'
-                  : done
-                    ? 'border-emerald-600/50 bg-emerald-100/60 text-black/80'
-                    : 'border-black/15 bg-white/50 text-black/65 hover:bg-white/80'
-              }`}
-            >
-              {WRITER_WORKSPACE_TAB_LABELS[id].ribbon}
-            </button>
-          );
-        })}
-        <span className="text-black/45 ml-auto max-w-[min(100%,280px)] leading-snug hidden sm:inline">
-          {quickGenerateNextHint}
-        </span>
-      </div>
+      {isPhone ? (
+        <div
+          className="flex-shrink-0 overflow-x-auto border-b border-white/20 bg-teal-950/15 px-2 py-2 [-webkit-overflow-scrolling:touch]"
+          aria-label="Narrative production stages"
+        >
+          <div className="flex min-w-max gap-1">
+            {productionStages.map((stage) => (
+              <button
+                key={stage.id}
+                type="button"
+                onClick={() => setActiveTab(stage.tab)}
+                className={`shrink-0 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                  stage.current
+                    ? 'border-amber-700 bg-amber-100 text-black'
+                    : stage.done
+                      ? 'border-emerald-600/50 bg-emerald-100/60 text-black/80'
+                      : 'border-black/15 bg-white/50 text-black/65'
+                }`}
+              >
+                {stage.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <WriterHelpModal
         open={Boolean(helpCategory)}
@@ -2751,6 +2891,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div
         className={`flex-1 min-h-0 flex min-w-0 ${isPhone ? 'flex-col' : 'flex-row'}`}
       >
+        {!isPhone ? (
+          <aside
+            className="hidden w-[236px] shrink-0 border-r border-white/25 bg-white/[0.12] p-2 backdrop-blur-md xl:block"
+            aria-label="Narrative production navigator"
+          >
+            <div className="mb-2 border-b border-black/10 px-2 pb-2">
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-black/42">Production map</p>
+              <p className="mt-1 text-[11px] font-semibold leading-snug text-black/62">
+                Structured path from foundation to export.
+              </p>
+            </div>
+            {writerPhaseRail}
+          </aside>
+        ) : null}
         <WriterContextMenu items={contextItems}>
           <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
             <div
@@ -2759,10 +2913,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               }`}
             >
               <div className="w-full min-w-0 space-y-4 text-slate-900/90">
-                <div className={`${WRITER_GLASS_CARD} p-4`}>
-                  <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                    {TABS.find((x) => x.id === activeTab)?.label}
-                  </h2>
+                <div className="border-b border-black/10 pb-3">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-black/42">
+                        {activeStage?.eyebrow ?? 'Workspace'} · {activeStage?.detail ?? 'Focus mode'}
+                      </p>
+                      <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
+                        {workspaceHeading}
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                      <span className="border-l border-black/15 bg-white/35 px-2 py-1">
+                        {selectedIssue ? `Issue ${selectedIssue.issue_number}` : 'No issue'}
+                      </span>
+                      <span className="border-l border-black/15 bg-white/35 px-2 py-1">
+                        {selectedPageLabel}
+                      </span>
+                      <span className="border-l border-black/15 bg-white/35 px-2 py-1">
+                        {completedStageCount}/{productionStages.length} ready
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 {imageWorkshopError ? (
                   <p className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">

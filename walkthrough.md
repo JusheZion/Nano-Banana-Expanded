@@ -5541,6 +5541,54 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 
 - Continue with the remaining Guided Comics QoL item for image fit/position handles when image and panel aspect ratios differ.
 
+## Writers Workshop Narrative Production Shell Pass - 2026-05-26
+
+### What changed
+
+- Reframed the Writers Workshop top shell as a compact `Narrative Production System` command band instead of a simple title plus separate desktop pipeline strip.
+- Added persistent production status in the header: current series, issue, selected page, completed stages, page/beat/dialogue/lore/shot/audit counts, active tab, and the next quick-generate action.
+- Replaced the desktop horizontal pipeline chip row with a left-side `Production map` rail that exposes Foundation, Structure, Canon, Beats, Dialogue, Visual, Audit, and Export stages with done/current states.
+- Kept a compact horizontal stage strip on phone layouts so mobile keeps production orientation without introducing a desktop rail.
+- Replaced the repeated glass-card tab heading with a slimmer workspace header that reports the current phase, issue, page, and readiness count.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a shell-first UX pass only. It did not change Supabase schemas, writer tool APIs, bridge contracts, persistence behavior, or the existing tab bodies.
+- The existing `WriterRibbon` and `WriterStudioDock` contracts were preserved so the pass stays low-risk and can be followed by a targeted ribbon-density/inspector pass.
+- Stage readiness is derived from existing local state: selected series/issue, latest outline, lore card count, page beat coverage, dialogue coverage, latest shot plan, and cached pacing/canon review results.
+- The desktop production rail maps stages back to the existing writer tabs instead of adding a new workflow router.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/portals/writer/__tests__/shotPlanCsv.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 7 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing warning baseline: 67 warnings, 0 errors.
+- Chrome DevTools MCP was confirmed live, and the correct local repo app loaded at `http://127.0.0.1:5174/`.
+- DevTools console check after reload showed only the existing PWA meta warning: `apple-mobile-web-app-capable` is deprecated in favor of `mobile-web-app-capable`.
+
+### Outstanding issues
+
+- Full visual inspection of the signed-in Writers Workshop workspace was blocked in the isolated DevTools Chrome profile by the protected portal sign-in gate.
+
+### Risks or caveats
+
+- The full ribbon is still present and still consumes meaningful vertical height. This pass reduces navigation duplication and adds hierarchy, but a later pass should compact the ribbon or move more tab-specific controls into contextual inspectors.
+- The new production stages are derived from the current comic/issue-oriented writer model; medium/scope metadata for books, screenplays, shared universes, and lore systems is still a planned follow-up.
+
+### Operator follow-up
+
+- In an authenticated browser profile, open Writers Workshop and verify the command band, production map, workspace header, and mobile stage strip with real writer data.
+
+### Next steps
+
+- Implement the next UX pass: Foundation Hub fields for medium type and narrative scope, stored in existing notes metadata before any schema expansion.
+- Follow with a ribbon-density pass that makes the writer workspace feel less like a generic AI dashboard and more like a production editor.
+
 ## How to Use These Docs
 
 | File | Use |
