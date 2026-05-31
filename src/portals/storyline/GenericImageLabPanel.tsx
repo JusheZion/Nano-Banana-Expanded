@@ -994,13 +994,18 @@ export function GenericImageLabPanel({
     (files: FileList | null) => {
       const file = files?.[0];
       if (!file || !file.type.startsWith('image/')) return;
+      const nextPageBackgroundUrl = URL.createObjectURL(file);
+      const previousPageBackgroundUrl = pageConfig.panelStyle.pageBackgroundUrl;
+      if (previousPageBackgroundUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previousPageBackgroundUrl);
+      }
       updatePageConfig({
         panelStyle: {
-          pageBackgroundUrl: URL.createObjectURL(file),
+          pageBackgroundUrl: nextPageBackgroundUrl,
         },
       });
     },
-    [updatePageConfig],
+    [pageConfig.panelStyle.pageBackgroundUrl, updatePageConfig],
   );
 
   const exportProductionJson = useCallback(() => {
@@ -1177,7 +1182,6 @@ export function GenericImageLabPanel({
     });
     if (target) {
       selectProductionItem(target.id);
-      updateProductionItemStatus(target.id, target.status === 'draft' ? 'generated' : target.status);
     }
     setNotice('Staged a refinement prompt for the selected production item.');
   }, [
@@ -1189,7 +1193,6 @@ export function GenericImageLabPanel({
     replacePromptWorkspace,
     selectProductionItem,
     selectedProductionItem,
-    updateProductionItemStatus,
   ]);
 
   const saveCustomArtStyle = useCallback(() => {
