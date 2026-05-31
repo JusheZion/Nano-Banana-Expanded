@@ -51,9 +51,9 @@ The visible flow should become:
 - [x] Add dynamic beat editing: insert, remove, merge, split, reorder, regenerate selected.
   - Current state: the Beats JSON editor can insert, remove, merge, split, and move panel beats while preserving page-level metadata; selected-page regeneration remains the existing `Generate page beats` action.
 - [x] Expand audit modes: continuity, emotional arc, character utilization, worldbuilding density.
-  - Current state: schemas/prompts now accept emotional arc, character utilization, and worldbuilding density branches, and Arc exposes audit mode entry points.
+  - Current state: schemas/prompts now accept emotional arc, character utilization, and worldbuilding density branches, and Arc exposes readable readiness/summary cards for each audit mode.
 - [x] Add production branches for visual prep, dialogue, exports, and Guided Comics handoff.
-  - Current state: Video workspace exposes branch cards that route to visual prep, dialogue, exports, and Guided Comics handoff output-format context.
+  - Current state: Video workspace exposes readiness-aware branch cards with direct actions for visual prep, dialogue, issue-pack exports, markdown export, and Guided Comics handoff JSON export.
 - [~] Reduce ribbon/workspace density after the core flow is stable.
   - Current state: secondary production routes are grouped under branch/audit cards, but full ribbon compaction is still a later polish task.
 - [x] Run authenticated in-app browser QA after each visible UI pass.
@@ -67,3 +67,4 @@ The visible flow should become:
 - Foundation Hub production defaults now persist without schema changes through existing series/issue notes metadata; issue defaults override series defaults.
 - Generation calls now send production defaults to outline, page beats, dialogue, and shot/visual planning, while issue-pack exports include the resolved defaults and preferred output format.
 - Page-beat generation now requires page-level `characters`, `locations`, and `art_style`, grounded in outline/synopsis/cast/location/lore source material with empty arrays when source material does not name a value.
+- Pass 2 branch hardening added explicit issue-pack markdown and `writer-guided-comics-handoff.json` exports so production branches produce portable artifacts, not just navigation cues.

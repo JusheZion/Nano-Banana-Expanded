@@ -96,9 +96,11 @@ import {
   type WriterHierarchyNode,
 } from '@/portals/writer/writerHierarchy';
 import {
-  WRITER_AUDIT_MODE_OPTIONS,
-  WRITER_PRODUCTION_BRANCH_OPTIONS,
+  buildGuidedComicsHandoffExport,
+  formatIssuePackAsMarkdown,
   summarizePageBeatMetadata,
+  summarizeWriterAuditModes,
+  summarizeWriterProductionBranches,
 } from '@/portals/writer/writerProductionBranches';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
@@ -1039,6 +1041,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const selectedPageMetadata = useMemo(
     () => summarizePageBeatMetadata((selectedPage?.beats_json as PageBeatsJson | null | undefined) ?? null),
     [selectedPage?.beats_json],
+  );
+  const auditSummaries = useMemo(
+    () =>
+      summarizeWriterAuditModes({
+        pacingResult: pacingSaved?.result,
+        canonResult: canonSaved?.result,
+      }),
+    [pacingSaved?.result, canonSaved?.result],
   );
   const authorOutlineSource = useMemo<AuthorOutlineSource>(
     () => ({
@@ -2367,6 +2377,39 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       productionDefaultsPayload,
     ],
   );
+  const productionBranchSummaries = useMemo(
+    () =>
+      summarizeWriterProductionBranches({
+        hasOutline: Boolean(latestOutline),
+        pagesWithBeats: pagesWithBeatsCount,
+        pagesWithDialogue: pagesWithScriptCount,
+        pageCount: sortedPages.length,
+        hasShotPlan: Boolean(latestShotPlan),
+        outputFormat: productionDefaultsPayload.output_format,
+      }),
+    [
+      latestOutline,
+      pagesWithBeatsCount,
+      pagesWithScriptCount,
+      sortedPages.length,
+      latestShotPlan,
+      productionDefaultsPayload.output_format,
+    ],
+  );
+
+  const downloadIssuePackMarkdown = useCallback(() => {
+    downloadTextFile(
+      'writer-issue-pack.md',
+      formatIssuePackAsMarkdown(issuePackObject),
+      'text/markdown;charset=utf-8',
+    );
+    pushHistory('downloaded issue pack markdown');
+  }, [issuePackObject, pushHistory]);
+
+  const downloadGuidedComicsHandoff = useCallback(() => {
+    downloadJsonFile('writer-guided-comics-handoff.json', buildGuidedComicsHandoffExport(issuePackObject));
+    pushHistory('downloaded Guided Comics handoff package');
+  }, [issuePackObject, pushHistory]);
 
   useEffect(() => {
     if (!latestOutline) {
@@ -5412,14 +5455,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </span>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {WRITER_AUDIT_MODE_OPTIONS.map((option) => {
+                        {auditSummaries.map((option) => {
                           const usesPacing = option.id === 'emotional_arc';
-                          const saved =
-                            option.id === 'continuity'
-                              ? Boolean(canonSaved?.result)
-                              : option.id === 'emotional_arc'
-                                ? Boolean((pacingSaved?.result as Record<string, unknown> | undefined)?.emotional_arc)
-                                : Boolean((canonSaved?.result as Record<string, unknown> | undefined)?.[option.id]);
                           return (
                             <button
                               key={option.id}
@@ -5434,9 +5471,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               onClick={() => (usesPacing ? void runPacingFromRibbon() : void runCanonFromRibbon())}
                               className="rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-left hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                             >
-                              <span className="block text-[11px] font-black text-black">{option.label}</span>
-                              <span className="mt-0.5 block text-[10px] leading-snug text-black/55">
-                                {saved ? 'Saved in latest review output.' : usesPacing ? 'Run pacing review.' : 'Run canon check.'}
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-black text-black">{option.label}</span>
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                    option.ready ? 'bg-emerald-100 text-emerald-900' : 'bg-black/10 text-black/45'
+                                  }`}
+                                >
+                                  {option.ready ? 'saved' : option.source === 'pacing_review' ? 'pacing' : 'canon'}
+                                </span>
+                              </span>
+                              <span className="mt-1 block text-[10px] leading-snug text-black/58">
+                                {option.summary}
                               </span>
                             </button>
                           );
@@ -5482,42 +5528,91 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </span>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {WRITER_PRODUCTION_BRANCH_OPTIONS.map((option) => {
-                          const description =
-                            option.id === 'visual_prep'
-                              ? 'Shot plans, page beats, and Imageshop handoff.'
-                              : option.id === 'dialogue'
-                                ? 'Draft, batch, and edit selected-page scripts.'
-                                : option.id === 'exports'
-                                  ? 'Issue pack, outline, beats, dialogue, and reviews.'
-                                  : 'Prepare issue-pack output for Guided Comics handoff.';
+                        {productionBranchSummaries.map((option) => {
                           return (
-                            <button
+                            <div
                               key={option.id}
-                              type="button"
-                              onClick={() => {
-                                if (option.id === 'dialogue') {
-                                  setActiveTab('dialogue');
-                                } else if (option.id === 'exports') {
-                                  setActiveTab('scripts');
-                                  setScriptsEditorTab('synopsis');
-                                } else if (option.id === 'guided_comics_handoff') {
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    outputFormat: 'guided_comic_handoff',
-                                  }));
-                                  setActiveTab('scripts');
-                                } else {
-                                  setActiveTab('video');
-                                }
-                              }}
-                              className="rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-left hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                              className="space-y-2 rounded-lg border border-black/10 bg-white/70 px-3 py-2"
                             >
-                              <span className="block text-[11px] font-black text-black">{option.label}</span>
-                              <span className="mt-0.5 block text-[10px] leading-snug text-black/55">
-                                {description}
-                              </span>
-                            </button>
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-[11px] font-black text-black">{option.label}</p>
+                                  <p className="mt-0.5 text-[10px] leading-snug text-black/55">{option.summary}</p>
+                                </div>
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                    option.ready ? 'bg-emerald-100 text-emerald-900' : 'bg-black/10 text-black/45'
+                                  }`}
+                                >
+                                  {option.ready ? 'ready' : 'prep'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (option.id === 'dialogue') {
+                                      setActiveTab('dialogue');
+                                    } else if (option.id === 'exports') {
+                                      setActiveTab('scripts');
+                                      setScriptsEditorTab('synopsis');
+                                    } else if (option.id === 'guided_comics_handoff') {
+                                      setProductionDefaultsDraft((p) => ({
+                                        ...p,
+                                        outputFormat: 'guided_comic_handoff',
+                                      }));
+                                      setActiveTab('scripts');
+                                    } else {
+                                      setActiveTab('video');
+                                    }
+                                  }}
+                                  className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                >
+                                  {option.actionLabel}
+                                </button>
+                                {option.id === 'visual_prep' ? (
+                                  <button
+                                    type="button"
+                                    disabled={!selectedIssueId || imageWorkshopBusy || (!latestShotPlan && !selectedPage?.beats_json)}
+                                    onClick={() => void openImageWorkshopFromWriter(latestShotPlan ? 'shot-plan' : 'page')}
+                                    className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                  >
+                                    Imageshop
+                                  </button>
+                                ) : null}
+                                {option.id === 'exports' ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        downloadJsonFile('writer-issue-pack.json', issuePackObject);
+                                        pushHistory('downloaded issue pack');
+                                      }}
+                                      className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                    >
+                                      JSON
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadIssuePackMarkdown()}
+                                      className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                    >
+                                      Markdown
+                                    </button>
+                                  </>
+                                ) : null}
+                                {option.id === 'guided_comics_handoff' ? (
+                                  <button
+                                    type="button"
+                                    disabled={sortedPages.length === 0}
+                                    onClick={() => downloadGuidedComicsHandoff()}
+                                    className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                  >
+                                    Handoff JSON
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
@@ -6070,6 +6165,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
                               >
                                 Download issue pack
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadIssuePackMarkdown()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Download issue pack .md
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sortedPages.length === 0}
+                                onClick={() => downloadGuidedComicsHandoff()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Download Guided Comics handoff
                               </button>
                               <button
                                 type="button"

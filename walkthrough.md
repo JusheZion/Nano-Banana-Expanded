@@ -6082,6 +6082,65 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Decide whether the hierarchy tree needs direct node rename/reorder controls beyond import/paste editing.
 - Continue ribbon density polish once the production branch surfaces settle.
 
+## Writers Workshop Production Branch Hardening - 2026-05-31
+
+### What changed
+
+- Proceeded with the second pass by hardening the already-visible audit and production branch surfaces.
+- Added pure production-branch helpers that summarize expanded audit readiness for continuity, emotional arc, character utilization, and worldbuilding density.
+- Added pure branch-readiness helpers for visual prep, dialogue, exports, and Guided Comics handoff.
+- Added issue-pack markdown export formatting.
+- Added a portable `writer-guided-comics-handoff.json` export shape that packages Writers Workshop pages with page summaries, `characters`, `locations`, `art_style`, panel beats, and dialogue for Guided Comics intake.
+- Updated the Arc tab expanded audit cards so they show saved/missing state plus a readable summary rather than only a raw review cache indicator.
+- Updated the Video tab production branch cards so each branch shows readiness, focused action copy, and direct actions for Imageshop, issue-pack JSON, issue-pack Markdown, and Guided Comics handoff JSON.
+- Added the same issue-pack Markdown and Guided Comics handoff export actions to the Synopsis helper `Copy & download` panel.
+- Updated `tasks.md` and the formal Narrative Production System plan with the second-pass branch hardening status.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration or routing change was added.
+- The Guided Comics handoff is a portable export artifact, not an automatic import into Guided Comics. This preserves the existing source-of-truth boundary between Writers Workshop and Guided Comics.
+- The export helper accepts persisted `beats_json` records conservatively and only emits page-beat metadata when a `panels` array is present.
+- The Arc audit cards still run the existing `pacing_review` or `canon_check` modes; the second pass makes their expanded saved branches readable in the UI.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/writer/__tests__/schemas.test.ts` passed: 2 files, 40 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- Authenticated in-app browser QA at `http://127.0.0.1:5174/` confirmed:
+  - Arc expanded audit cards render readable pacing/canon summary states.
+  - Video production branch cards render readiness badges and direct actions for `Imageshop`, `JSON`, `Markdown`, and `Handoff JSON`.
+  - Synopsis helper `Copy & download` renders `Download issue pack .md` and `Download Guided Comics handoff`.
+
+### Outstanding issues
+
+- True non-persisting LLM diff preview for replacement page beats/dialogue before persistence remains a follow-up from the prior pass.
+
+### Risks or caveats
+
+- `writer-guided-comics-handoff.json` is a structured export for downstream use. It does not yet call a Guided Comics import action directly.
+- Branch readiness is derived from current saved rows and cached outputs; stale cached audit data can still appear ready until a fresh pacing/canon run updates it.
+
+### Operator follow-up
+
+- After `writer-tools` redeploy, run fresh pacing/canon checks and confirm expanded audit summaries populate the readiness cards from live Edge output.
+- Decide whether Guided Comics should add a first-class importer for `writer-guided-comics-handoff.json`.
+
+### Next steps
+
+- Run final lint, diff check, and authenticated browser QA for the second-pass branch actions.
+
 ## How to Use These Docs
 
 | File | Use |
@@ -6091,3 +6150,44 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 | **walkthrough.md** | This file: big picture and roadmap for you and future agents. |
 
 Cursor does not auto-update these files; update them (or ask the agent to) as you complete work so the roadmap stays accurate.
+
+## Imageshop Production Studio Tracker - 2026-05-31
+
+### What changed
+
+- Created a durable Imageshop Production Studio implementation tracker with a seven-pass estimate and an agent-updatable checklist.
+- Captured the implementation constraints for keeping the work inside the existing Imageshop / `lab` portal, preserving current bridge contracts, avoiding Supabase schema changes for v1, and leaving ComicEditor untouched.
+- Added a verification matrix that future agents can use to record automated and manual checks as each pass lands.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a documentation/tracker pass only. It did not implement the seven Imageshop production-studio passes yet.
+- The tracker marks the document creation and verification-matrix setup items complete, while leaving Passes 1-7 unchecked for future implementation.
+- The tracker explicitly preserves existing Imageshop session recovery, Guided Comic Flow handoff, vault save/export behavior, routing, Supabase schema, and ComicEditor boundaries.
+
+### Verification
+
+- `rg -n "Imageshop Production Studio Implementation Tracker|Pass 1: Production state foundation|Agent Checklist|Verification Matrix" docs/superpowers/plans/2026-05-31-imageshop-production-studio.md` confirmed the tracker title, first pass, checklist, and verification matrix landed.
+- `rg -n "Imageshop Production Studio Tracker - 2026-05-31" walkthrough.md` confirmed the walkthrough entry landed.
+- `git status --short` confirmed the new tracker file and walkthrough modification are present. It also showed existing unrelated modifications to `src/portals/writer/WriterPortal.tsx`, `src/portals/writer/writerProductionBranches.ts`, and `src/portals/writer/__tests__/writerProductionBranches.test.ts`, which were not touched by this pass.
+
+### Outstanding issues
+
+- The actual Imageshop production-studio implementation remains pending across the seven listed passes.
+
+### Risks or caveats
+
+- None for runtime behavior because no application code changed.
+
+### Operator follow-up
+
+- Future implementation agents should update the tracker after each pass and append a scoped `walkthrough.md` entry for each meaningful implementation delta.
+
+### Next steps
+
+- Begin Pass 1: production state foundation.

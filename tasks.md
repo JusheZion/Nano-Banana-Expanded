@@ -19,6 +19,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Add author outline import/paste flow: paste, `.txt`, `.md`, and JSON import normalize into `notes.hierarchy_tree` with a saved tree preview.
 - [x] Add dynamic beat editing controls: insert, remove, merge, split, and move selected page beats while preserving page-level metadata.
 - [x] Add expanded audit modes and production branch surfaces for continuity, emotional arc, character utilization, worldbuilding density, visual prep, dialogue, exports, and Guided Comics handoff.
+- [x] Harden production branches with readable audit summaries, readiness-aware branch cards, issue-pack markdown export, and Guided Comics handoff JSON export.
 - [~] Finish preview-safe regeneration: affected-page preview and explicit apply are implemented; true proposed LLM diff preview before save remains a follow-up.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 
