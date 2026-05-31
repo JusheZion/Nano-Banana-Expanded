@@ -19,18 +19,18 @@ export function getWriterQuickGenerateNextHint(
   if (!ctx.hasIssue) return 'Select or add an issue, then save story context if needed.';
 
   switch (tab) {
-    case 'cockpit':
-      return 'Compare outline / beats / dialogue side-by-side, then use Idea assist (⌥⌘1). Next: Issue Outline (⌥⌘2) or Page Beats (⌥⌘4).';
     case 'outline':
       if (!ctx.hasOutline) {
-        return 'Next: generate outline, then sync pages to match target count → Lore (⌥⌘3) or Page Beats (⌥⌘4).';
+        return 'Next: use Synopsis (⌥⌘2) for source outline, Canon (⌥⌘3) for lore, then generate the issue outline.';
       }
       if (ctx.pageCount < ctx.targetPageCount) {
-        return 'Next: use “Sync pages to target” so every page row exists, then Lore (⌥⌘3) or Page Beats (⌥⌘4).';
+        return 'Next: use “Sync pages to target” so every page row exists, then Canon (⌥⌘3) or Page Beats (⌥⌘4).';
       }
       return 'Next: Page Beats (⌥⌘4 / Alt+Ctrl+4) — pick pages, generate per page, or run “Generate all beats”.';
+    case 'scripts':
+      return 'Use Synopsis helper for author outline/source structure, then Canon (⌥⌘3) before regenerating outline or beats.';
     case 'lore':
-      return 'Lore cards marked “Include in AI prompts” are sent to Generate outline and page beats. Next: Page Beats (⌥⌘4).';
+      return 'Canon cards marked “Include in AI prompts” are sent to Generate outline and page beats. Next: Page Beats (⌥⌘4).';
     case 'beats':
       if (ctx.pageCount === 0) {
         return 'Next: sync pages from Issue Outline (target pages) or add pages in the Library.';
@@ -47,11 +47,11 @@ export function getWriterQuickGenerateNextHint(
       }
       return 'Next: Video (⌥⌘6 / Alt+Ctrl+6) for shot list, or Arc (⌥⌘7 / Alt+Ctrl+7) for pacing / canon review.';
     case 'video':
-      return 'Next: Arc tab (⌥⌘7 / Alt+Ctrl+7) for pacing/canon, or Scripts (⌥⌘8 / Alt+Ctrl+8) or File → Scripts & exports.';
+      return 'Next: Arc tab (⌥⌘7 / Alt+Ctrl+7) for pacing/canon, or Cockpit (⌥⌘8 / Alt+Ctrl+8) to compare outputs.';
     case 'arc':
-      return 'Run pacing/canon on the Library issue, or batch-select issues above. Scripts (⌥⌘8 / Alt+Ctrl+8) or File → Scripts & exports for synopsis helper and issue pack.';
-    case 'scripts':
-      return 'Build synopsis from sections, copy or download the issue bundle, or edit saved outline / beats / dialogue JSON.';
+      return 'Run pacing/canon on the Library issue, or batch-select issues above. Next: Cockpit (⌥⌘8 / Alt+Ctrl+8) for compare/review.';
+    case 'cockpit':
+      return 'Compare outline / beats / dialogue side-by-side, then use Idea assist for late-stage review and targeted fixes.';
     default:
       return '';
   }

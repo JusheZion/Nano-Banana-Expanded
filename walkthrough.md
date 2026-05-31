@@ -5589,6 +5589,173 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Implement the next UX pass: Foundation Hub fields for medium type and narrative scope, stored in existing notes metadata before any schema expansion.
 - Follow with a ribbon-density pass that makes the writer workspace feel less like a generic AI dashboard and more like a production editor.
 
+## Vault Prompt Export Utility - 2026-05-26
+
+### What changed
+
+- Added a standalone non-UI exporter for turning existing vault image records into prompt-library files.
+- The exporter writes both `prompts.json` and `prompts.md` to an output directory, defaulting to `exports/vault-prompts/YYYY-MM-DD`.
+- The exporter supports two input paths:
+  - `--input vault-records.json` for pre-collected Character/Asset/NPC vault records.
+  - Authenticated Supabase reads from `characters` and `assets` when `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `SUPABASE_ACCESS_TOKEN` are available.
+- Prompt generation uses Gemini vision with source-specific instructions for character, NPC/supporting reference, and asset/environment records.
+
+### Files touched
+
+- `scripts/export-vault-prompts.mjs`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No app UI, portal routing, vault components, or persistence contracts were changed.
+- The script normalizes records into prompt-library entries with `id`, `source`, `title`, `group`, `prompt`, `tags`, `source_image_url`, `vault_id`, `seed`, `created_at`, `generated_at`, `model`, and `prompt_type`.
+- The script can sign private `arcs-generations` storage URLs when a Supabase client is available, then sends inline image data to Gemini.
+- Character and Asset cloud vault rows are protected by the app sign-in/session model. An unauthenticated read using the local `.env` returned zero rows; the alternate `.env.sh` key was invalid.
+- The in-app browser loaded `http://127.0.0.1:5174/` successfully, but the Reference Vault was behind the sign-in gate, so actual prompt generation could not run yet.
+- NPC Vault records remain local-only through `arcs_generations_supporting_reference`, so they need either an exported input JSON or a signed-in visible app/session path before the script can include them.
+
+### Verification
+
+- `node scripts/export-vault-prompts.mjs --help` passed and printed usage/output instructions.
+- `node --check scripts/export-vault-prompts.mjs` passed.
+- Read-only Supabase checks were attempted:
+  - `.env` project: `characters` count 0 and `assets` count 0 without authenticated session.
+  - `.env.sh` project: invalid API key.
+- Browser check: local app loaded at `http://127.0.0.1:5174/` with title `ARCS Expanded`, but the vault page showed `Sign in to continue`.
+
+### Outstanding issues
+
+- `prompts.json` and `prompts.md` have not been generated yet because no authenticated vault rows or exported vault-record input JSON were available in this session.
+
+### Risks or caveats
+
+- The generated prompts are reverse-engineered descriptions, not guaranteed originals.
+- Large vaults may incur Gemini API cost/rate-limit delays because each image is processed individually.
+- NPC prompt export requires local NPC records to be supplied through an input JSON or another authenticated/exported app path.
+
+### Operator follow-up
+
+- Provide an authenticated vault source before running the exporter:
+  - Set `SUPABASE_ACCESS_TOKEN` for the current user and run `node scripts/export-vault-prompts.mjs`, or
+  - Export visible vault records into a JSON array with `source`, `id`, `title`, and `imageUrl`, then run `node scripts/export-vault-prompts.mjs --input vault-records.json`.
+
+### Next steps
+
+- After authenticated records are available, run the exporter and verify the generated `prompts.json` and `prompts.md` contents before importing them into the separate prompt-library app.
+
+## Vault Prompt Pack Generation - 2026-05-27
+
+### What changed
+
+- Used the signed-in in-app browser session to extract a fresh vault record pack for prompt generation.
+- Generated the final prompt-library export files:
+  - `exports/vault-prompts/2026-05-27/prompts.json`
+  - `exports/vault-prompts/2026-05-27/prompts.md`
+  - `exports/vault-prompts/2026-05-27/vault-records.json`
+- The final export contains 89 reverse-engineered prompts:
+  - 67 Character Vault prompts.
+  - 22 Asset Vault prompts.
+  - 0 NPC Vault prompts because the signed-in NPC Vault showed no saved NPC references.
+
+### Files touched
+
+- `exports/vault-prompts/2026-05-27/prompts.json`
+- `exports/vault-prompts/2026-05-27/prompts.md`
+- `exports/vault-prompts/2026-05-27/vault-records.json`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The in-app browser was signed in as `hayronivy@gmail.com`, and the Reference Vault was visible.
+- A temporary local receiver on `127.0.0.1:5189` captured authenticated vault records from the app context, then was stopped after use.
+- A temporary query-gated export hook was briefly added to `ReferenceAlbum.tsx` to let the signed-in app resolve fresh private `arcs-generations` URLs and POST records locally; the hook was removed before completion, so no lasting app UI or runtime export hook remains.
+- The first browser-DOM crawl collected 87 rendered unique image URLs, but the final authenticated app-context export correctly captured the database-backed total of 89 records.
+- The generated prompt entries include signed `source_image_url` values from the export moment. These are useful for traceability shortly after export but should be treated as expiring references rather than permanent public image URLs.
+
+### Verification
+
+- `node scripts/export-vault-prompts.mjs --input exports/vault-prompts/2026-05-27/vault-records.json --out exports/vault-prompts/2026-05-27` completed successfully and wrote 89 prompts.
+- JSON verification confirmed `prompts.json` contains 89 entries: 67 `character` and 22 `asset`.
+- Markdown verification confirmed `prompts.md` contains 89 prompt sections.
+- File-size check showed:
+  - `prompts.json`: about 1.1 MB.
+  - `prompts.md`: about 102 KB.
+  - `vault-records.json`: about 1.0 MB.
+
+### Outstanding issues
+
+- NPC Vault contributed no prompts because the current signed-in NPC Vault had `References: 0`.
+
+### Risks or caveats
+
+- These are reverse-engineered prompts generated from images, not guaranteed original prompts.
+- The `source_image_url` fields are signed storage URLs and may expire; importers should rely primarily on prompt text, title, source, group, and vault id unless a future pass replaces those URLs with durable image references.
+
+### Operator follow-up
+
+- Import `exports/vault-prompts/2026-05-27/prompts.json` into the prompt-library app.
+- Review `exports/vault-prompts/2026-05-27/prompts.md` manually for any wording that should be normalized before broader reuse.
+
+### Next steps
+
+- If NPC references are added later, rerun the exporter or provide an NPC-only `vault-records.json` to generate a supplemental NPC prompt pack.
+
+## Writers Workshop Synopsis And Canon Flow Reorder - 2026-05-27
+
+### What changed
+
+- Reordered the Writers Workshop workspace flow around the way the author is actually using it: `Outline -> Synopsis -> Canon -> Beats -> Dialogue -> Video -> Arc -> Cockpit`.
+- Moved the former Scripts surface forward as `Synopsis helper` so the author/source outline can be entered before AI generation starts filling narrative gaps.
+- Reframed the Lore workspace as a `Canon gate` with explicit pre-lore and post-lore actions.
+- Added an AI-assisted lore gap helper that suggests missing canon cards before outline/page-beat regeneration.
+- Added a visible generation contract in the Canon tab that explains that outline and beat generation use included canon cards, and that comic/video assumptions should be made explicit rather than repeatedly typed by the user.
+- Moved the Cockpit concept to the end of the production flow as a late-stage comparison/review workspace.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterRibbon.tsx`
+- `src/portals/writer/writerNextStep.ts`
+- `src/portals/writer/writerSearch.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No backend, schema, routing, or persistence changes were made in this pass.
+- Lore cards marked `Include in AI prompts` already feed outline and page-beat generation; this pass makes that behavior more visible and action-oriented.
+- `runLoreGapAssist` reuses the existing `idea_assist` writer-tools endpoint. It includes series logline, issue synopsis/source text, included lore cards, saved outline, and latest pacing/canon review as context.
+- AI lore suggestions are non-persisted until the user copies them or appends them into the lore card body.
+- The Synopsis helper still uses the existing issue notes/synopsis helper structure and can continue to build an Issue Outline draft.
+- The top production map now has nine stages: Foundation, Synopsis, Canon, Structure, Beats, Dialogue, Visual, Audit, and Cockpit.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/portals/writer/__tests__/shotPlanCsv.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 7 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing baseline of 67 warnings and 0 errors.
+- `git diff --check` passed.
+- In-app browser QA at `http://localhost:5174/` confirmed the authenticated Writers Workshop flow shows `OUTLINE`, `SYNOPSIS`, `CANON`, `BEATS`, `DIALOGUE`, `VIDEO`, `ARC`, `COCKPIT`, and the Canon tab shows `PRE-LORE INTAKE`, `Suggest missing lore`, `Post-lore canon check`, `GENERATION CONTRACT`, `OUTLINE USES CANON`, `BEATS USE CANON`, `NO VIDEO ASSUMPTIONS`, and `VISUAL DETAILS EXPLICIT`.
+
+### Outstanding issues
+
+- Saved production defaults for comic medium, average panels/page, art style, character consistency, and strict canon behavior have not been implemented yet.
+
+### Risks or caveats
+
+- The lore gap assistant can suggest draft lore but does not persist new canon automatically.
+- The post-lore canon check still runs the existing canon review; it does not yet automatically enforce missing lore fields across all generated output.
+- The Cockpit is repositioned in the flow, but its internal feature set is still the existing compare/assist surface.
+
+### Operator follow-up
+
+- Continue using Synopsis helper for author/source outline input before regenerating outlines or beats.
+- Add or include Canon cards before generation when character appearance, school/building design, devices, species/race/gender, factions, or world rules must remain stable.
+
+### Next steps
+
+- Add saved production defaults to the existing writer notes/metadata layer for comic vs video, target panels per page, art style, character consistency, strict canon/lore toggles, and prompt/export behavior.
+- Append those production defaults into outline, page-beat, dialogue, and visual-planning generation contexts so users do not have to repeatedly type "comic book, not video" or panel-density instructions.
+
 ## How to Use These Docs
 
 | File | Use |

@@ -210,7 +210,7 @@ function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
     }
     case 'scripts': {
       const doc = buildSynopsisDocumentFromParts(ctx.synopsisParts).trim();
-      return truncateWriterPromptText(doc || '(Synopsis helper is empty — open Scripts & exports to fill sections.)', cap);
+      return truncateWriterPromptText(doc || '(Synopsis helper is empty — open Synopsis helper to fill sections.)', cap);
     }
     default: {
       return '';
@@ -411,6 +411,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     skippedPayload: number;
     invalid: number;
   } | null>(null);
+  const [loreAssistLoading, setLoreAssistLoading] = useState(false);
+  const [loreAssistError, setLoreAssistError] = useState<string | null>(null);
+  const [loreAssistOutput, setLoreAssistOutput] = useState('');
 
   const pushHistory = useCallback((line: string) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
@@ -1838,9 +1841,96 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory,
   ]);
 
+  const outlineJsonString = latestOutline
+    ? JSON.stringify(latestOutline.outline_json, null, 2)
+    : '';
+  const beatsJsonString = selectedPage?.beats_json
+    ? JSON.stringify(selectedPage.beats_json, null, 2)
+    : '';
+  const shotPlanJsonString = latestShotPlan
+    ? JSON.stringify(latestShotPlan.shot_plan_json, null, 2)
+    : '';
+  const arcReviewPlain = useMemo(
+    () => formatArcReviewPlainText(pacingSaved, canonSaved),
+    [pacingSaved, canonSaved],
+  );
+
+  const runLoreGapAssist = useCallback(async () => {
+    if (!selectedIssueId) return;
+    setLoreAssistLoading(true);
+    setLoreAssistError(null);
+
+    const foundationContext = truncateWriterPromptText(
+      [
+        `Series logline:\n${seriesLoglineDraft.trim() || '(none)'}`,
+        `Issue synopsis / author source:\n${issueSynopsisDraft.trim() || '(none)'}`,
+      ].join('\n\n'),
+      16_000,
+    );
+    const loreContext = truncateWriterPromptText(loreCardsFindText || '(No included lore cards yet.)', 16_000);
+    const structureContext = truncateWriterPromptText(
+      [
+        outlineJsonString ? `Saved outline:\n${outlineJsonString}` : '(No saved outline yet.)',
+        arcReviewPlain ? `Latest pacing/canon review:\n${arcReviewPlain}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      16_000,
+    );
+
+    const res = await invokeWriterTools({
+      mode: 'idea_assist',
+      issue_id: selectedIssueId,
+      prompt:
+        'Act as a continuity editor before comic outline/page-beat generation. Suggest lore cards the author should add or tighten so AI generation does not invent character appearance, species/race/gender, buildings, devices, factions, magic/technology rules, visual motifs, or setting details. Return markdown grouped as: Pre-lore entries to add, Questions for the author, Post-lore checks before beats. Do not state invented details as canon; phrase uncertain items as questions or proposed card drafts.',
+      include_left: true,
+      include_middle: true,
+      include_right: true,
+      context_left: foundationContext,
+      context_middle: loreContext,
+      context_right: structureContext,
+    });
+
+    setLoreAssistLoading(false);
+
+    if (!res.success) {
+      const msg = toolErrorMessage(res);
+      setLoreAssistError(msg);
+      pushHistory(`error: lore suggestions — ${msg}`);
+      return;
+    }
+
+    const parsed = ideaAssistResultSchema.safeParse(res.data);
+    if (!parsed.success) {
+      const msg = 'Lore suggestions returned unexpected JSON';
+      setLoreAssistError(msg);
+      pushHistory(`error: ${msg}`);
+      return;
+    }
+
+    const d = parsed.data;
+    const pieces: string[] = [];
+    if (d.title?.trim()) pieces.push(`# ${d.title.trim()}`);
+    pieces.push(d.answer_markdown.trim());
+    if (d.bullets?.length) pieces.push('', '## Notes', ...d.bullets.map((b) => `- ${b}`));
+    if (d.next_steps?.length) pieces.push('', '## Next steps', ...d.next_steps.map((b) => `- ${b}`));
+    if (d.risks?.length) pieces.push('', '## Risks', ...d.risks.map((b) => `- ${b}`));
+
+    setLoreAssistOutput(pieces.filter(Boolean).join('\n\n').trim());
+    pushHistory('lore gap suggestions — ok');
+  }, [
+    selectedIssueId,
+    seriesLoglineDraft,
+    issueSynopsisDraft,
+    loreCardsFindText,
+    outlineJsonString,
+    arcReviewPlain,
+    pushHistory,
+  ]);
+
   const quickGenerateLabel =
     activeTab === 'scripts' || activeTab === 'lore'
-      ? '—'
+      ? 'Use tab actions'
       : activeTab === 'cockpit'
         ? cockpitIdeaPromptDraft.trim()
           ? 'Run Idea assist'
@@ -1884,20 +1974,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     onToggleDock: () => setDockCollapsed((c) => !c),
     dockEnabled: true,
   });
-
-  const outlineJsonString = latestOutline
-    ? JSON.stringify(latestOutline.outline_json, null, 2)
-    : '';
-  const beatsJsonString = selectedPage?.beats_json
-    ? JSON.stringify(selectedPage.beats_json, null, 2)
-    : '';
-  const shotPlanJsonString = latestShotPlan
-    ? JSON.stringify(latestShotPlan.shot_plan_json, null, 2)
-    : '';
-  const arcReviewPlain = useMemo(
-    () => formatArcReviewPlainText(pacingSaved, canonSaved),
-    [pacingSaved, canonSaved],
-  );
 
   const issuePackObject = useMemo(
     () => ({
@@ -2600,6 +2676,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       current: activeTab === 'outline' && !latestOutline,
     },
     {
+      id: 'synopsis',
+      label: 'Synopsis',
+      tab: 'scripts',
+      eyebrow: 'Author source',
+      detail: issueSynopsisDraft.trim() ? 'Source text ready' : 'Add outline/source',
+      done: Boolean(issueSynopsisDraft.trim()),
+      current: activeTab === 'scripts',
+    },
+    {
+      id: 'canon',
+      label: 'Canon',
+      tab: 'lore',
+      eyebrow: 'Lore',
+      detail: `${loreCards.length} included ${loreCards.length === 1 ? 'card' : 'cards'}`,
+      done: loreCards.length > 0,
+      current: activeTab === 'lore',
+    },
+    {
       id: 'structure',
       label: 'Structure',
       tab: 'outline',
@@ -2607,15 +2701,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       detail: latestOutline ? `v${latestOutline.version}` : 'Premise to hierarchy',
       done: Boolean(latestOutline),
       current: activeTab === 'outline' && Boolean(latestOutline),
-    },
-    {
-      id: 'world',
-      label: 'Canon',
-      tab: 'lore',
-      eyebrow: 'Lore',
-      detail: `${loreCards.length} reference ${loreCards.length === 1 ? 'card' : 'cards'}`,
-      done: loreCards.length > 0,
-      current: activeTab === 'lore',
     },
     {
       id: 'beats',
@@ -2654,13 +2739,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       current: activeTab === 'arc',
     },
     {
-      id: 'export',
-      label: 'Export',
-      tab: 'scripts',
-      eyebrow: 'Pipeline',
-      detail: 'Issue pack + prompts',
+      id: 'cockpit',
+      label: 'Cockpit',
+      tab: 'cockpit',
+      eyebrow: 'Review',
+      detail: 'Compare + assist',
       done: false,
-      current: activeTab === 'scripts' || activeTab === 'cockpit',
+      current: activeTab === 'cockpit',
     },
   ];
   const activeStage = productionStages.find((stage) => stage.current) ?? productionStages.find((stage) => stage.tab === activeTab);
@@ -2733,7 +2818,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               { label: 'Pages', value: sortedPages.length || targetPageCount },
               { label: 'Beats', value: pagesWithBeatsCount },
               { label: 'Script', value: pagesWithScriptCount },
-              { label: 'Lore', value: loreCards.length },
+              { label: 'Canon', value: loreCards.length },
               { label: 'Shots', value: latestShotPlan ? 1 : 0 },
               { label: 'Audit', value: reviewReady ? 1 : 0 },
               { label: 'Tab', value: activeStage?.label ?? workspaceHeading },
@@ -3523,7 +3608,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                        Series lore cards
+                        Canon gate
                       </p>
                       <WriterSectionTip tipKey="loreTab" label="About lore cards" />
                     </div>
@@ -3531,11 +3616,88 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.seriesLibrary}</p>
                     ) : (
                       <>
-                        <p className="text-xs text-black/65 leading-snug max-w-3xl">
-                          Store worldbuilding, character facts, and locations for this series. Cards checked
-                          below are included in <strong>Generate outline</strong> and <strong>page beats</strong>{' '}
-                          prompts (truncated if very large).
-                        </p>
+                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+                          <div className="border-l-2 border-amber-700 bg-amber-50/70 px-3 py-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
+                              Pre-lore intake
+                            </p>
+                            <p className="mt-1 text-xs leading-snug text-black/70">
+                              Add canonical descriptions before regenerating outline or page beats. If a school,
+                              device, species, character appearance, faction, or rule is missing here, the model can
+                              invent it. Included canon cards are sent to <strong>Generate outline</strong> and{' '}
+                              <strong>page beats</strong>.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || !selectedIssueId || loreAssistLoading}
+                                onClick={() => void runLoreGapAssist()}
+                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                {loreAssistLoading ? 'Scanning…' : 'Suggest missing lore'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || !selectedIssueId || canonLoading}
+                                onClick={() => void runCanonFromRibbon()}
+                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+                              >
+                                {canonLoading ? 'Checking…' : 'Post-lore canon check'}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="border-l-2 border-emerald-600 bg-emerald-50/60 px-3 py-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+                              Generation contract
+                            </p>
+                            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                              <span className="bg-white/60 px-2 py-1">Outline uses canon</span>
+                              <span className="bg-white/60 px-2 py-1">Beats use canon</span>
+                              <span className="bg-white/60 px-2 py-1">No video assumptions</span>
+                              <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
+                            </div>
+                            <p className="mt-2 text-[11px] leading-snug text-black/58">
+                              This pass keeps settings in the existing flow. A later pass should add saved production
+                              defaults for comic medium, panel density, art style, and character consistency.
+                            </p>
+                          </div>
+                        </div>
+                        {loreAssistError ? (
+                          <p className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{loreAssistError}</p>
+                        ) : null}
+                        {loreAssistOutput.trim() ? (
+                          <div className="border border-black/10 bg-white/45 p-3 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                AI lore suggestions
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void navigator.clipboard.writeText(loreAssistOutput)}
+                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
+                                >
+                                  Copy
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => appendTextToField(setLoreDraftBody, loreAssistOutput)}
+                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
+                                >
+                                  Append to card body
+                                </button>
+                              </div>
+                            </div>
+                            <pre className={`${preShell} ${preFont} max-h-[min(300px,38vh)]`}>
+                              <WriterHighlightedText
+                                text={loreAssistOutput}
+                                query={findQuery}
+                                activeMatchIndex={findActiveIndex}
+                              />
+                            </pre>
+                          </div>
+                        ) : null}
                         <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
                             {loreEditingId ? 'Edit card' : 'New card'}
@@ -4625,7 +4787,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 {activeTab === 'scripts' && (
                   <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-lg font-bold text-black">Scripts & exports</p>
+                      <div>
+                        <p className="text-lg font-bold text-black">Synopsis helper</p>
+                        <p className="mt-0.5 text-xs text-black/58">
+                          Put your author outline/source structure here before AI starts filling gaps.
+                        </p>
+                      </div>
                       <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
                     </div>
                     {!selectedIssueId ? (

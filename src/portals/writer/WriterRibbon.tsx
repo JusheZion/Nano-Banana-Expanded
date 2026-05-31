@@ -178,7 +178,7 @@ export const WriterRibbon: React.FC<Props> = ({
                   onClick={() => onSelectWorkspaceTabFromFile('scripts')}
                   className="rounded-md border border-amber-800/40 bg-amber-100/90 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                 >
-                  Scripts & exports
+                  Synopsis helper
                 </button>
               </Tooltip>
             ) : null}

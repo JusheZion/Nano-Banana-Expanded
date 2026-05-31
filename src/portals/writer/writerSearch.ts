@@ -13,16 +13,16 @@ export type WriterWorkspaceTabId =
   | 'video'
   | 'scripts';
 
-/** Narrative pipeline order: Cockpit → Outline → Lore → Beats → … Shortcuts: ⌥⌘1–8 (Mac) / Alt+Ctrl+1–8 — not plain ⌘1–7 (browser tabs). */
+/** Narrative pipeline order: author source → synopsis → canon → production → review cockpit. */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
-  'cockpit',
   'outline',
+  'scripts',
   'lore',
   'beats',
   'dialogue',
   'video',
   'arc',
-  'scripts',
+  'cockpit',
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
@@ -30,13 +30,13 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   { ribbon: string; heading: string }
 > = {
   cockpit: { ribbon: 'Cockpit', heading: 'Writers’ cockpit' },
-  outline: { ribbon: 'Outline', heading: 'Issue Outline' },
-  lore: { ribbon: 'Lore', heading: 'Series lore' },
+  outline: { ribbon: 'Outline', heading: 'Issue outline' },
+  scripts: { ribbon: 'Synopsis', heading: 'Synopsis helper' },
+  lore: { ribbon: 'Canon', heading: 'Canon & lore' },
   beats: { ribbon: 'Beats', heading: 'Page Beats' },
   dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
   video: { ribbon: 'Video', heading: 'Video' },
   arc: { ribbon: 'Arc', heading: 'Arc Planner' },
-  scripts: { ribbon: 'Scripts', heading: 'Scripts & exports' },
 };
 
 export type WriterToolSaved = { at?: string; result?: unknown } | null;

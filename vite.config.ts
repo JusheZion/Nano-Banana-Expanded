@@ -19,7 +19,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 5174,
     allowedHosts: [
       '28da55332603f5.lhr.life/',  // exact tunnel domain
       '.lhr.life'                  // optional: wildcard for any *.lhr.life
