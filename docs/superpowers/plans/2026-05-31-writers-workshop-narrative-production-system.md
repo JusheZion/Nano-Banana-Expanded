@@ -42,9 +42,8 @@ The visible flow should become:
 - [x] Add Foundation Hub fields for primary medium type.
 - [x] Add Foundation Hub fields for narrative scope.
 - [x] Persist production defaults in existing writer notes/metadata before schema expansion.
-- [~] Add comic/book/video/wiki-specific defaults for panel density, art style, character consistency, strict canon, and output format.
-  - Current state: medium type, narrative scope, comic panel density, art style, character consistency, strict canon, and no-video-assumptions save through `notes.production_defaults`.
-  - Remaining work: add explicit output-format defaults after the export branch is designed.
+- [x] Add comic/book/video/wiki-specific defaults for panel density, art style, character consistency, strict canon, and output format.
+  - Current state: medium type, narrative scope, comic panel density, art style, character consistency, strict canon, no-video-assumptions, and preferred output format save through `notes.production_defaults`.
 - [x] Inject production defaults into outline, page-beat, dialogue, shot/visual, and export prompts.
 - [ ] Add hierarchical structure support: arc -> book/issue/episode -> chapter/page/scene -> beat.
 - [~] Add user-controlled outline import/upload/paste flow with editable hierarchy.
@@ -63,4 +62,4 @@ The visible flow should become:
 - Pacing automation must remain confirmable when it deletes or overwrites saved page rows, beats, or dialogue.
 - The first pacing-apply slice intentionally avoids silently rewriting existing dialogue or page beats. It stages affected pages for follow-up regeneration after outline changes.
 - Foundation Hub production defaults now persist without schema changes through existing series/issue notes metadata; issue defaults override series defaults.
-- Generation calls now send production defaults to outline, page beats, dialogue, and shot/visual planning, while issue-pack exports include the resolved defaults.
+- Generation calls now send production defaults to outline, page beats, dialogue, and shot/visual planning, while issue-pack exports include the resolved defaults and preferred output format.

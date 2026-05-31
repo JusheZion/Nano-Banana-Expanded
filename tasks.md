@@ -14,6 +14,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [~] Add pacing recommendation apply path: Arc can stage/apply target/page-row changes and optionally regenerate the outline; downstream page-beat/dialogue regeneration still needs a preview-safe wizard.
 - [x] Add Foundation Hub medium/scope fields and persisted production defaults.
 - [x] Inject production defaults into outline, beat, dialogue, visual, and export contexts.
+- [x] Add preferred output-format defaults to Foundation Hub and issue-pack exports.
 - [~] Add author outline import/paste flow: paste/save is implemented; file upload/import and editable hierarchy are still pending.
 - [ ] Add hierarchical outline/beat editing and expanded audit modes.
 

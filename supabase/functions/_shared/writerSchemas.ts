@@ -28,6 +28,16 @@ export const writerProductionDefaultsPayloadSchema = z
     comic_panel_density: z.enum(['sparse', 'standard', 'dense']).optional(),
     art_style: z.string().max(500).optional(),
     character_consistency: z.enum(['standard', 'strict']).optional(),
+    output_format: z
+      .enum([
+        'issue_pack_json',
+        'comic_script_markdown',
+        'guided_comic_handoff',
+        'fountain_screenplay',
+        'prose_manuscript',
+        'lore_wiki',
+      ])
+      .optional(),
     strict_canon: z.boolean().optional(),
     no_video_assumptions: z.boolean().optional(),
   })

@@ -54,6 +54,7 @@ describe('writerToolsRequestSchema', () => {
         comic_panel_density: 'standard',
         art_style: 'clean line art',
         character_consistency: 'strict',
+        output_format: 'guided_comic_handoff',
         strict_canon: true,
         no_video_assumptions: true,
       },
@@ -63,6 +64,7 @@ describe('writerToolsRequestSchema', () => {
       outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
       production_defaults: {
         medium_type: 'comic',
+        output_format: 'guided_comic_handoff',
         no_video_assumptions: true,
       },
     });

@@ -3793,6 +3793,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 <option value="standard">Standard</option>
                               </select>
                             </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Preferred export
+                              <select
+                                value={productionDefaultsDraft.outputFormat}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    outputFormat: e.target.value as WriterProductionDefaults['outputFormat'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="issue_pack_json">Issue pack JSON</option>
+                                <option value="comic_script_markdown">Comic script markdown</option>
+                                <option value="guided_comic_handoff">Guided Comics handoff</option>
+                                <option value="fountain_screenplay">Fountain screenplay</option>
+                                <option value="prose_manuscript">Prose manuscript</option>
+                                <option value="lore_wiki">Lore wiki</option>
+                              </select>
+                            </label>
                           </div>
                           <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
                             Art style
@@ -5261,17 +5282,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         type="button"
                         disabled={!latestOutline && !latestShotPlan && pages.length === 0}
                         onClick={() => {
-                          downloadJsonFile('writer-issue-pack.json', {
-                            issue_id: selectedIssueId,
-                            exported_at: new Date().toISOString(),
-                            outline: latestOutline?.outline_json ?? null,
-                            shot_plan: latestShotPlan?.shot_plan_json ?? null,
-                            pages: pages.map((p) => ({
-                              page_number: p.page_number,
-                              beats_json: p.beats_json,
-                              script_preview: (p.script_text ?? '').slice(0, 2000),
-                            })),
-                          });
+                          downloadJsonFile('writer-issue-pack.json', issuePackObject);
                         }}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >

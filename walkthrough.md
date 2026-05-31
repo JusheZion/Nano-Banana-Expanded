@@ -5940,6 +5940,69 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
 - Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
 
+## Writers Workshop Output Format Defaults - 2026-05-31
+
+### What changed
+
+- Added an explicit preferred output/export format to Foundation Hub production defaults.
+- Stored the new value as `output_format` under the existing `notes.production_defaults` metadata contract, preserving the no-migration approach from the Foundation Hub pass.
+- Added Foundation Hub UI options for Issue pack JSON, comic script markdown, Guided Comics handoff, Fountain screenplay, prose manuscript, and lore wiki output.
+- Routed `output_format` through production-default payloads, client schemas, shared writer types, and the mirrored Supabase Edge schema.
+- Updated the Supabase `writer-tools` production-default resolver and prompt block so saved issue/series defaults still inject preferred output format when the client does not send the current draft.
+- Kept issue-pack exports consistent by ensuring the older Outline-tab issue-pack download uses the full `issuePackObject`, including production defaults.
+- Updated the formal Writers Workshop Narrative Production System tracker and `tasks.md`.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionDefaults.ts`
+- `src/portals/writer/__tests__/writerProductionDefaults.test.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database schema changes were made.
+- `output_format` is advisory production context for generation and export packaging; it does not remove the existing per-button export formats.
+- Issue-level production defaults continue to override series-level defaults through the existing resolver.
+- The Edge Function and client schemas must stay mirrored for `writerProductionDefaultsPayloadSchema`.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 37 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing 67-warning baseline and 0 errors.
+- `git diff --check` passed.
+- In-app browser QA at `http://127.0.0.1:5174/` confirmed the Writers Workshop loaded with title `ARCS Expanded`; Foundation Hub rendered the `Preferred export` select with Issue pack JSON, comic script markdown, Guided Comics handoff, Fountain screenplay, prose manuscript, and lore wiki options; Outline/Synopsis tab switching worked and returned to Foundation Hub.
+- Screenshot capture through the in-app browser timed out, so no screenshot artifact was saved for this pass.
+
+### Outstanding issues
+
+- Hierarchical structure support remains pending.
+- File upload/import and editable hierarchy controls for author outlines remain pending.
+- Preview-safe downstream pacing regeneration for page beats/dialogue remains pending.
+
+### Risks or caveats
+
+- `writer-tools` must be redeployed before production Supabase Edge calls honor `output_format` from saved notes fallback.
+- Preferred output format currently travels as prompt/export metadata; it does not automatically change which download button a user clicks.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Manually verify saving a non-default preferred export value in a signed-in browser session once Supabase auth is available.
+
+### Next steps
+
+- Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
+- Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
+
 ## How to Use These Docs
 
 | File | Use |

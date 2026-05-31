@@ -78,6 +78,13 @@ type WriterProductionDefaultsPayload = {
   comic_panel_density?: 'sparse' | 'standard' | 'dense';
   art_style?: string;
   character_consistency?: 'standard' | 'strict';
+  output_format?:
+    | 'issue_pack_json'
+    | 'comic_script_markdown'
+    | 'guided_comic_handoff'
+    | 'fountain_screenplay'
+    | 'prose_manuscript'
+    | 'lore_wiki';
   strict_canon?: boolean;
   no_video_assumptions?: boolean;
 };
@@ -88,6 +95,7 @@ const DEFAULT_PRODUCTION_DEFAULTS: Required<WriterProductionDefaultsPayload> = {
   comic_panel_density: 'standard',
   art_style: 'consistent comic-book line art',
   character_consistency: 'strict',
+  output_format: 'issue_pack_json',
   strict_canon: true,
   no_video_assumptions: true,
 };
@@ -106,6 +114,9 @@ function readProductionDefaultsPayload(notes: Record<string, unknown> | undefine
     ...(typeof o.art_style === 'string' ? { art_style: o.art_style } : {}),
     ...(typeof o.character_consistency === 'string'
       ? { character_consistency: o.character_consistency as WriterProductionDefaultsPayload['character_consistency'] }
+      : {}),
+    ...(typeof o.output_format === 'string'
+      ? { output_format: o.output_format as WriterProductionDefaultsPayload['output_format'] }
       : {}),
     ...(typeof o.strict_canon === 'boolean' ? { strict_canon: o.strict_canon } : {}),
     ...(typeof o.no_video_assumptions === 'boolean' ? { no_video_assumptions: o.no_video_assumptions } : {}),
@@ -132,6 +143,7 @@ function buildProductionDefaultsPromptBlock(defaults: Required<WriterProductionD
     `Comic panel density: ${defaults.comic_panel_density}`,
     `Art style: ${defaults.art_style}`,
     `Character consistency: ${defaults.character_consistency}`,
+    `Preferred output format: ${defaults.output_format}`,
     `Strict canon: ${defaults.strict_canon ? 'yes' : 'no'}`,
     `No video assumptions: ${defaults.no_video_assumptions ? 'yes' : 'no'}`,
     defaults.no_video_assumptions && defaults.medium_type === 'comic'

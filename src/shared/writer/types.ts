@@ -38,6 +38,13 @@ export type WriterProductionDefaultsPayload = {
   comic_panel_density?: 'sparse' | 'standard' | 'dense';
   art_style?: string;
   character_consistency?: 'standard' | 'strict';
+  output_format?:
+    | 'issue_pack_json'
+    | 'comic_script_markdown'
+    | 'guided_comic_handoff'
+    | 'fountain_screenplay'
+    | 'prose_manuscript'
+    | 'lore_wiki';
   strict_canon?: boolean;
   no_video_assumptions?: boolean;
 };
