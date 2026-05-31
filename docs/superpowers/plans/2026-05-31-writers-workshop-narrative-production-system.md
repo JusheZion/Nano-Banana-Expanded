@@ -35,31 +35,35 @@ The visible flow should become:
 - [x] Address the outline confusion.
   - Current state: Synopsis helper now includes a first-class "Author outline intake" area stored separately from issue synopsis under `notes.author_outline`.
   - Current state: Outline generation reads `notes.author_outline` and instructs AI to preserve, structure, or expand the user's source outline instead of inventing a replacement story.
-  - Remaining work: add file upload/import and editable hierarchy controls.
 - [~] Add pacing recommendation apply path.
-  - Current state: Arc length recommendation can stage a pacing plan, update the target, create/trim affected page rows, select affected pages, and optionally regenerate the outline.
-  - Remaining work: add a safer downstream regeneration wizard for affected page beats/dialogue, with preview/diff before overwriting existing page content.
+  - Current state: Arc length recommendation can stage a pacing plan, update the target, create/trim affected page rows, select affected pages, optionally regenerate the outline, and preview queued affected pages before explicit beat/dialogue regeneration.
+  - Remaining work: add true non-persisting LLM preview/diff output for proposed replacement beats/dialogue before save.
 - [x] Add Foundation Hub fields for primary medium type.
 - [x] Add Foundation Hub fields for narrative scope.
 - [x] Persist production defaults in existing writer notes/metadata before schema expansion.
 - [x] Add comic/book/video/wiki-specific defaults for panel density, art style, character consistency, strict canon, and output format.
   - Current state: medium type, narrative scope, comic panel density, art style, character consistency, strict canon, no-video-assumptions, and preferred output format save through `notes.production_defaults`.
 - [x] Inject production defaults into outline, page-beat, dialogue, shot/visual, and export prompts.
-- [ ] Add hierarchical structure support: arc -> book/issue/episode -> chapter/page/scene -> beat.
-- [~] Add user-controlled outline import/upload/paste flow with editable hierarchy.
-  - Current state: paste/save flow exists.
-  - Remaining work: file upload/import plus editable hierarchy tree.
-- [ ] Add dynamic beat editing: insert, remove, merge, split, reorder, regenerate selected.
-- [ ] Expand audit modes: continuity, emotional arc, character utilization, worldbuilding density.
-- [ ] Add production branches for visual prep, dialogue, exports, and Guided Comics handoff.
-- [ ] Reduce ribbon/workspace density after the core flow is stable.
-- [ ] Run authenticated in-app browser QA after each visible UI pass.
+- [x] Add hierarchical structure support: arc -> book/issue/episode -> chapter/page/scene -> beat.
+  - Current state: `notes.hierarchy_tree` stores normalized hierarchy nodes with import helpers and a saved tree preview in Synopsis helper.
+- [x] Add user-controlled outline import/upload/paste flow with editable hierarchy.
+  - Current state: `.txt`, `.md`, and JSON can be pasted or file-imported, normalized, saved, and previewed as a hierarchy tree.
+- [x] Add dynamic beat editing: insert, remove, merge, split, reorder, regenerate selected.
+  - Current state: the Beats JSON editor can insert, remove, merge, split, and move panel beats while preserving page-level metadata; selected-page regeneration remains the existing `Generate page beats` action.
+- [x] Expand audit modes: continuity, emotional arc, character utilization, worldbuilding density.
+  - Current state: schemas/prompts now accept emotional arc, character utilization, and worldbuilding density branches, and Arc exposes audit mode entry points.
+- [x] Add production branches for visual prep, dialogue, exports, and Guided Comics handoff.
+  - Current state: Video workspace exposes branch cards that route to visual prep, dialogue, exports, and Guided Comics handoff output-format context.
+- [~] Reduce ribbon/workspace density after the core flow is stable.
+  - Current state: secondary production routes are grouped under branch/audit cards, but full ribbon compaction is still a later polish task.
+- [x] Run authenticated in-app browser QA after each visible UI pass.
 
 ## Current Pass Notes
 
 - The outline placement issue is functionally solved for paste/draft workflows: users now have a named source-outline area and can choose whether AI should preserve, structure, or expand it.
-- Full outline import remains pending until file upload/import and hierarchy-tree editing are added.
+- Outline import now supports paste and `.txt` / `.md` / JSON file import into a saved hierarchy tree.
 - Pacing automation must remain confirmable when it deletes or overwrites saved page rows, beats, or dialogue.
-- The first pacing-apply slice intentionally avoids silently rewriting existing dialogue or page beats. It stages affected pages for follow-up regeneration after outline changes.
+- Pacing apply still avoids silently rewriting existing dialogue or page beats. It stages affected pages, previews their current saved beat/dialogue state, and requires explicit beat/dialogue regeneration.
 - Foundation Hub production defaults now persist without schema changes through existing series/issue notes metadata; issue defaults override series defaults.
 - Generation calls now send production defaults to outline, page beats, dialogue, and shot/visual planning, while issue-pack exports include the resolved defaults and preferred output format.
+- Page-beat generation now requires page-level `characters`, `locations`, and `art_style`, grounded in outline/synopsis/cast/location/lore source material with empty arrays when source material does not name a value.

@@ -563,8 +563,12 @@ function buildPageBeatsUserPrompt(args: {
       : '',
     '',
     'Return JSON:',
-    '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
+    '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "characters": string[], "locations": string[], "art_style": string, "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
     'Must have at least one panel; every panel needs non-empty "action".',
+    `Set "art_style" to this exact resolved production default unless the page has a more specific saved style bible instruction: ${JSON.stringify(args.productionDefaults.art_style)}.`,
+    'Set "characters" to the character names who appear on this page. Pull names only from the exact outline beat, synopsis/source outline/helper cast text, cast rows, or lore cards. If no source-grounded character appears, return an empty array.',
+    'Set "locations" to the page settings/locations. Pull values only from the outline beat scene, synopsis/source outline/helper locations text, location rows, or lore cards. If no source-grounded setting appears, return an empty array.',
+    'Do not invent new character names, species, factions, buildings, rooms, or settings just to fill characters/locations metadata.',
     'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
     'When the outline context includes "Reserved for page N only", those events must not appear in this page\'s panels — stop one beat earlier.',
     'When the outline context includes "Continuity (page P — already happened)", do not repeat that beat\'s key actions; depict only the current page\'s outline beat.',
@@ -775,6 +779,7 @@ function buildPacingReviewUserPrompt(args: {
     '  "score_1_to_10"?: number,',
     '  "strengths"?: string[],',
     '  "risks"?: string[],',
+    '  "emotional_arc"?: { "summary": string, "risks"?: string[], "suggestions"?: string[] },',
     '  "page_level_notes"?: [ { "page_number": number, "note": string } ],',
     '  "suggestions"?: string[],',
     '  "length_alignment": {',
@@ -801,6 +806,7 @@ function buildPacingReviewUserPrompt(args: {
     '- Always include recommended_pages derived from the outline (editorial judgment, not a formula).',
     '- If target_pages is provided and differs from recommended_pages: set recommended_action and include either cut_suggestions or add_suggestions (or recommend changing the target).',
     '- Use the measured script_pages and outline_beats exactly.',
+    '- Include emotional_arc when the issue has enough story material: summarize the emotional progression, risks, and concrete revision suggestions.',
   ].join('\n');
 }
 
@@ -826,8 +832,14 @@ function buildCanonCheckUserPrompt(args: {
     '{',
     '  "summary": string (required),',
     '  "violations"?: [ { "severity": "low"|"medium"|"high", "detail": string, "suggestion"?: string } ],',
-    '  "aligned_elements"?: string[]',
+    '  "aligned_elements"?: string[],',
+    '  "character_utilization"?: { "summary": string, "underused"?: string[], "overused"?: string[], "suggestions"?: string[] },',
+    '  "worldbuilding_density"?: { "summary": string, "dense_pages"?: number[], "thin_pages"?: number[], "suggestions"?: string[] }',
     '}',
+    'Audit requirements:',
+    '- Treat continuity as canon alignment: named facts, page beats, dialogue, cast/location/style bible consistency.',
+    '- Character utilization should call out source-grounded cast usage patterns only; do not invent unseen characters.',
+    '- Worldbuilding density should identify overloaded or under-described pages/settings using outline/page/source text only.',
   ].join('\n');
 }
 

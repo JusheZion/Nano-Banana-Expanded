@@ -6003,6 +6003,85 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
 - Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
 
+## Writers Workshop Narrative Production System Completion Pass - 2026-05-31
+
+### What changed
+
+- Completed the requested two-pass Writers Workshop completion slice in one integrated implementation pass, with subagent lanes used for schema/page-beat metadata, hierarchy helpers, and production branch/audit helpers before coordinator integration.
+- Added page-level metadata to stored page beats: `characters: string[]`, `locations: string[]`, and `art_style: string`, while leaving the existing `panels` payload unchanged.
+- Updated the `writer-tools` page-beat prompt so generated page beats must include source-grounded `characters`, source-grounded `locations`, and resolved production-default `art_style`; missing source-grounded names/settings must be empty arrays rather than invented values.
+- Added hierarchy import/tree support inside the existing Synopsis helper surface, using `notes.hierarchy_tree` with no database migration.
+- Added paste and file import for `.txt`, `.md`, `.markdown`, and JSON hierarchy source; imported content normalizes into `arc -> book/issue/episode -> chapter/page/scene -> beat` nodes and renders as a saved tree preview.
+- Added page-beat metadata visibility on the Beats tab for the selected page.
+- Added dynamic selected-page beat editing controls in the existing Beats JSON editor: insert, remove, merge, split, move up, and move down. These controls only rewrite the `panels` array and preserve page-level `characters`, `locations`, and `art_style` unless the JSON is edited directly.
+- Added preview-safe pacing regeneration support in the Arc tab by showing queued affected pages, their current beat/dialogue state, and explicit follow-up actions before beat/dialogue regeneration.
+- Expanded audit contracts and prompts for emotional arc, character utilization, and worldbuilding density in addition to continuity/canon review.
+- Added expanded audit entry cards and production branch cards for visual prep, dialogue, exports, and Guided Comics handoff inside existing Writers Workshop surfaces.
+- Updated `tasks.md` and the formal Narrative Production System plan to reflect the completed and remaining items.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerHierarchy.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerHierarchy.test.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration was added; hierarchy data is stored under existing issue `notes.hierarchy_tree`, and page metadata stays inside existing `writer_pages.beats_json`.
+- The app and Supabase shared schemas remain mirrored for page-beat metadata and expanded audit output validation.
+- The dynamic beat controls operate on the local JSON draft first; the user must still press `Save beats to database` to persist.
+- The selected-page regeneration path remains the existing `Generate page beats` action, now with the richer metadata contract.
+- The pacing preview now prevents silent downstream overwrites by showing affected pages and requiring explicit beat/dialogue regeneration. It does not yet produce a non-persisting LLM diff of proposed replacement text before saving.
+- Production branch cards are navigation/output-context surfaces; they group existing visual prep, dialogue, export, and Guided Comics handoff paths rather than adding a new portal.
+
+### Verification
+
+- `npm run test -- --run src/shared/writer/__tests__/schemas.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 6 files, 47 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- Authenticated in-app browser QA at `http://127.0.0.1:5174/` confirmed the signed-in Writers Workshop loaded as `ARCS Expanded`, selected a real issue, and showed:
+  - Synopsis helper hierarchy import, `.txt/.md/JSON` file import, and saved hierarchy tree preview.
+  - Beats tab page metadata for characters, locations, and art style.
+  - Beats JSON editor controls for insert, remove, merge, split, move up, and move down.
+  - Arc expanded audits for continuity, emotional arc, character utilization, and worldbuilding density.
+  - Video production branches for visual prep, dialogue, exports, and Guided Comics handoff.
+- Browser screenshot capture timed out, so no screenshot artifact was saved for this pass.
+
+### Outstanding issues
+
+- True proposed LLM diff preview for replacement page beats/dialogue before persistence remains a follow-up.
+- Full ribbon compaction remains future polish; this pass groups more secondary actions but does not redesign the ribbon.
+- `writer-tools` must be redeployed before production Edge calls honor the new page-beat metadata and expanded audit prompt/schema behavior.
+
+### Risks or caveats
+
+- Existing legacy page beats without metadata remain valid; the selected page metadata strip will show empty-state labels until pages are regenerated or manually edited.
+- Generated metadata is only as source-grounded as the outline/synopsis/cast/location/lore data supplied to the Edge Function.
+- The hierarchy tree currently imports/saves normalized structure and previews it; direct node-by-node editing beyond re-import/paste editing is not implemented.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Regenerate a small set of page beats in a signed-in production-like environment and confirm saved `beats_json` includes `characters`, `locations`, and `art_style`.
+- Run one pacing review and one canon check after redeploy to confirm the expanded audit branches save in `notes.writer_tool_cache`.
+
+### Next steps
+
+- Add non-persisting preview endpoints or client staging for proposed beat/dialogue replacements before applying pacing-driven regeneration.
+- Decide whether the hierarchy tree needs direct node rename/reorder controls beyond import/paste editing.
+- Continue ribbon density polish once the production branch surfaces settle.
+
 ## How to Use These Docs
 
 | File | Use |

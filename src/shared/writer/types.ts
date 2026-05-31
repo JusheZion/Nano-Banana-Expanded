@@ -53,6 +53,9 @@ export type WriterProductionDefaultsPayload = {
 export type PageBeatsJson = {
   page_number_ref?: number;
   one_line_hook?: string;
+  characters?: string[];
+  locations?: string[];
+  art_style?: string;
   panels: Array<{
     index?: number;
     action: string;

@@ -210,6 +210,38 @@ describe('writerToolsRequestSchema', () => {
     expect(p.panels).toHaveLength(1);
   });
 
+  it('pageBeatsJsonSchema accepts optional page-level metadata', () => {
+    const p = pageBeatsJsonSchema.parse({
+      characters: ['Mara', 'Sol'],
+      locations: ['Gate bridge'],
+      art_style: 'clean cinematic line art',
+      panels: [{ action: 'Mara studies the waking gate.' }],
+    });
+    expect(p.characters).toEqual(['Mara', 'Sol']);
+    expect(p.locations).toEqual(['Gate bridge']);
+    expect(p.art_style).toBe('clean cinematic line art');
+    expect(p.panels).toHaveLength(1);
+  });
+
+  it('pageBeatsJsonSchema keeps legacy beats without metadata valid', () => {
+    const p = pageBeatsJsonSchema.parse({
+      page_number_ref: 1,
+      one_line_hook: 'The gate wakes.',
+      panels: [{ action: 'Wide establishing shot' }],
+    });
+    expect(p.panels).toHaveLength(1);
+  });
+
+  it('pageBeatsJsonSchema rejects invalid page-level metadata shapes', () => {
+    const validPageBeats = {
+      panels: [{ action: 'Wide establishing shot' }],
+    };
+
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, characters: 'Mara' })).toThrow();
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, locations: ['Gate bridge', 1] })).toThrow();
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, art_style: 1 })).toThrow();
+  });
+
   it('parses pacing_review request', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     expect(writerToolsRequestSchema.parse({ mode: 'pacing_review', issue_id: id })).toMatchObject({
