@@ -10,6 +10,7 @@ export type WriterSeriesRow = {
   genre: string | null;
   tone: string | null;
   target_demographic: string | null;
+  notes: Record<string, unknown>;
   created_at: string;
 };
 
@@ -72,13 +73,19 @@ export async function listWriterSeries(): Promise<WriterSeriesRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase
     .from('writer_series')
-    .select('id, title, logline, genre, tone, target_demographic, created_at')
+    .select('id, title, logline, genre, tone, target_demographic, notes, created_at')
     .order('created_at', { ascending: false });
   if (error) {
     console.warn('[arcsWriterRoom] listWriterSeries', error.message);
     return [];
   }
-  return (data ?? []) as WriterSeriesRow[];
+  return ((data ?? []) as Array<Omit<WriterSeriesRow, 'notes'> & { notes?: unknown }>).map((r) => ({
+    ...r,
+    notes:
+      r.notes && typeof r.notes === 'object' && !Array.isArray(r.notes)
+        ? (r.notes as Record<string, unknown>)
+        : {},
+  }));
 }
 
 /** Insert first row when the workshop DB has no series yet. */
@@ -87,13 +94,20 @@ export async function createWriterSeries(input?: { title?: string }): Promise<Wr
   const { data, error } = await supabase
     .from('writer_series')
     .insert({ title: input?.title?.trim() || 'Untitled series', notes: {} })
-    .select('id, title, logline, genre, tone, target_demographic, created_at')
+    .select('id, title, logline, genre, tone, target_demographic, notes, created_at')
     .single();
   if (error) {
     console.warn('[arcsWriterRoom] createWriterSeries', error.message);
     return null;
   }
-  return data as WriterSeriesRow;
+  const r = data as Omit<WriterSeriesRow, 'notes'> & { notes?: unknown };
+  return {
+    ...r,
+    notes:
+      r.notes && typeof r.notes === 'object' && !Array.isArray(r.notes)
+        ? (r.notes as Record<string, unknown>)
+        : {},
+  };
 }
 
 /** Insert issue for a series (e.g. first issue when list is empty). */
@@ -216,7 +230,13 @@ export async function updateWriterPageScriptText(pageId: string, scriptText: str
 
 export async function updateWriterSeries(
   seriesId: string,
-  patch: { title?: string | null; logline?: string | null; genre?: string | null; tone?: string | null },
+  patch: {
+    title?: string | null;
+    logline?: string | null;
+    genre?: string | null;
+    tone?: string | null;
+    notes?: Record<string, unknown>;
+  },
 ): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase

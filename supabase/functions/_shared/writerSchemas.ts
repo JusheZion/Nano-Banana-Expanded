@@ -19,6 +19,20 @@ const issueOutlinePageBeatSchema = z.object({
   emotional_turn: z.string().optional(),
 });
 
+export const writerProductionDefaultsPayloadSchema = z
+  .object({
+    medium_type: z.enum(['comic', 'book', 'screenplay', 'video', 'wiki']).optional(),
+    narrative_scope: z
+      .enum(['single_issue', 'multi_issue_arc', 'book', 'episode', 'shared_universe'])
+      .optional(),
+    comic_panel_density: z.enum(['sparse', 'standard', 'dense']).optional(),
+    art_style: z.string().max(500).optional(),
+    character_consistency: z.enum(['standard', 'strict']).optional(),
+    strict_canon: z.boolean().optional(),
+    no_video_assumptions: z.boolean().optional(),
+  })
+  .strict();
+
 export const issueOutlineSchema = z
   .object({
     title: z.string().optional(),
@@ -34,6 +48,7 @@ export const writerToolsOutlineIssueRequestSchema = z.object({
   issue_id: z.string().uuid(),
   target_page_count: z.number().int().positive().max(200).optional(),
   outline_supplement: z.string().max(8000).optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
 
 const pageBeatPanelSchema = z.object({
@@ -58,6 +73,7 @@ export const writerToolsPageBeatsRequestSchema = z.object({
   page_id: z.string().uuid(),
   /** Optional; only used for page_beats — layout, spreads, tone. */
   director_notes_for_beats: z.string().max(4000).optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
 
 /** Refine on the array (not the object) so the request stays a ZodObject for discriminatedUnion. */
@@ -78,6 +94,7 @@ export const writerToolsPageBeatsIssueRequestSchema = z.object({
   batch_offset: z.number().int().min(0).max(500).optional(),
   director_notes_for_beats: z.string().max(4000).optional(),
   page_ids: writerToolsPageBeatsIssuePageIdsSchema.optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
 
 export const draftDialogueResultSchema = z
@@ -90,6 +107,7 @@ export const writerToolsDraftDialogueRequestSchema = z.object({
   mode: z.literal('draft_dialogue'),
   page_id: z.string().uuid(),
   style: z.enum(['comic_script', 'screenplay_light']).optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
 
 export const pacingLengthAlignmentSchema = z
@@ -196,6 +214,7 @@ export const writerToolsPlanShotsRequestSchema = z.object({
   mode: z.literal('plan_shots_from_issue'),
   issue_id: z.string().uuid(),
   creative_brief: z.string().max(4000).optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
 
 /** LLM output for `idea_assist` (non-persisted brainstorming / analysis). */

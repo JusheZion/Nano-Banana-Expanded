@@ -2,6 +2,21 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Writers Workshop — Narrative Production System Retool (2026-05-31) — IN PROGRESS
+
+Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`](docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md)
+
+- [x] Reframe top shell as `Narrative Production System`.
+- [x] Reorder flow to `Outline -> Synopsis -> Canon -> Beats -> Dialogue -> Video -> Arc -> Cockpit`.
+- [x] Reframe Scripts as `Synopsis helper` and Lore as `Canon gate`.
+- [x] Add pre-lore intake, post-lore canon check, and missing-lore suggestions.
+- [x] Address outline confusion: Synopsis helper now has dedicated `notes.author_outline` intake with preserve/structure/expand modes, and `outline_issue` consumes it during generation.
+- [~] Add pacing recommendation apply path: Arc can stage/apply target/page-row changes and optionally regenerate the outline; downstream page-beat/dialogue regeneration still needs a preview-safe wizard.
+- [x] Add Foundation Hub medium/scope fields and persisted production defaults.
+- [x] Inject production defaults into outline, beat, dialogue, visual, and export contexts.
+- [~] Add author outline import/paste flow: paste/save is implemented; file upload/import and editable hierarchy are still pending.
+- [ ] Add hierarchical outline/beat editing and expanded audit modes.
+
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
 - [x] **Prompt helper:** [`imageshopImportPrompt.ts`](src/portals/storyline/imageshopImportPrompt.ts) — `buildImageshopImportPrompt` (retouch / optional `ART_STYLE_LIBRARY` / notes); [`imageshopImportPrompt.test.ts`](src/portals/storyline/__tests__/imageshopImportPrompt.test.ts)

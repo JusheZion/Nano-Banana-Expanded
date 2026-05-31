@@ -68,8 +68,109 @@ type IssueRow = {
     genre: string | null;
     tone: string | null;
     target_demographic: string | null;
+    notes?: Record<string, unknown>;
   } | null;
 };
+
+type WriterProductionDefaultsPayload = {
+  medium_type?: 'comic' | 'book' | 'screenplay' | 'video' | 'wiki';
+  narrative_scope?: 'single_issue' | 'multi_issue_arc' | 'book' | 'episode' | 'shared_universe';
+  comic_panel_density?: 'sparse' | 'standard' | 'dense';
+  art_style?: string;
+  character_consistency?: 'standard' | 'strict';
+  strict_canon?: boolean;
+  no_video_assumptions?: boolean;
+};
+
+const DEFAULT_PRODUCTION_DEFAULTS: Required<WriterProductionDefaultsPayload> = {
+  medium_type: 'comic',
+  narrative_scope: 'single_issue',
+  comic_panel_density: 'standard',
+  art_style: 'consistent comic-book line art',
+  character_consistency: 'strict',
+  strict_canon: true,
+  no_video_assumptions: true,
+};
+
+function readProductionDefaultsPayload(notes: Record<string, unknown> | undefined): WriterProductionDefaultsPayload {
+  if (!notes || typeof notes !== 'object') return {};
+  const raw = notes.production_defaults;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const o = raw as Record<string, unknown>;
+  return {
+    ...(typeof o.medium_type === 'string' ? { medium_type: o.medium_type as WriterProductionDefaultsPayload['medium_type'] } : {}),
+    ...(typeof o.narrative_scope === 'string' ? { narrative_scope: o.narrative_scope as WriterProductionDefaultsPayload['narrative_scope'] } : {}),
+    ...(typeof o.comic_panel_density === 'string'
+      ? { comic_panel_density: o.comic_panel_density as WriterProductionDefaultsPayload['comic_panel_density'] }
+      : {}),
+    ...(typeof o.art_style === 'string' ? { art_style: o.art_style } : {}),
+    ...(typeof o.character_consistency === 'string'
+      ? { character_consistency: o.character_consistency as WriterProductionDefaultsPayload['character_consistency'] }
+      : {}),
+    ...(typeof o.strict_canon === 'boolean' ? { strict_canon: o.strict_canon } : {}),
+    ...(typeof o.no_video_assumptions === 'boolean' ? { no_video_assumptions: o.no_video_assumptions } : {}),
+  };
+}
+
+function resolveProductionDefaultsPayload(
+  issue: IssueRow,
+  requestDefaults?: WriterProductionDefaultsPayload,
+): Required<WriterProductionDefaultsPayload> {
+  return {
+    ...DEFAULT_PRODUCTION_DEFAULTS,
+    ...readProductionDefaultsPayload(issue.writer_series?.notes),
+    ...readProductionDefaultsPayload(issue.notes),
+    ...(requestDefaults ?? {}),
+  };
+}
+
+function buildProductionDefaultsPromptBlock(defaults: Required<WriterProductionDefaultsPayload>): string {
+  return [
+    'Production defaults:',
+    `Primary medium: ${defaults.medium_type}`,
+    `Narrative scope: ${defaults.narrative_scope}`,
+    `Comic panel density: ${defaults.comic_panel_density}`,
+    `Art style: ${defaults.art_style}`,
+    `Character consistency: ${defaults.character_consistency}`,
+    `Strict canon: ${defaults.strict_canon ? 'yes' : 'no'}`,
+    `No video assumptions: ${defaults.no_video_assumptions ? 'yes' : 'no'}`,
+    defaults.no_video_assumptions && defaults.medium_type === 'comic'
+      ? 'Do not translate comic pages into video, trailer, camera-shot, animation, or runtime language unless this request is explicitly visual planning.'
+      : '',
+    defaults.strict_canon
+      ? 'Treat included lore, cast, locations, style bibles, and author outline as hard continuity constraints; ask or leave gaps explicit instead of inventing canon.'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function extractAuthorOutlineForPrompt(notes: Record<string, unknown> | undefined): string {
+  if (!notes || typeof notes !== 'object') return '';
+  const raw = notes.author_outline;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return '';
+  const o = raw as Record<string, unknown>;
+  const text = typeof o.text === 'string' ? o.text.trim() : '';
+  if (!text) return '';
+  const modeRaw = typeof o.mode === 'string' ? o.mode : 'structure';
+  const mode =
+    modeRaw === 'preserve' || modeRaw === 'structure' || modeRaw === 'expand'
+      ? modeRaw
+      : 'structure';
+  const instruction =
+    mode === 'preserve'
+      ? 'Preserve the author outline order, named events, outcomes, and causal chain as strictly as possible. Do not replace the story; only map it into production-ready page_beats.'
+      : mode === 'expand'
+        ? 'Use the author outline as the required story spine. Add connective tissue, transitions, escalation, and page-level staging only where the source is sparse.'
+        : 'Restructure the author outline into clean production beats while preserving its events, intent, order, and named details.';
+  const cap = 16_000;
+  const body = text.length <= cap ? text : `${text.slice(0, cap)}\n…(truncated)`;
+  return [
+    `Author-provided outline source (notes.author_outline, mode: ${mode}):`,
+    instruction,
+    body,
+  ].join('\n');
+}
 
 /** Public API ids that work with AI Studio keys; preview ids last (may 400 "unexpected model name" on some keys). */
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
@@ -218,6 +319,7 @@ function buildOutlineUserPrompt(args: {
   locations: unknown[];
   styleBibles: unknown[];
   loreCardsDigest?: string;
+  productionDefaults: Required<WriterProductionDefaultsPayload>;
   /** Optional author instructions appended after synopsis (coverage boost, tone, etc.). */
   supplement?: string;
 }): string {
@@ -236,6 +338,7 @@ function buildOutlineUserPrompt(args: {
       )
     : '{}';
   const synopsisTrim = (args.issue.synopsis ?? '').trim();
+  const authorOutlineBlock = extractAuthorOutlineForPrompt(args.issue.notes);
   return [
     `Create a comic issue outline as JSON only.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`.trim(),
@@ -243,6 +346,10 @@ function buildOutlineUserPrompt(args: {
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
     synopsisTrim
       ? `If synopsis is not "(none)", premise and page_beats MUST align with it.`
+      : '',
+    buildProductionDefaultsPromptBlock(args.productionDefaults),
+    authorOutlineBlock
+      ? `${authorOutlineBlock}\nThe generated outline MUST use this author outline as the source structure. Do not invent a different plot when source beats are provided.`
       : '',
     args.supplement?.trim()
       ? `Author instructions (follow unless they contradict the synopsis):\n${args.supplement.trim()}`
@@ -284,13 +391,18 @@ async function loadIssueRow(supabase: SupabaseAdmin, issueId: string): Promise<I
   if (issueErr || !issue) return null;
   const { data: series } = await supabase
     .from('writer_series')
-    .select('id, title, logline, genre, tone, target_demographic')
+    .select('id, title, logline, genre, tone, target_demographic, notes')
     .eq('id', issue.series_id)
     .maybeSingle();
   return {
     ...(issue as Omit<IssueRow, 'writer_series' | 'notes'>),
     notes: asJsonObject((issue as { notes?: unknown }).notes),
-    writer_series: series,
+    writer_series: series
+      ? {
+          ...series,
+          notes: asJsonObject((series as { notes?: unknown }).notes),
+        }
+      : null,
   };
 }
 
@@ -406,6 +518,7 @@ function buildPageBeatsUserPrompt(args: {
   priorPagesDigest: string;
   directorNotesForBeats?: string;
   loreCardsDigest?: string;
+  productionDefaults: Required<WriterProductionDefaultsPayload>;
 }): string {
   const outlineBeatContext = extractOutlineBeatContextForPage(args.latestOutline, args.page.page_number);
   const outlineBeat =
@@ -418,6 +531,7 @@ function buildPageBeatsUserPrompt(args: {
     `Create panel-by-panel beats for ONE comic book page as JSON.`,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    buildProductionDefaultsPromptBlock(args.productionDefaults),
     synopsisRules
       ? `Author rules for this issue (from Scripts → synopsis helper, notes.synopsis_helper.rules; apply on every page-beats call including batch):\n${synopsisRules}`
       : '',
@@ -457,6 +571,7 @@ function buildDraftDialogueUserPrompt(args: {
   cast: unknown[];
   styleBibles: unknown[];
   dialogueStyle: 'comic_script' | 'screenplay_light';
+  productionDefaults: Required<WriterProductionDefaultsPayload>;
 }): string {
   const beatsStr = args.page.beats_json
     ? JSON.stringify(args.page.beats_json, null, 2)
@@ -470,6 +585,7 @@ function buildDraftDialogueUserPrompt(args: {
     styleNote,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
     `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    buildProductionDefaultsPromptBlock(args.productionDefaults),
     `Page number: ${args.page.page_number}`,
     `Panel beats JSON:\n${beatsStr}`,
     `Prior script (you may replace):\n${(args.page.script_text ?? '').slice(0, 4000) || '(empty)'}`,
@@ -541,6 +657,7 @@ async function executeSinglePageBeats(
   geminiModel: string,
   geminiKey: string,
   directorNotesForBeats?: string,
+  productionDefaults?: Required<WriterProductionDefaultsPayload>,
 ): Promise<{ ok: true; data: unknown } | { ok: false; message: string }> {
   const sid = issueRow.series_id;
   const [castRes, locRes, bibleRes, outlineRes, priorPagesRes, loreDigest] = await Promise.all([
@@ -576,6 +693,7 @@ async function executeSinglePageBeats(
     priorPagesDigest,
     directorNotesForBeats,
     loreCardsDigest: loreDigest,
+    productionDefaults: productionDefaults ?? resolveProductionDefaultsPayload(issueRow),
   });
   let beatsJson: unknown;
   try {
@@ -706,6 +824,7 @@ function buildShotPlanUserPrompt(args: {
   outlineJson: unknown;
   pages: Array<{ page_number: number; beats_json: unknown; script_text: string | null }>;
   creativeBrief?: string;
+  productionDefaults: Required<WriterProductionDefaultsPayload>;
 }): string {
   const brief = args.creativeBrief?.trim()
     ? `Director / creative brief:\n${args.creativeBrief.trim()}\n`
@@ -714,6 +833,10 @@ function buildShotPlanUserPrompt(args: {
     `Create a shot list for adapting this comic issue to motion (trailers, animatic, or live-action planning). Output JSON only.`,
     brief,
     `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
+    buildProductionDefaultsPromptBlock(args.productionDefaults),
+    args.productionDefaults.no_video_assumptions && args.productionDefaults.medium_type === 'comic'
+      ? 'Visual planning note: this is a comic-first storyboard/image planning context. Use panel, page, spread, and image-reference language unless the author explicitly changed the medium to video.'
+      : '',
     `Outline:\n${JSON.stringify(args.outlineJson ?? {}, null, 2).slice(0, 10000)}`,
     `Pages:\n${buildPagesDigest(args.pages)}`,
     '',
@@ -992,7 +1115,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'outline_issue') {
-      const { issue_id, target_page_count, outline_supplement } = parsedReq.data;
+      const { issue_id, target_page_count, outline_supplement, production_defaults } = parsedReq.data;
 
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
@@ -1020,6 +1143,7 @@ Deno.serve(async (req) => {
         locations: locRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
         loreCardsDigest: loreDigest,
+        productionDefaults: resolveProductionDefaultsPayload(row, production_defaults),
         supplement: outline_supplement,
       });
 
@@ -1090,7 +1214,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'page_beats') {
-      const { page_id, director_notes_for_beats } = parsedReq.data;
+      const { page_id, director_notes_for_beats, production_defaults } = parsedReq.data;
       const { data: page, error: pageErr } = await supabase
         .from('writer_pages')
         .select('id, issue_id, page_number, beats_json, script_text')
@@ -1113,6 +1237,7 @@ Deno.serve(async (req) => {
         geminiModel,
         geminiKey,
         director_notes_for_beats,
+        resolveProductionDefaultsPayload(issueRow, production_defaults),
       );
       if (!result.ok) {
         if (/api key|GEMINI|Google|quota|429/i.test(result.message)) {
@@ -1137,6 +1262,7 @@ Deno.serve(async (req) => {
         batch_offset,
         director_notes_for_beats,
         page_ids,
+        production_defaults,
       } = parsedReq.data;
       const issueRow = await loadIssueRow(supabase, issue_id);
       if (!issueRow) {
@@ -1225,6 +1351,7 @@ Deno.serve(async (req) => {
           geminiModel,
           geminiKey,
           director_notes_for_beats,
+          resolveProductionDefaultsPayload(issueRow, production_defaults),
         );
         if (r.ok) {
           processed.push(page.page_number);
@@ -1258,7 +1385,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'draft_dialogue') {
-      const { page_id, style } = parsedReq.data;
+      const { page_id, style, production_defaults } = parsedReq.data;
       const { data: page, error: pageErr } = await supabase
         .from('writer_pages')
         .select('id, issue_id, page_number, beats_json, script_text')
@@ -1288,6 +1415,7 @@ Deno.serve(async (req) => {
         cast: castRes.data ?? [],
         styleBibles: bibleRes.data ?? [],
         dialogueStyle,
+        productionDefaults: resolveProductionDefaultsPayload(issueRow, production_defaults),
       });
       let diaJson: unknown;
       try {
@@ -1468,7 +1596,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'plan_shots_from_issue') {
-      const { issue_id, creative_brief } = parsedReq.data;
+      const { issue_id, creative_brief, production_defaults } = parsedReq.data;
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
         return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
@@ -1492,6 +1620,7 @@ Deno.serve(async (req) => {
         outlineJson: outlineRow?.outline_json ?? null,
         pages: pageRows ?? [],
         creativeBrief: creative_brief,
+        productionDefaults: resolveProductionDefaultsPayload(row, production_defaults),
       });
       let shotsJson: unknown;
       try {

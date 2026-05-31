@@ -5756,6 +5756,190 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Add saved production defaults to the existing writer notes/metadata layer for comic vs video, target panels per page, art style, character consistency, strict canon/lore toggles, and prompt/export behavior.
 - Append those production defaults into outline, page-beat, dialogue, and visual-planning generation contexts so users do not have to repeatedly type "comic book, not video" or panel-density instructions.
 
+## Writers Workshop Pacing Apply Plan - 2026-05-31
+
+### What changed
+
+- Added a durable Writers Workshop Narrative Production System tracker at `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`.
+- Added the same high-level tracker pointer/status to `tasks.md` so the separate tasklist stays visible outside chat.
+- Incorporated the unresolved outline-intake issue into the plan/checklist as partial work: Synopsis helper is now early, but a dedicated author-outline intake/import surface is still pending.
+- Added the pacing recommendation apply path to the Arc tab:
+  - `Stage plan` applies the recommended page target, creates or trims affected page rows, appends pacing instructions into the outline supplement, and selects affected pages for follow-up regeneration.
+  - `Apply + regenerate outline` does the same and immediately calls `outline_issue` with the pacing supplement and recommended target.
+- Trimming pages is confirmable because it deletes page rows above the recommended target, including their saved page beats and dialogue.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The first pacing-apply slice is intentionally conservative. It updates target/page-row structure and regenerates the outline when requested, but it does not silently overwrite existing page beats or dialogue.
+- When pacing expands the issue, newly created page rows are selected for later batch beat/dialogue generation.
+- When pacing condenses the issue, rows above the recommended target are deleted only after confirmation.
+- When pacing keeps the same page count but suggests beat rebalancing, existing pages are selected for follow-up regeneration.
+- The generated outline supplement captures target length, direction, page/beat deltas, rationale, add/cut suggestions, and a reminder to regenerate affected page beats/dialogue after outline changes.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/portals/writer/__tests__/shotPlanCsv.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 7 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing 67-warning baseline and 0 errors.
+- `git diff --check` passed.
+- In-app browser QA at `http://127.0.0.1:5174/` confirmed the signed-in Writers Workshop Arc tab shows `Length recommendation`, `Apply recommendation`, `Stage plan`, `Apply + regenerate outline`, and `Pacing review`.
+
+### Outstanding issues
+
+- The author-outline confusion is only tracked, not solved. A first-class source-outline intake/import area is still needed.
+- Pacing apply does not yet include a preview-safe downstream wizard that regenerates or overwrites affected page beats/dialogue.
+
+### Risks or caveats
+
+- `Apply + regenerate outline` makes a real AI writer-tools call and saves a new outline version.
+- Page trimming deletes rows above the recommended target after confirmation; there is no diff/undo workflow in this pass.
+- Existing beats/dialogue on retained pages are not automatically rewritten.
+
+### Operator follow-up
+
+- Review the new task tracker before the next Writers Workshop pass and keep its checkbox state synchronized after each pass.
+- Use `Stage plan` first when you want to inspect the generated outline supplement before saving a new AI outline.
+
+### Next steps
+
+- Add the dedicated author-outline intake/import surface.
+- Add a downstream pacing-apply wizard that previews affected outline/page-beat/dialogue changes before overwriting saved content.
+- Add production defaults for comic vs video, panel density, art style, character consistency, and strict canon behavior.
+
+## Writers Workshop Author Outline Intake - 2026-05-31
+
+### What changed
+
+- Added first-class author outline intake to the Synopsis helper tab.
+- The new intake saves the user's source outline separately from issue synopsis under `writer_issues.notes.author_outline`.
+- Added Preserve / Structure / Expand modes so the author can choose how strictly AI should follow the source outline during generation.
+- Updated Cockpit/Synopsis digest context and issue-pack exports to include the author outline source.
+- Updated the Lore gap helper context so missing-lore suggestions can inspect both issue synopsis and the author outline.
+- Updated `writer-tools` outline generation so `outline_issue` reads `notes.author_outline` and injects it into the outline prompt as required source structure.
+- Updated the Writers Workshop Narrative Production System tracker and `tasks.md` so the outline confusion item is marked complete for paste/draft workflows, with file upload/import and hierarchy editing still pending.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerSynopsisHelper.ts`
+- `src/portals/writer/__tests__/writerSynopsisHelper.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database schema changes were made. Author outlines use the existing JSON notes column on `writer_issues`.
+- `notes.author_outline` stores `text`, `mode`, and `updated_at`.
+- Preserve mode tells AI to keep author order, named events, outcomes, and causal chain as strictly as possible.
+- Structure mode tells AI to organize the source outline into production beats while preserving events and intent.
+- Expand mode tells AI to use the outline as the required story spine and add connective tissue only where sparse.
+- The author outline does not overwrite `writer_issues.synopsis`; synopsis remains short pitch/context, while author outline is now the source structure.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/portals/writer/__tests__/shotPlanCsv.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 8 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing 67-warning baseline and 0 errors.
+- `git diff --check` passed.
+- In-app browser QA at `http://127.0.0.1:5174/` confirmed the signed-in Writers Workshop Synopsis tab shows `Author outline intake`, `notes.author_outline`, Preserve / Structure / Expand modes, `Generation contract`, and `Save author outline`.
+
+### Outstanding issues
+
+- File upload/import for outlines is not implemented yet.
+- Editable hierarchy/tree organization for pasted outlines is not implemented yet.
+- The downstream pacing-apply wizard for preview-safe beat/dialogue regeneration remains pending.
+
+### Risks or caveats
+
+- `outline_issue` prompt behavior changed in the Supabase Edge Function. Deploy `writer-tools` before expecting production Supabase calls to honor `notes.author_outline`.
+- The current UI supports pasted/drafted outlines, not `.docx`, `.txt`, `.md`, or JSON upload.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Try generating an outline with Preserve mode using a known source outline and verify the saved `page_beats` keep the intended story sequence.
+
+### Next steps
+
+- Add file upload/import for `.txt`, `.md`, and JSON outlines.
+- Add an editable hierarchy tree for author outlines before AI generation.
+- Add production defaults for comic/video distinction, average panels per page, art style, and character consistency.
+
+## Writers Workshop Foundation Hub Production Defaults - 2026-05-31
+
+### What changed
+
+- Added Foundation Hub production defaults to the Writers Workshop Outline workspace.
+- Added editable defaults for primary medium type, narrative scope, comic panel density, art style, character consistency, strict canon, and no-video-assumptions behavior.
+- Persisted the defaults through existing JSON metadata instead of a schema change:
+  - series-level defaults use `writer_series.notes.production_defaults`;
+  - issue-level defaults use `writer_issues.notes.production_defaults`;
+  - issue values override series values when both are present.
+- Added a tested production-defaults helper for reading, resolving, serializing, and formatting the defaults.
+- Extended writer-tools request schemas and client payloads so resolved production defaults are sent to outline, page-beat, batch page-beat, dialogue, and shot/visual planning calls.
+- Updated the Supabase `writer-tools` Edge Function prompts so production defaults are injected into outline, page-beat, dialogue, and visual planning contexts.
+- Added production defaults to Cockpit/Synopsis/Video digests, lore-gap context, and issue-pack exports.
+- Updated the Lore generation-contract copy now that saved production defaults exist.
+- Updated `tasks.md` and the formal Writers Workshop Narrative Production System tracker to mark the Foundation Hub/defaults injection slice complete, with explicit output-format defaults still pending.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionDefaults.ts`
+- `src/portals/writer/__tests__/writerProductionDefaults.test.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration or new table/column was added.
+- The UI saves issue defaults when an issue is selected; if only a series is selected, it saves series defaults.
+- The client still sends the resolved defaults on generation requests so current UI state is honored immediately, and the Edge Function also resolves saved series/issue notes as a fallback.
+- Comic-first defaults preserve the user's repeated instruction that the system should not assume video/trailer output unless visual planning explicitly asks for it.
+- `production_defaults` is intentionally a small snake-case payload in the writer-tools request contract so it can travel to the Edge Function without exposing UI-only state names.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 37 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+
+### Outstanding issues
+
+- Explicit output-format defaults remain pending until the export branch is designed.
+- File upload/import for author outlines and editable hierarchy/tree controls remain pending from the prior pass.
+
+### Risks or caveats
+
+- `writer-tools` must be redeployed before production Supabase Edge calls honor the new production defaults prompt block.
+- If a user edits defaults in the UI but does not save them, the current client sends them with immediate generation calls, but a future reload will restore the last saved series/issue notes defaults.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Test one comic outline generation and one page-beats generation with strict canon/no-video-assumptions enabled to confirm outputs stay comic-first.
+
+### Next steps
+
+- Add explicit export/output-format defaults once the export branch is designed.
+- Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
+- Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
+
 ## How to Use These Docs
 
 | File | Use |

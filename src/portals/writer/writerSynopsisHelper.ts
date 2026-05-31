@@ -23,6 +23,28 @@ export const EMPTY_SYNOPSIS_HELPER_PARTS: SynopsisHelperParts = {
 };
 
 const NOTES_KEY = 'synopsis_helper';
+const AUTHOR_OUTLINE_NOTES_KEY = 'author_outline';
+
+export type AuthorOutlineMode = 'preserve' | 'structure' | 'expand';
+
+export type AuthorOutlineSource = {
+  text: string;
+  mode: AuthorOutlineMode;
+  updatedAt?: string;
+};
+
+export const EMPTY_AUTHOR_OUTLINE_SOURCE: AuthorOutlineSource = {
+  text: '',
+  mode: 'structure',
+};
+
+const AUTHOR_OUTLINE_MODES = new Set<AuthorOutlineMode>(['preserve', 'structure', 'expand']);
+
+function readAuthorOutlineMode(raw: unknown): AuthorOutlineMode {
+  return typeof raw === 'string' && AUTHOR_OUTLINE_MODES.has(raw as AuthorOutlineMode)
+    ? (raw as AuthorOutlineMode)
+    : 'structure';
+}
 
 export function readSynopsisHelperFromNotes(notes: Record<string, unknown> | undefined): SynopsisHelperParts {
   if (!notes || typeof notes !== 'object') return { ...EMPTY_SYNOPSIS_HELPER_PARTS };
@@ -63,6 +85,38 @@ export function mergeSynopsisHelperIntoNotes(
   return {
     ...existingNotes,
     ...synopsisHelperPartsToNotesJson(parts),
+  };
+}
+
+export function readAuthorOutlineFromNotes(notes: Record<string, unknown> | undefined): AuthorOutlineSource {
+  if (!notes || typeof notes !== 'object') return { ...EMPTY_AUTHOR_OUTLINE_SOURCE };
+  const raw = notes[AUTHOR_OUTLINE_NOTES_KEY];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...EMPTY_AUTHOR_OUTLINE_SOURCE };
+  const o = raw as Record<string, unknown>;
+  return {
+    text: typeof o.text === 'string' ? o.text : '',
+    mode: readAuthorOutlineMode(o.mode),
+    updatedAt: typeof o.updated_at === 'string' ? o.updated_at : undefined,
+  };
+}
+
+export function authorOutlineToNotesJson(source: AuthorOutlineSource): Record<string, unknown> {
+  return {
+    [AUTHOR_OUTLINE_NOTES_KEY]: {
+      text: source.text,
+      mode: source.mode,
+      updated_at: source.updatedAt ?? new Date().toISOString(),
+    },
+  };
+}
+
+export function mergeAuthorOutlineIntoNotes(
+  existingNotes: Record<string, unknown>,
+  source: AuthorOutlineSource,
+): Record<string, unknown> {
+  return {
+    ...existingNotes,
+    ...authorOutlineToNotesJson(source),
   };
 }
 

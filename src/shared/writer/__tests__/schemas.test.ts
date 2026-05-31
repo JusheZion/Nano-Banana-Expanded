@@ -48,10 +48,23 @@ describe('writerToolsRequestSchema', () => {
       mode: 'outline_issue',
       issue_id: '550e8400-e29b-41d4-a716-446655440000',
       outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
+      production_defaults: {
+        medium_type: 'comic',
+        narrative_scope: 'single_issue',
+        comic_panel_density: 'standard',
+        art_style: 'clean line art',
+        character_consistency: 'strict',
+        strict_canon: true,
+        no_video_assumptions: true,
+      },
     });
     expect(r).toMatchObject({
       mode: 'outline_issue',
       outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
+      production_defaults: {
+        medium_type: 'comic',
+        no_video_assumptions: true,
+      },
     });
   });
 
@@ -76,11 +89,20 @@ describe('writerToolsRequestSchema', () => {
       mode: 'page_beats',
       page_id: id,
       director_notes_for_beats: 'Pages 3–4 spread; left page only.',
+      production_defaults: {
+        medium_type: 'comic',
+        comic_panel_density: 'dense',
+        strict_canon: true,
+        no_video_assumptions: true,
+      },
     });
     expect(r).toMatchObject({
       mode: 'page_beats',
       page_id: id,
       director_notes_for_beats: 'Pages 3–4 spread; left page only.',
+      production_defaults: {
+        comic_panel_density: 'dense',
+      },
     });
   });
 
@@ -169,8 +191,14 @@ describe('writerToolsRequestSchema', () => {
       mode: 'draft_dialogue',
       page_id: id,
       style: 'comic_script',
+      production_defaults: {
+        medium_type: 'comic',
+        character_consistency: 'strict',
+        no_video_assumptions: true,
+      },
     });
     expect(r.style).toBe('comic_script');
+    expect(r.production_defaults?.character_consistency).toBe('strict');
   });
 
   it('pageBeatsJsonSchema requires panels with action', () => {
@@ -205,8 +233,18 @@ describe('writerToolsRequestSchema', () => {
         mode: 'plan_shots_from_issue',
         issue_id: id,
         creative_brief: 'Trailer tone',
+        production_defaults: {
+          medium_type: 'comic',
+          no_video_assumptions: true,
+        },
       }),
-    ).toMatchObject({ mode: 'plan_shots_from_issue', creative_brief: 'Trailer tone' });
+    ).toMatchObject({
+      mode: 'plan_shots_from_issue',
+      creative_brief: 'Trailer tone',
+      production_defaults: {
+        no_video_assumptions: true,
+      },
+    });
   });
 
   it('parses idea_assist request', () => {

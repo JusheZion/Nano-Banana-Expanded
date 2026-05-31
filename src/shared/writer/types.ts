@@ -29,6 +29,17 @@ export type WriterToolsOutlineIssuePayload = {
   issue_id: string;
   target_page_count?: number;
   outline_supplement?: string;
+  production_defaults?: WriterProductionDefaultsPayload;
+};
+
+export type WriterProductionDefaultsPayload = {
+  medium_type?: 'comic' | 'book' | 'screenplay' | 'video' | 'wiki';
+  narrative_scope?: 'single_issue' | 'multi_issue_arc' | 'book' | 'episode' | 'shared_universe';
+  comic_panel_density?: 'sparse' | 'standard' | 'dense';
+  art_style?: string;
+  character_consistency?: 'standard' | 'strict';
+  strict_canon?: boolean;
+  no_video_assumptions?: boolean;
 };
 
 /** Stored in writer_pages.beats_json */
@@ -49,6 +60,7 @@ export type WriterToolsPageBeatsPayload = {
   mode: 'page_beats';
   page_id: string;
   director_notes_for_beats?: string;
+  production_defaults?: WriterProductionDefaultsPayload;
 };
 
 export type WriterToolsPageBeatsIssuePayload = {
@@ -60,6 +72,7 @@ export type WriterToolsPageBeatsIssuePayload = {
   director_notes_for_beats?: string;
   /** Max 5; when set, only these pages run (in issue order); batch_limit / batch_offset ignored. */
   page_ids?: string[];
+  production_defaults?: WriterProductionDefaultsPayload;
 };
 
 export type WriterToolsDraftDialoguePayload = {
@@ -67,6 +80,7 @@ export type WriterToolsDraftDialoguePayload = {
   page_id: string;
   /** Default: comic_script */
   style?: 'comic_script' | 'screenplay_light';
+  production_defaults?: WriterProductionDefaultsPayload;
 };
 
 export type WriterToolsPacingReviewPayload = {
@@ -85,6 +99,7 @@ export type WriterToolsPlanShotsPayload = {
   mode: 'plan_shots_from_issue';
   issue_id: string;
   creative_brief?: string;
+  production_defaults?: WriterProductionDefaultsPayload;
 };
 
 export type WriterToolsIdeaAssistPayload = {

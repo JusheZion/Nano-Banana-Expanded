@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EMPTY_AUTHOR_OUTLINE_SOURCE,
   buildSynopsisDocumentFromParts,
   EMPTY_SYNOPSIS_HELPER_PARTS,
+  mergeAuthorOutlineIntoNotes,
   mergeSynopsisHelperIntoNotes,
+  readAuthorOutlineFromNotes,
   readSynopsisHelperFromNotes,
 } from '../writerSynopsisHelper';
 
@@ -33,5 +36,22 @@ describe('writerSynopsisHelper', () => {
     const parts = readSynopsisHelperFromNotes(notes as Record<string, unknown>);
     expect(parts.logline).toBe('Test');
     expect(parts.mustHappen).toBe('Beat one');
+  });
+
+  it('readAuthorOutlineFromNotes round-trips source outline metadata', () => {
+    const notes = mergeAuthorOutlineIntoNotes(
+      { writer_tool_cache: { x: 1 } },
+      {
+        ...EMPTY_AUTHOR_OUTLINE_SOURCE,
+        text: 'Page 1: The door opens.',
+        mode: 'preserve',
+        updatedAt: '2026-05-31T00:00:00.000Z',
+      },
+    );
+    expect(notes.writer_tool_cache).toEqual({ x: 1 });
+    const outline = readAuthorOutlineFromNotes(notes as Record<string, unknown>);
+    expect(outline.text).toContain('The door opens');
+    expect(outline.mode).toBe('preserve');
+    expect(outline.updatedAt).toBe('2026-05-31T00:00:00.000Z');
   });
 });

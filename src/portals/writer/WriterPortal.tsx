@@ -69,12 +69,25 @@ import {
   WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
 import {
+  EMPTY_AUTHOR_OUTLINE_SOURCE,
   buildSynopsisDocumentFromParts,
   EMPTY_SYNOPSIS_HELPER_PARTS,
+  mergeAuthorOutlineIntoNotes,
   mergeSynopsisHelperIntoNotes,
+  readAuthorOutlineFromNotes,
   readSynopsisHelperFromNotes,
+  type AuthorOutlineMode,
+  type AuthorOutlineSource,
   type SynopsisHelperParts,
 } from '@/portals/writer/writerSynopsisHelper';
+import {
+  EMPTY_WRITER_PRODUCTION_DEFAULTS,
+  mergeProductionDefaultsIntoNotes,
+  productionDefaultsToPayload,
+  readProductionDefaultsFromNotes,
+  resolveProductionDefaults,
+  type WriterProductionDefaults,
+} from '@/portals/writer/writerProductionDefaults';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
@@ -155,6 +168,8 @@ type WriterCockpitDigestContext = {
   latestShotPlanJson: unknown | null;
   shotsBrief: string;
   synopsisParts: SynopsisHelperParts;
+  authorOutline: AuthorOutlineSource;
+  productionDefaults: WriterProductionDefaults;
 };
 
 function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
@@ -200,6 +215,7 @@ function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
       const shotJson = ctx.latestShotPlanJson;
       const parts: string[] = [];
       parts.push('VIDEO / SHOT PLAN DIGEST');
+      parts.push('', 'PRODUCTION DEFAULTS', JSON.stringify(productionDefaultsToPayload(ctx.productionDefaults), null, 2));
       if (brief) parts.push('', 'Director / creative brief (Video tab):', brief);
       if (shotJson) {
         parts.push('', 'Latest saved shot plan JSON:', JSON.stringify(shotJson, null, 2));
@@ -210,7 +226,18 @@ function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
     }
     case 'scripts': {
       const doc = buildSynopsisDocumentFromParts(ctx.synopsisParts).trim();
-      return truncateWriterPromptText(doc || '(Synopsis helper is empty — open Synopsis helper to fill sections.)', cap);
+      const authorOutline = ctx.authorOutline.text.trim();
+      const parts = [
+        `PRODUCTION DEFAULTS\n${JSON.stringify(productionDefaultsToPayload(ctx.productionDefaults), null, 2)}`,
+        authorOutline
+          ? `AUTHOR OUTLINE SOURCE (${ctx.authorOutline.mode})\n${authorOutline}`
+          : '',
+        doc ? `SYNOPSIS HELPER\n${doc}` : '',
+      ].filter(Boolean);
+      return truncateWriterPromptText(
+        parts.join('\n\n') || '(Synopsis helper is empty — open Synopsis helper to fill sections.)',
+        cap,
+      );
     }
     default: {
       return '';
@@ -262,6 +289,67 @@ function buildCoverageBoostOutlineSupplement(baseSupplement: string, targetPageC
   if (!trimmed) return boostLine;
   if (trimmed.includes('Coverage boost:')) return trimmed;
   return `${trimmed}\n\n${boostLine}`;
+}
+
+type WriterPacingLengthAlignment = {
+  target_pages?: number;
+  script_pages: number;
+  outline_beats: number;
+  recommended_pages: { exact: number } | { min: number; max: number };
+  recommended_action?: 'change_target' | 'cut_beats' | 'add_beats' | 'keep_target';
+  suggested_page_delta: number;
+  suggested_beat_delta?: number;
+  cut_suggestions?: string[];
+  add_suggestions?: string[];
+  assumptions?: string[];
+  rationale: string;
+};
+
+function recommendedPacingTargetPages(
+  alignment: WriterPacingLengthAlignment | null,
+  currentTarget: number,
+): number | null {
+  if (!alignment) return null;
+  if ('exact' in alignment.recommended_pages) return alignment.recommended_pages.exact;
+  const min = Math.min(alignment.recommended_pages.min, alignment.recommended_pages.max);
+  const max = Math.max(alignment.recommended_pages.min, alignment.recommended_pages.max);
+  if (currentTarget >= min && currentTarget <= max) return currentTarget;
+  return currentTarget < min ? min : max;
+}
+
+function buildPacingApplyOutlineSupplement(
+  baseSupplement: string,
+  alignment: WriterPacingLengthAlignment,
+  targetPages: number,
+): string {
+  const direction =
+    alignment.suggested_page_delta > 0
+      ? 'expand'
+      : alignment.suggested_page_delta < 0
+        ? 'condense'
+        : 'rebalance';
+  const suggestions =
+    direction === 'condense'
+      ? alignment.cut_suggestions ?? []
+      : direction === 'expand'
+        ? alignment.add_suggestions ?? []
+        : [...(alignment.add_suggestions ?? []), ...(alignment.cut_suggestions ?? [])];
+  const lines = [
+    'Pacing apply recommendation:',
+    `- Target length: ${targetPages} pages.`,
+    `- Direction: ${direction} the issue according to the latest pacing review.`,
+    `- Suggested page delta: ${alignment.suggested_page_delta >= 0 ? '+' : ''}${alignment.suggested_page_delta}.`,
+    alignment.suggested_beat_delta != null
+      ? `- Suggested beat delta: ${alignment.suggested_beat_delta >= 0 ? '+' : ''}${alignment.suggested_beat_delta}.`
+      : '',
+    `- Rationale: ${alignment.rationale}`,
+    suggestions.length ? '- Editorial changes to apply:' : '',
+    ...suggestions.slice(0, 12).map((s) => `  - ${s}`),
+    '- After outline regeneration, regenerate page beats and dialogue for pages affected by this pacing change.',
+  ].filter(Boolean);
+  const block = lines.join('\n');
+  const trimmed = baseSupplement.trim();
+  return trimmed ? `${trimmed}\n\n${block}` : block;
 }
 
 function downloadJsonFile(filename: string, data: unknown) {
@@ -350,6 +438,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [shotsBrief, setShotsBrief] = useState('');
   const [pacingLoading, setPacingLoading] = useState(false);
   const [pacingError, setPacingError] = useState<string | null>(null);
+  const [pacingApplyBusy, setPacingApplyBusy] = useState(false);
+  const [pacingApplyError, setPacingApplyError] = useState<string | null>(null);
   const [canonLoading, setCanonLoading] = useState(false);
   const [canonError, setCanonError] = useState<string | null>(null);
   const [shotsLoading, setShotsLoading] = useState(false);
@@ -385,6 +475,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
     ...EMPTY_SYNOPSIS_HELPER_PARTS,
   });
+  const [authorOutlineText, setAuthorOutlineText] = useState('');
+  const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
+  const [productionDefaultsDraft, setProductionDefaultsDraft] = useState<WriterProductionDefaults>({
+    ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
+  });
+  const [productionDefaultsBusy, setProductionDefaultsBusy] = useState(false);
+  const [productionDefaultsError, setProductionDefaultsError] = useState<string | null>(null);
   type ScriptsEditorTab = 'synopsis' | 'outline' | 'beats' | 'dialogue' | 'video';
   const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
   const [outlineEditDraft, setOutlineEditDraft] = useState('');
@@ -823,18 +920,28 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setSelectedPageIdsForBatch((prev) => prev.filter((id) => pages.some((p) => p.id === id)));
   }, [pages]);
 
+  const selectedSeries = seriesList.find((s) => s.id === selectedSeriesId) ?? null;
+
   useEffect(() => {
     const row = issues.find((x) => x.id === selectedIssueId);
     if (row) {
       setIssueTitleDraft(row.title ?? '');
       setIssueSynopsisDraft(row.synopsis ?? '');
       setSynopsisHelperParts(readSynopsisHelperFromNotes(row.notes));
+      const authorOutline = readAuthorOutlineFromNotes(row.notes);
+      setAuthorOutlineText(authorOutline.text);
+      setAuthorOutlineMode(authorOutline.mode);
+      setProductionDefaultsDraft(resolveProductionDefaults(selectedSeries?.notes, row.notes));
     } else {
       setIssueTitleDraft('');
       setIssueSynopsisDraft('');
       setSynopsisHelperParts({ ...EMPTY_SYNOPSIS_HELPER_PARTS });
+      setAuthorOutlineText('');
+      setAuthorOutlineMode(EMPTY_AUTHOR_OUTLINE_SOURCE.mode);
+      setProductionDefaultsDraft(readProductionDefaultsFromNotes(selectedSeries?.notes));
     }
-  }, [selectedIssueId, issues]);
+    setProductionDefaultsError(null);
+  }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
     const s = seriesList.find((x) => x.id === selectedSeriesId);
@@ -849,25 +956,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
   const selectedPage = pages.find((p) => p.id === selectedPageId) ?? null;
+  const authorOutlineSource = useMemo<AuthorOutlineSource>(
+    () => ({
+      text: authorOutlineText,
+      mode: authorOutlineMode,
+    }),
+    [authorOutlineText, authorOutlineMode],
+  );
+  const productionDefaultsPayload = useMemo(
+    () => productionDefaultsToPayload(productionDefaultsDraft),
+    [productionDefaultsDraft],
+  );
 
   const pacingLengthAlignment = useMemo(() => {
     const r = pacingSaved?.result;
     if (!r || typeof r !== 'object' || r === null) return null;
     const la = (r as Record<string, unknown>).length_alignment;
     if (!la || typeof la !== 'object') return null;
-    return la as {
-      target_pages?: number;
-      script_pages: number;
-      outline_beats: number;
-      recommended_pages: { exact: number } | { min: number; max: number };
-      recommended_action?: 'change_target' | 'cut_beats' | 'add_beats' | 'keep_target';
-      suggested_page_delta: number;
-      suggested_beat_delta?: number;
-      cut_suggestions?: string[];
-      add_suggestions?: string[];
-      assumptions?: string[];
-      rationale: string;
-    };
+    return la as WriterPacingLengthAlignment;
   }, [pacingSaved?.result]);
 
   const openImageWorkshopFromWriter = useCallback(
@@ -1042,6 +1148,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const outlineCoverageGap = Math.max(0, targetPageCount - outlinePageBeatsCount);
   const outlineCoverageWarning =
     Boolean(latestOutline) && targetPageCount > 0 && outlineCoverageGap >= 2;
+  const pacingRecommendedTarget = useMemo(
+    () => recommendedPacingTargetPages(pacingLengthAlignment, targetPageCount),
+    [pacingLengthAlignment, targetPageCount],
+  );
+  const pacingAffectedPageSummary = useMemo(() => {
+    if (!pacingLengthAlignment || pacingRecommendedTarget == null) return null;
+    if (pacingRecommendedTarget > sortedPages.length) {
+      return `Creates page rows ${sortedPages.length + 1}-${pacingRecommendedTarget} and queues those pages for beat/dialogue regeneration.`;
+    }
+    if (pacingRecommendedTarget < sortedPages.length) {
+      return `Removes page rows above ${pacingRecommendedTarget}; their page beats and dialogue are removed with those rows.`;
+    }
+    if ((pacingLengthAlignment.suggested_beat_delta ?? 0) !== 0) {
+      return 'Keeps the page count but queues the current pages for beat/dialogue regeneration after the outline is rebalanced.';
+    }
+    return 'Keeps the current page rows and updates the outline instructions with the pacing recommendation.';
+  }, [pacingLengthAlignment, pacingRecommendedTarget, sortedPages.length]);
 
   const nextPageNumber = useMemo(() => {
     if (sortedPages.length === 0) return 1;
@@ -1067,8 +1190,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         latestShotPlanJson: latestShotPlan?.shot_plan_json ?? null,
         shotsBrief,
         synopsisParts: synopsisHelperParts,
+        authorOutline: authorOutlineSource,
+        productionDefaults: productionDefaultsDraft,
       }) satisfies Omit<WriterCockpitDigestContext, 'view'>,
-    [latestOutline, selectedPage, pacingSaved, canonSaved, loreCards, latestShotPlan, shotsBrief, synopsisHelperParts],
+    [
+      latestOutline,
+      selectedPage,
+      pacingSaved,
+      canonSaved,
+      loreCards,
+      latestShotPlan,
+      shotsBrief,
+      synopsisHelperParts,
+      authorOutlineSource,
+      productionDefaultsDraft,
+    ],
   );
 
   const cockpitFindText = useMemo(() => {
@@ -1368,6 +1504,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         mode: 'outline_issue',
         issue_id: selectedIssueId,
         target_page_count: targetPageCount,
+        production_defaults: productionDefaultsPayload,
         ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
       });
       setOutlineGenLoading(false);
@@ -1384,7 +1521,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         pushHistory(`error: ${msg}`);
       }
     },
-    [selectedIssueId, targetPageCount, outlineSupplementDraft, pushHistory],
+    [selectedIssueId, targetPageCount, outlineSupplementDraft, productionDefaultsPayload, pushHistory],
   );
 
   const runOutlineGenerateCoverageBoost = useCallback(async () => {
@@ -1408,6 +1545,105 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       r.created > 0 ? `synced pages (+${r.created} new, ${pageRows.length} total)` : 'pages already match target',
     );
   }, [selectedIssueId, targetPageCount, pushHistory]);
+
+  const runApplyPacingRecommendation = useCallback(
+    async (opts?: { regenerateOutline?: boolean }) => {
+      if (!selectedIssueId || !pacingLengthAlignment || pacingRecommendedTarget == null) return;
+      const target = pacingRecommendedTarget;
+      const supplement = buildPacingApplyOutlineSupplement(
+        outlineSupplementDraft,
+        pacingLengthAlignment,
+        target,
+      );
+      const pageRowsBefore = sortedPages;
+      const rowsToDelete = pageRowsBefore.filter((p) => p.page_number > target);
+
+      if (rowsToDelete.length > 0) {
+        const ok = window.confirm(
+          `Apply pacing recommendation by trimming ${rowsToDelete.length} page row(s) above page ${target}? Their saved page beats and dialogue will be deleted with those rows.`,
+        );
+        if (!ok) return;
+      }
+
+      setPacingApplyBusy(true);
+      setPacingApplyError(null);
+      setTargetPageCount(target);
+      setOutlineSupplementDraft(supplement);
+
+      try {
+        if (rowsToDelete.length > 0) {
+          const deleted = await deleteWriterPages(rowsToDelete.map((p) => p.id));
+          if (!deleted) {
+            setPacingApplyError('Could not delete rows above the recommended page target.');
+            pushHistory('error: apply pacing recommendation');
+            return;
+          }
+        } else if (target > pageRowsBefore.length) {
+          const synced = await ensureWriterPagesToCount(selectedIssueId, target);
+          if (!synced.ok) {
+            setPacingApplyError('Could not create all recommended page rows.');
+            pushHistory('error: apply pacing recommendation');
+            return;
+          }
+        }
+
+        let pageRows = await listWriterPages(selectedIssueId);
+        setPages(pageRows);
+        if (pageRows.length > 0) {
+          const affectedIds =
+            target > pageRowsBefore.length
+              ? pageRows
+                  .filter((p) => p.page_number > pageRowsBefore.length && p.page_number <= target)
+                  .map((p) => p.id)
+              : rowsToDelete.length > 0
+                ? pageRows.filter((p) => p.page_number >= Math.max(1, target - 1)).map((p) => p.id)
+                : (pacingLengthAlignment.suggested_beat_delta ?? 0) !== 0
+                  ? pageRows.map((p) => p.id)
+                  : [];
+          setSelectedPageIdsForBatch(affectedIds);
+        }
+
+        if (opts?.regenerateOutline) {
+          setOutlineGenError(null);
+          setOutlineGenLoading(true);
+          const res = await invokeWriterTools({
+            mode: 'outline_issue',
+            issue_id: selectedIssueId,
+            target_page_count: target,
+            outline_supplement: supplement,
+            production_defaults: productionDefaultsPayload,
+          });
+          setOutlineGenLoading(false);
+          if (!res.success) {
+            const msg = toolErrorMessage(res);
+            setPacingApplyError(msg);
+            setOutlineGenError(msg);
+            pushHistory(`error: ${msg}`);
+            return;
+          }
+          const outlineRows = await listWriterOutlinesForIssue(selectedIssueId);
+          setOutlines(outlineRows);
+          pageRows = await listWriterPages(selectedIssueId);
+          setPages(pageRows);
+          pushHistory(`applied pacing recommendation and saved outline v${res.version ?? '?'}`);
+        } else {
+          pushHistory('staged pacing recommendation for outline regeneration');
+        }
+      } finally {
+        setPacingApplyBusy(false);
+        setOutlineGenLoading(false);
+      }
+    },
+    [
+      selectedIssueId,
+      pacingLengthAlignment,
+      pacingRecommendedTarget,
+      outlineSupplementDraft,
+      sortedPages,
+      productionDefaultsPayload,
+      pushHistory,
+    ],
+  );
 
   const runLibraryDeleteSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
@@ -1592,6 +1828,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           issue_id: selectedIssueId,
           skip_existing: beatsSkipExisting,
           batch_limit: WRITER_PAGE_BEATS_ISSUE_MAX,
+          production_defaults: productionDefaultsPayload,
           ...(!beatsSkipExisting ? { batch_offset: beatsBatchOffsetFullPassRef.current } : {}),
           ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
         });
@@ -1633,7 +1870,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchSource(null);
       beatsBatchAbortRef.current = null;
     }
-  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft, pushHistory]);
+  }, [selectedIssueId, beatsSkipExisting, beatsDirectorNotesDraft, productionDefaultsPayload, pushHistory]);
 
   const runSelectedBatchPageBeats = useCallback(async () => {
     if (!selectedIssueId || beatsPickOrdered.length === 0) return;
@@ -1648,6 +1885,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         issue_id: selectedIssueId,
         page_ids: beatsPickOrdered,
         skip_existing: beatsSkipExisting,
+        production_defaults: productionDefaultsPayload,
         ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
       });
       if (!res.success) {
@@ -1672,7 +1910,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchLabel('');
       setBeatsBatchSource(null);
     }
-  }, [selectedIssueId, beatsPickOrdered, beatsSkipExisting, beatsDirectorNotesDraft, pushHistory]);
+  }, [
+    selectedIssueId,
+    beatsPickOrdered,
+    beatsSkipExisting,
+    beatsDirectorNotesDraft,
+    productionDefaultsPayload,
+    pushHistory,
+  ]);
 
   const runBatchDialogueForSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
@@ -1716,6 +1961,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               mode: 'draft_dialogue',
               page_id: p.id,
               style: dialogueStyle,
+              production_defaults: productionDefaultsPayload,
             });
             return res.success;
           }),
@@ -1751,6 +1997,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     dialogueSkipExisting,
     sortedPages,
     dialogueStyle,
+    productionDefaultsPayload,
     pushHistory,
   ]);
 
@@ -1771,6 +2018,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const res = await invokeWriterTools({
         mode: 'page_beats',
         page_id: selectedPageId,
+        production_defaults: productionDefaultsPayload,
         ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
       });
       setBeatsLoading(false);
@@ -1792,6 +2040,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         mode: 'draft_dialogue',
         page_id: selectedPageId,
         style: dialogueStyle,
+        production_defaults: productionDefaultsPayload,
       });
       setDialogueLoading(false);
       if (res.success) {
@@ -1812,6 +2061,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         mode: 'plan_shots_from_issue',
         issue_id: selectedIssueId,
         creative_brief: shotsBrief.trim() || undefined,
+        production_defaults: productionDefaultsPayload,
       });
       setShotsLoading(false);
       if (res.success) {
@@ -1835,6 +2085,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     beatsDirectorNotesDraft,
     dialogueStyle,
     shotsBrief,
+    productionDefaultsPayload,
     runPacingFromRibbon,
     runOutlineGenerate,
     runCockpitIdeaAssist,
@@ -1864,6 +2115,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       [
         `Series logline:\n${seriesLoglineDraft.trim() || '(none)'}`,
         `Issue synopsis / author source:\n${issueSynopsisDraft.trim() || '(none)'}`,
+        `Author outline source (${authorOutlineMode}):\n${authorOutlineText.trim() || '(none)'}`,
+        `Production defaults:\n${JSON.stringify(productionDefaultsPayload, null, 2)}`,
       ].join('\n\n'),
       16_000,
     );
@@ -1922,6 +2175,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     selectedIssueId,
     seriesLoglineDraft,
     issueSynopsisDraft,
+    authorOutlineText,
+    authorOutlineMode,
+    productionDefaultsPayload,
     loreCardsFindText,
     outlineJsonString,
     arcReviewPlain,
@@ -1985,11 +2241,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             logline: seriesList.find((s) => s.id === selectedSeriesId)?.logline ?? null,
           }
         : null,
+      production_defaults: productionDefaultsPayload,
       issue: selectedIssue
         ? {
             issue_number: selectedIssue.issue_number,
             title: selectedIssue.title,
             synopsis: selectedIssue.synopsis,
+            author_outline: authorOutlineText.trim()
+              ? { text: authorOutlineText, mode: authorOutlineMode }
+              : null,
           }
         : null,
       outline: latestOutline
@@ -2018,6 +2278,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pacingSaved,
       canonSaved,
       sortedPages,
+      authorOutlineText,
+      authorOutlineMode,
+      productionDefaultsPayload,
     ],
   );
 
@@ -2069,6 +2332,60 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     await refreshIssuesForSeries();
     pushHistory('saved synopsis helper fields to issue notes');
   }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries, pushHistory]);
+
+  const saveAuthorOutlineToNotes = useCallback(async () => {
+    if (!selectedIssueId || !selectedIssue) return;
+    setScriptsError(null);
+    setScriptsBusy(true);
+    const merged = mergeAuthorOutlineIntoNotes(selectedIssue.notes, {
+      text: authorOutlineText,
+      mode: authorOutlineMode,
+    });
+    const ok = await updateWriterIssue(selectedIssueId, { notes: merged });
+    setScriptsBusy(false);
+    if (!ok) {
+      setScriptsError('Could not save author outline. Check Supabase.');
+      return;
+    }
+    await refreshIssuesForSeries();
+    pushHistory('saved author outline source to issue notes');
+  }, [selectedIssueId, selectedIssue, authorOutlineText, authorOutlineMode, refreshIssuesForSeries, pushHistory]);
+
+  const saveProductionDefaultsToNotes = useCallback(async () => {
+    if (!selectedSeriesId) return;
+    setProductionDefaultsError(null);
+    setProductionDefaultsBusy(true);
+
+    let ok = false;
+    if (selectedIssueId && selectedIssue) {
+      ok = await updateWriterIssue(selectedIssueId, {
+        notes: mergeProductionDefaultsIntoNotes(selectedIssue.notes, productionDefaultsDraft),
+      });
+    } else if (selectedSeries) {
+      ok = await updateWriterSeries(selectedSeries.id, {
+        notes: mergeProductionDefaultsIntoNotes(selectedSeries.notes, productionDefaultsDraft),
+      });
+    }
+
+    setProductionDefaultsBusy(false);
+    if (!ok) {
+      setProductionDefaultsError('Could not save production defaults. Check Supabase.');
+      return;
+    }
+
+    if (selectedIssueId) await refreshIssuesForSeries();
+    const seriesRows = await listWriterSeries();
+    setSeriesList(seriesRows);
+    pushHistory(selectedIssueId ? 'saved issue production defaults' : 'saved series production defaults');
+  }, [
+    selectedSeriesId,
+    selectedIssueId,
+    selectedIssue,
+    selectedSeries,
+    productionDefaultsDraft,
+    refreshIssuesForSeries,
+    pushHistory,
+  ]);
 
   const applyBuiltSynopsis = useCallback(() => {
     const doc = buildSynopsisDocumentFromParts(synopsisHelperParts);
@@ -2663,7 +2980,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const cockpitColumnPreview = (view: WriterCockpitPanelView) =>
     buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
 
-  const selectedSeries = seriesList.find((s) => s.id === selectedSeriesId) ?? null;
   const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
   const productionStages: WriterProductionStage[] = [
     {
@@ -2680,8 +2996,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       label: 'Synopsis',
       tab: 'scripts',
       eyebrow: 'Author source',
-      detail: issueSynopsisDraft.trim() ? 'Source text ready' : 'Add outline/source',
-      done: Boolean(issueSynopsisDraft.trim()),
+      detail: authorOutlineText.trim()
+        ? 'Author outline saved'
+        : issueSynopsisDraft.trim()
+          ? 'Source text ready'
+          : 'Add outline/source',
+      done: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
       current: activeTab === 'scripts',
     },
     {
@@ -3285,7 +3605,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         className={`${WRITER_GLASS_CARD} p-4 space-y-2 border-amber-400/40 bg-amber-50/30`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Story context</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation Hub</p>
                           <Tooltip content={WRITER_UI_TIPS.storyContextSupabase} side="left">
                             <button
                               type="button"
@@ -3304,7 +3624,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                            Story context → database fields
+                            Foundation Hub → story context
                           </p>
                           {dockCollapsed ? (
                             <Tooltip content={WRITER_UI_TIPS.dockLibraryHidden} side="left">
@@ -3382,6 +3702,156 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             }
                           />
                         </label>
+                        <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                                Foundation Hub / production defaults
+                              </p>
+                              <p className="mt-1 text-[11px] leading-snug text-black/60">
+                                Saved in existing notes metadata. Issue defaults override series defaults and are sent
+                                to outline, beats, dialogue, visual planning, and issue pack exports.
+                              </p>
+                            </div>
+                            <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                              notes.production_defaults
+                            </span>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Medium type
+                              <select
+                                value={productionDefaultsDraft.mediumType}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    mediumType: e.target.value as WriterProductionDefaults['mediumType'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="comic">Comic</option>
+                                <option value="book">Book</option>
+                                <option value="screenplay">Screenplay</option>
+                                <option value="video">Video</option>
+                                <option value="wiki">Lore wiki</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Narrative scope
+                              <select
+                                value={productionDefaultsDraft.narrativeScope}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    narrativeScope: e.target.value as WriterProductionDefaults['narrativeScope'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="single_issue">Single issue</option>
+                                <option value="multi_issue_arc">Multi-issue arc</option>
+                                <option value="book">Book</option>
+                                <option value="episode">Episode</option>
+                                <option value="shared_universe">Shared universe</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Comic panel density
+                              <select
+                                value={productionDefaultsDraft.comicPanelDensity}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    comicPanelDensity: e.target.value as WriterProductionDefaults['comicPanelDensity'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="sparse">Sparse</option>
+                                <option value="standard">Standard</option>
+                                <option value="dense">Dense</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Character consistency
+                              <select
+                                value={productionDefaultsDraft.characterConsistency}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    characterConsistency: e.target.value as WriterProductionDefaults['characterConsistency'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="strict">Strict</option>
+                                <option value="standard">Standard</option>
+                              </select>
+                            </label>
+                          </div>
+                          <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                            Art style
+                            <input
+                              type="text"
+                              value={productionDefaultsDraft.artStyle}
+                              onChange={(e) =>
+                                setProductionDefaultsDraft((p) => ({ ...p, artStyle: e.target.value }))
+                              }
+                              disabled={!selectedSeriesId}
+                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              placeholder="e.g. consistent comic-book line art"
+                            />
+                          </label>
+                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-black/70">
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={productionDefaultsDraft.strictCanon}
+                                disabled={!selectedSeriesId}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({ ...p, strictCanon: e.target.checked }))
+                                }
+                              />
+                              Strict canon
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={productionDefaultsDraft.noVideoAssumptions}
+                                disabled={!selectedSeriesId}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    noVideoAssumptions: e.target.checked,
+                                  }))
+                                }
+                              />
+                              No video assumptions
+                            </label>
+                          </div>
+                          {productionDefaultsError ? (
+                            <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                              {productionDefaultsError}
+                            </p>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={!supabaseOk || !selectedSeriesId || productionDefaultsBusy}
+                            onClick={() => void saveProductionDefaultsToNotes()}
+                            className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                          >
+                            {productionDefaultsBusy
+                              ? 'Saving…'
+                              : selectedIssueId
+                                ? 'Save issue defaults'
+                                : 'Save series defaults'}
+                          </button>
+                        </div>
                         {contextSaveError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{contextSaveError}</p>
                         )}
@@ -3658,8 +4128,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
                             </div>
                             <p className="mt-2 text-[11px] leading-snug text-black/58">
-                              This pass keeps settings in the existing flow. A later pass should add saved production
-                              defaults for comic medium, panel density, art style, and character consistency.
+                              Foundation Hub defaults now travel with generation so comic medium, panel density,
+                              style, canon, and character consistency do not have to be retyped on each prompt.
                             </p>
                           </div>
                         </div>
@@ -4142,6 +4612,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               const res = await invokeWriterTools({
                                 mode: 'page_beats',
                                 page_id: selectedPageId,
+                                production_defaults: productionDefaultsPayload,
                                 ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
                               });
                               setBeatsLoading(false);
@@ -4259,6 +4730,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             mode: 'draft_dialogue',
                             page_id: selectedPageId,
                             style: dialogueStyle,
+                            production_defaults: productionDefaultsPayload,
                           });
                           setDialogueLoading(false);
                           if (res.success) {
@@ -4481,6 +4953,49 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           ) : null}
                         </ul>
                         <p className="text-[11px] text-black/80 leading-snug">{pacingLengthAlignment.rationale}</p>
+                        {pacingRecommendedTarget != null ? (
+                          <div className="border-l-2 border-amber-700 bg-white/65 px-3 py-2 space-y-2">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/75">
+                                  Apply recommendation
+                                </p>
+                                <p className="mt-0.5 text-[11px] leading-snug text-black/65">
+                                  Target becomes {pacingRecommendedTarget} pages. {pacingAffectedPageSummary}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || !selectedIssueId || pacingApplyBusy || outlineGenLoading}
+                                  onClick={() => void runApplyPacingRecommendation()}
+                                  className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                >
+                                  {pacingApplyBusy ? 'Applying…' : 'Stage plan'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || !selectedIssueId || pacingApplyBusy || outlineGenLoading}
+                                  onClick={() => void runApplyPacingRecommendation({ regenerateOutline: true })}
+                                  className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                                >
+                                  {pacingApplyBusy || outlineGenLoading ? 'Applying…' : 'Apply + regenerate outline'}
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-[10px] leading-snug text-black/50">
+                              This updates the planning target, creates or trims affected page rows, and adds the pacing
+                              instructions to the outline supplement. Regenerate page beats/dialogue for selected affected
+                              pages after the outline changes.
+                            </p>
+                            {pacingApplyError ? (
+                              <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                                {pacingApplyError}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {pacingLengthAlignment.assumptions?.length ? (
                           <div className="pt-1">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-black/45">
@@ -4636,6 +5151,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           mode: 'plan_shots_from_issue',
                           issue_id: selectedIssueId,
                           creative_brief: shotsBrief.trim() || undefined,
+                          production_defaults: productionDefaultsPayload,
                         });
                         setShotsLoading(false);
                         if (res.success) {
@@ -4802,6 +5318,97 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         {scriptsError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
                         )}
+                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                          <div className="border-l-2 border-black/60 bg-white/55 px-3 py-3 space-y-3">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                                  Author outline intake
+                                </p>
+                                <p className="mt-1 text-xs leading-snug text-black/68">
+                                  Paste your real outline here. It is saved separately from the issue synopsis and is
+                                  sent directly to <strong>Generate outline</strong> so AI restructures your story
+                                  instead of inventing a replacement.
+                                </p>
+                              </div>
+                              <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                                notes.author_outline
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
+                              {(
+                                [
+                                  ['preserve', 'Preserve', 'Keep order and named events strict.'],
+                                  ['structure', 'Structure', 'Organize into production beats.'],
+                                  ['expand', 'Expand', 'Add connective tissue around your spine.'],
+                                ] as const
+                              ).map(([id, label, description]) => (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  onClick={() => setAuthorOutlineMode(id)}
+                                  title={description}
+                                  className={`rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                                    authorOutlineMode === id
+                                      ? 'border-black/60 bg-black text-white'
+                                      : 'border-black/15 bg-white/75 text-black/65 hover:bg-white'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              value={authorOutlineText}
+                              onChange={(e) => setAuthorOutlineText(e.target.value)}
+                              rows={8}
+                              className="w-full min-h-[180px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                              placeholder={'Paste or draft your issue/book outline here…\n\nExample:\nPage 1: Opening classroom misfire.\nPage 2: Vision escalates.\nPage 3: Mentor interrupts.'}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || scriptsBusy}
+                                onClick={() => void saveAuthorOutlineToNotes()}
+                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                {scriptsBusy ? 'Saving…' : 'Save author outline'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!authorOutlineText.trim()}
+                                onClick={() => appendTextToField(setOutlineSupplementDraft, authorOutlineText)}
+                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                              >
+                                Copy into outline instructions
+                              </button>
+                            </div>
+                          </div>
+                          <div className="border-l-2 border-emerald-700 bg-emerald-50/65 px-3 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+                              Generation contract
+                            </p>
+                            <div className="mt-2 space-y-2 text-[11px] leading-snug text-black/66">
+                              <p>
+                                <strong>Issue synopsis</strong> is the short pitch/logline context.
+                              </p>
+                              <p>
+                                <strong>Author outline</strong> is the source structure AI must preserve, structure, or
+                                expand when generating the saved Issue Outline.
+                              </p>
+                              <p>
+                                <strong>Canon cards</strong> still supply visual/world facts before beats are generated.
+                              </p>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                              <span className="bg-white/65 px-2 py-1">Source first</span>
+                              <span className="bg-white/65 px-2 py-1">Canon checked</span>
+                              <span className="bg-white/65 px-2 py-1">AI structures</span>
+                              <span className="bg-white/65 px-2 py-1">User owns story</span>
+                            </div>
+                          </div>
+                        </div>
                         {sortedPages.length > 0 ? (
                           <div
                             className="rounded-xl border border-black/10 bg-white/40 px-3 py-2.5 space-y-2"
@@ -5049,6 +5656,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </div>
                           {scriptsEditorTab === 'synopsis' && (
                             <div className="space-y-3">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-black/55">
+                                  Author outline source
+                                </p>
+                                <pre
+                                  className={`${preShell} ${preFont} max-h-[min(220px,30vh)] text-xs whitespace-pre-wrap`}
+                                >
+                                  {authorOutlineText.trim() || '(empty — paste your source outline above)'}
+                                </pre>
+                              </div>
                               <p className="text-[11px] text-black/60">
                                 Preview of the combined document from helper fields (not yet saved as issue synopsis
                                 until you use <strong>Build synopsis</strong> and <strong>Save story context</strong> on
