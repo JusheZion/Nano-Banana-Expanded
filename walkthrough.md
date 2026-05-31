@@ -6191,3 +6191,83 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 
 - Begin Pass 1: production state foundation.
+
+## Imageshop Production Studio Implementation - 2026-05-31
+
+### What changed
+
+- Implemented the seven-pass Imageshop Production Studio plan inside the existing Imageshop / `lab` portal.
+- Added a local production state store for generation mode, structured prompt workspace, saved art styles, continuity settings, comic page config, saved layout templates, imported batches, production items, statuses, and generated/refined versions.
+- Added structured prompt composition with video/comic mode awareness, negative prompt, character/environment/art style/camera/continuity sections, reference metadata injection, comic page settings, continuity strength, locked continuity, and Character Bible Mode.
+- Added JSON import/export support for Story Beat JSON, Comic Page JSON, and exported ARCS Imageshop configs, including normalized batch production items, reusable export JSON, saved art style definitions, and the selected art style.
+- Closed follow-up audit gaps by adding the named `Single Comic Page` page type, injecting approved/published production item versions back into prompt composition as production references, and preserving art style libraries through ARCS export/import round trips.
+- Expanded the Imageshop UI with:
+  - Video Beats / Comic Pages mode selector.
+  - Resizable multi-section prompt workspace.
+  - Art Style Library with built-in styles and saved custom styles.
+  - Continuity Lock controls and 0-100 continuity strength.
+  - Comic page configuration, page types, panel text/SFX/page-number toggles, border designer, gutter controls, page background URL/upload, and saved custom layout templates.
+  - JSON Production Batch import/export and sequential Generate Batch action.
+  - Production Dashboard with Draft, Generated, Refined, Approved, and Published status filters/actions.
+  - Refinement Workspace with prompt edit, region edit, character/face/costume/lighting/color/dialogue correction, and surgical Continuity Correction source/target fields.
+- Preserved existing generated-result session recovery, Save / Export, Character Vault, Asset Vault, NPC Vault, Guided Comic Flow handoff, and Guided Comic panel return wiring.
+- Updated the Imageshop production tracker so Passes 1-7 and automated verification are marked complete, while signed-in manual browser checks remain explicitly unchecked because auth blocked them.
+
+### Files touched
+
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/imageshopPromptComposer.ts`
+- `src/portals/storyline/imageshopJsonSchemas.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/portals/storyline/__tests__/imageshopPromptComposer.test.ts`
+- `src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No routing, Supabase schema, or ComicEditor changes were introduced.
+- The new production store persists local Imageshop production state under `arcs-imageshop-production-v1`; existing generated-result recovery remains in `arcs-imageshop-session-v1`.
+- Video Beats mode preserves the raw-prompt path unless the user enables structured production controls. Comic Pages mode composes the structured production prompt.
+- Reference metadata injection uses current Guided Comic handoff metadata where available, while manual/reference slot URLs still participate as named Imageshop slot references.
+- Region edit and continuity correction are implemented as structured prompt workflows over the existing generation API because no true region-edit API is exposed in the current repo.
+- Sequential batch generation processes dashboard production items and records output versions under each item.
+- Page background upload uses a local object URL for the current browser session.
+
+### Verification
+
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopSessionStore.test.ts` passed: 6 files, 34 tests.
+- `npm run test` passed: 49 files, 292 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- In-app browser opened `http://127.0.0.1:5173/` and confirmed the app title `ARCS Expanded`, but protected portal QA stopped at the Supabase sign-in gate.
+- Disposable QA sign-up was attempted through the app auth UI; the first `example.com` email was rejected as invalid, and the follow-up Gmail-style address was blocked by Supabase email rate limiting.
+- Chrome-profile QA was also attempted against `http://127.0.0.1:5173/`, but the available Chrome profile was not signed into ARCS and stopped at the same sign-in gate.
+- Because the browser sessions remained unauthenticated, signed-in manual checks for Guided Comic Flow -> Imageshop -> return-art and Save / Export were not completed in-browser. Focused bridge/component tests now cover Guided Comic Flow panel return wiring and session-result Save / Export to the NPC Vault/local archive path without regeneration.
+
+### Outstanding issues
+
+- Signed-in browser QA remains operator QA once a valid session is available, but the previously weak return/save paths now have automated component/bridge coverage.
+- True pixel/region editing is not implemented because the current repo exposes prompt/image generation, not a dedicated region-edit API.
+- Batch generation is sequential and intentionally conservative; no parallel rate-limit strategy was added.
+
+### Risks or caveats
+
+- The expanded UI is intentionally broad and functional, but it significantly increases `GenericImageLabPanel.tsx` size. Future polish should split the production controls into child components once behavior settles.
+- Local object URLs for uploaded page backgrounds are session-local and are not durable exports unless replaced with a hosted/stored URL.
+- Fake/local auth bypass was not added to app code; protected portal behavior remains intact.
+
+### Operator follow-up
+
+- Sign in with a valid Supabase user and manually verify:
+  - Guided Comic Flow -> Imageshop -> generated panel return.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download.
+  - Import JSON -> Generate Batch -> status update -> Export JSON.
+- Consider splitting Imageshop production subpanels into focused components after product behavior is accepted.
+
+### Next steps
+
+- Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.
