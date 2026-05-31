@@ -88,6 +88,20 @@ import {
   resolveProductionDefaults,
   type WriterProductionDefaults,
 } from '@/portals/writer/writerProductionDefaults';
+import {
+  importHierarchyFromJson,
+  importHierarchyFromText,
+  mergeHierarchyIntoNotes,
+  readHierarchyFromNotes,
+  type WriterHierarchyNode,
+} from '@/portals/writer/writerHierarchy';
+import {
+  buildGuidedComicsHandoffExport,
+  formatIssuePackAsMarkdown,
+  summarizePageBeatMetadata,
+  summarizeWriterAuditModes,
+  summarizeWriterProductionBranches,
+} from '@/portals/writer/writerProductionBranches';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
@@ -352,6 +366,65 @@ function buildPacingApplyOutlineSupplement(
   return trimmed ? `${trimmed}\n\n${block}` : block;
 }
 
+type PageBeatPanelDraft = NonNullable<PageBeatsJson['panels']>[number];
+
+type BeatsDraftParseResult =
+  | { ok: true; value: PageBeatsJson & Record<string, unknown> }
+  | { ok: false; error: string };
+
+function parseBeatsEditDraft(raw: string): BeatsDraftParseResult {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: { panels: [] } };
+  try {
+    const value = JSON.parse(trimmed);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, error: 'Beats must be a JSON object.' };
+    }
+    const panels = (value as PageBeatsJson).panels;
+    if (!Array.isArray(panels)) return { ok: false, error: 'Beats JSON must include a panels array.' };
+    return { ok: true, value: value as PageBeatsJson & Record<string, unknown> };
+  } catch {
+    return { ok: false, error: 'Beats JSON is invalid.' };
+  }
+}
+
+function serializeBeatsEditDraft(value: PageBeatsJson & Record<string, unknown>): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function readBeatPanelIndex(raw: string, panelsLength: number, allowEnd = false): number | null {
+  const value = Number.parseInt(raw, 10);
+  const upper = allowEnd ? panelsLength + 1 : panelsLength;
+  if (!Number.isFinite(value) || value < 1 || value > Math.max(1, upper)) return null;
+  return value - 1;
+}
+
+function makeInsertedBeatPanel(index: number): PageBeatPanelDraft {
+  return {
+    index,
+    action: 'New beat',
+  };
+}
+
+function renumberBeatPanels(panels: PageBeatPanelDraft[]): PageBeatPanelDraft[] {
+  return panels.map((panel, index) => ({ ...panel, index: index + 1 }));
+}
+
+function renderHierarchyNodes(nodes: WriterHierarchyNode[], depth = 0): React.ReactNode {
+  if (!nodes.length) return null;
+  return (
+    <ul className={depth === 0 ? 'space-y-1.5' : 'mt-1 space-y-1 border-l border-black/10 pl-3'}>
+      {nodes.map((node) => (
+        <li key={node.id} className="text-[11px] leading-snug text-black/75">
+          <span className="font-bold uppercase tracking-wide text-black/45">{node.kind}</span>{' '}
+          <span className="font-semibold text-black">{node.title}</span>
+          {renderHierarchyNodes(node.children, depth + 1)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function downloadJsonFile(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -477,6 +550,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   });
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
+  const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
+  const [hierarchyImportError, setHierarchyImportError] = useState<string | null>(null);
   const [productionDefaultsDraft, setProductionDefaultsDraft] = useState<WriterProductionDefaults>({
     ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
   });
@@ -486,6 +561,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
   const [outlineEditDraft, setOutlineEditDraft] = useState('');
   const [beatsEditDraft, setBeatsEditDraft] = useState('');
+  const [beatPanelIndexDraft, setBeatPanelIndexDraft] = useState('1');
   const [dialogueEditDraft, setDialogueEditDraft] = useState('');
   const [shotEditDraft, setShotEditDraft] = useState('');
   const [scriptsBusy, setScriptsBusy] = useState(false);
@@ -941,6 +1017,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setProductionDefaultsDraft(readProductionDefaultsFromNotes(selectedSeries?.notes));
     }
     setProductionDefaultsError(null);
+    setHierarchyImportDraft('');
+    setHierarchyImportError(null);
   }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
@@ -956,6 +1034,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
   const selectedPage = pages.find((p) => p.id === selectedPageId) ?? null;
+  const hierarchyNodes = useMemo(
+    () => readHierarchyFromNotes(selectedIssue?.notes),
+    [selectedIssue?.notes],
+  );
+  const selectedPageMetadata = useMemo(
+    () => summarizePageBeatMetadata((selectedPage?.beats_json as PageBeatsJson | null | undefined) ?? null),
+    [selectedPage?.beats_json],
+  );
+  const auditSummaries = useMemo(
+    () =>
+      summarizeWriterAuditModes({
+        pacingResult: pacingSaved?.result,
+        canonResult: canonSaved?.result,
+      }),
+    [pacingSaved?.result, canonSaved?.result],
+  );
   const authorOutlineSource = useMemo<AuthorOutlineSource>(
     () => ({
       text: authorOutlineText,
@@ -2283,6 +2377,39 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       productionDefaultsPayload,
     ],
   );
+  const productionBranchSummaries = useMemo(
+    () =>
+      summarizeWriterProductionBranches({
+        hasOutline: Boolean(latestOutline),
+        pagesWithBeats: pagesWithBeatsCount,
+        pagesWithDialogue: pagesWithScriptCount,
+        pageCount: sortedPages.length,
+        hasShotPlan: Boolean(latestShotPlan),
+        outputFormat: productionDefaultsPayload.output_format,
+      }),
+    [
+      latestOutline,
+      pagesWithBeatsCount,
+      pagesWithScriptCount,
+      sortedPages.length,
+      latestShotPlan,
+      productionDefaultsPayload.output_format,
+    ],
+  );
+
+  const downloadIssuePackMarkdown = useCallback(() => {
+    downloadTextFile(
+      'writer-issue-pack.md',
+      formatIssuePackAsMarkdown(issuePackObject),
+      'text/markdown;charset=utf-8',
+    );
+    pushHistory('downloaded issue pack markdown');
+  }, [issuePackObject, pushHistory]);
+
+  const downloadGuidedComicsHandoff = useCallback(() => {
+    downloadJsonFile('writer-guided-comics-handoff.json', buildGuidedComicsHandoffExport(issuePackObject));
+    pushHistory('downloaded Guided Comics handoff package');
+  }, [issuePackObject, pushHistory]);
 
   useEffect(() => {
     if (!latestOutline) {
@@ -2350,6 +2477,36 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     await refreshIssuesForSeries();
     pushHistory('saved author outline source to issue notes');
   }, [selectedIssueId, selectedIssue, authorOutlineText, authorOutlineMode, refreshIssuesForSeries, pushHistory]);
+
+  const saveHierarchyToNotes = useCallback(async () => {
+    if (!selectedIssueId || !selectedIssue) return;
+    const raw = hierarchyImportDraft.trim();
+    if (!raw) {
+      setHierarchyImportError('Paste an outline tree or JSON payload before saving.');
+      return;
+    }
+
+    const nodes = raw.startsWith('{') || raw.startsWith('[')
+      ? importHierarchyFromJson(raw)
+      : importHierarchyFromText(raw);
+    if (nodes.length === 0) {
+      setHierarchyImportError('No hierarchy nodes were found. Include arc/book/issue/chapter/page/scene/beat labels.');
+      return;
+    }
+
+    setHierarchyImportError(null);
+    setScriptsBusy(true);
+    const ok = await updateWriterIssue(selectedIssueId, {
+      notes: mergeHierarchyIntoNotes(selectedIssue.notes, nodes, { source: 'paste/import' }),
+    });
+    setScriptsBusy(false);
+    if (!ok) {
+      setHierarchyImportError('Could not save hierarchy tree. Check Supabase.');
+      return;
+    }
+    await refreshIssuesForSeries();
+    pushHistory(`saved hierarchy tree (${nodes.length} root node${nodes.length === 1 ? '' : 's'})`);
+  }, [selectedIssueId, selectedIssue, hierarchyImportDraft, refreshIssuesForSeries, pushHistory]);
 
   const saveProductionDefaultsToNotes = useCallback(async () => {
     if (!selectedSeriesId) return;
@@ -2455,6 +2612,79 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
   }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId, pushHistory]);
+
+  const updateBeatsPanelsDraft = useCallback(
+    (operation: 'insert' | 'remove' | 'merge' | 'split' | 'up' | 'down') => {
+      const parsed = parseBeatsEditDraft(beatsEditDraft);
+      if (!parsed.ok) {
+        setScriptsError(parsed.error);
+        return;
+      }
+
+      const panels = [...parsed.value.panels];
+      const index = readBeatPanelIndex(
+        beatPanelIndexDraft,
+        panels.length,
+        operation === 'insert',
+      );
+      if (index == null) {
+        setScriptsError('Choose a valid panel number before editing beats.');
+        return;
+      }
+
+      if (operation === 'insert') {
+        panels.splice(Math.min(index + 1, panels.length), 0, makeInsertedBeatPanel(index + 2));
+      } else if (operation === 'remove') {
+        if (panels.length === 0) {
+          setScriptsError('There are no panels to remove.');
+          return;
+        }
+        panels.splice(index, 1);
+      } else if (operation === 'merge') {
+        if (index >= panels.length - 1) {
+          setScriptsError('Choose a panel with another panel after it to merge.');
+          return;
+        }
+        const current = panels[index]!;
+        const next = panels[index + 1]!;
+        panels.splice(index, 2, {
+          ...current,
+          action: [current.action, next.action].filter(Boolean).join(' / '),
+          composition: [current.composition, next.composition].filter(Boolean).join(' / ') || undefined,
+          emotion: [current.emotion, next.emotion].filter(Boolean).join(' / ') || undefined,
+          dialogue_placeholder:
+            [current.dialogue_placeholder, next.dialogue_placeholder].filter(Boolean).join(' / ') || undefined,
+          sfx: [current.sfx, next.sfx].filter(Boolean).join(' / ') || undefined,
+        });
+      } else if (operation === 'split') {
+        if (index >= panels.length) {
+          setScriptsError('Choose an existing panel to split.');
+          return;
+        }
+        const current = panels[index]!;
+        panels.splice(index + 1, 0, {
+          ...current,
+          action: current.action ? `${current.action} (continued)` : 'Continued beat',
+        });
+      } else if (operation === 'up') {
+        if (index <= 0 || index >= panels.length) {
+          setScriptsError('Choose a panel after the first panel to move up.');
+          return;
+        }
+        [panels[index - 1], panels[index]] = [panels[index]!, panels[index - 1]!];
+      } else if (operation === 'down') {
+        if (index < 0 || index >= panels.length - 1) {
+          setScriptsError('Choose a panel before the last panel to move down.');
+          return;
+        }
+        [panels[index], panels[index + 1]] = [panels[index + 1]!, panels[index]!];
+      }
+
+      setScriptsError(null);
+      setBeatsEditDraft(serializeBeatsEditDraft({ ...parsed.value, panels: renumberBeatPanels(panels) }));
+    },
+    [beatsEditDraft, beatPanelIndexDraft],
+  );
 
   const saveDialogueEdit = useCallback(async () => {
     if (!selectedPageId || !selectedPage) return;
@@ -3793,6 +4023,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 <option value="standard">Standard</option>
                               </select>
                             </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Preferred export
+                              <select
+                                value={productionDefaultsDraft.outputFormat}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({
+                                    ...p,
+                                    outputFormat: e.target.value as WriterProductionDefaults['outputFormat'],
+                                  }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="issue_pack_json">Issue pack JSON</option>
+                                <option value="comic_script_markdown">Comic script markdown</option>
+                                <option value="guided_comic_handoff">Guided Comics handoff</option>
+                                <option value="fountain_screenplay">Fountain screenplay</option>
+                                <option value="prose_manuscript">Prose manuscript</option>
+                                <option value="lore_wiki">Lore wiki</option>
+                              </select>
+                            </label>
                           </div>
                           <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
                             Art style
@@ -4506,6 +4757,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[72px] disabled:opacity-50"
                           />
                         </div>
+                        {selectedPage ? (
+                          <div className="grid gap-2 rounded-xl border border-black/10 bg-white/45 p-3 sm:grid-cols-3">
+                            {[
+                              ['Characters', selectedPageMetadata.characters],
+                              ['Locations', selectedPageMetadata.locations],
+                              ['Art style', selectedPageMetadata.artStyle],
+                            ].map(([label, value]) => (
+                              <div key={label} className="min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-wider text-black/45">
+                                  {label}
+                                </p>
+                                <p className="mt-1 text-[11px] font-semibold leading-snug text-black/75 break-words">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         {sortedPages.length > 0 ? (
                           <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -4989,6 +5258,70 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               instructions to the outline supplement. Regenerate page beats/dialogue for selected affected
                               pages after the outline changes.
                             </p>
+                            {selectedPagesForBatchExport.length > 0 ? (
+                              <div className="rounded-lg border border-amber-900/15 bg-white/70 px-3 py-2 space-y-2">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/75">
+                                      Preview affected pages before overwrite
+                                    </p>
+                                    <p className="mt-0.5 text-[10px] leading-snug text-black/55">
+                                      These pages are queued from the pacing change. Regeneration only happens when you
+                                      explicitly run beats or dialogue.
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={beatsBatchBusy || selectedPagesForBatchExport.length === 0}
+                                      onClick={() => {
+                                        setBeatsPickPageIds(
+                                          selectedPagesForBatchExport
+                                            .slice(0, WRITER_PAGE_BEATS_ISSUE_MAX)
+                                            .map((p) => p.id),
+                                        );
+                                        setActiveTab('beats');
+                                      }}
+                                      className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                    >
+                                      Review beats batch
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={!supabaseOk || dialogueBatchBusy || selectedPagesForBatchExport.length === 0}
+                                      onClick={() => void runBatchDialogueForSelectedPages()}
+                                      className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                    >
+                                      {dialogueBatchBusy ? dialogueBatchLabel || 'Dialogue…' : 'Regenerate dialogue'}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="grid gap-1 sm:grid-cols-2">
+                                  {selectedPagesForBatchExport.slice(0, 8).map((p) => (
+                                    <button
+                                      key={`pacing-preview-${p.id}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPageId(p.id);
+                                        setActiveTab('beats');
+                                      }}
+                                      className="rounded-md border border-black/10 bg-white/80 px-2 py-1.5 text-left text-[10px] text-black/65 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                    >
+                                      <span className="font-black text-black">Page {p.page_number}</span>
+                                      <span className="ml-1">
+                                        {pageRowHasPanelBeats(p) ? 'has beats' : 'no beats'} ·{' '}
+                                        {(p.script_text ?? '').trim() ? 'has dialogue' : 'no dialogue'}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                                {selectedPagesForBatchExport.length > 8 ? (
+                                  <p className="text-[10px] text-black/45">
+                                    +{selectedPagesForBatchExport.length - 8} more affected page(s) in the Library batch.
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
                             {pacingApplyError ? (
                               <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
                                 {pacingApplyError}
@@ -5106,6 +5439,56 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <p className="text-xs text-black/50">No canon check yet for this issue.</p>
                       )}
                     </div>
+                    <div className="space-y-3 rounded-xl border border-black/10 bg-white/40 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Expanded audits
+                          </p>
+                          <p className="mt-1 text-[11px] leading-snug text-black/60">
+                            These modes ride the existing pacing and canon tools, then save structured audit branches in
+                            the review cache.
+                          </p>
+                        </div>
+                        <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                          continuity · emotion · character · world
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {auditSummaries.map((option) => {
+                          const usesPacing = option.id === 'emotional_arc';
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              disabled={
+                                !supabaseOk ||
+                                !selectedIssueId ||
+                                pacingLoading ||
+                                canonLoading ||
+                                arcBatchBusy
+                              }
+                              onClick={() => (usesPacing ? void runPacingFromRibbon() : void runCanonFromRibbon())}
+                              className="rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-left hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                            >
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-black text-black">{option.label}</span>
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                    option.ready ? 'bg-emerald-100 text-emerald-900' : 'bg-black/10 text-black/45'
+                                  }`}
+                                >
+                                  {option.ready ? 'saved' : option.source === 'pacing_review' ? 'pacing' : 'canon'}
+                                </span>
+                              </span>
+                              <span className="mt-1 block text-[10px] leading-snug text-black/58">
+                                {option.summary}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                     {arcReviewPlain ? (
                       <div className="space-y-2 rounded-xl border border-black/10 bg-white/40 p-4">
                         <div className="flex items-center justify-between gap-2">
@@ -5129,6 +5512,110 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="videoTab" label="About shot plans and video" />
+                    </div>
+                    <div className="space-y-3 rounded-xl border border-black/10 bg-white/40 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Production branches
+                          </p>
+                          <p className="mt-1 text-[11px] leading-snug text-black/60">
+                            Branch from the same issue pack into visual prep, dialogue, exports, or Guided Comics handoff.
+                          </p>
+                        </div>
+                        <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                          branch-ready
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {productionBranchSummaries.map((option) => {
+                          return (
+                            <div
+                              key={option.id}
+                              className="space-y-2 rounded-lg border border-black/10 bg-white/70 px-3 py-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-[11px] font-black text-black">{option.label}</p>
+                                  <p className="mt-0.5 text-[10px] leading-snug text-black/55">{option.summary}</p>
+                                </div>
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                    option.ready ? 'bg-emerald-100 text-emerald-900' : 'bg-black/10 text-black/45'
+                                  }`}
+                                >
+                                  {option.ready ? 'ready' : 'prep'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (option.id === 'dialogue') {
+                                      setActiveTab('dialogue');
+                                    } else if (option.id === 'exports') {
+                                      setActiveTab('scripts');
+                                      setScriptsEditorTab('synopsis');
+                                    } else if (option.id === 'guided_comics_handoff') {
+                                      setProductionDefaultsDraft((p) => ({
+                                        ...p,
+                                        outputFormat: 'guided_comic_handoff',
+                                      }));
+                                      setActiveTab('scripts');
+                                    } else {
+                                      setActiveTab('video');
+                                    }
+                                  }}
+                                  className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                >
+                                  {option.actionLabel}
+                                </button>
+                                {option.id === 'visual_prep' ? (
+                                  <button
+                                    type="button"
+                                    disabled={!selectedIssueId || imageWorkshopBusy || (!latestShotPlan && !selectedPage?.beats_json)}
+                                    onClick={() => void openImageWorkshopFromWriter(latestShotPlan ? 'shot-plan' : 'page')}
+                                    className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                  >
+                                    Imageshop
+                                  </button>
+                                ) : null}
+                                {option.id === 'exports' ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        downloadJsonFile('writer-issue-pack.json', issuePackObject);
+                                        pushHistory('downloaded issue pack');
+                                      }}
+                                      className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                    >
+                                      JSON
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadIssuePackMarkdown()}
+                                      className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                    >
+                                      Markdown
+                                    </button>
+                                  </>
+                                ) : null}
+                                {option.id === 'guided_comics_handoff' ? (
+                                  <button
+                                    type="button"
+                                    disabled={sortedPages.length === 0}
+                                    onClick={() => downloadGuidedComicsHandoff()}
+                                    className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                  >
+                                    Handoff JSON
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
                       Creative brief (optional)
@@ -5261,17 +5748,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         type="button"
                         disabled={!latestOutline && !latestShotPlan && pages.length === 0}
                         onClick={() => {
-                          downloadJsonFile('writer-issue-pack.json', {
-                            issue_id: selectedIssueId,
-                            exported_at: new Date().toISOString(),
-                            outline: latestOutline?.outline_json ?? null,
-                            shot_plan: latestShotPlan?.shot_plan_json ?? null,
-                            pages: pages.map((p) => ({
-                              page_number: p.page_number,
-                              beats_json: p.beats_json,
-                              script_preview: (p.script_text ?? '').slice(0, 2000),
-                            })),
-                          });
+                          downloadJsonFile('writer-issue-pack.json', issuePackObject);
                         }}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
@@ -5407,6 +5884,100 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               <span className="bg-white/65 px-2 py-1">AI structures</span>
                               <span className="bg-white/65 px-2 py-1">User owns story</span>
                             </div>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                                  Hierarchy tree import
+                                </p>
+                                <p className="mt-1 text-[11px] leading-snug text-black/60">
+                                  Paste .txt, .md, or JSON structure. It normalizes into arc → book/issue/episode →
+                                  chapter/page/scene → beat metadata on the issue notes.
+                                </p>
+                              </div>
+                              <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                                notes.hierarchy_tree
+                              </span>
+                            </div>
+                            <textarea
+                              value={hierarchyImportDraft}
+                              onChange={(e) => setHierarchyImportDraft(e.target.value)}
+                              rows={7}
+                              className="w-full min-h-[150px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                              placeholder={'# Arc: Haunted semester\n## Issue 1: First misfire\n### Page 1\n- Beat: Classroom spell goes wrong\n- Beat: Mentor interrupts'}
+                            />
+                            <label className="inline-flex w-fit cursor-pointer items-center rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-within:ring-2 focus-within:ring-black/25">
+                              Import .txt/.md/JSON file
+                              <input
+                                type="file"
+                                accept=".txt,.md,.markdown,.json,application/json,text/plain,text/markdown"
+                                className="sr-only"
+                                onChange={(event) => {
+                                  const file = event.currentTarget.files?.[0];
+                                  if (!file) return;
+                                  void file.text().then((text) => {
+                                    setHierarchyImportDraft(text);
+                                    setHierarchyImportError(null);
+                                  });
+                                  event.currentTarget.value = '';
+                                }}
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!authorOutlineText.trim()}
+                                onClick={() => {
+                                  setHierarchyImportDraft(authorOutlineText);
+                                  setHierarchyImportError(null);
+                                }}
+                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                              >
+                                Use author outline
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!buildSynopsisDocumentFromParts(synopsisHelperParts)}
+                                onClick={() => {
+                                  setHierarchyImportDraft(buildSynopsisDocumentFromParts(synopsisHelperParts));
+                                  setHierarchyImportError(null);
+                                }}
+                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                              >
+                                Use synopsis helper
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || scriptsBusy || !hierarchyImportDraft.trim()}
+                                onClick={() => void saveHierarchyToNotes()}
+                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                {scriptsBusy ? 'Saving…' : 'Import/save tree'}
+                              </button>
+                            </div>
+                            {hierarchyImportError ? (
+                              <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                                {hierarchyImportError}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-white/45 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Saved hierarchy tree
+                            </p>
+                            {hierarchyNodes.length ? (
+                              <div className="max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                                {renderHierarchyNodes(hierarchyNodes)}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-black/50">
+                                No hierarchy saved yet. Import from your outline or helper before generation.
+                              </p>
+                            )}
                           </div>
                         </div>
                         {sortedPages.length > 0 ? (
@@ -5597,6 +6168,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </button>
                               <button
                                 type="button"
+                                onClick={() => downloadIssuePackMarkdown()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
+                              >
+                                Download issue pack .md
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sortedPages.length === 0}
+                                onClick={() => downloadGuidedComicsHandoff()}
+                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              >
+                                Download Guided Comics handoff
+                              </button>
+                              <button
+                                type="button"
                                 disabled={!arcReviewPlain}
                                 onClick={() => void navigator.clipboard.writeText(arcReviewPlain)}
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
@@ -5721,6 +6307,44 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                   <p className="text-[10px] text-black/50">
                                     Page {selectedPage.page_number}. Empty JSON clears beats.
                                   </p>
+                                  <div className="rounded-xl border border-black/10 bg-white/45 p-3 space-y-2">
+                                    <div className="flex flex-wrap items-end gap-2">
+                                      <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-black/55">
+                                        Panel
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={beatPanelIndexDraft}
+                                          onChange={(e) => setBeatPanelIndexDraft(e.target.value)}
+                                          className="w-20 rounded-md border border-black/15 bg-white px-2 py-1.5 text-sm font-semibold text-black"
+                                        />
+                                      </label>
+                                      {(
+                                        [
+                                          ['insert', 'Insert after'],
+                                          ['remove', 'Remove'],
+                                          ['merge', 'Merge next'],
+                                          ['split', 'Split'],
+                                          ['up', 'Move up'],
+                                          ['down', 'Move down'],
+                                        ] as const
+                                      ).map(([operation, label]) => (
+                                        <button
+                                          key={operation}
+                                          type="button"
+                                          onClick={() => updateBeatsPanelsDraft(operation)}
+                                          className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                        >
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="text-[10px] leading-snug text-black/50">
+                                      These controls rewrite only the page <code className="rounded bg-black/10 px-1">panels</code>{' '}
+                                      array in the draft. Page-level characters, locations, and art style stay intact
+                                      unless you edit the JSON directly.
+                                    </p>
+                                  </div>
                                   <textarea
                                     value={beatsEditDraft}
                                     onChange={(e) => setBeatsEditDraft(e.target.value)}

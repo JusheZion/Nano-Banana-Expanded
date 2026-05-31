@@ -54,6 +54,7 @@ describe('writerToolsRequestSchema', () => {
         comic_panel_density: 'standard',
         art_style: 'clean line art',
         character_consistency: 'strict',
+        output_format: 'guided_comic_handoff',
         strict_canon: true,
         no_video_assumptions: true,
       },
@@ -63,6 +64,7 @@ describe('writerToolsRequestSchema', () => {
       outline_supplement: 'Emphasize act breaks at pages 8 and 16.',
       production_defaults: {
         medium_type: 'comic',
+        output_format: 'guided_comic_handoff',
         no_video_assumptions: true,
       },
     });
@@ -206,6 +208,38 @@ describe('writerToolsRequestSchema', () => {
       panels: [{ action: 'Wide establishing shot' }],
     });
     expect(p.panels).toHaveLength(1);
+  });
+
+  it('pageBeatsJsonSchema accepts optional page-level metadata', () => {
+    const p = pageBeatsJsonSchema.parse({
+      characters: ['Mara', 'Sol'],
+      locations: ['Gate bridge'],
+      art_style: 'clean cinematic line art',
+      panels: [{ action: 'Mara studies the waking gate.' }],
+    });
+    expect(p.characters).toEqual(['Mara', 'Sol']);
+    expect(p.locations).toEqual(['Gate bridge']);
+    expect(p.art_style).toBe('clean cinematic line art');
+    expect(p.panels).toHaveLength(1);
+  });
+
+  it('pageBeatsJsonSchema keeps legacy beats without metadata valid', () => {
+    const p = pageBeatsJsonSchema.parse({
+      page_number_ref: 1,
+      one_line_hook: 'The gate wakes.',
+      panels: [{ action: 'Wide establishing shot' }],
+    });
+    expect(p.panels).toHaveLength(1);
+  });
+
+  it('pageBeatsJsonSchema rejects invalid page-level metadata shapes', () => {
+    const validPageBeats = {
+      panels: [{ action: 'Wide establishing shot' }],
+    };
+
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, characters: 'Mara' })).toThrow();
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, locations: ['Gate bridge', 1] })).toThrow();
+    expect(() => pageBeatsJsonSchema.parse({ ...validPageBeats, art_style: 1 })).toThrow();
   });
 
   it('parses pacing_review request', () => {

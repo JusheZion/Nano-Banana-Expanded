@@ -28,6 +28,16 @@ export const writerProductionDefaultsPayloadSchema = z
     comic_panel_density: z.enum(['sparse', 'standard', 'dense']).optional(),
     art_style: z.string().max(500).optional(),
     character_consistency: z.enum(['standard', 'strict']).optional(),
+    output_format: z
+      .enum([
+        'issue_pack_json',
+        'comic_script_markdown',
+        'guided_comic_handoff',
+        'fountain_screenplay',
+        'prose_manuscript',
+        'lore_wiki',
+      ])
+      .optional(),
     strict_canon: z.boolean().optional(),
     no_video_assumptions: z.boolean().optional(),
   })
@@ -64,6 +74,9 @@ export const pageBeatsJsonSchema = z
   .object({
     page_number_ref: z.number().int().positive().max(500).optional(),
     one_line_hook: z.string().optional(),
+    characters: z.array(z.string()).optional(),
+    locations: z.array(z.string()).optional(),
+    art_style: z.string().optional(),
     panels: z.array(pageBeatPanelSchema).min(1).max(24),
   })
   .passthrough();
@@ -152,6 +165,13 @@ export const pacingReviewResultSchema = z
     score_1_to_10: z.number().int().min(1).max(10).optional(),
     strengths: z.array(z.string()).max(24).optional(),
     risks: z.array(z.string()).max(24).optional(),
+    emotional_arc: z
+      .object({
+        summary: z.string(),
+        risks: z.array(z.string()).max(24).optional(),
+        suggestions: z.array(z.string()).max(24).optional(),
+      })
+      .optional(),
     page_level_notes: z
       .array(
         z.object({
@@ -186,6 +206,22 @@ export const canonCheckResultSchema = z
       .max(48)
       .optional(),
     aligned_elements: z.array(z.string()).max(48).optional(),
+    character_utilization: z
+      .object({
+        summary: z.string(),
+        underused: z.array(z.string()).max(48).optional(),
+        overused: z.array(z.string()).max(48).optional(),
+        suggestions: z.array(z.string()).max(48).optional(),
+      })
+      .optional(),
+    worldbuilding_density: z
+      .object({
+        summary: z.string(),
+        dense_pages: z.array(z.number().int().positive().max(500)).max(200).optional(),
+        thin_pages: z.array(z.number().int().positive().max(500)).max(200).optional(),
+        suggestions: z.array(z.string()).max(48).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

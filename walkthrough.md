@@ -5940,6 +5940,207 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 - Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
 - Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
 
+## Writers Workshop Output Format Defaults - 2026-05-31
+
+### What changed
+
+- Added an explicit preferred output/export format to Foundation Hub production defaults.
+- Stored the new value as `output_format` under the existing `notes.production_defaults` metadata contract, preserving the no-migration approach from the Foundation Hub pass.
+- Added Foundation Hub UI options for Issue pack JSON, comic script markdown, Guided Comics handoff, Fountain screenplay, prose manuscript, and lore wiki output.
+- Routed `output_format` through production-default payloads, client schemas, shared writer types, and the mirrored Supabase Edge schema.
+- Updated the Supabase `writer-tools` production-default resolver and prompt block so saved issue/series defaults still inject preferred output format when the client does not send the current draft.
+- Kept issue-pack exports consistent by ensuring the older Outline-tab issue-pack download uses the full `issuePackObject`, including production defaults.
+- Updated the formal Writers Workshop Narrative Production System tracker and `tasks.md`.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionDefaults.ts`
+- `src/portals/writer/__tests__/writerProductionDefaults.test.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database schema changes were made.
+- `output_format` is advisory production context for generation and export packaging; it does not remove the existing per-button export formats.
+- Issue-level production defaults continue to override series-level defaults through the existing resolver.
+- The Edge Function and client schemas must stay mirrored for `writerProductionDefaultsPayloadSchema`.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 4 files, 37 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with the existing 67-warning baseline and 0 errors.
+- `git diff --check` passed.
+- In-app browser QA at `http://127.0.0.1:5174/` confirmed the Writers Workshop loaded with title `ARCS Expanded`; Foundation Hub rendered the `Preferred export` select with Issue pack JSON, comic script markdown, Guided Comics handoff, Fountain screenplay, prose manuscript, and lore wiki options; Outline/Synopsis tab switching worked and returned to Foundation Hub.
+- Screenshot capture through the in-app browser timed out, so no screenshot artifact was saved for this pass.
+
+### Outstanding issues
+
+- Hierarchical structure support remains pending.
+- File upload/import and editable hierarchy controls for author outlines remain pending.
+- Preview-safe downstream pacing regeneration for page beats/dialogue remains pending.
+
+### Risks or caveats
+
+- `writer-tools` must be redeployed before production Supabase Edge calls honor `output_format` from saved notes fallback.
+- Preferred output format currently travels as prompt/export metadata; it does not automatically change which download button a user clicks.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Manually verify saving a non-default preferred export value in a signed-in browser session once Supabase auth is available.
+
+### Next steps
+
+- Continue with hierarchy support: arc -> book/issue/episode -> chapter/page/scene -> beat.
+- Add the downstream pacing-apply preview wizard for page-beat/dialogue regeneration.
+
+## Writers Workshop Narrative Production System Completion Pass - 2026-05-31
+
+### What changed
+
+- Completed the requested two-pass Writers Workshop completion slice in one integrated implementation pass, with subagent lanes used for schema/page-beat metadata, hierarchy helpers, and production branch/audit helpers before coordinator integration.
+- Added page-level metadata to stored page beats: `characters: string[]`, `locations: string[]`, and `art_style: string`, while leaving the existing `panels` payload unchanged.
+- Updated the `writer-tools` page-beat prompt so generated page beats must include source-grounded `characters`, source-grounded `locations`, and resolved production-default `art_style`; missing source-grounded names/settings must be empty arrays rather than invented values.
+- Added hierarchy import/tree support inside the existing Synopsis helper surface, using `notes.hierarchy_tree` with no database migration.
+- Added paste and file import for `.txt`, `.md`, `.markdown`, and JSON hierarchy source; imported content normalizes into `arc -> book/issue/episode -> chapter/page/scene -> beat` nodes and renders as a saved tree preview.
+- Added page-beat metadata visibility on the Beats tab for the selected page.
+- Added dynamic selected-page beat editing controls in the existing Beats JSON editor: insert, remove, merge, split, move up, and move down. These controls only rewrite the `panels` array and preserve page-level `characters`, `locations`, and `art_style` unless the JSON is edited directly.
+- Added preview-safe pacing regeneration support in the Arc tab by showing queued affected pages, their current beat/dialogue state, and explicit follow-up actions before beat/dialogue regeneration.
+- Expanded audit contracts and prompts for emotional arc, character utilization, and worldbuilding density in addition to continuity/canon review.
+- Added expanded audit entry cards and production branch cards for visual prep, dialogue, exports, and Guided Comics handoff inside existing Writers Workshop surfaces.
+- Updated `tasks.md` and the formal Narrative Production System plan to reflect the completed and remaining items.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerHierarchy.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerHierarchy.test.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration was added; hierarchy data is stored under existing issue `notes.hierarchy_tree`, and page metadata stays inside existing `writer_pages.beats_json`.
+- The app and Supabase shared schemas remain mirrored for page-beat metadata and expanded audit output validation.
+- The dynamic beat controls operate on the local JSON draft first; the user must still press `Save beats to database` to persist.
+- The selected-page regeneration path remains the existing `Generate page beats` action, now with the richer metadata contract.
+- The pacing preview now prevents silent downstream overwrites by showing affected pages and requiring explicit beat/dialogue regeneration. It does not yet produce a non-persisting LLM diff of proposed replacement text before saving.
+- Production branch cards are navigation/output-context surfaces; they group existing visual prep, dialogue, export, and Guided Comics handoff paths rather than adding a new portal.
+
+### Verification
+
+- `npm run test -- --run src/shared/writer/__tests__/schemas.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts src/shared/api/__tests__/writerTools.test.ts` passed: 6 files, 47 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- Authenticated in-app browser QA at `http://127.0.0.1:5174/` confirmed the signed-in Writers Workshop loaded as `ARCS Expanded`, selected a real issue, and showed:
+  - Synopsis helper hierarchy import, `.txt/.md/JSON` file import, and saved hierarchy tree preview.
+  - Beats tab page metadata for characters, locations, and art style.
+  - Beats JSON editor controls for insert, remove, merge, split, move up, and move down.
+  - Arc expanded audits for continuity, emotional arc, character utilization, and worldbuilding density.
+  - Video production branches for visual prep, dialogue, exports, and Guided Comics handoff.
+- Browser screenshot capture timed out, so no screenshot artifact was saved for this pass.
+
+### Outstanding issues
+
+- True proposed LLM diff preview for replacement page beats/dialogue before persistence remains a follow-up.
+- Full ribbon compaction remains future polish; this pass groups more secondary actions but does not redesign the ribbon.
+- `writer-tools` must be redeployed before production Edge calls honor the new page-beat metadata and expanded audit prompt/schema behavior.
+
+### Risks or caveats
+
+- Existing legacy page beats without metadata remain valid; the selected page metadata strip will show empty-state labels until pages are regenerated or manually edited.
+- Generated metadata is only as source-grounded as the outline/synopsis/cast/location/lore data supplied to the Edge Function.
+- The hierarchy tree currently imports/saves normalized structure and previews it; direct node-by-node editing beyond re-import/paste editing is not implemented.
+
+### Operator follow-up
+
+- Deploy `writer-tools` with `supabase functions deploy writer-tools` after merging this pass.
+- Regenerate a small set of page beats in a signed-in production-like environment and confirm saved `beats_json` includes `characters`, `locations`, and `art_style`.
+- Run one pacing review and one canon check after redeploy to confirm the expanded audit branches save in `notes.writer_tool_cache`.
+
+### Next steps
+
+- Add non-persisting preview endpoints or client staging for proposed beat/dialogue replacements before applying pacing-driven regeneration.
+- Decide whether the hierarchy tree needs direct node rename/reorder controls beyond import/paste editing.
+- Continue ribbon density polish once the production branch surfaces settle.
+
+## Writers Workshop Production Branch Hardening - 2026-05-31
+
+### What changed
+
+- Proceeded with the second pass by hardening the already-visible audit and production branch surfaces.
+- Added pure production-branch helpers that summarize expanded audit readiness for continuity, emotional arc, character utilization, and worldbuilding density.
+- Added pure branch-readiness helpers for visual prep, dialogue, exports, and Guided Comics handoff.
+- Added issue-pack markdown export formatting.
+- Added a portable `writer-guided-comics-handoff.json` export shape that packages Writers Workshop pages with page summaries, `characters`, `locations`, `art_style`, panel beats, and dialogue for Guided Comics intake.
+- Updated the Arc tab expanded audit cards so they show saved/missing state plus a readable summary rather than only a raw review cache indicator.
+- Updated the Video tab production branch cards so each branch shows readiness, focused action copy, and direct actions for Imageshop, issue-pack JSON, issue-pack Markdown, and Guided Comics handoff JSON.
+- Added the same issue-pack Markdown and Guided Comics handoff export actions to the Synopsis helper `Copy & download` panel.
+- Updated `tasks.md` and the formal Narrative Production System plan with the second-pass branch hardening status.
+
+### Files touched
+
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration or routing change was added.
+- The Guided Comics handoff is a portable export artifact, not an automatic import into Guided Comics. This preserves the existing source-of-truth boundary between Writers Workshop and Guided Comics.
+- The export helper accepts persisted `beats_json` records conservatively and only emits page-beat metadata when a `panels` array is present.
+- The Arc audit cards still run the existing `pacing_review` or `canon_check` modes; the second pass makes their expanded saved branches readable in the UI.
+
+### Verification
+
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/writer/__tests__/schemas.test.ts` passed: 2 files, 40 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- Authenticated in-app browser QA at `http://127.0.0.1:5174/` confirmed:
+  - Arc expanded audit cards render readable pacing/canon summary states.
+  - Video production branch cards render readiness badges and direct actions for `Imageshop`, `JSON`, `Markdown`, and `Handoff JSON`.
+  - Synopsis helper `Copy & download` renders `Download issue pack .md` and `Download Guided Comics handoff`.
+
+### Outstanding issues
+
+- True non-persisting LLM diff preview for replacement page beats/dialogue before persistence remains a follow-up from the prior pass.
+
+### Risks or caveats
+
+- `writer-guided-comics-handoff.json` is a structured export for downstream use. It does not yet call a Guided Comics import action directly.
+- Branch readiness is derived from current saved rows and cached outputs; stale cached audit data can still appear ready until a fresh pacing/canon run updates it.
+
+### Operator follow-up
+
+- After `writer-tools` redeploy, run fresh pacing/canon checks and confirm expanded audit summaries populate the readiness cards from live Edge output.
+- Decide whether Guided Comics should add a first-class importer for `writer-guided-comics-handoff.json`.
+
+### Next steps
+
+- Run final lint, diff check, and authenticated browser QA for the second-pass branch actions.
+
 ## How to Use These Docs
 
 | File | Use |
@@ -5949,3 +6150,124 @@ Steps taken to try to fix undo/redo (Edit ribbon, Edit menu, ⌘Z / ⌘⇧Z):
 | **walkthrough.md** | This file: big picture and roadmap for you and future agents. |
 
 Cursor does not auto-update these files; update them (or ask the agent to) as you complete work so the roadmap stays accurate.
+
+## Imageshop Production Studio Tracker - 2026-05-31
+
+### What changed
+
+- Created a durable Imageshop Production Studio implementation tracker with a seven-pass estimate and an agent-updatable checklist.
+- Captured the implementation constraints for keeping the work inside the existing Imageshop / `lab` portal, preserving current bridge contracts, avoiding Supabase schema changes for v1, and leaving ComicEditor untouched.
+- Added a verification matrix that future agents can use to record automated and manual checks as each pass lands.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- This was a documentation/tracker pass only. It did not implement the seven Imageshop production-studio passes yet.
+- The tracker marks the document creation and verification-matrix setup items complete, while leaving Passes 1-7 unchecked for future implementation.
+- The tracker explicitly preserves existing Imageshop session recovery, Guided Comic Flow handoff, vault save/export behavior, routing, Supabase schema, and ComicEditor boundaries.
+
+### Verification
+
+- `rg -n "Imageshop Production Studio Implementation Tracker|Pass 1: Production state foundation|Agent Checklist|Verification Matrix" docs/superpowers/plans/2026-05-31-imageshop-production-studio.md` confirmed the tracker title, first pass, checklist, and verification matrix landed.
+- `rg -n "Imageshop Production Studio Tracker - 2026-05-31" walkthrough.md` confirmed the walkthrough entry landed.
+- `git status --short` confirmed the new tracker file and walkthrough modification are present. It also showed existing unrelated modifications to `src/portals/writer/WriterPortal.tsx`, `src/portals/writer/writerProductionBranches.ts`, and `src/portals/writer/__tests__/writerProductionBranches.test.ts`, which were not touched by this pass.
+
+### Outstanding issues
+
+- The actual Imageshop production-studio implementation remains pending across the seven listed passes.
+
+### Risks or caveats
+
+- None for runtime behavior because no application code changed.
+
+### Operator follow-up
+
+- Future implementation agents should update the tracker after each pass and append a scoped `walkthrough.md` entry for each meaningful implementation delta.
+
+### Next steps
+
+- Begin Pass 1: production state foundation.
+
+## Imageshop Production Studio Implementation - 2026-05-31
+
+### What changed
+
+- Implemented the seven-pass Imageshop Production Studio plan inside the existing Imageshop / `lab` portal.
+- Added a local production state store for generation mode, structured prompt workspace, saved art styles, continuity settings, comic page config, saved layout templates, imported batches, production items, statuses, and generated/refined versions.
+- Added structured prompt composition with video/comic mode awareness, negative prompt, character/environment/art style/camera/continuity sections, reference metadata injection, comic page settings, continuity strength, locked continuity, and Character Bible Mode.
+- Added JSON import/export support for Story Beat JSON, Comic Page JSON, and exported ARCS Imageshop configs, including normalized batch production items, reusable export JSON, saved art style definitions, and the selected art style.
+- Closed follow-up audit gaps by adding the named `Single Comic Page` page type, injecting approved/published production item versions back into prompt composition as production references, and preserving art style libraries through ARCS export/import round trips.
+- Expanded the Imageshop UI with:
+  - Video Beats / Comic Pages mode selector.
+  - Resizable multi-section prompt workspace.
+  - Art Style Library with built-in styles and saved custom styles.
+  - Continuity Lock controls and 0-100 continuity strength.
+  - Comic page configuration, page types, panel text/SFX/page-number toggles, border designer, gutter controls, page background URL/upload, and saved custom layout templates.
+  - JSON Production Batch import/export and sequential Generate Batch action.
+  - Production Dashboard with Draft, Generated, Refined, Approved, and Published status filters/actions.
+  - Refinement Workspace with prompt edit, region edit, character/face/costume/lighting/color/dialogue correction, and surgical Continuity Correction source/target fields.
+- Preserved existing generated-result session recovery, Save / Export, Character Vault, Asset Vault, NPC Vault, Guided Comic Flow handoff, and Guided Comic panel return wiring.
+- Updated the Imageshop production tracker so Passes 1-7 and automated verification are marked complete, while signed-in manual browser checks remain explicitly unchecked because auth blocked them.
+
+### Files touched
+
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/imageshopPromptComposer.ts`
+- `src/portals/storyline/imageshopJsonSchemas.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/portals/storyline/__tests__/imageshopPromptComposer.test.ts`
+- `src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No routing, Supabase schema, or ComicEditor changes were introduced.
+- The new production store persists local Imageshop production state under `arcs-imageshop-production-v1`; existing generated-result recovery remains in `arcs-imageshop-session-v1`.
+- Video Beats mode preserves the raw-prompt path unless the user enables structured production controls. Comic Pages mode composes the structured production prompt.
+- Reference metadata injection uses current Guided Comic handoff metadata where available, while manual/reference slot URLs still participate as named Imageshop slot references.
+- Region edit and continuity correction are implemented as structured prompt workflows over the existing generation API because no true region-edit API is exposed in the current repo.
+- Sequential batch generation processes dashboard production items and records output versions under each item.
+- Page background upload uses a local object URL for the current browser session.
+
+### Verification
+
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopSessionStore.test.ts` passed: 6 files, 34 tests.
+- `npm run test` passed: 49 files, 292 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- `git diff --check` passed.
+- In-app browser opened `http://127.0.0.1:5173/` and confirmed the app title `ARCS Expanded`, but protected portal QA stopped at the Supabase sign-in gate.
+- Disposable QA sign-up was attempted through the app auth UI; the first `example.com` email was rejected as invalid, and the follow-up Gmail-style address was blocked by Supabase email rate limiting.
+- Chrome-profile QA was also attempted against `http://127.0.0.1:5173/`, but the available Chrome profile was not signed into ARCS and stopped at the same sign-in gate.
+- Because the browser sessions remained unauthenticated, signed-in manual checks for Guided Comic Flow -> Imageshop -> return-art and Save / Export were not completed in-browser. Focused bridge/component tests now cover Guided Comic Flow panel return wiring and session-result Save / Export to the NPC Vault/local archive path without regeneration.
+
+### Outstanding issues
+
+- Signed-in browser QA remains operator QA once a valid session is available, but the previously weak return/save paths now have automated component/bridge coverage.
+- True pixel/region editing is not implemented because the current repo exposes prompt/image generation, not a dedicated region-edit API.
+- Batch generation is sequential and intentionally conservative; no parallel rate-limit strategy was added.
+
+### Risks or caveats
+
+- The expanded UI is intentionally broad and functional, but it significantly increases `GenericImageLabPanel.tsx` size. Future polish should split the production controls into child components once behavior settles.
+- Local object URLs for uploaded page backgrounds are session-local and are not durable exports unless replaced with a hosted/stored URL.
+- Fake/local auth bypass was not added to app code; protected portal behavior remains intact.
+
+### Operator follow-up
+
+- Sign in with a valid Supabase user and manually verify:
+  - Guided Comic Flow -> Imageshop -> generated panel return.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download.
+  - Import JSON -> Generate Batch -> status update -> Export JSON.
+- Consider splitting Imageshop production subpanels into focused components after product behavior is accepted.
+
+### Next steps
+
+- Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.

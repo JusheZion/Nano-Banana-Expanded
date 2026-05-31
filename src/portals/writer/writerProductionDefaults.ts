@@ -7,6 +7,13 @@ export type WriterNarrativeScope =
   | 'shared_universe';
 export type WriterComicPanelDensity = 'sparse' | 'standard' | 'dense';
 export type WriterCharacterConsistency = 'standard' | 'strict';
+export type WriterOutputFormat =
+  | 'issue_pack_json'
+  | 'comic_script_markdown'
+  | 'guided_comic_handoff'
+  | 'fountain_screenplay'
+  | 'prose_manuscript'
+  | 'lore_wiki';
 
 export type WriterProductionDefaults = {
   mediumType: WriterProductionMedium;
@@ -14,6 +21,7 @@ export type WriterProductionDefaults = {
   comicPanelDensity: WriterComicPanelDensity;
   artStyle: string;
   characterConsistency: WriterCharacterConsistency;
+  outputFormat: WriterOutputFormat;
   strictCanon: boolean;
   noVideoAssumptions: boolean;
   updatedAt?: string;
@@ -25,6 +33,7 @@ export type WriterProductionDefaultsPayload = {
   comic_panel_density?: WriterComicPanelDensity;
   art_style?: string;
   character_consistency?: WriterCharacterConsistency;
+  output_format?: WriterOutputFormat;
   strict_canon?: boolean;
   no_video_assumptions?: boolean;
 };
@@ -35,6 +44,7 @@ export const EMPTY_WRITER_PRODUCTION_DEFAULTS: WriterProductionDefaults = {
   comicPanelDensity: 'standard',
   artStyle: 'consistent comic-book line art',
   characterConsistency: 'strict',
+  outputFormat: 'issue_pack_json',
   strictCanon: true,
   noVideoAssumptions: true,
 };
@@ -50,6 +60,14 @@ const SCOPES = new Set<WriterNarrativeScope>([
 ]);
 const PANEL_DENSITIES = new Set<WriterComicPanelDensity>(['sparse', 'standard', 'dense']);
 const CHARACTER_CONSISTENCY = new Set<WriterCharacterConsistency>(['standard', 'strict']);
+const OUTPUT_FORMATS = new Set<WriterOutputFormat>([
+  'issue_pack_json',
+  'comic_script_markdown',
+  'guided_comic_handoff',
+  'fountain_screenplay',
+  'prose_manuscript',
+  'lore_wiki',
+]);
 
 function readStringEnum<T extends string>(raw: unknown, allowed: Set<T>, fallback: T): T {
   return typeof raw === 'string' && allowed.has(raw as T) ? (raw as T) : fallback;
@@ -88,6 +106,11 @@ export function readProductionDefaultsFromNotes(
       CHARACTER_CONSISTENCY,
       EMPTY_WRITER_PRODUCTION_DEFAULTS.characterConsistency,
     ),
+    outputFormat: readStringEnum(
+      raw.output_format,
+      OUTPUT_FORMATS,
+      EMPTY_WRITER_PRODUCTION_DEFAULTS.outputFormat,
+    ),
     strictCanon: readBoolean(raw.strict_canon, EMPTY_WRITER_PRODUCTION_DEFAULTS.strictCanon),
     noVideoAssumptions: readBoolean(
       raw.no_video_assumptions,
@@ -106,6 +129,7 @@ export function productionDefaultsToPayload(
     comic_panel_density: defaults.comicPanelDensity,
     art_style: defaults.artStyle,
     character_consistency: defaults.characterConsistency,
+    output_format: defaults.outputFormat,
     strict_canon: defaults.strictCanon,
     no_video_assumptions: defaults.noVideoAssumptions,
   };
@@ -158,6 +182,7 @@ export function buildProductionDefaultsPromptBlock(defaults: WriterProductionDef
     panelDensity,
     `Art style: ${defaults.artStyle.trim() || EMPTY_WRITER_PRODUCTION_DEFAULTS.artStyle}`,
     `Character consistency: ${defaults.characterConsistency}`,
+    `Preferred output format: ${defaults.outputFormat}`,
     `Strict canon: ${defaults.strictCanon ? 'yes' : 'no'}`,
     `No video assumptions: ${defaults.noVideoAssumptions ? 'yes' : 'no'}`,
     defaults.noVideoAssumptions && defaults.mediumType === 'comic'

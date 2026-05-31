@@ -38,6 +38,13 @@ export type WriterProductionDefaultsPayload = {
   comic_panel_density?: 'sparse' | 'standard' | 'dense';
   art_style?: string;
   character_consistency?: 'standard' | 'strict';
+  output_format?:
+    | 'issue_pack_json'
+    | 'comic_script_markdown'
+    | 'guided_comic_handoff'
+    | 'fountain_screenplay'
+    | 'prose_manuscript'
+    | 'lore_wiki';
   strict_canon?: boolean;
   no_video_assumptions?: boolean;
 };
@@ -46,6 +53,9 @@ export type WriterProductionDefaultsPayload = {
 export type PageBeatsJson = {
   page_number_ref?: number;
   one_line_hook?: string;
+  characters?: string[];
+  locations?: string[];
+  art_style?: string;
   panels: Array<{
     index?: number;
     action: string;

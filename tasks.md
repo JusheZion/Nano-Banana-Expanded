@@ -14,8 +14,14 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [~] Add pacing recommendation apply path: Arc can stage/apply target/page-row changes and optionally regenerate the outline; downstream page-beat/dialogue regeneration still needs a preview-safe wizard.
 - [x] Add Foundation Hub medium/scope fields and persisted production defaults.
 - [x] Inject production defaults into outline, beat, dialogue, visual, and export contexts.
-- [~] Add author outline import/paste flow: paste/save is implemented; file upload/import and editable hierarchy are still pending.
-- [ ] Add hierarchical outline/beat editing and expanded audit modes.
+- [x] Add preferred output-format defaults to Foundation Hub and issue-pack exports.
+- [x] Add page-beat metadata: `characters`, `locations`, and `art_style` are accepted by client/Edge schemas and required by page-beat generation prompts.
+- [x] Add author outline import/paste flow: paste, `.txt`, `.md`, and JSON import normalize into `notes.hierarchy_tree` with a saved tree preview.
+- [x] Add dynamic beat editing controls: insert, remove, merge, split, and move selected page beats while preserving page-level metadata.
+- [x] Add expanded audit modes and production branch surfaces for continuity, emotional arc, character utilization, worldbuilding density, visual prep, dialogue, exports, and Guided Comics handoff.
+- [x] Harden production branches with readable audit summaries, readiness-aware branch cards, issue-pack markdown export, and Guided Comics handoff JSON export.
+- [~] Finish preview-safe regeneration: affected-page preview and explicit apply are implemented; true proposed LLM diff preview before save remains a follow-up.
+- [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 

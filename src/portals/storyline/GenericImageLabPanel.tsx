@@ -39,17 +39,112 @@ import {
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
 import {
+  composeImageshopPrompt,
+  createDefaultImageshopContinuitySettings,
+  createDefaultImageshopPageConfig,
+  type ImageshopBorderStyle,
+  type ImageshopGenerationMode,
+  type ImageshopPageType,
+  type ImageshopPromptSectionKey,
+} from '@/portals/storyline/imageshopPromptComposer';
+import {
+  exportImageshopProductionConfig,
+  normalizeImageshopJson,
+} from '@/portals/storyline/imageshopJsonSchemas';
+import {
   buildGuidedImageWorkshopPrompt,
   buildGuidedImageWorkshopPromptForActiveReferences,
   getGuidedImageWorkshopAspectRatio,
   getGuidedImageWorkshopPreload,
   useImageWorkshopBridge,
   type GuidedImageWorkshopHandoff,
+  type GuidedImageWorkshopReference,
 } from '@/stores/imageWorkshopBridge';
+import {
+  useImageshopProductionStore,
+  type ImageshopProductionItem,
+  type ImageshopProductionStatus,
+  type ImageshopProductionVersionKind,
+} from '@/stores/imageshopProductionStore';
 import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/imageshopSessionStore';
 
 type LabContext = 'character' | 'asset';
 type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
+type RefinementTool =
+  | 'prompt-edit'
+  | 'region-edit'
+  | 'character-correction'
+  | 'face-correction'
+  | 'costume-correction'
+  | 'lighting-adjustment'
+  | 'color-adjustment'
+  | 'dialogue-correction'
+  | 'continuity-correction';
+
+const DEFAULT_CONTINUITY = createDefaultImageshopContinuitySettings();
+const DEFAULT_PAGE_CONFIG = createDefaultImageshopPageConfig();
+
+const PROMPT_WORKSPACE_FIELDS: Array<{
+  key: Exclude<ImageshopPromptSectionKey, 'main'>;
+  label: string;
+  placeholder: string;
+}> = [
+  { key: 'negative', label: 'Negative Prompt', placeholder: 'Avoid blurry faces, extra fingers, unreadable text...' },
+  { key: 'character', label: 'Character Instructions', placeholder: 'Faces, costume details, silhouettes, expressions...' },
+  { key: 'environment', label: 'Environment Instructions', placeholder: 'Location, props, set dressing, world details...' },
+  { key: 'artStyle', label: 'Art Style Instructions', placeholder: 'Linework, rendering, palette, medium, finish...' },
+  { key: 'camera', label: 'Camera Instructions', placeholder: 'Shot size, lens, angle, panel composition...' },
+  { key: 'continuity', label: 'Continuity Instructions', placeholder: 'Rules that should stay stable across pages or shots...' },
+];
+
+const PAGE_TYPE_OPTIONS: Array<{ value: ImageshopPageType; label: string }> = [
+  { value: 'single-comic-page', label: 'Single Comic Page' },
+  { value: 'standard-comic-page', label: 'Standard Comic Page' },
+  { value: 'double-page-spread', label: 'Double Page Spread' },
+  { value: 'splash-page', label: 'Splash Page' },
+  { value: 'cover', label: 'Cover' },
+  { value: 'character-sheet', label: 'Character Sheet' },
+  { value: 'environment-sheet', label: 'Environment Sheet' },
+  { value: 'asset-sheet', label: 'Asset Sheet' },
+];
+
+const BORDER_STYLE_OPTIONS: ImageshopBorderStyle[] = ['standard', 'thin', 'thick', 'rounded', 'manga', 'frameless', 'custom'];
+
+const LAYOUT_TEMPLATE_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: '3-panel', label: '3 Panel' },
+  { value: '4-panel', label: '4 Panel' },
+  { value: '6-panel', label: '6 Panel' },
+  { value: '9-panel', label: '9 Panel' },
+  { value: 'wide-top', label: 'Wide Top' },
+  { value: 'wide-bottom', label: 'Wide Bottom' },
+  { value: 'double-wide', label: 'Double Wide' },
+  { value: 'hero-splash', label: 'Hero Splash' },
+  { value: 'manga-dynamic', label: 'Manga Dynamic' },
+  { value: 'manga-diagonal', label: 'Manga Diagonal' },
+  { value: 'custom', label: 'Custom' },
+];
+
+const PRODUCTION_STATUSES: Array<{ value: ImageshopProductionStatus | 'all'; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'generated', label: 'Generated' },
+  { value: 'refined', label: 'Refined' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'published', label: 'Published' },
+];
+
+const REFINEMENT_TOOL_OPTIONS: Array<{ value: RefinementTool; label: string }> = [
+  { value: 'prompt-edit', label: 'Prompt Edit' },
+  { value: 'region-edit', label: 'Region Edit' },
+  { value: 'character-correction', label: 'Character Correction' },
+  { value: 'face-correction', label: 'Face Correction' },
+  { value: 'costume-correction', label: 'Costume Correction' },
+  { value: 'lighting-adjustment', label: 'Lighting Adjustment' },
+  { value: 'color-adjustment', label: 'Color Adjustment' },
+  { value: 'dialogue-correction', label: 'Dialogue Correction' },
+  { value: 'continuity-correction', label: 'Continuity Correction' },
+];
 
 export function GenericImageLabPanel({
   selectedBeat,
@@ -122,7 +217,47 @@ export function GenericImageLabPanel({
   const addSessionResult = useImageshopSessionStore((s) => s.addResult);
   const selectSessionResult = useImageshopSessionStore((s) => s.selectResult);
   const removeSessionResult = useImageshopSessionStore((s) => s.removeResult);
+  const generationMode = useImageshopProductionStore((s) => s.generationMode);
+  const setGenerationMode = useImageshopProductionStore((s) => s.setGenerationMode);
+  const promptWorkspace = useImageshopProductionStore((s) => s.promptWorkspace);
+  const updatePromptSection = useImageshopProductionStore((s) => s.updatePromptSection);
+  const replacePromptWorkspace = useImageshopProductionStore((s) => s.replacePromptWorkspace);
+  const selectedArtStyleId = useImageshopProductionStore((s) => s.selectedArtStyleId);
+  const savedArtStyles = useImageshopProductionStore((s) => s.savedArtStyles);
+  const selectArtStyle = useImageshopProductionStore((s) => s.selectArtStyle);
+  const saveArtStyle = useImageshopProductionStore((s) => s.saveArtStyle);
+  const continuity = useImageshopProductionStore((s) => s.continuity);
+  const updateContinuity = useImageshopProductionStore((s) => s.updateContinuity);
+  const pageConfig = useImageshopProductionStore((s) => s.pageConfig);
+  const updatePageConfig = useImageshopProductionStore((s) => s.updatePageConfig);
+  const savedLayoutTemplates = useImageshopProductionStore((s) => s.savedLayoutTemplates);
+  const saveLayoutTemplate = useImageshopProductionStore((s) => s.saveLayoutTemplate);
+  const productionItems = useImageshopProductionStore((s) => s.productionItems);
+  const selectedProductionItemId = useImageshopProductionStore((s) => s.selectedProductionItemId);
+  const dashboardStatusFilter = useImageshopProductionStore((s) => s.dashboardStatusFilter);
+  const addProductionItem = useImageshopProductionStore((s) => s.addProductionItem);
+  const selectProductionItem = useImageshopProductionStore((s) => s.selectProductionItem);
+  const updateProductionItemStatus = useImageshopProductionStore((s) => s.updateProductionItemStatus);
+  const addProductionVersion = useImageshopProductionStore((s) => s.addProductionVersion);
+  const importBatch = useImageshopProductionStore((s) => s.importBatch);
+  const setDashboardStatusFilter = useImageshopProductionStore((s) => s.setDashboardStatusFilter);
   const saveExportPanelRef = useRef<HTMLDivElement | null>(null);
+  const [jsonImportText, setJsonImportText] = useState('');
+  const [jsonImportError, setJsonImportError] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [customStyleName, setCustomStyleName] = useState('');
+  const [customStylePrompt, setCustomStylePrompt] = useState('');
+  const [customLayoutName, setCustomLayoutName] = useState('');
+  const [refinementTool, setRefinementTool] = useState<RefinementTool>('prompt-edit');
+  const [continuitySourceImageUrl, setContinuitySourceImageUrl] = useState('');
+  const [continuityTargetImageUrl, setContinuityTargetImageUrl] = useState('');
+  const [correctionOptions, setCorrectionOptions] = useState({
+    character: true,
+    costume: true,
+    lighting: false,
+    artStyle: true,
+    environment: false,
+  });
 
   const activeSessionResult = useMemo(
     () =>
@@ -136,12 +271,13 @@ export function GenericImageLabPanel({
     const next = seedPrompt?.trim();
     if (!next) return;
     setPromptRaw(next);
+    updatePromptSection('main', next);
     setGuidedPromptTracksReferences(false);
     setUseRefinedPrompt(false);
     setError(null);
     setNotice('Visual Prep seeded Image Lab with the selected prompt.');
     onSeedPromptConsumed?.();
-  }, [seedPrompt, onSeedPromptConsumed]);
+  }, [seedPrompt, onSeedPromptConsumed, updatePromptSection]);
 
   const loadProfileOptions = useCallback(() => {
     if (!supabaseReady) return;
@@ -194,21 +330,120 @@ export function GenericImageLabPanel({
     [refs]
   );
 
+  const activeReferenceMetadata = useMemo((): GuidedImageWorkshopReference[] => {
+    const activeUrls = new Set(stableRefs.map((url) => url.trim()).filter(Boolean));
+
+    const guidedReferences = guidedHandoffContext
+      ? getGuidedImageWorkshopPreload(guidedHandoffContext).allReferences.filter((reference) =>
+          activeUrls.has(reference.imageUrl.trim()),
+        )
+      : [];
+
+    const knownUrls = new Set(guidedReferences.map((reference) => reference.imageUrl.trim()));
+    const manualReferences = stableRefs
+      .map((url, index): GuidedImageWorkshopReference | null => {
+        const trimmed = url.trim();
+        if (!trimmed || knownUrls.has(trimmed)) return null;
+        return {
+          name: `reference-${index + 1}`,
+          displayName: `Reference ${index + 1}`,
+          imageUrl: trimmed,
+          sourceType: context === 'character' ? 'character' : 'asset',
+          sourceLabel: 'Imageshop slot',
+        };
+      })
+      .filter((reference): reference is GuidedImageWorkshopReference => Boolean(reference));
+
+    const approvedProductionReferences = productionItems
+      .filter((item) => item.status === 'approved' || item.status === 'published')
+      .map((item): GuidedImageWorkshopReference | null => {
+        const imageUrl = item.versions[0]?.imageUrl?.trim();
+        if (!imageUrl || activeUrls.has(imageUrl)) return null;
+        return {
+          name: item.id,
+          displayName: item.label,
+          imageUrl,
+          sourceType: 'asset',
+          sourceLabel: item.status === 'published' ? 'Published production reference' : 'Approved production reference',
+          imageLabel: item.sourceKind,
+        };
+      })
+      .filter((reference): reference is GuidedImageWorkshopReference => Boolean(reference));
+
+    return [...guidedReferences, ...manualReferences, ...approvedProductionReferences];
+  }, [context, guidedHandoffContext, productionItems, stableRefs]);
+
+  const guidedPanelContextLabel =
+    guidedHandoffContext?.pageNumber != null && guidedHandoffContext.panelNumber != null
+      ? `Page ${guidedHandoffContext.pageNumber}, Panel ${guidedHandoffContext.panelNumber}`
+      : guidedHandoffContext?.pageNumber != null
+        ? `Page ${guidedHandoffContext.pageNumber}`
+        : guidedHandoffContext?.panelNumber != null
+          ? `Panel ${guidedHandoffContext.panelNumber}`
+          : null;
+
+  const selectedArtStyle = useMemo(
+    () => savedArtStyles.find((style) => style.id === selectedArtStyleId) ?? null,
+    [savedArtStyles, selectedArtStyleId],
+  );
+
+  const layoutTemplateOptions = useMemo(
+    () => [
+      ...LAYOUT_TEMPLATE_OPTIONS,
+      ...savedLayoutTemplates.map((template) => ({
+        value: template.id,
+        label: template.name,
+      })),
+    ],
+    [savedLayoutTemplates],
+  );
+
+  const structuredWorkspace = useMemo(
+    () => ({
+      ...promptWorkspace,
+      main: (useRefinedPrompt && promptRefined.trim() ? promptRefined : promptRaw).trim() || promptWorkspace.main,
+    }),
+    [promptRaw, promptRefined, promptWorkspace, useRefinedPrompt],
+  );
+
+  const hasProductionPromptControls = useMemo(() => {
+    const hasExtraPromptSections = PROMPT_WORKSPACE_FIELDS.some(({ key }) => Boolean(promptWorkspace[key].trim()));
+    const continuityChanged = JSON.stringify(continuity) !== JSON.stringify(DEFAULT_CONTINUITY);
+    const pageConfigChanged = JSON.stringify(pageConfig) !== JSON.stringify(DEFAULT_PAGE_CONFIG);
+    return generationMode === 'comic-pages' || hasExtraPromptSections || Boolean(selectedArtStyle) || continuityChanged || pageConfigChanged;
+  }, [continuity, generationMode, pageConfig, promptWorkspace, selectedArtStyle]);
+
+  const composedProductionPrompt = useMemo(
+    () =>
+      composeImageshopPrompt({
+        mode: generationMode,
+        workspace: structuredWorkspace,
+        artStyle: selectedArtStyle,
+        continuity,
+        references: activeReferenceMetadata,
+        pageConfig,
+      }),
+    [activeReferenceMetadata, continuity, generationMode, pageConfig, selectedArtStyle, structuredWorkspace],
+  );
+
   /** Prefer refined text when enabled and present; otherwise use raw (avoids empty refined + default toggle blocking generation). */
   const effectivePrompt = useMemo(() => {
     const raw = promptRaw.trim();
     const refined = promptRefined.trim();
-    if (useRefinedPrompt && refined) return refined;
-    if (raw) return raw;
-    return refined;
-  }, [promptRaw, promptRefined, useRefinedPrompt]);
+    const basePrompt = useRefinedPrompt && refined ? refined : raw || refined || promptWorkspace.main.trim();
+    if (!basePrompt) return '';
+    if (hasProductionPromptControls) return composedProductionPrompt;
+    return basePrompt;
+  }, [composedProductionPrompt, hasProductionPromptControls, promptRaw, promptRefined, promptWorkspace.main, useRefinedPrompt]);
 
   useEffect(() => {
     if (!guidedPromptTracksReferences || !guidedHandoffContext) return;
-    setPromptRaw(buildGuidedImageWorkshopPromptForActiveReferences(guidedHandoffContext, stableRefs));
+    const nextPrompt = buildGuidedImageWorkshopPromptForActiveReferences(guidedHandoffContext, stableRefs);
+    setPromptRaw(nextPrompt);
+    updatePromptSection('main', nextPrompt);
     setPromptRefined('');
     setUseRefinedPrompt(false);
-  }, [guidedHandoffContext, guidedPromptTracksReferences, stableRefs]);
+  }, [guidedHandoffContext, guidedPromptTracksReferences, stableRefs, updatePromptSection]);
 
   const generatedSaveProcessing = useMemo((): Record<string, unknown> => {
     const guidedTarget =
@@ -238,6 +473,7 @@ export function GenericImageLabPanel({
       setContext(result.context);
       if (result.prompt.trim()) {
         setPromptRaw(result.prompt);
+        updatePromptSection('main', result.prompt);
         setGuidedPromptTracksReferences(false);
         setUseRefinedPrompt(false);
       }
@@ -246,7 +482,7 @@ export function GenericImageLabPanel({
       selectSessionResult(result.id);
       setNotice('Restored an Imageshop result from this session.');
     },
-    [selectSessionResult],
+    [selectSessionResult, updatePromptSection],
   );
 
   useEffect(() => {
@@ -278,11 +514,14 @@ export function GenericImageLabPanel({
       if (preload.slotUrls.length > 0) {
         applyRefs(preload.slotUrls, preload.context);
       }
-      setPromptRaw(buildGuidedImageWorkshopPrompt(handoff));
+      const nextPrompt = buildGuidedImageWorkshopPrompt(handoff);
+      setPromptRaw(nextPrompt);
+      updatePromptSection('main', nextPrompt);
       setPromptRefined('');
       setUseRefinedPrompt(false);
       setGuidedPromptTracksReferences(true);
       setAspectRatio(getGuidedImageWorkshopAspectRatio(handoff));
+      setGenerationMode('comic-pages');
       setError(null);
       setNotice(
         `Loaded panel from Guided Comic Flow: Page ${handoff.pageNumber ?? '?'}, Panel ${handoff.panelNumber ?? '?'} with ${preload.allReferences.length} reference${preload.allReferences.length === 1 ? '' : 's'}${preloadSuffix}.`,
@@ -296,7 +535,7 @@ export function GenericImageLabPanel({
     setNotice(
       `Loaded ${preload.allReferences.length} reference${preload.allReferences.length === 1 ? '' : 's'} from Guided Comic Flow${preloadSuffix}.`,
     );
-  }, [applyRefs, consumeGuidedComicHandoff]);
+  }, [applyRefs, consumeGuidedComicHandoff, setGenerationMode, updatePromptSection]);
 
   const sendBackToGuidedComicFlow = useCallback(() => {
     if (!guidedPanelTarget || !lastImageUrl || !guidedPanelTarget.pageNumber || !guidedPanelTarget.panelNumber) return;
@@ -428,6 +667,50 @@ export function GenericImageLabPanel({
     }
   }, []);
 
+  const ensureProductionItemForPrompt = useCallback(
+    (prompt: string): ImageshopProductionItem => {
+      const selectedItem = productionItems.find((item) => item.id === selectedProductionItemId);
+      if (selectedItem) return selectedItem;
+
+      return addProductionItem({
+        label: guidedPanelContextLabel ? `Imageshop ${guidedPanelContextLabel}` : `Imageshop item ${productionItems.length + 1}`,
+        sourceKind: guidedPanelTarget?.currentStep === 'art' ? 'comic-page' : 'manual',
+        sourceId: guidedPanelTarget?.panelId,
+        prompt,
+        promptSections: structuredWorkspace,
+        pageConfig: generationMode === 'comic-pages' ? pageConfig : undefined,
+      });
+    },
+    [
+      addProductionItem,
+      generationMode,
+      guidedPanelContextLabel,
+      guidedPanelTarget,
+      pageConfig,
+      productionItems,
+      selectedProductionItemId,
+      structuredWorkspace,
+    ],
+  );
+
+  const recordProductionVersion = useCallback(
+    (args: {
+      item: ImageshopProductionItem;
+      imageUrl: string;
+      seed: number | null;
+      prompt: string;
+      kind: ImageshopProductionVersionKind;
+    }) => {
+      addProductionVersion(args.item.id, {
+        imageUrl: args.imageUrl,
+        seed: args.seed,
+        prompt: args.prompt,
+        kind: args.kind,
+      });
+    },
+    [addProductionVersion],
+  );
+
   const refinePrompt = useCallback(async () => {
     const raw = promptRaw.trim();
     if (!raw) return;
@@ -495,6 +778,14 @@ export function GenericImageLabPanel({
         modelId,
         sourceLabel: guidedPanelTarget?.sourceLabel,
       });
+      const item = ensureProductionItemForPrompt(basePrompt);
+      recordProductionVersion({
+        item,
+        imageUrl: stored.imageUrl,
+        seed: stored.seed,
+        prompt: basePrompt,
+        kind: refinementTool === 'continuity-correction' ? 'continuity-correction' : item.versions.length > 0 ? 'refined' : 'generated',
+      });
       setLastImageUrl(stored.imageUrl);
       setLastSeed(stored.seed);
       setGeneratedSaveError(null);
@@ -502,7 +793,18 @@ export function GenericImageLabPanel({
     } finally {
       setGenBusy(false);
     }
-  }, [addSessionResult, aspectRatio, context, effectivePrompt, guidedPanelTarget?.sourceLabel, modelId, stableRefs]);
+  }, [
+    addSessionResult,
+    aspectRatio,
+    context,
+    effectivePrompt,
+    ensureProductionItemForPrompt,
+    guidedPanelTarget?.sourceLabel,
+    modelId,
+    recordProductionVersion,
+    refinementTool,
+    stableRefs,
+  ]);
 
   const handleSaveGeneratedToVault = useCallback(async () => {
     if (!lastImageUrl) {
@@ -647,19 +949,277 @@ export function GenericImageLabPanel({
     a.remove();
   }, []);
 
+  const downloadTextFile = useCallback((text: string, fileName: string, mime = 'application/json') => {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.rel = 'noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleImportJson = useCallback(
+    (text: string) => {
+      setJsonImportError(null);
+      try {
+        const parsed = JSON.parse(text);
+        const batch = normalizeImageshopJson(parsed);
+        importBatch(batch);
+        setJsonImportText('');
+        setGenerationMode(batch.kind === 'story-beat-json' ? 'video-beats' : 'comic-pages');
+        setNotice(`Imported ${batch.items.length} production item${batch.items.length === 1 ? '' : 's'} from ${batch.title}.`);
+      } catch (err) {
+        setJsonImportError(err instanceof Error ? err.message : 'Could not import JSON.');
+      }
+    },
+    [importBatch, setGenerationMode],
+  );
+
+  const handleJsonFile = useCallback(
+    async (files: FileList | null) => {
+      const file = files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      setJsonImportText(text);
+      handleImportJson(text);
+    },
+    [handleImportJson],
+  );
+
+  const handlePageBackgroundFile = useCallback(
+    (files: FileList | null) => {
+      const file = files?.[0];
+      if (!file || !file.type.startsWith('image/')) return;
+      updatePageConfig({
+        panelStyle: {
+          pageBackgroundUrl: URL.createObjectURL(file),
+        },
+      });
+    },
+    [updatePageConfig],
+  );
+
+  const exportProductionJson = useCallback(() => {
+    const payload = exportImageshopProductionConfig({
+      title: 'Imageshop production config',
+      mode: generationMode,
+      pageConfig,
+      artStyles: savedArtStyles,
+      selectedArtStyleId,
+      items:
+        productionItems.length > 0
+          ? productionItems.map((item) => ({
+              id: item.id,
+              label: item.label,
+              prompt: item.prompt,
+              promptSections: item.promptSections,
+              pageConfig: item.pageConfig ?? pageConfig,
+            }))
+          : [
+              {
+                id: 'current-imageshop-prompt',
+                label: 'Current Imageshop Prompt',
+                prompt: effectivePrompt,
+                promptSections: structuredWorkspace,
+                pageConfig,
+              },
+            ],
+    });
+    downloadTextFile(payload, 'imageshop-production-config.json');
+    setGeneratedSaveNotice('Exported Imageshop production JSON.');
+  }, [
+    downloadTextFile,
+    effectivePrompt,
+    generationMode,
+    pageConfig,
+    productionItems,
+    savedArtStyles,
+    selectedArtStyleId,
+    structuredWorkspace,
+  ]);
+
+  const generateBatch = useCallback(async () => {
+    const queue = productionItems.filter((item) => item.status === 'draft' || item.status === 'refined');
+    if (queue.length === 0) {
+      setNotice('No draft or refined production items are queued for batch generation.');
+      return;
+    }
+
+    setBatchBusy(true);
+    setError(null);
+    try {
+      for (const item of queue) {
+        const itemPrompt = composeImageshopPrompt({
+          mode: generationMode,
+          workspace: {
+            ...promptWorkspace,
+            ...item.promptSections,
+            main: item.promptSections.main?.trim() || item.prompt,
+          },
+          artStyle: selectedArtStyle,
+          continuity,
+          references: activeReferenceMetadata,
+          pageConfig: item.pageConfig ?? pageConfig,
+        });
+        const seed = pickGenerationSeed('randomized', null);
+        const res = await generateImage({
+          prompt: itemPrompt,
+          referenceImageUrls: stableRefs,
+          seed,
+          aspectRatio,
+          modelId,
+          context,
+        });
+        if (!res.ok) {
+          updateProductionItemStatus(item.id, 'draft');
+          setError('A batch item failed to generate; remaining items were left queued.');
+          break;
+        }
+        const stored = addSessionResult({
+          imageUrl: res.imageDataUrl,
+          seed,
+          prompt: itemPrompt,
+          aspectRatio,
+          context,
+          modelId,
+          sourceLabel: item.label,
+        });
+        recordProductionVersion({
+          item,
+          imageUrl: stored.imageUrl,
+          seed: stored.seed,
+          prompt: itemPrompt,
+          kind: item.versions.length > 0 ? 'refined' : 'generated',
+        });
+        setLastImageUrl(stored.imageUrl);
+        setLastSeed(stored.seed);
+      }
+    } finally {
+      setBatchBusy(false);
+    }
+  }, [
+    activeReferenceMetadata,
+    addSessionResult,
+    aspectRatio,
+    context,
+    continuity,
+    generationMode,
+    modelId,
+    pageConfig,
+    productionItems,
+    promptWorkspace,
+    recordProductionVersion,
+    selectedArtStyle,
+    stableRefs,
+    updateProductionItemStatus,
+  ]);
+
+  const selectedProductionItem = useMemo(
+    () => productionItems.find((item) => item.id === selectedProductionItemId) ?? productionItems[0] ?? null,
+    [productionItems, selectedProductionItemId],
+  );
+
+  const visibleProductionItems = useMemo(
+    () =>
+      dashboardStatusFilter === 'all'
+        ? productionItems
+        : productionItems.filter((item) => item.status === dashboardStatusFilter),
+    [dashboardStatusFilter, productionItems],
+  );
+
+  const stageProductionItem = useCallback(
+    (item: ImageshopProductionItem) => {
+      selectProductionItem(item.id);
+      setPromptRaw(item.prompt);
+      replacePromptWorkspace({
+        ...item.promptSections,
+        main: item.promptSections.main ?? item.prompt,
+      });
+      if (item.pageConfig) updatePageConfig(item.pageConfig);
+      setNotice(`Loaded ${item.label} into the prompt workspace.`);
+    },
+    [replacePromptWorkspace, selectProductionItem, updatePageConfig],
+  );
+
+  const stageRefinementPrompt = useCallback(() => {
+    const target = selectedProductionItem;
+    const base = target?.prompt || effectivePrompt;
+    const correctionList = [
+      correctionOptions.character ? 'match character identity' : '',
+      correctionOptions.costume ? 'match costume' : '',
+      correctionOptions.lighting ? 'match lighting' : '',
+      correctionOptions.artStyle ? 'match art style' : '',
+      correctionOptions.environment ? 'match environment' : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const instruction =
+      refinementTool === 'continuity-correction'
+        ? [
+            'Continuity correction only. Do not redraw the whole image.',
+            continuitySourceImageUrl.trim() ? `Approved source image: ${continuitySourceImageUrl.trim()}` : '',
+            continuityTargetImageUrl.trim() ? `Target image: ${continuityTargetImageUrl.trim()}` : '',
+            `Apply only these surgical fixes: ${correctionList || 'match selected references'}.`,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : `${REFINEMENT_TOOL_OPTIONS.find((tool) => tool.value === refinementTool)?.label ?? 'Refinement'}: refine the current generated image while preserving composition and production continuity.`;
+
+    const nextPrompt = [base, instruction].filter(Boolean).join('\n\n');
+    setPromptRaw(nextPrompt);
+    replacePromptWorkspace({
+      main: nextPrompt,
+      continuity: instruction,
+    });
+    if (target) {
+      selectProductionItem(target.id);
+      updateProductionItemStatus(target.id, target.status === 'draft' ? 'generated' : target.status);
+    }
+    setNotice('Staged a refinement prompt for the selected production item.');
+  }, [
+    correctionOptions,
+    effectivePrompt,
+    continuitySourceImageUrl,
+    continuityTargetImageUrl,
+    refinementTool,
+    replacePromptWorkspace,
+    selectProductionItem,
+    selectedProductionItem,
+    updateProductionItemStatus,
+  ]);
+
+  const saveCustomArtStyle = useCallback(() => {
+    const name = customStyleName.trim();
+    const prompt = customStylePrompt.trim();
+    if (!name || !prompt) {
+      setNotice('Enter a style name and style prompt before saving.');
+      return;
+    }
+    saveArtStyle({
+      name,
+      description: 'Custom Imageshop art style.',
+      prompt,
+    });
+    setCustomStyleName('');
+    setCustomStylePrompt('');
+    setNotice(`Saved art style "${name}".`);
+  }, [customStyleName, customStylePrompt, saveArtStyle]);
+
+  const saveCurrentLayoutTemplate = useCallback(() => {
+    const template = saveLayoutTemplate(customLayoutName.trim() || `Custom layout ${savedLayoutTemplates.length + 1}`);
+    setCustomLayoutName('');
+    setNotice(`Saved layout template "${template.name}".`);
+  }, [customLayoutName, saveLayoutTemplate, savedLayoutTemplates.length]);
+
   const canUseSelectedBeat = Boolean(selectedBeat && lastImageUrl);
   const labPreviewAspectCss = studioPreviewAspectCss(aspectRatio as StudioPreviewAspectId);
   const labPreviewMaxH = studioPreviewMaxHeightCss(aspectRatio as StudioPreviewAspectId);
   const isCinematic = aspectRatio === '21:9';
   const previewMaxH = isCinematic ? 'min(56vh, 520px)' : labPreviewMaxH;
-  const guidedPanelContextLabel =
-    guidedHandoffContext?.pageNumber != null && guidedHandoffContext.panelNumber != null
-      ? `Page ${guidedHandoffContext.pageNumber}, Panel ${guidedHandoffContext.panelNumber}`
-      : guidedHandoffContext?.pageNumber != null
-        ? `Page ${guidedHandoffContext.pageNumber}`
-        : guidedHandoffContext?.panelNumber != null
-          ? `Panel ${guidedHandoffContext.panelNumber}`
-          : null;
   const canSendBackToGuidedFlow = Boolean(
     guidedPanelTarget?.currentStep === 'art' &&
       guidedPanelTarget.pageNumber != null &&
@@ -720,6 +1280,33 @@ export function GenericImageLabPanel({
 
       <div className="p-3">
       <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Image Lab</h3>
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Generation Mode</p>
+            <p className="mt-1 text-[11px] text-white/50">
+              Video Beats preserves the current workflow. Comic Pages unlocks page, panel, continuity, and batch controls.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(['video-beats', 'comic-pages'] as ImageshopGenerationMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setGenerationMode(mode)}
+                className={`px-3 py-2 rounded-lg text-xs border ${
+                  generationMode === mode
+                    ? 'border-amber-300 bg-amber-400/20 text-amber-100'
+                    : 'border-white/15 bg-white/5 text-white/70 hover:bg-white/10'
+                }`}
+              >
+                {mode === 'video-beats' ? 'Video Beats' : 'Comic Pages'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <ImageshopImportPanel />
 
@@ -830,9 +1417,31 @@ export function GenericImageLabPanel({
           onChange={(e) => {
             setGuidedPromptTracksReferences(false);
             setPromptRaw(e.target.value);
+            updatePromptSection('main', e.target.value);
           }}
           placeholder="Describe the image you want..."
         />
+
+        <div className="mt-2 grid grid-cols-1 gap-2">
+          {PROMPT_WORKSPACE_FIELDS.map((field) => (
+            <label key={field.key} className="block">
+              <span className="text-[10px] text-white/45 uppercase">{field.label}</span>
+              <textarea
+                className="mt-0.5 w-full min-h-[54px] resize-y rounded-lg bg-black/25 border border-white/10 p-2 text-[11px] font-mono"
+                value={promptWorkspace[field.key]}
+                onChange={(e) => updatePromptSection(field.key, e.target.value)}
+                placeholder={field.placeholder}
+              />
+            </label>
+          ))}
+        </div>
+
+        {hasProductionPromptControls ? (
+          <div className="mt-2 rounded-lg border border-fuchsia-400/20 bg-fuchsia-950/10 p-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-fuchsia-100/70">Composed generation prompt</p>
+            <p className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap text-[10px] text-white/60">{composedProductionPrompt}</p>
+          </div>
+        ) : null}
 
         <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
@@ -885,6 +1494,238 @@ export function GenericImageLabPanel({
         ) : null}
       </div>
 
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Art Style Library</p>
+            <p className="mt-1 text-[11px] text-white/45">Styles stay separate from the main prompt and export with production configs.</p>
+          </div>
+          <select
+            className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+            value={selectedArtStyleId ?? ''}
+            onChange={(e) => selectArtStyle(e.target.value || null)}
+          >
+            <option value="">No saved style</option>
+            {savedArtStyles.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedArtStyle ? (
+          <p className="mt-2 rounded-lg border border-white/10 bg-black/25 p-2 text-[11px] text-white/60">
+            {selectedArtStyle.prompt}
+          </p>
+        ) : null}
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_auto]">
+          <input
+            type="text"
+            className="rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+            value={customStyleName}
+            onChange={(e) => setCustomStyleName(e.target.value)}
+            placeholder="Style name"
+          />
+          <input
+            type="text"
+            className="rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+            value={customStylePrompt}
+            onChange={(e) => setCustomStylePrompt(e.target.value)}
+            placeholder="Style definition"
+          />
+          <button
+            type="button"
+            className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10"
+            onClick={saveCustomArtStyle}
+          >
+            Save style
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Continuity Lock</p>
+            <p className="mt-1 text-[11px] text-white/45">References can act as source-of-truth guardrails for faces, costumes, props, and settings.</p>
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-white/70">
+            <input
+              type="checkbox"
+              checked={continuity.characterBibleMode}
+              onChange={(e) => updateContinuity({ characterBibleMode: e.target.checked })}
+            />
+            Character Bible Mode
+          </label>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {([
+            ['lockFaces', 'Faces'],
+            ['lockHairstyles', 'Hairstyles'],
+            ['lockCostumes', 'Costumes'],
+            ['lockProps', 'Props'],
+            ['lockEnvironment', 'Environment'],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] text-white/70">
+              <input
+                type="checkbox"
+                checked={continuity[key]}
+                onChange={(e) => updateContinuity({ [key]: e.target.checked })}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <label className="mt-3 block">
+          <span className="flex items-center justify-between text-[10px] uppercase text-white/45">
+            <span>Continuity Strength</span>
+            <span>{continuity.strength}/100</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={continuity.strength}
+            onChange={(e) => updateContinuity({ strength: Number(e.target.value) })}
+            className="mt-1 w-full"
+          />
+        </label>
+      </div>
+
+      {generationMode === 'comic-pages' ? (
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Comic Page Configuration</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-[10px] uppercase text-white/45">Page Type</span>
+              <select
+                className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+                value={pageConfig.pageType}
+                onChange={(e) => updatePageConfig({ pageType: e.target.value as ImageshopPageType })}
+              >
+                {PAGE_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase text-white/45">Layout Template</span>
+              <select
+                className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+                value={pageConfig.layoutTemplateId}
+                onChange={(e) => updatePageConfig({ layoutTemplateId: e.target.value })}
+              >
+                {layoutTemplateOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input
+              type="text"
+              className="rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+              value={customLayoutName}
+              onChange={(e) => setCustomLayoutName(e.target.value)}
+              placeholder="Custom layout template name"
+            />
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              onClick={saveCurrentLayoutTemplate}
+            >
+              Save layout template
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {([
+              ['includePanelNumbers', 'Panel Numbers'],
+              ['includeDialogue', 'Dialogue'],
+              ['includeCaptions', 'Captions'],
+              ['includeSfx', 'SFX'],
+              ['includePageNumbers', 'Page Numbers'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] text-white/70">
+                <input
+                  type="checkbox"
+                  checked={pageConfig[key]}
+                  onChange={(e) => updatePageConfig({ [key]: e.target.checked })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label>
+              <span className="text-[10px] uppercase text-white/45">Border Style</span>
+              <select
+                className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+                value={pageConfig.panelStyle.borderStyle}
+                onChange={(e) => updatePageConfig({ panelStyle: { borderStyle: e.target.value as ImageshopBorderStyle } })}
+              >
+                {BORDER_STYLE_OPTIONS.map((style) => (
+                  <option key={style} value={style}>
+                    {style}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="text-[10px] uppercase text-white/45">Gutter Width</span>
+              <input
+                type="range"
+                min={0}
+                max={48}
+                value={pageConfig.panelStyle.gutterWidth}
+                onChange={(e) => updatePageConfig({ panelStyle: { gutterWidth: Number(e.target.value) } })}
+                className="mt-2 w-full"
+              />
+            </label>
+            <label>
+              <span className="text-[10px] uppercase text-white/45">Border Color</span>
+              <input
+                type="color"
+                value={pageConfig.panelStyle.borderColor}
+                onChange={(e) => updatePageConfig({ panelStyle: { borderColor: e.target.value } })}
+                className="mt-0.5 h-9 w-full rounded-lg border border-white/15 bg-black/30"
+              />
+            </label>
+            <label>
+              <span className="text-[10px] uppercase text-white/45">Gutter Color</span>
+              <input
+                type="color"
+                value={pageConfig.panelStyle.gutterColor}
+                onChange={(e) => updatePageConfig({ panelStyle: { gutterColor: e.target.value } })}
+                className="mt-0.5 h-9 w-full rounded-lg border border-white/15 bg-black/30"
+              />
+            </label>
+          </div>
+          <label className="mt-2 block">
+            <span className="text-[10px] uppercase text-white/45">Page Background Image URL</span>
+            <input
+              type="text"
+              className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+              value={pageConfig.panelStyle.pageBackgroundUrl}
+              onChange={(e) => updatePageConfig({ panelStyle: { pageBackgroundUrl: e.target.value } })}
+              placeholder="Optional image URL behind the panel layout"
+            />
+          </label>
+          <label className="mt-2 inline-flex cursor-pointer rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10">
+            Upload page background
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handlePageBackgroundFile(e.target.files)}
+            />
+          </label>
+        </div>
+      ) : null}
+
       <div className="mt-3">
         <label className="block text-[10px] text-white/45 uppercase mb-1">Aspect ratio</label>
         <div className="flex flex-wrap gap-2">
@@ -905,6 +1746,58 @@ export function GenericImageLabPanel({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">JSON Production Batch</p>
+            <p className="mt-1 text-[11px] text-white/45">Import Story Beat, Comic Page, or ARCS Page JSON. Imported items land in the dashboard before generation.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <label className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 cursor-pointer">
+              Import JSON
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => void handleJsonFile(e.target.files)}
+              />
+            </label>
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              onClick={exportProductionJson}
+            >
+              Export JSON
+            </button>
+          </div>
+        </div>
+        <textarea
+          className="mt-2 w-full min-h-[72px] resize-y rounded-lg border border-white/10 bg-black/25 p-2 text-[11px] font-mono"
+          value={jsonImportText}
+          onChange={(e) => setJsonImportText(e.target.value)}
+          placeholder='Paste JSON here, then click "Import pasted JSON".'
+        />
+        <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+          <button
+            type="button"
+            className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:opacity-40"
+            disabled={!jsonImportText.trim()}
+            onClick={() => handleImportJson(jsonImportText)}
+          >
+            Import pasted JSON
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-amber-500/35 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-100 hover:bg-amber-400/20 disabled:opacity-40"
+            disabled={batchBusy || productionItems.length === 0}
+            onClick={() => void generateBatch()}
+          >
+            {batchBusy ? 'Generating batch...' : 'Generate Batch'}
+          </button>
+        </div>
+        {jsonImportError ? <p className="mt-2 text-[11px] text-red-200/90">{jsonImportError}</p> : null}
       </div>
 
       {error ? <p className="mt-2 text-xs text-red-200/90">{error}</p> : null}
@@ -1105,8 +1998,11 @@ export function GenericImageLabPanel({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/45 uppercase">Cast name (optional)</label>
+                    <label htmlFor="imageshop-generated-cast" className="text-[10px] text-white/45 uppercase">
+                      Cast name (optional)
+                    </label>
                     <input
+                      id="imageshop-generated-cast"
                       type="text"
                       className="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
                       value={generatedCastName}
@@ -1141,8 +2037,11 @@ export function GenericImageLabPanel({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/45 uppercase">Asset name (optional)</label>
+                    <label htmlFor="imageshop-generated-asset" className="text-[10px] text-white/45 uppercase">
+                      Asset name (optional)
+                    </label>
                     <input
+                      id="imageshop-generated-asset"
                       type="text"
                       className="mt-0.5 w-full rounded-lg bg-black/30 border border-white/15 px-2 py-1.5 text-xs"
                       value={generatedAssetName}
@@ -1213,6 +2112,147 @@ export function GenericImageLabPanel({
             </p>
           </div>
         )}
+
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Production Dashboard</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                Track images/pages from draft through generated, refined, approved, and published states.
+              </p>
+            </div>
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+              value={dashboardStatusFilter}
+              onChange={(e) => setDashboardStatusFilter(e.target.value as ImageshopProductionStatus | 'all')}
+            >
+              {PRODUCTION_STATUSES.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {visibleProductionItems.length > 0 ? (
+            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+              {visibleProductionItems.map((item) => {
+                const active = item.id === selectedProductionItem?.id;
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-lg border p-2 ${
+                      active ? 'border-amber-300/60 bg-amber-400/10' : 'border-white/10 bg-black/20'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="block w-full text-left"
+                      onClick={() => stageProductionItem(item)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs font-semibold text-white/85">{item.label}</p>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] uppercase text-white/45">
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[10px] text-white/45">{item.prompt}</p>
+                      <p className="mt-1 text-[9px] text-white/35">{item.versions.length} version{item.versions.length === 1 ? '' : 's'}</p>
+                    </button>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(['draft', 'generated', 'refined', 'approved', 'published'] as ImageshopProductionStatus[]).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          className={`rounded-md border px-1.5 py-1 text-[9px] uppercase ${
+                            item.status === status
+                              ? 'border-amber-300/55 bg-amber-400/20 text-amber-100'
+                              : 'border-white/10 text-white/45 hover:bg-white/10'
+                          }`}
+                          onClick={() => updateProductionItemStatus(item.id, status)}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed border-white/10 bg-black/15 p-3 text-center text-[11px] text-white/38">
+              No production items yet. Generate an image or import JSON to start the dashboard.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Refinement Workspace</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                Stage prompt-based refinements and continuity corrections for the selected production item.
+              </p>
+            </div>
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs"
+              value={refinementTool}
+              onChange={(e) => setRefinementTool(e.target.value as RefinementTool)}
+            >
+              {REFINEMENT_TOOL_OPTIONS.map((tool) => (
+                <option key={tool.value} value={tool.value}>
+                  {tool.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {refinementTool === 'continuity-correction' ? (
+            <div className="mt-3 space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  type="text"
+                  className="rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+                  value={continuitySourceImageUrl}
+                  onChange={(e) => setContinuitySourceImageUrl(e.target.value)}
+                  placeholder="Approved source image URL"
+                />
+                <input
+                  type="text"
+                  className="rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
+                  value={continuityTargetImageUrl}
+                  onChange={(e) => setContinuityTargetImageUrl(e.target.value)}
+                  placeholder="Target image URL"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['character', 'Match Character'],
+                  ['costume', 'Match Costume'],
+                  ['lighting', 'Match Lighting'],
+                  ['artStyle', 'Match Art Style'],
+                  ['environment', 'Match Environment'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] text-white/70">
+                    <input
+                      type="checkbox"
+                      checked={correctionOptions[key]}
+                      onChange={(e) => setCorrectionOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:opacity-40"
+            disabled={!selectedProductionItem && !effectivePrompt}
+            onClick={stageRefinementPrompt}
+          >
+            Stage refinement prompt
+          </button>
+        </div>
       </div>
       </div>
       </div>
