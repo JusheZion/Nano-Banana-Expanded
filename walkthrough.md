@@ -6271,3 +6271,36 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 
 - Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.
+
+## Imageshop PR bugfixes - 2026-05-31
+
+### What changed
+- Fixed refinement prompt staging so selecting/staging a production item no longer advances a draft item to `generated` before image generation actually succeeds.
+- Fixed uploaded page-background replacements so the previous `blob:` background URL is revoked before the new object URL is stored.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `implementation_plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `stageRefinementPrompt` now only updates the prompt workspace and preserves the selected production item's existing lifecycle status.
+- `handlePageBackgroundFile` captures the new object URL once, revokes only the prior `blob:` URL, and stores the new URL through the existing page-config merge path.
+
+### Verification
+- `npx eslint src/portals/storyline/GenericImageLabPanel.tsx`
+- `npm run build`
+- `git diff --check`
+
+### Outstanding issues
+- None.
+
+### Risks or caveats
+- Manual browser QA was not run; the changes are limited to callback logic and were verified by lint/build checks.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- None.
