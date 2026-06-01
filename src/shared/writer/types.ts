@@ -100,6 +100,15 @@ export type WriterToolsPacingReviewPayload = {
   target_page_count?: number;
 };
 
+export type WriterToolsPacingRegenerationPreviewPayload = {
+  mode: 'pacing_regeneration_preview';
+  issue_id: string;
+  page_ids: string[];
+  include_beats?: boolean;
+  include_dialogue?: boolean;
+  production_defaults?: WriterProductionDefaultsPayload;
+};
+
 export type WriterToolsCanonCheckPayload = {
   mode: 'canon_check';
   issue_id: string;
@@ -192,6 +201,7 @@ export type WriterToolsRequest =
   | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload
   | WriterToolsPacingReviewPayload
+  | WriterToolsPacingRegenerationPreviewPayload
   | WriterToolsCanonCheckPayload
   | WriterToolsPlanShotsPayload
   | WriterToolsIdeaAssistPayload

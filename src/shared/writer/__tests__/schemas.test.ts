@@ -4,6 +4,7 @@ import {
   ideaAssistResultSchema,
   issueOutlineSchema,
   pageBeatsJsonSchema,
+  pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   shotPlanJsonSchema,
   writerToolsGuidedComicAssistRequestSchema,
@@ -251,6 +252,43 @@ describe('writerToolsRequestSchema', () => {
     expect(
       writerToolsRequestSchema.parse({ mode: 'pacing_review', issue_id: id, target_page_count: 24 }),
     ).toMatchObject({ target_page_count: 24 });
+  });
+
+  it('parses pacing_regeneration_preview request and result without persistence fields', () => {
+    const issueId = '550e8400-e29b-41d4-a716-446655440000';
+    const pageId = '550e8400-e29b-41d4-a716-446655440001';
+    const req = writerToolsRequestSchema.parse({
+      mode: 'pacing_regeneration_preview',
+      issue_id: issueId,
+      page_ids: [pageId],
+      include_beats: true,
+      include_dialogue: true,
+      production_defaults: { output_format: 'comic_script_markdown' },
+    });
+
+    expect(req).toMatchObject({
+      mode: 'pacing_regeneration_preview',
+      issue_id: issueId,
+      page_ids: [pageId],
+      include_beats: true,
+      include_dialogue: true,
+    });
+
+    const result = pacingRegenerationPreviewResultSchema.parse({
+      pages: [
+        {
+          page_id: pageId,
+          page_number: 1,
+          reason: 'Tighten the turn.',
+          proposed_beats_json: {
+            panels: [{ action: 'Kron sees the rift widen.' }],
+          },
+          proposed_script_text: 'KRON: It is growing.',
+        },
+      ],
+    });
+
+    expect(result.pages[0].proposed_beats_json?.panels[0].action).toContain('rift');
   });
 
   it('parses canon_check request', () => {

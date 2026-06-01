@@ -1,4 +1,6 @@
-import type { PageBeatsJson } from '@/shared/writer/types';
+import type { PageBeatsJson, WriterProductionDefaultsPayload } from '@/shared/writer/types';
+
+type WriterOutputFormat = NonNullable<WriterProductionDefaultsPayload['output_format']>;
 
 export type WriterAuditModeId =
   | 'continuity'
@@ -76,6 +78,21 @@ export type WriterIssuePackLike = {
     script_text: string | null;
   }>;
 };
+
+export type WriterPreferredExport =
+  | {
+      kind: 'json';
+      label: string;
+      filename: string;
+      data: unknown;
+    }
+  | {
+      kind: 'text';
+      label: string;
+      filename: string;
+      mime: string;
+      body: string;
+    };
 
 type PageBeatMetadata = PageBeatsJson & {
   characters?: unknown;
@@ -321,4 +338,152 @@ export function formatIssuePackAsMarkdown(issuePack: WriterIssuePackLike): strin
     lines.push('');
   }
   return `${lines.join('\n').trim()}\n`;
+}
+
+function readIssuePackOutputFormat(issuePack: WriterIssuePackLike): WriterOutputFormat {
+  const raw = issuePack.production_defaults?.output_format;
+  return typeof raw === 'string' &&
+    [
+      'issue_pack_json',
+      'comic_script_markdown',
+      'guided_comic_handoff',
+      'fountain_screenplay',
+      'prose_manuscript',
+      'lore_wiki',
+    ].includes(raw)
+    ? (raw as WriterOutputFormat)
+    : 'issue_pack_json';
+}
+
+function formatIssuePackAsFountain(issuePack: WriterIssuePackLike): string {
+  const lines: string[] = [];
+  const title = readStringValue(issuePack.issue?.title) || readStringValue(issuePack.series?.title) || 'Dialogue export';
+  lines.push(`Title: ${title}`, '');
+  for (const page of issuePack.pages) {
+    lines.push(`# Page ${page.page_number}`, '');
+    lines.push(page.script_text?.trim() || '[[ no dialogue ]]');
+    lines.push('');
+  }
+  return `${lines.join('\n').trim()}\n`;
+}
+
+function formatIssuePackAsProseManuscript(issuePack: WriterIssuePackLike): string {
+  const lines: string[] = ['# Prose Manuscript Export', ''];
+  const title = readStringValue(issuePack.issue?.title) || 'Untitled issue';
+  const series = readStringValue(issuePack.series?.title);
+  lines.push(`# ${series ? `${series}: ` : ''}${title}`, '');
+  if (issuePack.issue?.synopsis) lines.push(issuePack.issue.synopsis, '');
+  if (issuePack.issue?.author_outline?.text) {
+    lines.push('## Author Outline', '', issuePack.issue.author_outline.text, '');
+  }
+  const outline = isRecord(issuePack.outline?.outline_json) ? issuePack.outline?.outline_json : null;
+  const beats = Array.isArray(outline?.page_beats) ? outline.page_beats : [];
+  if (beats.length) {
+    lines.push('## Story Sequence', '');
+    for (const beat of beats) {
+      if (!isRecord(beat)) continue;
+      const page = typeof beat.page_target === 'number' ? `Page ${beat.page_target}` : 'Scene';
+      const summary = readStringValue(beat.summary);
+      const turn = readStringValue(beat.emotional_turn);
+      lines.push(`- **${page}:** ${summary}${turn ? ` (${turn})` : ''}`);
+    }
+    lines.push('');
+  }
+  for (const page of issuePack.pages) {
+    const beatsJson = readPageBeatsJson(page.beats_json);
+    lines.push(`## Page ${page.page_number}`, '');
+    if (beatsJson?.one_line_hook) lines.push(beatsJson.one_line_hook, '');
+    const panels = beatsJson?.panels ?? [];
+    for (const [index, panel] of panels.entries()) {
+      const action = readStringValue(panel.action);
+      if (action) lines.push(`${index + 1}. ${action}`);
+    }
+    if (page.script_text?.trim()) lines.push('', page.script_text.trim());
+    lines.push('');
+  }
+  return `${lines.join('\n').trim()}\n`;
+}
+
+function formatIssuePackAsLoreWiki(issuePack: WriterIssuePackLike): string {
+  const characterSet = new Set<string>();
+  const locationSet = new Set<string>();
+  const styleSet = new Set<string>();
+  for (const page of issuePack.pages) {
+    const metadata = summarizePageBeatMetadata(readPageBeatsJson(page.beats_json));
+    if (metadata.characters !== 'No characters listed') {
+      metadata.characters.split(/,\s*/).forEach((item) => characterSet.add(item));
+    }
+    if (metadata.locations !== 'No locations listed') {
+      metadata.locations.split(/,\s*/).forEach((item) => locationSet.add(item));
+    }
+    if (metadata.artStyle !== 'No art style listed') styleSet.add(metadata.artStyle);
+  }
+
+  const lines: string[] = ['# Lore Wiki Export', ''];
+  const series = readStringValue(issuePack.series?.title);
+  const issue = readStringValue(issuePack.issue?.title);
+  if (series || issue) lines.push(`## Source`, '', [series, issue].filter(Boolean).join(' - '), '');
+  if (issuePack.issue?.synopsis) lines.push('## Synopsis', '', issuePack.issue.synopsis, '');
+  if (issuePack.issue?.author_outline?.text) {
+    lines.push('## Author Outline', '', issuePack.issue.author_outline.text, '');
+  }
+  lines.push('## Characters', '');
+  lines.push(...(characterSet.size ? [...characterSet].sort().map((item) => `- ${item}`) : ['- None listed']));
+  lines.push('', '## Locations', '');
+  lines.push(...(locationSet.size ? [...locationSet].sort().map((item) => `- ${item}`) : ['- None listed']));
+  lines.push('', '## Visual Style', '');
+  lines.push(...(styleSet.size ? [...styleSet].sort().map((item) => `- ${item}`) : ['- None listed']));
+  return `${lines.join('\n').trim()}\n`;
+}
+
+export function buildPreferredWriterExport(issuePack: WriterIssuePackLike): WriterPreferredExport {
+  switch (readIssuePackOutputFormat(issuePack)) {
+    case 'comic_script_markdown':
+      return {
+        kind: 'text',
+        label: 'Download comic script markdown',
+        filename: 'writer-issue-pack.md',
+        mime: 'text/markdown;charset=utf-8',
+        body: formatIssuePackAsMarkdown(issuePack),
+      };
+    case 'guided_comic_handoff':
+      return {
+        kind: 'json',
+        label: 'Download Guided Comics handoff',
+        filename: 'writer-guided-comics-handoff.json',
+        data: buildGuidedComicsHandoffExport(issuePack),
+      };
+    case 'fountain_screenplay':
+      return {
+        kind: 'text',
+        label: 'Download Fountain screenplay',
+        filename: 'writer-dialogue.fountain',
+        mime: 'text/plain;charset=utf-8',
+        body: formatIssuePackAsFountain(issuePack),
+      };
+    case 'prose_manuscript':
+      return {
+        kind: 'text',
+        label: 'Download prose manuscript',
+        filename: 'writer-prose-manuscript.md',
+        mime: 'text/markdown;charset=utf-8',
+        body: formatIssuePackAsProseManuscript(issuePack),
+      };
+    case 'lore_wiki':
+      return {
+        kind: 'text',
+        label: 'Download lore wiki',
+        filename: 'writer-lore-wiki.md',
+        mime: 'text/markdown;charset=utf-8',
+        body: formatIssuePackAsLoreWiki(issuePack),
+      };
+    case 'issue_pack_json':
+    default:
+      return {
+        kind: 'json',
+        label: 'Download issue pack JSON',
+        filename: 'writer-issue-pack.json',
+        data: issuePack,
+      };
+  }
 }

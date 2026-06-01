@@ -35,9 +35,9 @@ The visible flow should become:
 - [x] Address the outline confusion.
   - Current state: Synopsis helper now includes a first-class "Author outline intake" area stored separately from issue synopsis under `notes.author_outline`.
   - Current state: Outline generation reads `notes.author_outline` and instructs AI to preserve, structure, or expand the user's source outline instead of inventing a replacement story.
-- [~] Add pacing recommendation apply path.
+- [x] Add pacing recommendation apply path.
   - Current state: Arc length recommendation can stage a pacing plan, update the target, create/trim affected page rows, select affected pages, optionally regenerate the outline, and preview queued affected pages before explicit beat/dialogue regeneration.
-  - Remaining work: add true non-persisting LLM preview/diff output for proposed replacement beats/dialogue before save.
+  - Current state: Arc now includes a preview-only pacing regeneration path that asks `writer-tools` for proposed page-beat/dialogue replacements, shows current vs proposed content, and only saves accepted proposals.
 - [x] Add Foundation Hub fields for primary medium type.
 - [x] Add Foundation Hub fields for narrative scope.
 - [x] Persist production defaults in existing writer notes/metadata before schema expansion.
@@ -66,5 +66,10 @@ The visible flow should become:
 - Pacing apply still avoids silently rewriting existing dialogue or page beats. It stages affected pages, previews their current saved beat/dialogue state, and requires explicit beat/dialogue regeneration.
 - Foundation Hub production defaults now persist without schema changes through existing series/issue notes metadata; issue defaults override series defaults.
 - Generation calls now send production defaults to outline, page beats, dialogue, and shot/visual planning, while issue-pack exports include the resolved defaults and preferred output format.
+- Preferred output format now drives a primary preferred-export action in production branches and Scripts exports while preserving all explicit download buttons.
 - Page-beat generation now requires page-level `characters`, `locations`, and `art_style`, grounded in outline/synopsis/cast/location/lore source material with empty arrays when source material does not name a value.
 - Pass 2 branch hardening added explicit issue-pack markdown and `writer-guided-comics-handoff.json` exports so production branches produce portable artifacts, not just navigation cues.
+- The saved hierarchy tree is now editable in place with title/kind edits, sibling move controls, delete, reset, and explicit save back to `notes.hierarchy_tree`.
+- `writer-tools` was deployed after adding preview-only pacing regeneration; hosted `writer-tools` is active at version 46, updated `2026-06-01 05:45:41 UTC`.
+- Signed-in browser QA verified live `outline_issue`, `page_beats`, `draft_dialogue`, `plan_shots_from_issue`, `pacing_review`, and `pacing_regeneration_preview` calls against a temporary `Codex Live AI Verification` issue, then deleted the temporary issue.
+- Authenticated browser QA also verified the preferred-export button, hierarchy import/edit controls, screenshot capture, DOM inspection, and console log checks with no captured console errors.

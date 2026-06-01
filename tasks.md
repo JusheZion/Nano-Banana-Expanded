@@ -17,16 +17,18 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Reframe Scripts as `Synopsis helper` and Lore as `Canon gate`.
 - [x] Add pre-lore intake, post-lore canon check, and missing-lore suggestions.
 - [x] Address outline confusion: Synopsis helper now has dedicated `notes.author_outline` intake with preserve/structure/expand modes, and `outline_issue` consumes it during generation.
-- [~] Add pacing recommendation apply path: Arc can stage/apply target/page-row changes and optionally regenerate the outline; downstream page-beat/dialogue regeneration still needs a preview-safe wizard.
+- [x] Add pacing recommendation apply path: Arc can stage/apply target/page-row changes, optionally regenerate the outline, preview proposed downstream page-beat/dialogue replacements, and apply only accepted preview proposals.
 - [x] Add Foundation Hub medium/scope fields and persisted production defaults.
 - [x] Inject production defaults into outline, beat, dialogue, visual, and export contexts.
 - [x] Add preferred output-format defaults to Foundation Hub and issue-pack exports.
+- [x] Add primary preferred-export actions that follow the saved output-format default while preserving explicit JSON/Markdown/Guided handoff downloads.
 - [x] Add page-beat metadata: `characters`, `locations`, and `art_style` are accepted by client/Edge schemas and required by page-beat generation prompts.
-- [x] Add author outline import/paste flow: paste, `.txt`, `.md`, and JSON import normalize into `notes.hierarchy_tree` with a saved tree preview.
+- [x] Add author outline import/paste flow: paste, `.txt`, `.md`, and JSON import normalize into `notes.hierarchy_tree` with editable saved-tree controls.
 - [x] Add dynamic beat editing controls: insert, remove, merge, split, and move selected page beats while preserving page-level metadata.
 - [x] Add expanded audit modes and production branch surfaces for continuity, emotional arc, character utilization, worldbuilding density, visual prep, dialogue, exports, and Guided Comics handoff.
 - [x] Harden production branches with readable audit summaries, readiness-aware branch cards, issue-pack markdown export, and Guided Comics handoff JSON export.
-- [~] Finish preview-safe regeneration: affected-page preview and explicit apply are implemented; true proposed LLM diff preview before save remains a follow-up.
+- [x] Finish preview-safe regeneration: affected-page preview, preview-only AI replacement proposals, current/proposed diffs, and explicit per-page apply are implemented.
+- [x] Verify signed-in live AI calls: temporary browser QA issue confirmed outline, page beats, dialogue, shot plan, pacing review, and preview-only regeneration calls; the temporary issue was deleted afterward.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
@@ -332,7 +334,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Beats-only **Director notes for beats** + Edge **`PAGE_BEATS_PROMPT_CAPS`** / `jsonForPrompt` to avoid HTTP 546 worker limits
 - [x] Library → Pages: multi-select (no cap; Select all pages), batch delete/clear/download; Outline download; Beats/Dialogue per-page download/clear (`arcsWriterRoom` helpers)
 - [x] **Scripts** workspace tab: synopsis helper → `notes.synopsis_helper`, build synopsis into Issue Outline draft, issue pack copy/download (full beats + dialogue + arc cache), edit & save outline / beats / dialogue / shot plan JSON (`arcsWriterRoom` update helpers); **File → Scripts & exports**; workspace shortcuts **⌥⌘1–6** / **Alt+Ctrl+1–6** (avoids browser ⌘1–9)
-- [ ] Operator: `supabase functions deploy writer-tools` on hosted project after pull (outline supplement + prompt caps + anti-repeat)
+- [x] Operator: `supabase functions deploy writer-tools` on hosted project after pull (latest deploy verified version 46 on 2026-06-01)
 
 ## Writers' Workshop bugfixes (Apr 2026)
 

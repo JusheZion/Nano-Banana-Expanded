@@ -1714,6 +1714,20 @@ function getInitialGuidedComicLibraryStage(
   return 'series-gallery';
 }
 
+function timestampMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function shouldRestoreLocalGuidedDraftOverProject(
+  draft: GuidedComicDraftState | null,
+  project: GuidedComicProject,
+): draft is GuidedComicDraftState {
+  if (!draft) return false;
+  return timestampMs(draft.savedAt) > timestampMs(project.updatedAt);
+}
+
 function getGuidedComicNextIssueNumber(projects: GuidedComicProject[]): string {
   const highestIssueNumber = projects.reduce((highest, project) => {
     const parsed = Number.parseFloat(project.issueNumber || project.snapshot.setupForm.issueNumber);
@@ -1788,16 +1802,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const library = readGuidedComicProjectLibrary();
     const activeProject =
       library?.projects.find((project) => project.projectId === library.activeProjectId) ?? library?.projects[0] ?? null;
+    const draft = readGuidedComicDraft();
     if (library && activeProject) {
       return {
-        draft: snapshotToGuidedComicDraft(activeProject.snapshot, activeProject.updatedAt),
+        draft: shouldRestoreLocalGuidedDraftOverProject(draft, activeProject)
+          ? draft
+          : snapshotToGuidedComicDraft(activeProject.snapshot, activeProject.updatedAt),
         library,
         activeProjectId: activeProject.projectId,
         migratedDraft: false,
       };
     }
 
-    const draft = readGuidedComicDraft();
     if (!draft) {
       return {
         draft: null,

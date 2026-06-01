@@ -3,6 +3,7 @@ import type { PageBeatsJson } from '@/shared/writer/types';
 import {
   WRITER_AUDIT_MODE_OPTIONS,
   WRITER_PRODUCTION_BRANCH_OPTIONS,
+  buildPreferredWriterExport,
   buildGuidedComicsHandoffExport,
   formatIssuePackAsMarkdown,
   summarizePageBeatMetadata,
@@ -162,5 +163,64 @@ describe('writerProductionBranches', () => {
     expect(markdown).toContain('## Arc School - Opening');
     expect(markdown).toContain('- Characters: Kron');
     expect(markdown).toContain('- Panel 1: Kron studies the rift.');
+  });
+
+  it('builds preferred export payloads from saved output-format defaults', () => {
+    const baseIssuePack = {
+      issue_id: 'issue-1',
+      exported_at: '2026-06-01T12:00:00.000Z',
+      series: { title: 'Arc School' },
+      issue: { title: 'Opening', synopsis: 'A rift opens.' },
+      outline: {
+        outline_json: {
+          title: 'Opening',
+          premise: 'A rift opens.',
+          page_beats: [{ page_target: 1, summary: 'Kron sees the rift.' }],
+        },
+      },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            one_line_hook: 'Kron sees the rift.',
+            characters: ['Kron'],
+            locations: ['Institute'],
+            art_style: 'ink wash',
+            panels: [{ index: 1, action: 'Kron studies the rift.' }],
+          },
+          script_text: 'PANEL 1\nKRON: What is that?',
+        },
+      ],
+    };
+
+    expect(
+      buildPreferredWriterExport({
+        ...baseIssuePack,
+        production_defaults: { output_format: 'guided_comic_handoff' },
+      }),
+    ).toMatchObject({
+      label: 'Download Guided Comics handoff',
+      filename: 'writer-guided-comics-handoff.json',
+      kind: 'json',
+    });
+
+    expect(
+      buildPreferredWriterExport({
+        ...baseIssuePack,
+        production_defaults: { output_format: 'fountain_screenplay' },
+      }),
+    ).toMatchObject({
+      label: 'Download Fountain screenplay',
+      filename: 'writer-dialogue.fountain',
+      kind: 'text',
+      mime: 'text/plain;charset=utf-8',
+    });
+
+    const loreExport = buildPreferredWriterExport({
+        ...baseIssuePack,
+        production_defaults: { output_format: 'lore_wiki' },
+      });
+    expect(loreExport.kind).toBe('text');
+    expect(loreExport.kind === 'text' ? loreExport.body : '').toContain('## Characters');
   });
 });

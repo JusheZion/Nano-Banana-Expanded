@@ -40,6 +40,7 @@ const KIND_ORDER: WriterHierarchyNodeKind[] = [
   'scene',
   'beat',
 ];
+export const WRITER_HIERARCHY_NODE_KINDS = KIND_ORDER;
 const KIND_SET = new Set<WriterHierarchyNodeKind>(KIND_ORDER);
 const KIND_RANK = new Map<WriterHierarchyNodeKind, number>(KIND_ORDER.map((kind, index) => [kind, index]));
 
@@ -220,4 +221,55 @@ export function mergeHierarchyIntoNotes(
 export function readHierarchyFromNotes(notes: Record<string, unknown> | undefined): WriterHierarchyNode[] {
   if (!notes || typeof notes !== 'object') return [];
   return importHierarchyFromJson({ [NOTES_KEY]: notes[NOTES_KEY] });
+}
+
+export function updateHierarchyNode(
+  nodes: WriterHierarchyNode[],
+  nodeId: string,
+  patch: Partial<Pick<WriterHierarchyNode, 'kind' | 'title' | 'sourceText'>>,
+): WriterHierarchyNode[] {
+  return nodes.map((node) => {
+    if (node.id === nodeId) {
+      return {
+        ...node,
+        ...patch,
+        title: patch.title ?? node.title,
+        sourceText: patch.sourceText ?? patch.title ?? node.sourceText,
+      };
+    }
+    return {
+      ...node,
+      children: updateHierarchyNode(node.children, nodeId, patch),
+    };
+  });
+}
+
+export function moveHierarchyNode(
+  nodes: WriterHierarchyNode[],
+  nodeId: string,
+  direction: 'up' | 'down',
+): WriterHierarchyNode[] {
+  const index = nodes.findIndex((node) => node.id === nodeId);
+  if (index >= 0) {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= nodes.length) return nodes;
+    const next = [...nodes];
+    const [node] = next.splice(index, 1);
+    next.splice(target, 0, node!);
+    return next;
+  }
+
+  return nodes.map((node) => ({
+    ...node,
+    children: moveHierarchyNode(node.children, nodeId, direction),
+  }));
+}
+
+export function deleteHierarchyNode(nodes: WriterHierarchyNode[], nodeId: string): WriterHierarchyNode[] {
+  return nodes
+    .filter((node) => node.id !== nodeId)
+    .map((node) => ({
+      ...node,
+      children: deleteHierarchyNode(node.children, nodeId),
+    }));
 }

@@ -5,6 +5,7 @@ import {
   guidedComicAssistResultSchema,
   ideaAssistResultSchema,
   issueOutlineSchema,
+  pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
   shotPlanJsonSchema,
@@ -51,6 +52,10 @@ function mergeWriterToolCache(
   cache[key] = { at: new Date().toISOString(), result };
   prev.writer_tool_cache = cache;
   return prev;
+}
+
+function readWriterToolCache(notes: unknown): Record<string, unknown> {
+  return asJsonObject(asJsonObject(notes).writer_tool_cache);
 }
 
 type IssueRow = {
@@ -609,6 +614,51 @@ function buildDraftDialogueUserPrompt(args: {
     `Style bibles:\n${JSON.stringify(args.styleBibles, null, 2)}`,
     'Return exactly: { "script_text": string }',
   ].join('\n');
+}
+
+function buildPacingRegenerationPreviewUserPrompt(args: {
+  issue: IssueRow;
+  pages: Array<{ id: string; page_number: number; beats_json: unknown; script_text: string | null }>;
+  latestOutline: unknown;
+  pacingReview: unknown;
+  includeBeats: boolean;
+  includeDialogue: boolean;
+  cast: unknown[];
+  locations: unknown[];
+  styleBibles: unknown[];
+  loreCardsDigest?: string;
+  productionDefaults: Required<WriterProductionDefaultsPayload>;
+}): string {
+  return [
+    'Preview pacing-driven replacements for selected comic pages. Output JSON only. Do not mention persistence.',
+    'The caller will show current vs proposed content and will only save explicitly accepted proposals.',
+    `Issue: #${args.issue.issue_number} ${args.issue.title ?? ''}`,
+    `Synopsis: ${args.issue.synopsis ?? '(none)'}`,
+    buildProductionDefaultsPromptBlock(args.productionDefaults),
+    `Preview requested for page beats: ${args.includeBeats ? 'yes' : 'no'}`,
+    `Preview requested for dialogue: ${args.includeDialogue ? 'yes' : 'no'}`,
+    `Latest pacing review:\n${jsonForPrompt(args.pacingReview ?? null, 6000)}`,
+    `Latest outline:\n${jsonForPrompt(args.latestOutline ?? null, 9000)}`,
+    `Selected pages with current saved content:\n${jsonForPrompt(args.pages, 16000)}`,
+    `Cast:\n${jsonForPrompt(args.cast, PAGE_BEATS_PROMPT_CAPS.cast)}`,
+    `Locations:\n${jsonForPrompt(args.locations, PAGE_BEATS_PROMPT_CAPS.locations)}`,
+    `Style bibles:\n${jsonForPrompt(args.styleBibles, PAGE_BEATS_PROMPT_CAPS.styleBibles)}`,
+    args.loreCardsDigest?.trim()
+      ? `Series lore cards (hard continuity constraints when strict canon is enabled):\n${args.loreCardsDigest.trim()}`
+      : '',
+    '',
+    'Return exactly this shape:',
+    '{ "pages": [ { "page_id": string, "page_number": number, "reason"?: string, "proposed_beats_json"?: pageBeatsJson, "proposed_script_text"?: string } ] }',
+    'Rules:',
+    '- Include exactly one object for each selected page id.',
+    '- Echo page_id and page_number exactly from the selected pages.',
+    '- If page beats were requested, proposed_beats_json must satisfy the page beats schema with non-empty panels[].action.',
+    '- If dialogue was requested, proposed_script_text must be plain text suitable for a comic script.',
+    '- Respect pacing review cut/add/rebalance guidance while preserving author outline, lore, cast names, locations, and production defaults.',
+    '- Keep proposals concise enough for direct review; do not include markdown fences.',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function summarizePageBeatActions(beatsJson: unknown): string {
@@ -1473,6 +1523,108 @@ Deno.serve(async (req) => {
       }
       return Response.json(
         { success: true, mode: 'draft_dialogue', data: diaParsed.data, page_id },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'pacing_regeneration_preview') {
+      const { issue_id, page_ids, include_beats, include_dialogue, production_defaults } = parsedReq.data;
+      const includeBeats = include_beats !== false;
+      const includeDialogue = include_dialogue !== false;
+      if (!includeBeats && !includeDialogue) {
+        return Response.json(
+          { success: false, error: 'Nothing selected for preview', details: 'Choose beats, dialogue, or both.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const issueRow = await loadIssueRow(supabase, issue_id);
+      if (!issueRow) {
+        return Response.json({ success: false, error: 'Issue not found' }, { status: 404, headers: corsHeaders });
+      }
+      const { data: pageRows, error: pagesErr } = await supabase
+        .from('writer_pages')
+        .select('id, issue_id, page_number, beats_json, script_text')
+        .eq('issue_id', issue_id)
+        .in('id', page_ids);
+      if (pagesErr) {
+        return Response.json(
+          { success: false, error: 'Failed to load pages', details: pagesErr.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const pages = ((pageRows ?? []) as Array<{
+        id: string;
+        issue_id: string;
+        page_number: number;
+        beats_json: unknown;
+        script_text: string | null;
+      }>).sort((a, b) => a.page_number - b.page_number);
+      if (pages.length !== page_ids.length) {
+        return Response.json(
+          { success: false, error: 'Invalid page_ids', details: 'Every page id must belong to this issue.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const sid = issueRow.series_id;
+      const [castRes, locRes, bibleRes, outlineRes, loreDigest] = await Promise.all([
+        supabase.from('writer_cast').select('*').eq('series_id', sid),
+        supabase.from('writer_locations').select('*').eq('series_id', sid),
+        supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
+        supabase
+          .from('writer_issue_outlines')
+          .select('outline_json')
+          .eq('issue_id', issue_id)
+          .order('version', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        fetchLoreCardsDigest(supabase, sid),
+      ]);
+      const pacingReview = readWriterToolCache(issueRow.notes)?.pacing_review ?? null;
+      const userPrompt = buildPacingRegenerationPreviewUserPrompt({
+        issue: issueRow,
+        pages,
+        latestOutline: outlineRes.data?.outline_json ?? null,
+        pacingReview,
+        includeBeats,
+        includeDialogue,
+        cast: castRes.data ?? [],
+        locations: locRes.data ?? [],
+        styleBibles: bibleRes.data ?? [],
+        loreCardsDigest: loreDigest,
+        productionDefaults: resolveProductionDefaultsPayload(issueRow, production_defaults),
+      });
+      let previewJson: unknown;
+      try {
+        previewJson = await callGeminiJson({
+          system:
+            'You are a comics editor generating preview-only replacement page beats and dialogue. Output only valid JSON. No markdown fences.',
+          user: userPrompt,
+          preferredModel: geminiModel,
+          apiKey: geminiKey,
+          temperature: 0.45,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return llmFailureResponse(msg);
+      }
+      const previewParsed = pacingRegenerationPreviewResultSchema.safeParse(previewJson);
+      if (!previewParsed.success) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing regeneration preview failed validation',
+            details: previewParsed.error.message,
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      return Response.json(
+        {
+          success: true,
+          mode: 'pacing_regeneration_preview',
+          data: previewParsed.data,
+          issue_id,
+        },
         { headers: corsHeaders },
       );
     }

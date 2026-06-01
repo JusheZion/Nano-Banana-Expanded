@@ -6272,6 +6272,353 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 - Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.
 
+## Imageshop Production Studio Resumed QA Attempt - 2026-06-01
+
+### What changed
+
+- Rechecked the current tracker state after the goal was resumed.
+- Started the local dev server on `http://127.0.0.1:5173/` and connected the in-app browser to the app.
+- Confirmed the app loads as `ARCS Expanded`, but selecting the Illustrator's Imageshop card still routes to the protected `Sign in to continue` gate.
+- Updated the Imageshop production tracker to record this fresh resumed QA attempt.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this resumed QA attempt.
+- The two remaining unchecked tracker items still require a valid signed-in ARCS/Supabase browser session:
+  - Guided Comic Flow -> Imageshop -> return-art path manually verified.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download manually verified.
+
+### Verification
+
+- In-app browser opened `http://127.0.0.1:5173/` and reported title `ARCS Expanded`.
+- In-app browser DOM snapshot showed the protected `Sign in to continue` screen after opening Illustrator's Imageshop.
+- `git status --short --untracked-files=all` was clean before the tracker/walkthrough update.
+
+### Outstanding issues
+
+- Signed-in browser QA remains blocked until a valid authenticated session is available.
+
+### Risks or caveats
+
+- Automated coverage remains the strongest available evidence for the return/save paths, but it is not a substitute for the explicitly requested signed-in manual verification checklist items.
+
+### Operator follow-up
+
+- Sign in with a valid ARCS/Supabase account and manually verify the two remaining tracker checkboxes.
+
+### Next steps
+
+- Once signed in, run the manual Guided Comic Flow return-art and Save / Export checks, then update the tracker checkboxes and append a final walkthrough entry.
+
+## Imageshop Production Studio Auth QA Retry - 2026-06-01
+
+### What changed
+
+- Re-audited the remaining Imageshop tracker checkboxes and local auth setup.
+- Searched project docs, `.agents`, source, and Supabase config for a documented QA account or supported test auth path.
+- Attempted one fresh disposable Supabase email/password sign-up using the configured `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Updated the Imageshop production tracker with the fresh auth evidence.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this retry.
+- The local `.env` contains only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GEMINI_API_KEY`; no service-role key or documented QA credential is available.
+- The new disposable Supabase user was created, but Supabase returned `needsConfirmation: true` and no session, so it cannot be used to unlock the protected browser routes without email confirmation.
+
+### Verification
+
+- `git status --short --untracked-files=all` showed only the existing tracker/walkthrough modifications before this update.
+- `rg` over project docs/source found ordinary Supabase email/password auth and no documented QA account.
+- Supabase sign-up returned `ok: true`, `needsConfirmation: true`, `hasSession: false`, and `hasUser: true`.
+
+### Outstanding issues
+
+- Signed-in browser QA remains blocked until a valid authenticated ARCS/Supabase session is available.
+
+### Risks or caveats
+
+- A disposable unconfirmed Supabase user now exists in the auth project, but it has no usable session and was not used for app QA.
+
+### Operator follow-up
+
+- Provide or use a confirmed ARCS/Supabase account in the browser session, then manually verify:
+  - Guided Comic Flow -> Imageshop -> generated panel return.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download.
+
+### Next steps
+
+- Retry the signed-in browser checks once a confirmed account or active browser session is available.
+
+## Imageshop Production Studio Signed-In Save Export QA - 2026-06-01
+
+### What changed
+
+- Retried the Imageshop QA path after the in-app browser session became authenticated as `hayronivy@gmail.com`.
+- Generated a real Imageshop smoke-test image from the prompt `QA smoke test: a small golden compass on a clean studio table, crisp lighting, no text.`
+- Manually verified the signed-in Save / Export controls for Download, NPC Vault, Character Vault, and Asset Vault.
+- Updated the Imageshop production tracker to mark the Save / Export manual verification checkbox complete.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this QA pass.
+- Character Vault was verified with profile `Imageshop QA Character 20260601` and cast name `Imageshop QA`.
+- Asset Vault was verified with collection `Imageshop QA Assets 20260601` and asset name `Golden Compass Smoke Test`.
+- NPC Vault was verified with the default `Imageshop result` label.
+- Download was verified by the visible success notice `Downloaded the current generated image.`
+
+### Verification
+
+- In-app browser loaded `ARCS Expanded` signed in as `hayronivy@gmail.com`.
+- Imageshop opened without the protected sign-in gate.
+- Image generation completed and exposed the `Save / Export` panel.
+- Download showed `Downloaded the current generated image.`
+- NPC Vault save showed `Saved to NPC Vault as "Imageshop result".`
+- Character Vault save showed `Saved to Character Vault as "Imageshop QA Character 20260601".`
+- Asset Vault save showed `Saved to Asset Vault collection "Imageshop QA Assets 20260601".`
+
+### Outstanding issues
+
+- Guided Comic Flow -> Imageshop -> return-art manual QA remains unchecked.
+- The in-app browser control bridge became unresponsive while opening Comic Creator after the Save / Export checks, timing out on DOM and screenshot commands. Closing/reopening a clean in-app tab also timed out waiting for the browser webview to attach.
+
+### Risks or caveats
+
+- The Save / Export checks created real QA artifacts in the signed-in user's Character and Asset vaults.
+
+### Operator follow-up
+
+- Reopen or restart the in-app browser, then manually verify Guided Comic Flow -> Imageshop -> generated panel return.
+
+### Next steps
+
+- Once the browser bridge is responsive again, open Comic Creator, start or select a guided comic, use the panel Imageshop action, and click `Send back to Guided Flow` after generation.
+
+## Imageshop Guided Comic Return QA And Draft Restore Fix - 2026-06-01
+
+### What changed
+
+- Fixed the Guided Comic Flow restore order so a newer unsaved local guided draft is restored over an older Comic Library snapshot.
+- This preserves page cards and panel queues when Comic Creator remounts after sending generated art back from Imageshop.
+- Manually verified the signed-in Guided Comic Flow -> Imageshop -> return-art path.
+- Updated the Imageshop production tracker to mark the Guided Comic Flow return-art manual verification checkbox complete.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The bug appeared when returning from Imageshop to Comic Creator: Comic Creator remounted from the saved Comic Library project snapshot, which could be older than the unsaved local guided draft. That made the Art step show `0 panels`, so the returned panel image had no visible panel queue to attach to.
+- The fix compares the local guided draft `savedAt` timestamp with the active Comic Library project `updatedAt`; if the local draft is newer, it becomes the initial restored draft while preserving the existing library and active project id.
+- No Supabase schema, route, or ComicEditor changes were introduced.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed: 4 files, 40 tests.
+- Signed-in browser QA:
+  - Opened Comic Creator as `hayronivy@gmail.com`.
+  - Opened current issue and Page 1 / Panel 1 panel focus.
+  - Clicked `Imageshop` from the panel image controls.
+  - Confirmed Imageshop loaded `Page 1, Panel 1` with the Guided Comic Flow prompt.
+  - Generated panel art and clicked `Send back to Guided Comic Flow`.
+  - Reopened Page 1 / Panel 1 and confirmed status `Ready`, image framing controls enabled, and `Assigned art for page 1, panel 1` visible.
+
+### Outstanding issues
+
+- None for the Imageshop Evolution Plan tracker.
+
+### Risks or caveats
+
+- The manual QA created real signed-in Imageshop and Guided Comic local/browser artifacts in the current account/session.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- None.
+
+## Writers Workshop Completion Pass - 2026-06-01
+
+### What changed
+
+- Added an archived accountability plan at `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`.
+- Reconciled the stale handoff against the current repo state: output-format defaults, author-outline import, and hierarchy-tree storage were already implemented after the handoff was generated.
+- Added a preferred-export resolver for all saved `notes.production_defaults.output_format` values:
+  - `issue_pack_json`
+  - `comic_script_markdown`
+  - `guided_comic_handoff`
+  - `fountain_screenplay`
+  - `prose_manuscript`
+  - `lore_wiki`
+- Added primary preferred-export buttons to the Video production-branch export card and the Scripts export panel while preserving the explicit JSON, markdown, and Guided Comics handoff downloads.
+- Added editable saved hierarchy tree controls in Synopsis helper:
+  - title editing,
+  - node kind editing,
+  - sibling move up/down,
+  - delete,
+  - reset edits,
+  - explicit save back to `notes.hierarchy_tree`.
+- Added preview-safe downstream pacing regeneration:
+  - new `pacing_regeneration_preview` writer-tools mode,
+  - shared app and Supabase Edge schemas for preview requests/results,
+  - Edge function prompt and validation path that returns proposals without saving,
+  - Arc UI action to generate preview-only AI replacements for affected pages,
+  - current vs proposed diff display,
+  - explicit per-page Apply beats / Apply dialogue / Apply both actions.
+- Deployed the updated Supabase Edge Function `writer-tools`.
+- Updated `tasks.md` and the active Writers Workshop tracker to reflect the repo-authoritative completion state and the one live-AI verification blocker.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerHierarchy.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerHierarchy.test.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration was added. Production defaults, author outline data, and hierarchy data continue to use existing notes metadata.
+- Preferred exports are resolved from the issue-pack object and do not remove any existing explicit export buttons.
+- The preview regeneration mode intentionally does not update `writer_pages`. Only accepted UI proposals call existing page update helpers.
+- `writer-tools` validates the preview result with `pacingRegenerationPreviewResultSchema` before returning it to the client.
+- Build verification dirtied `supabase/functions/tsconfig.tsbuildinfo`; it was restored because it is generated verification output, not part of this feature.
+
+### Verification
+
+- Baseline targeted tests before implementation: `npm run test -- --run src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts` - PASS, 5 files / 48 tests.
+- TDD red checks:
+  - preferred export resolver test failed before `buildPreferredWriterExport` existed.
+  - hierarchy edit helper test failed before edit helpers existed.
+  - pacing preview schema test failed before the new discriminated-union mode existed.
+- Targeted tests after implementation: `npm run test -- --run src/shared/writer/__tests__/schemas.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/api/__tests__/writerTools.test.ts` - PASS, 4 files / 48 tests.
+- Full tests: `npm run test` - PASS, 49 files / 298 tests.
+- Build: `npm run build` - PASS with the existing large chunk warning.
+- Lint: `npm run lint` - PASS with 0 errors and the existing 67-warning baseline.
+- Whitespace: `git diff --check` - PASS.
+- Supabase before deploy: `supabase functions list` showed `writer-tools` ACTIVE version 45, updated `2026-05-11 21:48:03 UTC`.
+- Supabase deploy: `supabase functions deploy writer-tools --project-ref vxclogwiytxjolisnakd --use-api` - PASS.
+- Supabase after deploy: `supabase functions list --project-ref vxclogwiytxjolisnakd` showed `writer-tools` ACTIVE version 46, updated `2026-06-01 05:45:41 UTC`.
+- Browser QA at `http://127.0.0.1:5174/`:
+  - app title loaded as `ARCS Expanded`;
+  - DOM snapshot worked and showed the signed-out landing page;
+  - Writers Workshop card interaction worked and opened the protected `Sign in to continue` gate;
+  - screenshot capture timed out with `Page.captureScreenshot`, reproducing the in-app browser screenshot timeout issue.
+
+### Outstanding issues
+
+- Signed-in live AI generation calls for outline, beats, dialogue, and shot plan were not run because the current in-app browser session is signed out at the protected Writers Workshop route.
+
+### Risks or caveats
+
+- The new preview-only Edge mode has schema and build coverage, but live AI output quality still needs signed-in verification against real issue/page data.
+- Browser screenshot evidence remains unavailable in this session because the in-app browser screenshot command timed out even though DOM and interaction checks worked.
+
+### Operator follow-up
+
+- Sign in with a valid ARCS/Supabase account, then run live AI calls for:
+  - `outline_issue`,
+  - `page_beats` or `page_beats_issue`,
+  - `draft_dialogue`,
+  - `plan_shots_from_issue`,
+  - and the new `pacing_regeneration_preview`.
+- Confirm the live outputs honor production defaults, author outline, hierarchy source, page metadata, and preferred output-format guidance.
+
+### Next steps
+
+- Complete signed-in live AI verification once a valid browser session is available.
+
+## Writers Workshop Live Browser Verification - 2026-06-01
+
+### What changed
+
+- Re-ran authenticated in-app browser QA on `http://127.0.0.1:5174/` after the user made the browser session available.
+- Verified live AI generation calls against a temporary `Codex Live AI Verification` issue:
+  - outline generation,
+  - page beats,
+  - dialogue,
+  - shot plan,
+  - pacing review,
+  - and preview-only pacing regeneration replacements.
+- Verified the new UI surfaces in the browser:
+  - preferred-export action on Video production branches,
+  - hierarchy import and editable saved-tree controls in Synopsis helper,
+  - preview-safe current/proposed replacement UI with explicit apply buttons.
+- Deleted the temporary verification issue after the live QA pass.
+- Updated the completion plan, active Writers Workshop tracker, and task checklist to remove the previous signed-out live-AI blocker.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The temporary issue used a small two-page verification synopsis so live generation could be tested without overwriting the main `The Blackening` issue.
+- Browser QA confirmed:
+  - `outline_issue` saved `Outline · v1`;
+  - `page_beats` saved valid Page 1 panel JSON;
+  - `draft_dialogue` saved Page 1 script text;
+  - `plan_shots_from_issue` saved a valid `shots` array;
+  - `pacing_review` saved structured pacing output;
+  - `pacing_regeneration_preview` returned preview-only current/proposed beat/dialogue replacements and exposed `Apply beats`, `Apply dialogue`, and `Apply both`.
+- The preview replacement pass did not apply proposed replacements, preserving the preview-safe contract.
+- The temporary issue was deleted through the app after the live calls completed; the app returned to Issue 1 afterward.
+
+### Verification
+
+- Browser DOM inspection: authenticated Writers Workshop loaded with `Fabula Coniunctio Oppositorum · Issue 1: The Blackening`.
+- Browser console check: no captured console errors before live QA.
+- Browser screenshot: viewport screenshot succeeded after authenticated retry.
+- Live AI calls: outline, page beats, dialogue, shot plan, pacing review, and preview-only pacing regeneration all returned successful UI evidence.
+- Cleanup: temporary `Codex Live AI Verification` issue was no longer present after deletion; `Add issue #2` was visible again.
+
+### Outstanding issues
+
+- None for the six-pass Writers Workshop completion plan.
+
+### Risks or caveats
+
+- The live QA consumed real Supabase/Gemini calls in the authenticated project.
+- The earlier signed-out screenshot timeout was reproduced before this pass; the authenticated retry succeeded, so future agents should start browser QA from an authenticated Writers Workshop route and fall back to DOM evidence if screenshot capture stalls.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue future polish separately, especially the non-blocking ribbon/workspace density reduction noted in `tasks.md`.
 ## Imageshop PR bugfixes - 2026-05-31
 
 ### What changed
