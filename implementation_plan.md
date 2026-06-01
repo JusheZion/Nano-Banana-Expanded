@@ -1,5 +1,26 @@
 # Current feature: Storyline Studio — Master Director portal (2026-03-25)
 
+## Completed bugfix — Imageshop production status and background blob cleanup (2026-05-31)
+
+### Goal
+
+Resolve the two flagged `GenericImageLabPanel` issues with minimal behavior changes:
+
+- Staging a refinement prompt must only load prompt text and select the item; it must not advance a draft production item to `generated`.
+- Uploading a replacement page background file must revoke the prior `blob:` background URL before storing the new object URL.
+
+### Files
+
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `tasks.md`
+- `walkthrough.md`
+
+### Verification
+
+- `npx eslint src/portals/storyline/GenericImageLabPanel.tsx`
+- `npm run build`
+- `git diff --check`
+
 ## Completed — WriterPortal pacing arc: explicit length + length explorer (2026-04-19)
 
 - **Contract:** Shared Zod schemas — pacing review request may include `target_page_count`; result may include `length_alignment` (echo `target_pages` / `script_pages` / `outline_beats`, editorial `suggested_page_delta`, optional `suggested_beat_delta`, `rationale`). Duplicated in [`supabase/functions/_shared/writerSchemas.ts`](supabase/functions/_shared/writerSchemas.ts).

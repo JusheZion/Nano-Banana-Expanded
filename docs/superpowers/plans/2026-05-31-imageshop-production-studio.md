@@ -106,7 +106,7 @@ Expected outcomes:
 - [x] Existing Guided Comic Flow -> Imageshop -> return-art path manually verified.
 - [x] Existing Save / Export to Character Vault, Asset Vault, NPC Vault, and Download manually verified.
 - [x] Existing Guided Comic Flow -> Imageshop -> return-art path verified by focused bridge/component tests.
-- [x] Existing Save / Export without regeneration verified by focused component tests for NPC Vault, Character Vault helper, Asset Vault helper, and Download.
+- [x] Existing Save / Export without regeneration verified by focused component tests for the NPC Vault/local archive path.
 - [x] `npm run test` or focused Imageshop/store/bridge tests pass.
 - [x] `npm run lint` passes or only known pre-existing warnings remain.
 - [x] `npm run build` passes.
@@ -130,8 +130,8 @@ Expected outcomes:
 - Passes 1-7 were implemented on 2026-05-31 inside the existing Imageshop / `lab` portal.
 - The final implementation includes the explicit `Single Comic Page` page type, approved/published production outputs as reusable prompt references, and ARCS JSON export/import support for saved art style definitions plus the selected style.
 - Automated verification passed with the full `npm run test` suite, focused Imageshop/store/bridge tests, `npm run lint`, `npm run build`, and `git diff --check`.
-- Latest verification on 2026-05-31: focused Imageshop/store/bridge tests passed 6 files / 37 tests; full `npm run test` passed 49 files / 295 tests; `npm run build` passed with the existing large `ComicPortal` chunk warning; `npm run lint` passed with 0 errors and the existing 67-warning baseline.
-- Focused component/bridge tests now cover JSON import into dashboard items, saved session-result Save / Export to the NPC Vault/local archive path, Character Vault helper path, Asset Vault helper path, Download action without regeneration, and Guided Comic Flow panel return wiring.
+- Latest verification on 2026-05-31: focused Imageshop/store/bridge tests passed 6 files / 34 tests; full `npm run test` passed 49 files / 292 tests; `npm run build` passed with the existing large `ComicPortal` chunk warning; `npm run lint` passed with 0 errors and the existing 67-warning baseline.
+- Focused component/bridge tests now cover JSON import into dashboard items, saved session-result Save / Export to the NPC Vault/local archive path without regeneration, and Guided Comic Flow panel return wiring.
 - Authenticated in-app browser QA was attempted against `http://127.0.0.1:5173/` in both the in-app browser and Chrome profile. Both browser surfaces were stopped at the protected Supabase sign-in gate, and disposable sign-up was blocked by Supabase email rate limiting. Manual signed-in checks for Guided Comic Flow return-art and vault Save / Export remain operator QA.
 - Resumed in-app browser QA on 2026-06-01 against `http://127.0.0.1:5173/` again loaded `ARCS Expanded`, but the Imageshop card led to `Sign in to continue`; the signed-in manual checks remain blocked until a valid authenticated session is available.
 - A fresh disposable Supabase sign-up attempt on 2026-06-01 succeeded at the user-creation step but returned `needsConfirmation: true` and no session, so it did not unlock the protected Imageshop route. The local env does not include a service-role key or documented QA credential.
