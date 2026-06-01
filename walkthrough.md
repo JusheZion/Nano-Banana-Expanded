@@ -6651,3 +6651,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+
+## Cloudflare deploy syntax fix - 2026-06-01
+
+### What changed
+- Fixed the TypeScript parser failure reported by the Cloudflare deploy log for `src/portals/storyline/GenericImageLabPanel.tsx`.
+- Removed two stray branch-label lines and the duplicated old callback body that had been committed inside `handlePageBackgroundFile`.
+- Preserved the newer page-background object URL cleanup path so replacing an uploaded `blob:` background still revokes the previous blob URL before storing the new one.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- The failing deployed commit was on `origin/main` after fetch; local `main` had initially been stale and still built cleanly.
+- The bad region was a malformed conflict-resolution artifact around the page-background upload callback, including plain text labels `codex-writers-output-format-defaults` and `main`.
+- The fix is intentionally limited to restoring valid callback syntax and keeping the existing cleanup behavior.
+
+### Verification
+- `npm run build` passed.
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed: 1 file, 9 tests.
+- `npm run lint` passed with existing warnings only: 0 errors, 68 warnings.
+- `git diff --check` passed before the walkthrough append.
+
+### Outstanding issues
+- None for the deploy-blocking TypeScript syntax error.
+
+### Risks or caveats
+- Manual browser QA was not run; this was a parser/build-blocking syntax fix.
+- Cloudflare still needs a new deploy from the repaired `main` commit after the fix is pushed.
+
+### Operator follow-up
+- Trigger or allow the connected Cloudflare deployment to rebuild after the fix commit is pushed.
+
+### Next steps
+- None.

@@ -994,7 +994,6 @@ export function GenericImageLabPanel({
     (files: FileList | null) => {
       const file = files?.[0];
       if (!file || !file.type.startsWith('image/')) return;
- codex-writers-output-format-defaults
       const nextPageBackgroundUrl = URL.createObjectURL(file);
       const previousPageBackgroundUrl = pageConfig.panelStyle.pageBackgroundUrl;
       if (previousPageBackgroundUrl.startsWith('blob:')) {
@@ -1007,14 +1006,6 @@ export function GenericImageLabPanel({
       });
     },
     [pageConfig.panelStyle.pageBackgroundUrl, updatePageConfig],
-      updatePageConfig({
-        panelStyle: {
-          pageBackgroundUrl: URL.createObjectURL(file),
-        },
-      });
-    },
-    [updatePageConfig],
- main
   );
 
   const exportProductionJson = useCallback(() => {
