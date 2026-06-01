@@ -6921,7 +6921,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Live signed-in QA created two temporary lore cards in the selected series:
   - `Codex Obsidian QA Manual 20260601`
   - `Codex Obsidian QA JSON 20260601`
-- Cleanup deletion of those Supabase-backed QA cards is pending user confirmation.
+- Cleanup complete: the user manually deleted those Supabase-backed QA cards after the regression pass.
 
 ### Verification
 - `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed: 1 file, 1 test.
@@ -6950,15 +6950,131 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Obsidian preview duplicate actions (`skip`, `create duplicate`, `overwrite`, `merge`) remain unverified in the live UI.
 - Supabase cloud image upload for imported Obsidian images remains unverified.
 - Obsidian source badge and stored-image count display remain unverified.
-- The two temporary QA lore cards still need deletion after user confirmation.
+- The two temporary QA lore cards were manually deleted by the user after this QA pass.
 
 ### Risks or caveats
 - The tested Cockpit digest used manually created/JSON-imported lore cards, not Obsidian-imported cards, because native file selection could not be automated in the in-app browser.
-- The selected signed-in series now contains temporary QA lore data until cleanup is approved and performed.
+- The selected signed-in series no longer contains the temporary QA lore cards after user cleanup.
 
 ### Operator follow-up
-- Confirm cleanup deletion for `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
 - For full native-picker coverage, either perform the OS file selection manually in the in-app browser or provide a way for an automated Playwright session to reuse a signed-in Writer session safely.
 
 ### Next steps
-- After cleanup confirmation, delete the two QA lore cards, rerun `git diff --check`, and update this walkthrough if cleanup completes.
+- Continue only with the remaining native-picker, duplicate-action, badge/count, and cloud image-upload checks if deeper Obsidian import QA is needed.
+
+## Imageshop Cursory Audit and Backlog Update - 2026-06-01
+
+### What changed
+- Added Writers Workshop ribbon/workspace polish to the existing 2026-06-01 backlog section so it remains tracked as future polish rather than active feature work.
+- Performed a cursory source and signed-in browser audit of Illustrator's Imageshop with emphasis on UI/UX hierarchy, comic-page beat leverage, prompt integrity, generation reliability, and button/menu fidelity.
+- Added a `Cursory Audit Backlog - 2026-06-01` section to the Imageshop production-studio tracker with bugs, risks, and recommended next passes.
+
+### Files touched
+- `walkthrough.md`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+
+### Implementation notes
+- No product code was changed in this pass.
+- Source audit covered `StorylineStudio.tsx`, `GenericImageLabPanel.tsx`, `ImageshopImportPanel.tsx`, `imageshopPromptComposer.ts`, `imageshopJsonSchemas.ts`, `geminiImageApi.ts`, and the focused Imageshop component tests.
+- The portal currently renders production libraries and the beat timeline before the Image Lab, so the image-generation workflow is not the first-screen focus for an empty project.
+- Beats are partially integrated: selected beat refs can be pulled into Imageshop, generated output can become a selected/new B-roll beat, and Story Beat JSON can import production items. The missing workflow is a first-class page/panel queue that converts Writers/Guided page beats into Comic Pages generation items with per-panel prompts, references, status, retry, approval, and return targets.
+- Prompt integrity needs hardening because `Negative prompt` is composed as ordinary text inside the same prompt body, and Comic Pages mode can generate from mostly configuration text if no meaningful main prompt exists.
+- Generation reliability needs better diagnostics. The Gemini bridge retries 429s, but reference/network failures return immediately, batch failure copy is generic, and raw API errors can surface without user-friendly next steps.
+- Button fidelity issues observed in the live portal included duplicated aspect controls, duplicated export/save language, weak distinction between `Process` and `Generate`, low-context reference buttons, and production dashboard controls with long concatenated accessible names.
+- The two temporary Writer lore QA cards were manually deleted by the user after the signed-in regression pass.
+
+### Verification
+- Started local dev server with `npm run dev -- --host 127.0.0.1 --port 5174`.
+- In-app browser loaded `http://127.0.0.1:5174/` as signed-in user `hayronivy@gmail.com` with page title `ARCS Expanded`.
+- Opened Illustrator's Imageshop and confirmed no captured console errors on initial load.
+- Filled a generic Imageshop prompt and confirmed the `Generate` button enabled.
+- Ran one live generation smoke from the portal; generation completed successfully after roughly 35 seconds with no captured console errors and created an Imageshop production item.
+- Browser screenshot capture timed out, so live audit evidence was DOM/console/state based.
+
+### Outstanding issues
+- The random Imageshop error issue was not reproduced in the single live generation smoke.
+- Native image import/file picker and batch JSON generation were not exercised in this audit pass.
+- A visual screenshot artifact could not be captured because the in-app browser screenshot command timed out.
+
+### Risks or caveats
+- The live generation smoke used a harmless generic prompt; it does not represent success rate under heavy reference payloads, large uploads, batch generation, safety-sensitive prompts, or quota pressure.
+- The audit is intentionally cursory and should be followed by targeted implementation passes rather than treated as a complete design spec.
+
+### Operator follow-up
+- Decide whether the Imageshop overhaul should stay inside the existing `lab` portal or graduate into a more dedicated image-generation workspace route.
+
+### Next steps
+- First overhaul pass: recenter Imageshop's first viewport around prompt, references, generation status, preview, and save/export.
+- Second overhaul pass: add a `Comic Pages from Beats` workflow that imports Writers/Guided page beats into panel-level generation items.
+- Third overhaul pass: add prompt preflight, error classification, retry/fallback controls, and control/menu consolidation.
+
+## Illustrator's Imageshop Priority Audit Document - 2026-06-01
+
+### What changed
+- Created a comprehensive priority audit document for Illustrator's Imageshop as the intended main portal for fast comic-page creation.
+- Expanded the earlier short concern list into a full concern inventory covering product focus, comic page creation, Writers Workshop JSON, Obsidian lore/canon context, reference vault ergonomics, prompt integrity, generation reliability, batch workflows, button/menu fidelity, accessibility, dashboard/status design, save/export paths, state recovery, testing, performance, provenance, and visual design.
+- Updated the existing Imageshop production-studio tracker to point future agents/operators to the new audit document.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-01-illustrators-imageshop-priority-audit.md`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No application source code changed in this pass.
+- The new audit document frames the target product contract as: Imageshop owns comic-page image production; Writers Workshop supplies story/page/panel JSON; Reference Vaults supply visual continuity; Obsidian lore supplies canon context; Guided Comic Flow remains a consumer/return target.
+- The document recommends a priority order: define the product contract, recenter the UI around generation, implement Writer JSON to comic-page queue, add reference/lore context, harden prompt/error reliability, then upgrade dashboard/save/export workflows.
+
+### Verification
+- Documentation-only update; no runtime test required.
+- Verified the new audit document exists and is linked from the Imageshop tracker.
+- `git diff --check` passed after documentation edits.
+
+### Outstanding issues
+- The audit is a planning/concern inventory, not an implementation pass.
+- The temporary Writer lore QA cards were manually deleted by the user after the earlier QA pass.
+
+### Risks or caveats
+- The document intentionally lists broad concerns and does not resolve route ownership, full-page versus panel-first generation, lore attachment behavior, or batch failure defaults.
+
+### Operator follow-up
+- Use the new audit document as the source for the next Imageshop overhaul plan.
+- Decide whether the next implementation pass should start with UI recentering or Writer JSON to page/panel queue.
+
+### Next steps
+- Convert the audit into an implementation tracker once the first overhaul slice is selected.
+
+## Obsidian Lore QA Card Cleanup Recorded - 2026-06-01
+
+### What changed
+- Recorded that the user manually deleted the two temporary signed-in Writer lore QA cards created during Obsidian Lore Import regression QA.
+- Updated the Obsidian Lore Import QA plan and Writers Workshop completion tracker so cleanup is no longer listed as pending.
+- Replaced stale walkthrough caveats about pending QA-card deletion with completed-cleanup language.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No application source code changed in this pass.
+- The cleanup was performed manually by the user, not through Codex browser automation.
+- The deleted QA cards were `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
+
+### Verification
+- Documentation-only update; no runtime test required.
+- Searched the project trackers and walkthrough for stale pending-cleanup language.
+
+### Outstanding issues
+- Native file-picker import with Markdown + image files remains unverified.
+- Folder import with type filtering remains unverified.
+- Obsidian preview duplicate actions, source badges, stored-image counts, and real cloud image-upload verification remain unverified.
+
+### Risks or caveats
+- Codex did not independently verify the Supabase deletion after the user reported it.
+
+### Operator follow-up
+- None for QA-card cleanup.
+
+### Next steps
+- Continue only with the remaining Obsidian native-picker and cloud image-upload checks if deeper import QA is needed.

@@ -80,7 +80,7 @@
   - In-app browser QA verified Writers Workshop -> Canon -> Obsidian import UI renders at `http://127.0.0.1:5174/`, including type-filter options and both picker buttons, with no captured console errors.
   - Signed-in browser regression QA verified manual lore card create/edit, JSON lore import, reload persistence for the QA cards, and Cockpit Lore digest display without `ARCS_LORE_IMPORT_METADATA`, `storageUrl`, or raw storage URL leakage.
   - Native file-picker import, folder import, Obsidian preview duplicate actions, Obsidian source badges, stored image counts, and real cloud image-upload verification remain pending because the in-app browser runtime does not expose file-input upload automation and a standalone Playwright fallback would need a signed-in browser state before it can exercise the same Supabase-backed project.
-  - Cleanup of live QA lore cards is pending user confirmation before deleting Supabase-backed data.
+  - Cleanup complete: the user manually deleted the two live QA lore cards from the signed-in project after the regression pass.
 
 ## Acceptance Criteria
 

@@ -19,7 +19,7 @@
 - Live signed-in browser regression QA passed for manual lore card create, edit, JSON import, reload persistence, and Cockpit Lore digest display. The QA cards used were `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
 - Cockpit Lore digest showed the QA lore text and did not expose `ARCS_LORE_IMPORT_METADATA`, `storageUrl`, or raw storage URLs.
 - Native file-picker import, folder import, duplicate actions through the Obsidian preview UI, Obsidian source badges, stored image counts, and real cloud image-upload verification remain unverified in-browser. The in-app browser runtime exposes the hidden file inputs but does not expose `setInputFiles`; a standalone Playwright fallback required installing Playwright and would also need a signed-in browser state or token transfer before it could exercise the same Supabase-backed project.
-- Cleanup of the two live QA lore cards is pending user confirmation because deleting signed-in Supabase-backed data requires explicit action-time approval.
+- Cleanup complete: the user manually deleted the two live QA lore cards after the signed-in regression pass.
 
 ## QA Scope
 
@@ -468,7 +468,7 @@ Expected:
 
 ## Task 10: Cleanup QA
 
-- [ ] Delete QA lore cards from the selected series if they were imported into a real project.
+- [x] Delete QA lore cards from the selected series if they were imported into a real project. User completed manual cleanup for `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
 - [ ] Stop the local dev server.
 - [ ] Run final whitespace check.
 
