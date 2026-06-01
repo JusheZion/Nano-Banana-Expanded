@@ -304,6 +304,11 @@ async function callGeminiJson(args: {
 }
 
 const LORE_CARDS_PROMPT_CAP = 12_000;
+const LORE_IMPORT_METADATA_RE = /<!--\s*ARCS_LORE_IMPORT_METADATA\s*\n[\s\S]*?\n-->/g;
+
+function stripLoreImportMetadata(body: string): string {
+  return body.replace(LORE_IMPORT_METADATA_RE, '').trim();
+}
 
 /** Series lore cards (writer_lore_cards) for outline / page_beats context. */
 async function fetchLoreCardsDigest(supabase: SupabaseAdmin, seriesId: string): Promise<string> {
@@ -319,7 +324,7 @@ async function fetchLoreCardsDigest(supabase: SupabaseAdmin, seriesId: string): 
   const blocks = rows.map((r) => {
     const t = (r.title ?? '').trim() || '(untitled)';
     const cat = (r.category ?? '').trim() || 'general';
-    const b = (r.body ?? '').trim();
+    const b = stripLoreImportMetadata((r.body ?? '').trim());
     return b ? `### ${t} (${cat})\n${b}` : `### ${t} (${cat})\n(no body)`;
   });
   let s = `Series lore cards (reference — stay consistent; do not contradict without story reason):\n\n${blocks.join('\n\n')}`;

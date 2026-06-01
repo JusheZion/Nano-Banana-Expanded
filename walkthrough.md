@@ -6652,6 +6652,144 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None.
 
+## Obsidian Lore Import for Writers Workshop - 2026-06-01
+
+### What changed
+- Added an Obsidian import pipeline for Writers Workshop lore cards.
+- Added a Canon gate import panel with file selection, folder selection, Universe Operating System type filtering, preview rows, entry deselection, duplicate actions, warning display, and import result counts.
+- Added image-aware lore import behavior for `.png`, `.jpg`, `.jpeg`, `.webp`, and `.gif` files referenced by Obsidian embeds such as `![[image.png]]` and `![[Assets/Characters/Kron/kron-reference.png]]`.
+- Preserved imported note metadata without a database migration by storing a hidden structured import block inside the existing lore card body.
+- Updated lore prompt digests on the client and Supabase Edge function so hidden import metadata and image storage URLs are stripped before text generation.
+- Synced the Writers Workshop task tracker and active plan docs.
+
+### Files touched
+- `src/portals/writer/obsidianLoreImport.ts`
+- `src/portals/writer/__tests__/obsidianLoreImport.test.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/shared/api/arcsPersistence.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The parser reads `name` or `title` from frontmatter when present, otherwise falls back to the Markdown filename.
+- `type`, `category`, or `kind` frontmatter maps to the lore category and supports broader taxonomy entries such as character, species, faction, organization, location, event, discipline, artifact, and concept.
+- Markdown body content is preserved, including headings such as Overview, Relationships, Abilities, Biography, History, Visual References, and Notes.
+- Obsidian internal links are preserved in the Markdown body and also collected into structured `linkedLoreReferences` when they match existing or imported lore titles.
+- Embedded image references are resolved relative to the note folder, by selected path, or by unique filename. Unresolved image embeds produce warnings and do not block the note import.
+- Confirmed imports upload resolved image files through the existing `arcs-generations` storage path. Stored image URLs are kept in the lore import metadata as visual references.
+- Duplicate notes default to skip when a matching title already exists; the preview lets the user choose skip, overwrite, merge, or create duplicate. Merge preserves existing app-specific fields and app-field markers while updating the imported lore body.
+- Imported metadata includes source path, import date, updated date, summary, properties, tags, matched references, and images. Generation text uses `stripLoreImportMetadataFromBody` so image URLs are not forced into prompts unless a future reference-asset flow explicitly selects them.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts` passed: 1 file, 7 tests.
+- `npm run build` passed.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+- In-app browser QA on `http://127.0.0.1:5174/` verified the Canon tab rendered the Obsidian import panel, file/folder buttons, type filter, and no captured console errors.
+
+### Outstanding issues
+- Full browser import confirmation with a native file picker was not automated; parser, duplicate handling, and image reference behavior are covered by Vitest.
+
+### Risks or caveats
+- Storing rich import metadata in lore card bodies avoids a migration, but future database schema work could move this into first-class columns.
+- Image storage requires the user to be signed in and the existing `arcs-generations` storage policies to allow uploads. Failed image uploads become warnings while the lore text can still import.
+
+### Operator follow-up
+- Deploy `supabase/functions/writer-tools` before expecting hosted generation to strip Obsidian import metadata from lore prompt digests.
+
+### Next steps
+- Add a future reference-asset selection flow if generation should explicitly attach imported lore images to image-capable model calls.
+
+## Obsidian Lore Import Guide and QA Plan - 2026-06-01
+
+### What changed
+- Added a user/operator guide for the Writers Workshop Obsidian Lore Import workflow.
+- Added a repeatable QA plan for manual and automated validation of the Obsidian import feature.
+- Updated the active Writers Workshop trackers to explicitly reference the guide and QA plan.
+
+### Files touched
+- `docs/writers-workshop-obsidian-lore-import-guide.md`
+- `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The guide covers supported file types, recommended Obsidian frontmatter, property mapping, import steps, preview meanings, duplicate choices, image behavior, generation behavior, troubleshooting, and operator notes.
+- The QA plan creates a concrete fixture with `Kron.md`, `Stellar Academy.md`, `Moon Gate.md`, a resolved PNG image, and an intentionally unresolved image note.
+- The QA plan separates automated parser/build/lint checks from manual native-file-picker, folder import, Supabase persistence, duplicate action, prompt digest, and existing workflow regression checks.
+- The QA plan explicitly calls out the currently unproven native picker and real Supabase image-upload paths so they are not mistaken for completed QA.
+
+### Verification
+- `git diff --check` was run after the docs were added.
+
+### Outstanding issues
+- Manual end-to-end QA with a real Obsidian folder remains pending until the QA plan is executed.
+
+### Risks or caveats
+- The guide and QA plan document the current implementation shape, including metadata-in-body storage. If the lore schema later gains first-class metadata/assets tables, both docs should be updated.
+
+### Operator follow-up
+- Execute `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md` against a disposable series before treating the Obsidian import as fully end-to-end verified.
+
+### Next steps
+- None for documentation.
+
+## Twovestellium Obsidian Vault Parser QA - 2026-06-01
+
+### What changed
+- Tested the Obsidian lore importer against the user-provided vault at `reference/Twovestellium Universe Obsidian Vault/`.
+- Added parser support for capitalized Obsidian frontmatter keys such as `Type`, `Species`, `Faction`, and `Timeline`.
+- Added parser support for frontmatter keys with spaces or slashes, such as `Threat Level`, `First Appearance`, and `Symbols/Logos`.
+- Added folder-based category inference for notes without explicit type/category metadata, such as `Characters/Kron.md` and `Characters/Finn.md`.
+- Added exclusion for notes under `Templates/` and files named like `Character Template.md` during folder imports.
+- Added an optional reference-vault Vitest file that runs when the local Twovestellium vault exists and skips cleanly when absent.
+- Updated the Obsidian import guide, QA plan, active Writers Workshop tracker, and tasks checklist with these real-vault findings.
+
+### Files touched
+- `src/portals/writer/obsidianLoreImport.ts`
+- `src/portals/writer/__tests__/obsidianLoreImport.test.ts`
+- `src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts`
+- `docs/writers-workshop-obsidian-lore-import-guide.md`
+- `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The local vault currently contains four content notes and three template notes.
+- Parser QA confirmed the import set is `Kron`, `Finn`, `Glimm`, and `Institute of Divination & Occultivation`.
+- Parser QA confirmed `Character Template`, `Factions Template`, and `Species Template` are excluded.
+- `Kron` and `Finn` infer `character` from the `Characters/` folder because their notes do not provide explicit type/category metadata.
+- `Glimm` maps capitalized `Type: Species` to category `species`.
+- `Institute of Divination & Occultivation` maps `Type: Academic` to category `academic` and preserves `Symbols/Logos`.
+- No image QA was possible from this vault yet because it currently contains no image files and no embedded image references.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts` first failed on the real-vault cases before the parser fix.
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts` passed after the parser fix: 1 file, 9 tests.
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed: 2 files, 10 tests.
+- `npm run build` passed.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+
+### Outstanding issues
+- Native browser file-picker import, Supabase persistence, duplicate action UI, and real image upload QA are still pending from the full QA plan.
+- This vault does not yet exercise image resolution or unresolved image warning behavior.
+
+### Risks or caveats
+- `Type: Academic` is preserved as category `academic` rather than remapped to `organization`; this keeps the author-provided type value intact.
+- The optional reference-vault test depends on an untracked local folder and intentionally skips when that folder is absent.
+
+### Operator follow-up
+- Add at least one embedded image reference and image file to the vault before running the image-storage portion of the QA plan.
+
+### Next steps
+- Run native file-picker and Supabase persistence QA in a disposable series when ready.
+
 ## Cloudflare deploy syntax fix - 2026-06-01
 
 ### What changed
@@ -6686,3 +6824,78 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+
+## Twovestellium Obsidian Vault Embedded Image QA - 2026-06-01
+
+### What changed
+- Re-checked the user-provided vault after image files and embedded image references were added.
+- Confirmed `Kron.md`, `Finn.md`, and `Magister Valencius Santoro.md` contain Obsidian image embeds.
+- Fixed image section context parsing so adjacent embeds and tight Obsidian heading lines produce clean section labels.
+- Updated the optional Twovestellium reference-vault test to assert the current five-note import set and resolved embedded images.
+- Updated the Obsidian import guide, QA plan, completion tracker, and tasks checklist with the real embedded-image vault findings.
+
+### Files touched
+- `src/portals/writer/obsidianLoreImport.ts`
+- `src/portals/writer/__tests__/obsidianLoreImport.test.ts`
+- `src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts`
+- `docs/writers-workshop-obsidian-lore-import-guide.md`
+- `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The vault image files now include PNGs under `reference/Twovestellium Universe Obsidian Vault/Assets/Images/`.
+- `Kron.md` resolves `Kron, Lumilquill, Dorm Room.png`, `Kron's Presentation Outfit.png`, and `Kron IDO Favorite Fit.png` under the clean section label `Story Arc`.
+- `Finn.md` resolves `Monocerocephalic Form No More Telepathy.png` and `Monocerokorus Helm Version.png` under the clean section label `Notes`.
+- `Magister Valencius Santoro.md` resolves `Valerius Santoro, Magistus Santoro.png` under the clean section label `Appearance`.
+- The Santoro note exists at `reference/Twovestellium Universe Obsidian Vault/Characters/Magister Valencius Santoro.md`; the shorter path without `Obsidian Vault` was not present.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed: 2 files, 11 tests.
+- `npm run build` passed.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+- `git diff --check` passed.
+
+### Outstanding issues
+- Native browser file-picker import, Supabase persistence, duplicate action UI, and real cloud image upload QA remain pending from the full QA plan.
+
+### Risks or caveats
+- The local reference-vault test depends on untracked files in `reference/Twovestellium Universe Obsidian Vault/` and intentionally skips when that folder is absent.
+
+### Operator follow-up
+- Run the full manual QA plan against a disposable Writer series to verify preview UI, confirmed import, Supabase image storage, and duplicate actions end to end.
+
+### Next steps
+- None for parser-level embedded image handling.
+
+## Backlog Items - 2026-06-01
+
+### What changed
+- Added a dedicated backlog section for older, non-Obsidian tasks that remain outside the current Obsidian Lore Import QA track.
+
+### Files touched
+- `walkthrough.md`
+
+### Backlog items
+- Image Vault modal density: widen `ProfileVaultModal` / `CollectionVaultModal` and densify the internal image grid so more images fit without scrolling.
+- Imageshop/browser smoke checks: run the remaining targeted browser smoke checks noted in `tasks.md`, including Imageshop lint/browser verification and any older manual no-console-error checks.
+- Image-describe API follow-up: implement the future image-describe API for the Refine tab `NEW` workflow.
+
+### Implementation notes
+- These items are broader project backlog tasks and are not blockers for the Obsidian Lore Import parser or current embedded-image resolution work.
+
+### Verification
+- Documentation-only update; no runtime verification required.
+
+### Outstanding issues
+- The backlog items above remain unimplemented.
+
+### Risks or caveats
+- The backlog list is scoped to the items surfaced during the Obsidian handoff discussion, not a full audit of every historical `tasks.md` checkbox.
+
+### Operator follow-up
+- Prioritize these independently from Obsidian Lore Import end-to-end QA.
+
+### Next steps
+- Continue Obsidian Lore Import QA first if the goal is to finish that feature.

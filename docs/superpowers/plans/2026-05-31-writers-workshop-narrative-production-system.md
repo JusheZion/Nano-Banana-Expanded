@@ -54,6 +54,11 @@ The visible flow should become:
   - Current state: schemas/prompts now accept emotional arc, character utilization, and worldbuilding density branches, and Arc exposes readable readiness/summary cards for each audit mode.
 - [x] Add production branches for visual prep, dialogue, exports, and Guided Comics handoff.
   - Current state: Video workspace exposes readiness-aware branch cards with direct actions for visual prep, dialogue, issue-pack exports, markdown export, and Guided Comics handoff JSON export.
+- [x] Add Obsidian lore import for the Canon gate.
+  - Current state: Lore supports selecting Markdown/image files or an Obsidian folder, parsing frontmatter/body/wiki links/embedded images, previewing detected entries, filtering by Universe Operating System type, choosing duplicate actions, storing attached image references in lore import metadata, and stripping hidden import metadata from text-generation prompt digests.
+  - Current state: The parser now handles capitalized Obsidian property keys, frontmatter keys with spaces/slashes, folder-inferred categories for notes without explicit type/category, and skips notes under `Templates/` during folder imports.
+- [x] Document Obsidian lore import usage and QA.
+  - Current state: `docs/writers-workshop-obsidian-lore-import-guide.md` explains operator/user usage, note shape, property mapping, image behavior, duplicate handling, and troubleshooting. `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md` provides a repeatable parser, browser, native file picker, folder import, Supabase persistence, duplicate, prompt digest, and regression QA checklist.
 - [~] Reduce ribbon/workspace density after the core flow is stable.
   - Current state: secondary production routes are grouped under branch/audit cards, but full ribbon compaction is still a later polish task.
 - [x] Run authenticated in-app browser QA after each visible UI pass.
@@ -73,3 +78,4 @@ The visible flow should become:
 - `writer-tools` was deployed after adding preview-only pacing regeneration; hosted `writer-tools` is active at version 46, updated `2026-06-01 05:45:41 UTC`.
 - Signed-in browser QA verified live `outline_issue`, `page_beats`, `draft_dialogue`, `plan_shots_from_issue`, `pacing_review`, and `pacing_regeneration_preview` calls against a temporary `Codex Live AI Verification` issue, then deleted the temporary issue.
 - Authenticated browser QA also verified the preferred-export button, hierarchy import/edit controls, screenshot capture, DOM inspection, and console log checks with no captured console errors.
+- Obsidian lore import now extends the Canon gate without a new table migration: imported note metadata, matched lore references, source paths, timestamps, tags, and attached visual references are stored in a hidden structured body block, while generation prompt digests use the clean Markdown body so image URLs are not forced into text prompts.

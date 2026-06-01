@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Circle, HelpCircle, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, FileUp, FolderOpen, HelpCircle, Image, Loader2, Trash2 } from 'lucide-react';
 import {
   clearWriterPagesBeatsJson,
   clearWriterPagesScriptText,
@@ -35,6 +35,7 @@ import {
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { uploadImageFileToArcsGenerations } from '@/shared/api/arcsPersistence';
 import { useAuth } from '@/shared/context/AuthContext';
 import { shotPlanJsonToCsv } from '@/portals/writer/shotPlanCsv';
 import { WriterShotStoryboardStrip } from '@/portals/writer/WriterShotStoryboardStrip';
@@ -107,6 +108,18 @@ import {
   summarizeWriterAuditModes,
   summarizeWriterProductionBranches,
 } from '@/portals/writer/writerProductionBranches';
+import {
+  OBSIDIAN_LORE_TYPE_OPTIONS,
+  buildLoreBodyFromObsidianEntry,
+  parseObsidianLoreImport,
+  readLoreImportMetadataFromBody,
+  resolveObsidianLoreDuplicate,
+  stripLoreImportMetadataFromBody,
+  type ObsidianLoreDuplicateAction,
+  type ObsidianLoreEntry,
+  type ObsidianLoreExistingEntry,
+  type ObsidianLoreImage,
+} from '@/portals/writer/obsidianLoreImport';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
@@ -174,6 +187,15 @@ const COCKPIT_VIEW_OPTIONS: { id: WriterCockpitPanelView; label: string }[] = [
 
 const WRITER_COCKPIT_DIGEST_CAP = 12_000;
 
+type LoreObsidianImportResult = {
+  imported: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  storedImages: number;
+  warnings: string[];
+};
+
 function truncateWriterPromptText(raw: string, cap: number): string {
   const t = raw.trim();
   if (!t) return '';
@@ -227,7 +249,7 @@ function buildWriterCockpitViewDigest(ctx: WriterCockpitDigestContext): string {
       const lines = ctx.loreCards.map((c) => {
         const title = typeof c.title === 'string' ? c.title.trim() : '';
         const category = typeof c.category === 'string' ? c.category.trim() : 'world';
-        const body = typeof c.body === 'string' ? c.body.trim() : '';
+        const body = typeof c.body === 'string' ? stripLoreImportMetadataFromBody(c.body).trim() : '';
         const inc = c.include_in_prompt ? 'include' : 'exclude';
         return [`## ${title || '(untitled)'} (${category}) [${inc}]`, body].filter(Boolean).join('\n\n');
       });
@@ -670,6 +692,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     skippedPayload: number;
     invalid: number;
   } | null>(null);
+  const loreObsidianFileInputRef = useRef<HTMLInputElement | null>(null);
+  const loreObsidianFolderInputRef = useRef<HTMLInputElement | null>(null);
+  const [loreObsidianEntries, setLoreObsidianEntries] = useState<ObsidianLoreEntry[]>([]);
+  const [loreObsidianSelectedIds, setLoreObsidianSelectedIds] = useState<string[]>([]);
+  const [loreObsidianTypeFilter, setLoreObsidianTypeFilter] = useState('');
+  const [loreObsidianError, setLoreObsidianError] = useState<string | null>(null);
+  const [loreObsidianResult, setLoreObsidianResult] = useState<LoreObsidianImportResult | null>(null);
   const [loreAssistLoading, setLoreAssistLoading] = useState(false);
   const [loreAssistError, setLoreAssistError] = useState<string | null>(null);
   const [loreAssistOutput, setLoreAssistOutput] = useState('');
@@ -1060,6 +1089,155 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [loreCards, loreImportJsonDraft, reloadLoreCards, selectedSeriesId, pushHistory]);
 
+  const handleLoreObsidianFiles = useCallback(
+    async (fileList: FileList | null) => {
+      const files = Array.from(fileList ?? []);
+      setLoreObsidianError(null);
+      setLoreObsidianResult(null);
+      if (files.length === 0) return;
+      const existingEntries: ObsidianLoreExistingEntry[] = loreCards.map((card) => ({
+        id: card.id,
+        title: card.title,
+        category: card.category,
+        body: card.body,
+        include_in_prompt: card.include_in_prompt,
+        sort_order: card.sort_order,
+      }));
+      try {
+        const parsed = await parseObsidianLoreImport(files, {
+          existingEntries,
+          typeFilter: loreObsidianTypeFilter || null,
+        });
+        if (parsed.entries.length === 0) {
+          setLoreObsidianEntries([]);
+          setLoreObsidianSelectedIds([]);
+          setLoreObsidianError(
+            loreObsidianTypeFilter
+              ? `No Markdown notes matched type "${loreObsidianTypeFilter}".`
+              : 'No Markdown notes were found in that selection.',
+          );
+          return;
+        }
+        setLoreObsidianEntries(parsed.entries);
+        setLoreObsidianSelectedIds(parsed.entries.map((entry) => entry.id));
+      } catch (e) {
+        setLoreObsidianEntries([]);
+        setLoreObsidianSelectedIds([]);
+        setLoreObsidianError(e instanceof Error ? e.message : 'Could not parse Obsidian notes.');
+      }
+    },
+    [loreCards, loreObsidianTypeFilter],
+  );
+
+  const setLoreObsidianEntryAction = useCallback((entryId: string, action: ObsidianLoreDuplicateAction) => {
+    setLoreObsidianEntries((entries) =>
+      entries.map((entry) => (entry.id === entryId ? { ...entry, duplicateAction: action } : entry)),
+    );
+  }, []);
+
+  const toggleLoreObsidianEntry = useCallback((entryId: string) => {
+    setLoreObsidianSelectedIds((ids) =>
+      ids.includes(entryId) ? ids.filter((id) => id !== entryId) : [...ids, entryId],
+    );
+  }, []);
+
+  const runLoreObsidianImport = useCallback(async () => {
+    if (!selectedSeriesId) return;
+    const selectedEntries = loreObsidianEntries.filter((entry) => loreObsidianSelectedIds.includes(entry.id));
+    if (selectedEntries.length === 0) {
+      setLoreObsidianError('Select at least one detected note before importing.');
+      return;
+    }
+    setLoreImportBusy(true);
+    setLoreObsidianError(null);
+    setLoreObsidianResult(null);
+    const warnings: string[] = [];
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    let storedImages = 0;
+    let sortOrder = startLoreSortOrder(loreCards);
+
+    try {
+      for (const entry of selectedEntries) {
+        const storedImagesForEntry: ObsidianLoreImage[] = [];
+        for (const image of entry.images) {
+          if (image.status !== 'resolved' || !image.file) {
+            storedImagesForEntry.push(image);
+            continue;
+          }
+          const storageUrl = await uploadImageFileToArcsGenerations(image.file);
+          if (storageUrl) {
+            storedImages += 1;
+            storedImagesForEntry.push({ ...image, storageUrl, status: 'stored' });
+          } else {
+            const warning = `Could not store "${image.fileName}" for "${entry.title}". The lore note was imported, but the image remains an unresolved reference.`;
+            warnings.push(warning);
+            storedImagesForEntry.push({ ...image, status: 'unresolved' });
+          }
+        }
+
+        const body = buildLoreBodyFromObsidianEntry(entry, storedImagesForEntry);
+        const incoming = {
+          title: entry.title,
+          category: entry.category,
+          body,
+          include_in_prompt: true,
+          sort_order: sortOrder,
+        };
+        const operation = resolveObsidianLoreDuplicate({
+          existing: entry.duplicateOf,
+          incoming,
+          action: entry.duplicateOf ? entry.duplicateAction : 'create_duplicate',
+        });
+
+        if (operation.kind === 'skip') {
+          skipped += 1;
+          continue;
+        }
+
+        if (operation.kind === 'update') {
+          const ok = await updateWriterLoreCard(operation.id, operation.patch);
+          if (ok) {
+            updated += 1;
+          } else {
+            failed += 1;
+            warnings.push(`Could not update existing lore card "${entry.title}".`);
+          }
+          continue;
+        }
+
+        const created = await createWriterLoreCard({
+          series_id: selectedSeriesId,
+          ...operation.input,
+          sort_order: sortOrder,
+        });
+        sortOrder += 10;
+        if (created) {
+          imported += 1;
+        } else {
+          failed += 1;
+          warnings.push(`Could not create lore card "${entry.title}".`);
+        }
+      }
+
+      const allWarnings = [...selectedEntries.flatMap((entry) => entry.warnings), ...warnings];
+      setLoreObsidianResult({ imported, updated, skipped, failed, storedImages, warnings: allWarnings });
+      pushHistory(`imported Obsidian lore: ${imported} new, ${updated} updated, ${skipped} skipped`);
+      await reloadLoreCards();
+    } finally {
+      setLoreImportBusy(false);
+    }
+  }, [
+    loreCards,
+    loreObsidianEntries,
+    loreObsidianSelectedIds,
+    pushHistory,
+    reloadLoreCards,
+    selectedSeriesId,
+  ]);
+
   useEffect(() => {
     void reloadLoreCards();
   }, [reloadLoreCards]);
@@ -1076,6 +1254,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   useEffect(() => {
     setLoreImportError(null);
     setLoreImportResult(null);
+    setLoreObsidianEntries([]);
+    setLoreObsidianSelectedIds([]);
+    setLoreObsidianError(null);
+    setLoreObsidianResult(null);
   }, [selectedSeriesId]);
 
   useEffect(() => {
@@ -4785,6 +4967,221 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </div>
                           ) : null}
                         </div>
+                        <div className="border border-black/10 bg-white/45 p-3 space-y-3 max-w-5xl">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                Import from Obsidian
+                              </p>
+                              <p className="mt-1 max-w-2xl text-xs leading-snug text-black/62">
+                                Select Markdown notes, images, or a vault folder. Notes stay in Markdown, wiki links are
+                                detected, and image embeds become visual references on the imported lore card.
+                              </p>
+                            </div>
+                            <label className="flex items-center gap-2 text-[11px] font-bold text-black/65">
+                              Type filter
+                              <select
+                                value={loreObsidianTypeFilter}
+                                onChange={(e) => setLoreObsidianTypeFilter(e.target.value)}
+                                className="rounded-md border border-black/15 bg-white px-2 py-1 text-xs text-black"
+                              >
+                                <option value="">All types</option>
+                                {OBSIDIAN_LORE_TYPE_OPTIONS.map((type) => (
+                                  <option key={type} value={type}>
+                                    {type}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <input
+                            ref={loreObsidianFileInputRef}
+                            type="file"
+                            multiple
+                            accept=".md,.markdown,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                          />
+                          <input
+                            ref={loreObsidianFolderInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            {...{ webkitdirectory: '', directory: '' }}
+                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={loreImportBusy}
+                              onClick={() => loreObsidianFileInputRef.current?.click()}
+                              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-black text-black shadow-sm transition hover:-translate-y-0.5 disabled:opacity-45"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              <FileUp className="h-4 w-4" />
+                              Select notes/images
+                            </button>
+                            <button
+                              type="button"
+                              disabled={loreImportBusy}
+                              onClick={() => loreObsidianFolderInputRef.current?.click()}
+                              className="inline-flex items-center gap-2 rounded-md border border-black/20 bg-white/85 px-3 py-2 text-xs font-bold text-black transition hover:bg-white disabled:opacity-45"
+                            >
+                              <FolderOpen className="h-4 w-4" />
+                              Select vault folder
+                            </button>
+                            {loreObsidianEntries.length > 0 ? (
+                              <button
+                                type="button"
+                                disabled={loreImportBusy}
+                                onClick={() => {
+                                  setLoreObsidianEntries([]);
+                                  setLoreObsidianSelectedIds([]);
+                                  setLoreObsidianError(null);
+                                  setLoreObsidianResult(null);
+                                }}
+                                className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-xs font-bold text-black/65 transition hover:bg-white disabled:opacity-45"
+                              >
+                                Clear preview
+                              </button>
+                            ) : null}
+                          </div>
+                          {loreObsidianError ? (
+                            <p className="flex items-start gap-2 bg-red-100/80 px-3 py-2 text-xs text-red-900">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                              <span>{loreObsidianError}</span>
+                            </p>
+                          ) : null}
+                          {loreObsidianResult ? (
+                            <div className="bg-emerald-100/75 px-3 py-2 text-xs text-emerald-950">
+                              Imported {loreObsidianResult.imported}. Updated {loreObsidianResult.updated}. Skipped{' '}
+                              {loreObsidianResult.skipped}. Failed {loreObsidianResult.failed}. Stored images{' '}
+                              {loreObsidianResult.storedImages}.
+                              {loreObsidianResult.warnings.length > 0 ? (
+                                <ul className="mt-1 list-disc pl-4 text-amber-950">
+                                  {loreObsidianResult.warnings.slice(0, 5).map((warning) => (
+                                    <li key={warning}>{warning}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {loreObsidianEntries.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/10 pt-3">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                  Preview {loreObsidianSelectedIds.length}/{loreObsidianEntries.length} selected
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || loreImportBusy || loreObsidianSelectedIds.length === 0}
+                                  onClick={() => void runLoreObsidianImport()}
+                                  className="rounded-md px-4 py-2 text-xs font-black text-black shadow-sm disabled:opacity-45"
+                                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                                >
+                                  {loreImportBusy ? 'Importing…' : 'Confirm import'}
+                                </button>
+                              </div>
+                              <ul className="grid gap-2">
+                                {loreObsidianEntries.map((entry) => {
+                                  const selected = loreObsidianSelectedIds.includes(entry.id);
+                                  return (
+                                    <li
+                                      key={entry.id}
+                                      className={`border px-3 py-2 transition ${
+                                        selected
+                                          ? 'border-amber-500/70 bg-amber-50/75'
+                                          : 'border-black/10 bg-white/35 opacity-70'
+                                      }`}
+                                    >
+                                      <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            onChange={() => toggleLoreObsidianEntry(entry.id)}
+                                            className="mt-1 rounded border-black/30"
+                                          />
+                                          <span className="min-w-0">
+                                            <span className="block truncate text-sm font-black text-black">
+                                              {entry.title}
+                                              <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-black/45">
+                                                {entry.category}
+                                              </span>
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-[11px] text-black/48">
+                                              {entry.sourcePath}
+                                            </span>
+                                          </span>
+                                        </label>
+                                        {entry.duplicateOf ? (
+                                          <label className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                                            Duplicate
+                                            <select
+                                              value={entry.duplicateAction}
+                                              onChange={(e) =>
+                                                setLoreObsidianEntryAction(
+                                                  entry.id,
+                                                  e.target.value as ObsidianLoreDuplicateAction,
+                                                )
+                                              }
+                                              className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] normal-case tracking-normal text-black"
+                                            >
+                                              <option value="skip">skip</option>
+                                              <option value="overwrite">overwrite</option>
+                                              <option value="merge">merge</option>
+                                              <option value="create_duplicate">create duplicate</option>
+                                            </select>
+                                          </label>
+                                        ) : null}
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/58">
+                                        {entry.tags.slice(0, 6).map((tag) => (
+                                          <span key={tag} className="bg-white/70 px-2 py-1">
+                                            #{tag}
+                                          </span>
+                                        ))}
+                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
+                                          {entry.links.length} links
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
+                                          <Image className="h-3 w-3" />
+                                          {entry.images.filter((image) => image.status === 'resolved').length}/
+                                          {entry.images.length} images
+                                        </span>
+                                        {entry.linkedLoreReferences.length > 0 ? (
+                                          <span className="bg-emerald-100/90 px-2 py-1 text-emerald-950">
+                                            {entry.linkedLoreReferences.length} matched refs
+                                          </span>
+                                        ) : null}
+                                        {entry.warnings.length > 0 ? (
+                                          <span className="bg-amber-100/90 px-2 py-1 text-amber-950">
+                                            {entry.warnings.length} warnings
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      {entry.links.length > 0 || entry.images.length > 0 || entry.warnings.length > 0 ? (
+                                        <div className="mt-2 grid gap-2 text-[11px] text-black/62 md:grid-cols-3">
+                                          <p>
+                                            <strong>Links:</strong>{' '}
+                                            {entry.links.map((link) => link.target).join(', ') || 'none'}
+                                          </p>
+                                          <p>
+                                            <strong>Images:</strong>{' '}
+                                            {entry.images.map((image) => image.fileName).join(', ') || 'none'}
+                                          </p>
+                                          <p className={entry.warnings.length > 0 ? 'text-amber-950' : ''}>
+                                            <strong>Warnings:</strong> {entry.warnings.join(' ') || 'none'}
+                                          </p>
+                                        </div>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
                         <div className="space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
                             Cards ({loreCards.length})
@@ -4795,28 +5192,52 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             <p className="text-xs text-black/50">No lore cards yet. Add one above.</p>
                           ) : (
                             <ul className="space-y-2 max-w-4xl">
-                              {loreCards.map((c) => (
-                                <li
-                                  key={c.id}
-                                  className="rounded-xl border border-black/10 bg-white/35 p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
-                                >
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-bold text-black truncate">
-                                      {c.title || 'Untitled'}
-                                      <span className="font-normal text-black/55 text-xs ml-2">
-                                        ({c.category})
-                                      </span>
-                                      {!c.include_in_prompt ? (
-                                        <span className="ml-2 text-[10px] font-bold uppercase text-amber-900/80">
-                                          excluded from AI
+                              {loreCards.map((c) => {
+                                const importMetadata = readLoreImportMetadataFromBody(c.body);
+                                const cleanBody = stripLoreImportMetadataFromBody(c.body);
+                                const storedImageCount =
+                                  importMetadata?.images?.filter((image) => Boolean(image.storageUrl)).length ?? 0;
+                                return (
+                                  <li
+                                    key={c.id}
+                                    className="rounded-xl border border-black/10 bg-white/35 p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-black truncate">
+                                        {c.title || 'Untitled'}
+                                        <span className="font-normal text-black/55 text-xs ml-2">
+                                          ({c.category})
                                         </span>
+                                        {!c.include_in_prompt ? (
+                                          <span className="ml-2 text-[10px] font-bold uppercase text-amber-900/80">
+                                            excluded from AI
+                                          </span>
+                                        ) : null}
+                                      </p>
+                                      {importMetadata ? (
+                                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/52">
+                                          <span className="bg-white/70 px-2 py-0.5">Obsidian</span>
+                                          <span className="bg-white/70 px-2 py-0.5 truncate max-w-[280px]">
+                                            {importMetadata.sourcePath}
+                                          </span>
+                                          {importMetadata.tags?.slice(0, 4).map((tag) => (
+                                            <span key={tag} className="bg-white/70 px-2 py-0.5">
+                                              #{tag}
+                                            </span>
+                                          ))}
+                                          {importMetadata.images && importMetadata.images.length > 0 ? (
+                                            <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-0.5">
+                                              <Image className="h-3 w-3" />
+                                              {storedImageCount}/{importMetadata.images.length} visual refs
+                                            </span>
+                                          ) : null}
+                                        </div>
                                       ) : null}
-                                    </p>
-                                    <p className="text-xs text-black/75 whitespace-pre-wrap mt-1">
-                                      {c.body || '(empty body)'}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2 shrink-0">
+                                      <p className="text-xs text-black/75 whitespace-pre-wrap mt-1">
+                                        {cleanBody || '(empty body)'}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 shrink-0">
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -4858,9 +5279,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     >
                                       Delete
                                     </button>
-                                  </div>
-                                </li>
-                              ))}
+                                    </div>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           )}
                         </div>

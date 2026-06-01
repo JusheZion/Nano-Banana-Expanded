@@ -51,6 +51,30 @@
   - Timeout investigation: the earlier screenshot timeout was reproduced in the signed-out/protected-route state; the authenticated retry captured a screenshot successfully, so the failure is not universal to the in-app browser bridge.
   - Verification: targeted tests passed, full `npm run test` passed, `npm run build` passed, `npm run lint` passed with 0 errors / 67 warnings, and `git diff --check` passed.
 
+- [x] **Pass 7: Obsidian Lore Import**
+  - Added a pure Obsidian lore import parser for Markdown/frontmatter, filename title fallback, type/category extraction, summaries, tags, internal wiki links, embedded image references, folder-relative image resolution, unresolved-image warnings, and duplicate action resolution.
+  - Added Canon gate UI for selecting notes/images or a vault folder, type filtering, import preview rows, entry deselection, duplicate skip/overwrite/merge/create-duplicate actions, warning display, and import result counts.
+  - Stored import metadata in existing lore card bodies to avoid a schema migration while preserving source path, import/update timestamps, properties, tags, matched lore refs, and visual reference assets.
+  - Updated client and Edge prompt digest paths to strip hidden import metadata before generation so attached image URLs remain available as reference assets but are not automatically injected into text prompts.
+  - Verification: parser tests passed, `npm run build` passed, `npm run lint` passed with existing warnings only, and in-app browser QA verified the Canon tab import panel rendered with no captured console errors.
+
+- [x] **Pass 8: Obsidian Lore Import Guide and QA Plan**
+  - Added `docs/writers-workshop-obsidian-lore-import-guide.md` for user/operator instructions, supported file types, recommended Obsidian note shape, property mapping, import steps, preview meanings, image behavior, generation behavior, and troubleshooting.
+  - Added `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md` with a fixture-driven QA plan covering parser tests, build/lint, local browser smoke, native file picker import, folder import, duplicate actions, Supabase persistence, prompt digest stripping, existing workflow regression, and cleanup.
+  - Updated `tasks.md`, the active narrative production tracker, and `walkthrough.md` so future agents can distinguish implemented code from pending manual end-to-end QA.
+
+- [x] **Pass 9: Twovestellium Reference Vault Parser QA**
+  - Tested the user-provided `reference/Twovestellium Universe Obsidian Vault/` files directly through an optional local Vitest fixture.
+  - Fixed parser handling for capitalized Obsidian frontmatter keys, spaced/slashed property keys, folder-based category inference for character/species/etc. folders, and `Templates/` folder exclusion.
+  - Local vault parser result: imported `Kron`, `Finn`, `Glimm`, and `Institute of Divination & Occultivation`; skipped `Character Template`, `Factions Template`, and `Species Template`.
+  - Verification: `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed, `npm run build` passed, and `npm run lint` passed with existing warnings only.
+
+- [x] **Pass 10: Twovestellium Embedded Image Parser QA**
+  - Re-tested the local vault after embedded images were added to `Kron.md`, `Finn.md`, and `Magister Valencius Santoro.md`.
+  - Fixed image section context parsing so adjacent embeds and tight Obsidian heading lines such as `#Notes` resolve to clean section labels.
+  - Local vault parser result: imported `Kron`, `Finn`, `Glimm`, `Institute of Divination & Occultivation`, and `Magister Valencius Santoro`; resolved all detected embedded images from `Assets/Images` with no warnings.
+  - Verification: `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed, `npm run build` passed, `npm run lint` passed with existing warnings only, and `git diff --check` passed.
+
 ## Acceptance Criteria
 
 - All five requested next-step items are represented in tracker docs and addressed or explicitly blocked with evidence.

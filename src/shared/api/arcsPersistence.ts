@@ -66,6 +66,11 @@ async function uploadBlobToArcsBucket(blob: Blob): Promise<string | null> {
   return pub.publicUrl;
 }
 
+export async function uploadImageFileToArcsGenerations(file: File): Promise<string | null> {
+  if (!file.type.startsWith('image/')) return null;
+  return uploadBlobToArcsBucket(file);
+}
+
 /**
  * Ensures `image_url` stored in Postgres is loadable after refresh.
  * - `data:` (API generations) → upload to Storage, store public URL.
