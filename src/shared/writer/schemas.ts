@@ -195,6 +195,31 @@ export const writerToolsPacingReviewRequestSchema = z.object({
   target_page_count: z.number().int().min(1).max(500).optional(),
 });
 
+export const writerToolsPacingRegenerationPreviewRequestSchema = z.object({
+  mode: z.literal('pacing_regeneration_preview'),
+  issue_id: z.string().uuid(),
+  page_ids: writerToolsPageBeatsIssuePageIdsSchema,
+  include_beats: z.boolean().optional(),
+  include_dialogue: z.boolean().optional(),
+  production_defaults: writerProductionDefaultsPayloadSchema.optional(),
+});
+
+export const pacingRegenerationPreviewResultSchema = z
+  .object({
+    pages: z
+      .array(
+        z.object({
+          page_id: z.string().uuid(),
+          page_number: z.number().int().positive().max(500),
+          reason: z.string().max(2000).optional(),
+          proposed_beats_json: pageBeatsJsonSchema.optional(),
+          proposed_script_text: z.string().max(24_000).optional(),
+        }),
+      )
+      .max(WRITER_PAGE_BEATS_ISSUE_MAX),
+  })
+  .passthrough();
+
 /** LLM output merged into writer_issues.notes.writer_tool_cache.canon_check */
 export const canonCheckResultSchema = z
   .object({
@@ -409,6 +434,7 @@ export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,
   writerToolsPacingReviewRequestSchema,
+  writerToolsPacingRegenerationPreviewRequestSchema,
   writerToolsCanonCheckRequestSchema,
   writerToolsPlanShotsRequestSchema,
   writerToolsIdeaAssistRequestSchema,

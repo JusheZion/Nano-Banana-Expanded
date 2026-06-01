@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  deleteHierarchyNode,
   importHierarchyFromJson,
   importHierarchyFromText,
   mergeHierarchyIntoNotes,
+  moveHierarchyNode,
   readHierarchyFromNotes,
+  updateHierarchyNode,
 } from '../writerHierarchy';
 
 describe('writerHierarchy', () => {
@@ -134,5 +137,31 @@ The alarm starts outside.
       nodes: tree,
     });
     expect(readHierarchyFromNotes(notes)).toEqual(tree);
+  });
+
+  it('updates, reorders, and deletes hierarchy nodes immutably', () => {
+    const tree = importHierarchyFromText(`
+Page 1
+- Beat one
+- Beat two
+- Beat three
+`);
+
+    const renamed = updateHierarchyNode(tree, 'beat-2', {
+      title: 'Beat two revised',
+      kind: 'scene',
+    });
+    expect(renamed[0].children[1]).toMatchObject({
+      id: 'beat-2',
+      title: 'Beat two revised',
+      kind: 'scene',
+    });
+    expect(tree[0].children[1]).toMatchObject({ title: 'Beat two', kind: 'beat' });
+
+    const moved = moveHierarchyNode(renamed, 'beat-2', 'up');
+    expect(moved[0].children.map((node) => node.id)).toEqual(['beat-2', 'beat-1', 'beat-3']);
+
+    const deleted = deleteHierarchyNode(moved, 'beat-1');
+    expect(deleted[0].children.map((node) => node.id)).toEqual(['beat-2', 'beat-3']);
   });
 });

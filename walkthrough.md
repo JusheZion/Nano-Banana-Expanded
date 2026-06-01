@@ -6457,3 +6457,167 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 
 - None.
+
+## Writers Workshop Completion Pass - 2026-06-01
+
+### What changed
+
+- Added an archived accountability plan at `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`.
+- Reconciled the stale handoff against the current repo state: output-format defaults, author-outline import, and hierarchy-tree storage were already implemented after the handoff was generated.
+- Added a preferred-export resolver for all saved `notes.production_defaults.output_format` values:
+  - `issue_pack_json`
+  - `comic_script_markdown`
+  - `guided_comic_handoff`
+  - `fountain_screenplay`
+  - `prose_manuscript`
+  - `lore_wiki`
+- Added primary preferred-export buttons to the Video production-branch export card and the Scripts export panel while preserving the explicit JSON, markdown, and Guided Comics handoff downloads.
+- Added editable saved hierarchy tree controls in Synopsis helper:
+  - title editing,
+  - node kind editing,
+  - sibling move up/down,
+  - delete,
+  - reset edits,
+  - explicit save back to `notes.hierarchy_tree`.
+- Added preview-safe downstream pacing regeneration:
+  - new `pacing_regeneration_preview` writer-tools mode,
+  - shared app and Supabase Edge schemas for preview requests/results,
+  - Edge function prompt and validation path that returns proposals without saving,
+  - Arc UI action to generate preview-only AI replacements for affected pages,
+  - current vs proposed diff display,
+  - explicit per-page Apply beats / Apply dialogue / Apply both actions.
+- Deployed the updated Supabase Edge Function `writer-tools`.
+- Updated `tasks.md` and the active Writers Workshop tracker to reflect the repo-authoritative completion state and the one live-AI verification blocker.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerHierarchy.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/__tests__/writerHierarchy.test.ts`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No database migration was added. Production defaults, author outline data, and hierarchy data continue to use existing notes metadata.
+- Preferred exports are resolved from the issue-pack object and do not remove any existing explicit export buttons.
+- The preview regeneration mode intentionally does not update `writer_pages`. Only accepted UI proposals call existing page update helpers.
+- `writer-tools` validates the preview result with `pacingRegenerationPreviewResultSchema` before returning it to the client.
+- Build verification dirtied `supabase/functions/tsconfig.tsbuildinfo`; it was restored because it is generated verification output, not part of this feature.
+
+### Verification
+
+- Baseline targeted tests before implementation: `npm run test -- --run src/portals/writer/__tests__/writerProductionDefaults.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts` - PASS, 5 files / 48 tests.
+- TDD red checks:
+  - preferred export resolver test failed before `buildPreferredWriterExport` existed.
+  - hierarchy edit helper test failed before edit helpers existed.
+  - pacing preview schema test failed before the new discriminated-union mode existed.
+- Targeted tests after implementation: `npm run test -- --run src/shared/writer/__tests__/schemas.test.ts src/portals/writer/__tests__/writerHierarchy.test.ts src/portals/writer/__tests__/writerProductionBranches.test.ts src/shared/api/__tests__/writerTools.test.ts` - PASS, 4 files / 48 tests.
+- Full tests: `npm run test` - PASS, 49 files / 298 tests.
+- Build: `npm run build` - PASS with the existing large chunk warning.
+- Lint: `npm run lint` - PASS with 0 errors and the existing 67-warning baseline.
+- Whitespace: `git diff --check` - PASS.
+- Supabase before deploy: `supabase functions list` showed `writer-tools` ACTIVE version 45, updated `2026-05-11 21:48:03 UTC`.
+- Supabase deploy: `supabase functions deploy writer-tools --project-ref vxclogwiytxjolisnakd --use-api` - PASS.
+- Supabase after deploy: `supabase functions list --project-ref vxclogwiytxjolisnakd` showed `writer-tools` ACTIVE version 46, updated `2026-06-01 05:45:41 UTC`.
+- Browser QA at `http://127.0.0.1:5174/`:
+  - app title loaded as `ARCS Expanded`;
+  - DOM snapshot worked and showed the signed-out landing page;
+  - Writers Workshop card interaction worked and opened the protected `Sign in to continue` gate;
+  - screenshot capture timed out with `Page.captureScreenshot`, reproducing the in-app browser screenshot timeout issue.
+
+### Outstanding issues
+
+- Signed-in live AI generation calls for outline, beats, dialogue, and shot plan were not run because the current in-app browser session is signed out at the protected Writers Workshop route.
+
+### Risks or caveats
+
+- The new preview-only Edge mode has schema and build coverage, but live AI output quality still needs signed-in verification against real issue/page data.
+- Browser screenshot evidence remains unavailable in this session because the in-app browser screenshot command timed out even though DOM and interaction checks worked.
+
+### Operator follow-up
+
+- Sign in with a valid ARCS/Supabase account, then run live AI calls for:
+  - `outline_issue`,
+  - `page_beats` or `page_beats_issue`,
+  - `draft_dialogue`,
+  - `plan_shots_from_issue`,
+  - and the new `pacing_regeneration_preview`.
+- Confirm the live outputs honor production defaults, author outline, hierarchy source, page metadata, and preferred output-format guidance.
+
+### Next steps
+
+- Complete signed-in live AI verification once a valid browser session is available.
+
+## Writers Workshop Live Browser Verification - 2026-06-01
+
+### What changed
+
+- Re-ran authenticated in-app browser QA on `http://127.0.0.1:5174/` after the user made the browser session available.
+- Verified live AI generation calls against a temporary `Codex Live AI Verification` issue:
+  - outline generation,
+  - page beats,
+  - dialogue,
+  - shot plan,
+  - pacing review,
+  - and preview-only pacing regeneration replacements.
+- Verified the new UI surfaces in the browser:
+  - preferred-export action on Video production branches,
+  - hierarchy import and editable saved-tree controls in Synopsis helper,
+  - preview-safe current/proposed replacement UI with explicit apply buttons.
+- Deleted the temporary verification issue after the live QA pass.
+- Updated the completion plan, active Writers Workshop tracker, and task checklist to remove the previous signed-out live-AI blocker.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The temporary issue used a small two-page verification synopsis so live generation could be tested without overwriting the main `The Blackening` issue.
+- Browser QA confirmed:
+  - `outline_issue` saved `Outline · v1`;
+  - `page_beats` saved valid Page 1 panel JSON;
+  - `draft_dialogue` saved Page 1 script text;
+  - `plan_shots_from_issue` saved a valid `shots` array;
+  - `pacing_review` saved structured pacing output;
+  - `pacing_regeneration_preview` returned preview-only current/proposed beat/dialogue replacements and exposed `Apply beats`, `Apply dialogue`, and `Apply both`.
+- The preview replacement pass did not apply proposed replacements, preserving the preview-safe contract.
+- The temporary issue was deleted through the app after the live calls completed; the app returned to Issue 1 afterward.
+
+### Verification
+
+- Browser DOM inspection: authenticated Writers Workshop loaded with `Fabula Coniunctio Oppositorum · Issue 1: The Blackening`.
+- Browser console check: no captured console errors before live QA.
+- Browser screenshot: viewport screenshot succeeded after authenticated retry.
+- Live AI calls: outline, page beats, dialogue, shot plan, pacing review, and preview-only pacing regeneration all returned successful UI evidence.
+- Cleanup: temporary `Codex Live AI Verification` issue was no longer present after deletion; `Add issue #2` was visible again.
+
+### Outstanding issues
+
+- None for the six-pass Writers Workshop completion plan.
+
+### Risks or caveats
+
+- The live QA consumed real Supabase/Gemini calls in the authenticated project.
+- The earlier signed-out screenshot timeout was reproduced before this pass; the authenticated retry succeeded, so future agents should start browser QA from an authenticated Writers Workshop route and fall back to DOM evidence if screenshot capture stalls.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Continue future polish separately, especially the non-blocking ribbon/workspace density reduction noted in `tasks.md`.

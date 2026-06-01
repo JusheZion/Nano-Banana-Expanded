@@ -89,14 +89,19 @@ import {
   type WriterProductionDefaults,
 } from '@/portals/writer/writerProductionDefaults';
 import {
+  WRITER_HIERARCHY_NODE_KINDS,
+  deleteHierarchyNode,
   importHierarchyFromJson,
   importHierarchyFromText,
   mergeHierarchyIntoNotes,
+  moveHierarchyNode,
   readHierarchyFromNotes,
+  updateHierarchyNode,
   type WriterHierarchyNode,
 } from '@/portals/writer/writerHierarchy';
 import {
   buildGuidedComicsHandoffExport,
+  buildPreferredWriterExport,
   formatIssuePackAsMarkdown,
   summarizePageBeatMetadata,
   summarizeWriterAuditModes,
@@ -115,7 +120,11 @@ import {
   WRITERS_TIFFANY_TEXT,
   WRITERS_WORKSHOP_BG,
 } from '@/shared/theme/Phase12DesignTokens';
-import { ideaAssistResultSchema, WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
+import {
+  ideaAssistResultSchema,
+  pacingRegenerationPreviewResultSchema,
+  WRITER_PAGE_BEATS_ISSUE_MAX,
+} from '@/shared/writer/schemas';
 import type { PageBeatsJson } from '@/shared/writer/types';
 
 const titleTextStyle: React.CSSProperties = {
@@ -425,6 +434,70 @@ function renderHierarchyNodes(nodes: WriterHierarchyNode[], depth = 0): React.Re
   );
 }
 
+function renderEditableHierarchyNodes(
+  nodes: WriterHierarchyNode[],
+  onChange: (nodes: WriterHierarchyNode[]) => void,
+  depth = 0,
+  rootNodes = nodes,
+): React.ReactNode {
+  if (!nodes.length) return null;
+  return (
+    <ul className={depth === 0 ? 'space-y-2' : 'mt-2 space-y-2 border-l border-black/10 pl-3'}>
+      {nodes.map((node) => (
+        <li key={node.id} className="space-y-1.5 rounded-md border border-black/10 bg-white/65 px-2 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              value={node.kind}
+              onChange={(event) =>
+                onChange(updateHierarchyNode(rootNodes, node.id, { kind: event.target.value as WriterHierarchyNode['kind'] }))
+              }
+              className="rounded border border-black/15 bg-white px-1.5 py-1 text-[10px] font-bold uppercase text-black/65"
+              aria-label={`Kind for ${node.title}`}
+            >
+              {WRITER_HIERARCHY_NODE_KINDS.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind}
+                </option>
+              ))}
+            </select>
+            <input
+              value={node.title}
+              onChange={(event) => onChange(updateHierarchyNode(rootNodes, node.id, { title: event.target.value }))}
+              className="min-w-[160px] flex-1 rounded border border-black/15 bg-white px-2 py-1 text-xs font-semibold text-black"
+              aria-label={`Title for ${node.title}`}
+            />
+            <button
+              type="button"
+              onClick={() => onChange(moveHierarchyNode(rootNodes, node.id, 'up'))}
+              className="rounded border border-black/15 bg-white px-2 py-1 text-[10px] font-black text-black/65"
+              aria-label={`Move ${node.title} up`}
+            >
+              Up
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(moveHierarchyNode(rootNodes, node.id, 'down'))}
+              className="rounded border border-black/15 bg-white px-2 py-1 text-[10px] font-black text-black/65"
+              aria-label={`Move ${node.title} down`}
+            >
+              Down
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(deleteHierarchyNode(rootNodes, node.id))}
+              className="rounded border border-red-900/20 bg-red-50 px-2 py-1 text-[10px] font-black text-red-800"
+              aria-label={`Delete ${node.title}`}
+            >
+              Delete
+            </button>
+          </div>
+          {renderEditableHierarchyNodes(node.children, onChange, depth + 1, rootNodes)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function downloadJsonFile(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -448,6 +521,14 @@ function downloadTextFile(filename: string, body: string, mime: string) {
 export type WriterPortalProps = {
   /** Deep-link into Portals Wiki → Writers' Workshop (optional section id). */
   onRequestPortalsWiki?: (opts: { chapterId: string; headingId?: string }) => void;
+};
+
+type PacingRegenerationPreviewPage = {
+  page_id: string;
+  page_number: number;
+  reason?: string;
+  proposed_beats_json?: PageBeatsJson;
+  proposed_script_text?: string;
 };
 
 export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
@@ -513,6 +594,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [pacingError, setPacingError] = useState<string | null>(null);
   const [pacingApplyBusy, setPacingApplyBusy] = useState(false);
   const [pacingApplyError, setPacingApplyError] = useState<string | null>(null);
+  const [pacingPreviewBusy, setPacingPreviewBusy] = useState(false);
+  const [pacingPreviewError, setPacingPreviewError] = useState<string | null>(null);
+  const [pacingPreviewPages, setPacingPreviewPages] = useState<PacingRegenerationPreviewPage[]>([]);
   const [canonLoading, setCanonLoading] = useState(false);
   const [canonError, setCanonError] = useState<string | null>(null);
   const [shotsLoading, setShotsLoading] = useState(false);
@@ -552,6 +636,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
   const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
   const [hierarchyImportError, setHierarchyImportError] = useState<string | null>(null);
+  const [hierarchyEditNodes, setHierarchyEditNodes] = useState<WriterHierarchyNode[]>([]);
+  const [hierarchyEditError, setHierarchyEditError] = useState<string | null>(null);
   const [productionDefaultsDraft, setProductionDefaultsDraft] = useState<WriterProductionDefaults>({
     ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
   });
@@ -1019,6 +1105,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setProductionDefaultsError(null);
     setHierarchyImportDraft('');
     setHierarchyImportError(null);
+    setHierarchyEditError(null);
+    setPacingPreviewPages([]);
+    setPacingPreviewError(null);
   }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
@@ -1038,6 +1127,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => readHierarchyFromNotes(selectedIssue?.notes),
     [selectedIssue?.notes],
   );
+  useEffect(() => {
+    setHierarchyEditNodes(hierarchyNodes);
+    setHierarchyEditError(null);
+  }, [hierarchyNodes]);
   const selectedPageMetadata = useMemo(
     () => summarizePageBeatMetadata((selectedPage?.beats_json as PageBeatsJson | null | undefined) ?? null),
     [selectedPage?.beats_json],
@@ -1739,6 +1832,63 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     ],
   );
 
+  const runPacingRegenerationPreview = useCallback(async () => {
+    if (!selectedIssueId) return;
+    const pageIds = selectedPagesForBatchExport.slice(0, WRITER_PAGE_BEATS_ISSUE_MAX).map((p) => p.id);
+    if (pageIds.length === 0) {
+      setPacingPreviewError('Stage affected pages before generating a preview.');
+      return;
+    }
+    setPacingPreviewBusy(true);
+    setPacingPreviewError(null);
+    const res = await invokeWriterTools({
+      mode: 'pacing_regeneration_preview',
+      issue_id: selectedIssueId,
+      page_ids: pageIds,
+      include_beats: true,
+      include_dialogue: true,
+      production_defaults: productionDefaultsPayload,
+    });
+    setPacingPreviewBusy(false);
+    if (!res.success) {
+      const msg = toolErrorMessage(res);
+      setPacingPreviewError(msg);
+      pushHistory(`error: pacing preview — ${msg}`);
+      return;
+    }
+    const parsed = pacingRegenerationPreviewResultSchema.safeParse(res.data);
+    if (!parsed.success) {
+      setPacingPreviewError('Preview response did not match the expected shape.');
+      pushHistory('error: pacing preview validation');
+      return;
+    }
+    setPacingPreviewPages(parsed.data.pages as PacingRegenerationPreviewPage[]);
+    pushHistory(`generated pacing preview (${parsed.data.pages.length} page(s))`);
+  }, [selectedIssueId, selectedPagesForBatchExport, productionDefaultsPayload, pushHistory]);
+
+  const applyPacingPreviewPage = useCallback(
+    async (preview: PacingRegenerationPreviewPage, target: 'beats' | 'dialogue' | 'both') => {
+      setPacingPreviewError(null);
+      setPacingPreviewBusy(true);
+      let ok = true;
+      if ((target === 'beats' || target === 'both') && preview.proposed_beats_json) {
+        ok = await updateWriterPageBeatsJson(preview.page_id, preview.proposed_beats_json);
+      }
+      if (ok && (target === 'dialogue' || target === 'both') && preview.proposed_script_text != null) {
+        ok = await updateWriterPageScriptText(preview.page_id, preview.proposed_script_text);
+      }
+      setPacingPreviewBusy(false);
+      if (!ok) {
+        setPacingPreviewError(`Could not apply preview for page ${preview.page_number}.`);
+        return;
+      }
+      await refreshPagesForIssue();
+      setPacingPreviewPages((prev) => prev.filter((page) => page.page_id !== preview.page_id));
+      pushHistory(`applied pacing preview (page ${preview.page_number})`);
+    },
+    [refreshPagesForIssue, pushHistory],
+  );
+
   const runLibraryDeleteSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
     if (
@@ -2411,6 +2561,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory('downloaded Guided Comics handoff package');
   }, [issuePackObject, pushHistory]);
 
+  const preferredWriterExport = useMemo(() => buildPreferredWriterExport(issuePackObject), [issuePackObject]);
+
+  const downloadPreferredWriterExport = useCallback(() => {
+    if (preferredWriterExport.kind === 'json') {
+      downloadJsonFile(preferredWriterExport.filename, preferredWriterExport.data);
+    } else {
+      downloadTextFile(preferredWriterExport.filename, preferredWriterExport.body, preferredWriterExport.mime);
+    }
+    pushHistory(`downloaded preferred export: ${preferredWriterExport.filename}`);
+  }, [preferredWriterExport, pushHistory]);
+
   useEffect(() => {
     if (!latestOutline) {
       setOutlineEditDraft('');
@@ -2507,6 +2668,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     await refreshIssuesForSeries();
     pushHistory(`saved hierarchy tree (${nodes.length} root node${nodes.length === 1 ? '' : 's'})`);
   }, [selectedIssueId, selectedIssue, hierarchyImportDraft, refreshIssuesForSeries, pushHistory]);
+
+  const saveEditedHierarchyToNotes = useCallback(async () => {
+    if (!selectedIssueId || !selectedIssue) return;
+    if (hierarchyEditNodes.length === 0) {
+      setHierarchyEditError('No hierarchy nodes to save.');
+      return;
+    }
+    setHierarchyEditError(null);
+    setScriptsBusy(true);
+    const ok = await updateWriterIssue(selectedIssueId, {
+      notes: mergeHierarchyIntoNotes(selectedIssue.notes, hierarchyEditNodes, { source: 'manual-edit' }),
+    });
+    setScriptsBusy(false);
+    if (!ok) {
+      setHierarchyEditError('Could not save hierarchy edits. Check Supabase.');
+      return;
+    }
+    await refreshIssuesForSeries();
+    pushHistory('saved hierarchy tree edits');
+  }, [selectedIssueId, selectedIssue, hierarchyEditNodes, refreshIssuesForSeries, pushHistory]);
 
   const saveProductionDefaultsToNotes = useCallback(async () => {
     if (!selectedSeriesId) return;
@@ -5294,6 +5475,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     >
                                       {dialogueBatchBusy ? dialogueBatchLabel || 'Dialogue…' : 'Regenerate dialogue'}
                                     </button>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        !supabaseOk ||
+                                        pacingPreviewBusy ||
+                                        selectedPagesForBatchExport.length === 0
+                                      }
+                                      onClick={() => void runPacingRegenerationPreview()}
+                                      className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                      style={{ background: ACCENT_GOLD_GRADIENT }}
+                                    >
+                                      {pacingPreviewBusy ? 'Previewing…' : 'Preview AI replacements'}
+                                    </button>
                                   </div>
                                 </div>
                                 <div className="grid gap-1 sm:grid-cols-2">
@@ -5319,6 +5513,91 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                   <p className="text-[10px] text-black/45">
                                     +{selectedPagesForBatchExport.length - 8} more affected page(s) in the Library batch.
                                   </p>
+                                ) : null}
+                                {pacingPreviewError ? (
+                                  <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                                    {pacingPreviewError}
+                                  </p>
+                                ) : null}
+                                {pacingPreviewPages.length ? (
+                                  <div className="space-y-2 border-t border-black/10 pt-2">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/75">
+                                      AI replacement preview
+                                    </p>
+                                    {pacingPreviewPages.map((preview) => {
+                                      const currentPage = pages.find((p) => p.id === preview.page_id);
+                                      return (
+                                        <div
+                                          key={`pacing-preview-proposal-${preview.page_id}`}
+                                          className="rounded-md border border-black/10 bg-white/85 p-2 text-[10px] text-black/65"
+                                        >
+                                          <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div>
+                                              <p className="font-black text-black">Page {preview.page_number}</p>
+                                              {preview.reason ? <p>{preview.reason}</p> : null}
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              <button
+                                                type="button"
+                                                disabled={pacingPreviewBusy || !preview.proposed_beats_json}
+                                                onClick={() => void applyPacingPreviewPage(preview, 'beats')}
+                                                className="rounded border border-black/15 bg-white px-2 py-1 font-bold text-black/70 disabled:opacity-40"
+                                              >
+                                                Apply beats
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={pacingPreviewBusy || preview.proposed_script_text == null}
+                                                onClick={() => void applyPacingPreviewPage(preview, 'dialogue')}
+                                                className="rounded border border-black/15 bg-white px-2 py-1 font-bold text-black/70 disabled:opacity-40"
+                                              >
+                                                Apply dialogue
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={
+                                                  pacingPreviewBusy ||
+                                                  (!preview.proposed_beats_json && preview.proposed_script_text == null)
+                                                }
+                                                onClick={() => void applyPacingPreviewPage(preview, 'both')}
+                                                className="rounded bg-black px-2 py-1 font-black text-white disabled:opacity-40"
+                                              >
+                                                Apply both
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                            <div>
+                                              <p className="font-bold uppercase text-black/45">Current</p>
+                                              <pre className="mt-1 max-h-36 overflow-y-auto rounded bg-black/10 p-2 whitespace-pre-wrap">
+                                                {JSON.stringify(
+                                                  {
+                                                    beats_json: currentPage?.beats_json ?? null,
+                                                    script_text: currentPage?.script_text ?? null,
+                                                  },
+                                                  null,
+                                                  2,
+                                                )}
+                                              </pre>
+                                            </div>
+                                            <div>
+                                              <p className="font-bold uppercase text-black/45">Proposed</p>
+                                              <pre className="mt-1 max-h-36 overflow-y-auto rounded bg-amber-50 p-2 whitespace-pre-wrap">
+                                                {JSON.stringify(
+                                                  {
+                                                    beats_json: preview.proposed_beats_json ?? null,
+                                                    script_text: preview.proposed_script_text ?? null,
+                                                  },
+                                                  null,
+                                                  2,
+                                                )}
+                                              </pre>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 ) : null}
                               </div>
                             ) : null}
@@ -5582,6 +5861,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 ) : null}
                                 {option.id === 'exports' ? (
                                   <>
+                                    <button
+                                      type="button"
+                                      disabled={!selectedIssueId}
+                                      onClick={() => downloadPreferredWriterExport()}
+                                      className="rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                      style={{ background: ACCENT_GOLD_GRADIENT }}
+                                    >
+                                      Preferred
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -5970,9 +6258,45 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               Saved hierarchy tree
                             </p>
                             {hierarchyNodes.length ? (
-                              <div className="max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                                {renderHierarchyNodes(hierarchyNodes)}
-                              </div>
+                              <>
+                                <div className="max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                                  {renderEditableHierarchyNodes(hierarchyEditNodes, setHierarchyEditNodes)}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={!supabaseOk || scriptsBusy || hierarchyEditNodes.length === 0}
+                                    onClick={() => void saveEditedHierarchyToNotes()}
+                                    className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                                    style={{ background: ACCENT_GOLD_GRADIENT }}
+                                  >
+                                    {scriptsBusy ? 'Saving…' : 'Save tree edits'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setHierarchyEditNodes(hierarchyNodes);
+                                      setHierarchyEditError(null);
+                                    }}
+                                    className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                  >
+                                    Reset edits
+                                  </button>
+                                </div>
+                                {hierarchyEditError ? (
+                                  <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                                    {hierarchyEditError}
+                                  </p>
+                                ) : null}
+                                <details className="text-[10px] text-black/45">
+                                  <summary className="cursor-pointer font-bold uppercase tracking-wide">
+                                    Read-only outline view
+                                  </summary>
+                                  <div className="mt-2 rounded-md bg-white/55 p-2">
+                                    {renderHierarchyNodes(hierarchyNodes)}
+                                  </div>
+                                </details>
+                              </>
                             ) : (
                               <p className="text-xs text-black/50">
                                 No hierarchy saved yet. Import from your outline or helper before generation.
@@ -6155,6 +6479,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
                               >
                                 Copy issue pack (JSON)
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!selectedIssueId}
+                                onClick={() => downloadPreferredWriterExport()}
+                                className="rounded-lg px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-40"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                {preferredWriterExport.label}
                               </button>
                               <button
                                 type="button"
