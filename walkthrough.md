@@ -6273,3 +6273,187 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 
 - Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.
+
+## Imageshop Production Studio Resumed QA Attempt - 2026-06-01
+
+### What changed
+
+- Rechecked the current tracker state after the goal was resumed.
+- Started the local dev server on `http://127.0.0.1:5173/` and connected the in-app browser to the app.
+- Confirmed the app loads as `ARCS Expanded`, but selecting the Illustrator's Imageshop card still routes to the protected `Sign in to continue` gate.
+- Updated the Imageshop production tracker to record this fresh resumed QA attempt.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this resumed QA attempt.
+- The two remaining unchecked tracker items still require a valid signed-in ARCS/Supabase browser session:
+  - Guided Comic Flow -> Imageshop -> return-art path manually verified.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download manually verified.
+
+### Verification
+
+- In-app browser opened `http://127.0.0.1:5173/` and reported title `ARCS Expanded`.
+- In-app browser DOM snapshot showed the protected `Sign in to continue` screen after opening Illustrator's Imageshop.
+- `git status --short --untracked-files=all` was clean before the tracker/walkthrough update.
+
+### Outstanding issues
+
+- Signed-in browser QA remains blocked until a valid authenticated session is available.
+
+### Risks or caveats
+
+- Automated coverage remains the strongest available evidence for the return/save paths, but it is not a substitute for the explicitly requested signed-in manual verification checklist items.
+
+### Operator follow-up
+
+- Sign in with a valid ARCS/Supabase account and manually verify the two remaining tracker checkboxes.
+
+### Next steps
+
+- Once signed in, run the manual Guided Comic Flow return-art and Save / Export checks, then update the tracker checkboxes and append a final walkthrough entry.
+
+## Imageshop Production Studio Auth QA Retry - 2026-06-01
+
+### What changed
+
+- Re-audited the remaining Imageshop tracker checkboxes and local auth setup.
+- Searched project docs, `.agents`, source, and Supabase config for a documented QA account or supported test auth path.
+- Attempted one fresh disposable Supabase email/password sign-up using the configured `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Updated the Imageshop production tracker with the fresh auth evidence.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this retry.
+- The local `.env` contains only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GEMINI_API_KEY`; no service-role key or documented QA credential is available.
+- The new disposable Supabase user was created, but Supabase returned `needsConfirmation: true` and no session, so it cannot be used to unlock the protected browser routes without email confirmation.
+
+### Verification
+
+- `git status --short --untracked-files=all` showed only the existing tracker/walkthrough modifications before this update.
+- `rg` over project docs/source found ordinary Supabase email/password auth and no documented QA account.
+- Supabase sign-up returned `ok: true`, `needsConfirmation: true`, `hasSession: false`, and `hasUser: true`.
+
+### Outstanding issues
+
+- Signed-in browser QA remains blocked until a valid authenticated ARCS/Supabase session is available.
+
+### Risks or caveats
+
+- A disposable unconfirmed Supabase user now exists in the auth project, but it has no usable session and was not used for app QA.
+
+### Operator follow-up
+
+- Provide or use a confirmed ARCS/Supabase account in the browser session, then manually verify:
+  - Guided Comic Flow -> Imageshop -> generated panel return.
+  - Save / Export to Character Vault, Asset Vault, NPC Vault, and Download.
+
+### Next steps
+
+- Retry the signed-in browser checks once a confirmed account or active browser session is available.
+
+## Imageshop Production Studio Signed-In Save Export QA - 2026-06-01
+
+### What changed
+
+- Retried the Imageshop QA path after the in-app browser session became authenticated as `hayronivy@gmail.com`.
+- Generated a real Imageshop smoke-test image from the prompt `QA smoke test: a small golden compass on a clean studio table, crisp lighting, no text.`
+- Manually verified the signed-in Save / Export controls for Download, NPC Vault, Character Vault, and Asset Vault.
+- Updated the Imageshop production tracker to mark the Save / Export manual verification checkbox complete.
+
+### Files touched
+
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- No application code changed in this QA pass.
+- Character Vault was verified with profile `Imageshop QA Character 20260601` and cast name `Imageshop QA`.
+- Asset Vault was verified with collection `Imageshop QA Assets 20260601` and asset name `Golden Compass Smoke Test`.
+- NPC Vault was verified with the default `Imageshop result` label.
+- Download was verified by the visible success notice `Downloaded the current generated image.`
+
+### Verification
+
+- In-app browser loaded `ARCS Expanded` signed in as `hayronivy@gmail.com`.
+- Imageshop opened without the protected sign-in gate.
+- Image generation completed and exposed the `Save / Export` panel.
+- Download showed `Downloaded the current generated image.`
+- NPC Vault save showed `Saved to NPC Vault as "Imageshop result".`
+- Character Vault save showed `Saved to Character Vault as "Imageshop QA Character 20260601".`
+- Asset Vault save showed `Saved to Asset Vault collection "Imageshop QA Assets 20260601".`
+
+### Outstanding issues
+
+- Guided Comic Flow -> Imageshop -> return-art manual QA remains unchecked.
+- The in-app browser control bridge became unresponsive while opening Comic Creator after the Save / Export checks, timing out on DOM and screenshot commands. Closing/reopening a clean in-app tab also timed out waiting for the browser webview to attach.
+
+### Risks or caveats
+
+- The Save / Export checks created real QA artifacts in the signed-in user's Character and Asset vaults.
+
+### Operator follow-up
+
+- Reopen or restart the in-app browser, then manually verify Guided Comic Flow -> Imageshop -> generated panel return.
+
+### Next steps
+
+- Once the browser bridge is responsive again, open Comic Creator, start or select a guided comic, use the panel Imageshop action, and click `Send back to Guided Flow` after generation.
+
+## Imageshop Guided Comic Return QA And Draft Restore Fix - 2026-06-01
+
+### What changed
+
+- Fixed the Guided Comic Flow restore order so a newer unsaved local guided draft is restored over an older Comic Library snapshot.
+- This preserves page cards and panel queues when Comic Creator remounts after sending generated art back from Imageshop.
+- Manually verified the signed-in Guided Comic Flow -> Imageshop -> return-art path.
+- Updated the Imageshop production tracker to mark the Guided Comic Flow return-art manual verification checkbox complete.
+
+### Files touched
+
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `docs/superpowers/plans/2026-05-31-imageshop-production-studio.md`
+- `walkthrough.md`
+
+### Implementation notes
+
+- The bug appeared when returning from Imageshop to Comic Creator: Comic Creator remounted from the saved Comic Library project snapshot, which could be older than the unsaved local guided draft. That made the Art step show `0 panels`, so the returned panel image had no visible panel queue to attach to.
+- The fix compares the local guided draft `savedAt` timestamp with the active Comic Library project `updatedAt`; if the local draft is newer, it becomes the initial restored draft while preserving the existing library and active project id.
+- No Supabase schema, route, or ComicEditor changes were introduced.
+
+### Verification
+
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed: 4 files, 40 tests.
+- Signed-in browser QA:
+  - Opened Comic Creator as `hayronivy@gmail.com`.
+  - Opened current issue and Page 1 / Panel 1 panel focus.
+  - Clicked `Imageshop` from the panel image controls.
+  - Confirmed Imageshop loaded `Page 1, Panel 1` with the Guided Comic Flow prompt.
+  - Generated panel art and clicked `Send back to Guided Comic Flow`.
+  - Reopened Page 1 / Panel 1 and confirmed status `Ready`, image framing controls enabled, and `Assigned art for page 1, panel 1` visible.
+
+### Outstanding issues
+
+- None for the Imageshop Evolution Plan tracker.
+
+### Risks or caveats
+
+- The manual QA created real signed-in Imageshop and Guided Comic local/browser artifacts in the current account/session.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- None.
