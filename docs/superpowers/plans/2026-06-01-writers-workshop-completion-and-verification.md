@@ -75,6 +75,13 @@
   - Local vault parser result: imported `Kron`, `Finn`, `Glimm`, `Institute of Divination & Occultivation`, and `Magister Valencius Santoro`; resolved all detected embedded images from `Assets/Images` with no warnings.
   - Verification: `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed, `npm run build` passed, `npm run lint` passed with existing warnings only, and `git diff --check` passed.
 
+- [~] **Pass 11: Obsidian Lore Import End-to-End QA**
+  - Re-ran focused parser and optional reference-vault tests, production build, lint, and whitespace checks.
+  - In-app browser QA verified Writers Workshop -> Canon -> Obsidian import UI renders at `http://127.0.0.1:5174/`, including type-filter options and both picker buttons, with no captured console errors.
+  - Signed-in browser regression QA verified manual lore card create/edit, JSON lore import, reload persistence for the QA cards, and Cockpit Lore digest display without `ARCS_LORE_IMPORT_METADATA`, `storageUrl`, or raw storage URL leakage.
+  - Native file-picker import, folder import, Obsidian preview duplicate actions, Obsidian source badges, stored image counts, and real cloud image-upload verification remain pending because the in-app browser runtime does not expose file-input upload automation and a standalone Playwright fallback would need a signed-in browser state before it can exercise the same Supabase-backed project.
+  - Cleanup of live QA lore cards is pending user confirmation before deleting Supabase-backed data.
+
 ## Acceptance Criteria
 
 - All five requested next-step items are represented in tracker docs and addressed or explicitly blocked with evidence.
@@ -83,3 +90,4 @@
 - Pacing downstream regeneration has a non-persisting preview path and explicit apply path.
 - Live AI and Edge deploy verification are passed with browser evidence.
 - Browser timeout investigation leaves a repeatable QA approach for future agents.
+- Obsidian import end-to-end QA has passing parser/build/lint/UI/regression evidence, with native picker/image-upload checks still explicitly pending.

@@ -6878,6 +6878,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `walkthrough.md`
 
 ### Backlog items
+- Writers Workshop ribbon/workspace polish: compact the ribbon and workspace command density now that the core Writers Workshop flow is effectively complete; preserve the existing tab order and avoid reopening feature scope.
 - Image Vault modal density: widen `ProfileVaultModal` / `CollectionVaultModal` and densify the internal image grid so more images fit without scrolling.
 - Imageshop/browser smoke checks: run the remaining targeted browser smoke checks noted in `tasks.md`, including Imageshop lint/browser verification and any older manual no-console-error checks.
 - Image-describe API follow-up: implement the future image-describe API for the Refine tab `NEW` workflow.
@@ -6899,3 +6900,65 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue Obsidian Lore Import QA first if the goal is to finish that feature.
+
+## Obsidian Lore Import Partial End-to-End QA - 2026-06-01
+
+### What changed
+- Ran the next QA pass for Writers Workshop / Canon Obsidian Lore Import using the existing QA plan.
+- Updated the QA plan, active completion tracker, and task checklist with the actual pass/fail/pending state.
+- Verified the signed-in Canon and Cockpit surfaces without changing application code.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-01-obsidian-lore-import-qa-plan.md`
+- `docs/superpowers/plans/2026-06-01-writers-workshop-completion-and-verification.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No application source code changed in this QA pass.
+- Focused parser QA initially failed when the parser test and optional reference-vault test were launched in parallel; the isolated parser rerun passed, so this was treated as a runner/runtime collision rather than an importer failure.
+- The in-app browser runtime exposed the hidden Obsidian file inputs but did not expose file-upload automation (`setInputFiles` was unavailable). A standalone Playwright fallback could be installed, but it would need signed-in browser state or auth transfer before it could exercise the same Supabase-backed Writer project.
+- Live signed-in QA created two temporary lore cards in the selected series:
+  - `Codex Obsidian QA Manual 20260601`
+  - `Codex Obsidian QA JSON 20260601`
+- Cleanup deletion of those Supabase-backed QA cards is pending user confirmation.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.referenceVault.test.ts` passed: 1 file, 1 test.
+- `npm run test -- --run src/portals/writer/__tests__/obsidianLoreImport.test.ts` passed on isolated rerun: 1 file, 10 tests.
+- `npm run build` passed.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+- `git diff --check` passed before documentation edits.
+- In-app browser QA at `http://127.0.0.1:5174/` confirmed:
+  - page title `ARCS Expanded`;
+  - Writers Workshop -> Canon rendered nonblank with no framework overlay;
+  - `Import from Obsidian` rendered;
+  - `Type filter` included `All types`, `character`, `species`, `faction`, `organization`, `location`, `event`, `discipline`, `artifact`, and `concept`;
+  - `Select notes/images` and `Select vault folder` rendered;
+  - no captured console errors.
+- Signed-in browser regression QA confirmed:
+  - manual lore card creation worked;
+  - manual lore card edit/save worked;
+  - JSON lore import worked;
+  - both QA cards persisted after reload;
+  - Cockpit left column set to `Lore` displayed the QA lore text;
+  - Cockpit Lore digest did not show `ARCS_LORE_IMPORT_METADATA`, `storageUrl`, or raw storage URLs.
+
+### Outstanding issues
+- Native file-picker import with Markdown + image files remains unverified.
+- Folder import with type filtering remains unverified.
+- Obsidian preview duplicate actions (`skip`, `create duplicate`, `overwrite`, `merge`) remain unverified in the live UI.
+- Supabase cloud image upload for imported Obsidian images remains unverified.
+- Obsidian source badge and stored-image count display remain unverified.
+- The two temporary QA lore cards still need deletion after user confirmation.
+
+### Risks or caveats
+- The tested Cockpit digest used manually created/JSON-imported lore cards, not Obsidian-imported cards, because native file selection could not be automated in the in-app browser.
+- The selected signed-in series now contains temporary QA lore data until cleanup is approved and performed.
+
+### Operator follow-up
+- Confirm cleanup deletion for `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
+- For full native-picker coverage, either perform the OS file selection manually in the in-app browser or provide a way for an automated Playwright session to reuse a signed-in Writer session safely.
+
+### Next steps
+- After cleanup confirmation, delete the two QA lore cards, rerun `git diff --check`, and update this walkthrough if cleanup completes.

@@ -32,6 +32,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Add Obsidian lore import: Markdown/frontmatter parsing, wiki-link detection, embedded image resolution/storage metadata, preview filtering, duplicate actions, and prompt-safe metadata stripping.
 - [x] Document Obsidian lore import usage and QA: user guide plus repeatable manual/end-to-end QA plan.
 - [x] Test against the local Twovestellium Obsidian vault: real notes parse, templates are skipped, capitalized/spaced properties are preserved, folder categories are inferred, and embedded image references resolve from `Assets/Images`.
+- [~] Run Obsidian lore import end-to-end QA: parser/reference tests, build, lint, Canon import UI smoke, manual lore create/edit, JSON import, reload persistence, and Cockpit Lore digest stripping passed; native file-picker/folder import, preview duplicate actions, Obsidian source badges, stored image counts, cloud image upload, and QA-card cleanup remain pending.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE

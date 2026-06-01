@@ -10,6 +10,17 @@
 
 ---
 
+## QA Execution Log - 2026-06-01
+
+- Automated parser QA passed after rerunning the focused parser test by itself. The first focused parser run was started in parallel with the optional reference-vault test and hit a Workers runtime startup failure; the isolated rerun passed.
+- Optional Twovestellium reference-vault parser QA passed against the checked-in reference vault.
+- Production build, lint, and whitespace checks passed. Lint still reports the known 68 warnings and 0 errors.
+- In-app browser smoke QA on `http://127.0.0.1:5174/` passed for Writers Workshop -> Canon -> Obsidian import UI visibility, type-filter options, picker button visibility, page identity, nonblank render, no framework overlay, and no captured console errors.
+- Live signed-in browser regression QA passed for manual lore card create, edit, JSON import, reload persistence, and Cockpit Lore digest display. The QA cards used were `Codex Obsidian QA Manual 20260601` and `Codex Obsidian QA JSON 20260601`.
+- Cockpit Lore digest showed the QA lore text and did not expose `ARCS_LORE_IMPORT_METADATA`, `storageUrl`, or raw storage URLs.
+- Native file-picker import, folder import, duplicate actions through the Obsidian preview UI, Obsidian source badges, stored image counts, and real cloud image-upload verification remain unverified in-browser. The in-app browser runtime exposes the hidden file inputs but does not expose `setInputFiles`; a standalone Playwright fallback required installing Playwright and would also need a signed-in browser state or token transfer before it could exercise the same Supabase-backed project.
+- Cleanup of the two live QA lore cards is pending user confirmation because deleting signed-in Supabase-backed data requires explicit action-time approval.
+
 ## QA Scope
 
 This plan verifies:
