@@ -6211,7 +6211,6 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
   - Production Dashboard with Draft, Generated, Refined, Approved, and Published status filters/actions.
   - Refinement Workspace with prompt edit, region edit, character/face/costume/lighting/color/dialogue correction, and surgical Continuity Correction source/target fields.
 - Preserved existing generated-result session recovery, Save / Export, Character Vault, Asset Vault, NPC Vault, Guided Comic Flow handoff, and Guided Comic panel return wiring.
-- Added focused Save / Export coverage for Character Vault helper saves, Asset Vault helper saves, and Download, and fixed the optional Cast name / Asset name labels so they are associated with their form controls.
 - Updated the Imageshop production tracker so Passes 1-7 and automated verification are marked complete, while signed-in manual browser checks remain explicitly unchecked because auth blocked them.
 
 ### Files touched
@@ -6239,16 +6238,15 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Verification
 
-- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed: 1 file, 9 tests.
-- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopSessionStore.test.ts` passed: 6 files, 37 tests.
-- `npm run test` passed: 49 files, 295 tests.
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopSessionStore.test.ts` passed: 6 files, 34 tests.
+- `npm run test` passed: 49 files, 292 tests.
 - `npm run build` passed with the existing large `ComicPortal` chunk warning.
 - `npm run lint` passed with 0 errors and the existing 67-warning baseline.
 - `git diff --check` passed.
 - In-app browser opened `http://127.0.0.1:5173/` and confirmed the app title `ARCS Expanded`, but protected portal QA stopped at the Supabase sign-in gate.
 - Disposable QA sign-up was attempted through the app auth UI; the first `example.com` email was rejected as invalid, and the follow-up Gmail-style address was blocked by Supabase email rate limiting.
 - Chrome-profile QA was also attempted against `http://127.0.0.1:5173/`, but the available Chrome profile was not signed into ARCS and stopped at the same sign-in gate.
-- Because the browser sessions remained unauthenticated, signed-in manual checks for Guided Comic Flow -> Imageshop -> return-art and Save / Export were not completed in-browser. Focused bridge/component tests now cover Guided Comic Flow panel return wiring and session-result Save / Export to the NPC Vault/local archive path, Character Vault helper path, Asset Vault helper path, and Download without regeneration.
+- Because the browser sessions remained unauthenticated, signed-in manual checks for Guided Comic Flow -> Imageshop -> return-art and Save / Export were not completed in-browser. Focused bridge/component tests now cover Guided Comic Flow panel return wiring and session-result Save / Export to the NPC Vault/local archive path without regeneration.
 
 ### Outstanding issues
 
@@ -6273,3 +6271,36 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 
 - Perform signed-in browser QA and update the tracker checkboxes for the remaining manual verification items.
+
+## Imageshop PR bugfixes - 2026-05-31
+
+### What changed
+- Fixed refinement prompt staging so selecting/staging a production item no longer advances a draft item to `generated` before image generation actually succeeds.
+- Fixed uploaded page-background replacements so the previous `blob:` background URL is revoked before the new object URL is stored.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `implementation_plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `stageRefinementPrompt` now only updates the prompt workspace and preserves the selected production item's existing lifecycle status.
+- `handlePageBackgroundFile` captures the new object URL once, revokes only the prior `blob:` URL, and stores the new URL through the existing page-config merge path.
+
+### Verification
+- `npx eslint src/portals/storyline/GenericImageLabPanel.tsx`
+- `npm run build`
+- `git diff --check`
+
+### Outstanding issues
+- None.
+
+### Risks or caveats
+- Manual browser QA was not run; the changes are limited to callback logic and were verified by lint/build checks.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- None.

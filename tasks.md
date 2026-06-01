@@ -2,6 +2,12 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Imageshop PR bugfix verification (2026-05-31) — COMPLETE
+
+- [x] Fix staging refinement prompt so it does not advance draft production items before generation.
+- [x] Revoke the previous uploaded page-background `blob:` URL when replacing it with another upload.
+- [x] Verify with lint/build checks and update `walkthrough.md`.
+
 ## Writers Workshop — Narrative Production System Retool (2026-05-31) — IN PROGRESS
 
 Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md`](docs/superpowers/plans/2026-05-31-writers-workshop-narrative-production-system.md)
