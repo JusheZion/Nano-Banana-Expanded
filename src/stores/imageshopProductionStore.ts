@@ -17,6 +17,20 @@ import type {
   ImageshopProductionBatchItem,
   ImageshopProductionSourceKind,
 } from '@/portals/storyline/imageshopJsonSchemas';
+import {
+  addImageshopPanelReferenceChip as addPanelReferenceChipToQueue,
+  clearImageshopPanelReferenceChips as clearPanelReferenceChipsInQueue,
+  getImageshopQueueReadiness,
+  replaceImageshopPanelReferenceChips as replacePanelReferenceChipsInQueue,
+  restoreImageshopPanelReferenceChips as restorePanelReferenceChipsInQueue,
+  updateImageshopPanelQueueItemStatus,
+  type ImageshopIssueQueue,
+  type ImageshopPanelGenerationStatus,
+  type ImageshopPanelReferenceMutationResult,
+  type ImageshopPanelReferenceUndo,
+  type ImageshopQueueReadiness,
+  type ImageshopReferenceChip,
+} from '@/portals/storyline/imageshopPagePanelQueue';
 
 export type ImageshopProductionStatus = 'draft' | 'generated' | 'refined' | 'approved' | 'published';
 export type ImageshopProductionVersionKind = 'generated' | 'refined' | 'continuity-correction';
@@ -79,6 +93,9 @@ type ImageshopProductionState = {
   productionItems: ImageshopProductionItem[];
   selectedProductionItemId: string | null;
   dashboardStatusFilter: ImageshopProductionStatus | 'all';
+  panelQueue: ImageshopIssueQueue | null;
+  selectedPanelQueueItemId: string | null;
+  panelQueueReadiness: ImageshopQueueReadiness;
   setGenerationMode: (mode: ImageshopGenerationMode) => void;
   updatePromptSection: (section: ImageshopPromptSectionKey, value: string) => void;
   replacePromptWorkspace: (workspace: Partial<ImageshopPromptWorkspace>) => void;
@@ -94,7 +111,32 @@ type ImageshopProductionState = {
   addProductionVersion: (id: string, version: AddProductionVersionInput) => void;
   importBatch: (batch: ImageshopProductionBatch) => void;
   setDashboardStatusFilter: (filter: ImageshopProductionStatus | 'all') => void;
+  setPanelQueue: (queue: ImageshopIssueQueue | null) => void;
+  selectPanelQueueItem: (id: string | null) => void;
+  updatePanelQueueItemStatus: (id: string, status: ImageshopPanelGenerationStatus) => void;
+  addPanelQueueReferenceChip: (id: string, chip: ImageshopReferenceChip) => ImageshopPanelReferenceMutationResult;
+  replacePanelQueueReferenceChips: (
+    id: string,
+    chips: ImageshopReferenceChip[],
+    options: { confirmed: boolean },
+  ) => ImageshopPanelReferenceMutationResult;
+  clearPanelQueueReferenceChips: (
+    id: string,
+    options: { confirmed: boolean },
+  ) => ImageshopPanelReferenceMutationResult;
+  restorePanelQueueReferenceChips: (undo: ImageshopPanelReferenceUndo) => ImageshopPanelReferenceMutationResult;
   clearProductionItems: () => void;
+};
+
+const EMPTY_PANEL_QUEUE_READINESS: ImageshopQueueReadiness = {
+  totalPanels: 0,
+  readyPanels: 0,
+  missingPromptPanels: [],
+  generatedPanels: 0,
+  approvedPanels: 0,
+  failedPanels: 0,
+  canonChipCount: 0,
+  referenceChipCount: 0,
 };
 
 function createId(prefix: string): string {
@@ -139,6 +181,11 @@ function batchItemToProductionItem(batch: ImageshopProductionBatch, item: Images
   });
 }
 
+function requirePanelQueue(queue: ImageshopIssueQueue | null): ImageshopIssueQueue {
+  if (!queue) throw new Error('Cannot edit Imageshop panel references without an active panel queue.');
+  return queue;
+}
+
 export const useImageshopProductionStore = create<ImageshopProductionState>()(
   persist(
     (set) => ({
@@ -153,6 +200,9 @@ export const useImageshopProductionStore = create<ImageshopProductionState>()(
       productionItems: [],
       selectedProductionItemId: null,
       dashboardStatusFilter: 'all',
+      panelQueue: null,
+      selectedPanelQueueItemId: null,
+      panelQueueReadiness: EMPTY_PANEL_QUEUE_READINESS,
 
       setGenerationMode: (mode) => set({ generationMode: mode }),
       updatePromptSection: (section, value) =>
@@ -277,9 +327,96 @@ export const useImageshopProductionStore = create<ImageshopProductionState>()(
             ...batch.items.map((item) => batchItemToProductionItem(batch, item)),
             ...state.productionItems,
           ],
+          panelQueue: batch.panelQueue ?? state.panelQueue,
+          selectedPanelQueueItemId:
+            batch.panelQueue?.pages[0]?.panels[0]?.queueItemId ?? state.selectedPanelQueueItemId,
+          panelQueueReadiness: batch.panelQueue
+            ? getImageshopQueueReadiness(batch.panelQueue)
+            : state.panelQueueReadiness,
         })),
       setDashboardStatusFilter: (filter) => set({ dashboardStatusFilter: filter }),
-      clearProductionItems: () => set({ importedBatches: [], productionItems: [], selectedProductionItemId: null }),
+      setPanelQueue: (queue) =>
+        set({
+          panelQueue: queue,
+          selectedPanelQueueItemId: queue?.pages[0]?.panels[0]?.queueItemId ?? null,
+          panelQueueReadiness: getImageshopQueueReadiness(queue),
+        }),
+      selectPanelQueueItem: (id) => set({ selectedPanelQueueItemId: id }),
+      updatePanelQueueItemStatus: (id, status) =>
+        set((state) => {
+          if (!state.panelQueue) return state;
+          const panelQueue = updateImageshopPanelQueueItemStatus(state.panelQueue, id, status);
+          return {
+            panelQueue,
+            selectedPanelQueueItemId: id,
+            panelQueueReadiness: getImageshopQueueReadiness(panelQueue),
+          };
+        }),
+      addPanelQueueReferenceChip: (id, chip) => {
+        const result = addPanelReferenceChipToQueue(requirePanelQueue(useImageshopProductionStore.getState().panelQueue), id, chip);
+        if (!result.blockedReason) {
+          set({
+            panelQueue: result.queue,
+            selectedPanelQueueItemId: id,
+            panelQueueReadiness: getImageshopQueueReadiness(result.queue),
+          });
+        }
+        return result;
+      },
+      replacePanelQueueReferenceChips: (id, chips, options) => {
+        const result = replacePanelReferenceChipsInQueue(
+          requirePanelQueue(useImageshopProductionStore.getState().panelQueue),
+          id,
+          chips,
+          options,
+        );
+        if (!result.blockedReason) {
+          set({
+            panelQueue: result.queue,
+            selectedPanelQueueItemId: id,
+            panelQueueReadiness: getImageshopQueueReadiness(result.queue),
+          });
+        }
+        return result;
+      },
+      clearPanelQueueReferenceChips: (id, options) => {
+        const result = clearPanelReferenceChipsInQueue(
+          requirePanelQueue(useImageshopProductionStore.getState().panelQueue),
+          id,
+          options,
+        );
+        if (!result.blockedReason) {
+          set({
+            panelQueue: result.queue,
+            selectedPanelQueueItemId: id,
+            panelQueueReadiness: getImageshopQueueReadiness(result.queue),
+          });
+        }
+        return result;
+      },
+      restorePanelQueueReferenceChips: (undo) => {
+        const result = restorePanelReferenceChipsInQueue(
+          requirePanelQueue(useImageshopProductionStore.getState().panelQueue),
+          undo,
+        );
+        if (!result.blockedReason) {
+          set({
+            panelQueue: result.queue,
+            selectedPanelQueueItemId: undo.queueItemId,
+            panelQueueReadiness: getImageshopQueueReadiness(result.queue),
+          });
+        }
+        return result;
+      },
+      clearProductionItems: () =>
+        set({
+          importedBatches: [],
+          productionItems: [],
+          selectedProductionItemId: null,
+          panelQueue: null,
+          selectedPanelQueueItemId: null,
+          panelQueueReadiness: EMPTY_PANEL_QUEUE_READINESS,
+        }),
     }),
     {
       name: 'arcs-imageshop-production-v1',

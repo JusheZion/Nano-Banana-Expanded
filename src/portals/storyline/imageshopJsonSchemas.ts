@@ -7,9 +7,11 @@ import {
   type ImageshopPageConfig,
   type ImageshopPromptWorkspace,
 } from '@/portals/storyline/imageshopPromptComposer';
+import { normalizeImageshopWriterJson, type ImageshopWriterImportDiagnostic } from '@/portals/storyline/imageshopWriterImport';
+import type { ImageshopIssueQueue } from '@/portals/storyline/imageshopPagePanelQueue';
 
-export type ImageshopProductionBatchKind = 'story-beat-json' | 'comic-page-json' | 'arcs-page-json';
-export type ImageshopProductionSourceKind = 'story-beat' | 'comic-page' | 'arcs-page';
+export type ImageshopProductionBatchKind = 'story-beat-json' | 'comic-page-json' | 'arcs-page-json' | 'writer-issue-json';
+export type ImageshopProductionSourceKind = 'story-beat' | 'comic-page' | 'arcs-page' | 'writer-panel';
 
 export type ImageshopProductionBatchItem = {
   sourceId: string;
@@ -28,6 +30,8 @@ export type ImageshopProductionBatch = {
   artStyles?: ImageshopArtStyle[];
   selectedArtStyleId?: string | null;
   items: ImageshopProductionBatchItem[];
+  panelQueue?: ImageshopIssueQueue;
+  importDiagnostics?: ImageshopWriterImportDiagnostic[];
 };
 
 const storyBeatJsonSchema = z.object({
@@ -229,10 +233,17 @@ export function normalizeImageshopJson(input: unknown): ImageshopProductionBatch
   const comic = normalizeComicPageJson(input);
   if (comic) return comic;
 
+  try {
+    const writer = normalizeImageshopWriterJson(input);
+    return writer.batch;
+  } catch {
+    // Continue through the legacy supported schemas before surfacing the generic unsupported error.
+  }
+
   const story = normalizeStoryBeatJson(input);
   if (story) return story;
 
-  throw new Error('Unsupported Imageshop JSON. Import Story Beat JSON, Comic Page JSON, or exported ARCS Page JSON.');
+  throw new Error('Unsupported Imageshop JSON. Import Writer issue-pack JSON, Story Beat JSON, Comic Page JSON, or exported ARCS Page JSON.');
 }
 
 export function exportImageshopProductionConfig({

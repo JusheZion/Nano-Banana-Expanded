@@ -38,6 +38,7 @@ import {
   type StudioPreviewAspectId,
 } from '@/shared/utils/studioPreviewLayout';
 import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
+import { ImageshopGenerationCockpit } from '@/portals/storyline/components/ImageshopGenerationCockpit';
 import {
   composeImageshopPrompt,
   createDefaultImageshopContinuitySettings,
@@ -51,6 +52,11 @@ import {
   exportImageshopProductionConfig,
   normalizeImageshopJson,
 } from '@/portals/storyline/imageshopJsonSchemas';
+import {
+  findImageshopPanelQueueItem,
+  type ImageshopPanelQueueItem,
+} from '@/portals/storyline/imageshopPagePanelQueue';
+import { buildImageshopReferenceContext } from '@/portals/storyline/imageshopReferenceContext';
 import {
   buildGuidedImageWorkshopPrompt,
   buildGuidedImageWorkshopPromptForActiveReferences,
@@ -70,6 +76,7 @@ import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/
 
 type LabContext = 'character' | 'asset';
 type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
+type ImageshopSurfaceTab = 'compose' | 'page-setup' | 'batch-json' | 'review';
 type RefinementTool =
   | 'prompt-edit'
   | 'region-edit'
@@ -134,6 +141,13 @@ const PRODUCTION_STATUSES: Array<{ value: ImageshopProductionStatus | 'all'; lab
   { value: 'published', label: 'Published' },
 ];
 
+const IMAGESHOP_SURFACE_TABS: Array<{ value: ImageshopSurfaceTab; label: string; description: string }> = [
+  { value: 'compose', label: 'Compose', description: 'Prompt, references, preview, and generation.' },
+  { value: 'page-setup', label: 'Page setup', description: 'Style, continuity, page layout, and aspect.' },
+  { value: 'batch-json', label: 'Batch JSON', description: 'Import and export production JSON batches.' },
+  { value: 'review', label: 'Review', description: 'Dashboard status and refinement staging.' },
+];
+
 const REFINEMENT_TOOL_OPTIONS: Array<{ value: RefinementTool; label: string }> = [
   { value: 'prompt-edit', label: 'Prompt Edit' },
   { value: 'region-edit', label: 'Region Edit' },
@@ -145,6 +159,17 @@ const REFINEMENT_TOOL_OPTIONS: Array<{ value: RefinementTool; label: string }> =
   { value: 'dialogue-correction', label: 'Dialogue Correction' },
   { value: 'continuity-correction', label: 'Continuity Correction' },
 ];
+
+function buildPanelQueuePrompt(panel: ImageshopPanelQueueItem): string {
+  return [
+    panel.prompt,
+    panel.composition ? `Composition: ${panel.composition}` : '',
+    panel.dialogue ? `Dialogue: ${panel.dialogue}` : '',
+    panel.sfx ? `SFX: ${panel.sfx}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
 export function GenericImageLabPanel({
   selectedBeat,
@@ -182,6 +207,7 @@ export function GenericImageLabPanel({
   const [context, setContext] = useState<LabContext>('character');
   const [modelId] = useState<OnyxModelId>('pro');
   const [aspectRatio, setAspectRatio] = useState<StoryBeatAspectRatio>('9:16');
+  const [activeImageshopSurface, setActiveImageshopSurface] = useState<ImageshopSurfaceTab>('compose');
 
   const [promptRaw, setPromptRaw] = useState('');
   const [promptRefined, setPromptRefined] = useState('');
@@ -241,6 +267,11 @@ export function GenericImageLabPanel({
   const addProductionVersion = useImageshopProductionStore((s) => s.addProductionVersion);
   const importBatch = useImageshopProductionStore((s) => s.importBatch);
   const setDashboardStatusFilter = useImageshopProductionStore((s) => s.setDashboardStatusFilter);
+  const panelQueue = useImageshopProductionStore((s) => s.panelQueue);
+  const selectedPanelQueueItemId = useImageshopProductionStore((s) => s.selectedPanelQueueItemId);
+  const panelQueueReadiness = useImageshopProductionStore((s) => s.panelQueueReadiness);
+  const selectPanelQueueItem = useImageshopProductionStore((s) => s.selectPanelQueueItem);
+  const updatePanelQueueItemStatus = useImageshopProductionStore((s) => s.updatePanelQueueItemStatus);
   const saveExportPanelRef = useRef<HTMLDivElement | null>(null);
   const [jsonImportText, setJsonImportText] = useState('');
   const [jsonImportError, setJsonImportError] = useState<string | null>(null);
@@ -745,14 +776,15 @@ export function GenericImageLabPanel({
     }
   }, [promptRaw]);
 
-  const generate = useCallback(async () => {
-    const basePrompt = effectivePrompt;
+  const generate = useCallback(async (promptOverride?: string, panelQueueItemId?: string) => {
+    const basePrompt = promptOverride?.trim() || effectivePrompt;
     if (!basePrompt) {
       setError('Enter a prompt before generating.');
       return;
     }
     setError(null);
     setGenBusy(true);
+    if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'generating');
     try {
       const seed = pickGenerationSeed('randomized', null);
       const res = await generateImage({
@@ -767,6 +799,7 @@ export function GenericImageLabPanel({
         if ('blocked' in res && res.blocked) setError('Blocked by safety filters.');
         else if ('error' in res) setError(formatGeminiClientError(res.error));
         else setError('Failed to generate image.');
+        if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'failed');
         return;
       }
       const stored = addSessionResult({
@@ -790,6 +823,7 @@ export function GenericImageLabPanel({
       setLastSeed(stored.seed);
       setGeneratedSaveError(null);
       setGeneratedSaveNotice(null);
+      if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'generated');
     } finally {
       setGenBusy(false);
     }
@@ -804,6 +838,7 @@ export function GenericImageLabPanel({
     recordProductionVersion,
     refinementTool,
     stableRefs,
+    updatePanelQueueItemStatus,
   ]);
 
   const handleSaveGeneratedToVault = useCallback(async () => {
@@ -1224,6 +1259,87 @@ export function GenericImageLabPanel({
   const labPreviewMaxH = studioPreviewMaxHeightCss(aspectRatio as StudioPreviewAspectId);
   const isCinematic = aspectRatio === '21:9';
   const previewMaxH = isCinematic ? 'min(56vh, 520px)' : labPreviewMaxH;
+  const selectedPanelQueueItem = useMemo(
+    () =>
+      panelQueue && selectedPanelQueueItemId
+        ? findImageshopPanelQueueItem(panelQueue, selectedPanelQueueItemId) ?? panelQueue.pages[0]?.panels[0] ?? null
+        : panelQueue?.pages[0]?.panels[0] ?? null,
+    [panelQueue, selectedPanelQueueItemId],
+  );
+  const selectedPanelReferenceContext = useMemo(
+    () =>
+      buildImageshopReferenceContext({
+        panel: selectedPanelQueueItem,
+        productionCast,
+        productionAssets,
+        productionSupportingRefs,
+        guidedHandoff: guidedHandoffContext,
+        approvedProductionItems: productionItems,
+      }),
+    [
+      guidedHandoffContext,
+      productionAssets,
+      productionCast,
+      productionItems,
+      productionSupportingRefs,
+      selectedPanelQueueItem,
+    ],
+  );
+  const selectedPanelQueueItemWithReferences = useMemo<ImageshopPanelQueueItem | null>(
+    () =>
+      selectedPanelQueueItem
+        ? {
+            ...selectedPanelQueueItem,
+            referenceChips: selectedPanelReferenceContext.chips,
+          }
+        : null,
+    [selectedPanelQueueItem, selectedPanelReferenceContext.chips],
+  );
+
+  const loadSelectedPanelPrompt = useCallback(() => {
+    if (!selectedPanelQueueItemWithReferences) return;
+    const nextPrompt = buildPanelQueuePrompt(selectedPanelQueueItemWithReferences);
+    setGenerationMode('comic-pages');
+    setPromptRaw(nextPrompt);
+    setPromptRefined('');
+    setUseRefinedPrompt(false);
+    replacePromptWorkspace({
+      main: nextPrompt,
+      character: selectedPanelQueueItemWithReferences.characters.join(', '),
+      environment: selectedPanelQueueItemWithReferences.locations.join(', '),
+      artStyle: selectedPanelQueueItemWithReferences.artStyle,
+      camera: selectedPanelQueueItemWithReferences.composition,
+      continuity: [
+        ...selectedPanelQueueItemWithReferences.canonChips.map((chip) => chip.summary).filter(Boolean),
+        selectedPanelQueueItemWithReferences.loreIds.length > 0 ? `Lore ids: ${selectedPanelQueueItemWithReferences.loreIds.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    });
+    const referenceUrls = selectedPanelQueueItemWithReferences.referenceChips.map((chip) => chip.imageUrl ?? '').filter(Boolean);
+    if (referenceUrls.length > 0) {
+      setRefs(Array.from({ length: 14 }, (_, index) => referenceUrls[index] ?? ''));
+      setContext(selectedPanelQueueItemWithReferences.referenceChips.some((chip) => chip.sourceType === 'character') ? 'character' : 'asset');
+    }
+    const matchingProductionItem = productionItems.find((item) => item.sourceId === selectedPanelQueueItemWithReferences.queueItemId);
+    if (matchingProductionItem) selectProductionItem(matchingProductionItem.id);
+    selectPanelQueueItem(selectedPanelQueueItemWithReferences.queueItemId);
+    setNotice(`Loaded Page ${selectedPanelQueueItemWithReferences.pageNumber} Panel ${selectedPanelQueueItemWithReferences.panelNumber} into the prompt workspace.`);
+  }, [
+    productionItems,
+    replacePromptWorkspace,
+    selectPanelQueueItem,
+    selectProductionItem,
+    selectedPanelQueueItemWithReferences,
+    setGenerationMode,
+  ]);
+
+  const generateSelectedPanel = useCallback(() => {
+    if (!selectedPanelQueueItemWithReferences) return;
+    loadSelectedPanelPrompt();
+    void generate(buildPanelQueuePrompt(selectedPanelQueueItemWithReferences), selectedPanelQueueItemWithReferences.queueItemId);
+  }, [generate, loadSelectedPanelPrompt, selectedPanelQueueItemWithReferences]);
+
   const canSendBackToGuidedFlow = Boolean(
     guidedPanelTarget?.currentStep === 'art' &&
       guidedPanelTarget.pageNumber != null &&
@@ -1285,8 +1401,47 @@ export function GenericImageLabPanel({
       <div className="p-3">
       <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">Image Lab</h3>
 
-      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <ImageshopGenerationCockpit
+          queue={panelQueue}
+          selectedPanel={selectedPanelQueueItemWithReferences}
+          readiness={panelQueueReadiness}
+          generating={genBusy}
+          hasPreview={Boolean(lastImageUrl)}
+          missingReferenceRoutes={selectedPanelReferenceContext.missingReferenceRoutes}
+          onSelectPanel={selectPanelQueueItem}
+          onLoadSelectedPanelPrompt={loadSelectedPanelPrompt}
+          onGenerateSelectedPanel={generateSelectedPanel}
+	      />
+
+	      <div className="mt-3 border border-white/10 bg-black/20 p-2">
+	        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Production Surface Tabs</p>
+	        <div className="mt-2 grid gap-2 sm:grid-cols-4">
+	          {IMAGESHOP_SURFACE_TABS.map((tab) => {
+	            const selected = activeImageshopSurface === tab.value;
+	            return (
+	              <button
+	                key={tab.value}
+	                type="button"
+	                aria-pressed={selected}
+	                title={tab.description}
+	                onClick={() => setActiveImageshopSurface(tab.value)}
+	                className={`border px-3 py-2 text-left text-xs ${
+	                  selected
+	                    ? 'border-amber-300 bg-amber-400/20 text-amber-100'
+	                    : 'border-white/15 bg-white/5 text-white/70 hover:bg-white/10'
+	                }`}
+	              >
+	                {tab.label}
+	              </button>
+	            );
+	          })}
+	        </div>
+	      </div>
+
+	      {activeImageshopSurface === 'compose' ? (
+	        <>
+	      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+	        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Generation Mode</p>
             <p className="mt-1 text-[11px] text-white/50">
@@ -1310,14 +1465,18 @@ export function GenericImageLabPanel({
             ))}
           </div>
         </div>
-      </div>
+	      </div>
 
-      <ImageshopImportPanel />
+	      <ImageshopImportPanel />
+	        </>
+	      ) : null}
 
-      <div className="mt-3 flex flex-col lg:flex-row lg:items-stretch gap-4 lg:gap-5 min-h-0">
-      <div className="flex-1 min-w-0 lg:max-w-[min(100%,440px)] space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <button
+	      <div className="mt-3 flex flex-col lg:flex-row lg:items-stretch gap-4 lg:gap-5 min-h-0">
+	      <div className="flex-1 min-w-0 lg:max-w-[min(100%,440px)] space-y-3">
+	      {activeImageshopSurface === 'compose' ? (
+	        <>
+	      <div className="flex flex-wrap gap-2">
+	        <button
           type="button"
           className="px-2 py-1 rounded-lg text-[11px] border border-white/15 hover:bg-white/10"
           onClick={() => replaceFromStudio('character')}
@@ -1495,11 +1654,15 @@ export function GenericImageLabPanel({
             </p>
             <p className="text-[11px] text-white/70 whitespace-pre-wrap">{promptRefined}</p>
           </div>
-        ) : null}
-      </div>
+	        ) : null}
+	      </div>
+	        </>
+	      ) : null}
 
-      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+	      {activeImageshopSurface === 'page-setup' ? (
+	        <>
+	      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+	        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Art Style Library</p>
             <p className="mt-1 text-[11px] text-white/45">Styles stay separate from the main prompt and export with production configs.</p>
@@ -1733,91 +1896,102 @@ export function GenericImageLabPanel({
       <div className="mt-3">
         <label className="block text-[10px] text-white/45 uppercase mb-1">Aspect ratio</label>
         <div className="flex flex-wrap gap-2">
-          {(['9:16', '1:1', '21:9'] as StoryBeatAspectRatio[]).map((ratio) => (
-            <button
-              key={ratio}
-              type="button"
-              onClick={() => setAspectRatio(ratio)}
-              className={`px-2 py-1 rounded-lg text-[11px] border ${
-                aspectRatio === ratio ? 'border-fuchsia-400 bg-fuchsia-500/15' : 'border-white/15 hover:bg-white/10'
-              }`}
-            >
-              {ratio === '9:16'
-                ? 'Portrait'
-                : ratio === '1:1'
-                  ? 'Square'
-                  : 'Cinematic'}
-            </button>
-          ))}
-        </div>
-      </div>
+          {(['9:16', '1:1', '21:9'] as StoryBeatAspectRatio[]).map((ratio) => {
+            const ratioLabel = ratio === '9:16' ? 'Portrait' : ratio === '1:1' ? 'Square' : 'Cinematic';
 
-      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">JSON Production Batch</p>
-            <p className="mt-1 text-[11px] text-white/45">Import Story Beat, Comic Page, or ARCS Page JSON. Imported items land in the dashboard before generation.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 cursor-pointer">
-              Import JSON
-              <input
-                type="file"
-                accept=".json,application/json"
-                className="hidden"
-                onChange={(e) => void handleJsonFile(e.target.files)}
-              />
-            </label>
-            <button
-              type="button"
-              className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10"
-              onClick={exportProductionJson}
-            >
-              Export JSON
-            </button>
-          </div>
-        </div>
-        <textarea
-          className="mt-2 w-full min-h-[72px] resize-y rounded-lg border border-white/10 bg-black/25 p-2 text-[11px] font-mono"
-          value={jsonImportText}
-          onChange={(e) => setJsonImportText(e.target.value)}
-          placeholder='Paste JSON here, then click "Import pasted JSON".'
-        />
-        <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-          <button
-            type="button"
-            className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:opacity-40"
-            disabled={!jsonImportText.trim()}
-            onClick={() => handleImportJson(jsonImportText)}
-          >
-            Import pasted JSON
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-amber-500/35 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-100 hover:bg-amber-400/20 disabled:opacity-40"
-            disabled={batchBusy || productionItems.length === 0}
-            onClick={() => void generateBatch()}
-          >
-            {batchBusy ? 'Generating batch...' : 'Generate Batch'}
-          </button>
-        </div>
-        {jsonImportError ? <p className="mt-2 text-[11px] text-red-200/90">{jsonImportError}</p> : null}
-      </div>
+            return (
+              <button
+                key={ratio}
+                type="button"
+                aria-label={`Set generation aspect ratio to ${ratioLabel}`}
+                onClick={() => setAspectRatio(ratio)}
+                className={`px-2 py-1 rounded-lg text-[11px] border ${
+                  aspectRatio === ratio ? 'border-fuchsia-400 bg-fuchsia-500/15' : 'border-white/15 hover:bg-white/10'
+                }`}
+              >
+                {ratioLabel}
+              </button>
+            );
+          })}
+	        </div>
+	      </div>
+	        </>
+	      ) : null}
 
-      {error ? <p className="mt-2 text-xs text-red-200/90">{error}</p> : null}
+	      {activeImageshopSurface === 'batch-json' ? (
+	        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+	          <div className="flex items-start justify-between gap-3 flex-wrap">
+	            <div>
+	              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">JSON Production Batch</p>
+	              <p className="mt-1 text-[11px] text-white/45">Import Story Beat, Comic Page, or ARCS Page JSON. Imported items land in the dashboard before generation.</p>
+	            </div>
+	            <div className="flex flex-wrap gap-2">
+	              <label className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 cursor-pointer">
+	                Import JSON
+	                <input
+	                  type="file"
+	                  accept=".json,application/json"
+	                  className="hidden"
+	                  onChange={(e) => void handleJsonFile(e.target.files)}
+	                />
+	              </label>
+	              <button
+	                type="button"
+	                className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10"
+	                onClick={exportProductionJson}
+	              >
+	                Export JSON
+	              </button>
+	            </div>
+	          </div>
+	          <textarea
+	            className="mt-2 w-full min-h-[72px] resize-y rounded-lg border border-white/10 bg-black/25 p-2 text-[11px] font-mono"
+	            value={jsonImportText}
+	            onChange={(e) => setJsonImportText(e.target.value)}
+	            placeholder='Paste JSON here, then click "Import pasted JSON".'
+	          />
+	          <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+	            <button
+	              type="button"
+	              className="rounded-lg border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:bg-white/10 disabled:opacity-40"
+	              disabled={!jsonImportText.trim()}
+	              onClick={() => handleImportJson(jsonImportText)}
+	            >
+	              Import pasted JSON
+	            </button>
+	            <button
+	              type="button"
+	              className="rounded-lg border border-amber-500/35 bg-amber-400/10 px-2 py-1.5 text-xs text-amber-100 hover:bg-amber-400/20 disabled:opacity-40"
+	              disabled={batchBusy || productionItems.length === 0}
+	              onClick={() => void generateBatch()}
+	            >
+	              {batchBusy ? 'Generating batch...' : 'Generate Batch'}
+	            </button>
+	          </div>
+	          {jsonImportError ? <p className="mt-2 text-[11px] text-red-200/90">{jsonImportError}</p> : null}
+	        </div>
+	      ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
+	      {error ? <p className="mt-2 text-xs text-red-200/90">{error}</p> : null}
+
+	      {activeImageshopSurface === 'compose' ? (
+	      <div className="mt-3 flex flex-wrap gap-2">
+	        <button
           type="button"
+          aria-label="Generate current Imageshop prompt"
           disabled={genBusy || !effectivePrompt}
           onClick={() => void generate()}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
           style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
-        >
-          {genBusy ? 'Generating…' : 'Generate'}
-        </button>
-      </div>
-      </div>
+	        >
+	          {genBusy ? 'Generating…' : 'Generate'}
+	        </button>
+          {!effectivePrompt ? (
+            <p className="basis-full text-[11px] text-white/45">Add a prompt before generating.</p>
+          ) : null}
+	      </div>
+	      ) : null}
+	      </div>
 
       <div className="flex-1 min-w-0 min-h-[200px] lg:min-h-0 flex flex-col">
         {lastImageUrl ? (
@@ -1877,7 +2051,7 @@ export function GenericImageLabPanel({
                           </button>
                           <button
                             type="button"
-                            aria-label="Remove session result"
+                            aria-label={`Remove session result ${index + 1}`}
                             className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-xs font-black text-white hover:bg-red-500/85"
                             onClick={() => {
                               removeSessionResult(result.id);
@@ -2115,12 +2289,14 @@ export function GenericImageLabPanel({
               Generated image appears here (portrait / square / cinematic).
             </p>
           </div>
-        )}
+	        )}
 
-        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Production Dashboard</p>
+	        {activeImageshopSurface === 'review' ? (
+	        <>
+	        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+	          <div className="flex items-start justify-between gap-3 flex-wrap">
+	            <div>
+	              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Production Dashboard</p>
               <p className="mt-1 text-[11px] text-white/45">
                 Track images/pages from draft through generated, refined, approved, and published states.
               </p>
@@ -2253,11 +2429,13 @@ export function GenericImageLabPanel({
             className="mt-3 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-2 text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:opacity-40"
             disabled={!selectedProductionItem && !effectivePrompt}
             onClick={stageRefinementPrompt}
-          >
-            Stage refinement prompt
-          </button>
-        </div>
-      </div>
+	          >
+	            Stage refinement prompt
+	          </button>
+	        </div>
+	        </>
+	        ) : null}
+	      </div>
       </div>
       </div>
     </section>

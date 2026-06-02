@@ -106,6 +106,51 @@ describe('normalizeImageshopJson', () => {
     expect(batch.items[0].prompt).toBe('Hero cover pose.');
   });
 
+  it('normalizes Writer issue-pack JSON with a page/panel queue', () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-99',
+      exported_at: '2026-06-01T15:00:00.000Z',
+      series: { title: 'Arc School' },
+      issue: { issue_number: 99, title: 'Doorway' },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            one_line_hook: 'The doorway opens.',
+            characters: ['Kron'],
+            locations: ['Dorm Room'],
+            art_style: 'clean comic linework',
+            panels: [
+              {
+                index: 1,
+                action: 'Kron opens the glowing doorway.',
+                lore_ids: ['lore-kron'],
+                reference_ids: ['character-kron-cover'],
+              },
+            ],
+          },
+          script_text: null,
+        },
+      ],
+    });
+
+    expect(batch.kind).toBe('writer-issue-json');
+    expect(batch.items[0]).toMatchObject({
+      sourceKind: 'writer-panel',
+      label: 'Page 1 Panel 1',
+      prompt: 'Kron opens the glowing doorway.',
+    });
+    expect(batch.panelQueue?.issueId).toBe('issue-99');
+    expect(batch.panelQueue?.pages[0].panels[0]).toMatchObject({
+      characters: ['Kron'],
+      locations: ['Dorm Room'],
+      artStyle: 'clean comic linework',
+      loreIds: ['lore-kron'],
+      referenceIds: ['character-kron-cover'],
+    });
+    expect(batch.importDiagnostics).toEqual([]);
+  });
+
   it('rejects unsupported JSON with a useful error', () => {
     expect(() => normalizeImageshopJson({ unknown: true })).toThrow(/Unsupported Imageshop JSON/);
   });

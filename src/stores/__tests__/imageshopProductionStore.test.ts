@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { createImageshopIssueQueue } from '@/portals/storyline/imageshopPagePanelQueue';
+import { normalizeImageshopJson } from '@/portals/storyline/imageshopJsonSchemas';
 import { useImageshopProductionStore } from '@/stores/imageshopProductionStore';
 
 beforeEach(() => {
@@ -111,5 +113,164 @@ describe('useImageshopProductionStore', () => {
     expect(template.pageConfig.panelStyle.gutterWidth).toBe(20);
     expect(useImageshopProductionStore.getState().savedLayoutTemplates[0].id).toBe(template.id);
     expect(useImageshopProductionStore.getState().pageConfig.layoutTemplateId).toBe(template.id);
+  });
+
+  it('stores an active Writer page/panel queue and updates panel status', () => {
+    const queue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-01T12:00:00.000Z',
+      issue: {
+        id: 'issue-store',
+        title: 'Store Queue',
+        issueNumber: 2,
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'A character studies a wall of reference images.',
+              loreIds: ['lore-wall'],
+              referenceIds: ['asset-wall'],
+            },
+            {
+              panelNumber: 2,
+              action: 'The panel queue lights up.',
+            },
+          ],
+        },
+      ],
+    });
+
+    useImageshopProductionStore.getState().setPanelQueue(queue);
+    useImageshopProductionStore.getState().selectPanelQueueItem('issue-store-page-1-panel-2');
+    useImageshopProductionStore.getState().updatePanelQueueItemStatus('issue-store-page-1-panel-2', 'approved');
+
+    const state = useImageshopProductionStore.getState();
+    expect(state.panelQueue?.issueTitle).toBe('Store Queue');
+    expect(state.selectedPanelQueueItemId).toBe('issue-store-page-1-panel-2');
+    expect(state.panelQueueReadiness).toMatchObject({
+      totalPanels: 2,
+      readyPanels: 2,
+      approvedPanels: 1,
+    });
+    expect(state.panelQueue?.pages[0].panels[1].status).toBe('approved');
+  });
+
+  it('activates the Writer panel queue when importing a Writer issue batch', () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-import',
+      exported_at: '2026-06-01T15:30:00.000Z',
+      issue: { issue_number: 4, title: 'Import Queue' },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            one_line_hook: 'The import becomes a queue.',
+            panels: [{ index: 1, action: 'Flux reviews the production queue.' }],
+          },
+          script_text: null,
+        },
+      ],
+    });
+
+    useImageshopProductionStore.getState().importBatch(batch);
+
+    const state = useImageshopProductionStore.getState();
+    expect(state.importedBatches[0].kind).toBe('writer-issue-json');
+    expect(state.panelQueue?.issueId).toBe('issue-import');
+    expect(state.selectedPanelQueueItemId).toBe('issue-import-page-1-panel-1');
+    expect(state.panelQueueReadiness).toMatchObject({
+      totalPanels: 1,
+      readyPanels: 1,
+    });
+  });
+
+  it('edits active panel queue references with undo-safe add, replace, and clear actions', () => {
+    const queue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-01T12:00:00.000Z',
+      issue: {
+        id: 'issue-reference-store',
+        title: 'Reference Store',
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'Flux reviews reference slots.',
+              referenceChips: [
+                {
+                  id: 'character-flux',
+                  label: 'Flux identity',
+                  lane: 'character-dna',
+                  sourceType: 'character',
+                  referenceId: 'character-flux',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const queueItemId = 'issue-reference-store-page-1-panel-1';
+
+    useImageshopProductionStore.getState().setPanelQueue(queue);
+    const addResult = useImageshopProductionStore.getState().addPanelQueueReferenceChip(queueItemId, {
+      id: 'asset-map',
+      label: 'Sky map',
+      lane: 'props',
+      sourceType: 'asset',
+      referenceId: 'asset-map',
+    });
+    expect(addResult.undo?.previousReferenceChips.map((chip) => chip.id)).toEqual(['character-flux']);
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips.map((chip) => chip.id)).toEqual([
+      'character-flux',
+      'asset-map',
+    ]);
+    expect(useImageshopProductionStore.getState().panelQueueReadiness.referenceChipCount).toBe(2);
+
+    const blockedReplace = useImageshopProductionStore.getState().replacePanelQueueReferenceChips(queueItemId, [], {
+      confirmed: false,
+    });
+    expect(blockedReplace.blockedReason).toBe('confirmation-required');
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips).toHaveLength(2);
+
+    const replaceResult = useImageshopProductionStore.getState().replacePanelQueueReferenceChips(
+      queueItemId,
+      [
+        {
+          id: 'style-board',
+          label: 'Issue style board',
+          lane: 'style',
+          sourceType: 'approved-output',
+          referenceId: 'style-board',
+        },
+      ],
+      { confirmed: true },
+    );
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips.map((chip) => chip.id)).toEqual([
+      'style-board',
+    ]);
+
+    useImageshopProductionStore.getState().restorePanelQueueReferenceChips(replaceResult.undo!);
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips.map((chip) => chip.id)).toEqual([
+      'character-flux',
+      'asset-map',
+    ]);
+
+    const clearResult = useImageshopProductionStore.getState().clearPanelQueueReferenceChips(queueItemId, {
+      confirmed: true,
+    });
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips).toEqual([]);
+
+    useImageshopProductionStore.getState().restorePanelQueueReferenceChips(clearResult.undo!);
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips.map((chip) => chip.id)).toEqual([
+      'character-flux',
+      'asset-map',
+    ]);
   });
 });

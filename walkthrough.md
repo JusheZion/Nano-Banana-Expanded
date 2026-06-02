@@ -7078,3 +7078,503 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue only with the remaining Obsidian native-picker and cloud image-upload checks if deeper import QA is needed.
+
+## Imageshop Comic Production Portal Plan - 2026-06-01
+
+### What changed
+- Created an approval-gated implementation plan for transforming Illustrator's Imageshop into the primary comic-page image production portal.
+- Grounded the plan in the Imageshop priority audit and the earlier production-studio tracker.
+- Set the two success barometers as: batch generation from Writer `.json` beats plus metadata, including Obsidian-derived canon context; and durable workflows between Writers' Workshop, Character Vault, Asset Vault, NPC/supporting references, and Imageshop for image generation and comic production.
+- Organized the expected implementation into 8 passes with task checklists, TDD gates, verification expectations, UX direction, data flow, file responsibility map, risks, and approval questions.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No application source code was changed.
+- The plan keeps the first overhaul inside the existing `lab` portal unless the user later approves broader routing scope.
+- The recommended workflow is panel-first comic production, with full-page generation preserved as an explicit option.
+- Obsidian lore is treated as Writer canon metadata and prompt-safe lore chips, not raw note dumping into image prompts.
+- The plan preserves the existing no-Supabase-schema-change constraint unless a later approved pass demonstrates a persistence gap.
+- The checklist requires `superpowers:test-driven-development` during implementation and keeps implementation blocked until user approval.
+
+### Verification
+- Documentation-only update; no runtime test required.
+- Verified the new plan file was created.
+- Verified this walkthrough section was appended.
+
+### Outstanding issues
+- The plan is not implemented.
+- The user still needs to approve the plan and answer or accept the recommended approval-question defaults before implementation begins.
+
+### Risks or caveats
+- The final implementation scope is broad and should remain pass-based to avoid destabilizing existing Imageshop save/export and Guided return paths.
+- Browser QA will need a signed-in session for the full Writer JSON import -> panel generation -> approval -> vault save -> Writer/Guided return path.
+
+### Operator follow-up
+- Review `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`.
+- Approve the plan as written or revise the recommended approval-question defaults.
+
+### Next steps
+- After approval, begin Pass 1 with failing tests for queue hierarchy, provenance snapshots, readiness counters, and backward-compatible production-store persistence.
+
+## Imageshop Comic Production Portal Pass 1 - 2026-06-01
+
+### What changed
+- Started implementation of the Imageshop comic production portal plan on branch `codex/imageshop-comic-production-portal`.
+- Added the first page/panel queue contract for Writer-sourced comic production work.
+- Added canon chips for Obsidian/Writer/manual context, reference chips for vault/Guided/approved-output sources, queue readiness counters, panel lookup helpers, panel status updates, and generation provenance snapshots.
+- Extended `useImageshopProductionStore` with active panel queue state, selected panel queue item state, queue readiness state, and actions for setting/selecting/updating queue items while preserving existing Imageshop production items and batch behavior.
+- Updated the active plan checklist and `tasks.md` so Pass 1 is recorded as complete and Pass 2 is clearly queued.
+
+### Files touched
+- `src/portals/storyline/imageshopPagePanelQueue.ts`
+- `src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This pass is intentionally foundational and does not yet expose the queue in the Imageshop UI.
+- `createImageshopIssueQueue` preserves Writer series, issue, page, panel, beat, dialogue, SFX, art style, lore id, reference id, canon chip, and reference chip metadata.
+- `getImageshopQueueReadiness` reports total, ready, missing-prompt, generated, approved, failed, canon chip, and reference chip counts for production health displays in later passes.
+- `createImageshopGenerationProvenance` snapshots source queue, Writer issue/page/panel identity, model, aspect ratio, destination, composed prompt, prompt sections, canon chips, and reference chips.
+- The store keeps the new queue state alongside the existing `arcs-imageshop-production-v1` persisted state so current art styles, batches, production items, layout templates, save/export flows, and Guided handoff behavior remain untouched.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` failed because `@/portals/storyline/imageshopPagePanelQueue` did not exist.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` passed 2 files / 8 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 8 files / 61 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+- `git diff --check` passed.
+
+### Outstanding issues
+- Writer JSON is not yet imported into the new queue; that is Pass 2.
+- The Imageshop UI does not yet render the generation-first cockpit, panel queue, context inspector, or output panel; those remain later passes.
+- Obsidian canon chips can be represented by the queue contract but are not yet resolved from Writer lore cards in Imageshop.
+- Batch generation, prompt preflight, structured generation diagnostics, and Writer/Guided round trip are not yet implemented.
+
+### Risks or caveats
+- The new queue state is foundational and currently unexposed, so browser QA is not meaningful for this pass alone.
+- Later UI passes must avoid regressing existing save/export and Guided Comic Flow return behavior.
+
+### Operator follow-up
+- None for Pass 1.
+
+### Next steps
+- Pass 2: import Writer JSON into the page/panel queue with diagnostics, Writer provenance, lore ids, vault reference ids, reusable Imageshop production JSON, and Writer-compatible image maps.
+
+## Imageshop Comic Production Portal Pass 2 - 2026-06-01
+
+### What changed
+- Added Writer issue-pack JSON import support for Imageshop's new page/panel queue.
+- Added `imageshopWriterImport.ts` to normalize Writers Workshop issue exports into an Imageshop panel queue while preserving Writer series, issue, page, panel, dialogue, SFX, art style, lore ids, vault reference ids, canon chips, and reference chips.
+- Extended `normalizeImageshopJson` so Writer issue-pack JSON returns a `writer-issue-json` production batch with an attached `panelQueue` and import diagnostics.
+- Preserved existing Story Beat JSON, Comic Page JSON, and ARCS Page JSON normalization by keeping legacy schema priority intact.
+- Added Writer-compatible image-map export support so generated/approved Imageshop panel outputs can be mapped back to Writer pages and panels.
+- Updated `useImageshopProductionStore.importBatch` so importing a Writer issue batch activates the attached panel queue and queue readiness counts.
+- Updated the active plan checklist and `tasks.md` so Pass 2 is recorded as complete.
+
+### Files touched
+- `src/portals/storyline/imageshopWriterImport.ts`
+- `src/portals/storyline/__tests__/imageshopWriterImport.test.ts`
+- `src/portals/storyline/imageshopJsonSchemas.ts`
+- `src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `normalizeImageshopWriterJson` accepts the existing Writer issue-pack shape used by Writers Workshop exports: `issue_id`, `exported_at`, `series`, `issue`, `production_defaults`, and `pages[]` with `beats_json`.
+- The importer recognizes page/panel metadata including `characters`, `locations`, `art_style`, `dialogue_placeholder`, `sfx`, `lore_ids`, `reference_ids`, `canon`, and `references`.
+- Canon entries can carry Obsidian provenance through `source_path`, `sourcePath`, or `obsidianPath`, which becomes `canonChips[].provenance.obsidianPath`.
+- Reference entries accept snake_case or camelCase source fields and normalize them into queue reference chips.
+- Import diagnostics currently cover missing `beats_json` panels, empty panel arrays, and panels with no action/composition/prompt text.
+- `buildImageshopWriterImageMapExport` emits a Writer-targeted image map grouped by page with queue item id, Writer page id, Writer panel id, panel number, image URL, status, version id, prompt, model, and seed.
+- This pass still does not render the queue in the Imageshop UI; it makes the data path real for the next UI pass.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts` failed because `@/portals/storyline/imageshopWriterImport` did not exist and `normalizeImageshopJson` rejected Writer issue-pack JSON.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts` passed 2 files / 8 tests after tightening schema priority so legacy Comic Page JSON remains `comic-page-json`.
+- Store/schema/import green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` passed 3 files / 14 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 9 files / 66 tests.
+- Initial `npm run build` caught one unused import in `imageshopWriterImport.ts`; the import was removed.
+- `npm run build` passed after that fix with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+- `git diff --check` passed.
+
+### Outstanding issues
+- Imageshop still does not expose the Writer panel queue in the first viewport; that is Pass 3.
+- Unknown lore ids and unknown vault ids are preserved as ids but not yet resolved against live Writer lore cards or vault albums.
+- Obsidian canon chips are imported when present in Writer JSON, but automatic lore-card attachment/conflict detection remains Pass 5.
+- Batch generation, prompt preflight, structured generation diagnostics, and unified output destinations remain later passes.
+
+### Risks or caveats
+- The importer is intentionally tolerant of snake_case and camelCase Writer metadata, but UI diagnostics should still make malformed inputs understandable in Pass 3.
+- Writer-compatible image maps are generated as data objects only; no UI export button or Writer return application exists yet.
+
+### Operator follow-up
+- None for Pass 2.
+
+### Next steps
+- Pass 3: recenter Imageshop around a generation-first cockpit that can display the active Writer page/panel queue, import diagnostics, prompt/reference/canon readiness, preview, generate/retry actions, and output destinations before the old beat timeline/libraries.
+
+## Imageshop Comic Production Portal Pass 3 Cockpit Surface - 2026-06-01
+
+### What changed
+- Added the first generation-first Imageshop cockpit surface for Writer-sourced page/panel production queues.
+- Added `ImageshopGenerationCockpit` and rendered it at the top of the Image Lab before the legacy JSON production batch and production dashboard surfaces.
+- Wired the cockpit to the active Writer panel queue, queue readiness counts, selected panel state, import diagnostics, prompt/ref/canon readiness, current prompt workspace, reference slots, generation action, and output destination summary.
+- Added a focused component test proving the Writer Pages Cockpit appears before the older production surfaces and exposes source panel, canon, reference lanes, output destinations, and generate/load controls.
+- Updated the active plan checklist and `tasks.md` to record Pass 3 as partially complete rather than fully done.
+
+### Files touched
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The cockpit is intentionally layered on top of the existing Imageshop UI so the current batch import, dashboard, save/export, and refinement workflows remain available while Pass 3 continues.
+- `Load selected panel prompt` fills the main prompt, context, and available reference slots from the selected Writer queue item and selects the matching production item when one exists.
+- `Generate selected panel` composes the selected panel prompt from Writer action/composition, dialogue, SFX, art style, characters, locations, canon chips, and reference chips, then updates queue item status through `generating`, `generated`, or `failed`.
+- The cockpit currently centralizes the first viewport, but the dedicated `ImageshopPanelQueue`, `ImageshopContextInspector`, and `ImageshopOutputPanel` extractions remain pending.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because the Writer Pages Cockpit did not exist in the first viewport.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 10 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 9 files / 67 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+- Signed-in browser smoke: opened `http://127.0.0.1:5174/`, launched Illustrator's Imageshop, imported a Writer issue JSON fixture through `Import pasted JSON`, and confirmed the Writer Pages Cockpit appeared before Generation Mode, JSON Production Batch, and Production Dashboard with the sample panel, canon chip, reference lane, and output destination text.
+
+### Outstanding issues
+- Legacy production libraries, beat timeline, JSON import, page configuration, dashboard, and refinement controls still need to move into contextual tabs or inspectors.
+- Duplicated aspect/export/save controls still need to be reconciled into one command model per active workflow.
+- Scoped accessible names and disabled-state helper copy for repeated controls still need a focused cleanup pass.
+
+### Risks or caveats
+- The first cockpit is now live, but Pass 3 should not be considered complete until the legacy surfaces are reorganized and browser-checked.
+- The generated panel status updates are local queue state only; later passes still need unified production board/version selection, structured diagnostics, and Writer/Guided return behavior.
+
+### Operator follow-up
+- The signed-in local browser now contains the Writer issue JSON smoke-test fixture in Imageshop state. It is safe to replace through the normal Imageshop import workflow during the next QA pass.
+
+### Next steps
+- Continue Pass 3 by extracting the dedicated queue, context inspector, and output components, then move legacy production surfaces into tabs/inspectors without removing current capabilities.
+
+## Imageshop Comic Production Portal Pass 3 Subcomponent Extraction - 2026-06-01
+
+### What changed
+- Continued Pass 3 by splitting the Writer Pages Cockpit into dedicated production sub-surfaces.
+- Added a named `Panel Queue` surface for page/panel selection, active panel status, prompt/action text, composition, dialogue, SFX, characters, locations, and art style.
+- Added a named `Context Inspector` surface for canon chips and labeled reference lanes, including human-readable lane labels such as `Character DNA`.
+- Added a named `Output Destinations` surface for vault save, Writer image-map, Guided return, generate, load-prompt, and retry affordances.
+- Updated the component test so the first Imageshop viewport must expose the extracted cockpit surfaces before the legacy JSON Production Batch and Production Dashboard.
+- Updated the active plan checklist and `tasks.md` so the extraction portion of Pass 3 is recorded as complete while legacy surface relocation remains pending.
+
+### Files touched
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/components/ImageshopPanelQueue.tsx`
+- `src/portals/storyline/components/ImageshopContextInspector.tsx`
+- `src/portals/storyline/components/ImageshopOutputPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This pass is a UI extraction and cockpit-contract pass. It does not change routing, Supabase schema, Writer export shape, or Guided Comic return contracts.
+- `ImageshopGenerationCockpit` now owns the high-level first-viewport shell and delegates panel navigation, context review, and output actions to focused child components.
+- `ImageshopOutputPanel` exposes a disabled `Retry selected panel` affordance until the selected panel is in `failed` status; recoverable batch retry behavior remains a later Pass 7 responsibility.
+- The legacy JSON import, comic page configuration, art style library, continuity lock, production dashboard, and refinement workspace remain available below the cockpit and still need to be moved into contextual tabs/inspectors to finish Pass 3.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because `Panel Queue` was missing from the first-viewport cockpit.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 10 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 9 files / 67 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- Legacy production libraries, beat timeline, JSON import, page configuration, dashboard, and refinement controls still need to move into contextual tabs or inspectors.
+- Duplicated aspect/export/save controls still need to be reconciled into one command model per active workflow.
+- Scoped accessible names and disabled-state helper copy for repeated controls still need a focused cleanup pass.
+
+### Risks or caveats
+- The retry button is an affordance only in this slice; full queue retry, pause/resume, partial success, and structured generation diagnostics remain later planned work.
+- Browser QA was not rerun for this extraction slice because the behavior is covered by the same first-viewport component contract and nearby regression suite; run signed-in browser QA again after the legacy surfaces move.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Continue Pass 3 by moving the older production libraries, beat timeline, JSON import, page configuration, dashboard, and refinement workspace into contextual tabs or inspectors while preserving current capabilities.
+
+## Imageshop Comic Production Portal Pass 3 Contextual Surface Tabs - 2026-06-01
+
+### What changed
+- Continued Pass 3 by adding contextual production tabs under the Writer Pages Cockpit.
+- Added `Production Surface Tabs` with `Compose`, `Page setup`, `Batch JSON`, and `Review` modes.
+- Kept `Compose` as the default surface for generation mode, external image import, prompt/reference controls, preview, save/export, and generation actions.
+- Moved Image Lab production libraries and page setup controls behind `Page setup`, including Art Style Library, Continuity Lock, Comic Page Configuration, and Aspect ratio.
+- Moved JSON import/export and batch generation controls behind `Batch JSON`.
+- Moved Production Dashboard and Refinement Workspace behind `Review`.
+- Updated production-studio component tests so JSON import and review assertions follow the new tabbed workflow.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The change preserves the existing `lab` portal route, production store, JSON import/export handlers, generation actions, save/export panel, and Guided Comic return behavior.
+- The tab model uses local UI state only; it does not alter persisted Imageshop production data.
+- The right-side preview remains visible across tabs so users keep visual orientation while moving between setup, batch import, and review.
+- This slice relocates the Image Lab production surfaces. The broader page-level beat timeline remains outside the tab model and still needs a later Pass 3 decision.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because the expected `Compose`, `Page setup`, `Batch JSON`, and `Review` tab buttons did not exist.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 10 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 9 files / 67 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- The broader Storyline/Imageshop beat timeline remains outside the contextual tab model.
+- Duplicated aspect/export/save controls still need to be reconciled into one command model per active workflow.
+- Scoped accessible names and disabled-state helper copy for repeated controls still need a focused cleanup pass.
+
+### Risks or caveats
+- Browser QA was not rerun for this tabbing slice; run signed-in browser QA after duplicate command cleanup or before closing Pass 3.
+- Review is now an explicit tab, so users must switch to `Review` after importing JSON to inspect dashboard items.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Continue Pass 3 with command cleanup: reconcile duplicated aspect/export/save controls and tighten accessible names/disabled helper copy for repeated controls.
+
+## Imageshop Comic Production Portal Pass 3 Command Cleanup - 2026-06-01
+
+### What changed
+- Continued Pass 3 by tightening repeated Imageshop command labels and disabled-state helper copy.
+- Added scoped accessible names for the compose generation action, aspect-ratio controls, and recoverable session-result removal controls.
+- Added visible helper copy explaining why empty-prompt generation is disabled.
+- Added visible helper copy explaining why `Retry selected panel` is disabled until the selected Writer panel fails.
+- Split the production-studio component test so empty-prompt disabled copy and restored session-result controls are tested in their correct UI states.
+- Updated the active plan checklist and `tasks.md` so scoped command-label cleanup is complete while broader beat-timeline relocation and full save/export command-model consolidation remain pending.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/components/ImageshopOutputPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The compose `Generate` button now exposes the command as `Generate current Imageshop prompt` while preserving its existing visible label.
+- Aspect-ratio buttons now expose `Set generation aspect ratio to Portrait`, `Set generation aspect ratio to Square`, and `Set generation aspect ratio to Cinematic`.
+- Session result delete buttons now expose ordinal names such as `Remove session result 1`.
+- The retry helper copy is informational only. Full retry strategy, structured diagnostics, pause/resume, and partial-success handling remain Pass 7 work.
+- This slice did not change routing, Supabase schema, Writer export contracts, Guided return contracts, or the existing save/export behavior.
+
+### Verification
+- Red test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because `Generate current Imageshop prompt` and `Retry unlocks after the selected panel fails.` were missing.
+- Focused green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 12 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 9 files / 69 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- The broader Storyline/Imageshop beat timeline remains outside the contextual tab model.
+- Full save/export command-model consolidation remains pending for the unified output-destination work in Pass 8.
+- Browser QA was not rerun for this command-cleanup slice.
+
+### Risks or caveats
+- The visible retry helper may appear in the cockpit even when the user has not attempted generation yet; this keeps the disabled reason explicit but should be reconsidered if the output panel becomes visually noisy.
+- The existing `GenericImageLabPanel.tsx` hook-dependency lint warning remains pre-existing and was not changed in this pass.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Continue toward Pass 4 by adding reference lane construction from Character Vault, Asset Vault, NPC/supporting references, Guided handoff refs, and approved Imageshop outputs.
+
+## Imageshop Comic Production Portal Pass 4 Reference Lanes - 2026-06-01
+
+### What changed
+- Started Pass 4 by adding a reference-context helper for Imageshop page/panel queues.
+- Added `buildImageshopReferenceContext` to merge Writer JSON reference chips, Character Vault production cast, Asset Vault production assets, NPC/supporting references, Guided Comic handoff refs, and approved Imageshop outputs into one `ImageshopReferenceChip` list.
+- Added labeled lane groups for `Character DNA`, `Wardrobe`, `Environment`, `Props`, `Style`, `Lighting`, and `Canon`.
+- Wired the selected Writer panel in `GenericImageLabPanel` through the reference-context helper before rendering the cockpit inspector.
+- Updated the selected-panel prompt loader so enriched vault/guided/approved references can populate Imageshop reference slots.
+- Added focused helper and production-studio component tests for reference lane construction and cockpit display.
+- Updated the active plan checklist and `tasks.md` so Pass 4 is marked partially complete rather than untouched.
+
+### Files touched
+- `src/portals/storyline/imageshopReferenceContext.ts`
+- `src/portals/storyline/__tests__/imageshopReferenceContext.test.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The helper is pure and does not persist derived reference chips into the production store. It enriches the active panel for cockpit display and prompt-slot loading.
+- Character Vault refs match Writer panels by explicit `referenceIds` or by panel character names against cast display/cast/profile names.
+- Asset Vault refs match by explicit `referenceIds` or by panel location names against asset/collection names; location matches are placed in the `Environment` lane, otherwise assets fall into `Props`.
+- NPC/supporting refs match by explicit `referenceIds` or label-to-character matching and are placed in `Character DNA`.
+- Guided handoff refs use the existing Guided image-workshop preload helper; Guided location refs go to `Environment`, props to `Props`, and character/NPC refs to `Character DNA`.
+- Approved or published Imageshop production items with a current image version are exposed as `approved-output` chips in the `Lighting` lane for continuity reuse.
+- Missing reference ids are reported by the helper, but the UI does not yet route missing refs to Character Studio, Asset Studio, or quick supporting refs.
+
+### Verification
+- Red helper test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts` failed because `@/portals/storyline/imageshopReferenceContext` did not exist.
+- Focused helper green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts` passed 1 file / 1 test.
+- Red UI test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because imported Writer panels did not show vault lane chips such as `Flux Solara`, `Brass iris door`, and `Alley Witness`.
+- Focused UI green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 13 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 10 files / 71 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- Missing-reference routing from Writer context to Character Studio, Asset Studio, or quick supporting reference is still pending.
+- Explicit replace/add/clear semantics with undo or confirmation for destructive replacement are still pending.
+- Explicit continuity-role labels are not yet exposed beyond lane/source/id metadata.
+- Browser QA was not rerun for this Pass 4 helper/UI slice.
+
+### Risks or caveats
+- Approved Imageshop outputs currently land in the `Lighting` lane as a pragmatic continuity-reuse default. Future Pass 8 output-destination work may want a more explicit continuity role model.
+- Derived reference chips are not persisted into the queue; if later passes need durable provenance for derived vault references, store-level enrichment or generation-provenance capture should be added intentionally.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Continue Pass 4 with missing-reference routing and explicit replace/add/clear semantics, then move into Pass 5 Obsidian canon context when the reference workflow is complete enough.
+
+## Imageshop Comic Production Portal Pass 4 Missing Reference Routes - 2026-06-01
+
+### What changed
+- Continued Pass 4 by adding missing-reference route suggestions for unresolved Writer reference ids.
+- Extended `buildImageshopReferenceContext` with `missingReferenceRoutes`.
+- Added route inference for unresolved ids:
+  - character-like ids route to `Character Studio`,
+  - NPC/supporting ids route to quick supporting reference creation,
+  - all other unresolved ids route to `Asset Studio`.
+- Surfaced missing-reference route chips inside the cockpit `Context Inspector`.
+- Updated the production-studio component test so unresolved Writer refs must be visible in the first-viewport cockpit.
+- Updated the active plan checklist and `tasks.md` to record missing-reference routing as partially complete.
+
+### Files touched
+- `src/portals/storyline/imageshopReferenceContext.ts`
+- `src/portals/storyline/__tests__/imageshopReferenceContext.test.ts`
+- `src/portals/storyline/components/ImageshopContextInspector.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Missing-reference routing is currently a visible suggestion layer, not an active cross-portal navigation action.
+- The route inference is conservative and based on unresolved reference-id text. `char*` or `*character*` goes to Character Studio; `npc*` or `*supporting*` goes to quick supporting reference; everything else defaults to Asset Studio.
+- `ImageshopContextInspector` now accepts `missingReferenceRoutes` separately from panel chips so derived route suggestions do not mutate panel queue data.
+- This slice does not add undo/replace/clear reference semantics and does not persist missing-route data.
+
+### Verification
+- Red helper test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts` failed because `missingReferenceRoutes` was undefined.
+- Focused helper green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts` passed 1 file / 2 tests.
+- Red UI test first: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` failed because `Missing references` was not shown in the cockpit inspector.
+- Focused UI green test: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 13 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 10 files / 72 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- Missing-reference route chips do not yet navigate to Character Studio, Asset Studio, or a quick supporting-reference creation flow.
+- Explicit replace/add/clear semantics with undo or confirmation remain pending.
+- Continuity-role labeling beyond lane/source/id metadata remains pending.
+- Browser QA was not rerun for this route-suggestion slice.
+
+### Risks or caveats
+- The destination inference is id-text based. It is useful for Writer JSON ids such as `char-*`, `asset-*`, and `npc-*`, but future Writer exports should carry explicit reference intent for higher confidence.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Continue Pass 4 with active route actions and explicit replace/add/clear semantics, or move to Pass 5 canon context if the next priority is Obsidian provenance over route interactivity.
+
+## Imageshop Comic Production Portal Pass 4 Reference Mutation Semantics - 2026-06-02
+
+### What changed
+- Continued Pass 4 by adding undo-safe reference mutation semantics for active Imageshop page/panel queues.
+- Added queue-level helpers for deduped add, confirmed replace, confirmed clear, and restore-from-undo reference edits.
+- Added production-store actions that expose those reference edits from `useImageshopProductionStore`.
+- Recalculate panel queue readiness after successful reference edits.
+- Added focused queue and store tests for add, duplicate add, blocked unconfirmed replace, confirmed replace, restore, blocked unconfirmed clear, confirmed clear, and restore after clear.
+- Updated the active plan checklist and `tasks.md` to record replace/add/clear semantics as partially complete while cockpit controls remain pending.
+
+### Files touched
+- `src/portals/storyline/imageshopPagePanelQueue.ts`
+- `src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `addImageshopPanelReferenceChip` is non-destructive and dedupes by chip id/source/reference/image/lane identity.
+- `replaceImageshopPanelReferenceChips` and `clearImageshopPanelReferenceChips` require `{ confirmed: true }`; otherwise they return `blockedReason: 'confirmation-required'` and leave the queue unchanged.
+- Successful mutations return an `ImageshopPanelReferenceUndo` snapshot with the previous `referenceIds` and `referenceChips`.
+- `restoreImageshopPanelReferenceChips` restores the snapshot and returns a reciprocal undo snapshot for the state it replaced.
+- Store actions intentionally throw if called without an active panel queue. The cockpit should only expose these actions when a queue exists.
+- This slice adds the real state contract but does not yet render cockpit buttons/menus for reference add/replace/clear.
+
+### Verification
+- Red queue test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts` failed because `addImageshopPanelReferenceChip` did not exist.
+- Focused queue green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts` passed 1 file / 4 tests.
+- Red store test first: `npm run test -- --run src/stores/__tests__/imageshopProductionStore.test.ts` failed because `addPanelQueueReferenceChip` did not exist on the store.
+- Focused store green test: `npm run test -- --run src/stores/__tests__/imageshopProductionStore.test.ts` passed 1 file / 7 tests.
+- Regression green test: `npm run test -- --run src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopPagePanelQueue.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` passed 10 files / 74 tests.
+- `git diff --check` passed.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 warnings.
+
+### Outstanding issues
+- Cockpit UI controls for add, replace, clear, and undo are not yet rendered.
+- Active cross-portal missing-reference route actions remain pending.
+- Explicit continuity-role labels remain pending.
+- Browser QA was not rerun for this data-store slice.
+
+### Risks or caveats
+- The store actions currently throw when called without an active panel queue. Future UI controls should be gated by queue presence and active panel selection.
+- Replacing or clearing references updates `referenceIds` from the new chip list; if future Writer exports need to preserve unresolved original ids separately, add a separate unresolved-reference field rather than overloading `referenceIds`.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Add cockpit controls for reference add/replace/clear/undo, or move into Pass 5 Obsidian canon context if canon provenance is the next priority.

@@ -2,6 +2,23 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — IN PROGRESS
+
+Detailed tracker: [`docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`](docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md)
+
+- [x] Pass 1: Add Writer issue/page/panel queue contract, canon/reference chips, generation provenance snapshots, readiness counters, and active queue state in `useImageshopProductionStore`.
+- [x] Pass 2: Import Writer JSON into the page/panel queue with diagnostics, Writer provenance, lore ids, vault reference ids, reusable Imageshop production JSON, and Writer-compatible image maps.
+- [~] Pass 3: Recenter Imageshop around a generation-first cockpit and move timeline/libraries/dashboard/config into contextual surfaces. First-viewport Writer Pages Cockpit, queue/inspector/output extraction, Image Lab production surface tabs, scoped command labels, and disabled helper copy are live; broader beat-timeline relocation and full save/export command-model consolidation remain pending.
+- [~] Pass 4: Add ergonomic Character/Asset/NPC/Guided reference lanes and per-panel chips. Reference-context helper, cockpit lane display, missing-reference route suggestions, and undo-safe queue/store add-replace-clear semantics are live for Writer, vault, Guided, NPC, and approved Imageshop output sources; cross-portal route actions, continuity role labels, and cockpit controls for reference mutation remain pending.
+- [ ] Pass 5: Add Obsidian-derived canon chips, conflict warnings, and canon provenance.
+- [ ] Pass 6: Add prompt preflight, source-attributed composed prompts, avoid-list semantics, and payload health.
+- [ ] Pass 7: Add structured generation diagnostics and recoverable batch generation.
+- [ ] Pass 8: Add page/panel production board, unified output destinations, approved-output continuity refs, and Writer/Guided round trip.
+- [x] Verify Pass 1 focused tests and nearby Imageshop/bridge regressions.
+- [x] Verify Pass 2 Writer import/schema/store tests and nearby Imageshop/bridge regressions.
+- [x] Verify Pass 3 cockpit/component command cleanup tests, regression suite, build, lint, diff check, and signed-in browser smoke for Writer JSON import -> first-viewport cockpit.
+- [ ] Run full implementation verification when the remaining passes land: `npm run test`, `npm run lint`, `npm run build`, `git diff --check`, and signed-in browser QA.
+
 ## Imageshop PR bugfix verification (2026-05-31) — COMPLETE
 
 - [x] Fix staging refinement prompt so it does not advance draft production items before generation.
