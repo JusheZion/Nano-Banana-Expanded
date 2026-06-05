@@ -1,6 +1,7 @@
 import {
   createImageshopIssueQueue,
   type ImageshopCanonChip,
+  type ImageshopGenerationProvenance,
   type ImageshopIssueQueue,
   type ImageshopPanelGenerationStatus,
   type ImageshopReferenceChip,
@@ -40,6 +41,7 @@ export type ImageshopWriterImageMapOutput = {
   prompt?: string;
   model?: string;
   seed?: number | null;
+  provenance?: ImageshopGenerationProvenance;
 };
 
 export type ImageshopWriterImageMapExport = {
@@ -65,6 +67,8 @@ export type ImageshopWriterImageMapExport = {
       prompt?: string;
       model?: string;
       seed?: number | null;
+      canon_used: ImageshopCanonChip[];
+      references_used: ImageshopReferenceChip[];
     }>;
   }>;
 };
@@ -482,6 +486,8 @@ export function buildImageshopWriterImageMapExport({
               prompt: output.prompt,
               model: output.model,
               seed: output.seed,
+              canon_used: output.provenance?.canon ?? panel.canonChips,
+              references_used: output.provenance?.references ?? panel.referenceChips,
             },
           ];
         }),

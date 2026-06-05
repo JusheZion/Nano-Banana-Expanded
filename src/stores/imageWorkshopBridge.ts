@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Portal } from '@/shared/portals';
 import type { ImageWorkshopDraft } from '@/portals/storyline/imageWorkshopPlanning';
+import type { ImageshopGenerationProvenance } from '@/portals/storyline/imageshopPagePanelQueue';
+import type { ImageshopWriterImageMapExport } from '@/portals/storyline/imageshopWriterImport';
 
 export type GuidedImageWorkshopReference = {
   name: string;
@@ -203,6 +205,7 @@ export type GuidedComicPanelImageReturn = {
   imageUrl: string;
   seed?: number | null;
   prompt?: string;
+  provenance?: ImageshopGenerationProvenance;
   returnedAt: string;
 };
 
@@ -211,12 +214,16 @@ interface ImageWorkshopBridgeState {
   draft: ImageWorkshopDraft | null;
   guidedHandoff: GuidedImageWorkshopHandoff | null;
   guidedPanelReturn: GuidedComicPanelImageReturn | null;
+  writerImageMapReturn: ImageshopWriterImageMapExport | null;
+  requestPortalOpen: (portal: Portal) => void;
   requestWriterHandoff: (draft: ImageWorkshopDraft) => void;
   requestGuidedComicHandoff: (handoff: GuidedImageWorkshopHandoff) => void;
   consumeGuidedComicHandoff: () => GuidedImageWorkshopHandoff | null;
   sendGuidedComicPanelImageBack: (payload: Omit<GuidedComicPanelImageReturn, 'source' | 'returnTarget' | 'returnedAt'>) => void;
   returnToGuidedComicFlow: () => void;
   consumeGuidedComicPanelImageReturn: () => GuidedComicPanelImageReturn | null;
+  sendImageshopWriterImageMapBack: (payload: ImageshopWriterImageMapExport) => void;
+  consumeImageshopWriterImageMapReturn: () => ImageshopWriterImageMapExport | null;
   clearPortalRequest: () => void;
   clearDraft: () => void;
 }
@@ -226,6 +233,8 @@ export const useImageWorkshopBridge = create<ImageWorkshopBridgeState>((set, get
   draft: null,
   guidedHandoff: null,
   guidedPanelReturn: null,
+  writerImageMapReturn: null,
+  requestPortalOpen: (portal) => set({ portalToOpen: portal }),
   requestWriterHandoff: (draft) => set({ draft, portalToOpen: 'lab' }),
   requestGuidedComicHandoff: (handoff) => set({ guidedHandoff: handoff, portalToOpen: 'lab' }),
   consumeGuidedComicHandoff: () => {
@@ -249,6 +258,17 @@ export const useImageWorkshopBridge = create<ImageWorkshopBridgeState>((set, get
     const payload = get().guidedPanelReturn;
     if (!payload) return null;
     set({ guidedPanelReturn: null });
+    return payload;
+  },
+  sendImageshopWriterImageMapBack: (payload) =>
+    set({
+      writerImageMapReturn: payload,
+      portalToOpen: 'writer',
+    }),
+  consumeImageshopWriterImageMapReturn: () => {
+    const payload = get().writerImageMapReturn;
+    if (!payload) return null;
+    set({ writerImageMapReturn: null });
     return payload;
   },
   clearPortalRequest: () => set({ portalToOpen: null }),

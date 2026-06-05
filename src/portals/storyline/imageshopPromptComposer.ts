@@ -213,7 +213,7 @@ export function composeImageshopPrompt({
   const lines: string[] = [`Generation mode: ${formatMode(mode)}`];
 
   addLine(lines, 'Main prompt', workspace.main);
-  addLine(lines, 'Negative prompt', workspace.negative);
+  addLine(lines, 'Avoid list', workspace.negative);
   addLine(lines, 'Character instructions', workspace.character);
   addLine(lines, 'Environment instructions', workspace.environment);
   addLine(lines, 'Art style instructions', workspace.artStyle);

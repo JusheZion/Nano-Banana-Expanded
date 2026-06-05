@@ -1,38 +1,111 @@
 import type { ImageshopPanelQueueItem } from '@/portals/storyline/imageshopPagePanelQueue';
+import type { ImageshopPromptPreflight } from '@/portals/storyline/imageshopPromptPreflight';
+import {
+  ImageshopPromptPreflightPanel,
+  type ImageshopPromptPreflightSection,
+} from '@/portals/storyline/components/ImageshopPromptPreflightPanel';
+import {
+  ImageshopBatchControls,
+  type ImageshopBatchUiStatus,
+} from '@/portals/storyline/components/ImageshopBatchControls';
+import type {
+  ImageshopBatchGenerationAttempt,
+  ImageshopBatchRetryStrategy,
+} from '@/portals/storyline/imageshopBatchGeneration';
+import { ImageshopOutputDestinations } from '@/portals/storyline/components/ImageshopOutputDestinations';
 
 type ImageshopOutputPanelProps = {
   panel: ImageshopPanelQueueItem | null;
   generating: boolean;
   hasPreview: boolean;
+  preflight: ImageshopPromptPreflight;
+  promptSections: ImageshopPromptPreflightSection[];
+  batchStatus: ImageshopBatchUiStatus;
+  batchAttempts: ImageshopBatchGenerationAttempt[];
+  batchTotalItems: number;
   onLoadSelectedPanelPrompt: () => void;
   onGenerateSelectedPanel: () => void;
+  onGeneratePage: () => void;
+  onGenerateAll: () => void;
+  onRetryFailed: (strategy: ImageshopBatchRetryStrategy) => void;
+  onPauseBatch: () => void;
+  onResumeBatch: () => void;
+  onSkipSelectedPanel: () => void;
+  hasSelectedBeat: boolean;
+  canExportWriterImageMap: boolean;
+  canReturnToWriter: boolean;
+  canReturnToGuided: boolean;
+  onChooseVaultTarget: (target: 'character' | 'asset' | 'npc') => void;
+  onAssignSelectedBeat: () => void;
+  onCreateNewBeat: () => void;
+  onExportProductionJson: () => void;
+  onExportWriterImageMap: () => void;
+  onReturnToWriter: () => void;
+  onReturnToGuided: () => void;
 };
 
 export function ImageshopOutputPanel({
   panel,
   generating,
   hasPreview,
+  preflight,
+  promptSections,
+  batchStatus,
+  batchAttempts,
+  batchTotalItems,
   onLoadSelectedPanelPrompt,
   onGenerateSelectedPanel,
+  onGeneratePage,
+  onGenerateAll,
+  onRetryFailed,
+  onPauseBatch,
+  onResumeBatch,
+  onSkipSelectedPanel,
+  hasSelectedBeat,
+  canExportWriterImageMap,
+  canReturnToWriter,
+  canReturnToGuided,
+  onChooseVaultTarget,
+  onAssignSelectedBeat,
+  onCreateNewBeat,
+  onExportProductionJson,
+  onExportWriterImageMap,
+  onReturnToWriter,
+  onReturnToGuided,
 }: ImageshopOutputPanelProps) {
-  const canGenerate = Boolean(panel?.prompt) && !generating;
+  const canGenerate = Boolean(panel?.prompt) && preflight.canGenerate && !generating;
   const canRetry = panel?.status === 'failed' && canGenerate;
 
   return (
     <div className="min-w-0 space-y-3">
-      <div className="border border-white/10 bg-black/25 p-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Output Destinations</p>
-        <div className="mt-2 grid gap-1.5 text-[11px] text-white/65">
-          <span>Vault save</span>
-          <span>Writer image map</span>
-          <span>Guided return</span>
-        </div>
-        <p className="mt-2 text-[11px] text-white/55">
-          {hasPreview
-            ? 'Preview ready for vault save, download, or guided return when available.'
-            : 'Generate a panel to unlock vault save, Writer image-map export, and guided return paths.'}
-        </p>
-      </div>
+      <ImageshopPromptPreflightPanel preflight={preflight} sections={promptSections} />
+      <ImageshopBatchControls
+        status={batchStatus}
+        attempts={batchAttempts}
+        totalItems={batchTotalItems}
+        canGenerate={preflight.canGenerate}
+        onGeneratePage={onGeneratePage}
+        onGenerateAll={onGenerateAll}
+        onRetryFailed={onRetryFailed}
+        onPause={onPauseBatch}
+        onResume={onResumeBatch}
+        onSkipSelected={onSkipSelectedPanel}
+      />
+
+      <ImageshopOutputDestinations
+        hasPreview={hasPreview}
+        hasSelectedBeat={hasSelectedBeat}
+        canExportWriterImageMap={canExportWriterImageMap}
+        canReturnToWriter={canReturnToWriter}
+        canReturnToGuided={canReturnToGuided}
+        onChooseVaultTarget={onChooseVaultTarget}
+        onAssignSelectedBeat={onAssignSelectedBeat}
+        onCreateNewBeat={onCreateNewBeat}
+        onExportProductionJson={onExportProductionJson}
+        onExportWriterImageMap={onExportWriterImageMap}
+        onReturnToWriter={onReturnToWriter}
+        onReturnToGuided={onReturnToGuided}
+      />
 
       <div className="flex flex-wrap gap-2">
         <button

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createImageshopIssueQueue } from '@/portals/storyline/imageshopPagePanelQueue';
 import { normalizeImageshopJson } from '@/portals/storyline/imageshopJsonSchemas';
-import { useImageshopProductionStore } from '@/stores/imageshopProductionStore';
+import {
+  getCurrentImageshopProductionVersion,
+  useImageshopProductionStore,
+} from '@/stores/imageshopProductionStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -50,6 +53,93 @@ describe('useImageshopProductionStore', () => {
       kind: 'generated',
     });
     expect(useImageshopProductionStore.getState().selectedProductionItemId).toBe(item.id);
+  });
+
+  it('tracks an explicit current version and supports selection and revert', () => {
+    const item = useImageshopProductionStore.getState().addProductionItem({
+      label: 'Page 1 Panel 1',
+      sourceKind: 'writer-panel',
+      sourceId: 'issue-version-page-1-panel-1',
+      prompt: 'Flux enters the observatory.',
+      promptSections: {
+        main: 'Flux enters the observatory.',
+      },
+    });
+
+    useImageshopProductionStore.getState().addProductionVersion(item.id, {
+      imageUrl: 'data:image/png;base64,first',
+      seed: 11,
+      prompt: 'First pass.',
+      kind: 'generated',
+    });
+    const firstVersionId = useImageshopProductionStore.getState().productionItems[0].versions[0].id;
+
+    useImageshopProductionStore.getState().addProductionVersion(item.id, {
+      imageUrl: 'data:image/png;base64,second',
+      seed: 22,
+      prompt: 'Second pass.',
+      kind: 'refined',
+    });
+
+    let stored = useImageshopProductionStore.getState().productionItems[0];
+    expect(getCurrentImageshopProductionVersion(stored)?.imageUrl).toBe('data:image/png;base64,second');
+
+    useImageshopProductionStore.getState().selectProductionVersion(item.id, firstVersionId);
+    stored = useImageshopProductionStore.getState().productionItems[0];
+    expect(stored.currentVersionId).toBe(firstVersionId);
+    expect(getCurrentImageshopProductionVersion(stored)?.seed).toBe(11);
+
+    useImageshopProductionStore.getState().revertProductionVersion(item.id, firstVersionId);
+    stored = useImageshopProductionStore.getState().productionItems[0];
+    expect(stored.status).toBe('refined');
+    expect(stored.currentVersionId).toBe(firstVersionId);
+  });
+
+  it('synchronizes approve and publish actions with the Writer panel queue', () => {
+    const queue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-05T12:00:00.000Z',
+      issue: {
+        id: 'issue-approval',
+        title: 'Approval Queue',
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'Flux approves the panel.',
+            },
+          ],
+        },
+      ],
+    });
+    const queueItemId = queue.pages[0].panels[0].queueItemId;
+    useImageshopProductionStore.getState().setPanelQueue(queue);
+    const item = useImageshopProductionStore.getState().addProductionItem({
+      label: 'Page 1 Panel 1',
+      sourceKind: 'writer-panel',
+      sourceId: queueItemId,
+      prompt: 'Flux approves the panel.',
+      promptSections: {
+        main: 'Flux approves the panel.',
+      },
+    });
+    useImageshopProductionStore.getState().addProductionVersion(item.id, {
+      imageUrl: 'data:image/png;base64,approved',
+      seed: 7,
+      prompt: 'Approved pass.',
+      kind: 'generated',
+    });
+
+    useImageshopProductionStore.getState().approveProductionItem(item.id);
+    expect(useImageshopProductionStore.getState().productionItems[0].status).toBe('approved');
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].status).toBe('approved');
+
+    useImageshopProductionStore.getState().publishProductionItem(item.id);
+    expect(useImageshopProductionStore.getState().productionItems[0].status).toBe('published');
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].status).toBe('approved');
   });
 
   it('imports a batch and preserves saved art styles', () => {
@@ -272,5 +362,51 @@ describe('useImageshopProductionStore', () => {
       'character-flux',
       'asset-map',
     ]);
+  });
+
+  it('persists manual canon attachments and detachments on the active panel queue', () => {
+    const queue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-05T12:00:00.000Z',
+      issue: {
+        id: 'issue-canon-store',
+        title: 'Canon Store',
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'Flux finds an unlinked artifact.',
+            },
+          ],
+        },
+      ],
+    });
+    const queueItemId = queue.pages[0].panels[0].queueItemId;
+    useImageshopProductionStore.getState().setPanelQueue(queue);
+
+    useImageshopProductionStore.getState().attachPanelQueueCanonChip(queueItemId, {
+      id: 'lore-artifact',
+      title: 'Helios Key',
+      category: 'artifact',
+      source: 'obsidian',
+      summary: 'The key must always emit a narrow gold ring.',
+      provenance: {
+        obsidianPath: 'Lore/Artifacts/Helios Key.md',
+      },
+    });
+
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0]).toMatchObject({
+      loreIds: ['lore-artifact'],
+      canonChips: [expect.objectContaining({ id: 'lore-artifact', title: 'Helios Key' })],
+    });
+
+    useImageshopProductionStore.getState().detachPanelQueueCanonChip(queueItemId, 'lore-artifact');
+    expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0]).toMatchObject({
+      loreIds: [],
+      canonChips: [],
+    });
   });
 });

@@ -135,6 +135,18 @@ export const StorylineStudio: React.FC = () => {
   const consumeReturnPayloadForPortal = useStudioImportBridge((s) => s.consumeReturnPayloadForPortal);
   const imageWorkshopDraft = useImageWorkshopBridge((s) => s.draft);
   const clearImageWorkshopDraft = useImageWorkshopBridge((s) => s.clearDraft);
+  const imageshopWriterLoreCards = useMemo(
+    () =>
+      (imageWorkshopDraft?.items ?? []).map((item) => ({
+        id: item.id,
+        seriesId: imageWorkshopDraft?.source.seriesId,
+        title: item.label,
+        category: item.entityKind,
+        body: item.sourceText,
+        includeInPrompt: true,
+      })),
+    [imageWorkshopDraft],
+  );
 
   const openSupportingVault = useCallback(() => {
     setSupportingVaultOpen(true);
@@ -1434,6 +1446,7 @@ export const StorylineStudio: React.FC = () => {
               productionCast={store.productionCast}
               productionAssets={store.productionAssets}
               productionSupportingRefs={store.productionSupportingRefs}
+              writerLoreCards={imageshopWriterLoreCards}
               onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
               onCreateNewBeat={handleLabCreateNewBeat}
               seedPrompt={labSeedPrompt}

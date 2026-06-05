@@ -3,7 +3,10 @@ import {
   type GuidedImageWorkshopHandoff,
   type GuidedImageWorkshopReference,
 } from '@/stores/imageWorkshopBridge';
-import type { ImageshopProductionItem } from '@/stores/imageshopProductionStore';
+import {
+  getCurrentImageshopProductionVersion,
+  type ImageshopProductionItem,
+} from '@/stores/imageshopProductionStore';
 import type {
   ImageshopPanelQueueItem,
   ImageshopReferenceChip,
@@ -155,7 +158,7 @@ function guidedChip(
 
 function approvedProductionChip(item: ImageshopProductionItem): ImageshopReferenceChip | null {
   if (item.status !== 'approved' && item.status !== 'published') return null;
-  const imageUrl = clean(item.versions[0]?.imageUrl);
+  const imageUrl = clean(getCurrentImageshopProductionVersion(item)?.imageUrl);
   if (!imageUrl) return null;
   return {
     id: `approved-output-${item.id}`,
@@ -201,12 +204,13 @@ export function buildImageshopReferenceContext({
 }: BuildImageshopReferenceContextInput): ImageshopReferenceContext {
   const chips: ImageshopReferenceChip[] = [];
   const seen = new Set<string>();
+  const referenceMode = panel?.referenceMode ?? 'auto';
 
-  for (const chip of panel?.referenceChips ?? []) {
+  for (const chip of referenceMode === 'none' ? [] : panel?.referenceChips ?? []) {
     addChip(chips, seen, chip);
   }
 
-  if (panel) {
+  if (panel && referenceMode === 'auto') {
     for (const cast of productionCast.filter((item) => castMatchesPanel(panel, item))) {
       addChip(chips, seen, {
         id: `character-${cast.vaultCharacterId}`,
@@ -244,7 +248,7 @@ export function buildImageshopReferenceContext({
     }
   }
 
-  if (guidedHandoff) {
+  if (guidedHandoff && referenceMode === 'auto') {
     const guidedReferences = getGuidedImageWorkshopPreload(guidedHandoff).allReferences;
     guidedReferences.forEach((reference, index) => {
       const lane: ImageshopReferenceLane =
@@ -257,8 +261,10 @@ export function buildImageshopReferenceContext({
     });
   }
 
-  for (const item of approvedProductionItems) {
-    addChip(chips, seen, approvedProductionChip(item));
+  if (referenceMode === 'auto') {
+    for (const item of approvedProductionItems) {
+      addChip(chips, seen, approvedProductionChip(item));
+    }
   }
 
   const resolvedReferenceIds = new Set(

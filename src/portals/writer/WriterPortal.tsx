@@ -121,6 +121,7 @@ import {
   type ObsidianLoreImage,
 } from '@/portals/writer/obsidianLoreImport';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
+import { mergeImageshopImageMapIntoWriterBeats } from '@/portals/writer/writerImageshopReturn';
 import { getCharacterAlbums } from '@/shared/api/arcsVault';
 import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
@@ -725,6 +726,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const [libraryPagesBusy, setLibraryPagesBusy] = useState(false);
   const requestWriterHandoff = useImageWorkshopBridge((s) => s.requestWriterHandoff);
+  const consumeImageshopWriterImageMapReturn = useImageWorkshopBridge(
+    (s) => s.consumeImageshopWriterImageMapReturn,
+  );
   const consumeRequestedIssueOpen = useWriterWorkshopBridge((s) => s.consumeRequestedIssueOpen);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
@@ -849,6 +853,85 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       cancelled = true;
     };
   }, [consumeRequestedIssueOpen, pushHistory]);
+
+  useEffect(() => {
+    const imageMap = consumeImageshopWriterImageMapReturn();
+    if (!imageMap) return;
+    let cancelled = false;
+
+    void (async () => {
+      const seriesRows = await listWriterSeries();
+      let targetSeries: WriterSeriesRow | null = null;
+      let targetIssue: WriterIssueRow | null = null;
+      let targetIssues: WriterIssueRow[] = [];
+
+      for (const series of seriesRows) {
+        const issueRows = await listWriterIssues(series.id);
+        const issue = imageMap.writer_issue_id
+          ? issueRows.find((candidate) => candidate.id === imageMap.writer_issue_id)
+          : issueRows.find(
+              (candidate) =>
+                candidate.issue_number === imageMap.issue.issue_number &&
+                (candidate.title ?? '').trim().toLowerCase() === imageMap.issue.title.trim().toLowerCase(),
+            );
+        if (!issue) continue;
+        targetSeries = series;
+        targetIssue = issue;
+        targetIssues = issueRows;
+        break;
+      }
+
+      if (!targetSeries || !targetIssue) {
+        if (!cancelled) pushHistory('Imageshop return could not find its Writers Workshop issue');
+        return;
+      }
+
+      const pageRows = await listWriterPages(targetIssue.id);
+      let appliedPanels = 0;
+      for (const imageMapPage of imageMap.pages) {
+        const firstMappedPanel = imageMapPage.panels[0];
+        const page = pageRows.find(
+          (candidate) =>
+            candidate.id === firstMappedPanel?.writer_page_id ||
+            candidate.page_number === imageMapPage.page_number,
+        );
+        if (!page) continue;
+
+        let nextBeatsJson = page.beats_json;
+        for (const imageMapPanel of imageMapPage.panels) {
+          nextBeatsJson = mergeImageshopImageMapIntoWriterBeats({
+            beatsJson: nextBeatsJson,
+            imageMapPanel,
+            returnedAt: imageMap.exported_at,
+          });
+          appliedPanels += 1;
+        }
+        await updateWriterPageBeatsJson(page.id, nextBeatsJson);
+      }
+
+      if (cancelled) return;
+      const refreshedPages = await listWriterPages(targetIssue.id);
+      setSeriesList(seriesRows);
+      setSelectedSeriesId(targetSeries.id);
+      setIssues(targetIssues);
+      setSelectedIssueId(targetIssue.id);
+      setPages(refreshedPages);
+      setSelectedPageId((current) =>
+        current && refreshedPages.some((page) => page.id === current)
+          ? current
+          : refreshedPages[0]?.id ?? null,
+      );
+      setDockTab('library');
+      setDockCollapsed(false);
+      pushHistory(
+        `applied ${appliedPanels} Imageshop panel image${appliedPanels === 1 ? '' : 's'} to issue #${targetIssue.issue_number}`,
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [consumeImageshopWriterImageMapReturn, pushHistory]);
 
   useEffect(() => {
     let cancelled = false;

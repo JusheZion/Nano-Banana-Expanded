@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { OnyxModelId } from '@/shared/api/geminiImageApi';
+import type { ImageshopGenerationProvenance } from '@/portals/storyline/imageshopPagePanelQueue';
+import type { ImageshopBatchGenerationAttempt } from '@/portals/storyline/imageshopBatchGeneration';
 import type { StoryBeatAspectRatio } from '@/portals/storyline/storylineTypes';
 
 export type ImageshopSessionResult = {
@@ -13,6 +15,8 @@ export type ImageshopSessionResult = {
   modelId: OnyxModelId;
   generatedAt: string;
   sourceLabel?: string;
+  provenance?: ImageshopGenerationProvenance;
+  attempt?: ImageshopBatchGenerationAttempt;
 };
 
 type AddImageshopSessionResultInput = Omit<ImageshopSessionResult, 'id' | 'generatedAt'>;

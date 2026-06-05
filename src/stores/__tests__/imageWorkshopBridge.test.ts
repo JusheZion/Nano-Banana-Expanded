@@ -13,6 +13,7 @@ beforeEach(() => {
     draft: null,
     guidedHandoff: null,
     guidedPanelReturn: null,
+    writerImageMapReturn: null,
   });
 });
 
@@ -414,6 +415,28 @@ describe('useImageWorkshopBridge', () => {
       imageUrl: 'data:image/png;base64,abc123',
       seed: 42,
       prompt: 'A heroic panel.',
+      provenance: {
+        source: 'imageshop-panel-queue',
+        sourceQueueId: 'writer-json-issue-1',
+        sourcePanelId: 'issue-1-page-4-panel-1',
+        capturedAt: '2026-06-05T14:00:00.000Z',
+        writer: {
+          issueTitle: 'Return Issue',
+          pageNumber: 4,
+          panelNumber: 1,
+        },
+        generation: {
+          model: 'pro',
+          aspectRatio: '9:16',
+          destination: 'guided-comic',
+        },
+        prompt: {
+          composed: 'A heroic panel.',
+          sections: {},
+        },
+        canon: [],
+        references: [],
+      },
     });
 
     expect(useImageWorkshopBridge.getState().portalToOpen).toBe('comic');
@@ -425,8 +448,45 @@ describe('useImageWorkshopBridge', () => {
     expect(out?.imageUrl).toBe('data:image/png;base64,abc123');
     expect(out?.seed).toBe(42);
     expect(out?.prompt).toBe('A heroic panel.');
+    expect(out?.provenance?.sourcePanelId).toBe('issue-1-page-4-panel-1');
     expect(out?.returnedAt).toEqual(expect.any(String));
     expect(useImageWorkshopBridge.getState().consumeGuidedComicPanelImageReturn()).toBeNull();
+  });
+
+  it('stores Writer image-map returns and opens Writers Workshop', () => {
+    useImageWorkshopBridge.getState().sendImageshopWriterImageMapBack({
+      source: 'imageshop',
+      target: 'writers-workshop',
+      kind: 'writer-image-map',
+      exported_at: '2026-06-05T14:00:00.000Z',
+      writer_issue_id: 'writer-issue-1',
+      issue: {
+        issue_number: 1,
+        title: 'Return Issue',
+      },
+      pages: [
+        {
+          page_number: 1,
+          panels: [
+            {
+              queue_item_id: 'writer-issue-1-page-1-panel-1',
+              writer_page_id: 'writer-page-1',
+              panel_number: 1,
+              image_url: 'data:image/png;base64,writer-return',
+              status: 'approved',
+              canon_used: [],
+              references_used: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(useImageWorkshopBridge.getState().portalToOpen).toBe('writer');
+    const out = useImageWorkshopBridge.getState().consumeImageshopWriterImageMapReturn();
+    expect(out?.writer_issue_id).toBe('writer-issue-1');
+    expect(out?.pages[0].panels[0].image_url).toBe('data:image/png;base64,writer-return');
+    expect(useImageWorkshopBridge.getState().consumeImageshopWriterImageMapReturn()).toBeNull();
   });
 
   it('returns to guided comic flow without creating a panel image return', () => {
@@ -447,5 +507,13 @@ describe('useImageWorkshopBridge', () => {
     expect(useImageWorkshopBridge.getState().portalToOpen).toBe('comic');
     expect(useImageWorkshopBridge.getState().guidedPanelReturn).toBeNull();
     expect(useImageWorkshopBridge.getState().guidedHandoff?.pageNumber).toBe(1);
+  });
+
+  it('opens an explicit portal for unresolved reference routing', () => {
+    useImageWorkshopBridge.getState().requestPortalOpen('studio');
+    expect(useImageWorkshopBridge.getState().portalToOpen).toBe('studio');
+
+    useImageWorkshopBridge.getState().requestPortalOpen('assets');
+    expect(useImageWorkshopBridge.getState().portalToOpen).toBe('assets');
   });
 });

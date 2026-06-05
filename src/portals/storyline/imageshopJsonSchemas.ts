@@ -88,6 +88,14 @@ const arcsPageJsonSchema = z.object({
     }),
   ).optional(),
   pageConfig: z.record(z.string(), z.unknown()).optional(),
+  panelQueue: z.custom<ImageshopIssueQueue>(
+    (value) =>
+      Boolean(value) &&
+      typeof value === 'object' &&
+      typeof (value as ImageshopIssueQueue).id === 'string' &&
+      Array.isArray((value as ImageshopIssueQueue).pages),
+    'Invalid Imageshop panel queue.',
+  ).optional(),
   items: z.array(
     z.object({
       id: z.string().optional(),
@@ -212,6 +220,7 @@ function normalizeArcsPageJson(input: unknown): ImageshopProductionBatch | null 
       prompt: style.prompt,
     })),
     selectedArtStyleId: parsed.data.selectedArtStyleId ?? null,
+    panelQueue: parsed.data.panelQueue,
     items: parsed.data.items.map((item, index) => {
       const prompt = item.prompt?.trim() || item.promptSections?.main?.trim() || `ARCS item ${index + 1}`;
       return {
@@ -252,6 +261,7 @@ export function exportImageshopProductionConfig({
   pageConfig,
   artStyles = [],
   selectedArtStyleId = null,
+  panelQueue,
   items,
 }: {
   title: string;
@@ -259,6 +269,7 @@ export function exportImageshopProductionConfig({
   pageConfig: ImageshopPageConfig;
   artStyles?: ImageshopArtStyle[];
   selectedArtStyleId?: string | null;
+  panelQueue?: ImageshopIssueQueue | null;
   items: Array<{
     id: string;
     label: string;
@@ -275,6 +286,7 @@ export function exportImageshopProductionConfig({
       selectedArtStyleId,
       artStyles,
       pageConfig,
+      panelQueue: panelQueue ?? undefined,
       items: items.map((item) => ({
         id: item.id,
         label: item.label,

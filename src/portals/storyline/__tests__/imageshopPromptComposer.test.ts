@@ -62,7 +62,7 @@ describe('composeImageshopPrompt', () => {
 
     expect(prompt).toContain('Generation mode: Comic Pages');
     expect(prompt).toContain('Main prompt: A hero discovers a storm engine');
-    expect(prompt).toContain('Negative prompt: no blurry faces');
+    expect(prompt).toContain('Avoid list: no blurry faces');
     expect(prompt).toContain('Art style: Teslan CGI');
     expect(prompt).toContain('Page type: Double Page Spread');
     expect(prompt).toContain('Layout template: wide-top');
@@ -91,7 +91,7 @@ describe('composeImageshopPrompt', () => {
 
     expect(prompt).toContain('Generation mode: Video Beats');
     expect(prompt).toContain('Main prompt: Cinematic establishing shot');
-    expect(prompt).not.toContain('Negative prompt:');
+    expect(prompt).not.toContain('Avoid list:');
     expect(prompt).not.toContain('Page type:');
   });
 

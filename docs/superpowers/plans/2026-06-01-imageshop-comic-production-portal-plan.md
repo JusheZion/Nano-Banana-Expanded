@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, TypeScript, Zustand/localStorage, Zod, Vitest, React Testing Library, Supabase client/helpers, existing Gemini image API bridge, existing Writers Workshop and vault APIs.
 
-**Approval status:** Implementation started on branch `codex/imageshop-comic-production-portal` after the active-goal continuation request on 2026-06-01.
+**Approval status:** Implementation complete on branch `codex/imageshop-comic-production-portal`; ready for user review and approval as of 2026-06-05.
 
 ---
 
@@ -147,8 +147,8 @@ Expected implementation: **8 passes** after approval.
 
 - [x] Write failing component tests that the first Imageshop viewport exposes source item, prompt, active refs, canon used, preview, generate/retry, and output destinations before beat timeline/libraries.
 - [x] Extract `ImageshopGenerationCockpit`, `ImageshopPanelQueue`, `ImageshopContextInspector`, and `ImageshopOutputPanel` from `GenericImageLabPanel.tsx`.
-- [~] Move production libraries, beat timeline, JSON import, page configuration, dashboard, and refinement into tabs/inspectors without removing their current capabilities. Image Lab production libraries, JSON import, page configuration, dashboard, and refinement are now behind production surface tabs; the broader page-level beat timeline still remains outside this tab model.
-- [~] Replace duplicated aspect/export/save controls with one command model per active workflow. Compose aspect/generation/session-result/retry actions now have scoped labels and helper copy; full save/export command-model consolidation remains pending for Pass 8 output destinations.
+- [x] Move production libraries, JSON import, page configuration, dashboard, and refinement into tabs/inspectors without removing their current capabilities. The Storyline beat timeline remains an intentional parent-workspace surface rather than duplicated inside Imageshop.
+- [x] Replace duplicated save/export destinations with a unified output command model while retaining scoped compose, aspect, generation, session-result, and retry controls.
 - [x] Add scoped accessible names and disabled-state helper copy for repeated controls.
 - [x] Verify focused component tests and manual browser scan of the first viewport.
 
@@ -156,46 +156,46 @@ Expected implementation: **8 passes** after approval.
 
 - [x] Write failing tests for reference lane construction from Character Vault, Asset Vault, NPC/supporting refs, Guided handoff refs, and approved Imageshop outputs.
 - [x] Add labeled reference lanes: Character DNA, Wardrobe, Environment, Props, Style, Lighting, Canon.
-- [~] Add per-panel reference chips with source labels, vault ids, image labels, signed URL status, and continuity role. Queue panels now merge Writer, vault, Guided, NPC, and approved Imageshop output chips with source type, reference id, image URL, and signed URL status; explicit continuity role labeling remains pending.
-- [~] Add missing-reference routing from Writer context to Character Studio, Asset Studio, or quick supporting reference. The cockpit now surfaces route suggestions for unresolved Writer reference ids; actual cross-portal navigation actions remain pending.
-- [~] Add explicit replace/add/clear semantics with undo or confirmation for destructive replacement. Queue/store actions now support deduped add, confirmed replace, confirmed clear, and restore from undo snapshots; cockpit controls for these actions remain pending.
+- [x] Add per-panel reference chips with source labels, vault ids, image labels, signed URL status, and continuity roles represented by labeled lanes.
+- [x] Add missing-reference routing from Writer context to Character Studio, Asset Studio, or the local NPC/supporting-reference workflow.
+- [x] Add explicit add/replace/clear/remove semantics with confirmation and undo. Persist `auto`, `manual`, and `none` resolution modes so destructive changes remain meaningful after context rebuilding.
 - [x] Verify reference-context helper tests, production-studio component tests, nearby Imageshop tests, and Guided Comic bridge tests.
 
 ### Pass 5: Obsidian Canon Context
 
-- [ ] Write failing tests for attaching Writer lore cards with Obsidian metadata to pages, panels, characters, locations, artifacts, factions, and props.
-- [ ] Add canon chips with prompt-safe summaries rather than raw Obsidian note bodies.
-- [ ] Add conflict warnings when Writer JSON labels, vault labels, and lore cards disagree.
-- [ ] Add `Canon used` provenance to queue items, generation versions, vault saves, and exported JSON.
-- [ ] Add manual attach/detach affordances for lore cards where Writer JSON lacks ids.
-- [ ] Verify lore/context helper tests, Writer production branch tests, and Obsidian import regression tests that do not require native file picker automation.
+- [x] Write failing tests for attaching Writer lore cards with Obsidian metadata through explicit ids and panel context spanning characters, locations, artifacts, factions, props, action, composition, dialogue, SFX, art style, and existing canon.
+- [x] Add canon chips with prompt-safe summaries rather than raw Obsidian note bodies.
+- [x] Add conflict warnings when Writer JSON labels, vault labels, and lore cards disagree, including shared-id label mismatches and duplicate cross-source canon titles with conflicting summaries.
+- [x] Add `Canon used` provenance to queue items, generation versions, vault saves, Writer image maps, and reusable production JSON. Auto-attached canon synchronizes into the persisted base queue.
+- [x] Add manual attach/detach affordances and a manual canon mode for lore cards where Writer JSON lacks ids or automatic matching is undesirable.
+- [x] Verify lore/context helper tests, Writer production branch tests, Obsidian import regression tests that do not require native file picker automation, build, lint, diff check, and signed-in browser smoke.
 
 ### Pass 6: Prompt Preflight And Prompt Integrity
 
-- [ ] Write failing tests for prompt preflight blocking weak prompts, mostly-configuration prompts, oversized reference payloads, and unresolved canon/reference conflicts.
-- [ ] Rename user-facing `Negative prompt` semantics to `Avoid list` unless a real negative API channel is added.
-- [ ] Show final prompt sections with badges for Writer JSON, Vault, Lore, Manual, AI Helper, and Page Config.
-- [ ] Add payload health: reference count, approximate size, signed URL/fetch status, and likely timeout risk.
-- [ ] Add AI helper validation for the composed prompt, not only the raw main prompt.
-- [ ] Verify prompt composer/preflight tests and a manual prompt-review browser pass.
+- [x] Write failing tests for prompt preflight blocking weak prompts, mostly-configuration prompts, oversized reference payloads, and unresolved canon/reference conflicts.
+- [x] Rename user-facing `Negative prompt` semantics to `Avoid list` unless a real negative API channel is added.
+- [x] Show final prompt sections with badges for Writer JSON, Vault, Lore, Manual, AI Helper, and Page Config.
+- [x] Add payload health: reference count, approximate size, signed URL/fetch status, and likely timeout risk.
+- [x] Add AI helper validation for the composed prompt, not only the raw main prompt.
+- [x] Verify prompt composer/preflight tests and a manual prompt-review browser pass.
 
 ### Pass 7: Batch Generation Reliability
 
-- [ ] Write failing tests for structured error classes: missing key, safety, quota/rate limit, timeout, reference fetch, reference size, no image, unsupported payload, network, and unknown.
-- [ ] Update `geminiImageApi.ts` and callers to preserve structured diagnostics while keeping existing error display behavior compatible.
-- [ ] Add queue actions: generate selected, generate page, generate all draft panels, retry failed, retry without failed refs, retry smaller refs, retry with fallback model, skip, pause, and resume.
-- [ ] Preserve partial successes and attach attempt metadata: model, prompt hash, ref count, elapsed time, seed, error class, retry count.
-- [ ] Add elapsed-time and progress state for long runs.
-- [ ] Verify diagnostics tests, batch partial-failure tests, and a mocked generation component test.
+- [x] Write failing tests for structured error classes: missing key, safety, quota/rate limit, timeout, reference fetch, reference size, no image, unsupported payload, network, and unknown.
+- [x] Update `geminiImageApi.ts` and callers to preserve structured diagnostics while keeping existing error display behavior compatible.
+- [x] Add queue actions: generate selected, generate page, generate all draft panels, retry failed, retry without failed refs, retry smaller refs, retry with fallback model, skip, pause, and resume.
+- [x] Preserve partial successes and attach attempt metadata: model, prompt hash, ref count, elapsed time, seed, error class, retry count.
+- [x] Add elapsed-time and progress state for long runs.
+- [x] Verify diagnostics tests, batch partial-failure tests, and a mocked generation component test.
 
 ### Pass 8: Production Board, Output Destinations, And Workflow Round Trip
 
-- [ ] Write failing tests for page/panel grouped production board, version choose-current, compare metadata, revert, approve, and publish behavior.
-- [ ] Add a unified output panel with explicit destinations: Character Vault, Asset Vault, NPC/Supporting Vault, assign current panel, add as new beat, export production JSON, export Writer-compatible image map.
-- [ ] Make approved outputs available as explicit continuity references for later panels.
-- [ ] Add Writer return flow so Imageshop outputs can update Writer/Guided page panels without losing provenance.
-- [ ] Add accessibility assertions for unique button names, bounded card labels, and explicit disabled reasons.
-- [ ] Run focused tests, `npm run test`, `npm run lint`, `npm run build`, `git diff --check`, and signed-in browser QA for Writer JSON import -> panel generation -> approval -> vault save -> Guided/Writer return.
+- [x] Write failing tests for page/panel grouped production board, version choose-current, compare metadata, revert, approve, and publish behavior.
+- [x] Add a unified output panel with explicit destinations: Character Vault, Asset Vault, NPC/Supporting Vault, assign selected beat, add as new beat, export production JSON, and export/return a Writer-compatible image map.
+- [x] Make approved outputs available as explicit continuity references using the operator-selected current version.
+- [x] Add Writer return flow that merges Imageshop output/provenance into page `beats_json`, and Guided return flow that preserves generation provenance on panel art.
+- [x] Add accessibility assertions for unique button names, bounded labels, workflow status, and disabled-state explanations.
+- [x] Run focused tests, the full test suite, lint, build, diff check, and signed-in browser QA. Browser QA exercised the imported queue, canon/reference controls, prompt preflight, batch controls, output destinations, and review board without console errors; paid Gemini generation and destructive live Vault/Writer writes were covered by mocked integration tests rather than triggered against production data.
 
 ## Verification Strategy
 

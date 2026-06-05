@@ -20,7 +20,31 @@ const arcsPersistenceMocks = vi.hoisted(() => ({
   })),
 }));
 
+const geminiTextMocks = vi.hoisted(() => ({
+  generateGeminiText: vi.fn(async (input: { userPrompt: string }) => {
+    void input;
+    return {
+      ok: true as const,
+      text: JSON.stringify({ refinedPrompt: 'Refined composed Imageshop prompt.' }),
+    };
+  }),
+}));
+
+const geminiImageMocks = vi.hoisted(() => ({
+  generateImage: vi.fn(),
+}));
+
 vi.mock('@/shared/api/arcsPersistence', () => arcsPersistenceMocks);
+
+vi.mock('@/shared/api/geminiTextApi', () => geminiTextMocks);
+
+vi.mock('@/shared/api/geminiImageApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/api/geminiImageApi')>();
+  return {
+    ...actual,
+    generateImage: geminiImageMocks.generateImage,
+  };
+});
 
 vi.mock('@/shared/lib/supabase', () => ({
   isSupabaseConfigured: () => true,
@@ -52,6 +76,7 @@ beforeEach(() => {
     draft: null,
     guidedHandoff: null,
     guidedPanelReturn: null,
+    writerImageMapReturn: null,
   });
   useImageshopProductionStore.setState(useImageshopProductionStore.getInitialState(), true);
   useImageshopSessionStore.setState({
@@ -60,6 +85,12 @@ beforeEach(() => {
   });
   arcsPersistenceMocks.saveImportedImageToCharacterVault.mockClear();
   arcsPersistenceMocks.saveImportedImageToAssetVault.mockClear();
+  geminiTextMocks.generateGeminiText.mockClear();
+  geminiImageMocks.generateImage.mockReset();
+  geminiImageMocks.generateImage.mockResolvedValue({
+    ok: true,
+    imageDataUrl: 'data:image/png;base64,generated-panel',
+  });
 });
 
 describe('GenericImageLabPanel production studio shell', () => {
@@ -113,11 +144,44 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getByRole('button', { name: 'Generate current Imageshop prompt' })).toBeTruthy();
     expect(screen.getByText('Add a prompt before generating.')).toBeTruthy();
 
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want...'), {
+      target: { value: 'Blue hero.' },
+    });
+    expect(screen.getByText('Preflight blocked')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Generate current Imageshop prompt' }) as HTMLButtonElement).disabled).toBe(true);
+
     fireEvent.click(screen.getByRole('button', { name: 'Page setup' }));
 
     expect(screen.getByRole('button', { name: 'Set generation aspect ratio to Portrait' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Set generation aspect ratio to Square' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Set generation aspect ratio to Cinematic' })).toBeTruthy();
+  });
+
+  it('sends the composed comic-page request to the AI prompt helper', async () => {
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comic Pages' }));
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want...'), {
+      target: { value: 'Flux opens a brass observatory door in a low-angle wide comic panel.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'AI prompt helper' }));
+
+    await waitFor(() => expect(geminiTextMocks.generateGeminiText).toHaveBeenCalledTimes(1));
+    expect(geminiTextMocks.generateGeminiText.mock.calls[0]?.[0]?.userPrompt).toContain(
+      'Generation mode: Comic Pages',
+    );
+    expect(geminiTextMocks.generateGeminiText.mock.calls[0]?.[0]?.userPrompt).toContain(
+      'Page type: Single Comic Page',
+    );
   });
 
   it('scopes recoverable session result commands', () => {
@@ -281,15 +345,26 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getAllByText('Flux').length).toBeGreaterThan(0);
     expect(screen.getByText('Reference lanes')).toBeTruthy();
     expect(screen.getByText('Character DNA')).toBeTruthy();
-    expect(screen.getByText('Flux identity')).toBeTruthy();
+    expect(screen.getAllByText('Flux identity').length).toBeGreaterThan(0);
     expect(screen.getByText('Output Destinations')).toBeTruthy();
     expect(screen.getByText('Vault save')).toBeTruthy();
     expect(screen.getByText('Writer image map')).toBeTruthy();
     expect(screen.getByText('Guided return')).toBeTruthy();
+    expect(screen.getByText('Prompt preflight')).toBeTruthy();
+    expect(screen.getByText('Ready to generate')).toBeTruthy();
+    expect(screen.getAllByText('Writer JSON').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Lore').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Vault').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Page Config').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 reference')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Load selected panel prompt' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Generate selected panel' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Generate selected panel' }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole('button', { name: 'Retry selected panel' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Retry unlocks after the selected panel fails.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate all drafts' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pause batch' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Resume batch' })).toBeTruthy();
 
     const cockpit = screen.getByText('Writer Pages Cockpit');
     fireEvent.click(screen.getByRole('button', { name: 'Batch JSON' }));
@@ -298,6 +373,87 @@ describe('GenericImageLabPanel production studio shell', () => {
     const dashboard = screen.getByText('Production Dashboard');
     expect(cockpit.compareDocumentPosition(legacyBatch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(cockpit.compareDocumentPosition(dashboard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('preserves a successful panel when a page batch pauses and retries the failed panel', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-batch-recovery',
+      exported_at: '2026-06-05T17:00:00.000Z',
+      issue: { title: 'Batch Recovery' },
+      pages: [
+        {
+          id: 'writer-page-batch-recovery',
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                id: 'writer-panel-batch-1',
+                index: 1,
+                action: 'Flux opens the brass observatory door beneath a rotating field of stars.',
+              },
+              {
+                id: 'writer-panel-batch-2',
+                index: 2,
+                action: 'Flux raises the glowing compass while the observatory chamber turns around her.',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+    geminiImageMocks.generateImage
+      .mockResolvedValueOnce({
+        ok: true,
+        imageDataUrl: 'data:image/png;base64,panel-one',
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: 'Image request timed out. Try again.',
+        diagnostic: {
+          errorClass: 'timeout',
+          message: 'Image request timed out. Try again.',
+          retryable: true,
+          suggestedAction: 'retry',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        imageDataUrl: 'data:image/png;base64,panel-two-retry',
+      });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate page' }));
+
+    await waitFor(() => expect(screen.getByText('Batch paused with 1 generated and 1 failed.')).toBeTruthy());
+    const panelsAfterFailure = useImageshopProductionStore.getState().panelQueue?.pages[0]?.panels ?? [];
+    expect(panelsAfterFailure.map((panel) => panel.status)).toEqual(['generated', 'failed']);
+    expect(useImageshopSessionStore.getState().results[0]).toMatchObject({
+      imageUrl: 'data:image/png;base64,panel-one',
+      attempt: expect.objectContaining({
+        queueItemId: 'issue-batch-recovery-page-1-panel-1',
+        promptHash: expect.stringMatching(/^fnv1a-/),
+        referenceCount: 0,
+        retryCount: 0,
+      }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry smaller refs' }));
+
+    await waitFor(() => expect(screen.getByText('Batch completed with 2 generated, 1 failed, and 0 skipped.')).toBeTruthy());
+    const panelsAfterRetry = useImageshopProductionStore.getState().panelQueue?.pages[0]?.panels ?? [];
+    expect(panelsAfterRetry.map((panel) => panel.status)).toEqual(['generated', 'generated']);
+    expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(3);
   });
 
   it('surfaces vault reference lanes for imported Writer panels', () => {
@@ -371,6 +527,95 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getByText('Resolve char-missing-flux in Character Studio')).toBeTruthy();
   });
 
+  it('attaches prompt-safe Obsidian canon from Writer context and reports vault label conflicts', () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-obsidian-canon',
+      exported_at: '2026-06-05T12:00:00.000Z',
+      series: { id: 'series-1', title: 'Twovestellium' },
+      issue: { title: 'Obsidian Canon Smoke' },
+      pages: [
+        {
+          id: 'writer-page-obsidian-canon',
+          page_number: 1,
+          beats_json: {
+            characters: ['Flux'],
+            panels: [
+              {
+                id: 'writer-panel-obsidian-canon',
+                index: 1,
+                action: 'Flux enters the observatory.',
+                lore_ids: ['lore-flux'],
+                references: [
+                  {
+                    id: 'lore-flux',
+                    label: 'Flux Alternate',
+                    lane: 'character-dna',
+                    source_type: 'character',
+                    reference_id: 'lore-flux',
+                    image_url: 'https://example.test/flux.png',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        writerLoreCards={[
+          {
+            id: 'lore-flux',
+            seriesId: 'series-1',
+            title: 'Flux',
+            category: 'character',
+            body: [
+              '> Gold eyes, cobalt coat, and a white comet badge.',
+              '',
+              'Private drafting notes should stay out of the prompt.',
+              '',
+              '<!-- ARCS_LORE_IMPORT_METADATA',
+              JSON.stringify({
+                source: 'obsidian',
+                sourcePath: 'Characters/Flux.md',
+                importDate: '2026-06-01T12:00:00.000Z',
+                updatedAt: '2026-06-01T12:00:00.000Z',
+                summary: 'Gold eyes, cobalt coat, and a white comet badge.',
+              }),
+              '-->',
+            ].join('\n'),
+            includeInPrompt: true,
+          },
+        ]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Flux').length).toBeGreaterThan(0);
+    expect(screen.getByText('Obsidian')).toBeTruthy();
+    expect(screen.getByText('Characters/Flux.md')).toBeTruthy();
+    expect(
+      screen.getByText('Canon "Flux" conflicts with vault reference label "Flux Alternate".'),
+    ).toBeTruthy();
+    expect(screen.getByText('Preflight blocked')).toBeTruthy();
+    expect(screen.getByText('1 canon conflict must be resolved before generation.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Generate selected panel' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load selected panel prompt' }));
+
+    const continuity = useImageshopProductionStore.getState().promptWorkspace.continuity;
+    expect(continuity).toContain('Gold eyes, cobalt coat, and a white comet badge.');
+    expect(continuity).not.toContain('ARCS_LORE_IMPORT_METADATA');
+    expect(continuity).not.toContain('Private drafting notes');
+  });
+
   it('restores session results and saves the current output to the NPC Vault without regeneration', async () => {
     useImageshopSessionStore.getState().addResult({
       imageUrl: 'data:image/png;base64,session-result',
@@ -413,6 +658,43 @@ describe('GenericImageLabPanel production studio shell', () => {
       aspectRatio: '1:1',
       context: 'character',
       modelId: 'pro',
+      provenance: {
+        source: 'imageshop-panel-queue',
+        sourceQueueId: 'writer-issue-series-1',
+        sourcePanelId: 'issue-1-page-1-panel-1',
+        capturedAt: '2026-06-05T12:00:00.000Z',
+        writer: {
+          seriesId: 'series-1',
+          issueTitle: 'Obsidian Canon Smoke',
+          pageNumber: 1,
+          panelNumber: 1,
+        },
+        generation: {
+          model: 'pro',
+          aspectRatio: '1:1',
+          destination: 'production-version',
+        },
+        prompt: {
+          composed: 'Character Imageshop result',
+          sections: {
+            main: 'Character Imageshop result',
+          },
+        },
+        canon: [
+          {
+            id: 'lore-flux',
+            title: 'Flux',
+            category: 'character',
+            source: 'obsidian',
+            summary: 'Gold eyes, cobalt coat, and a white comet badge.',
+            provenance: {
+              obsidianPath: 'Characters/Flux.md',
+              writerLoreCardId: 'lore-flux',
+            },
+          },
+        ],
+        references: [],
+      },
     });
 
     render(
@@ -446,6 +728,17 @@ describe('GenericImageLabPanel production studio shell', () => {
         profileName: 'Flux Prime',
         castName: 'Flux',
         seed: 101,
+        processing: expect.objectContaining({
+          generationProvenance: expect.objectContaining({
+            sourcePanelId: 'issue-1-page-1-panel-1',
+            canon: [
+              expect.objectContaining({
+                id: 'lore-flux',
+                source: 'obsidian',
+              }),
+            ],
+          }),
+        }),
       }),
     );
     expect(getGenerations('character')[0]).toMatchObject({
@@ -629,5 +922,35 @@ describe('GenericImageLabPanel production studio shell', () => {
 
     expect(await screen.findByText(/Approved production reference/i)).toBeTruthy();
     expect(screen.getAllByText(/Approved Sky Observatory/i).length).toBeGreaterThan(0);
+  });
+
+  it('exposes unified output destinations with preview-aware labels', async () => {
+    useImageshopSessionStore.getState().addResult({
+      imageUrl: 'data:image/png;base64,output-destinations',
+      seed: 91,
+      prompt: 'Output destination test.',
+      aspectRatio: '9:16',
+      context: 'character',
+      modelId: 'pro',
+    });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Save preview to Character Vault' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save preview to Asset Vault' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save preview to NPC Vault' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Assign preview to selected beat' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create a new beat from preview' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export Imageshop production JSON' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export Writer image map' })).toBeTruthy();
   });
 });

@@ -7578,3 +7578,310 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Add cockpit controls for reference add/replace/clear/undo, or move into Pass 5 Obsidian canon context if canon provenance is the next priority.
+
+## Imageshop Comic Production Portal Pass 5 Obsidian Canon Context - 2026-06-05
+
+### What changed
+- Added a canon-context helper that resolves relevant Writer lore cards for the selected Imageshop panel through explicit lore ids, existing canon ids, and panel text matches across characters, locations, action, composition, dialogue, SFX, and art style.
+- Converted Obsidian-backed Writer lore into prompt-safe canon chips with source paths and import provenance while stripping stored import metadata, markdown, and private note content from generation prompts.
+- Added visible Obsidian/Writer/manual source labels, summaries, source paths, and shared-id label warnings to the first-viewport Context Inspector.
+- Expanded selected-panel prompt loading so characters, locations, art style, canon summaries, and reference targets are composed into the generation workspace.
+- Captured the exact canon/reference context used for selected-panel generation in session results and production versions.
+- Included generation provenance in Character/Asset Vault save processing metadata and made generated provenance take precedence in Writer image-map `canon_used` and `references_used` exports.
+- Mapped Writer Workshop image-workshop draft items into Imageshop lore candidates without adding a new route or persistence schema.
+- Updated the active plan and `tasks.md` to mark Pass 5 partially complete.
+
+### Files touched
+- `src/portals/storyline/imageshopCanonContext.ts`
+- `src/portals/storyline/__tests__/imageshopCanonContext.test.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/portals/storyline/components/ImageshopContextInspector.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/imageshopWriterImport.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/portals/storyline/__tests__/imageshopWriterImport.test.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/imageshopSessionStore.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Obsidian metadata summaries are preferred when present. Otherwise the helper derives a sanitized summary from the first quoted line or cleaned Writer lore body and caps it at 360 characters.
+- Lore cards with `includeInPrompt: false` are excluded from automatic prompt context.
+- Canon chips preserve `obsidianPath`, `writerLoreCardId`, and import/update time where available.
+- The initial warning model is intentionally narrow: a canon chip and a reference sharing the same id/reference id warn when their labels disagree.
+- Auto-attached canon enriches the active panel used for prompting and provenance but is not yet persisted back into the base queue.
+- Writer image-map exports prefer output generation provenance over import-time queue chips so exported metadata reflects what the model actually received.
+
+### Verification
+- Red helper test first: the focused canon-context test failed because `imageshopCanonContext` did not exist.
+- Focused helper green: `npm run test -- --run src/portals/storyline/__tests__/imageshopCanonContext.test.ts` passed 1 file / 3 tests.
+- Red cockpit test first: the production-studio test failed because imported Writer panels did not show the expected Obsidian canon context.
+- Focused cockpit green: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 14 tests.
+- Red provenance checks first: Character Vault processing metadata and Writer image-map exports initially omitted generated canon provenance.
+- Focused provenance green: `npm run test -- --run src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/portals/storyline/__tests__/imageshopCanonContext.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 3 files / 20 tests.
+- Regression suite: 14 focused Imageshop, store, bridge, Writer, Guided Comic, and Obsidian import test files passed 92 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+- `git diff --check` passed.
+- Signed-in browser smoke at `http://127.0.0.1:5174/` confirmed the first viewport showed `Flux`, `Obsidian`, `Characters/Flux.md`, and the prompt-safe summary; loading the selected panel populated canon context and continuity without raw metadata/private note content. Browser console errors: none.
+- Browser screenshot capture timed out twice, so this pass has DOM-backed browser verification but no screenshot artifact.
+
+### Outstanding issues
+- Manual lore attach/detach controls are not yet available when Writer JSON lacks a usable id or text match.
+- Conflict detection does not yet cover duplicate lore cards, conflicting Writer labels without shared ids, or semantic disagreements across multiple canon sources.
+- Auto-attached canon is not persisted into the base queue or reusable Imageshop production JSON.
+- Dedicated page-level, faction, and prop-category attachment tests remain.
+
+### Risks or caveats
+- Title matching is deliberately conservative but can still attach a lore card when its normalized title appears in broader panel text.
+- Vault save provenance is carried in processing metadata; consumers that ignore that metadata will not display canon history yet.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Finish the remaining Pass 5 manual attach/detach and durable queue/export persistence, or proceed into Pass 6 prompt preflight while retaining the listed Pass 5 follow-ups.
+
+## Imageshop Comic Production Portal Pass 6 Prompt Preflight - 2026-06-05
+
+### What changed
+- Added a pure Imageshop prompt-preflight evaluator for weak visual direction, configuration-dominant requests, oversized or high-risk reference payloads, failed reference URLs, unresolved reference routes, and canon conflicts.
+- Applied preflight blocking to both selected Writer panel generation and standalone Imageshop prompt generation.
+- Added a first-viewport preflight panel with ready/warning/blocked status, reference count, approximate known data size, ready/unchecked/failed URL counts, timeout risk, and actionable diagnostics.
+- Added source-attributed prompt sections for Writer JSON, Vault, Lore, Manual, AI Helper, and Page Config.
+- Renamed user-facing `Negative Prompt` and composed prompt output to `Avoid List` while retaining the existing internal workspace key for compatibility.
+- Changed the AI prompt helper to validate/refine the composed production request, including page configuration and continuity sections, instead of only the raw main prompt.
+- Updated the active plan and `tasks.md` to mark Pass 6 complete.
+
+### Files touched
+- `src/portals/storyline/imageshopPromptPreflight.ts`
+- `src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts`
+- `src/portals/storyline/components/ImageshopPromptPreflightPanel.tsx`
+- `src/portals/storyline/components/ImageshopOutputPanel.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/imageshopPromptComposer.ts`
+- `src/portals/storyline/__tests__/imageshopPromptComposer.test.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Prompts with fewer than four semantic words are blocked as weak. Prompts with fewer than eight semantic words whose composed request is more than three times configuration text are blocked as configuration-dominant.
+- Reference payloads block above ten references or eight MB of known inline data. More than eight references or five MB of known inline data produces timeout risk.
+- Remote reference size remains unknown until fetched; the panel distinguishes ready, unchecked, and failed URL states instead of inventing byte counts.
+- Canon conflicts and unresolved Writer reference routes are generation blockers for the selected panel.
+- The selected-panel preflight uses the enriched canon/reference panel, so the displayed sections match generation provenance.
+- Standalone prompt preflight displays only when a prompt exists and disables the existing generate command when blocked.
+
+### Verification
+- Red helper test first: `npm run test -- --run src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts` failed because the preflight module did not exist.
+- Focused helper green: the preflight suite passed 1 file / 5 tests.
+- Red UI/composer tests first: the production-studio tests failed because no preflight surface or generation guard existed, and the composer still emitted `Negative prompt`.
+- Focused green: `npm run test -- --run src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts src/portals/storyline/__tests__/imageshopPromptComposer.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 3 files / 23 tests.
+- Regression suite: 15 focused Imageshop, store, bridge, Writer, Guided Comic, and Obsidian import test files passed 98 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and 68 existing warnings.
+- `git diff --check` passed.
+- Signed-in browser smoke at `http://127.0.0.1:5174/` confirmed `Prompt preflight`, `Ready to generate`, one-reference payload health, Writer JSON/Lore/Vault/Page Config badges, the renamed `Avoid List`, an enabled selected-panel generation command, and no browser console errors.
+
+### Outstanding issues
+- Pass 7 structured generation diagnostics and batch recovery actions remain.
+- Pass 5 manual lore attach/detach and base-queue canon persistence remain tracked.
+
+### Risks or caveats
+- Remote reference byte size cannot be known before fetch, so timeout warnings use count plus known inline-data size.
+- The threshold values are intentionally conservative and may need calibration against production provider limits.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Implement Pass 7 structured error classification, attempt metadata, and recoverable selected/page/all batch generation while preserving partial successes.
+
+## Imageshop Comic Production Portal Pass 7 Batch Reliability - 2026-06-05
+
+### What changed
+- Added structured Gemini image diagnostics for missing key, safety, quota/rate limit, timeout, reference fetch, reference size, no image, unsupported payload, network, and unknown failures.
+- Preserved the existing `error` and safety-block result shapes while attaching typed diagnostic class, retryability, and suggested recovery action.
+- Added a pure sequential batch runner that preserves previous attempts, pauses after failure, resumes from the next panel, and supports normal, failed-reference removal, smaller-reference, and fallback-model strategies.
+- Added cockpit actions for generate selected, generate page, generate all draft panels, pause, resume, skip selected, retry failed, retry without failed refs, retry smaller refs, and retry fallback model.
+- Added visible batch status, total/generated/failed counts, elapsed time, last failure class/message, and disabled states for unavailable recovery actions.
+- Stored attempt metadata on session results and production versions: model, prompt hash, reference count, elapsed time, seed, error class/message, retry count, and strategy.
+- Preserved partial successes by recording each generated panel immediately before a later panel can fail.
+- Added mocked component coverage for one successful panel, one timeout, paused state, and successful smaller-reference retry.
+- Updated the active plan and `tasks.md` to mark Pass 7 complete.
+
+### Files touched
+- `src/shared/api/geminiImageApi.ts`
+- `src/shared/api/__tests__/geminiImageDiagnostics.test.ts`
+- `src/portals/storyline/imageshopBatchGeneration.ts`
+- `src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts`
+- `src/portals/storyline/components/ImageshopBatchControls.tsx`
+- `src/portals/storyline/components/ImageshopOutputPanel.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/stores/imageshopSessionStore.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Batch execution is sequential so provider limits and partial results remain understandable.
+- Failure pauses occur after the failed attempt is recorded; resume continues with the next unattempted panel. Failed panels are handled through the explicit retry actions.
+- `Retry without failed refs` excludes chips with failed signed-URL status. `Retry smaller refs` limits the request to six reference images. `Retry fallback model` switches the attempt to the Flash model.
+- Provider error display remains compatible because callers can still read `error`; batch callers use the attached structured diagnostic.
+- Generated panels receive enriched canon/reference provenance. Retry strategies record the actual reference subset used in provenance and the attempt reference count.
+- Pause requests take effect after an in-flight panel finishes; the current provider request is not force-aborted.
+
+### Verification
+- Red diagnostic test first: the classifier tests failed because `classifyGeminiImageFailure` did not exist.
+- Diagnostic green: `npm run test -- --run src/shared/api/__tests__/geminiImageDiagnostics.test.ts` passed 1 file / 11 tests.
+- Red batch-runner test first: the suite failed because `imageshopBatchGeneration` did not exist.
+- Batch-runner green: diagnostics plus batch runner passed 2 files / 14 tests.
+- Mocked component recovery test passed: first panel generated, second timed out, batch paused, session attempt metadata persisted, and `Retry smaller refs` completed the failed panel.
+- Regression suite: 17 focused Imageshop, provider, store, bridge, Writer, Guided Comic, and Obsidian import test files passed 113 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the repository baseline warnings.
+- `git diff --check` passed.
+- Signed-in browser smoke at `http://127.0.0.1:5174/` confirmed the batch status counters and all page/all/pause/resume/skip/retry controls render with correct initial disabled states; browser console errors: none.
+
+### Outstanding issues
+- Pass 8 production board, version comparison/current selection, approval/publish controls, unified destinations, and Writer/Guided round trip remain.
+- Pause does not abort an already-running provider request.
+- Pass 5 manual lore attachment and durable base-queue canon persistence remain tracked.
+
+### Risks or caveats
+- Batch attempt state is local to the current Imageshop component session, while successful image/version records and panel statuses persist through their existing stores.
+- Retry counts reflect attempt history retained in the current batch session.
+
+### Operator follow-up
+- None for this slice.
+
+### Next steps
+- Implement Pass 8 page/panel production board, version-current/revert/approve/publish behavior, unified output destinations, continuity reuse, and Writer/Guided return.
+
+## Imageshop Comic Production Portal Pass 8 And Completion - 2026-06-05
+
+### What changed
+- Added a grouped Writer page/panel production board with explicit current-version selection, compare metadata, revert, approve, and publish actions.
+- Added a persisted `currentVersionId` contract and changed approved continuity references and Writer image maps to use the operator-selected version rather than implicitly using the newest version.
+- Added unified output destinations for Character Vault, Asset Vault, NPC Vault, selected-beat assignment, new-beat creation, production JSON, Writer image-map export/return, and Guided Comic return.
+- Added a Writer round trip that merges image URLs, status, version, prompt, model, seed, canon, references, and return time into each matching page panel's existing `beats_json`.
+- Added Guided Comic return provenance and retained it in the panel art image state.
+- Added cockpit canon attach/detach and reference add/replace/remove/clear/undo controls.
+- Added meaningful reference resolution modes (`auto`, `manual`, `none`), cross-portal missing-reference routes, source/status labels, duplicate cross-source canon warnings, and reusable production JSON queue persistence.
+- Updated the implementation plan and `tasks.md` to mark all eight passes complete and ready for user review.
+
+### Files touched
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/imageWorkshopBridge.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/imageshopProductionBoard.ts`
+- `src/portals/storyline/imageshopPagePanelQueue.ts`
+- `src/portals/storyline/imageshopReferenceContext.ts`
+- `src/portals/storyline/imageshopCanonContext.ts`
+- `src/portals/storyline/imageshopJsonSchemas.ts`
+- `src/portals/storyline/components/ImageshopProductionBoard.tsx`
+- `src/portals/storyline/components/ImageshopOutputDestinations.tsx`
+- `src/portals/storyline/components/ImageshopOutputPanel.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/components/ImageshopContextInspector.tsx`
+- `src/portals/writer/writerImageshopReturn.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `src/stores/__tests__/imageWorkshopBridge.test.ts`
+- `src/portals/storyline/__tests__/imageshopProductionBoard.test.ts`
+- `src/portals/storyline/__tests__/ImageshopProductionBoard.test.tsx`
+- `src/portals/storyline/__tests__/ImageshopContextInspector.test.tsx`
+- `src/portals/storyline/__tests__/imageshopCanonContext.test.ts`
+- `src/portals/storyline/__tests__/imageshopJsonSchemas.test.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/portals/writer/__tests__/writerImageshopReturn.test.ts`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Approve and publish synchronize the matching Writer panel queue to approved while preserving Imageshop's richer production status.
+- Existing persisted production items without `currentVersionId` remain compatible because current-version lookup falls back to the newest version.
+- Reference replacement switches a panel to manual resolution; clearing switches it to none; undo restores the prior mode and chips.
+- Manual canon edits switch a panel to manual canon mode so a detached auto-match is not immediately reattached.
+- Auto-attached canon synchronizes into the persisted queue and is included when reusable production JSON is exported and reimported.
+- Writer returns use existing `writer_pages.beats_json`; no Supabase schema or route expansion was required.
+
+### Verification
+- TDD red/green coverage added for current version selection/revert, approval/publish queue synchronization, grouped board data and controls, Writer image-map merging, bridge returns, canon persistence, reusable queue JSON, duplicate canon warnings, reference/canon cockpit controls, and accessible output destinations.
+- `npm run test -- --run` passed 62 test files / 363 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and repository baseline warnings.
+- `git diff --check` passed.
+- Signed-in browser QA at `http://127.0.0.1:5174/` confirmed the Writer Pages Cockpit, Obsidian canon/path display, reference mutation controls, prompt preflight, batch controls, unified destinations, and grouped review board. Browser console errors: none.
+- A native confirmation dialog temporarily blocked the browser bridge during destructive-control smoke testing; the tab was closed and recovered cleanly. Store/component tests cover confirmed clear and undo behavior.
+- Paid Gemini generation and destructive live Vault/Writer writes were not triggered during browser QA; mocked component and bridge tests cover those paths.
+
+### Outstanding issues
+- None for the approved eight-pass implementation scope.
+
+### Risks or caveats
+- Pause waits for an in-flight provider request to finish rather than aborting it.
+- The existing `ComicPortal` production bundle remains above Vite's 500 kB warning threshold.
+- Lint still reports pre-existing repository warnings outside this scope.
+
+### Operator follow-up
+- Review and approve the completed plan and implementation.
+
+### Next steps
+- After approval, commit or publish the branch through the repository's normal review workflow.
+
+## Illustrator's Imageshop React Integrity Audit - 2026-06-05
+
+### What changed
+- Audited the current Imageshop working tree using the Vercel React best-practices categories for async waterfalls, bundle size, client persistence, rerender scope, rendering cost, and JavaScript performance.
+- Added a durable audit report with prioritized integrity, performance, workflow, and missing-test findings.
+- Confirmed the active implementation plan's completion claim is premature because critical storage and prompt-contract risks remain, reference lanes do not map reliably to provider slots, failed-reference retry lacks failure attribution, and the live first viewport remains beat-first.
+- No runtime implementation code was changed in this audit pass.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-05-imageshop-react-integrity-audit.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The highest-risk path duplicates full generated `data:` image URLs into both session and production web storage, while prompt edits synchronously persist the production store on every keystroke.
+- Panel and batch preflight compose a richer prompt than the provider call sends, so visible instructions and provenance can diverge from the actual request.
+- Reference lane labels are not compiled into Gemini's index-based slot roles; mixed reference types can reach the provider with incorrect semantics.
+- Reference encoding is sequential, creating an avoidable async waterfall before generation.
+- Existing retry and counter tests preserve historical failed attempts, which leaves successful retries reporting stale failures.
+
+### Verification
+- Focused Imageshop suite: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopCanonContext.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageshopSessionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts` passed 8 files / 60 tests.
+- Full suite: `npm run test` passed 62 files / 363 tests.
+- `npm run build` passed. `PhotoLab` built at 194.54 kB minified / 48.31 kB gzip; the existing `ComicPortal` chunk warning remains.
+- `npm run lint` passed with 0 errors and 67 repository warnings.
+- `git diff --check` passed.
+- Signed-in browser inspection at `http://127.0.0.1:5173/` confirmed the live portal still places production libraries, Beat Timeline, Selected Frame Preview, and Beat Detail before Image Lab. Browser console warnings/errors: none.
+- No paid Gemini generation or destructive Vault/Writer write was performed.
+
+### Outstanding issues
+- Critical: quota-safe image persistence and recovery.
+- High: one prompt contract for preflight, provider execution, and provenance.
+- High: lane-to-provider-slot compilation and parallel reference preparation.
+- High: per-reference failure attribution for meaningful retry behavior.
+- Medium: final-state batch counters, narrower render subscriptions, generation-first layout, and object URL cleanup.
+
+### Risks or caveats
+- Automated tests currently pass while asserting at least one inconsistent retry summary, so green coverage does not establish workflow integrity for the audited risks.
+- Remote reference performance was assessed from the serial implementation path; paid provider calls were intentionally not used for timing.
+
+### Operator follow-up
+- Keep the branch in review until the critical and high findings are repaired and covered by regression tests.
+
+### Next steps
+- Start with storage/persistence hardening, then unify prompt execution and reference-slot compilation before additional UI expansion.

@@ -57,6 +57,7 @@ import { guidedComicAssistResultSchema, issueOutlineSchema, WRITER_PAGE_BEATS_IS
 import type { GuidedComicAssistAction, GuidedComicAssistResult } from '@/shared/writer/types';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
+import type { ImageshopGenerationProvenance } from '@/portals/storyline/imageshopPagePanelQueue';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
 import {
@@ -410,6 +411,7 @@ type PanelArtImageState = {
   returnedAt: string;
   prompt?: string;
   sourceLabel?: string;
+  provenance?: ImageshopGenerationProvenance;
 };
 
 export type GuidedProductionPageStatus =
@@ -2407,6 +2409,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       source: 'imageshop',
       returnedAt: panelReturn.returnedAt,
       prompt: panelReturn.prompt,
+      provenance: panelReturn.provenance,
     });
   }, [assignPanelArtImage, consumeGuidedComicPanelImageReturn]);
 

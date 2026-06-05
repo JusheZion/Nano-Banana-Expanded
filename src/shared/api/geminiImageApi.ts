@@ -210,10 +210,147 @@ export interface GenerateImageOptions {
   context?: 'character' | 'asset';
 }
 
+export type GeminiImageErrorClass =
+  | 'missing-key'
+  | 'safety'
+  | 'quota-rate-limit'
+  | 'timeout'
+  | 'reference-fetch'
+  | 'reference-size'
+  | 'no-image'
+  | 'unsupported-payload'
+  | 'network'
+  | 'unknown';
+
+export type GeminiImageDiagnostic = {
+  errorClass: GeminiImageErrorClass;
+  message: string;
+  retryable: boolean;
+  suggestedAction:
+    | 'configure-key'
+    | 'edit-prompt'
+    | 'retry-later'
+    | 'retry'
+    | 'retry-without-failed-refs'
+    | 'retry-smaller-refs'
+    | 'change-payload'
+    | 'inspect-error';
+};
+
 export type GenerateImageResult =
   | { ok: true; imageDataUrl: string }
-  | { ok: false; blocked: true; reason: 'safety' }
-  | { ok: false; error: string };
+  | { ok: false; blocked: true; reason: 'safety'; diagnostic: GeminiImageDiagnostic }
+  | { ok: false; error: string; diagnostic: GeminiImageDiagnostic };
+
+export function classifyGeminiImageFailure(message: string): GeminiImageDiagnostic {
+  const normalized = message.trim().toLowerCase();
+  if (normalized.includes('vite_gemini_api_key') || normalized.includes('missing api key')) {
+    return {
+      errorClass: 'missing-key',
+      message,
+      retryable: false,
+      suggestedAction: 'configure-key',
+    };
+  }
+  if (normalized.includes('safety') || normalized.includes('blocked by')) {
+    return {
+      errorClass: 'safety',
+      message,
+      retryable: false,
+      suggestedAction: 'edit-prompt',
+    };
+  }
+  if (
+    normalized.includes('rate limit') ||
+    normalized.includes('rate-limit') ||
+    normalized.includes('quota') ||
+    normalized.includes('resource exhausted') ||
+    normalized.includes('429')
+  ) {
+    return {
+      errorClass: 'quota-rate-limit',
+      message,
+      retryable: true,
+      suggestedAction: 'retry-later',
+    };
+  }
+  if (
+    normalized.includes('reference') &&
+    (normalized.includes('fetch') || normalized.includes('download') || normalized.includes('load timed out'))
+  ) {
+    return {
+      errorClass: 'reference-fetch',
+      message,
+      retryable: true,
+      suggestedAction: 'retry-without-failed-refs',
+    };
+  }
+  if (
+    normalized.includes('payload') &&
+    (normalized.includes('size') || normalized.includes('too large') || normalized.includes('exceeds'))
+  ) {
+    return {
+      errorClass: 'reference-size',
+      message,
+      retryable: true,
+      suggestedAction: 'retry-smaller-refs',
+    };
+  }
+  if (normalized.includes('timed out') || normalized.includes('timeout') || normalized.includes('aborted')) {
+    return {
+      errorClass: 'timeout',
+      message,
+      retryable: true,
+      suggestedAction: 'retry',
+    };
+  }
+  if (normalized.includes('no image')) {
+    return {
+      errorClass: 'no-image',
+      message,
+      retryable: true,
+      suggestedAction: 'retry',
+    };
+  }
+  if (
+    normalized.includes('unsupported') ||
+    normalized.includes('invalid payload') ||
+    normalized.includes('invalid argument')
+  ) {
+    return {
+      errorClass: 'unsupported-payload',
+      message,
+      retryable: false,
+      suggestedAction: 'change-payload',
+    };
+  }
+  if (
+    normalized.includes('network') ||
+    normalized.includes('failed to fetch') ||
+    normalized.includes('connection')
+  ) {
+    return {
+      errorClass: 'network',
+      message,
+      retryable: true,
+      suggestedAction: 'retry',
+    };
+  }
+  return {
+    errorClass: 'unknown',
+    message,
+    retryable: false,
+    suggestedAction: 'inspect-error',
+  };
+}
+
+function imageFailure(message: string): Extract<GenerateImageResult, { ok: false; error: string }> {
+  return {
+    ok: false,
+    error: message,
+    diagnostic: classifyGeminiImageFailure(message),
+  };
+}
 
 export async function referenceUrlToBase64WithMimeRetry(
   url: string
@@ -256,7 +393,7 @@ export async function generateImage(
 ): Promise<GenerateImageResult> {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
   if (!apiKey) {
-    return { ok: false, error: 'Missing VITE_GEMINI_API_KEY' };
+    return imageFailure('Missing VITE_GEMINI_API_KEY');
   }
 
   const model = getGeminiModelId(options.modelId);
@@ -287,10 +424,7 @@ export async function generateImage(
       parts.push({ inlineData: { mimeType, data: base64 } });
     }
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : 'Failed to encode reference images',
-    };
+    return imageFailure(e instanceof Error ? e.message : 'Failed to encode reference images');
   }
 
   const hasAnyRef = padded.some((u) => u);
@@ -336,14 +470,13 @@ export async function generateImage(
           GEMINI_FETCH_TIMEOUT_MS
         );
       } catch (netErr) {
-        return {
-          ok: false,
-          error: isAbortError(netErr)
+        return imageFailure(
+          isAbortError(netErr)
             ? 'Image request timed out. Try again, or use fewer or smaller reference images.'
             : netErr instanceof Error
               ? netErr.message
               : 'Network error while calling image API',
-        };
+        );
       }
 
       if (isRateLimitResponse(res)) {
@@ -352,7 +485,7 @@ export async function generateImage(
           await delay(backoffDelay(attempt));
           continue;
         }
-        return { ok: false, error: lastError };
+        return imageFailure(lastError);
       }
 
       let data: unknown;
@@ -361,12 +494,17 @@ export async function generateImage(
       } catch (readErr) {
         const msg = readErr instanceof Error ? readErr.message : String(readErr);
         if (msg.includes('timed out')) {
-          return { ok: false, error: msg };
+          return imageFailure(msg);
         }
         data = {};
       }
       if (parseSafetyBlock(data)) {
-        return { ok: false, blocked: true, reason: 'safety' };
+        return {
+          ok: false,
+          blocked: true,
+          reason: 'safety',
+          diagnostic: classifyGeminiImageFailure('Blocked by safety filters.'),
+        };
       }
 
       if (!res.ok) {
@@ -374,7 +512,7 @@ export async function generateImage(
           (data as any)?.error?.message && typeof (data as any).error?.message === 'string'
             ? ((data as any).error.message as string)
             : res.statusText || 'Request failed';
-        return { ok: false, error: msg };
+        return imageFailure(msg);
       }
 
       const candidates = (data as any).candidates as
@@ -391,11 +529,8 @@ export async function generateImage(
       break;
     }
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : 'Image generation failed unexpectedly',
-    };
+    return imageFailure(e instanceof Error ? e.message : 'Image generation failed unexpectedly');
   }
 
-  return { ok: false, error: lastError || 'Unknown error' };
+  return imageFailure(lastError || 'Unknown error');
 }

@@ -2,22 +2,22 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
-## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — IN PROGRESS
+## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — COMPLETE
 
 Detailed tracker: [`docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`](docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md)
 
 - [x] Pass 1: Add Writer issue/page/panel queue contract, canon/reference chips, generation provenance snapshots, readiness counters, and active queue state in `useImageshopProductionStore`.
 - [x] Pass 2: Import Writer JSON into the page/panel queue with diagnostics, Writer provenance, lore ids, vault reference ids, reusable Imageshop production JSON, and Writer-compatible image maps.
-- [~] Pass 3: Recenter Imageshop around a generation-first cockpit and move timeline/libraries/dashboard/config into contextual surfaces. First-viewport Writer Pages Cockpit, queue/inspector/output extraction, Image Lab production surface tabs, scoped command labels, and disabled helper copy are live; broader beat-timeline relocation and full save/export command-model consolidation remain pending.
-- [~] Pass 4: Add ergonomic Character/Asset/NPC/Guided reference lanes and per-panel chips. Reference-context helper, cockpit lane display, missing-reference route suggestions, and undo-safe queue/store add-replace-clear semantics are live for Writer, vault, Guided, NPC, and approved Imageshop output sources; cross-portal route actions, continuity role labels, and cockpit controls for reference mutation remain pending.
-- [ ] Pass 5: Add Obsidian-derived canon chips, conflict warnings, and canon provenance.
-- [ ] Pass 6: Add prompt preflight, source-attributed composed prompts, avoid-list semantics, and payload health.
-- [ ] Pass 7: Add structured generation diagnostics and recoverable batch generation.
-- [ ] Pass 8: Add page/panel production board, unified output destinations, approved-output continuity refs, and Writer/Guided round trip.
+- [x] Pass 3: Recenter Imageshop around a generation-first cockpit with contextual production surfaces and one unified output destination model. The broader Storyline beat timeline remains intentionally owned by the parent workspace.
+- [x] Pass 4: Add ergonomic Character/Asset/NPC/Guided reference lanes, source/status labels, cross-portal missing-reference routes, and cockpit add/replace/remove/clear/undo controls with persisted auto/manual/none resolution modes.
+- [x] Pass 5: Add Obsidian-derived canon chips, prompt-safe summaries, manual attach/detach, shared-id and duplicate-title conflict warnings, generation/vault/export provenance, and durable base-queue/reusable-JSON persistence.
+- [x] Pass 6: Add prompt preflight, source-attributed composed prompts, avoid-list semantics, and payload health. Selected-panel and standalone generation now block weak/configuration-dominant prompts, oversized/failed/missing references, and canon conflicts; prompt sections show Writer/Vault/Lore/Manual/AI/Page Config sources; payload health and composed-prompt AI refinement are live.
+- [x] Pass 7: Add structured generation diagnostics and recoverable batch generation. Provider failures now carry typed classes/actions; selected/page/all generation, pause/resume/skip, failed-panel retries, failed-ref removal, smaller-ref and fallback-model retries preserve partial success and record attempt metadata with progress/elapsed state.
+- [x] Pass 8: Add grouped page/panel production board, explicit current-version choose/revert/approve/publish controls, unified Vault/beat/JSON destinations, approved-output continuity reuse, and Writer/Guided round trips with provenance.
 - [x] Verify Pass 1 focused tests and nearby Imageshop/bridge regressions.
 - [x] Verify Pass 2 Writer import/schema/store tests and nearby Imageshop/bridge regressions.
 - [x] Verify Pass 3 cockpit/component command cleanup tests, regression suite, build, lint, diff check, and signed-in browser smoke for Writer JSON import -> first-viewport cockpit.
-- [ ] Run full implementation verification when the remaining passes land: `npm run test`, `npm run lint`, `npm run build`, `git diff --check`, and signed-in browser QA.
+- [x] Run full implementation verification: 62 test files / 363 tests passed; lint passed with 0 errors and repository baseline warnings; build passed with the existing large `ComicPortal` chunk warning; `git diff --check` passed; signed-in browser QA showed no console errors.
 
 ## Imageshop PR bugfix verification (2026-05-31) — COMPLETE
 

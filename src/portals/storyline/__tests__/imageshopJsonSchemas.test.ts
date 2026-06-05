@@ -4,6 +4,7 @@ import {
   normalizeImageshopJson,
 } from '@/portals/storyline/imageshopJsonSchemas';
 import { createDefaultImageshopPageConfig } from '@/portals/storyline/imageshopPromptComposer';
+import { createImageshopIssueQueue } from '@/portals/storyline/imageshopPagePanelQueue';
 
 describe('normalizeImageshopJson', () => {
   it('normalizes story beat JSON into production batch items', () => {
@@ -67,6 +68,34 @@ describe('normalizeImageshopJson', () => {
   });
 
   it('round-trips exported production config through the normalized ARCS shape', () => {
+    const panelQueue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-05T12:00:00.000Z',
+      issue: {
+        id: 'issue-export',
+        title: 'Reusable Canon',
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'Flux raises the Helios Key.',
+              canonChips: [
+                {
+                  id: 'lore-helios-key',
+                  title: 'Helios Key',
+                  category: 'artifact',
+                  source: 'obsidian',
+                  summary: 'The key emits a narrow gold ring.',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
     const exported = exportImageshopProductionConfig({
       title: 'Reusable config',
       mode: 'comic-pages',
@@ -83,6 +112,7 @@ describe('normalizeImageshopJson', () => {
         },
       ],
       selectedArtStyleId: 'custom-ink',
+      panelQueue,
       items: [
         {
           id: 'item-1',
@@ -104,6 +134,10 @@ describe('normalizeImageshopJson', () => {
     expect(batch.selectedArtStyleId).toBe('custom-ink');
     expect(batch.items[0].pageConfig?.pageType).toBe('cover');
     expect(batch.items[0].prompt).toBe('Hero cover pose.');
+    expect(batch.panelQueue?.pages[0].panels[0].canonChips[0]).toMatchObject({
+      id: 'lore-helios-key',
+      title: 'Helios Key',
+    });
   });
 
   it('normalizes Writer issue-pack JSON with a page/panel queue', () => {

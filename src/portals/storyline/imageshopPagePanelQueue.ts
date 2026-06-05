@@ -61,7 +61,9 @@ export type ImageshopPanelQueueItem = {
   loreIds: string[];
   referenceIds: string[];
   canonChips: ImageshopCanonChip[];
+  canonMode?: 'auto' | 'manual';
   referenceChips: ImageshopReferenceChip[];
+  referenceMode?: 'auto' | 'manual' | 'none';
   status: ImageshopPanelGenerationStatus;
   createdAt: string;
   updatedAt: string;
@@ -166,6 +168,7 @@ export type ImageshopPanelReferenceUndo = {
   queueItemId: string;
   previousReferenceIds: string[];
   previousReferenceChips: ImageshopReferenceChip[];
+  previousReferenceMode?: ImageshopPanelQueueItem['referenceMode'];
 };
 
 export type ImageshopPanelReferenceMutationResult = {
@@ -242,7 +245,9 @@ export function createImageshopIssueQueue(input: CreateImageshopIssueQueueInput)
           loreIds: cleanList(panel.loreIds),
           referenceIds: cleanList(panel.referenceIds),
           canonChips: panel.canonChips ?? [],
+          canonMode: 'auto',
           referenceChips: panel.referenceChips ?? [],
+          referenceMode: 'auto',
           status: panel.status ?? 'draft',
           createdAt: now,
           updatedAt: now,
@@ -342,6 +347,7 @@ function mutateImageshopPanelReferenceChips(
   queue: ImageshopIssueQueue,
   queueItemId: string,
   nextReferenceChips: ImageshopReferenceChip[],
+  referenceMode: NonNullable<ImageshopPanelQueueItem['referenceMode']> = 'manual',
 ): ImageshopPanelReferenceMutationResult {
   const existingPanel = findImageshopPanelQueueItem(queue, queueItemId);
   if (!existingPanel) {
@@ -358,6 +364,7 @@ function mutateImageshopPanelReferenceChips(
     queueItemId,
     previousReferenceIds: existingPanel.referenceIds,
     previousReferenceChips: existingPanel.referenceChips,
+    previousReferenceMode: existingPanel.referenceMode,
   };
 
   return {
@@ -371,6 +378,7 @@ function mutateImageshopPanelReferenceChips(
                 ...panel,
                 referenceIds: referenceIdsFromChips(nextChips),
                 referenceChips: nextChips,
+                referenceMode,
                 updatedAt,
               }
             : panel,
@@ -401,7 +409,7 @@ export function addImageshopPanelReferenceChip(
       undo: null,
     };
   }
-  return mutateImageshopPanelReferenceChips(queue, queueItemId, nextChips);
+  return mutateImageshopPanelReferenceChips(queue, queueItemId, nextChips, 'manual');
 }
 
 export function replaceImageshopPanelReferenceChips(
@@ -417,7 +425,7 @@ export function replaceImageshopPanelReferenceChips(
       blockedReason: 'confirmation-required',
     };
   }
-  return mutateImageshopPanelReferenceChips(queue, queueItemId, chips);
+  return mutateImageshopPanelReferenceChips(queue, queueItemId, chips, 'manual');
 }
 
 export function clearImageshopPanelReferenceChips(
@@ -432,7 +440,7 @@ export function clearImageshopPanelReferenceChips(
       blockedReason: 'confirmation-required',
     };
   }
-  return mutateImageshopPanelReferenceChips(queue, queueItemId, []);
+  return mutateImageshopPanelReferenceChips(queue, queueItemId, [], 'none');
 }
 
 export function restoreImageshopPanelReferenceChips(
@@ -460,6 +468,7 @@ export function restoreImageshopPanelReferenceChips(
                 ...panel,
                 referenceIds: undo.previousReferenceIds,
                 referenceChips: undo.previousReferenceChips,
+                referenceMode: undo.previousReferenceMode ?? 'auto',
                 updatedAt,
               }
             : panel,
@@ -470,6 +479,7 @@ export function restoreImageshopPanelReferenceChips(
       queueItemId: undo.queueItemId,
       previousReferenceIds: existingPanel.referenceIds,
       previousReferenceChips: existingPanel.referenceChips,
+      previousReferenceMode: existingPanel.referenceMode,
     },
   };
 }

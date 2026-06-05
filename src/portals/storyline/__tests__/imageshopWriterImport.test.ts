@@ -190,7 +190,32 @@ describe('imageshopWriterImport', () => {
             characters: ['Mara'],
             locations: ['Engine Shrine'],
             art_style: 'diesel fantasy ink',
-            panels: [{ id: 'panel-a', index: 2, action: 'Mara lifts a lantern engine.' }],
+            panels: [
+              {
+                id: 'panel-a',
+                index: 2,
+                action: 'Mara lifts a lantern engine.',
+                canon: [
+                  {
+                    id: 'lore-engine',
+                    title: 'Lantern Engine',
+                    category: 'artifact',
+                    source: 'obsidian',
+                    summary: 'Bronze piston core with blue glass ribs.',
+                    source_path: 'Artifacts/Lantern Engine.md',
+                  },
+                ],
+                references: [
+                  {
+                    id: 'asset-engine',
+                    label: 'Lantern Engine asset',
+                    lane: 'props',
+                    source_type: 'asset',
+                    image_url: 'https://example.test/engine.png',
+                  },
+                ],
+              },
+            ],
           },
           script_text: null,
         },
@@ -208,6 +233,53 @@ describe('imageshopWriterImport', () => {
           prompt: 'Mara lifts a lantern engine.',
           model: 'gemini-2.5-flash-image-preview',
           seed: 101,
+          provenance: {
+            source: 'imageshop-panel-queue',
+            sourceQueueId: result.queue.id,
+            sourcePanelId: 'issue-map-page-9-panel-2',
+            capturedAt: '2026-06-01T15:00:00.000Z',
+            writer: {
+              issueId: 'issue-map',
+              issueTitle: 'Image Map',
+              issueNumber: 5,
+              pageId: 'writer-page-9',
+              pageNumber: 9,
+              panelNumber: 2,
+            },
+            generation: {
+              model: 'gemini-2.5-flash-image-preview',
+              aspectRatio: '1:1',
+              destination: 'production-version',
+            },
+            prompt: {
+              composed: 'Mara lifts a lantern engine.',
+              sections: {
+                main: 'Mara lifts a lantern engine.',
+              },
+            },
+            canon: [
+              {
+                id: 'lore-flux',
+                title: 'Flux',
+                category: 'character',
+                source: 'obsidian',
+                summary: 'Flux wears a copper mask with a fractured left lens.',
+                provenance: {
+                  obsidianPath: 'Characters/Flux.md',
+                },
+              },
+            ],
+            references: [
+              {
+                id: 'character-flux',
+                label: 'Flux turnaround',
+                lane: 'character-dna',
+                sourceType: 'character',
+                referenceId: 'character-flux',
+                imageUrl: 'https://example.test/flux.png',
+              },
+            ],
+          },
         },
       ],
     });
@@ -236,6 +308,22 @@ describe('imageshopWriterImport', () => {
               prompt: 'Mara lifts a lantern engine.',
               model: 'gemini-2.5-flash-image-preview',
               seed: 101,
+              canon_used: [
+                expect.objectContaining({
+                  id: 'lore-flux',
+                  source: 'obsidian',
+                  provenance: expect.objectContaining({
+                    obsidianPath: 'Characters/Flux.md',
+                  }),
+                }),
+              ],
+              references_used: [
+                expect.objectContaining({
+                  id: 'character-flux',
+                  lane: 'character-dna',
+                  sourceType: 'character',
+                }),
+              ],
             },
           ],
         },
