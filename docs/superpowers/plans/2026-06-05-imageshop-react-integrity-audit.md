@@ -186,3 +186,18 @@ Relevant code:
 - failed reference id is recorded and excluded on retry;
 - successful retry clears current failed count;
 - object URL cleanup on clear, replace, and unmount.
+
+## Live Playwright Confirmation - 2026-06-05
+
+The signed-in end-to-end report at
+`docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md`
+confirmed and extended these findings:
+
+- one generated JPEG was duplicated into 1,359,811 characters of local production storage and 1,346,623 characters of session storage;
+- a 22-character typing probe caused 22 full production-store writes of approximately 1.36 million characters each;
+- an unreachable reference passed preflight as healthy, produced `net::ERR_UNSAFE_PORT`, and did not prevent a paid Gemini request;
+- selected Writer panel generation updated the cockpit but created a detached generic production item while the grouped panel remained Draft with zero versions;
+- the Writer cockpit overflowed horizontally at both 1600x900 and 1280x720;
+- Guided return preserved the panel image but returned to Comic Library instead of restoring panel focus.
+
+The report includes screenshots, exact measurements, successful controls, and completed QA-data cleanup.

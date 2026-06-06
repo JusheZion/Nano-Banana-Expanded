@@ -19,6 +19,19 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-01-imageshop-comic-production
 - [x] Verify Pass 3 cockpit/component command cleanup tests, regression suite, build, lint, diff check, and signed-in browser smoke for Writer JSON import -> first-viewport cockpit.
 - [x] Run full implementation verification: 62 test files / 363 tests passed; lint passed with 0 errors and repository baseline warnings; build passed with the existing large `ComicPortal` chunk warning; `git diff --check` passed; signed-in browser QA showed no console errors.
 
+## Illustrator's Imageshop - Integrity Repair (2026-06-05) - OPEN
+
+Live QA report: [`docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md`](docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md)
+
+- [x] Run signed-in Playwright QA with one live Gemini generation, Writer JSON, Vault saves, Guided return, reload recovery, responsive review, and cleanup.
+- [ ] Remove full generated image payloads from synchronous localStorage/sessionStorage persistence and add quota-safe recovery.
+- [ ] Stop rewriting production image history on every prompt keystroke.
+- [ ] Block or explicitly resolve unchecked/failed references before provider execution and record the failed reference id.
+- [ ] Attach selected-panel generations to the matching grouped page/panel production version.
+- [ ] Remove cockpit horizontal clipping at 1600x900 and 1280x720.
+- [ ] Move the generation cockpit ahead of empty beat-first surfaces.
+- [ ] Restore Guided return to the originating page/panel workspace.
+
 ## Imageshop PR bugfix verification (2026-05-31) — COMPLETE
 
 - [x] Fix staging refinement prompt so it does not advance draft production items before generation.

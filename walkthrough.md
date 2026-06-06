@@ -7885,3 +7885,90 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Start with storage/persistence hardening, then unify prompt execution and reference-slot compilation before additional UI expansion.
+
+## Handoff Skill Creation - 2026-06-05
+
+### What changed
+- Created the global personal `$handoff` skill for context handoffs, session transfers, continuation briefs, checkpoint summaries, and next-thread packages.
+- Required every generated handoff to use one fenced `md` text block with these ordered sections: Current State, Changed Files, Commands Run, Open Risks, Next Step, and Other Pertinent Information.
+- Added accuracy rules requiring refreshed repository evidence, explicit failed or incomplete checks, checkpoint-scoped file changes, and one exact next action.
+- Added a walkthrough rule requiring meaningful repository handoffs to reference the skill or resulting handoff artifact.
+
+### Files touched
+- `/Users/apoaaron/.codex/skills/handoff/SKILL.md`
+- `/Users/apoaaron/.codex/skills/handoff/agents/openai.yaml`
+- `walkthrough.md`
+
+### Implementation notes
+- The skill is installed in the personal Codex skills directory rather than this repository, so its implementation is available across projects but is not tracked by this repository's Git history.
+- The output contract is intentionally fixed and continuation-oriented rather than a general conversational summary.
+- A handoff must identify the last checkpoint when known; when it is unknown, the skill requires that uncertainty to be stated.
+
+### Verification
+- `init_skill.py handoff --path /Users/apoaaron/.codex/skills ...` completed successfully and created the skill scaffold.
+- A Ruby frontmatter check passed for the skill name, description, allowed keys, and naming format.
+- A contract check passed for the exact presence and order of all six required handoff sections inside a fenced `md` block.
+- A metadata check passed for `agents/openai.yaml`, including the `$handoff` invocation and short-description length.
+- The official `quick_validate.py` command could not run because its Python environment lacks the `yaml` module (`ModuleNotFoundError: No module named 'yaml'`); this is a validator dependency failure, not a detected skill-format failure.
+
+### Outstanding issues
+- The official validator has not completed until PyYAML is available in its execution environment.
+
+### Risks or caveats
+- An already-open Codex session may need to be restarted or replaced with a fresh thread before the newly installed personal skill appears in its discovered skill list.
+- Because the skill lives outside the repository, cloning this repository alone will not reproduce the personal skill installation.
+
+### Operator follow-up
+- In a fresh Codex thread, invoke `$handoff` and confirm the generated artifact uses the six required sections in one fenced `md` text block.
+
+### Next steps
+- Use `$handoff` for the next context transfer and carry the Imageshop integrity audit into the new thread's Current State, Open Risks, and Other Pertinent Information sections.
+
+## Illustrator's Imageshop Playwright End-to-End QA - 2026-06-05
+
+### What changed
+- Ran signed-in functional and visual QA through the requested persistent Playwright Interactive workflow.
+- Exercised prompt preflight, generation modes, production tabs, malformed and valid Writer JSON import, canon/reference context, one live Gemini generation, reload recovery, production review, three Vault save paths, and Guided Comic return.
+- Added a durable QA report with severity-ranked findings, exact storage/layout measurements, screenshot evidence, successful controls, limitations, and cleanup evidence.
+- Added the live evidence to the React integrity audit and reopened the repair work in `tasks.md`.
+- No runtime source code was changed.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md`
+- `docs/superpowers/plans/2026-06-05-imageshop-react-integrity-audit.md`
+- `docs/superpowers/plans/assets/2026-06-05-imageshop-playwright-qa/`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- One generated JPEG was stored as a complete data URL in both production localStorage and sessionStorage, consuming about 2.7 MB across the two keys.
+- A 22-character typing probe produced 22 full writes of the approximately 1.36 MB production payload.
+- An unreachable reference passed preflight as healthy, failed with `net::ERR_UNSAFE_PORT`, and did not stop the paid Gemini request.
+- The Writer cockpit marked Page 1 Panel 2 generated, but the grouped board left the panel Draft with zero versions and stored the output under a separate generic item.
+- The cockpit clipped horizontally at both tested desktop sizes, and the first viewport remained dominated by empty beat surfaces.
+- Guided return preserved the panel image but returned to Comic Library instead of restoring panel focus.
+
+### Verification
+- Signed-in browser QA ran at `1600x900` and `1280x720`.
+- The one permitted live Gemini generation completed and displayed a panel image.
+- Character, Asset, and NPC Vault saves all reported success.
+- Reload restored the imported queue and session output before cleanup.
+- Prompt blocking, detailed-prompt readiness, malformed JSON feedback, tab/mode cycles, and reference remove/undo were verified.
+- No uncaught browser page errors were captured.
+
+### Outstanding issues
+- Critical storage duplication and per-keystroke serialization remain unresolved.
+- Failed/unchecked references can still reach paid generation without actionable attribution.
+- Selected-panel output is not consistently linked to its grouped production-board panel.
+- First-viewport hierarchy, cockpit overflow, and Guided return navigation require repair.
+
+### Risks or caveats
+- Only one paid Gemini generation was used.
+- A failed retry could not be exercised because the invalid reference did not stop generation.
+- Full multi-panel batch generation was intentionally not run.
+
+### Operator follow-up
+- Keep the branch in review and start with quota-safe persistence, then reference failure gating and page/panel version linkage.
+
+### Next steps
+- Implement the first integrity repair pass with regression tests for storage quota failure and large-history prompt typing.
