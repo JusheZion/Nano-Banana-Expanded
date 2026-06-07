@@ -8435,3 +8435,233 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Review the full Pass 1-7 rollout as one branch-level change set before commit/PR packaging.
+
+## Writers Workshop Live Assistant Workflow Evaluation - 2026-06-07
+
+### What changed
+- Added a documentation-only evaluation of a possible live AI assistant for Writers Workshop.
+- Captured the current Writers Workshop AI shape, including the Supabase `writer-tools` Edge Function path, Gemini API key usage, current model/fallback behavior, and cost surfaces.
+- Documented the expected user workflow in chronological order and identified why the current ordering can feel confusing.
+- Distinguished smoke testing from a full AI/user-agent portal QA approach, recommending a tool coverage audit plus deterministic browser regression and limited live-AI smoke verification.
+- Preserved the user's request not to modify portal behavior or application code.
+
+### Files touched
+- `docs/writers-workshop-live-assistant-workflow-evaluation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This was an evaluation and documentation pass only.
+- The document notes that Writers Workshop currently uses Gemini via Supabase secrets, not OpenAI.
+- The document flags that the repo default `gemini-2.0-flash` is listed by Google as shut down on June 1, 2026, so future assistant work should verify or set an active `GEMINI_MODEL` before relying on expanded live AI behavior.
+- The recommended assistant direction is a confirmable, context-aware panel that reuses existing `idea_assist`-style flows before considering true realtime or voice behavior.
+
+### Verification
+- `date +%Y-%m-%d`
+- Repository/source review only; no build, lint, browser QA, or tests were run because no portal code changed.
+
+### Outstanding issues
+- No implementation was performed.
+- A future implementation plan would need to decide assistant placement, allowed actions, budget indicators, and live-vs-mocked AI QA policy.
+
+### Risks or caveats
+- Gemini and Supabase pricing can change; pricing references should be rechecked before implementation or high-volume live testing.
+- The document is based on static repo/source inspection plus official pricing documentation, not a new live Writers Workshop browser session.
+
+### Operator follow-up
+- Review the document and decide whether the next step should be workflow simplification, a guided assistant plan, or a QA coverage matrix.
+
+### Next steps
+- If approved, create an implementation plan for either a workflow simplification pass or a low-risk assistant panel that reuses existing `writer-tools` modes with explicit user confirmation.
+
+## Writers Workshop Chronology and Page Edit Autonomy - 2026-06-07
+
+### What changed
+- Implemented the Writers Workshop chronology simplification pass using a tested helper that models the visible flow as `Library -> Foundation -> Synopsis -> Canon -> Outline -> Pages -> Beats -> Dialogue -> Visual Prep -> Audit -> Cockpit -> Export`.
+- Updated the Writer production map to use the shared chronology helper, including Foundation as the first production setup step while preserving the existing `notes.production_defaults` storage contract.
+- Added a staged page-edit review helper for outline, page beats, and dialogue edits. The helper reports likely repetition, canon drift, neighboring-page overlap, layer mismatch, affected layers, and explicit safe actions.
+- Added the "Edit current page review" panel to the active Beats and Dialogue workspaces and to the saved-output editor. The panel exposes only explicit actions: save staged layer, run canon check, regenerate beats, regenerate dialogue, or preview the affected page.
+- Preserved the existing no-silent-overwrite behavior: cascade-style work opens preview/regeneration actions that still require user confirmation.
+- Strengthened the Writer page-to-Imageshop handoff by preserving selected page dialogue in the Imageshop moodboard prompt context and adding focused tests around handoff and returned Writer image-map provenance.
+- Saved and completed the execution plan for this pass.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-07-writers-workshop-chronology-edit-autonomy-plan.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `src/portals/writer/writerPageEditReview.ts`
+- `src/portals/writer/__tests__/writerWorkflowChronology.test.ts`
+- `src/portals/writer/__tests__/writerPageEditReview.test.ts`
+- `src/portals/writer/__tests__/writerImageshopReturn.test.ts`
+- `src/portals/storyline/imageWorkshopPlanning.ts`
+- `src/portals/storyline/__tests__/imageWorkshopPlanning.test.ts`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `writerWorkflowChronology.ts` centralizes the ordered Writer production steps and status details so the UI order and tests stay aligned.
+- `WriterPortal` now computes the active workflow step separately from the raw tab label, allowing Cockpit to remain late-stage while Foundation appears early.
+- `writerPageEditReview.ts` is intentionally deterministic and local: it does not call AI or overwrite data. AI-backed regeneration still routes through the existing canon, page-beats, dialogue, and pacing preview paths.
+- The page-edit review panel is shared JSX inside `WriterPortal` and renders in the live Beats/Dialogue tabs as well as the saved-output editor.
+- `collectMoodboardPrompts` now prioritizes selected page script text before lower-level panel action/composition prompts so Writer dialogue context is not pushed out of the Imageshop handoff seed list.
+- Live browser QA stopped before image generation. The Imageshop return button appeared but was disabled until generated panel/image-map output exists, which matches the guarded workflow.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerPageEditReview.test.ts` passed 2 files / 5 tests.
+- `npm run test -- --run src/portals/storyline/__tests__/imageWorkshopPlanning.test.ts` passed 1 file / 5 tests.
+- `npm run test -- --run src/portals/writer/__tests__/writerImageshopReturn.test.ts` passed 1 file / 3 tests.
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerPageEditReview.test.ts src/portals/storyline/__tests__/imageWorkshopPlanning.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/writer/__tests__/writerImageshopReturn.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` passed 7 files / 72 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 warnings.
+- Browser smoke on `http://127.0.0.1:5174/` confirmed the signed-in Writer issue rendered the new production map order, the staged review panel appeared on Dialogue and Beats, `Send page to Illustrator’s Imageshop` was visible from selected page beats, and Imageshop opened with Writer-derived page/panel context and no console errors.
+
+### Outstanding issues
+- No live Gemini image generation was run, so the browser smoke did not create new image-map provenance. Returned image-map merge behavior is covered by focused automated tests.
+- The screenshot capture helper timed out during browser QA, but text-based browser inspection verified the target UI state.
+
+### Risks or caveats
+- The page-edit review is heuristic and local. It is meant to catch obvious conflicts and direct users to existing canon/regeneration tools, not to replace full AI/editorial review.
+- The Writer-to-Imageshop route was browser-smoked with the existing signed-in local data and no paid generation.
+
+### Operator follow-up
+- Approve live Gemini generation separately if a future pass should verify generated image-map return in the browser with real images.
+
+### Next steps
+- Use the new chronology and staged edit review as the baseline for any future live assistant or deeper autonomy work.
+
+## Writers Workshop to Imageshop Live Generation Verification - 2026-06-07
+
+### What changed
+- Ran the approved live Writer-to-Imageshop verification against `Oratoria de Conjunctio Oppositorum`, Issue 1 `Twove`, Page 8.
+- Found a live bridge gap before spending API budget: `Send page to Illustrator's Imageshop` updated the Visual Prep prompt/lore context, but the active Imageshop production `panelQueue` could remain from a previous import. This meant `Generate selected panel` could target stale Writer queue data.
+- Fixed Writer page handoff so selected-page beats build and carry a one-page Imageshop `panelQueue` alongside the existing Visual Prep draft.
+- Updated Imageshop to adopt the Writer-provided queue automatically, switch into Comic Pages mode, and show the correct active panel queue for the selected Writer page.
+- Used the single approved live Gemini generation on `P8.1` only.
+- Returned the generated Writer image map to Writers Workshop and verified `imageshop_output` merged into Oratoria Issue 1 Page 8 Panel 1.
+
+### Files touched
+- `src/portals/storyline/imageWorkshopPlanning.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/portals/storyline/__tests__/imageWorkshopPlanning.test.ts`
+- `docs/superpowers/plans/2026-06-07-writers-workshop-chronology-edit-autonomy-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `ImageWorkshopDraft` now optionally includes `panelQueue`.
+- `buildImageWorkshopDraftFromWriterSelection` uses `createImageshopIssueQueue` to convert selected Writer `beats_json.panels` into returnable Imageshop panel queue items while preserving Writer series/issue/page ids.
+- `WriterPortal` now passes the selected series title into the handoff source context.
+- `StorylineStudio` passes `imageWorkshopDraft.panelQueue` into `GenericImageLabPanel`.
+- `GenericImageLabPanel` imports the Writer queue into `useImageshopProductionStore`, sets generation mode to `comic-pages`, and keeps the Compose surface active.
+- The generated page beat merge produced `imageshop_output` with status `generated`, model `pro`, seed `877649595`, the composed prompt, and a generated data URL on Page 8 Panel 1.
+
+### Verification
+- Pre-generation browser check: Oratoria Issue 1 Page 8 handoff initially opened Visual Prep correctly but showed a stale panel queue from another issue; generation was intentionally paused before API spend.
+- `npm run test -- --run src/portals/storyline/__tests__/imageWorkshopPlanning.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/writer/__tests__/writerImageshopReturn.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` passed 5 files / 67 tests after the bridge fix.
+- Browser check after the bridge fix: Oratoria Issue 1 `Twove` Page 8 opened Imageshop with `P8.1` through `P8.5`, `5/5 panels ready`, canon chips for Angels/Cosmic, and the selected panel prompt for `P8.1`.
+- Live Gemini generation: clicked `Generate selected panel` once for `P8.1`; generation completed successfully, changed `PAGE 8 PANEL 1` to `GENERATED`, and enabled `Writer map` and `Return to Writer`.
+- Return verification: clicked the enabled `Send image map to Writers Workshop` control, reselected Oratoria Issue 1 Page 8 in Writers Workshop, and confirmed `imageshop_output` was present in the selected page beats JSON for Panel 1.
+- Browser console errors were empty during the live generation and return checks.
+
+### Outstanding issues
+- None for the approved live verification.
+
+### Risks or caveats
+- This run intentionally generated one panel only; full page or batch live generation was not exercised.
+- The generated image provenance is now stored in the live Writer page beat for Oratoria Issue 1 Page 8 Panel 1.
+
+### Operator follow-up
+- None required unless you want the generated image/provenance removed from the live Writer page beat.
+
+### Next steps
+- Treat the Writer page-to-Imageshop-to-Writer return path as live-verified for the single-panel case.
+
+## Advanced Comic Creator Direct Access and Image Import Fix - 2026-06-07
+
+### What changed
+- Added a direct Advanced Comic Creator landing-page card that opens the existing Comic portal straight into the Advanced Studio canvas.
+- Added a matching desktop left-rail `Advanced Comic Creator` button below the regular Comic Creator entry.
+- Fixed Advanced Studio asset insertion so clicking a stored asset updates the comic workspace immediately instead of waiting on an image `onload` event that could make the UI appear nonresponsive.
+- Added local image import controls in the Advanced Studio asset panel and Home/Panel menus.
+- Reworked the Advanced Studio asset panel from the confusing hidden-overflow/masonry feel into a vertical two-column grid with an explicit `47 stored images - scroll down for the full library` hint.
+- Improved the asset panel header contrast so the import button and scroll hint remain readable against the dock background.
+
+### Files touched
+- `src/App.tsx`
+- `src/components/LandingPage.tsx`
+- `src/components/layout/AppShell.tsx`
+- `src/portals/ComicPortal.tsx`
+- `src/modes/comic/components/AssetLibrary.tsx`
+- `src/modes/comic/components/MenuBar.tsx`
+- `src/modes/comic/layouts/ComicLayout.tsx`
+- `src/stores/comicStore.ts`
+- `src/modes/comic/components/__tests__/AssetLibrary.test.tsx`
+- `src/modes/comic/components/__tests__/MenuBar.test.tsx`
+- `src/portals/__tests__/ComicPortal.advancedEntry.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- `ComicPortal` now accepts an `advancedStudioRequestKey` and switches to `ComicEditor` when the app shell or landing card requests direct advanced access.
+- `App` owns the direct-open intent and preserves the existing phone guard that keeps Comic/Imageshop off phone layouts.
+- `comicStore` now exposes `insertImageIntoWorkspace`, which either fills selected panels or creates and selects a new image panel centered near the last canvas position or page center.
+- `AssetLibrary` uses the shared store insertion action for stored assets, mock generation, and local file imports, removing the fragile async-only image-load gate.
+- `MenuBar` now exposes `Import image...` from Home and Panel menus, and replaces the external placeholder insertion path with a stored local asset insertion path.
+- The asset dock remains inside the existing Studio panel system; no new route, Supabase schema, or comic serialization format was added.
+
+### Verification
+- `npm run test -- --run src/modes/comic/components/__tests__/AssetLibrary.test.tsx src/portals/__tests__/ComicPortal.advancedEntry.test.tsx` passed 2 files / 3 tests after first fixing the failing RED cases.
+- `npm run test -- --run src/modes/comic/components/__tests__/AssetLibrary.test.tsx src/portals/__tests__/ComicPortal.advancedEntry.test.tsx src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/stores/__tests__/comicStoreSerialization.test.ts` passed 4 files / 15 tests.
+- `npm run test -- --run src/modes/comic/components/__tests__/AssetLibrary.test.tsx src/modes/comic/components/__tests__/MenuBar.test.tsx src/portals/__tests__/ComicPortal.advancedEntry.test.tsx src/portals/guided-comic/__tests__/guidedComicAdvancedStudioAccess.test.ts src/stores/__tests__/comicStoreSerialization.test.ts` passed 5 files / 16 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 warnings.
+- `git diff --check` passed.
+- Browser QA on `http://127.0.0.1:5173/` confirmed the landing card and left-rail Advanced Comic Creator entry open Advanced Studio, the asset panel shows `Import local image` plus the 47-image scroll hint, clicking `Anunnaki Anubis.png` inserts a visible image panel, the Layers dock shows a new `Panel rect`, and browser console errors remained empty.
+
+### Outstanding issues
+- Local file import was covered by component tests and control visibility in browser QA, but the browser run did not upload a real local file through the OS picker.
+
+### Risks or caveats
+- Direct Advanced Comic Creator access still uses the existing protected Comic portal and desktop/tablet availability rules. On phone layouts, the app continues to route Comic access back to Home.
+- Imported local images are embedded as data URLs in the current comic project state, matching the existing JSON/local persistence model.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Consider a future deeper Advanced Studio pass for richer imported-asset management if users need a persistent custom asset library rather than direct image insertion.
+
+## Context Handoff Checkpoint - 2026-06-07
+
+### What changed
+- Created a `$handoff` continuation checkpoint for the current dirty branch state.
+- The handoff is recorded in the chat response rather than persisted as a separate repository file.
+- The checkpoint represents the state after Writers Workshop chronology/edit-autonomy implementation, approved single-panel Writer-to-Imageshop live generation verification, and the later Advanced Comic Creator direct-access/image-import work already reflected in this walkthrough.
+
+### Files touched
+- `walkthrough.md`
+
+### Implementation notes
+- The working tree remains dirty and contains at least two scopes: Writers Workshop/Imageshop bridge work and Advanced Comic Creator direct-access/image-import work.
+- The next agent should not revert unrelated dirty files without explicit user approval.
+
+### Verification
+- `git branch --show-current`
+- `git log -1 --oneline`
+- `git status --short`
+- `git diff --stat`
+- `rg -n "Run approved live Writer-to-Imageshop generation|Writers Workshop to Imageshop Live Generation Verification|Live Gemini generation was later explicitly approved|Writers Workshop Chronology and Page Edit Autonomy" tasks.md walkthrough.md docs/superpowers/plans/2026-06-07-writers-workshop-chronology-edit-autonomy-plan.md`
+- `tail -n 120 walkthrough.md`
+- `git diff --check`
+
+### Outstanding issues
+- No new implementation issue was discovered while preparing the handoff.
+
+### Risks or caveats
+- The branch is not committed.
+- The dirty tree includes files outside the Writer/Imageshop scope.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- In the next thread, refresh `git status --short` and split review/staging by scope before any commit or PR packaging.
