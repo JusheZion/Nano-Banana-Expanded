@@ -80,6 +80,7 @@ import {
   createImageshopGenerationProvenance,
   findImageshopPanelQueueItem,
   type ImageshopGenerationProvenance,
+  type ImageshopIssueQueue,
   type ImageshopPanelReferenceUndo,
   type ImageshopPanelQueueItem,
   type ImageshopReferenceLane,
@@ -278,6 +279,7 @@ export function GenericImageLabPanel({
   productionAssets,
   productionSupportingRefs,
   writerLoreCards = [],
+  writerPanelQueue = null,
   onUseAsSelectedBeat,
   onCreateNewBeat,
   seedPrompt,
@@ -288,6 +290,7 @@ export function GenericImageLabPanel({
   productionAssets: ProductionAssetMember[];
   productionSupportingRefs: ProductionSupportingRefMember[];
   writerLoreCards?: ImageshopWriterLoreCandidate[];
+  writerPanelQueue?: ImageshopIssueQueue | null;
   onUseAsSelectedBeat: (args: {
     imageUrl: string;
     seed: number | null;
@@ -390,6 +393,7 @@ export function GenericImageLabPanel({
   const approveProductionItem = useImageshopProductionStore((s) => s.approveProductionItem);
   const publishProductionItem = useImageshopProductionStore((s) => s.publishProductionItem);
   const importBatch = useImageshopProductionStore((s) => s.importBatch);
+  const setPanelQueue = useImageshopProductionStore((s) => s.setPanelQueue);
   const setDashboardStatusFilter = useImageshopProductionStore((s) => s.setDashboardStatusFilter);
   const panelQueue = useImageshopProductionStore((s) => s.panelQueue);
   const selectedPanelQueueItemId = useImageshopProductionStore((s) => s.selectedPanelQueueItemId);
@@ -884,6 +888,14 @@ export function GenericImageLabPanel({
     setContext(nextContext);
     setNotice(null);
   }, [replaceRefsWithOwnedUrlCleanup]);
+
+  useEffect(() => {
+    if (!writerPanelQueue) return;
+    setPanelQueue(writerPanelQueue);
+    setGenerationMode('comic-pages');
+    setActiveImageshopSurface('compose');
+    setNotice(`Loaded Writer page queue: ${writerPanelQueue.issueTitle}, Page ${writerPanelQueue.pages[0]?.pageNumber ?? '?'}.`);
+  }, [setGenerationMode, setPanelQueue, writerPanelQueue]);
 
   useEffect(() => {
     const handoff = consumeGuidedComicHandoff();

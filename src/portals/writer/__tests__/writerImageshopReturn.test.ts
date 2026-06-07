@@ -85,4 +85,59 @@ describe('mergeImageshopImageMapIntoWriterBeats', () => {
       }),
     ]);
   });
+
+  it('preserves existing panel beats while adding Imageshop output by writer panel id', () => {
+    const result = mergeImageshopImageMapIntoWriterBeats({
+      beatsJson: {
+        panels: [
+          {
+            id: 'writer-panel-1',
+            index: 1,
+            action: 'Mara opens the gate.',
+            imageshop_output: {
+              image_url: 'data:image/png;base64,old',
+              status: 'generated',
+            },
+          },
+          {
+            id: 'writer-panel-2',
+            index: 2,
+            action: 'Sol raises the lantern.',
+          },
+        ],
+      },
+      imageMapPanel: {
+        queue_item_id: 'writer-issue-6-page-9-panel-2',
+        writer_panel_id: 'writer-panel-2',
+        panel_number: 99,
+        image_url: 'data:image/png;base64,new-panel-two',
+        status: 'approved',
+        version_id: 'version-panel-two',
+        prompt: 'Sol raises the lantern.',
+        canon_used: [],
+        references_used: [],
+      },
+      returnedAt: '2026-06-07T20:00:00.000Z',
+    });
+
+    expect(result.panels).toEqual([
+      expect.objectContaining({
+        id: 'writer-panel-1',
+        action: 'Mara opens the gate.',
+        imageshop_output: expect.objectContaining({
+          image_url: 'data:image/png;base64,old',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'writer-panel-2',
+        action: 'Sol raises the lantern.',
+        imageshop_output: expect.objectContaining({
+          image_url: 'data:image/png;base64,new-panel-two',
+          status: 'approved',
+          version_id: 'version-panel-two',
+          returned_at: '2026-06-07T20:00:00.000Z',
+        }),
+      }),
+    ]);
+  });
 });

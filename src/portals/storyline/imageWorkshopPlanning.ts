@@ -2,6 +2,10 @@ import type { VaultAssetAlbum } from '@/shared/api/arcsAssetVault';
 import type { VaultCharacterAlbum } from '@/shared/api/arcsVault';
 import type { WriterLoreCardRow } from '@/shared/api/arcsWriterRoom';
 import type { PageBeatsJson } from '@/shared/writer/types';
+import {
+  createImageshopIssueQueue,
+  type ImageshopIssueQueue,
+} from '@/portals/storyline/imageshopPagePanelQueue';
 
 export type ImageWorkshopEntityKind = 'character' | 'asset' | 'location' | 'reference';
 export type ImageWorkshopRecurrence = 'recurring' | 'one_off';
@@ -14,6 +18,7 @@ export type ImageWorkshopGroup = 'matched' | 'quick_ref' | 'needs_studio';
 
 export interface ImageWorkshopSourceContext {
   sourceLabel: string;
+  seriesTitle?: string;
   issueTitle?: string;
   issueSynopsis?: string;
   pageNumber?: number | null;
@@ -43,6 +48,7 @@ export interface ImageWorkshopDraft {
   source: ImageWorkshopSourceContext;
   moodboardPrompts: string[];
   items: ImageWorkshopPrepItem[];
+  panelQueue?: ImageshopIssueQueue;
 }
 
 interface BuildDraftOptions {
@@ -142,8 +148,8 @@ function collectMoodboardPrompts(
   const prompts = [
     source.issueSynopsis ?? '',
     pageBeats?.one_line_hook ?? '',
-    ...(pageBeats?.panels ?? []).flatMap((panel) => [panel.action ?? '', panel.composition ?? '']),
     scriptText ?? '',
+    ...(pageBeats?.panels ?? []).flatMap((panel) => [panel.action ?? '', panel.composition ?? '']),
   ]
     .map((value) => value.trim())
     .filter(Boolean);
@@ -226,5 +232,38 @@ export function buildImageWorkshopDraftFromWriterSelection(
     source: options.source,
     moodboardPrompts: collectMoodboardPrompts(options.source, options.pageBeats, options.scriptText),
     items,
+    panelQueue:
+      options.source.pageNumber && options.source.pageId && options.pageBeats?.panels?.length
+        ? createImageshopIssueQueue({
+            source: 'writer-json',
+            series: {
+              id: options.source.seriesId ?? undefined,
+              title: options.source.seriesTitle,
+            },
+            issue: {
+              id: options.source.issueId ?? undefined,
+              title: options.source.issueTitle,
+              issueNumber: Number(options.source.sourceLabel.match(/Issue #(\d+)/)?.[1] ?? '') || undefined,
+            },
+            pages: [
+              {
+                id: options.source.pageId,
+                pageNumber: options.source.pageNumber,
+                summary: options.pageBeats.one_line_hook,
+                panels: options.pageBeats.panels.map((panel, index) => ({
+                  panelNumber: panel.index ?? index + 1,
+                  action: panel.action,
+                  composition: panel.composition,
+                  dialogue: panel.dialogue_placeholder,
+                  sfx: panel.sfx,
+                  characters: options.pageBeats?.characters,
+                  locations: options.pageBeats?.locations,
+                  artStyle: options.pageBeats?.art_style,
+                  loreIds: matchedLoreCards.map((card) => card.id),
+                })),
+              },
+            ],
+          })
+        : undefined,
   };
 }

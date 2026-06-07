@@ -70,6 +70,16 @@ import {
   WRITER_WORKSPACE_TAB_ORDER,
 } from '@/portals/writer/writerSearch';
 import {
+  buildWriterWorkflowSteps,
+  type WriterWorkflowStep,
+  type WriterWorkflowStepId,
+} from '@/portals/writer/writerWorkflowChronology';
+import {
+  buildWriterPageEditReview,
+  summarizeWriterPageEditReview,
+  type WriterPageEditLayer,
+} from '@/portals/writer/writerPageEditReview';
+import {
   EMPTY_AUTHOR_OUTLINE_SOURCE,
   buildSynopsisDocumentFromParts,
   EMPTY_SYNOPSIS_HELPER_PARTS,
@@ -157,15 +167,7 @@ const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB
   label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
 }));
 
-type WriterProductionStage = {
-  id: string;
-  label: string;
-  tab: WriterWorkspaceTabId;
-  eyebrow: string;
-  detail: string;
-  done: boolean;
-  current: boolean;
-};
+type WriterProductionStage = WriterWorkflowStep & { current: boolean };
 
 type WriterCockpitPanelView =
   | 'outline'
@@ -1500,6 +1502,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 : mode === 'shot-plan'
                   ? `Issue #${selectedIssue.issue_number} · Shot plan`
                   : `Issue #${selectedIssue.issue_number} · Outline`,
+            seriesTitle: selectedSeries?.title ?? undefined,
             issueTitle: selectedIssue.title ?? undefined,
             issueSynopsis: selectedIssue.synopsis ?? undefined,
             pageId: selectedPage?.id ?? null,
@@ -1539,6 +1542,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       requestWriterHandoff,
       selectedIssue,
       selectedPage,
+      selectedSeries?.title,
       selectedSeriesId,
     ],
   );
@@ -2097,9 +2101,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     ],
   );
 
-  const runPacingRegenerationPreview = useCallback(async () => {
+  const runPacingRegenerationPreview = useCallback(async (explicitPageIds?: string[]) => {
     if (!selectedIssueId) return;
-    const pageIds = selectedPagesForBatchExport.slice(0, WRITER_PAGE_BEATS_ISSUE_MAX).map((p) => p.id);
+    const pageIds =
+      explicitPageIds?.slice(0, WRITER_PAGE_BEATS_ISSUE_MAX) ??
+      selectedPagesForBatchExport.slice(0, WRITER_PAGE_BEATS_ISSUE_MAX).map((p) => p.id);
     if (pageIds.length === 0) {
       setPacingPreviewError('Stage affected pages before generating a preview.');
       return;
@@ -2428,6 +2434,51 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory,
   ]);
 
+  const runSelectedPageBeatsGeneration = useCallback(async () => {
+    if (!selectedPageId || !selectedIssueId) return;
+    setBeatsError(null);
+    setBeatsLoading(true);
+    const notesTrim = beatsDirectorNotesDraft.trim();
+    const res = await invokeWriterTools({
+      mode: 'page_beats',
+      page_id: selectedPageId,
+      production_defaults: productionDefaultsPayload,
+      ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+    });
+    setBeatsLoading(false);
+    if (res.success) {
+      pushHistory('page beats saved (page)');
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    } else {
+      const msg = toolErrorMessage(res);
+      setBeatsError(msg);
+      pushHistory(`error: ${msg}`);
+    }
+  }, [selectedPageId, selectedIssueId, beatsDirectorNotesDraft, productionDefaultsPayload, pushHistory]);
+
+  const runSelectedPageDialogueGeneration = useCallback(async () => {
+    if (!selectedPageId || !selectedIssueId) return;
+    setDialogueError(null);
+    setDialogueLoading(true);
+    const res = await invokeWriterTools({
+      mode: 'draft_dialogue',
+      page_id: selectedPageId,
+      style: dialogueStyle,
+      production_defaults: productionDefaultsPayload,
+    });
+    setDialogueLoading(false);
+    if (res.success) {
+      pushHistory('dialogue draft saved');
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
+    } else {
+      const msg = toolErrorMessage(res);
+      setDialogueError(msg);
+      pushHistory(`error: ${msg}`);
+    }
+  }, [selectedPageId, selectedIssueId, dialogueStyle, productionDefaultsPayload, pushHistory]);
+
   const runBatchDialogueForSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
     if (dialogueBatchBusy) return;
@@ -2521,46 +2572,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     if (activeTab === 'beats' && selectedPageId && selectedIssueId) {
-      setBeatsError(null);
-      setBeatsLoading(true);
-      const notesTrim = beatsDirectorNotesDraft.trim();
-      const res = await invokeWriterTools({
-        mode: 'page_beats',
-        page_id: selectedPageId,
-        production_defaults: productionDefaultsPayload,
-        ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
-      });
-      setBeatsLoading(false);
-      if (res.success) {
-        pushHistory('page beats saved (page)');
-        const pageRows = await listWriterPages(selectedIssueId);
-        setPages(pageRows);
-      } else {
-        const msg = toolErrorMessage(res);
-        setBeatsError(msg);
-        pushHistory(`error: ${msg}`);
-      }
+      await runSelectedPageBeatsGeneration();
       return;
     }
     if (activeTab === 'dialogue' && selectedPageId && selectedIssueId) {
-      setDialogueError(null);
-      setDialogueLoading(true);
-      const res = await invokeWriterTools({
-        mode: 'draft_dialogue',
-        page_id: selectedPageId,
-        style: dialogueStyle,
-        production_defaults: productionDefaultsPayload,
-      });
-      setDialogueLoading(false);
-      if (res.success) {
-        pushHistory('dialogue draft saved');
-        const pageRows = await listWriterPages(selectedIssueId);
-        setPages(pageRows);
-      } else {
-        const msg = toolErrorMessage(res);
-        setDialogueError(msg);
-        pushHistory(`error: ${msg}`);
-      }
+      await runSelectedPageDialogueGeneration();
       return;
     }
     if (activeTab === 'video' && selectedIssueId) {
@@ -2591,13 +2607,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab,
     selectedIssueId,
     selectedPageId,
-    beatsDirectorNotesDraft,
-    dialogueStyle,
     shotsBrief,
     productionDefaultsPayload,
     runPacingFromRibbon,
     runOutlineGenerate,
     runCockpitIdeaAssist,
+    runSelectedPageBeatsGeneration,
+    runSelectedPageDialogueGeneration,
     pushHistory,
   ]);
 
@@ -2614,6 +2630,65 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => formatArcReviewPlainText(pacingSaved, canonSaved),
     [pacingSaved, canonSaved],
   );
+  const selectedOutlinePageText = useMemo(() => {
+    const outline = latestOutline?.outline_json;
+    if (!outline || !selectedPage?.page_number) return outlineJsonString;
+    if (typeof outline === 'object' && !Array.isArray(outline)) {
+      const pageBeats = (outline as { page_beats?: unknown }).page_beats;
+      if (Array.isArray(pageBeats)) {
+        const match = pageBeats.find((beat) => {
+          if (!beat || typeof beat !== 'object' || Array.isArray(beat)) return false;
+          return (beat as { page_target?: unknown }).page_target === selectedPage.page_number;
+        });
+        if (match) return JSON.stringify(match, null, 2);
+      }
+    }
+    return outlineJsonString;
+  }, [latestOutline?.outline_json, outlineJsonString, selectedPage?.page_number]);
+  let pageEditLayer: WriterPageEditLayer | null = null;
+  if (activeTab === 'beats' || activeTab === 'dialogue') {
+    pageEditLayer = activeTab;
+  } else if (scriptsEditorTab === 'outline' || scriptsEditorTab === 'beats' || scriptsEditorTab === 'dialogue') {
+    pageEditLayer = scriptsEditorTab;
+  }
+  const pageEditReview = useMemo(() => {
+    if (!selectedPage || !pageEditLayer) return null;
+    const previousPage = sortedPages.find((page) => page.page_number === selectedPage.page_number - 1);
+    const nextPage = sortedPages.find((page) => page.page_number === selectedPage.page_number + 1);
+    const stagedText =
+      pageEditLayer === 'outline'
+        ? outlineEditDraft
+        : pageEditLayer === 'beats'
+          ? beatsEditDraft
+          : dialogueEditDraft;
+    return buildWriterPageEditReview({
+      layer: pageEditLayer,
+      pageNumber: selectedPage.page_number,
+      stagedText,
+      outlineText: selectedOutlinePageText,
+      beatsText: beatsJsonString,
+      dialogueText: selectedPage.script_text,
+      previousPageText: [
+        previousPage?.beats_json ? JSON.stringify(previousPage.beats_json) : '',
+        previousPage?.script_text ?? '',
+      ].filter(Boolean).join('\n'),
+      nextPageText: [
+        nextPage?.beats_json ? JSON.stringify(nextPage.beats_json) : '',
+        nextPage?.script_text ?? '',
+      ].filter(Boolean).join('\n'),
+      canonText: loreCards.map((card) => `${card.title}\n${stripLoreImportMetadataFromBody(card.body)}`).join('\n\n'),
+    });
+  }, [
+    selectedPage,
+    pageEditLayer,
+    sortedPages,
+    outlineEditDraft,
+    beatsEditDraft,
+    dialogueEditDraft,
+    selectedOutlinePageText,
+    beatsJsonString,
+    loreCards,
+  ]);
 
   const runLoreGapAssist = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -3657,93 +3732,47 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
 
   const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
-  const productionStages: WriterProductionStage[] = [
-    {
-      id: 'foundation',
-      label: 'Foundation',
-      tab: 'outline',
-      eyebrow: 'Project',
-      detail: selectedSeriesId && selectedIssueId ? 'Container ready' : 'Choose series + issue',
-      done: Boolean(selectedSeriesId && selectedIssueId),
-      current: activeTab === 'outline' && !latestOutline,
-    },
-    {
-      id: 'synopsis',
-      label: 'Synopsis',
-      tab: 'scripts',
-      eyebrow: 'Author source',
-      detail: authorOutlineText.trim()
-        ? 'Author outline saved'
-        : issueSynopsisDraft.trim()
-          ? 'Source text ready'
-          : 'Add outline/source',
-      done: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
-      current: activeTab === 'scripts',
-    },
-    {
-      id: 'canon',
-      label: 'Canon',
-      tab: 'lore',
-      eyebrow: 'Lore',
-      detail: `${loreCards.length} included ${loreCards.length === 1 ? 'card' : 'cards'}`,
-      done: loreCards.length > 0,
-      current: activeTab === 'lore',
-    },
-    {
-      id: 'structure',
-      label: 'Structure',
-      tab: 'outline',
-      eyebrow: 'Outline',
-      detail: latestOutline ? `v${latestOutline.version}` : 'Premise to hierarchy',
-      done: Boolean(latestOutline),
-      current: activeTab === 'outline' && Boolean(latestOutline),
-    },
-    {
-      id: 'beats',
-      label: 'Beats',
-      tab: 'beats',
-      eyebrow: 'Pages',
-      detail: `${pagesWithBeatsCount}/${Math.max(sortedPages.length, targetPageCount)} paced`,
-      done: sortedPages.length > 0 && pagesWithBeatsCount >= sortedPages.length,
-      current: activeTab === 'beats',
-    },
-    {
-      id: 'dialogue',
-      label: 'Dialogue',
-      tab: 'dialogue',
-      eyebrow: 'Script',
-      detail: `${pagesWithScriptCount}/${Math.max(sortedPages.length, pagesWithBeatsCount)} scripted`,
-      done: sortedPages.length > 0 && pagesWithScriptCount >= pagesWithBeatsCount && pagesWithBeatsCount > 0,
-      current: activeTab === 'dialogue',
-    },
-    {
-      id: 'visual',
-      label: 'Visual',
-      tab: 'video',
-      eyebrow: 'Prep',
-      detail: latestShotPlan ? 'Shot plan saved' : 'Plan shots + images',
-      done: Boolean(latestShotPlan),
-      current: activeTab === 'video',
-    },
-    {
-      id: 'audit',
-      label: 'Audit',
-      tab: 'arc',
-      eyebrow: 'Health',
-      detail: reviewReady ? 'Review cached' : 'Pacing + canon',
-      done: reviewReady,
-      current: activeTab === 'arc',
-    },
-    {
-      id: 'cockpit',
-      label: 'Cockpit',
-      tab: 'cockpit',
-      eyebrow: 'Review',
-      detail: 'Compare + assist',
-      done: false,
-      current: activeTab === 'cockpit',
-    },
-  ];
+  const activeWorkflowStepId: WriterWorkflowStepId =
+    activeTab === 'outline'
+      ? !selectedSeriesId || !selectedIssueId
+        ? 'library'
+        : !latestOutline
+          ? 'foundation'
+          : sortedPages.length < targetPageCount
+            ? 'pages'
+            : 'outline'
+      : activeTab === 'scripts'
+        ? scriptsEditorTab === 'synopsis'
+          ? 'synopsis'
+          : 'export'
+        : activeTab === 'lore'
+          ? 'canon'
+          : activeTab === 'beats'
+            ? 'beats'
+            : activeTab === 'dialogue'
+              ? 'dialogue'
+              : activeTab === 'video'
+                ? 'visual'
+                : activeTab === 'arc'
+                  ? 'audit'
+                  : 'cockpit';
+  const productionStages: WriterProductionStage[] = buildWriterWorkflowSteps({
+    hasSeries: Boolean(selectedSeriesId),
+    hasIssue: Boolean(selectedIssueId),
+    hasFoundation: Boolean(selectedSeriesId),
+    hasSynopsis: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
+    hasCanon: loreCards.length > 0,
+    hasOutline: Boolean(latestOutline),
+    pageCount: sortedPages.length,
+    targetPageCount,
+    pagesWithBeats: pagesWithBeatsCount,
+    pagesWithDialogue: pagesWithScriptCount,
+    hasShotPlan: Boolean(latestShotPlan),
+    hasAudit: reviewReady,
+  }).map((stage) => ({
+    ...stage,
+    current: stage.id === activeWorkflowStepId,
+  }));
   const activeStage = productionStages.find((stage) => stage.current) ?? productionStages.find((stage) => stage.tab === activeTab);
   const completedStageCount = productionStages.filter((stage) => stage.done).length;
   const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
@@ -3781,6 +3810,118 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           </span>
         </button>
       ))}
+    </div>
+  );
+
+  const pageEditReviewPanel = (
+    <div className="rounded-xl border border-amber-800/20 bg-amber-50/75 p-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/70">
+            Edit current page review
+          </p>
+          <p className="mt-1 text-xs leading-snug text-black/65">
+            Stage outline, beats, or dialogue edits here first. The review flags likely repetition,
+            canon drift, neighbor overlap, and layer mismatch before you save or regenerate.
+          </p>
+        </div>
+        <span className="rounded bg-white/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+          {selectedPage ? `Page ${selectedPage.page_number}` : 'No page'}
+        </span>
+      </div>
+      {!selectedPage || !pageEditLayer || !pageEditReview ? (
+        <p className="mt-3 text-[11px] text-black/55">
+          Select a page and open the Outline, Beats, or Dialogue editor tab to review staged page edits.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <div
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              pageEditReview.status === 'clear'
+                ? 'border-emerald-500/40 bg-emerald-50 text-emerald-950'
+                : 'border-amber-700/35 bg-white/75 text-amber-950'
+            }`}
+          >
+            <p className="font-bold">
+              {pageEditReview.status === 'clear'
+                ? 'No obvious conflicts detected.'
+                : 'Review before applying this edit.'}
+            </p>
+            <p className="mt-1 leading-snug">{summarizeWriterPageEditReview(pageEditReview)}</p>
+          </div>
+          {pageEditReview.findings.length > 0 ? (
+            <ul className="grid gap-1.5 sm:grid-cols-2">
+              {pageEditReview.findings.map((finding) => (
+                <li
+                  key={finding.kind}
+                  className="rounded-md border border-black/10 bg-white/70 px-2 py-1.5 text-[11px] leading-snug text-black/68"
+                >
+                  <span className="font-black uppercase tracking-wide text-black/50">
+                    {finding.kind.replace(/_/g, ' ')}
+                  </span>
+                  : {finding.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!supabaseOk || scriptsBusy}
+              onClick={() => {
+                if (pageEditLayer === 'outline') void saveOutlineEdit();
+                else if (pageEditLayer === 'beats') void saveBeatsEdit();
+                else void saveDialogueEdit();
+              }}
+              className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-45"
+              style={{ background: ACCENT_GOLD_GRADIENT }}
+            >
+              Save staged {pageEditLayer}
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || !selectedIssueId || canonLoading}
+              onClick={() => void runCanonFromRibbon()}
+              className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+            >
+              {canonLoading ? 'Checking…' : 'Run canon check'}
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || !selectedPageId || beatsLoading}
+              onClick={() => void runSelectedPageBeatsGeneration()}
+              className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+            >
+              {beatsLoading ? 'Regenerating…' : 'Regenerate beats'}
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || !selectedPageId || dialogueLoading}
+              onClick={() => void runSelectedPageDialogueGeneration()}
+              className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+            >
+              {dialogueLoading ? 'Regenerating…' : 'Regenerate dialogue'}
+            </button>
+            <button
+              type="button"
+              disabled={!supabaseOk || !selectedPageId || pacingPreviewBusy}
+              onClick={async () => {
+                if (!selectedPageId) return;
+                setSelectedPageIdsForBatch([selectedPageId]);
+                await runPacingRegenerationPreview([selectedPageId]);
+                setActiveTab('arc');
+              }}
+              className="rounded-md border border-amber-800/30 bg-amber-100/90 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+            >
+              {pacingPreviewBusy ? 'Previewing…' : 'Preview affected page'}
+            </button>
+          </div>
+          <p className="text-[10px] leading-snug text-black/52">
+            Generated previews open on Audit and still require per-page apply. Nothing here silently
+            rewrites another layer.
+          </p>
+        </div>
+      )}
     </div>
   );
 
@@ -5559,28 +5700,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <button
                             type="button"
                             disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
-                            onClick={async () => {
-                              if (!selectedPageId || !selectedIssueId) return;
-                              setBeatsError(null);
-                              setBeatsLoading(true);
-                              const notesTrim = beatsDirectorNotesDraft.trim();
-                              const res = await invokeWriterTools({
-                                mode: 'page_beats',
-                                page_id: selectedPageId,
-                                production_defaults: productionDefaultsPayload,
-                                ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
-                              });
-                              setBeatsLoading(false);
-                              if (res.success) {
-                                pushHistory(`page beats saved (page)`);
-                                const pageRows = await listWriterPages(selectedIssueId);
-                                setPages(pageRows);
-                              } else {
-                                const msg = toolErrorMessage(res);
-                                setBeatsError(msg);
-                                pushHistory(`error: ${msg}`);
-                              }
-                            }}
+                            onClick={() => void runSelectedPageBeatsGeneration()}
                             className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                             style={{ background: ACCENT_GOLD_GRADIENT }}
                           >
@@ -5623,6 +5743,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         {beatsError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
                         )}
+                        {pageEditReviewPanel}
                       </div>
                       <aside
                         className="min-w-0 flex flex-col xl:sticky xl:top-2 xl:max-h-[min(calc(100dvh-10rem),920px)] xl:min-h-[min(280px,40vh)]"
@@ -5733,6 +5854,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {dialogueError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{dialogueError}</p>
                     )}
+                    {pageEditReviewPanel}
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50 mb-1">Script</p>
                       {selectedPage?.script_text ? (
@@ -6588,6 +6710,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         {scriptsError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
                         )}
+                        {pageEditReviewPanel}
                         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                           <div className="border-l-2 border-black/60 bg-white/55 px-3 py-3 space-y-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">

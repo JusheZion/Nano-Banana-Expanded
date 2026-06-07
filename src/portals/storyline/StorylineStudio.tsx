@@ -782,6 +782,7 @@ export const StorylineStudio: React.FC = () => {
             productionAssets={store.productionAssets}
             productionSupportingRefs={store.productionSupportingRefs}
             writerLoreCards={imageshopWriterLoreCards}
+            writerPanelQueue={imageWorkshopDraft?.panelQueue ?? null}
             onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
             onCreateNewBeat={handleLabCreateNewBeat}
             seedPrompt={labSeedPrompt}

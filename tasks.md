@@ -64,6 +64,10 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Add Obsidian lore import: Markdown/frontmatter parsing, wiki-link detection, embedded image resolution/storage metadata, preview filtering, duplicate actions, and prompt-safe metadata stripping.
 - [x] Document Obsidian lore import usage and QA: user guide plus repeatable manual/end-to-end QA plan.
 - [x] Test against the local Twovestellium Obsidian vault: real notes parse, templates are skipped, capitalized/spaced properties are preserved, folder categories are inferred, and embedded image references resolve from `Assets/Images`.
+- [x] Simplify Writers Workshop chronology to `Library -> Foundation -> Synopsis -> Canon -> Outline -> Pages -> Beats -> Dialogue -> Visual Prep -> Audit -> Cockpit -> Export` with a tested workflow helper and updated production map.
+- [x] Add staged page-level edit review for outline, beats, and dialogue with explicit save, canon check, regenerate, and affected-page preview actions; no silent cascade overwrite.
+- [x] Verify Writer page-beats-to-Imageshop bridge with focused tests and browser smoke: page context reaches Imageshop, Writer map/return controls are present, and returned image provenance merge is covered by automated tests.
+- [x] Run approved live Writer-to-Imageshop generation on `Oratoria de Conjunctio Oppositorum` Issue 1 Page 8 Panel 1; fixed Writer handoff to populate the active Imageshop panel queue and verified returned `imageshop_output` merged into the Writer page beat.
 - [~] Run Obsidian lore import end-to-end QA: parser/reference tests, build, lint, Canon import UI smoke, manual lore create/edit, JSON import, reload persistence, and Cockpit Lore digest stripping passed; native file-picker/folder import, preview duplicate actions, Obsidian source badges, stored image counts, cloud image upload, and QA-card cleanup remain pending.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 

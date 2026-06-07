@@ -158,4 +158,94 @@ describe('buildImageWorkshopDraftFromWriterSelection', () => {
     });
     expect(draft.moodboardPrompts.length).toBeGreaterThan(0);
   });
+
+  it('preserves selected Writer page provenance and page beat prompts for Imageshop handoff', () => {
+    const draft = buildImageWorkshopDraftFromWriterSelection({
+      source: {
+        sourceLabel: 'Issue #6 · Page 9',
+        issueTitle: 'The Observatory Door',
+        issueSynopsis: 'Mara and Sol reach the observatory.',
+        issueId: 'writer-issue-6',
+        seriesId: 'writer-series-1',
+        pageId: 'writer-page-9',
+        pageNumber: 9,
+      },
+      pageBeats: {
+        one_line_hook: 'Mara opens the observatory door while Sol guards the bridge.',
+        characters: ['Mara', 'Sol'],
+        locations: ['Observatory bridge'],
+        art_style: 'ink wash',
+        panels: [
+          {
+            action: 'Mara opens the observatory door.',
+            composition: 'Wide panel with the bridge behind her.',
+          },
+          {
+            action: 'Sol raises the gold lantern.',
+            composition: 'Low angle on the lantern flare.',
+          },
+        ],
+      },
+      scriptText: 'MARA: Stay close.\nSOL: The lantern is reacting.',
+      loreCards: [],
+      characterAlbums: [],
+      assetAlbums: [],
+    });
+
+    expect(draft.source).toMatchObject({
+      issueId: 'writer-issue-6',
+      seriesId: 'writer-series-1',
+      pageId: 'writer-page-9',
+      pageNumber: 9,
+    });
+    expect(draft.moodboardPrompts).toEqual(
+      expect.arrayContaining([
+        'Mara opens the observatory door while Sol guards the bridge.',
+        'Mara opens the observatory door.',
+        'MARA: Stay close.\nSOL: The lantern is reacting.',
+      ]),
+    );
+    expect(draft.items[0]).toMatchObject({
+      label: 'Scene reference',
+      recommendedAction: 'quick_ref',
+    });
+    expect(draft.panelQueue).toMatchObject({
+      source: 'writer-json',
+      seriesId: 'writer-series-1',
+      issueId: 'writer-issue-6',
+      issueTitle: 'The Observatory Door',
+      issueNumber: 6,
+      pages: [
+        {
+          id: 'writer-page-9',
+          pageNumber: 9,
+          summary: 'Mara opens the observatory door while Sol guards the bridge.',
+          panels: [
+            {
+              pageId: 'writer-page-9',
+              pageNumber: 9,
+              panelNumber: 1,
+              action: 'Mara opens the observatory door.',
+              composition: 'Wide panel with the bridge behind her.',
+              characters: ['Mara', 'Sol'],
+              locations: ['Observatory bridge'],
+              artStyle: 'ink wash',
+              status: 'draft',
+            },
+            {
+              pageId: 'writer-page-9',
+              pageNumber: 9,
+              panelNumber: 2,
+              action: 'Sol raises the gold lantern.',
+              composition: 'Low angle on the lantern flare.',
+              characters: ['Mara', 'Sol'],
+              locations: ['Observatory bridge'],
+              artStyle: 'ink wash',
+              status: 'draft',
+            },
+          ],
+        },
+      ],
+    });
+  });
 });
