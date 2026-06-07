@@ -22,15 +22,17 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-01-imageshop-comic-production
 ## Illustrator's Imageshop - Integrity Repair (2026-06-05) - OPEN
 
 Live QA report: [`docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md`](docs/superpowers/plans/2026-06-05-imageshop-playwright-qa-report.md)
+Detailed repair plan: [`docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`](docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md)
 
 - [x] Run signed-in Playwright QA with one live Gemini generation, Writer JSON, Vault saves, Guided return, reload recovery, responsive review, and cleanup.
-- [ ] Remove full generated image payloads from synchronous localStorage/sessionStorage persistence and add quota-safe recovery.
-- [ ] Stop rewriting production image history on every prompt keystroke.
-- [ ] Block or explicitly resolve unchecked/failed references before provider execution and record the failed reference id.
-- [ ] Attach selected-panel generations to the matching grouped page/panel production version.
-- [ ] Remove cockpit horizontal clipping at 1600x900 and 1280x720.
-- [ ] Move the generation cockpit ahead of empty beat-first surfaces.
-- [ ] Restore Guided return to the originating page/panel workspace.
+- [x] Approve the seven-pass integrity repair plan before runtime implementation.
+- [x] Pass 1: Move generated image bytes to quota-safe asynchronous storage and isolate prompt-draft persistence. Verified with 62 files / 370 tests, build, lint with 0 errors, diff check, and signed-in non-paid browser smoke.
+- [x] Pass 2: Use one compiled prompt/request contract for preflight, provider execution, hashes, and provenance. Verified with 63 files / 374 tests, build, lint with 0 errors, diff check, and signed-in non-paid browser smoke.
+- [x] Pass 3: Compile lane semantics, prepare references in parallel, block failed/unchecked refs, and record failed ids. Verified with 65 files / 390 tests, build, lint with 0 errors, diff check, and signed-in non-paid browser smoke.
+- [x] Pass 4: Link selected-panel versions to the grouped production item and report batch state from latest attempts. Verified with 65 files / 391 tests, build, lint with 0 errors, diff check, and non-paid browser smoke.
+- [x] Pass 5: Restore Guided returns to the originating issue/page/panel focus while preserving saved-project identity and newer unsaved recovery drafts. Verified with 66 files / 393 tests, build, lint with 0 errors, diff check, and signed-in non-paid Comic Creator browser smoke.
+- [x] Pass 6: Make the first viewport generation-first, move Import into a contextual tab, remove cockpit overflow, and narrow Storyline render subscriptions. Verified with 67 files / 395 tests, build, lint with 0 errors, diff check, and signed-in responsive browser QA at `1600x900`, `1280x720`, and expanded-sidebar content-width equivalents.
+- [x] Pass 7: Revoke owned object URLs and complete focused/full/browser regression verification. Verified with red-green object URL tests, focused suites, full suite 67 files / 399 tests, build, lint with 0 errors, diff check, and signed-in non-paid browser QA at `1600x900` and `1280x720`.
 
 ## Imageshop PR bugfix verification (2026-05-31) — COMPLETE
 

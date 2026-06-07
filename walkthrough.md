@@ -7972,3 +7972,466 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Implement the first integrity repair pass with regression tests for storage quota failure and large-history prompt typing.
+
+## Imageshop Integrity Repair Approval Plan - 2026-06-06
+
+### What changed
+- Reviewed the June 5 React integrity audit, signed-in Playwright QA report, all seven screenshot artifacts, the active Imageshop feature plan, current repair tracker, relevant runtime contracts, and the current Git checkpoint.
+- Used the `$handoff` skill as a checkpoint/evidence discipline so the plan distinguishes current verified state from proposed work and identifies one exact implementation entry point.
+- Added an approval-gated seven-pass repair plan covering every finding from both audits.
+- Reopened the prior feature plan's approval status and linked the new repair tracker from `tasks.md`.
+- No runtime React, store, API, bridge, or persistence code was changed.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The proposed storage contract keeps reload recovery by storing generated image bytes once in IndexedDB while synchronous Zustand persistence retains metadata and shared asset ids only.
+- The proposed generation contract compiles one exact request for preflight, provider execution, prompt hashes, provenance, queue identity, and retries.
+- Reference lanes become explicit provider instructions, reference preparation becomes parallel and reference-id aware, and strict preflight blocks provider calls when included references are unchecked or failed.
+- Queue/version integrity, Guided return focus, first-viewport hierarchy, responsive overflow, render scope, and object URL cleanup are separated into later passes after the data contracts are repaired.
+- The plan preserves the existing `lab` route, avoids Supabase schema and `ComicEditor` changes, and keeps legacy image API callers compatible.
+
+### Verification
+- Inspected current branch/status and latest commit.
+- Read both audit reports, the active feature plan, `tasks.md`, `walkthrough.md`, `.agents/workflows/chat-handoff.md`, and the relevant store/API/UI/bridge/test files.
+- Visually reviewed the Playwright screenshots at `1600x900` and `1280x720`.
+- Documentation link/status verification is required before final response.
+- No runtime tests, build, lint, paid Gemini generation, deployment, or destructive Vault/Writer action was run because this was a planning-only pass.
+
+### Outstanding issues
+- All runtime findings remain unresolved until the user approves and implementation begins.
+- The approval gate includes IndexedDB storage, strict failed/unchecked reference blocking, explicit lane-based provider instructions, and moving Image Lab ahead of beat/library surfaces.
+
+### Risks or caveats
+- IndexedDB hydration and blob URL ownership require focused lifecycle tests.
+- The shared Gemini API must retain the existing positional reference path for non-Imageshop callers.
+- Guided return must cover both unsaved recovery drafts and saved Comic Library projects.
+
+### Operator follow-up
+- Review and approve or revise `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`.
+
+### Next steps
+- After approval, begin Pass 1 by writing failing store/component tests proving generated image payloads are absent from synchronous web storage and remain visible after quota failure.
+
+## Imageshop Integrity Repair Pass 1 - 2026-06-06
+
+### What changed
+- Added quota-safe generated-image persistence backed by IndexedDB so one generated image is stored once and referenced by the same asset id from session and production records.
+- Changed Imageshop Zustand persistence to retain image metadata instead of complete `data:` or `blob:` payloads, including nested batch-attempt image fields.
+- Added version 2 migrations that strip legacy persisted image payloads while preserving prompts, queue identity, provenance, attempts, versions, and selection state.
+- Added asynchronous image hydration, shared hydrated URL caching, and release of hydrated object URLs when assets are removed or the Imageshop panel unmounts.
+- Kept successful provider results visible when IndexedDB storage fails, marked them memory-only, and added an accessible reload-safety warning.
+- Moved prompt keystrokes into a local draft hook so production history is committed only at stable load, stage, and generation actions.
+- Made async batch attempt callbacks await image persistence before recording the corresponding session and production metadata.
+- Changed the session result summary to report only reload-safe results.
+
+### Files touched
+- `src/shared/utils/imageshopImageRepository.ts`
+- `src/portals/storyline/hooks/useImageshopPromptDraft.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/imageshopBatchGeneration.ts`
+- `src/stores/imageshopSessionStore.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/stores/__tests__/imageshopSessionStore.test.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Runtime records still expose the current image URL for preview, save, download, Writer map, and Guided workflows. Persisted web-storage records retain only the small asset descriptor and recovery status.
+- Session and production records share the same asset id for each generated result, avoiding the audited duplicate binary payload.
+- Hydration uses one cached object URL per asset id even when both stores reference the image.
+- Prompt drafts remain local until an explicit stable action; this removes full production-history serialization from prompt typing without changing the existing stored prompt contract.
+- Broader uploaded, pasted, and page-background object URL ownership remains scheduled for Pass 7.
+
+### Verification
+- TDD red phase reproduced payload persistence, per-keystroke writes, missing quota warning, and missing hydration behavior before implementation.
+- Focused audit suite: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopCanonContext.test.ts src/stores/__tests__/imageshopProductionStore.test.ts src/stores/__tests__/imageshopSessionStore.test.ts src/stores/__tests__/imageWorkshopBridge.test.ts` passed 8 files / 67 tests.
+- Full suite: `npm run test -- --run` passed 62 files / 370 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `npx tsc -b --pretty false` passed.
+- `git diff --check` passed.
+- Signed-in browser smoke at `http://127.0.0.1:5174/` confirmed Imageshop loaded, prompt editing worked, the uncommitted draft did not survive a portal reload, the previously committed panel prompt restored, and no console warnings/errors appeared.
+
+### Outstanding issues
+- Passes 2 through 7 remain open, beginning with one compiled request contract for preflight, provider execution, hashes, and provenance.
+- A live quota failure was not forced in the signed-in browser; the `QuotaExceededError` path is covered by the component test.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed in this pass.
+- Full ownership cleanup for uploaded, pasted, and page-background object URLs remains a Pass 7 responsibility.
+
+### Operator follow-up
+- None for Pass 1.
+
+### Next steps
+- Begin Pass 2 with failing tests proving the displayed preflight prompt, provider prompt, stored version prompt, and provenance prompt are byte-for-byte identical.
+
+## Imageshop Integrity Repair Pass 2 - 2026-06-06
+
+### What changed
+- Added one immutable `ImageshopGenerationRequest` contract for the exact prompt, provider inputs, source identity, model, aspect ratio, context, ordered references, provenance inputs, and prompt hash.
+- Routed standalone generation, selected Writer-panel generation, page/all batch generation, and legacy production batch generation through the compiled request.
+- Made preflight evaluate the same request object used for provider execution instead of independently recomposing prompt data.
+- Removed the selected-panel `promptOverride` path that previously bypassed the normal preflight gate.
+- Tied session prompts, production-version prompts, provenance composed prompts, and batch attempt hashes to the exact provider prompt.
+- Ensured avoid-list, selected art style, continuity/canon instructions, and page configuration reach the provider exactly as shown in the composed request preview.
+
+### Files touched
+- `src/portals/storyline/imageshopGenerationRequest.ts`
+- `src/portals/storyline/imageshopBatchGeneration.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/imageshopGenerationRequest.test.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The request compiler freezes the request, workspace, references, provider inputs, source identity, and provenance inputs so downstream code cannot silently substitute a different prompt.
+- The prompt hash uses the exact compiled provider prompt rather than the earlier raw panel action text.
+- Selected-panel provenance now receives the compiled prompt and complete compiled prompt sections.
+- Batch retries continue to adjust reference URL subsets through the existing strategy contract; explicit failed-reference ids and retry-specific reference recompilation remain Pass 3 work.
+- The existing compact composed-prompt surface is now the authoritative preview rather than a descriptive prompt that could diverge from execution.
+
+### Verification
+- TDD red phase:
+  - The request-contract test initially failed because `imageshopGenerationRequest.ts` did not exist.
+  - Selected-panel and batch tests then failed because provider calls received raw panel text without `Generation mode: Comic Pages`, avoid-list, art style, or page configuration.
+- Focused request and prompt suite passed 5 files / 35 tests.
+- Broader Imageshop audit suite passed 10 files / 74 tests.
+- Full suite: `npm run test -- --run` passed 63 files / 374 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `npx tsc -b --pretty false` passed.
+- `git diff --check` passed.
+- Signed-in browser smoke at `http://127.0.0.1:5174/` confirmed the compiled request preview included generation mode, panel prompt, canon context, art-style instructions, and page configuration with no console warnings/errors.
+
+### Outstanding issues
+- Pass 3 must give reference lanes explicit provider roles, prepare references concurrently, block unknown/failed preparation, and record failed reference ids for retries.
+- Browser text entry could not be exercised because the Browser Use virtual clipboard was not installed in the active session; avoid-list equality was verified by component tests.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed.
+- Retry strategies still share the original prompt text while changing reference subsets; Pass 3 will make those reference changes explicit in the compiled request and provenance.
+
+### Operator follow-up
+- None for Pass 2.
+
+### Next steps
+- Begin Pass 3 with failing tests for mixed reference lanes, bounded parallel preparation, strict provider-call suppression, failed-reference attribution, and retry-without-failed-reference request changes.
+
+## Imageshop Integrity Repair Pass 3 - 2026-06-07
+
+### What changed
+- Added an explicit provider compiler for all seven Imageshop reference lanes: Character DNA, Wardrobe, Environment, Props, Style, Lighting, and Canon.
+- Added deterministic lane ordering and retained the 14-reference maximum guard before provider execution.
+- Replaced serial reference preparation in Imageshop with bounded concurrent preparation while preserving deterministic provider order.
+- Added per-reference preparation results keyed by chip id, including timeout, fetch, decode, and decoded-size failure categories.
+- Added a structured prepared-reference path to the Gemini image adapter while preserving the legacy positional URL path for non-Imageshop callers.
+- Blocked provider execution until every included reference is ready and suppressed the provider completely when preparation fails.
+- Updated matching panel queue chips with ready/failed preparation state and failure details.
+- Added included and failed reference ids to batch attempt metadata.
+- Made `Retry without failed refs` recompile the request from surviving reference ids so the provider payload, prompt hash, stored prompt, and provenance all reflect the references actually used.
+- Removed duplicate reference-target text from the panel base prompt so the immutable request compiler is the only owner of reference inclusion.
+
+### Files touched
+- `src/portals/storyline/imageshopReferencePreparation.ts`
+- `src/portals/storyline/imageshopGenerationRequest.ts`
+- `src/portals/storyline/imageshopBatchGeneration.ts`
+- `src/portals/storyline/imageshopPagePanelQueue.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/shared/api/geminiImageApi.ts`
+- `src/stores/imageshopProductionStore.ts`
+- `src/portals/storyline/__tests__/imageshopReferencePreparation.test.ts`
+- `src/portals/storyline/__tests__/imageshopGenerationRequest.test.ts`
+- `src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/shared/api/__tests__/geminiImagePreparedReferences.test.ts`
+- `src/stores/__tests__/imageshopProductionStore.test.ts`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Provider instructions are attached to each compiled reference rather than inferred from array position or one global character/asset context.
+- Preparation defaults to four concurrent workers, returns results in compiled lane order, and does not call Gemini while any reference is still pending.
+- Queue status updates are id-targeted, so one failed fetch cannot mark unrelated chips failed.
+- Batch retries use failed ids recorded on prior attempts, not a generic URL subset. The retry request is recompiled, which removes the failed reference from the selected-reference prompt line as well as provider inputs and provenance.
+- The structured Gemini option carries pre-encoded image data and exact instructions. Existing callers that provide only `referenceImageUrls` continue through the legacy slot-role implementation.
+- UI hierarchy and density findings remain assigned to Pass 6; Pass 3 did not widen its scope into layout work.
+
+### Verification
+- TDD red phase confirmed the reference compiler module and retry attribution contracts were absent before implementation.
+- Focused tests covered all seven lane mappings, the maximum-reference guard, bounded concurrency, deterministic output order, timeout/fetch/decode/size attribution, pending-reference provider suppression, failed-reference provider suppression, queue-chip updates, prepared Gemini payload ordering, and retry request/provenance changes.
+- `npm run test` passed 65 files / 390 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `git diff --check` passed.
+- Signed-in non-paid browser smoke at `http://127.0.0.1:5173/` confirmed the Imageshop heading, prompt preflight, and generation controls rendered at the default 1280px viewport.
+- Browser inspection reported `body.scrollWidth === document.documentElement.clientWidth` and no console warnings/errors.
+
+### Outstanding issues
+- Pass 4 must link selected-panel versions to the grouped panel production item and derive batch summaries/retry eligibility from each panel's latest attempt.
+- Passes 5 through 7 remain open for Guided return restoration, generation-first responsive layout/render scope, and complete object URL cleanup/regression.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed.
+- Live unreachable-reference behavior was covered by component tests with the real component flow and mocked reference preparation; browser smoke remained non-paid and non-destructive.
+- Historical failed ids remain available on attempts for diagnostics; current batch-summary semantics are intentionally deferred to Pass 4.
+
+### Operator follow-up
+- None for Pass 3.
+
+### Next steps
+- Begin Pass 4 with a failing selected-panel test that reproduces the detached generic production item, then add latest-attempt-per-panel batch selectors.
+
+## Imageshop Integrity Repair Pass 4 - 2026-06-07
+
+### What changed
+- Fixed selected-panel generation so the generated version is recorded on the grouped production item whose `sourceId` is the Writer panel queue id instead of a detached generic `Imageshop item N`.
+- Kept the queue panel, grouped production item, current version, production board, session provenance, and Writer image-map return synchronized around the same queue item and version.
+- Added a latest-attempt-per-panel selector for current batch summaries and retry eligibility.
+- Preserved complete attempt history for diagnostics while deriving generated, failed, and skipped counts from only each panel's latest attempt.
+- Updated failed-panel retries to target panels whose latest attempt is failed.
+- Disabled stale retry actions after a successful retry clears the current failed count.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/imageshopBatchGeneration.ts`
+- `src/portals/storyline/components/ImageshopBatchControls.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Selected-panel success resolves the source panel from the current production-store queue before calling `ensureProductionItemForPanel`, avoiding stale React selection state after loading a panel prompt.
+- The panel-linked production item receives the generated version before the Writer map is exported, so the board and return payload expose the same `version_id`.
+- `getLatestImageshopBatchAttempts` retains the last attempt for each queue item in latest-attempt order. The original attempt array remains unchanged.
+- Batch controls and result summaries use latest attempts for current status. Elapsed time still includes all historical attempts because it is diagnostic history rather than current panel state.
+- The failed-panel retry action no longer treats an old queue `failed` status as sufficient when the latest attempt succeeded.
+- No layout or styling changes were made. The existing generation-first hierarchy and density work remains assigned to Pass 6.
+
+### Verification
+- TDD red phase reproduced the detached selected-panel version and the stale historical failure count before implementation.
+- Focused Pass 4 tests passed 8 files / 70 tests, covering panel-linked versions, production-board identity, Writer image-map return, latest-attempt selection, batch recovery, and stale retry disabling.
+- `npm run test -- --run` passed 65 files / 391 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `git diff --check` passed.
+- Non-paid browser smoke at `http://127.0.0.1:5173/` confirmed Imageshop and Batch JSON render at `1280x720`, `body.scrollWidth` equals the viewport width, and the console has no warnings/errors.
+
+### Outstanding issues
+- Pass 5 must restore Guided returns to the originating issue, page, and panel-focus workspace.
+- Passes 6 and 7 remain open for responsive generation-first layout/render scope and complete object URL cleanup/regression.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed.
+- Browser smoke verified rendering and controls without generating. Panel identity and successful-retry behavior were verified through component tests with mocked provider responses.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Begin Pass 5 with a failing Guided bridge/component test that starts from a specific issue, page, and panel and verifies return to that same panel-focus workspace.
+
+## Imageshop Integrity Repair Pass 5 - 2026-06-07
+
+### What changed
+- Added originating Comic Library project and Writer issue identity to Guided Imageshop handoffs and returns.
+- Restored Guided returns directly into the originating issue workspace, Art step, page, selected panel, and panel-focus view.
+- Preserved newer unsaved Guided recovery drafts when they are more current than the saved Comic Library snapshot.
+- Kept returned image assignment, ready status, provenance, and layout geometry on the existing assignment path.
+
+### Files touched
+- `src/stores/imageWorkshopBridge.ts`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/__tests__/guidedComicImageshopReturn.test.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The Guided handoff carries `projectId` and `writerIssueId`; Imageshop forwards that workspace unchanged in the return payload.
+- When the return targets another saved project, Guided selects it, restores its snapshot, updates the selected series, and then applies the returned art.
+- When the return targets the active project, Guided does not reapply an older saved snapshot, so newer local recovery pages and panels remain available.
+- The return consumer explicitly opens `issue-workspace`, activates Art, restores `activePageNumber`, selects the returned panel, and enters `panel-focus`.
+- Pass 5 did not change layout or styling. Responsive hierarchy and render-scope work remain in Pass 6.
+
+### Verification
+- TDD red phase reproduced the missing workspace payload and Cover Table landing for saved-project and recovery-draft returns.
+- Focused Pass 5 suite passed 5 files / 61 tests; final return-path rerun passed 2 files / 28 tests.
+- Full suite: `npm run test -- --run` passed 66 files / 393 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `git diff --check` passed.
+- Signed-in non-paid browser smoke at `http://127.0.0.1:5173/` opened Comic Creator, selected the saved series, and entered its issue workspace with expected navigation and production controls. Browser logs contained no warnings or errors.
+
+### Outstanding issues
+- Pass 6 remains open for generation-first responsive layout, cockpit overflow, and narrowed render subscriptions.
+- Pass 7 remains open for complete owned object URL cleanup and final regression.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed.
+- The exact Imageshop-to-Guided return transition is verified by component integration tests; browser smoke remained non-paid and non-mutating.
+
+### Operator follow-up
+- None for Pass 5.
+
+### Next steps
+- Begin Pass 6 with a failing layout/order regression test and render-scope evidence.
+
+## Imageshop Integrity Repair Pass 6 - 2026-06-07
+
+### What changed
+- Made Image Lab the first full-width primary workspace in Illustrator's Imageshop.
+- Moved production libraries, Beat timeline, Selected frame preview, and Beat detail below the generation workspace.
+- Added a contextual Import tab so external-image retouch controls no longer crowd the default Compose surface.
+- Reordered Compose around the main prompt, Generate action, reference tray, and preview.
+- Replaced fixed-minimum Writer cockpit columns with fluid responsive columns.
+- Narrowed the Storyline Zustand subscription and deferred callback-only state reads.
+
+### Files touched
+- `src/portals/storyline/StorylineStudio.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/components/ImageshopGenerationCockpit.tsx`
+- `src/portals/storyline/components/ImageshopOutputDestinations.tsx`
+- `src/portals/storyline/__tests__/StorylineStudio.layout.test.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The primary workspace now has a stable `Imageshop generation workspace` region before all secondary Storyline surfaces.
+- Compose keeps prompt, Generate, preview, references, labels, disabled explanations, and vertical scrolling available without rendering the Import form.
+- Import is a peer surface beside Compose, Page setup, Batch JSON, and Review.
+- Output destinations use a compact desktop command row instead of a tall two-column stack.
+- The Writer Pages Cockpit uses two fluid columns at `lg` and four zero-minimum columns at `2xl`; no fixed `14rem` or `18rem` column minimum remains.
+- `useStorylineStudioStore()` now uses a shallow selector for render-relevant fields. Export, Vault save, and director-setting callback data are read from `getState()` only when invoked.
+- Render-count evidence showed selector isolation was sufficient, so no speculative component memoization was added.
+- The UI critic review drove five revisions: primary workspace order, contextual Import, prompt/action placement, output density, and cockpit width behavior.
+
+### Verification
+- TDD red phase reproduced secondary-first DOM order, unrelated-store rerenders, fixed cockpit minima, default Import crowding, Generate after advanced fields, and references before the main prompt.
+- Focused Pass 6 suite passed 2 files / 28 tests.
+- Full suite: `npm run test -- --run` passed 67 files / 395 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `git diff --check` passed.
+- Signed-in browser QA at `1280x720` measured the prompt at `596-668px` and Generate at `681-713px`; Import was hidden until selected.
+- Browser measurements at `1600x900` and `1280x720` reported document width equal to viewport width.
+- Expanded-sidebar content-width equivalents were checked at 1430px and 1110px, matching the AppShell's 170px collapsed-to-expanded width delta, with no horizontal document overflow.
+- Import tab interaction rendered `Import external image`; returning to Compose restored the prompt. Browser console logs were clean.
+
+### Outstanding issues
+- Pass 7 remains open for complete owned object URL cleanup and final regression verification.
+
+### Risks or caveats
+- No paid Gemini generation or destructive Vault/Writer action was performed.
+- The in-app browser screenshot command timed out. Responsive claims are supported by DOM snapshots, bounding boxes, document-width measurements, interaction state, and console logs instead.
+- Expanded navigation could not be hover-triggered through the active browser bridge; equivalent available content widths were measured using the AppShell's exact 60px-to-230px sidebar delta.
+
+### Operator follow-up
+- None for Pass 6.
+
+### Next steps
+- Begin Pass 7 with failing object URL ownership tests for replace, clear, remove, and unmount.
+
+## Imageshop Integrity Repair Handoff Checkpoint - 2026-06-07
+
+### What changed
+- Created a `$handoff` continuation checkpoint after completing Imageshop integrity repair Pass 6.
+- The handoff is recorded in the chat response rather than persisted as a separate repository file.
+- The checkpoint represents the state where Passes 1 through 6 are complete and Pass 7 is the next repair pass.
+
+### Files touched
+- `walkthrough.md`
+
+### Implementation notes
+- The working tree remains dirty with the broader Pass 1-6 rollout still uncommitted.
+- The next action is to begin Pass 7 with failing object URL ownership tests.
+
+### Verification
+- `git branch --show-current`
+- `git log -1 --oneline`
+- `git status --short`
+- `rg -n "Approval status|Pass 6 Results|Pass 7:" docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `sed -n '28,38p' tasks.md`
+- `git status --short walkthrough.md tasks.md docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `rg -n "Imageshop Integrity Repair Handoff Checkpoint" walkthrough.md`
+- `git diff --check`
+
+### Outstanding issues
+- Pass 7 remains open.
+
+### Risks or caveats
+- No new implementation or verification run was performed as part of the handoff checkpoint beyond evidence refresh, walkthrough update, and diff whitespace check.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Begin Pass 7 with failing object URL ownership tests for replace, clear, remove, and unmount.
+
+## Imageshop Integrity Repair Pass 7 Object URL Cleanup - 2026-06-07
+
+### What changed
+- Completed Pass 7 of the Imageshop integrity repair plan.
+- Added component-owned object URL tracking to Image Lab so uploaded references, pasted references, and uploaded page-background images are registered before they enter component state.
+- Revoked owned object URLs exactly once when local references are removed, cleared, replaced by studio/panel references, or released during component unmount.
+- Updated page-background handling so only component-owned blob URLs are revoked when replaced or overwritten; remote/data/manual URLs are not revoked.
+- Added focused TDD coverage for remove, clear, replace, and unmount cleanup paths.
+- Confirmed the two unrelated `output/imagegen/page-06-mirrorverse-invasion*.png` files were already absent from the repository before Pass 7 implementation continued.
+
+### Files touched
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx`
+- `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `GenericImageLabPanel` now keeps a `Set` of object URLs created by the component.
+- `registerOwnedObjectUrl` records a newly-created URL, while `revokeOwnedObjectUrl` deletes the URL from the set before calling `URL.revokeObjectURL`, preventing duplicate revokes.
+- Reference replacements now route through a cleanup helper that compares previous refs to the next ref set and only revokes owned URLs that are no longer present.
+- Pasted references now revoke immediately if no slot is available by the time the clipboard image resolves.
+- IndexedDB-hydrated generated image URLs remain owned by `imageshopImageRepository` and continue to release through `releaseImageshopImageUrl(assetId)`.
+
+### Verification
+- TDD red: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx -t "owned"` failed 4 expected object URL cleanup tests with zero revoke calls.
+- Green slice: `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx -t "owned"` passed 4 tests.
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` passed 1 file / 30 tests.
+- `npm run test -- --run src/stores/__tests__/imageshopSessionStore.test.ts src/stores/__tests__/imageshopProductionStore.test.ts` passed 2 files / 18 tests.
+- `npm run test -- --run src/shared/api/__tests__/geminiImageDiagnostics.test.ts src/portals/storyline/__tests__/imageshopPromptPreflight.test.ts src/portals/storyline/__tests__/imageshopReferenceContext.test.ts src/portals/storyline/__tests__/imageshopBatchGeneration.test.ts` passed 4 files / 23 tests.
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/stores/__tests__/imageWorkshopBridge.test.ts src/portals/guided-comic/__tests__/guidedComicImageshopReturn.test.tsx` passed 3 files / 48 tests.
+- `npm run test -- --run` passed 67 files / 399 tests.
+- `npm run build` passed with the existing large `ComicPortal` chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 repository warnings.
+- `git diff --check` passed.
+- Browser QA at `1600x900`: Image Lab rendered, Compose defaulted, Import was hidden until selected, document/body width equaled 1600px, prompt measured `596-668px`, Generate measured `681-713px`, and console warnings/errors were empty.
+- Browser QA at `1280x720`: deterministic Writer-style prompt typing did not create generated image payloads in web storage, Import rendered and returned to Compose, document/body width equaled 1280px, prompt measured `596-668px`, Generate measured `681-713px`, and console warnings/errors were empty.
+
+### Outstanding issues
+- None for Pass 7.
+
+### Risks or caveats
+- Browser QA used non-paid/manual checks and did not trigger live Gemini generation.
+- The browser storage check found no `localStorage` or `sessionStorage` entries after prompt typing in the active test profile.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Review the full Pass 1-7 rollout as one branch-level change set before commit/PR packaging.

@@ -34,6 +34,10 @@ import {
   type ImageshopReferenceChip,
 } from '@/portals/storyline/imageshopPagePanelQueue';
 import type { ImageshopBatchGenerationAttempt } from '@/portals/storyline/imageshopBatchGeneration';
+import type {
+  ImageshopImageAsset,
+  ImageshopImagePersistence,
+} from '@/shared/utils/imageshopImageRepository';
 
 export type ImageshopProductionStatus = 'draft' | 'generated' | 'refined' | 'approved' | 'published';
 export type ImageshopProductionVersionKind = 'generated' | 'refined' | 'continuity-correction';
@@ -42,6 +46,8 @@ export type ImageshopProductionVersion = {
   id: string;
   kind: ImageshopProductionVersionKind;
   imageUrl: string;
+  imageAsset?: ImageshopImageAsset;
+  imagePersistence?: ImageshopImagePersistence;
   seed: number | null;
   prompt: string;
   provenance?: ImageshopGenerationProvenance;
@@ -115,6 +121,7 @@ type ImageshopProductionState = {
   selectProductionItem: (id: string | null) => void;
   updateProductionItemStatus: (id: string, status: ImageshopProductionStatus) => void;
   addProductionVersion: (id: string, version: AddProductionVersionInput) => void;
+  restoreProductionVersionImage: (id: string, versionId: string, imageUrl: string) => void;
   selectProductionVersion: (id: string, versionId: string) => void;
   revertProductionVersion: (id: string, versionId: string) => void;
   approveProductionItem: (id: string) => void;
@@ -124,6 +131,15 @@ type ImageshopProductionState = {
   setPanelQueue: (queue: ImageshopIssueQueue | null) => void;
   selectPanelQueueItem: (id: string | null) => void;
   updatePanelQueueItemStatus: (id: string, status: ImageshopPanelGenerationStatus) => void;
+  updatePanelQueueReferencePreparation: (
+    id: string,
+    updates: Array<{
+      id: string;
+      status: 'ready' | 'failed';
+      failureKind?: ImageshopReferenceChip['preparationFailureKind'];
+      failureMessage?: string;
+    }>,
+  ) => void;
   addPanelQueueReferenceChip: (id: string, chip: ImageshopReferenceChip) => ImageshopPanelReferenceMutationResult;
   replacePanelQueueReferenceChips: (
     id: string,
@@ -375,6 +391,21 @@ export const useImageshopProductionStore = create<ImageshopProductionState>()(
           selectedProductionItemId: id,
         }));
       },
+      restoreProductionVersionImage: (id, versionId, imageUrl) =>
+        set((state) => ({
+          productionItems: state.productionItems.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  versions: item.versions.map((version) =>
+                    version.id === versionId
+                      ? { ...version, imageUrl, imagePersistence: 'stored' }
+                      : version,
+                  ),
+                }
+              : item,
+          ),
+        })),
       selectProductionVersion: (id, versionId) =>
         set((state) => ({
           productionItems: state.productionItems.map((item) =>
@@ -442,6 +473,30 @@ export const useImageshopProductionStore = create<ImageshopProductionState>()(
           return {
             panelQueue,
             selectedPanelQueueItemId: id,
+            panelQueueReadiness: getImageshopQueueReadiness(panelQueue),
+          };
+        }),
+      updatePanelQueueReferencePreparation: (id, updates) =>
+        set((state) => {
+          if (!state.panelQueue) return state;
+          const updatesById = new Map(updates.map((update) => [update.id, update]));
+          const panelQueue = updatePanelCanon(state.panelQueue, id, (panel) => ({
+            ...panel,
+            referenceChips: panel.referenceChips.map((chip) => {
+              const update = updatesById.get(chip.id);
+              if (!update) return chip;
+              return {
+                ...chip,
+                signedUrlStatus: update.status,
+                preparationFailureKind:
+                  update.status === 'failed' ? update.failureKind : undefined,
+                preparationFailureMessage:
+                  update.status === 'failed' ? update.failureMessage : undefined,
+              };
+            }),
+          }));
+          return {
+            panelQueue,
             panelQueueReadiness: getImageshopQueueReadiness(panelQueue),
           };
         }),
@@ -559,7 +614,76 @@ export const useImageshopProductionStore = create<ImageshopProductionState>()(
     {
       name: 'arcs-imageshop-production-v1',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      partialize: (state) => ({
+        generationMode: state.generationMode,
+        promptWorkspace: state.promptWorkspace,
+        selectedArtStyleId: state.selectedArtStyleId,
+        savedArtStyles: state.savedArtStyles,
+        continuity: state.continuity,
+        pageConfig: state.pageConfig,
+        savedLayoutTemplates: state.savedLayoutTemplates,
+        importedBatches: state.importedBatches,
+        productionItems: state.productionItems.map((item) => ({
+          ...item,
+          versions: item.versions.map((version) => ({
+            ...version,
+            imageUrl:
+              version.imageUrl.startsWith('data:') || version.imageUrl.startsWith('blob:')
+                ? ''
+                : version.imageUrl,
+            imagePersistence:
+              version.imagePersistence ??
+              (version.imageAsset
+                ? 'stored'
+                : version.imageUrl.startsWith('data:') || version.imageUrl.startsWith('blob:')
+                  ? 'memory-only'
+                  : 'missing'),
+            attempt: version.attempt
+              ? {
+                  ...version.attempt,
+                  imageUrl:
+                    version.attempt.imageUrl?.startsWith('data:') || version.attempt.imageUrl?.startsWith('blob:')
+                      ? undefined
+                      : version.attempt.imageUrl,
+                }
+              : undefined,
+          })),
+        })),
+        selectedProductionItemId: state.selectedProductionItemId,
+        dashboardStatusFilter: state.dashboardStatusFilter,
+        panelQueue: state.panelQueue,
+        selectedPanelQueueItemId: state.selectedPanelQueueItemId,
+        panelQueueReadiness: state.panelQueueReadiness,
+      }),
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<ImageshopProductionState>;
+        return {
+          ...state,
+          productionItems: (state.productionItems ?? []).map((item) => ({
+            ...item,
+            versions: item.versions.map((version) => ({
+              ...version,
+              imageUrl:
+                version.imageUrl.startsWith('data:') || version.imageUrl.startsWith('blob:')
+                  ? ''
+                  : version.imageUrl,
+              imagePersistence:
+                version.imagePersistence ??
+                (version.imageAsset ? 'stored' : 'missing'),
+              attempt: version.attempt
+                ? {
+                    ...version.attempt,
+                    imageUrl:
+                      version.attempt.imageUrl?.startsWith('data:') || version.attempt.imageUrl?.startsWith('blob:')
+                        ? undefined
+                        : version.attempt.imageUrl,
+                  }
+                : undefined,
+            })),
+          })),
+        };
+      },
+      version: 2,
     },
   ),
 );

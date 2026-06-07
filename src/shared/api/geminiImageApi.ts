@@ -201,6 +201,13 @@ export interface GenerateImageOptions {
   prompt: string;
   /** Up to 14 slots (character or asset banding; see referenceSlots). Pad to 14 with '' for unused. */
   referenceImageUrls: string[];
+  /** Pre-encoded Imageshop references with explicit provider semantics. */
+  preparedReferenceImages?: ReadonlyArray<{
+    id: string;
+    providerInstruction: string;
+    base64: string;
+    mimeType: string;
+  }>;
   seed: number | null;
   aspectRatio: '9:16' | '1:1' | '21:9';
   modelId: OnyxModelId;
@@ -404,30 +411,43 @@ export async function generateImage(
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
   try {
-    let lastRole: string | null = null;
-    for (let i = 0; i < padded.length; i++) {
-      const refUrl = padded[i];
-      if (!refUrl) continue;
-      const role =
-        genContext === 'asset'
-          ? getSlotRole(i, 'asset')
-          : getSlotRole(i, 'character');
-      if (role !== lastRole) {
-        const label =
-          genContext === 'asset'
-            ? ASSET_ROLE_LABELS[role as AssetReferenceSlotRole]
-            : CHARACTER_ROLE_LABELS[role as ReferenceSlotRole];
-        parts.push({ text: label + '\n' });
-        lastRole = role;
+    if (options.preparedReferenceImages) {
+      for (const reference of options.preparedReferenceImages) {
+        parts.push({ text: `${reference.providerInstruction}\n` });
+        parts.push({
+          inlineData: {
+            mimeType: reference.mimeType,
+            data: reference.base64,
+          },
+        });
       }
-      const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(refUrl);
-      parts.push({ inlineData: { mimeType, data: base64 } });
+    } else {
+      let lastRole: string | null = null;
+      for (let i = 0; i < padded.length; i++) {
+        const refUrl = padded[i];
+        if (!refUrl) continue;
+        const role =
+          genContext === 'asset'
+            ? getSlotRole(i, 'asset')
+            : getSlotRole(i, 'character');
+        if (role !== lastRole) {
+          const label =
+            genContext === 'asset'
+              ? ASSET_ROLE_LABELS[role as AssetReferenceSlotRole]
+              : CHARACTER_ROLE_LABELS[role as ReferenceSlotRole];
+          parts.push({ text: label + '\n' });
+          lastRole = role;
+        }
+        const { base64, mimeType } = await referenceUrlToBase64WithMimeRetry(refUrl);
+        parts.push({ inlineData: { mimeType, data: base64 } });
+      }
     }
   } catch (e) {
     return imageFailure(e instanceof Error ? e.message : 'Failed to encode reference images');
   }
 
-  const hasAnyRef = padded.some((u) => u);
+  const hasAnyRef =
+    (options.preparedReferenceImages?.length ?? 0) > 0 || padded.some((u) => u);
   const subjectOnlyCharacter =
     hasAnyRef
       ? 'Reference workflow: Character DNA images define WHO (face, body, hair). Wardrobe DNA images define WHAT THEY WEAR—match that clothing faithfully, not a stylized hybrid. Atmospheric DNA affects lighting/setting only. Ignore backgrounds behind people in refs unless the prompt asks for that setting.\n\n'

@@ -41,6 +41,8 @@ export type ImageshopReferenceChip = {
   referenceId?: string;
   imageUrl?: string;
   signedUrlStatus?: 'unknown' | 'ready' | 'failed';
+  preparationFailureKind?: 'timeout' | 'fetch' | 'decode' | 'size';
+  preparationFailureMessage?: string;
 };
 
 export type ImageshopPanelQueueItem = {

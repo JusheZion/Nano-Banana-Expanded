@@ -2,6 +2,11 @@ import type {
   GeminiImageDiagnostic,
   OnyxModelId,
 } from '@/shared/api/geminiImageApi';
+import {
+  filterImageshopGenerationRequestReferences,
+  hashImageshopGenerationPrompt,
+  type ImageshopGenerationRequest,
+} from '@/portals/storyline/imageshopGenerationRequest';
 
 export type ImageshopBatchRetryStrategy =
   | 'normal'
@@ -14,8 +19,10 @@ export type ImageshopBatchGenerationItem = {
   pageNumber: number;
   panelNumber: number;
   prompt: string;
+  request?: ImageshopGenerationRequest;
   model: OnyxModelId;
   references: Array<{
+    id: string;
     imageUrl: string;
     status?: 'unknown' | 'ready' | 'failed';
   }>;
@@ -39,6 +46,8 @@ export type ImageshopBatchGenerationAttempt = {
   errorClass?: GeminiImageDiagnostic['errorClass'];
   errorMessage?: string;
   suggestedAction?: GeminiImageDiagnostic['suggestedAction'];
+  referenceIds?: string[];
+  failedReferenceIds?: string[];
 };
 
 export type ImageshopBatchExecutionResult =
@@ -50,12 +59,15 @@ export type ImageshopBatchExecutionResult =
   | {
       ok: false;
       diagnostic: GeminiImageDiagnostic;
+      failedReferenceIds?: string[];
     };
 
 export type ImageshopBatchExecutionInput = {
   item: ImageshopBatchGenerationItem;
   model: OnyxModelId;
   referenceUrls: string[];
+  references: ImageshopBatchGenerationItem['references'];
+  request?: ImageshopGenerationRequest;
   strategy: ImageshopBatchRetryStrategy;
   retryCount: number;
 };
@@ -69,25 +81,34 @@ export type ImageshopBatchGenerationResult = {
   skippedCount: number;
 };
 
-function promptHash(prompt: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < prompt.length; index += 1) {
-    hash ^= prompt.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+export function getLatestImageshopBatchAttempts(
+  attempts: readonly ImageshopBatchGenerationAttempt[],
+): ImageshopBatchGenerationAttempt[] {
+  const latestByPanel = new Map<
+    string,
+    { attempt: ImageshopBatchGenerationAttempt; index: number }
+  >();
+  attempts.forEach((attempt, index) => {
+    latestByPanel.set(attempt.queueItemId, { attempt, index });
+  });
+  return [...latestByPanel.values()]
+    .sort((left, right) => left.index - right.index)
+    .map(({ attempt }) => attempt);
 }
 
 function referencesForStrategy(
   item: ImageshopBatchGenerationItem,
   strategy: ImageshopBatchRetryStrategy,
-): string[] {
+  failedReferenceIds: ReadonlySet<string>,
+): ImageshopBatchGenerationItem['references'] {
   const references =
     strategy === 'without-failed-refs'
-      ? item.references.filter((reference) => reference.status !== 'failed')
+      ? item.references.filter(
+          (reference) =>
+            reference.status !== 'failed' && !failedReferenceIds.has(reference.id),
+        )
       : item.references;
-  const urls = references.map((reference) => reference.imageUrl.trim()).filter(Boolean);
-  return strategy === 'smaller-refs' ? urls.slice(0, 6) : urls;
+  return strategy === 'smaller-refs' ? references.slice(0, 6) : references;
 }
 
 function modelForStrategy(
@@ -102,13 +123,14 @@ function resultSummary(
   attempts: ImageshopBatchGenerationAttempt[],
   nextIndex: number,
 ): ImageshopBatchGenerationResult {
+  const latestAttempts = getLatestImageshopBatchAttempts(attempts);
   return {
     status,
     attempts,
     nextIndex,
-    completedCount: attempts.filter((attempt) => attempt.status === 'generated').length,
-    failedCount: attempts.filter((attempt) => attempt.status === 'failed').length,
-    skippedCount: attempts.filter((attempt) => attempt.status === 'skipped').length,
+    completedCount: latestAttempts.filter((attempt) => attempt.status === 'generated').length,
+    failedCount: latestAttempts.filter((attempt) => attempt.status === 'failed').length,
+    skippedCount: latestAttempts.filter((attempt) => attempt.status === 'skipped').length,
   };
 }
 
@@ -129,7 +151,7 @@ export async function runImageshopGenerationBatch({
   previousAttempts?: ImageshopBatchGenerationAttempt[];
   pauseOnFailure?: boolean;
   shouldPause?: () => boolean;
-  onAttempt?: (attempt: ImageshopBatchGenerationAttempt) => void;
+  onAttempt?: (attempt: ImageshopBatchGenerationAttempt) => void | Promise<void>;
 }): Promise<ImageshopBatchGenerationResult> {
   const attempts = [...previousAttempts];
 
@@ -138,7 +160,19 @@ export async function runImageshopGenerationBatch({
     const item = items[index];
     const retryCount = attempts.filter((attempt) => attempt.queueItemId === item.queueItemId).length;
     const model = modelForStrategy(item, strategy);
-    const referenceUrls = referencesForStrategy(item, strategy);
+    const failedReferenceIds = new Set(
+      attempts
+        .filter((attempt) => attempt.queueItemId === item.queueItemId)
+        .flatMap((attempt) => attempt.failedReferenceIds ?? []),
+    );
+    const references = referencesForStrategy(item, strategy, failedReferenceIds);
+    const referenceUrls = references.map((reference) => reference.imageUrl.trim()).filter(Boolean);
+    const request = item.request
+      ? filterImageshopGenerationRequestReferences(
+          item.request,
+          references.map((reference) => reference.id),
+        )
+      : undefined;
 
     if (item.skip) {
       const attempt: ImageshopBatchGenerationAttempt = {
@@ -148,15 +182,16 @@ export async function runImageshopGenerationBatch({
         panelNumber: item.panelNumber,
         status: 'skipped',
         model,
-        promptHash: promptHash(item.prompt),
+        promptHash: request?.promptHash ?? hashImageshopGenerationPrompt(item.prompt),
         referenceCount: referenceUrls.length,
+        referenceIds: references.map((reference) => reference.id),
         elapsedMs: 0,
         seed: null,
         retryCount,
         strategy,
       };
       attempts.push(attempt);
-      onAttempt?.(attempt);
+      await onAttempt?.(attempt);
       continue;
     }
 
@@ -165,6 +200,8 @@ export async function runImageshopGenerationBatch({
       item,
       model,
       referenceUrls,
+      references,
+      request,
       strategy,
       retryCount,
     });
@@ -178,8 +215,9 @@ export async function runImageshopGenerationBatch({
         panelNumber: item.panelNumber,
         status: 'generated',
         model,
-        promptHash: promptHash(item.prompt),
+        promptHash: request?.promptHash ?? hashImageshopGenerationPrompt(item.prompt),
         referenceCount: referenceUrls.length,
+        referenceIds: references.map((reference) => reference.id),
         elapsedMs,
         seed: execution.seed,
         retryCount,
@@ -187,7 +225,7 @@ export async function runImageshopGenerationBatch({
         imageUrl: execution.imageUrl,
       };
       attempts.push(attempt);
-      onAttempt?.(attempt);
+      await onAttempt?.(attempt);
       continue;
     }
 
@@ -198,8 +236,9 @@ export async function runImageshopGenerationBatch({
       panelNumber: item.panelNumber,
       status: 'failed',
       model,
-      promptHash: promptHash(item.prompt),
+      promptHash: request?.promptHash ?? hashImageshopGenerationPrompt(item.prompt),
       referenceCount: referenceUrls.length,
+      referenceIds: references.map((reference) => reference.id),
       elapsedMs,
       seed: null,
       retryCount,
@@ -207,9 +246,10 @@ export async function runImageshopGenerationBatch({
       errorClass: execution.diagnostic.errorClass,
       errorMessage: execution.diagnostic.message,
       suggestedAction: execution.diagnostic.suggestedAction,
+      failedReferenceIds: execution.failedReferenceIds,
     };
     attempts.push(attempt);
-    onAttempt?.(attempt);
+    await onAttempt?.(attempt);
     if (pauseOnFailure) return resultSummary('paused', attempts, index + 1);
   }
 

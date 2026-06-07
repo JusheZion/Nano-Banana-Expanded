@@ -1,8 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenericImageLabPanel } from '@/portals/storyline/GenericImageLabPanel';
+import { hashImageshopGenerationPrompt } from '@/portals/storyline/imageshopGenerationRequest';
 import { normalizeImageshopJson } from '@/portals/storyline/imageshopJsonSchemas';
-import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import { buildImageshopProductionBoard } from '@/portals/storyline/imageshopProductionBoard';
+import {
+  type GuidedImageWorkshopHandoff,
+  useImageWorkshopBridge,
+} from '@/stores/imageWorkshopBridge';
+import { useCharacterStudioStore } from '@/stores/characterStudioStore';
 import { useImageshopProductionStore } from '@/stores/imageshopProductionStore';
 import { useImageshopSessionStore } from '@/stores/imageshopSessionStore';
 import { getGenerations } from '@/shared/utils/generationOutputRouter';
@@ -32,6 +38,13 @@ const geminiTextMocks = vi.hoisted(() => ({
 
 const geminiImageMocks = vi.hoisted(() => ({
   generateImage: vi.fn(),
+  referenceUrlToBase64WithMimeRetry: vi.fn(),
+}));
+
+const imageRepositoryMocks = vi.hoisted(() => ({
+  saveImageshopImage: vi.fn(),
+  loadImageshopImageUrl: vi.fn<(assetId: string) => Promise<string | null>>(async () => null),
+  releaseImageshopImageUrl: vi.fn(),
 }));
 
 vi.mock('@/shared/api/arcsPersistence', () => arcsPersistenceMocks);
@@ -43,8 +56,11 @@ vi.mock('@/shared/api/geminiImageApi', async (importOriginal) => {
   return {
     ...actual,
     generateImage: geminiImageMocks.generateImage,
+    referenceUrlToBase64WithMimeRetry: geminiImageMocks.referenceUrlToBase64WithMimeRetry,
   };
 });
+
+vi.mock('@/shared/utils/imageshopImageRepository', () => imageRepositoryMocks);
 
 vi.mock('@/shared/lib/supabase', () => ({
   isSupabaseConfigured: () => true,
@@ -69,6 +85,14 @@ vi.mock('@/components/ui/ArcsStorageImg', () => ({
 }));
 
 beforeEach(() => {
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn(() => 'blob:imageshop-test-url'),
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: vi.fn(),
+  });
   localStorage.clear();
   sessionStorage.clear();
   useImageWorkshopBridge.setState({
@@ -83,6 +107,9 @@ beforeEach(() => {
     results: [],
     activeResultId: null,
   });
+  useCharacterStudioStore.setState({
+    referenceImageUrls: [],
+  });
   arcsPersistenceMocks.saveImportedImageToCharacterVault.mockClear();
   arcsPersistenceMocks.saveImportedImageToAssetVault.mockClear();
   geminiTextMocks.generateGeminiText.mockClear();
@@ -91,6 +118,19 @@ beforeEach(() => {
     ok: true,
     imageDataUrl: 'data:image/png;base64,generated-panel',
   });
+  geminiImageMocks.referenceUrlToBase64WithMimeRetry.mockReset();
+  geminiImageMocks.referenceUrlToBase64WithMimeRetry.mockImplementation(async (url: string) => ({
+    base64: btoa(url),
+    mimeType: 'image/png',
+  }));
+  imageRepositoryMocks.saveImageshopImage.mockReset();
+  imageRepositoryMocks.saveImageshopImage.mockResolvedValue({
+    id: 'imageshop-test-asset',
+    mimeType: 'image/png',
+    byteLength: 15,
+  });
+  imageRepositoryMocks.loadImageshopImageUrl.mockClear();
+  imageRepositoryMocks.releaseImageshopImageUrl.mockClear();
 });
 
 describe('GenericImageLabPanel production studio shell', () => {
@@ -110,12 +150,23 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getByRole('button', { name: 'Video Beats' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Comic Pages' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Compose' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Import' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Page setup' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Batch JSON' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Review' })).toBeTruthy();
+    const mainPrompt = screen.getByPlaceholderText('Describe the image you want...');
+    const referenceTray = screen.getByText('References');
+    expect(mainPrompt.compareDocumentPosition(referenceTray) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const generateAction = screen.getByRole('button', { name: 'Generate current Imageshop prompt' });
+    const advancedDirection = screen.getByLabelText('Avoid List');
+    expect(generateAction.compareDocumentPosition(advancedDirection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('Import external image')).toBeNull();
     expect(screen.queryByText('Art Style Library')).toBeNull();
     expect(screen.queryByText('JSON Production Batch')).toBeNull();
     expect(screen.queryByText('Production Dashboard')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(screen.getByTestId('imageshop-import-panel')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Page setup' }));
     expect(screen.getByText('Art Style Library')).toBeTruthy();
@@ -181,6 +232,173 @@ describe('GenericImageLabPanel production studio shell', () => {
     );
     expect(geminiTextMocks.generateGeminiText.mock.calls[0]?.[0]?.userPrompt).toContain(
       'Page type: Single Comic Page',
+    );
+  });
+
+  it('uses the displayed standalone preflight prompt for provider execution and persistence', async () => {
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comic Pages' }));
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want...'), {
+      target: {
+        value: 'Flux opens a brass observatory door beneath a rotating star map.',
+      },
+    });
+    fireEvent.change(screen.getByLabelText('Avoid List'), {
+      target: { value: 'no blurry faces, no unreadable lettering' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate current Imageshop prompt' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    const providerPrompt = geminiImageMocks.generateImage.mock.calls[0][0].prompt;
+    const result = useImageshopSessionStore.getState().results[0];
+    const version = useImageshopProductionStore.getState().productionItems[0].versions[0];
+    const displayedPrompt = screen
+      .getByText('Composed generation prompt')
+      .parentElement?.querySelectorAll('p')[1]?.textContent;
+
+    expect(displayedPrompt).toBe(providerPrompt);
+    expect(providerPrompt).toContain('Generation mode: Comic Pages');
+    expect(providerPrompt).toContain('Avoid list: no blurry faces, no unreadable lettering');
+    expect(providerPrompt).toContain('Page type: Single Comic Page');
+    expect(result.prompt).toBe(providerPrompt);
+    expect(version.prompt).toBe(providerPrompt);
+  });
+
+  it('does not persist production history while the user types a prompt', () => {
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    setItem.mockClear();
+
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want...'), {
+      target: { value: 'Flux enters a luminous clockwork observatory.' },
+    });
+
+    expect(setItem).not.toHaveBeenCalledWith('arcs-imageshop-production-v1', expect.any(String));
+    setItem.mockRestore();
+  });
+
+  it('keeps a successful generated result visible when binary persistence exceeds quota', async () => {
+    imageRepositoryMocks.saveImageshopImage.mockRejectedValueOnce(
+      new DOMException('The quota has been exceeded.', 'QuotaExceededError'),
+    );
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want...'), {
+      target: { value: 'Flux enters a luminous clockwork observatory beneath a rotating star map.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate current Imageshop prompt' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(useImageshopSessionStore.getState().results[0]?.imageUrl).toBe(
+        'data:image/png;base64,generated-panel',
+      ),
+    );
+    expect(useImageshopSessionStore.getState().results[0]?.imagePersistence).toBe('memory-only');
+    expect(useImageshopProductionStore.getState().productionItems[0]?.versions[0]?.imageUrl).toBe(
+      'data:image/png;base64,generated-panel',
+    );
+    expect(screen.getByText(/will not survive a reload/i)).toBeTruthy();
+  });
+
+  it('hydrates persisted session and production images from the shared binary asset', async () => {
+    imageRepositoryMocks.loadImageshopImageUrl.mockResolvedValue('blob:restored-imageshop-result');
+    useImageshopSessionStore.setState({
+      results: [
+        {
+          id: 'restored-session-result',
+          imageUrl: '',
+          imageAsset: {
+            id: 'restored-shared-asset',
+            mimeType: 'image/png',
+            byteLength: 32,
+          },
+          seed: 42,
+          prompt: 'Restored prompt',
+          aspectRatio: '1:1',
+          context: 'character',
+          modelId: 'pro',
+          generatedAt: '2026-06-06T12:00:00.000Z',
+        },
+      ],
+      activeResultId: 'restored-session-result',
+    });
+    const item = useImageshopProductionStore.getState().addProductionItem({
+      label: 'Restored item',
+      sourceKind: 'manual',
+      prompt: 'Restored prompt',
+      promptSections: { main: 'Restored prompt' },
+    });
+    useImageshopProductionStore.getState().addProductionVersion(item.id, {
+      imageUrl: '',
+      imageAsset: {
+        id: 'restored-shared-asset',
+        mimeType: 'image/png',
+        byteLength: 32,
+      },
+      seed: 42,
+      prompt: 'Restored prompt',
+      kind: 'generated',
+    });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(useImageshopSessionStore.getState().results[0].imageUrl).toBe(
+        'blob:restored-imageshop-result',
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        useImageshopProductionStore.getState().productionItems[0].versions[0].imageUrl,
+      ).toBe('blob:restored-imageshop-result'),
+    );
+
+    act(() => {
+      useImageshopSessionStore.getState().clearResults();
+      useImageshopProductionStore.getState().clearProductionItems();
+    });
+    await waitFor(() =>
+      expect(imageRepositoryMocks.releaseImageshopImageUrl).toHaveBeenCalledWith(
+        'restored-shared-asset',
+      ),
     );
   });
 
@@ -367,6 +585,10 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getByRole('button', { name: 'Resume batch' })).toBeTruthy();
 
     const cockpit = screen.getByText('Writer Pages Cockpit');
+    const cockpitGrid = cockpit.closest('section')?.firstElementChild;
+    expect(cockpitGrid?.className).toContain('lg:grid-cols-2');
+    expect(cockpitGrid?.className).toContain('2xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)]');
+    expect(cockpitGrid?.className).not.toContain('minmax(14rem');
     fireEvent.click(screen.getByRole('button', { name: 'Batch JSON' }));
     const legacyBatch = screen.getByText('JSON Production Batch');
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
@@ -450,10 +672,392 @@ describe('GenericImageLabPanel production studio shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry smaller refs' }));
 
-    await waitFor(() => expect(screen.getByText('Batch completed with 2 generated, 1 failed, and 0 skipped.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Batch completed with 2 generated, 0 failed, and 0 skipped.')).toBeTruthy());
     const panelsAfterRetry = useImageshopProductionStore.getState().panelQueue?.pages[0]?.panels ?? [];
     expect(panelsAfterRetry.map((panel) => panel.status)).toEqual(['generated', 'generated']);
     expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(3);
+    expect((screen.getByRole('button', { name: 'Retry failed panels' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Retry smaller refs' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('uses the exact composed selected-panel prompt for provider execution and provenance', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-request-contract',
+      exported_at: '2026-06-06T20:00:00.000Z',
+      issue: { title: 'Request Contract' },
+      pages: [
+        {
+          id: 'writer-page-request-contract',
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                id: 'writer-panel-request-contract',
+                index: 1,
+                action: 'Flux opens a brass observatory door beneath a rotating star map.',
+                composition: 'Low-angle wide panel with an astrolabe in the foreground.',
+                characters: ['Flux'],
+                locations: ['Sky Observatory'],
+                art_style: 'ornate celestial comic',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Avoid List'), {
+      target: { value: 'no blurry faces, no unreadable lettering' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate selected panel' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(
+        useImageshopProductionStore
+          .getState()
+          .productionItems.find(
+            (item) => item.sourceId === 'issue-request-contract-page-1-panel-1',
+          )?.versions,
+      ).toHaveLength(1),
+    );
+    const providerPrompt = geminiImageMocks.generateImage.mock.calls[0][0].prompt;
+    const result = useImageshopSessionStore.getState().results[0];
+    const state = useImageshopProductionStore.getState();
+    const queueItemId = 'issue-request-contract-page-1-panel-1';
+    const linkedItems = state.productionItems.filter((item) => item.sourceId === queueItemId);
+    const linkedItem = linkedItems[0];
+    const version = linkedItem?.versions[0];
+    const board = buildImageshopProductionBoard(state.panelQueue!, state.productionItems);
+
+    expect(providerPrompt).toContain('Generation mode: Comic Pages');
+    expect(providerPrompt).toContain('Avoid list: no blurry faces, no unreadable lettering');
+    expect(providerPrompt).toContain('Art style instructions: ornate celestial comic');
+    expect(providerPrompt).toContain('Page type: Single Comic Page');
+    expect(result.prompt).toBe(providerPrompt);
+    expect(result.provenance?.prompt.composed).toBe(providerPrompt);
+    expect(version?.prompt).toBe(providerPrompt);
+    expect(version?.provenance?.prompt.composed).toBe(providerPrompt);
+    expect(linkedItems).toHaveLength(1);
+    expect(linkedItem).toMatchObject({
+      sourceKind: 'writer-panel',
+      sourceId: queueItemId,
+      label: 'Page 1 Panel 1',
+      status: 'generated',
+      currentVersionId: version?.id,
+    });
+    expect(state.productionItems.some((item) => item.label.startsWith('Imageshop item'))).toBe(false);
+    expect(state.panelQueue?.pages[0].panels[0].status).toBe('generated');
+    expect(result.provenance?.sourcePanelId).toBe(queueItemId);
+    expect(board.pages[0].panels[0]).toMatchObject({
+      queueItemId,
+      productionItemId: linkedItem.id,
+      currentVersionId: version?.id,
+      status: 'generated',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send image map to Writers Workshop' }));
+    expect(useImageWorkshopBridge.getState().writerImageMapReturn?.pages[0].panels[0]).toMatchObject({
+      queue_item_id: queueItemId,
+      image_url: result.imageUrl,
+      status: 'generated',
+      version_id: version?.id,
+      prompt: providerPrompt,
+    });
+  });
+
+  it('uses the exact composed batch prompt for provider execution, hashes, and provenance', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-batch-request-contract',
+      exported_at: '2026-06-06T20:30:00.000Z',
+      issue: { title: 'Batch Request Contract' },
+      pages: [
+        {
+          id: 'writer-page-batch-request-contract',
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                id: 'writer-panel-batch-request-contract',
+                index: 1,
+                action: 'Flux raises a glowing compass while the observatory rotates around her.',
+                composition: 'Centered medium-wide panel with strong radial motion.',
+                characters: ['Flux'],
+                locations: ['Sky Observatory'],
+                art_style: 'ornate celestial comic',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Avoid List'), {
+      target: { value: 'no blurry faces, no unreadable lettering' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate page' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    const providerPrompt = geminiImageMocks.generateImage.mock.calls[0][0].prompt;
+    const result = useImageshopSessionStore.getState().results[0];
+
+    expect(providerPrompt).toContain('Generation mode: Comic Pages');
+    expect(providerPrompt).toContain('Avoid list: no blurry faces, no unreadable lettering');
+    expect(providerPrompt).toContain('Art style instructions: ornate celestial comic');
+    expect(providerPrompt).toContain('Page type: Single Comic Page');
+    expect(result.prompt).toBe(providerPrompt);
+    expect(result.provenance?.prompt.composed).toBe(providerPrompt);
+    expect(result.attempt?.promptHash).toBe(hashImageshopGenerationPrompt(providerPrompt));
+  });
+
+  it('blocks the provider and marks the matching queue chip when reference preparation fails', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-reference-failure',
+      exported_at: '2026-06-06T20:00:00.000Z',
+      issue: { title: 'Reference Failure' },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                index: 1,
+                action: 'Flux opens the observatory door while holding a brass compass.',
+                references: [
+                  {
+                    id: 'observatory-reference',
+                    label: 'Sky Observatory',
+                    lane: 'environment',
+                    source_type: 'asset',
+                    image_url: 'https://example.test/observatory.png',
+                  },
+                  {
+                    id: 'flux-reference',
+                    label: 'Flux identity',
+                    lane: 'character-dna',
+                    source_type: 'character',
+                    image_url: 'https://example.test/flux.png',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+    geminiImageMocks.referenceUrlToBase64WithMimeRetry.mockImplementation(async (url: string) => {
+      if (url.includes('observatory')) throw new Error('Failed to fetch reference image (404)');
+      return { base64: btoa(url), mimeType: 'image/png' };
+    });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate selected panel' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Reference preparation failed: Sky Observatory.')).toBeTruthy(),
+    );
+    expect(geminiImageMocks.generateImage).not.toHaveBeenCalled();
+    expect(
+      useImageshopProductionStore
+        .getState()
+        .panelQueue?.pages[0].panels[0].referenceChips.map((chip) => ({
+          id: chip.id,
+          status: chip.signedUrlStatus,
+          failureKind: chip.preparationFailureKind,
+        })),
+    ).toEqual([
+      {
+        id: 'observatory-reference',
+        status: 'failed',
+        failureKind: 'fetch',
+      },
+      {
+        id: 'flux-reference',
+        status: 'ready',
+        failureKind: undefined,
+      },
+    ]);
+  });
+
+  it('sends prepared references to Gemini in lane order with explicit provider instructions', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-reference-roles',
+      exported_at: '2026-06-06T20:30:00.000Z',
+      issue: { title: 'Reference Roles' },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                index: 1,
+                action: 'Flux enters the observatory beneath a field of rotating stars.',
+                references: [
+                  {
+                    id: 'environment-reference',
+                    label: 'Sky Observatory',
+                    lane: 'environment',
+                    source_type: 'asset',
+                    image_url: 'https://example.test/observatory.png',
+                  },
+                  {
+                    id: 'character-reference',
+                    label: 'Flux identity',
+                    lane: 'character-dna',
+                    source_type: 'character',
+                    image_url: 'https://example.test/flux.png',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate selected panel' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    expect(
+      geminiImageMocks.generateImage.mock.calls[0][0].preparedReferenceImages.map(
+        (reference: { id: string; providerInstruction: string }) => ({
+          id: reference.id,
+          providerInstruction: reference.providerInstruction,
+        }),
+      ),
+    ).toEqual([
+      {
+        id: 'character-reference',
+        providerInstruction:
+          '[Character DNA: preserve identity, face, body, hair, skin, and distinguishing features.]',
+      },
+      {
+        id: 'environment-reference',
+        providerInstruction:
+          '[Environment: preserve location, architecture, geography, layout, and spatial relationships.]',
+      },
+    ]);
+  });
+
+  it('retries a failed panel with the recorded reference removed from request and provenance', async () => {
+    const batch = normalizeImageshopJson({
+      issue_id: 'issue-reference-retry',
+      exported_at: '2026-06-06T21:00:00.000Z',
+      issue: { title: 'Reference Retry' },
+      pages: [
+        {
+          page_number: 1,
+          beats_json: {
+            panels: [
+              {
+                index: 1,
+                action: 'Flux studies the brass astrolabe inside the rotating observatory.',
+                references: [
+                  {
+                    id: 'failed-environment',
+                    label: 'Broken Observatory',
+                    lane: 'environment',
+                    source_type: 'asset',
+                    image_url: 'https://example.test/broken-observatory.png',
+                  },
+                  {
+                    id: 'ready-character',
+                    label: 'Flux identity',
+                    lane: 'character-dna',
+                    source_type: 'character',
+                    image_url: 'https://example.test/flux.png',
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    useImageshopProductionStore.getState().importBatch(batch);
+    geminiImageMocks.referenceUrlToBase64WithMimeRetry.mockImplementation(async (url: string) => {
+      if (url.includes('broken-observatory')) {
+        throw new Error('Failed to fetch reference image (404)');
+      }
+      return { base64: btoa(url), mimeType: 'image/png' };
+    });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate page' }));
+    await waitFor(() => expect(screen.getByText('Batch paused with 0 generated and 1 failed.')).toBeTruthy());
+    expect(geminiImageMocks.generateImage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry without failed refs' }));
+
+    await waitFor(() => expect(geminiImageMocks.generateImage).toHaveBeenCalledTimes(1));
+    const providerInput = geminiImageMocks.generateImage.mock.calls[0][0];
+    const result = useImageshopSessionStore.getState().results[0];
+    expect(providerInput.preparedReferenceImages.map((reference: { id: string }) => reference.id)).toEqual([
+      'ready-character',
+    ]);
+    expect(providerInput.prompt).not.toContain('Broken Observatory');
+    expect(result.provenance?.references.map((reference) => reference.id)).toEqual(['ready-character']);
+    expect(result.attempt).toMatchObject({
+      strategy: 'without-failed-refs',
+      referenceIds: ['ready-character'],
+    });
   });
 
   it('surfaces vault reference lanes for imported Writer panels', () => {
@@ -831,11 +1435,15 @@ describe('GenericImageLabPanel production studio shell', () => {
   });
 
   it('keeps the Guided Comic Flow panel return action wired after restoring a generated result', async () => {
-    useImageWorkshopBridge.getState().requestGuidedComicHandoff({
+    const guidedHandoff: GuidedImageWorkshopHandoff = {
       source: 'guided-comic',
       currentStep: 'art',
       returnTarget: 'guided-comic-art',
       sourceLabel: 'Guided Comic Flow · Page 2, Panel 3',
+      workspace: {
+        projectId: 'guided-project-7',
+        writerIssueId: 'writer-issue-7',
+      },
       panelId: 'page-2-panel-3',
       pageNumber: 2,
       panelNumber: 3,
@@ -850,7 +1458,8 @@ describe('GenericImageLabPanel production studio shell', () => {
       ],
       locations: [],
       npcs: [],
-    });
+    };
+    useImageWorkshopBridge.getState().requestGuidedComicHandoff(guidedHandoff);
     useImageshopSessionStore.getState().addResult({
       imageUrl: 'data:image/png;base64,guided-return',
       seed: 77,
@@ -884,6 +1493,10 @@ describe('GenericImageLabPanel production studio shell', () => {
       panelNumber: 3,
       imageUrl: 'data:image/png;base64,guided-return',
       seed: 77,
+      workspace: {
+        projectId: 'guided-project-7',
+        writerIssueId: 'writer-issue-7',
+      },
     });
   });
 
@@ -952,5 +1565,132 @@ describe('GenericImageLabPanel production studio shell', () => {
     expect(screen.getByRole('button', { name: 'Create a new beat from preview' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Export Imageshop production JSON' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Export Writer image map' })).toBeTruthy();
+  });
+
+  it('revokes an owned uploaded reference URL when the reference is removed', () => {
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:owned-reference-remove');
+    const revokeObjectURL = vi.mocked(URL.revokeObjectURL);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Upload$/), {
+      target: {
+        files: [new File(['reference'], 'reference.png', { type: 'image/png' })],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove reference' }));
+
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-reference-remove');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes owned uploaded reference URLs when references are cleared', () => {
+    vi.mocked(URL.createObjectURL)
+      .mockReturnValueOnce('blob:owned-reference-clear-one')
+      .mockReturnValueOnce('blob:owned-reference-clear-two');
+    const revokeObjectURL = vi.mocked(URL.revokeObjectURL);
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Upload$/), {
+      target: {
+        files: [
+          new File(['reference-one'], 'reference-one.png', { type: 'image/png' }),
+          new File(['reference-two'], 'reference-two.png', { type: 'image/png' }),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-reference-clear-one');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-reference-clear-two');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('revokes owned uploaded reference URLs when studio references replace them', () => {
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:owned-reference-replace');
+    const revokeObjectURL = vi.mocked(URL.revokeObjectURL);
+    useCharacterStudioStore.setState({
+      referenceImageUrls: ['https://example.test/character-reference.png'],
+    });
+
+    render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Upload$/), {
+      target: {
+        files: [new File(['reference'], 'reference.png', { type: 'image/png' })],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Replace with Character refs' }));
+
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-reference-replace');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes owned reference and page-background URLs on unmount', async () => {
+    vi.mocked(URL.createObjectURL)
+      .mockReturnValueOnce('blob:owned-reference-unmount')
+      .mockReturnValueOnce('blob:owned-page-background-unmount');
+    const revokeObjectURL = vi.mocked(URL.revokeObjectURL);
+
+    const { unmount } = render(
+      <GenericImageLabPanel
+        selectedBeat={null}
+        productionCast={[]}
+        productionAssets={[]}
+        productionSupportingRefs={[]}
+        onUseAsSelectedBeat={vi.fn()}
+        onCreateNewBeat={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Upload$/), {
+      target: {
+        files: [new File(['reference'], 'reference.png', { type: 'image/png' })],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Comic Pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Page setup' }));
+    expect(await screen.findByText('Art Style Library')).toBeTruthy();
+    const pageBackgroundInput = screen.getByText('Upload page background').querySelector('input');
+    expect(pageBackgroundInput).toBeInstanceOf(HTMLInputElement);
+    fireEvent.change(pageBackgroundInput as HTMLInputElement, {
+      target: {
+        files: [new File(['background'], 'background.png', { type: 'image/png' })],
+      },
+    });
+
+    unmount();
+
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-reference-unmount');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:owned-page-background-unmount');
+    expect(revokeObjectURL).toHaveBeenCalledTimes(2);
   });
 });

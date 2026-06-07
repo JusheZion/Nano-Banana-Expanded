@@ -55,6 +55,93 @@ describe('useImageshopProductionStore', () => {
     expect(useImageshopProductionStore.getState().selectedProductionItemId).toBe(item.id);
   });
 
+  it('persists production version metadata without generated image payloads', () => {
+    const item = useImageshopProductionStore.getState().addProductionItem({
+      label: 'Page 1 Panel 1',
+      sourceKind: 'writer-panel',
+      sourceId: 'panel-storage',
+      prompt: 'A hero enters the observatory.',
+      promptSections: {
+        main: 'A hero enters the observatory.',
+      },
+    });
+
+    useImageshopProductionStore.getState().addProductionVersion(item.id, {
+      imageUrl: 'data:image/png;base64,full-production-payload',
+      imageAsset: {
+        id: 'imageshop-asset-production-1',
+        mimeType: 'image/png',
+        byteLength: 32,
+      },
+      seed: 7,
+      prompt: 'A hero enters the observatory.',
+      kind: 'generated',
+      attempt: {
+        id: 'attempt-production-storage',
+        queueItemId: 'panel-storage',
+        pageNumber: 1,
+        panelNumber: 1,
+        status: 'generated',
+        model: 'pro',
+        promptHash: 'hash',
+        referenceCount: 0,
+        elapsedMs: 100,
+        seed: 7,
+        retryCount: 0,
+        strategy: 'normal',
+        imageUrl: 'data:image/png;base64,nested-production-payload',
+      },
+    });
+
+    expect(useImageshopProductionStore.getState().productionItems[0].versions[0].imageUrl).toContain(
+      'full-production-payload',
+    );
+    const persisted = localStorage.getItem('arcs-imageshop-production-v1') ?? '';
+    expect(persisted).toContain('imageshop-asset-production-1');
+    expect(persisted).not.toContain('full-production-payload');
+    expect(persisted).not.toContain('nested-production-payload');
+  });
+
+  it('strips legacy generated payloads while rehydrating production metadata', async () => {
+    localStorage.setItem(
+      'arcs-imageshop-production-v1',
+      JSON.stringify({
+        state: {
+          productionItems: [
+            {
+              id: 'legacy-production-item',
+              sourceKind: 'manual',
+              label: 'Legacy item',
+              prompt: 'Legacy prompt',
+              promptSections: { main: 'Legacy prompt' },
+              status: 'generated',
+              versions: [
+                {
+                  id: 'legacy-production-version',
+                  kind: 'generated',
+                  imageUrl: 'data:image/png;base64,legacy-production-payload',
+                  seed: 3,
+                  prompt: 'Legacy prompt',
+                  createdAt: '2026-06-05T12:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-06-05T12:00:00.000Z',
+              updatedAt: '2026-06-05T12:00:00.000Z',
+            },
+          ],
+        },
+        version: 1,
+      }),
+    );
+
+    await useImageshopProductionStore.persist.rehydrate();
+
+    expect(useImageshopProductionStore.getState().productionItems[0]).toMatchObject({
+      id: 'legacy-production-item',
+      versions: [expect.objectContaining({ id: 'legacy-production-version', imageUrl: '' })],
+    });
+  });
+
   it('tracks an explicit current version and supports selection and revert', () => {
     const item = useImageshopProductionStore.getState().addProductionItem({
       label: 'Page 1 Panel 1',
@@ -361,6 +448,74 @@ describe('useImageshopProductionStore', () => {
     expect(useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips.map((chip) => chip.id)).toEqual([
       'character-flux',
       'asset-map',
+    ]);
+  });
+
+  it('updates preparation status only on the matching panel reference chips', () => {
+    const queue = createImageshopIssueQueue({
+      source: 'writer-json',
+      importedAt: '2026-06-06T20:00:00.000Z',
+      issue: {
+        id: 'issue-reference-preparation',
+        title: 'Reference Preparation',
+      },
+      pages: [
+        {
+          pageNumber: 1,
+          panels: [
+            {
+              panelNumber: 1,
+              action: 'Flux checks the observatory reference set.',
+              referenceChips: [
+                {
+                  id: 'character-flux',
+                  label: 'Flux identity',
+                  lane: 'character-dna',
+                  sourceType: 'character',
+                  imageUrl: 'https://example.test/flux.png',
+                },
+                {
+                  id: 'asset-observatory',
+                  label: 'Sky Observatory',
+                  lane: 'environment',
+                  sourceType: 'asset',
+                  imageUrl: 'https://example.test/observatory.png',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const queueItemId = 'issue-reference-preparation-page-1-panel-1';
+    useImageshopProductionStore.getState().setPanelQueue(queue);
+
+    useImageshopProductionStore.getState().updatePanelQueueReferencePreparation(
+      queueItemId,
+      [
+        { id: 'character-flux', status: 'ready' },
+        {
+          id: 'asset-observatory',
+          status: 'failed',
+          failureKind: 'fetch',
+          failureMessage: 'Failed to fetch reference image (404)',
+        },
+      ],
+    );
+
+    expect(
+      useImageshopProductionStore.getState().panelQueue?.pages[0].panels[0].referenceChips,
+    ).toEqual([
+      expect.objectContaining({
+        id: 'character-flux',
+        signedUrlStatus: 'ready',
+      }),
+      expect.objectContaining({
+        id: 'asset-observatory',
+        signedUrlStatus: 'failed',
+        preparationFailureKind: 'fetch',
+        preparationFailureMessage: 'Failed to fetch reference image (404)',
+      }),
     ]);
   });
 

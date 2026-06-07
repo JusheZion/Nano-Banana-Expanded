@@ -101,6 +101,7 @@ import {
   getGuidedComicDeleteSeriesLabel,
   getGuidedComicLibrarySeriesGroups,
   getGuidedComicProjectCoverImageUrl,
+  getGuidedComicSeriesKey,
   isGuidedComicLivingArchiveUnlocked,
   type GuidedComicSeriesGroup,
 } from '@/portals/guided-comic/guidedComicLibraryView';
@@ -2400,8 +2401,31 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     const panelReturn = consumeGuidedComicPanelImageReturn();
     if (!panelReturn) return;
 
+    const targetProjectId = panelReturn.workspace?.projectId;
+    if (targetProjectId && targetProjectId !== activeProjectId) {
+      const targetProject = projectLibrary?.projects.find((project) => project.projectId === targetProjectId);
+      if (targetProject) {
+        setActiveProjectId(targetProject.projectId);
+        setProjectLibrary((current) =>
+          current
+            ? {
+                ...current,
+                activeProjectId: targetProject.projectId,
+              }
+            : current,
+        );
+        setSelectedSeriesKey(getGuidedComicSeriesKey(targetProject.seriesTitle));
+        applyGuidedComicProjectSnapshot(targetProject.snapshot, targetProject.updatedAt);
+      }
+    }
+
     const panelId = panelReturn.panelId ?? panelArtQueueId(panelReturn.pageNumber, panelReturn.panelNumber);
+    if (panelReturn.workspace?.writerIssueId) {
+      setWriterIssueId(panelReturn.workspace.writerIssueId);
+    }
+    setLibraryStage('issue-workspace');
     setActiveIndex(STEPS.findIndex((step) => step.id === 'art'));
+    setActivePageNumber(panelReturn.pageNumber);
     setWorkspaceMode('panel-focus');
     setProductionPanelFocusOpen(true);
     assignPanelArtImage(panelId, {
@@ -2411,7 +2435,13 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       prompt: panelReturn.prompt,
       provenance: panelReturn.provenance,
     });
-  }, [assignPanelArtImage, consumeGuidedComicPanelImageReturn]);
+  }, [
+    activeProjectId,
+    applyGuidedComicProjectSnapshot,
+    assignPanelArtImage,
+    consumeGuidedComicPanelImageReturn,
+    projectLibrary,
+  ]);
 
   useEffect(() => {
     if (!isStoryStep) return;
@@ -4608,6 +4638,10 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       currentStep: 'art',
       returnTarget: 'guided-comic-art',
       sourceLabel: `Guided Comic Flow · Page ${targetPanel.pageNumber}, Panel ${targetPanel.panelNumber}`,
+      workspace: {
+        projectId: activeProjectId,
+        writerIssueId,
+      },
       panelId: targetPanel.id,
       pageNumber: targetPanel.pageNumber,
       panelNumber: targetPanel.panelNumber,

@@ -35,7 +35,7 @@ export function ImageshopOutputDestinations({
         <span>Writer image map</span>
         <span>Guided return</span>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
+      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-9">
         {(['character', 'asset', 'npc'] as const).map((target) => (
           <button
             key={target}

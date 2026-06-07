@@ -32,11 +32,17 @@ export type GuidedImageWorkshopReferenceNeeds = {
   npcs: string[];
 };
 
+export type GuidedImageWorkshopWorkspace = {
+  projectId: string | null;
+  writerIssueId: string | null;
+};
+
 export type GuidedImageWorkshopHandoff = {
   source: 'guided-comic';
   currentStep: 'visual-prep' | 'art';
   returnTarget?: 'guided-comic-art';
   sourceLabel: string;
+  workspace?: GuidedImageWorkshopWorkspace;
   characters: GuidedImageWorkshopReference[];
   locations: GuidedImageWorkshopReference[];
   npcs: GuidedImageWorkshopReference[];
@@ -199,6 +205,7 @@ export function getGuidedImageWorkshopAspectRatio(
 export type GuidedComicPanelImageReturn = {
   source: 'guided-comic';
   returnTarget: 'guided-comic-art';
+  workspace?: GuidedImageWorkshopWorkspace;
   panelId?: string;
   pageNumber: number;
   panelNumber: number;

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Clapperboard,
   ExternalLink,
@@ -130,7 +131,31 @@ export const StorylineStudio: React.FC = () => {
   const [labSeedPrompt, setLabSeedPrompt] = useState<string | null>(null);
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
 
-  const store = useStorylineStudioStore();
+  const store = useStorylineStudioStore(
+    useShallow((state) => ({
+      storyTitle: state.storyTitle,
+      beats: state.beats,
+      productionCast: state.productionCast,
+      productionAssets: state.productionAssets,
+      productionSupportingRefs: state.productionSupportingRefs,
+      selectedBeatId: state.selectedBeatId,
+      aiBusy: state.aiBusy,
+      lastError: state.lastError,
+      setStoryTitle: state.setStoryTitle,
+      setSelectedBeatId: state.setSelectedBeatId,
+      setAiBusy: state.setAiBusy,
+      setLastError: state.setLastError,
+      addProductionCastMember: state.addProductionCastMember,
+      removeProductionCastMember: state.removeProductionCastMember,
+      addProductionAssetMember: state.addProductionAssetMember,
+      removeProductionAssetMember: state.removeProductionAssetMember,
+      addProductionSupportingRef: state.addProductionSupportingRef,
+      removeProductionSupportingRef: state.removeProductionSupportingRef,
+      updateBeat: state.updateBeat,
+      insertBeatAfter: state.insertBeatAfter,
+      removeBeat: state.removeBeat,
+    })),
+  );
   const requestOpenInStudio = useStudioImportBridge((s) => s.requestOpenInStudio);
   const consumeReturnPayloadForPortal = useStudioImportBridge((s) => s.consumeReturnPayloadForPortal);
   const imageWorkshopDraft = useImageWorkshopBridge((s) => s.draft);
@@ -178,7 +203,8 @@ export const StorylineStudio: React.FC = () => {
   }, [store.storyTitle, loadVaultCollections]);
 
   const handleSaveVaultConfirm = useCallback(async () => {
-    const cover = firstStoryCoverImageUrl(store.beats);
+    const currentStory = useStorylineStudioStore.getState();
+    const cover = firstStoryCoverImageUrl(currentStory.beats);
     if (!cover) {
       store.setLastError('Generate at least one beat image before saving to the vault.');
       return;
@@ -200,14 +226,14 @@ export const StorylineStudio: React.FC = () => {
     setSaveVaultPending(true);
     const result = await saveStorySequenceToAssetsVault({
       coverImageUrl: cover,
-      storyTitle: store.storyTitle,
-      rawStoryline: store.rawStoryline,
-      cleanedStoryline: store.cleanedStoryline,
-      beatIntervalSec: store.beatIntervalSec,
-      directorSettings: store.directorSettings,
-      productionCast: store.productionCast,
-      productionAssets: store.productionAssets,
-      beats: store.beats,
+      storyTitle: currentStory.storyTitle,
+      rawStoryline: currentStory.rawStoryline,
+      cleanedStoryline: currentStory.cleanedStoryline,
+      beatIntervalSec: currentStory.beatIntervalSec,
+      directorSettings: currentStory.directorSettings,
+      productionCast: currentStory.productionCast,
+      productionAssets: currentStory.productionAssets,
+      beats: currentStory.beats,
       collectionNameForDb,
       baseNameForId,
       assetName: assetNameOpt,
@@ -412,7 +438,11 @@ export const StorylineStudio: React.FC = () => {
         beat.linkedVaultAssetIds.includes(a.vaultAssetId)
       );
 
-      const prompt = compileVisualPromptForBeat(beat, store.productionCast, store.directorSettings);
+      const prompt = compileVisualPromptForBeat(
+        beat,
+        store.productionCast,
+        useStorylineStudioStore.getState().directorSettings,
+      );
       const refUrls = buildStorylineReferenceSlots(linkedCast, linkedSupporting, linkedAssets);
       const seed = pickGenerationSeed('randomized', null);
 
@@ -477,25 +507,26 @@ export const StorylineStudio: React.FC = () => {
   );
 
   const exportStoryJson = useCallback(() => {
+    const currentStory = useStorylineStudioStore.getState();
     const payload = {
       version: 1,
-      title: store.storyTitle,
-      rawStoryline: store.rawStoryline,
-      cleanedStoryline: store.cleanedStoryline,
-      beatIntervalSec: store.beatIntervalSec,
-      directorSettings: store.directorSettings,
-      productionCast: store.productionCast,
-      productionAssets: store.productionAssets,
-      productionSupportingRefs: store.productionSupportingRefs,
-      beats: store.beats,
+      title: currentStory.storyTitle,
+      rawStoryline: currentStory.rawStoryline,
+      cleanedStoryline: currentStory.cleanedStoryline,
+      beatIntervalSec: currentStory.beatIntervalSec,
+      directorSettings: currentStory.directorSettings,
+      productionCast: currentStory.productionCast,
+      productionAssets: currentStory.productionAssets,
+      productionSupportingRefs: currentStory.productionSupportingRefs,
+      beats: currentStory.beats,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${store.storyTitle.replace(/\s+/g, '_') || 'arcs_story'}.json`;
+    a.download = `${currentStory.storyTitle.replace(/\s+/g, '_') || 'arcs_story'}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [store]);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -740,7 +771,25 @@ export const StorylineStudio: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Row 1 — Production libraries (vault-linked cast, assets, and NPC refs for generation refs) */}
+        <section
+          data-storyline-workspace="imageshop"
+          className="min-w-0 shrink-0"
+          aria-label="Imageshop generation workspace"
+        >
+          <GenericImageLabPanel
+            selectedBeat={selectedBeat}
+            productionCast={store.productionCast}
+            productionAssets={store.productionAssets}
+            productionSupportingRefs={store.productionSupportingRefs}
+            writerLoreCards={imageshopWriterLoreCards}
+            onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
+            onCreateNewBeat={handleLabCreateNewBeat}
+            seedPrompt={labSeedPrompt}
+            onSeedPromptConsumed={() => setLabSeedPrompt(null)}
+          />
+        </section>
+
+        {/* Secondary production libraries (vault-linked cast, assets, and NPC refs for generation refs) */}
         <div className="shrink-0 rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <section className="flex flex-col min-h-0 min-w-0 max-h-[320px] md:max-h-[380px]">
@@ -882,7 +931,7 @@ export const StorylineStudio: React.FC = () => {
           </div>
         </div>
 
-        {/* Row 2 — Timeline + large aspect-correct preview */}
+        {/* Secondary timeline + large aspect-correct preview */}
         <div className="shrink-0 rounded-xl border border-white/10 bg-black/20 flex flex-col lg:flex-row min-h-0 gap-0">
           <main className="flex-1 min-w-0 flex flex-col p-3 min-h-[220px] lg:border-r border-white/10">
             <div className="flex items-center justify-between mb-2 shrink-0">
@@ -1065,8 +1114,8 @@ export const StorylineStudio: React.FC = () => {
           </aside>
         </div>
 
-        {/* Row 3 — Beat detail | Image Lab */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-h-0 shrink-0 pb-2">
+        {/* Secondary beat detail */}
+        <div className="min-h-0 shrink-0 pb-2">
           <aside className="min-w-0 flex flex-col gap-3 rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm max-h-[70vh] xl:max-h-none overflow-y-auto">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
               Beat detail
@@ -1440,19 +1489,6 @@ export const StorylineStudio: React.FC = () => {
             )}
           </aside>
 
-          <aside className="min-w-0 flex flex-col rounded-xl border border-white/10 bg-black/25 p-4 backdrop-blur-sm max-h-[70vh] xl:max-h-none overflow-y-auto">
-            <GenericImageLabPanel
-              selectedBeat={selectedBeat}
-              productionCast={store.productionCast}
-              productionAssets={store.productionAssets}
-              productionSupportingRefs={store.productionSupportingRefs}
-              writerLoreCards={imageshopWriterLoreCards}
-              onUseAsSelectedBeat={handleLabUseAsSelectedBeat}
-              onCreateNewBeat={handleLabCreateNewBeat}
-              seedPrompt={labSeedPrompt}
-              onSeedPromptConsumed={() => setLabSeedPrompt(null)}
-            />
-          </aside>
         </div>
       </div>
 

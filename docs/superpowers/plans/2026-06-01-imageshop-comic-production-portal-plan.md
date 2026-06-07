@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, TypeScript, Zustand/localStorage, Zod, Vitest, React Testing Library, Supabase client/helpers, existing Gemini image API bridge, existing Writers Workshop and vault APIs.
 
-**Approval status:** Implementation complete on branch `codex/imageshop-comic-production-portal`; ready for user review and approval as of 2026-06-05.
+**Approval status:** The original eight-pass feature scope is implemented on branch `codex/imageshop-comic-production-portal`, but approval is withheld after the June 5 integrity and Playwright audits. Repair work is planned in `docs/superpowers/plans/2026-06-06-imageshop-integrity-repair-plan.md`.
 
 ---
 

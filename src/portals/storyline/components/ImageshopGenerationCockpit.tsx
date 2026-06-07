@@ -116,8 +116,8 @@ export function ImageshopGenerationCockpit({
   const activePanel = selectedPanel ?? queue.pages[0]?.panels[0] ?? null;
 
   return (
-    <section className="mt-3 border border-amber-300/25 bg-[#120f08]/85 p-3 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
-      <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.85fr)_minmax(18rem,1.2fr)_minmax(14rem,0.85fr)]">
+    <section className="mt-3 min-w-0 max-w-full overflow-x-clip border border-amber-300/25 bg-[#120f08]/85 p-3 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100/65">
             Writer Pages Cockpit

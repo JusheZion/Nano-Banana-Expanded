@@ -1,6 +1,7 @@
-import type {
-  ImageshopBatchGenerationAttempt,
-  ImageshopBatchRetryStrategy,
+import {
+  getLatestImageshopBatchAttempts,
+  type ImageshopBatchGenerationAttempt,
+  type ImageshopBatchRetryStrategy,
 } from '@/portals/storyline/imageshopBatchGeneration';
 
 export type ImageshopBatchUiStatus = 'idle' | 'running' | 'paused' | 'completed';
@@ -29,9 +30,10 @@ export function ImageshopBatchControls({
   onSkipSelected: () => void;
 }) {
   const running = status === 'running';
-  const failedAttempts = attempts.filter((attempt) => attempt.status === 'failed');
-  const generatedAttempts = attempts.filter((attempt) => attempt.status === 'generated');
-  const skippedAttempts = attempts.filter((attempt) => attempt.status === 'skipped');
+  const latestAttempts = getLatestImageshopBatchAttempts(attempts);
+  const failedAttempts = latestAttempts.filter((attempt) => attempt.status === 'failed');
+  const generatedAttempts = latestAttempts.filter((attempt) => attempt.status === 'generated');
+  const skippedAttempts = latestAttempts.filter((attempt) => attempt.status === 'skipped');
   const elapsedMs = attempts.reduce((total, attempt) => total + attempt.elapsedMs, 0);
 
   return (

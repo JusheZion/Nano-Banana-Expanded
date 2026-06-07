@@ -37,6 +37,13 @@ import { pickGenerationSeed } from '@/shared/utils/generationSeed';
 import { saveGeneration } from '@/shared/utils/generationOutputRouter';
 import { addRecentFromAsset, addRecentFromCharacter } from '@/shared/utils/recentGenerations';
 import {
+  loadImageshopImageUrl,
+  releaseImageshopImageUrl,
+  saveImageshopImage,
+  type ImageshopImageAsset,
+  type ImageshopImagePersistence,
+} from '@/shared/utils/imageshopImageRepository';
+import {
   studioPreviewAspectCss,
   studioPreviewMaxHeightCss,
   type StudioPreviewAspectId,
@@ -45,8 +52,8 @@ import { ImageshopImportPanel } from '@/portals/storyline/ImageshopImportPanel';
 import { ImageshopGenerationCockpit } from '@/portals/storyline/components/ImageshopGenerationCockpit';
 import { ImageshopOutputDestinations } from '@/portals/storyline/components/ImageshopOutputDestinations';
 import { ImageshopProductionBoard } from '@/portals/storyline/components/ImageshopProductionBoard';
+import { useImageshopPromptDraft } from '@/portals/storyline/hooks/useImageshopPromptDraft';
 import {
-  composeImageshopPrompt,
   createDefaultImageshopContinuitySettings,
   createDefaultImageshopPageConfig,
   createDefaultImageshopPromptWorkspace,
@@ -55,6 +62,16 @@ import {
   type ImageshopPageType,
   type ImageshopPromptSectionKey,
 } from '@/portals/storyline/imageshopPromptComposer';
+import {
+  compileImageshopGenerationRequest,
+  evaluateImageshopGenerationRequest,
+  filterImageshopGenerationRequestReferences,
+  type ImageshopGenerationRequest,
+} from '@/portals/storyline/imageshopGenerationRequest';
+import {
+  executeWithPreparedImageshopReferences,
+  type ImageshopReferencePreparationResult,
+} from '@/portals/storyline/imageshopReferencePreparation';
 import {
   exportImageshopProductionConfig,
   normalizeImageshopJson,
@@ -65,6 +82,7 @@ import {
   type ImageshopGenerationProvenance,
   type ImageshopPanelReferenceUndo,
   type ImageshopPanelQueueItem,
+  type ImageshopReferenceLane,
 } from '@/portals/storyline/imageshopPagePanelQueue';
 import {
   buildImageshopCanonContext,
@@ -83,6 +101,7 @@ import {
   type ImageshopPromptPreflightSection,
 } from '@/portals/storyline/components/ImageshopPromptPreflightPanel';
 import {
+  getLatestImageshopBatchAttempts,
   runImageshopGenerationBatch,
   type ImageshopBatchGenerationAttempt,
   type ImageshopBatchGenerationItem,
@@ -109,7 +128,42 @@ import { useImageshopSessionStore, type ImageshopSessionResult } from '@/stores/
 
 type LabContext = 'character' | 'asset';
 type GeneratedVaultTarget = 'character' | 'asset' | 'npc';
-type ImageshopSurfaceTab = 'compose' | 'page-setup' | 'batch-json' | 'review';
+
+function laneForStandaloneReference(
+  reference: GuidedImageWorkshopReference,
+  context: LabContext,
+): ImageshopReferenceLane {
+  if (reference.sourceType === 'character' || reference.sourceType === 'npc') {
+    return 'character-dna';
+  }
+  if (reference.sourceType === 'asset') return 'environment';
+  return context === 'character' ? 'character-dna' : 'environment';
+}
+
+function syncPanelReferencePreparation(
+  request: ImageshopGenerationRequest,
+  preparation: ImageshopReferencePreparationResult,
+  update: ReturnType<typeof useImageshopProductionStore.getState>['updatePanelQueueReferencePreparation'],
+): void {
+  if (request.source.kind !== 'panel') return;
+  update(
+    request.source.queueItemId,
+    preparation.references.map((reference) =>
+      reference.status === 'ready'
+        ? {
+            id: reference.id,
+            status: 'ready' as const,
+          }
+        : {
+            id: reference.id,
+            status: 'failed' as const,
+            failureKind: reference.failure.kind,
+            failureMessage: reference.failure.message,
+          },
+    ),
+  );
+}
+type ImageshopSurfaceTab = 'compose' | 'import' | 'page-setup' | 'batch-json' | 'review';
 type RefinementTool =
   | 'prompt-edit'
   | 'region-edit'
@@ -183,6 +237,7 @@ const PRODUCTION_STATUSES: Array<{ value: ImageshopProductionStatus | 'all'; lab
 
 const IMAGESHOP_SURFACE_TABS: Array<{ value: ImageshopSurfaceTab; label: string; description: string }> = [
   { value: 'compose', label: 'Compose', description: 'Prompt, references, preview, and generation.' },
+  { value: 'import', label: 'Import', description: 'Retouch or restyle an external image.' },
   { value: 'page-setup', label: 'Page setup', description: 'Style, continuity, page layout, and aspect.' },
   { value: 'batch-json', label: 'Batch JSON', description: 'Import and export production JSON batches.' },
   { value: 'review', label: 'Review', description: 'Dashboard status and refinement staging.' },
@@ -211,9 +266,6 @@ function buildPanelQueuePrompt(panel: ImageshopPanelQueueItem): string {
     panel.artStyle ? `Art style: ${panel.artStyle}` : '',
     panel.canonChips.length > 0
       ? `Canon context:\n${panel.canonChips.map((chip) => `- ${chip.title}: ${chip.summary}`).join('\n')}`
-      : '',
-    panel.referenceChips.length > 0
-      ? `Reference targets:\n${panel.referenceChips.map((chip) => `- ${chip.lane}: ${chip.label}`).join('\n')}`
       : '',
   ]
     .filter(Boolean)
@@ -271,6 +323,7 @@ export function GenericImageLabPanel({
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [imagePersistenceWarning, setImagePersistenceWarning] = useState<string | null>(null);
 
   const [lastImageUrl, setLastImageUrl] = useState<string | null>(null);
   const [lastSeed, setLastSeed] = useState<number | null>(null);
@@ -281,6 +334,7 @@ export function GenericImageLabPanel({
   const [batchNextIndex, setBatchNextIndex] = useState(0);
   const batchPauseRequestedRef = useRef(false);
   const batchPanelContextsRef = useRef<Map<string, ImageshopBatchPanelContext>>(new Map());
+  const hydratedImageAssetIdsRef = useRef(new Set<string>());
   const [guidedHandoffContext, setGuidedHandoffContext] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPanelTarget, setGuidedPanelTarget] = useState<GuidedImageWorkshopHandoff | null>(null);
   const [guidedPromptTracksReferences, setGuidedPromptTracksReferences] = useState(false);
@@ -303,11 +357,16 @@ export function GenericImageLabPanel({
   const addSessionResult = useImageshopSessionStore((s) => s.addResult);
   const selectSessionResult = useImageshopSessionStore((s) => s.selectResult);
   const removeSessionResult = useImageshopSessionStore((s) => s.removeResult);
+  const restoreSessionResultImage = useImageshopSessionStore((s) => s.restoreResultImage);
   const generationMode = useImageshopProductionStore((s) => s.generationMode);
   const setGenerationMode = useImageshopProductionStore((s) => s.setGenerationMode);
-  const promptWorkspace = useImageshopProductionStore((s) => s.promptWorkspace);
-  const updatePromptSection = useImageshopProductionStore((s) => s.updatePromptSection);
-  const replacePromptWorkspace = useImageshopProductionStore((s) => s.replacePromptWorkspace);
+  const persistedPromptWorkspace = useImageshopProductionStore((s) => s.promptWorkspace);
+  const commitPromptWorkspace = useImageshopProductionStore((s) => s.replacePromptWorkspace);
+  const {
+    promptWorkspace,
+    updatePromptSection,
+    replacePromptWorkspace,
+  } = useImageshopPromptDraft(persistedPromptWorkspace);
   const selectedArtStyleId = useImageshopProductionStore((s) => s.selectedArtStyleId);
   const savedArtStyles = useImageshopProductionStore((s) => s.savedArtStyles);
   const selectArtStyle = useImageshopProductionStore((s) => s.selectArtStyle);
@@ -325,6 +384,7 @@ export function GenericImageLabPanel({
   const selectProductionItem = useImageshopProductionStore((s) => s.selectProductionItem);
   const updateProductionItemStatus = useImageshopProductionStore((s) => s.updateProductionItemStatus);
   const addProductionVersion = useImageshopProductionStore((s) => s.addProductionVersion);
+  const restoreProductionVersionImage = useImageshopProductionStore((s) => s.restoreProductionVersionImage);
   const selectProductionVersion = useImageshopProductionStore((s) => s.selectProductionVersion);
   const revertProductionVersion = useImageshopProductionStore((s) => s.revertProductionVersion);
   const approveProductionItem = useImageshopProductionStore((s) => s.approveProductionItem);
@@ -336,6 +396,9 @@ export function GenericImageLabPanel({
   const panelQueueReadiness = useImageshopProductionStore((s) => s.panelQueueReadiness);
   const selectPanelQueueItem = useImageshopProductionStore((s) => s.selectPanelQueueItem);
   const updatePanelQueueItemStatus = useImageshopProductionStore((s) => s.updatePanelQueueItemStatus);
+  const updatePanelQueueReferencePreparation = useImageshopProductionStore(
+    (s) => s.updatePanelQueueReferencePreparation,
+  );
   const addPanelQueueReferenceChip = useImageshopProductionStore((s) => s.addPanelQueueReferenceChip);
   const replacePanelQueueReferenceChips = useImageshopProductionStore((s) => s.replacePanelQueueReferenceChips);
   const clearPanelQueueReferenceChips = useImageshopProductionStore((s) => s.clearPanelQueueReferenceChips);
@@ -344,6 +407,7 @@ export function GenericImageLabPanel({
   const detachPanelQueueCanonChip = useImageshopProductionStore((s) => s.detachPanelQueueCanonChip);
   const syncPanelQueueCanonChips = useImageshopProductionStore((s) => s.syncPanelQueueCanonChips);
   const saveExportPanelRef = useRef<HTMLDivElement | null>(null);
+  const ownedObjectUrlsRef = useRef(new Set<string>());
   const [jsonImportText, setJsonImportText] = useState('');
   const [jsonImportError, setJsonImportError] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -362,12 +426,132 @@ export function GenericImageLabPanel({
   });
   const [lastReferenceUndo, setLastReferenceUndo] = useState<ImageshopPanelReferenceUndo | null>(null);
 
+  const registerOwnedObjectUrl = useCallback((url: string): string => {
+    ownedObjectUrlsRef.current.add(url);
+    return url;
+  }, []);
+
+  const revokeOwnedObjectUrl = useCallback((url: string): void => {
+    if (!ownedObjectUrlsRef.current.delete(url)) return;
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const replaceRefsWithOwnedUrlCleanup = useCallback(
+    (nextRefsOrUpdater: string[] | ((prev: string[]) => string[])) => {
+      setRefs((prev) => {
+        const nextRefs =
+          typeof nextRefsOrUpdater === 'function'
+            ? nextRefsOrUpdater(prev)
+            : nextRefsOrUpdater;
+        const nextOwnedUrls = new Set(nextRefs.filter(Boolean));
+        for (const url of prev) {
+          if (!url || nextOwnedUrls.has(url)) continue;
+          revokeOwnedObjectUrl(url);
+        }
+        return nextRefs;
+      });
+    },
+    [revokeOwnedObjectUrl],
+  );
+
   const activeSessionResult = useMemo(
     () =>
       sessionResults.find((result) => result.id === activeSessionResultId) ??
       sessionResults[0] ??
       null,
     [activeSessionResultId, sessionResults],
+  );
+  const reloadSafeSessionResultCount = useMemo(
+    () => sessionResults.filter((result) => result.imagePersistence === 'stored').length,
+    [sessionResults],
+  );
+
+  const persistGeneratedImage = useCallback(
+    async (
+      imageUrl: string,
+    ): Promise<{
+      imageAsset?: ImageshopImageAsset;
+      imagePersistence: ImageshopImagePersistence;
+    }> => {
+      try {
+        const imageAsset = await saveImageshopImage(imageUrl);
+        setImagePersistenceWarning(null);
+        return { imageAsset, imagePersistence: 'stored' };
+      } catch {
+        setImagePersistenceWarning(
+          'Generated image is available now but will not survive a reload because browser image storage is unavailable.',
+        );
+        return { imagePersistence: 'memory-only' };
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const activeAssetIds = new Set<string>();
+    for (const result of sessionResults) {
+      if (result.imageAsset) activeAssetIds.add(result.imageAsset.id);
+    }
+    for (const item of productionItems) {
+      for (const version of item.versions) {
+        if (version.imageAsset) activeAssetIds.add(version.imageAsset.id);
+      }
+    }
+
+    for (const assetId of hydratedImageAssetIdsRef.current) {
+      if (activeAssetIds.has(assetId)) continue;
+      releaseImageshopImageUrl(assetId);
+      hydratedImageAssetIdsRef.current.delete(assetId);
+    }
+
+    for (const result of sessionResults) {
+      if (result.imageUrl || !result.imageAsset) continue;
+      const assetId = result.imageAsset.id;
+      hydratedImageAssetIdsRef.current.add(assetId);
+      void loadImageshopImageUrl(assetId)
+        .then((imageUrl) => {
+          if (cancelled || !imageUrl) return;
+          restoreSessionResultImage(result.id, imageUrl);
+        })
+        .catch(() => undefined);
+    }
+
+    for (const item of productionItems) {
+      for (const version of item.versions) {
+        if (version.imageUrl || !version.imageAsset) continue;
+        const assetId = version.imageAsset.id;
+        hydratedImageAssetIdsRef.current.add(assetId);
+        void loadImageshopImageUrl(assetId)
+          .then((imageUrl) => {
+            if (cancelled || !imageUrl) return;
+            restoreProductionVersionImage(item.id, version.id, imageUrl);
+          })
+          .catch(() => undefined);
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    productionItems,
+    restoreProductionVersionImage,
+    restoreSessionResultImage,
+    sessionResults,
+  ]);
+
+  useEffect(
+    () => () => {
+      for (const assetId of hydratedImageAssetIdsRef.current) {
+        releaseImageshopImageUrl(assetId);
+      }
+      hydratedImageAssetIdsRef.current.clear();
+      for (const url of ownedObjectUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      ownedObjectUrlsRef.current.clear();
+    },
+    [],
   );
 
   useEffect(() => {
@@ -516,18 +700,41 @@ export function GenericImageLabPanel({
     return generationMode === 'comic-pages' || hasExtraPromptSections || Boolean(selectedArtStyle) || continuityChanged || pageConfigChanged;
   }, [continuity, generationMode, pageConfig, promptWorkspace, selectedArtStyle]);
 
-  const composedProductionPrompt = useMemo(
+  const currentGenerationRequest = useMemo(
     () =>
-      composeImageshopPrompt({
+      compileImageshopGenerationRequest({
         mode: generationMode,
         workspace: structuredWorkspace,
         artStyle: selectedArtStyle,
         continuity,
-        references: activeReferenceMetadata,
         pageConfig,
+        references: activeReferenceMetadata.map((reference, index) => ({
+          id: reference.referenceId ?? reference.name ?? `imageshop-reference-${index + 1}`,
+          label: reference.displayName,
+          lane: laneForStandaloneReference(reference, context),
+          imageUrl: reference.imageUrl,
+          status: 'unknown',
+          sourceType: reference.sourceType,
+          sourceLabel: reference.sourceLabel,
+        })),
+        modelId,
+        aspectRatio,
+        context,
+        source: { kind: 'standalone' },
       }),
-    [activeReferenceMetadata, continuity, generationMode, pageConfig, selectedArtStyle, structuredWorkspace],
+    [
+      activeReferenceMetadata,
+      aspectRatio,
+      context,
+      continuity,
+      generationMode,
+      modelId,
+      pageConfig,
+      selectedArtStyle,
+      structuredWorkspace,
+    ],
   );
+  const composedProductionPrompt = currentGenerationRequest.prompt;
 
   /** Prefer refined text when enabled and present; otherwise use raw (avoids empty refined + default toggle blocking generation). */
   const effectivePrompt = useMemo(() => {
@@ -535,22 +742,12 @@ export function GenericImageLabPanel({
     const refined = promptRefined.trim();
     const basePrompt = useRefinedPrompt && refined ? refined : raw || refined || promptWorkspace.main.trim();
     if (!basePrompt) return '';
-    if (hasProductionPromptControls) return composedProductionPrompt;
-    return basePrompt;
-  }, [composedProductionPrompt, hasProductionPromptControls, promptRaw, promptRefined, promptWorkspace.main, useRefinedPrompt]);
+    return currentGenerationRequest.prompt;
+  }, [currentGenerationRequest.prompt, promptRaw, promptRefined, promptWorkspace.main, useRefinedPrompt]);
   const promptForAiHelper = hasProductionPromptControls ? composedProductionPrompt.trim() : promptRaw.trim();
   const currentPromptPreflight = useMemo(
-    () =>
-      evaluateImageshopPromptPreflight({
-        composedPrompt: composedProductionPrompt,
-        workspace: structuredWorkspace,
-        references: activeReferenceMetadata.map((reference) => ({
-          label: reference.displayName,
-          imageUrl: reference.imageUrl,
-          signedUrlStatus: 'unknown',
-        })),
-      }),
-    [activeReferenceMetadata, composedProductionPrompt, structuredWorkspace],
+    () => evaluateImageshopGenerationRequest(currentGenerationRequest),
+    [currentGenerationRequest],
   );
   const currentPromptPreflightSections = useMemo<ImageshopPromptPreflightSection[]>(
     () => [
@@ -683,10 +880,10 @@ export function GenericImageLabPanel({
 
   const applyRefs = useCallback((incoming: string[], nextContext: LabContext) => {
     const next = Array.from({ length: 14 }, (_, i) => incoming[i] ?? '');
-    setRefs(next);
+    replaceRefsWithOwnedUrlCleanup(next);
     setContext(nextContext);
     setNotice(null);
-  }, []);
+  }, [replaceRefsWithOwnedUrlCleanup]);
 
   useEffect(() => {
     const handoff = consumeGuidedComicHandoff();
@@ -732,6 +929,7 @@ export function GenericImageLabPanel({
     if (!guidedPanelTarget || !lastImageUrl || !guidedPanelTarget.pageNumber || !guidedPanelTarget.panelNumber) return;
 
     sendGuidedComicPanelImageBack({
+      workspace: guidedPanelTarget.workspace,
       panelId: guidedPanelTarget.panelId,
       pageNumber: guidedPanelTarget.pageNumber,
       panelNumber: guidedPanelTarget.panelNumber,
@@ -811,13 +1009,13 @@ export function GenericImageLabPanel({
       selectedBeat.linkedVaultAssetIds.includes(a.vaultAssetId)
     );
     const packed = buildStorylineReferenceSlots(linkedCast, linkedSupporting, linkedAssets);
-    setRefs(packed);
+    replaceRefsWithOwnedUrlCleanup(packed);
     setContext('character');
-  }, [productionAssets, productionCast, productionSupportingRefs, selectedBeat]);
+  }, [productionAssets, productionCast, productionSupportingRefs, replaceRefsWithOwnedUrlCleanup, selectedBeat]);
 
   const clearRefs = useCallback(() => {
-    setRefs(Array.from({ length: 14 }, () => ''));
-  }, []);
+    replaceRefsWithOwnedUrlCleanup(Array.from({ length: 14 }, () => ''));
+  }, [replaceRefsWithOwnedUrlCleanup]);
 
   const addFiles = useCallback(
     (files: FileList | null) => {
@@ -830,14 +1028,14 @@ export function GenericImageLabPanel({
           if (!file.type.startsWith('image/')) continue;
           while (slot < 14 && next[slot]) slot++;
           if (slot >= 14) break;
-          const url = URL.createObjectURL(file);
+          const url = registerOwnedObjectUrl(URL.createObjectURL(file));
           next[slot] = url;
           slot++;
         }
         return next;
       });
     },
-    []
+    [registerOwnedObjectUrl]
   );
 
   const pasteFirstEmpty = useCallback(async () => {
@@ -851,10 +1049,17 @@ export function GenericImageLabPanel({
             if (!type.startsWith('image/')) continue;
             void (async () => {
               const blob = await item.getType(type);
-              const url = URL.createObjectURL(blob);
-              const firstEmpty = next.findIndex((u) => !u);
-              if (firstEmpty >= 0) next[firstEmpty] = url;
-              setRefs([...next]);
+              const url = registerOwnedObjectUrl(URL.createObjectURL(blob));
+              setRefs((current) => {
+                const updated = Array.from({ length: 14 }, (_, i) => current[i] ?? '');
+                const firstEmpty = updated.findIndex((u) => !u);
+                if (firstEmpty < 0) {
+                  revokeOwnedObjectUrl(url);
+                  return current;
+                }
+                updated[firstEmpty] = url;
+                return updated;
+              });
             })();
             return next;
           }
@@ -864,7 +1069,7 @@ export function GenericImageLabPanel({
     } catch {
       setError('Could not paste image from clipboard (permission or no image).');
     }
-  }, []);
+  }, [registerOwnedObjectUrl, revokeOwnedObjectUrl]);
 
   const ensureProductionItemForPrompt = useCallback(
     (prompt: string): ImageshopProductionItem => {
@@ -920,6 +1125,8 @@ export function GenericImageLabPanel({
     (args: {
       item: ImageshopProductionItem;
       imageUrl: string;
+      imageAsset?: ImageshopImageAsset;
+      imagePersistence?: ImageshopImagePersistence;
       seed: number | null;
       prompt: string;
       kind: ImageshopProductionVersionKind;
@@ -928,6 +1135,8 @@ export function GenericImageLabPanel({
     }) => {
       addProductionVersion(args.item.id, {
         imageUrl: args.imageUrl,
+        imageAsset: args.imageAsset,
+        imagePersistence: args.imagePersistence,
         seed: args.seed,
         prompt: args.prompt,
         kind: args.kind,
@@ -973,58 +1182,89 @@ export function GenericImageLabPanel({
   }, [promptForAiHelper]);
 
   const generate = useCallback(async (
-    promptOverride?: string,
-    panelQueueItemId?: string,
+    request: ImageshopGenerationRequest,
     provenance?: ImageshopGenerationProvenance,
   ) => {
-    const basePrompt = promptOverride?.trim() || effectivePrompt;
-    if (!basePrompt) {
+    if (!request.workspace.main.trim()) {
       setError('Enter a prompt before generating.');
       return;
     }
-    if (!promptOverride && !currentPromptPreflight.canGenerate) {
+    const preflight = evaluateImageshopGenerationRequest(request);
+    if (!preflight.canGenerate) {
       setError(
-        currentPromptPreflight.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+        preflight.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
           'Resolve prompt preflight errors before generation.',
       );
       return;
     }
     setError(null);
     setGenBusy(true);
-    if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'generating');
+    commitPromptWorkspace(request.workspace);
+    if (request.source.kind === 'panel') updatePanelQueueItemStatus(request.source.queueItemId, 'generating');
     try {
       const seed = pickGenerationSeed('randomized', null);
-      const res = await generateImage({
-        prompt: basePrompt,
-        referenceImageUrls: stableRefs,
-        seed,
-        aspectRatio,
-        modelId,
-        context,
+      const execution = await executeWithPreparedImageshopReferences({
+        references: request.provider.references,
+        execute: (preparedReferenceImages) =>
+          generateImage({
+            prompt: request.provider.prompt,
+            referenceImageUrls: [],
+            preparedReferenceImages,
+            seed,
+            aspectRatio: request.aspectRatio,
+            modelId: request.modelId,
+            context: request.context,
+          }),
       });
+      syncPanelReferencePreparation(
+        request,
+        execution.preparation,
+        updatePanelQueueReferencePreparation,
+      );
+      if (!execution.ok) {
+        const failedLabels = execution.failedReferenceIds.map(
+          (id) => request.references.find((reference) => reference.id === id)?.label ?? id,
+        );
+        setError(`Reference preparation failed: ${failedLabels.join(', ')}.`);
+        if (request.source.kind === 'panel') updatePanelQueueItemStatus(request.source.queueItemId, 'failed');
+        return;
+      }
+      const res = execution.value;
       if (!res.ok) {
         if ('blocked' in res && res.blocked) setError('Blocked by safety filters.');
         else if ('error' in res) setError(formatGeminiClientError(res.error));
         else setError('Failed to generate image.');
-        if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'failed');
+        if (request.source.kind === 'panel') updatePanelQueueItemStatus(request.source.queueItemId, 'failed');
         return;
       }
+      const { imageAsset, imagePersistence } = await persistGeneratedImage(res.imageDataUrl);
       const stored = addSessionResult({
         imageUrl: res.imageDataUrl,
+        imageAsset,
+        imagePersistence,
         seed,
-        prompt: basePrompt,
-        aspectRatio,
-        context,
-        modelId,
+        prompt: request.prompt,
+        aspectRatio: request.aspectRatio,
+        context: request.context,
+        modelId: request.modelId,
         sourceLabel: guidedPanelTarget?.sourceLabel,
         provenance,
       });
-      const item = ensureProductionItemForPrompt(basePrompt);
+      const activeQueue = useImageshopProductionStore.getState().panelQueue;
+      const sourcePanel =
+        request.source.kind === 'panel' && activeQueue
+          ? findImageshopPanelQueueItem(activeQueue, request.source.queueItemId)
+          : undefined;
+      const item = sourcePanel
+        ? ensureProductionItemForPanel(sourcePanel, request.prompt)
+        : ensureProductionItemForPrompt(request.prompt);
       recordProductionVersion({
         item,
         imageUrl: stored.imageUrl,
+        imageAsset,
+        imagePersistence,
         seed: stored.seed,
-        prompt: basePrompt,
+        prompt: request.prompt,
         kind: refinementTool === 'continuity-correction' ? 'continuity-correction' : item.versions.length > 0 ? 'refined' : 'generated',
         provenance,
       });
@@ -1033,23 +1273,21 @@ export function GenericImageLabPanel({
       setLastGenerationProvenance(provenance ?? null);
       setGeneratedSaveError(null);
       setGeneratedSaveNotice(null);
-      if (panelQueueItemId) updatePanelQueueItemStatus(panelQueueItemId, 'generated');
+      if (request.source.kind === 'panel') updatePanelQueueItemStatus(request.source.queueItemId, 'generated');
     } finally {
       setGenBusy(false);
     }
   }, [
     addSessionResult,
-    aspectRatio,
-    context,
-    currentPromptPreflight,
-    effectivePrompt,
+    commitPromptWorkspace,
+    ensureProductionItemForPanel,
     ensureProductionItemForPrompt,
     guidedPanelTarget?.sourceLabel,
-    modelId,
+    persistGeneratedImage,
     recordProductionVersion,
     refinementTool,
-    stableRefs,
     updatePanelQueueItemStatus,
+    updatePanelQueueReferencePreparation,
   ]);
 
   const handleSaveGeneratedToVault = useCallback(async () => {
@@ -1240,10 +1478,23 @@ export function GenericImageLabPanel({
     (files: FileList | null) => {
       const file = files?.[0];
       if (!file || !file.type.startsWith('image/')) return;
-      const nextPageBackgroundUrl = URL.createObjectURL(file);
+      const nextPageBackgroundUrl = registerOwnedObjectUrl(URL.createObjectURL(file));
       const previousPageBackgroundUrl = pageConfig.panelStyle.pageBackgroundUrl;
-      if (previousPageBackgroundUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previousPageBackgroundUrl);
+      revokeOwnedObjectUrl(previousPageBackgroundUrl);
+      updatePageConfig({
+        panelStyle: {
+          pageBackgroundUrl: nextPageBackgroundUrl,
+        },
+      });
+    },
+    [pageConfig.panelStyle.pageBackgroundUrl, registerOwnedObjectUrl, revokeOwnedObjectUrl, updatePageConfig],
+  );
+
+  const handlePageBackgroundUrlChange = useCallback(
+    (nextPageBackgroundUrl: string) => {
+      const previousPageBackgroundUrl = pageConfig.panelStyle.pageBackgroundUrl;
+      if (previousPageBackgroundUrl !== nextPageBackgroundUrl) {
+        revokeOwnedObjectUrl(previousPageBackgroundUrl);
       }
       updatePageConfig({
         panelStyle: {
@@ -1251,7 +1502,7 @@ export function GenericImageLabPanel({
         },
       });
     },
-    [pageConfig.panelStyle.pageBackgroundUrl, updatePageConfig],
+    [pageConfig.panelStyle.pageBackgroundUrl, revokeOwnedObjectUrl, updatePageConfig],
   );
 
   const exportProductionJson = useCallback(() => {
@@ -1354,7 +1605,7 @@ export function GenericImageLabPanel({
     setError(null);
     try {
       for (const item of queue) {
-        const itemPrompt = composeImageshopPrompt({
+        const request = compileImageshopGenerationRequest({
           mode: generationMode,
           workspace: {
             ...promptWorkspace,
@@ -1363,37 +1614,74 @@ export function GenericImageLabPanel({
           },
           artStyle: selectedArtStyle,
           continuity,
-          references: activeReferenceMetadata,
           pageConfig: item.pageConfig ?? pageConfig,
-        });
-        const seed = pickGenerationSeed('randomized', null);
-        const res = await generateImage({
-          prompt: itemPrompt,
-          referenceImageUrls: stableRefs,
-          seed,
-          aspectRatio,
+          references: activeReferenceMetadata.map((reference, index) => ({
+            id: reference.referenceId ?? reference.name ?? `imageshop-reference-${index + 1}`,
+            label: reference.displayName,
+            lane: laneForStandaloneReference(reference, context),
+            imageUrl: reference.imageUrl,
+            status: 'unknown',
+            sourceType: reference.sourceType,
+            sourceLabel: reference.sourceLabel,
+          })),
           modelId,
+          aspectRatio,
           context,
+          source: { kind: 'standalone' },
         });
+        const preflight = evaluateImageshopGenerationRequest(request);
+        if (!preflight.canGenerate) {
+          updateProductionItemStatus(item.id, 'draft');
+          setError(
+            preflight.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+              'Prompt preflight blocked the batch item.',
+          );
+          break;
+        }
+        const seed = pickGenerationSeed('randomized', null);
+        const execution = await executeWithPreparedImageshopReferences({
+          references: request.provider.references,
+          execute: (preparedReferenceImages) =>
+            generateImage({
+              prompt: request.provider.prompt,
+              referenceImageUrls: [],
+              preparedReferenceImages,
+              seed,
+              aspectRatio: request.aspectRatio,
+              modelId: request.modelId,
+              context: request.context,
+            }),
+        });
+        if (!execution.ok) {
+          updateProductionItemStatus(item.id, 'draft');
+          setError(`Reference preparation failed for ${execution.failedReferenceIds.join(', ')}.`);
+          break;
+        }
+        const res = execution.value;
         if (!res.ok) {
           updateProductionItemStatus(item.id, 'draft');
           setError('A batch item failed to generate; remaining items were left queued.');
           break;
         }
+        const { imageAsset, imagePersistence } = await persistGeneratedImage(res.imageDataUrl);
         const stored = addSessionResult({
           imageUrl: res.imageDataUrl,
+          imageAsset,
+          imagePersistence,
           seed,
-          prompt: itemPrompt,
-          aspectRatio,
-          context,
-          modelId,
+          prompt: request.prompt,
+          aspectRatio: request.aspectRatio,
+          context: request.context,
+          modelId: request.modelId,
           sourceLabel: item.label,
         });
         recordProductionVersion({
           item,
           imageUrl: stored.imageUrl,
+          imageAsset,
+          imagePersistence,
           seed: stored.seed,
-          prompt: itemPrompt,
+          prompt: request.prompt,
           kind: item.versions.length > 0 ? 'refined' : 'generated',
         });
         setLastImageUrl(stored.imageUrl);
@@ -1411,11 +1699,11 @@ export function GenericImageLabPanel({
     generationMode,
     modelId,
     pageConfig,
+    persistGeneratedImage,
     productionItems,
     promptWorkspace,
     recordProductionVersion,
     selectedArtStyle,
-    stableRefs,
     updateProductionItemStatus,
   ]);
 
@@ -1473,14 +1761,16 @@ export function GenericImageLabPanel({
     (item: ImageshopProductionItem) => {
       selectProductionItem(item.id);
       setPromptRaw(item.prompt);
-      replacePromptWorkspace({
+      const workspace = {
         ...item.promptSections,
         main: item.promptSections.main ?? item.prompt,
-      });
+      };
+      replacePromptWorkspace(workspace);
+      commitPromptWorkspace(workspace);
       if (item.pageConfig) updatePageConfig(item.pageConfig);
       setNotice(`Loaded ${item.label} into the prompt workspace.`);
     },
-    [replacePromptWorkspace, selectProductionItem, updatePageConfig],
+    [commitPromptWorkspace, replacePromptWorkspace, selectProductionItem, updatePageConfig],
   );
 
   const stageRefinementPrompt = useCallback(() => {
@@ -1509,10 +1799,12 @@ export function GenericImageLabPanel({
 
     const nextPrompt = [base, instruction].filter(Boolean).join('\n\n');
     setPromptRaw(nextPrompt);
-    replacePromptWorkspace({
+    const workspace = {
       main: nextPrompt,
       continuity: instruction,
-    });
+    };
+    replacePromptWorkspace(workspace);
+    commitPromptWorkspace(workspace);
     if (target) {
       selectProductionItem(target.id);
       updateProductionItemStatus(target.id, target.status === 'draft' ? 'generated' : target.status);
@@ -1520,6 +1812,7 @@ export function GenericImageLabPanel({
     setNotice('Staged a refinement prompt for the selected production item.');
   }, [
     correctionOptions,
+    commitPromptWorkspace,
     effectivePrompt,
     continuitySourceImageUrl,
     continuityTargetImageUrl,
@@ -1724,35 +2017,65 @@ export function GenericImageLabPanel({
     }),
     [promptWorkspace.negative, selectedPanelCanonContext.promptSummary, selectedPanelQueueItemWithContext],
   );
-  const selectedPanelPreflight = useMemo(
+  const selectedPanelGenerationRequest = useMemo(
     () =>
-      evaluateImageshopPromptPreflight({
-        composedPrompt: composeImageshopPrompt({
-          mode: 'comic-pages',
-          workspace: selectedPanelPreflightWorkspace,
-          artStyle: selectedArtStyle,
-          continuity,
-          references: [],
-          pageConfig,
-        }),
-        workspace: selectedPanelPreflightWorkspace,
-        references: (selectedPanelQueueItemWithContext?.referenceChips ?? []).map((chip) => ({
-          label: chip.label,
-          imageUrl: chip.imageUrl ?? '',
-          signedUrlStatus: chip.signedUrlStatus,
-        })),
-        canonConflictCount: selectedPanelCanonContext.conflicts.length,
-        missingReferenceCount: selectedPanelReferenceContext.missingReferenceRoutes.length,
-      }),
+      selectedPanelQueueItemWithContext
+        ? compileImageshopGenerationRequest({
+            mode: 'comic-pages',
+            workspace: selectedPanelPreflightWorkspace,
+            artStyle: selectedArtStyle,
+            continuity,
+            pageConfig,
+            references: selectedPanelQueueItemWithContext.referenceChips.map((chip) => ({
+              id: chip.id,
+              label: chip.label,
+              lane: chip.lane,
+              imageUrl: chip.imageUrl ?? '',
+              status: chip.signedUrlStatus,
+              sourceType:
+                chip.sourceType === 'character' || chip.sourceType === 'asset' || chip.sourceType === 'npc'
+                  ? chip.sourceType
+                  : undefined,
+              sourceLabel: chip.sourceType,
+            })),
+            modelId,
+            aspectRatio,
+            context: selectedPanelQueueItemWithContext.referenceChips.some(
+              (chip) => chip.sourceType === 'character',
+            )
+              ? 'character'
+              : 'asset',
+            source: {
+              kind: 'panel',
+              queueItemId: selectedPanelQueueItemWithContext.queueItemId,
+              pageNumber: selectedPanelQueueItemWithContext.pageNumber,
+              panelNumber: selectedPanelQueueItemWithContext.panelNumber,
+            },
+            canonConflictCount: selectedPanelCanonContext.conflicts.length,
+            missingReferenceCount: selectedPanelReferenceContext.missingReferenceRoutes.length,
+          })
+        : null,
     [
+      aspectRatio,
       continuity,
+      modelId,
       pageConfig,
       selectedArtStyle,
       selectedPanelCanonContext.conflicts.length,
       selectedPanelPreflightWorkspace,
-      selectedPanelQueueItemWithContext?.referenceChips,
+      selectedPanelQueueItemWithContext,
       selectedPanelReferenceContext.missingReferenceRoutes.length,
     ],
+  );
+  const selectedPanelPreflight = useMemo(
+    () =>
+      selectedPanelGenerationRequest
+        ? evaluateImageshopGenerationRequest(selectedPanelGenerationRequest)
+        : evaluateImageshopPromptPreflight({
+            composedPrompt: '',
+            workspace: selectedPanelPreflightWorkspace,
+          }),
+    [selectedPanelGenerationRequest, selectedPanelPreflightWorkspace],
   );
   const selectedPanelPreflightSections = useMemo<ImageshopPromptPreflightSection[]>(
     () => [
@@ -1893,42 +2216,15 @@ export function GenericImageLabPanel({
         previousAttempts,
         pauseOnFailure: true,
         shouldPause: () => batchPauseRequestedRef.current,
-        execute: async ({ item, model, referenceUrls }) => {
+        execute: async ({ item, model, request }) => {
           const panelContext = contexts.get(item.queueItemId);
-          if (!panelContext) {
+          if (!panelContext || !request) {
             return {
               ok: false,
-              diagnostic: classifyGeminiImageFailure('Unsupported payload: panel context is unavailable.'),
+              diagnostic: classifyGeminiImageFailure('Unsupported payload: panel request context is unavailable.'),
             };
           }
-          const workspace = {
-            ...createDefaultImageshopPromptWorkspace(),
-            main: item.prompt,
-            negative: promptWorkspace.negative,
-            character: panelContext.panel.characters.join(', '),
-            environment: panelContext.panel.locations.join(', '),
-            artStyle: panelContext.panel.artStyle,
-            camera: panelContext.panel.composition,
-            continuity: panelContext.promptSummary,
-          };
-          const preflight = evaluateImageshopPromptPreflight({
-            composedPrompt: composeImageshopPrompt({
-              mode: 'comic-pages',
-              workspace,
-              artStyle: selectedArtStyle,
-              continuity,
-              references: [],
-              pageConfig,
-            }),
-            workspace,
-            references: panelContext.panel.referenceChips.map((chip) => ({
-              label: chip.label,
-              imageUrl: chip.imageUrl ?? '',
-              signedUrlStatus: chip.signedUrlStatus,
-            })),
-            canonConflictCount: panelContext.canonConflictCount,
-            missingReferenceCount: panelContext.missingReferenceCount,
-          });
+          const preflight = evaluateImageshopGenerationRequest(request);
           if (!preflight.canGenerate) {
             const message =
               preflight.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
@@ -1941,16 +2237,40 @@ export function GenericImageLabPanel({
 
           updatePanelQueueItemStatus(item.queueItemId, 'generating');
           const seed = pickGenerationSeed('randomized', null);
-          const generated = await generateImage({
-            prompt: item.prompt,
-            referenceImageUrls: referenceUrls,
-            seed,
-            aspectRatio,
-            modelId: model,
-            context: panelContext.panel.referenceChips.some((chip) => chip.sourceType === 'character')
-              ? 'character'
-              : 'asset',
+          const execution = await executeWithPreparedImageshopReferences({
+            references: request.provider.references,
+            execute: (preparedReferenceImages) =>
+              generateImage({
+                prompt: request.provider.prompt,
+                referenceImageUrls: [],
+                preparedReferenceImages,
+                seed,
+                aspectRatio: request.aspectRatio,
+                modelId: model,
+                context: request.context,
+              }),
           });
+          syncPanelReferencePreparation(
+            request,
+            execution.preparation,
+            updatePanelQueueReferencePreparation,
+          );
+          if (!execution.ok) {
+            const failedMessage = execution.failedReferenceIds
+              .map((id) => {
+                const failure = execution.preparation.byId[id];
+                return `${failure.label}: ${
+                  failure.status === 'failed' ? failure.failure.message : 'preparation failed'
+                }`;
+              })
+              .join('; ');
+            return {
+              ok: false,
+              diagnostic: classifyGeminiImageFailure(`Reference fetch failed: ${failedMessage}`),
+              failedReferenceIds: [...execution.failedReferenceIds],
+            };
+          }
+          const generated = execution.value;
           if (!generated.ok) {
             return {
               ok: false,
@@ -1963,7 +2283,7 @@ export function GenericImageLabPanel({
             seed,
           };
         },
-        onAttempt: (attempt) => {
+        onAttempt: async (attempt) => {
           setBatchAttempts((current) => [...current, attempt]);
           const panelContext = contexts.get(attempt.queueItemId);
           if (!panelContext) return;
@@ -1977,53 +2297,52 @@ export function GenericImageLabPanel({
             return;
           }
           const activeQueue = useImageshopProductionStore.getState().panelQueue;
-          const actualReferenceChips =
-            attempt.strategy === 'without-failed-refs'
-              ? panelContext.panel.referenceChips.filter((chip) => chip.signedUrlStatus !== 'failed')
-              : attempt.strategy === 'smaller-refs'
-                ? panelContext.panel.referenceChips.slice(0, 6)
-                : panelContext.panel.referenceChips;
+          const includedReferenceIds = new Set(attempt.referenceIds ?? []);
+          const actualReferenceChips = panelContext.panel.referenceChips.filter((chip) =>
+            includedReferenceIds.has(chip.id),
+          );
           const generatedPanel = {
             ...panelContext.panel,
             referenceChips: actualReferenceChips,
           };
-          const prompt = buildPanelQueuePrompt(generatedPanel);
+          const originalRequest = items.find((item) => item.queueItemId === attempt.queueItemId)?.request;
+          if (!originalRequest) return;
+          const request = filterImageshopGenerationRequestReferences(
+            originalRequest,
+            attempt.referenceIds ?? [],
+          );
           const provenance = activeQueue
             ? createImageshopGenerationProvenance({
                 queue: activeQueue,
                 panel: generatedPanel,
                 model: attempt.model,
-                aspectRatio,
-                prompt,
-                promptSections: {
-                  main: generatedPanel.prompt,
-                  character: generatedPanel.characters.join(', '),
-                  environment: generatedPanel.locations.join(', '),
-                  artStyle: generatedPanel.artStyle,
-                  camera: generatedPanel.composition,
-                  continuity: panelContext.promptSummary,
-                },
+                aspectRatio: request.aspectRatio,
+                prompt: request.provenance.prompt,
+                promptSections: request.provenance.promptSections,
                 destination: 'production-version',
               })
             : undefined;
+          const { imageAsset, imagePersistence } = await persistGeneratedImage(attempt.imageUrl ?? '');
           const result = addSessionResult({
             imageUrl: attempt.imageUrl ?? '',
+            imageAsset,
+            imagePersistence,
             seed: attempt.seed,
-            prompt,
-            aspectRatio,
-            context: generatedPanel.referenceChips.some((chip) => chip.sourceType === 'character')
-              ? 'character'
-              : 'asset',
+            prompt: request.prompt,
+            aspectRatio: request.aspectRatio,
+            context: request.context,
             modelId: attempt.model,
             provenance,
             attempt,
           });
-          const productionItem = ensureProductionItemForPanel(generatedPanel, prompt);
+          const productionItem = ensureProductionItemForPanel(generatedPanel, request.prompt);
           recordProductionVersion({
             item: productionItem,
             imageUrl: result.imageUrl,
+            imageAsset,
+            imagePersistence,
             seed: result.seed,
-            prompt,
+            prompt: request.prompt,
             kind: productionItem.versions.length > 0 ? 'refined' : 'generated',
             provenance,
             attempt,
@@ -2047,14 +2366,11 @@ export function GenericImageLabPanel({
     },
     [
       addSessionResult,
-      aspectRatio,
-      continuity,
       ensureProductionItemForPanel,
-      pageConfig,
-      promptWorkspace.negative,
+      persistGeneratedImage,
       recordProductionVersion,
-      selectedArtStyle,
       updatePanelQueueItemStatus,
+      updatePanelQueueReferencePreparation,
     ],
   );
 
@@ -2068,13 +2384,58 @@ export function GenericImageLabPanel({
       const items = panels.map((panel) => {
         const panelContext = buildBatchPanelContext(panel);
         contexts.set(panel.queueItemId, panelContext);
+        const workspace = {
+          ...createDefaultImageshopPromptWorkspace(),
+          main: buildPanelQueuePrompt(panelContext.panel),
+          negative: promptWorkspace.negative,
+          character: panelContext.panel.characters.join(', '),
+          environment: panelContext.panel.locations.join(', '),
+          artStyle: panelContext.panel.artStyle,
+          camera: panelContext.panel.composition,
+          continuity: panelContext.promptSummary,
+        };
+        const context = panelContext.panel.referenceChips.some((chip) => chip.sourceType === 'character')
+          ? 'character'
+          : 'asset';
+        const request = compileImageshopGenerationRequest({
+          mode: 'comic-pages',
+          workspace,
+          artStyle: selectedArtStyle,
+          continuity,
+          pageConfig,
+          references: panelContext.panel.referenceChips.map((chip) => ({
+            id: chip.id,
+            label: chip.label,
+            lane: chip.lane,
+            imageUrl: chip.imageUrl ?? '',
+            status: chip.signedUrlStatus,
+            sourceType:
+              chip.sourceType === 'character' || chip.sourceType === 'asset' || chip.sourceType === 'npc'
+                ? chip.sourceType
+                : undefined,
+            sourceLabel: chip.sourceType,
+          })),
+          modelId,
+          aspectRatio,
+          context,
+          source: {
+            kind: 'panel',
+            queueItemId: panel.queueItemId,
+            pageNumber: panel.pageNumber,
+            panelNumber: panel.panelNumber,
+          },
+          canonConflictCount: panelContext.canonConflictCount,
+          missingReferenceCount: panelContext.missingReferenceCount,
+        });
         return {
           queueItemId: panel.queueItemId,
           pageNumber: panel.pageNumber,
           panelNumber: panel.panelNumber,
-          prompt: buildPanelQueuePrompt(panelContext.panel),
+          prompt: request.prompt,
+          request,
           model: modelId,
           references: panelContext.panel.referenceChips.map((chip) => ({
+            id: chip.id,
             imageUrl: chip.imageUrl ?? '',
             status: chip.signedUrlStatus,
           })),
@@ -2087,7 +2448,16 @@ export function GenericImageLabPanel({
         previousAttempts,
       });
     },
-    [buildBatchPanelContext, modelId, runBatchItems],
+    [
+      aspectRatio,
+      buildBatchPanelContext,
+      continuity,
+      modelId,
+      pageConfig,
+      promptWorkspace.negative,
+      runBatchItems,
+      selectedArtStyle,
+    ],
   );
 
   const generateSelectedPage = useCallback(() => {
@@ -2108,11 +2478,13 @@ export function GenericImageLabPanel({
     (strategy: ImageshopBatchRetryStrategy) => {
       if (!panelQueue) return;
       const failedIds = new Set(
-        batchAttempts.filter((attempt) => attempt.status === 'failed').map((attempt) => attempt.queueItemId),
+        getLatestImageshopBatchAttempts(batchAttempts)
+          .filter((attempt) => attempt.status === 'failed')
+          .map((attempt) => attempt.queueItemId),
       );
       const panels = panelQueue.pages
         .flatMap((page) => page.panels)
-        .filter((panel) => failedIds.has(panel.queueItemId) || panel.status === 'failed');
+        .filter((panel) => failedIds.has(panel.queueItemId));
       startPanelBatch(panels, strategy, batchAttempts);
     },
     [batchAttempts, panelQueue, startPanelBatch],
@@ -2149,7 +2521,7 @@ export function GenericImageLabPanel({
     setPromptRaw(nextPrompt);
     setPromptRefined('');
     setUseRefinedPrompt(false);
-    replacePromptWorkspace({
+    const workspace = {
       main: nextPrompt,
       character: selectedPanelQueueItemWithContext.characters.join(', '),
       environment: selectedPanelQueueItemWithContext.locations.join(', '),
@@ -2161,10 +2533,12 @@ export function GenericImageLabPanel({
       ]
         .filter(Boolean)
         .join('\n'),
-    });
+    };
+    replacePromptWorkspace(workspace);
+    commitPromptWorkspace(workspace);
     const referenceUrls = selectedPanelQueueItemWithContext.referenceChips.map((chip) => chip.imageUrl ?? '').filter(Boolean);
     if (referenceUrls.length > 0) {
-      setRefs(Array.from({ length: 14 }, (_, index) => referenceUrls[index] ?? ''));
+      replaceRefsWithOwnedUrlCleanup(Array.from({ length: 14 }, (_, index) => referenceUrls[index] ?? ''));
       setContext(selectedPanelQueueItemWithContext.referenceChips.some((chip) => chip.sourceType === 'character') ? 'character' : 'asset');
     }
     const matchingProductionItem = productionItems.find((item) => item.sourceId === selectedPanelQueueItemWithContext.queueItemId);
@@ -2172,7 +2546,9 @@ export function GenericImageLabPanel({
     selectPanelQueueItem(selectedPanelQueueItemWithContext.queueItemId);
     setNotice(`Loaded Page ${selectedPanelQueueItemWithContext.pageNumber} Panel ${selectedPanelQueueItemWithContext.panelNumber} into the prompt workspace.`);
   }, [
+    commitPromptWorkspace,
     productionItems,
+    replaceRefsWithOwnedUrlCleanup,
     replacePromptWorkspace,
     selectPanelQueueItem,
     selectProductionItem,
@@ -2182,7 +2558,7 @@ export function GenericImageLabPanel({
   ]);
 
   const generateSelectedPanel = useCallback(() => {
-    if (!selectedPanelQueueItemWithContext) return;
+    if (!selectedPanelQueueItemWithContext || !selectedPanelGenerationRequest) return;
     if (!selectedPanelPreflight.canGenerate) {
       setError(
         selectedPanelPreflight.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
@@ -2191,33 +2567,23 @@ export function GenericImageLabPanel({
       return;
     }
     loadSelectedPanelPrompt();
-    const prompt = buildPanelQueuePrompt(selectedPanelQueueItemWithContext);
     const provenance = panelQueue
       ? createImageshopGenerationProvenance({
           queue: panelQueue,
           panel: selectedPanelQueueItemWithContext,
-          model: modelId,
-          aspectRatio,
-          prompt,
-          promptSections: {
-            main: selectedPanelQueueItemWithContext.prompt,
-            character: selectedPanelQueueItemWithContext.characters.join(', '),
-            environment: selectedPanelQueueItemWithContext.locations.join(', '),
-            artStyle: selectedPanelQueueItemWithContext.artStyle,
-            camera: selectedPanelQueueItemWithContext.composition,
-            continuity: selectedPanelCanonContext.promptSummary,
-          },
+          model: selectedPanelGenerationRequest.modelId,
+          aspectRatio: selectedPanelGenerationRequest.aspectRatio,
+          prompt: selectedPanelGenerationRequest.provenance.prompt,
+          promptSections: selectedPanelGenerationRequest.provenance.promptSections,
           destination: 'production-version',
         })
       : undefined;
-    void generate(prompt, selectedPanelQueueItemWithContext.queueItemId, provenance);
+    void generate(selectedPanelGenerationRequest, provenance);
   }, [
-    aspectRatio,
     generate,
     loadSelectedPanelPrompt,
-    modelId,
     panelQueue,
-    selectedPanelCanonContext.promptSummary,
+    selectedPanelGenerationRequest,
     selectedPanelPreflight,
     selectedPanelQueueItemWithContext,
   ]);
@@ -2381,7 +2747,7 @@ export function GenericImageLabPanel({
 
 	      <div className="mt-3 border border-white/10 bg-black/20 p-2">
 	        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Production Surface Tabs</p>
-	        <div className="mt-2 grid gap-2 sm:grid-cols-4">
+	        <div className="mt-2 grid gap-2 sm:grid-cols-5">
 	          {IMAGESHOP_SURFACE_TABS.map((tab) => {
 	            const selected = activeImageshopSurface === tab.value;
 	            return (
@@ -2405,7 +2771,6 @@ export function GenericImageLabPanel({
 	      </div>
 
 	      {activeImageshopSurface === 'compose' ? (
-	        <>
 	      <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
 	        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2432,9 +2797,12 @@ export function GenericImageLabPanel({
           </div>
         </div>
 	      </div>
+	      ) : null}
 
+	      {activeImageshopSurface === 'import' ? (
+	        <div className="mt-3">
 	      <ImageshopImportPanel />
-	        </>
+	        </div>
 	      ) : null}
 
 	      <div className="mt-3 flex flex-col lg:flex-row lg:items-stretch gap-4 lg:gap-5 min-h-0">
@@ -2484,59 +2852,15 @@ export function GenericImageLabPanel({
           {notice}
         </p>
       )}
-
-      <div className="mt-3">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <label className="text-[10px] text-white/45 uppercase">References</label>
-          <div className="flex gap-2">
-            <label className="text-[10px] text-amber-200/90 hover:text-amber-100 cursor-pointer">
-              Upload
-              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => addFiles(e.target.files)} />
-            </label>
-            <button
-              type="button"
-              className="text-[10px] text-white/70 hover:text-white/90"
-              onClick={() => void pasteFirstEmpty()}
-            >
-              Paste
-            </button>
-            <button
-              type="button"
-              className="text-[10px] text-white/70 hover:text-white/90"
-              onClick={() => clearRefs()}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {stableRefs.map((u, i) => (
-            <div
-              key={i}
-              className={`relative w-14 h-14 rounded-lg border ${
-                u ? 'border-fuchsia-400/30' : 'border-white/10'
-              } bg-black/20 overflow-hidden`}
-            >
-              {u ? <ArcsStorageImg src={u} alt="" className="w-full h-full object-cover" /> : null}
-              {u ? (
-                <button
-                  type="button"
-                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black/80 text-white text-xs flex items-center justify-center"
-                  onClick={() => setRefs((prev) => prev.map((x, idx) => (idx === i ? '' : x)))}
-                  aria-label="Remove reference"
-                >
-                  ×
-                </button>
-              ) : (
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white/25">
-                  {i + 1}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+      {imagePersistenceWarning ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="border-l-2 border-amber-300/70 bg-amber-950/20 py-1 pl-2 text-[11px] font-medium text-amber-100"
+        >
+          {imagePersistenceWarning}
+        </p>
+      ) : null}
 
       <div className="mt-3">
         <label className="block text-[10px] text-white/45 uppercase mb-1">Prompt</label>
@@ -2550,6 +2874,75 @@ export function GenericImageLabPanel({
           }}
           placeholder="Describe the image you want..."
         />
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-label="Generate current Imageshop prompt"
+            disabled={genBusy || !effectivePrompt || !currentPromptPreflight.canGenerate}
+            onClick={() => void generate(currentGenerationRequest)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
+            style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
+          >
+            {genBusy ? 'Generating…' : 'Generate'}
+          </button>
+          {!effectivePrompt ? (
+            <p className="basis-full text-[11px] text-white/45">Add a prompt before generating.</p>
+          ) : null}
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <label className="text-[10px] text-white/45 uppercase">References</label>
+            <div className="flex gap-2">
+              <label className="text-[10px] text-amber-200/90 hover:text-amber-100 cursor-pointer">
+                Upload
+                <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => addFiles(e.target.files)} />
+              </label>
+              <button
+                type="button"
+                className="text-[10px] text-white/70 hover:text-white/90"
+                onClick={() => void pasteFirstEmpty()}
+              >
+                Paste
+              </button>
+              <button
+                type="button"
+                className="text-[10px] text-white/70 hover:text-white/90"
+                onClick={() => clearRefs()}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {stableRefs.map((u, i) => (
+              <div
+                key={i}
+                className={`relative w-14 h-14 rounded-lg border ${
+                  u ? 'border-fuchsia-400/30' : 'border-white/10'
+                } bg-black/20 overflow-hidden`}
+              >
+                {u ? <ArcsStorageImg src={u} alt="" className="w-full h-full object-cover" /> : null}
+                {u ? (
+                  <button
+                    type="button"
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black/80 text-white text-xs flex items-center justify-center"
+                    onClick={() => replaceRefsWithOwnedUrlCleanup((prev) => prev.map((x, idx) => (idx === i ? '' : x)))}
+                    aria-label="Remove reference"
+                  >
+                    ×
+                  </button>
+                ) : (
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white/25">
+                    {i + 1}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-2 grid grid-cols-1 gap-2">
           {PROMPT_WORKSPACE_FIELDS.map((field) => (
@@ -2852,7 +3245,7 @@ export function GenericImageLabPanel({
               type="text"
               className="mt-0.5 w-full rounded-lg border border-white/15 bg-black/30 px-2 py-1.5 text-xs"
               value={pageConfig.panelStyle.pageBackgroundUrl}
-              onChange={(e) => updatePageConfig({ panelStyle: { pageBackgroundUrl: e.target.value } })}
+              onChange={(e) => handlePageBackgroundUrlChange(e.target.value)}
               placeholder="Optional image URL behind the panel layout"
             />
           </label>
@@ -2949,23 +3342,6 @@ export function GenericImageLabPanel({
 
 	      {error ? <p className="mt-2 text-xs text-red-200/90">{error}</p> : null}
 
-	      {activeImageshopSurface === 'compose' ? (
-	      <div className="mt-3 flex flex-wrap gap-2">
-	        <button
-          type="button"
-          aria-label="Generate current Imageshop prompt"
-          disabled={genBusy || !effectivePrompt || !currentPromptPreflight.canGenerate}
-          onClick={() => void generate()}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold text-black disabled:opacity-50"
-          style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
-	        >
-	          {genBusy ? 'Generating…' : 'Generate'}
-	        </button>
-          {!effectivePrompt ? (
-            <p className="basis-full text-[11px] text-white/45">Add a prompt before generating.</p>
-          ) : null}
-	      </div>
-	      ) : null}
 	      </div>
 
       <div className="flex-1 min-w-0 min-h-[200px] lg:min-h-0 flex flex-col">
@@ -2993,7 +3369,9 @@ export function GenericImageLabPanel({
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
                     Session results
                   </p>
-                  <span className="text-[10px] text-white/35">{sessionResults.length} recoverable</span>
+                  <span className="text-[10px] text-white/35">
+                    {reloadSafeSessionResultCount} reload-safe
+                  </span>
                 </div>
                 <div className="overflow-x-auto">
                   <div className="flex w-max max-w-none gap-2">
