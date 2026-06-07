@@ -35,6 +35,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
 }) => {
   const triggerExport = useComicStore(state => state.triggerExport);
   const flushAutoSave = useComicStore(state => state.flushAutoSave);
+  const insertImageIntoWorkspace = useComicStore(state => state.insertImageIntoWorkspace);
   const currentGenreId = useComicStore(state => state.currentGenreId);
   const setGenre = useComicStore(state => state.setGenre);
   const applyGenreToAll = useComicStore(state => state.applyGenreToAll);
@@ -81,6 +82,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
   const [formatDialogTab, setFormatDialogTab] = useState<FormatDialogTabId>('fillLine');
   const [formatDialogTarget, setFormatDialogTarget] = useState<{ pageId?: string | null; balloonId?: string | null; panelId?: string | null }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
 
   const currentPage = pages.find(p => p.id === currentPageId);
@@ -125,6 +127,18 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
       if (content) loadProject(content);
     };
     reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = typeof reader.result === 'string' ? reader.result : '';
+      if (content) insertImageIntoWorkspace(content, { sourceLabel: file.name || 'Imported image' });
+    };
+    reader.readAsDataURL(file);
     e.target.value = '';
   };
 
@@ -366,6 +380,7 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
             onThemeClick={() => setIsGenreOpen(!isGenreOpen)}
             onSave={serializeProject}
             onLoad={() => fileInputRef.current?.click()}
+            onImportImage={() => imageInputRef.current?.click()}
             onExportPng={() => triggerExport('png')}
             onExportPdf={() => triggerExport('pdf')}
             onUndo={undo}
@@ -424,6 +439,14 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
         )}
 
         <input ref={fileInputRef} type="file" accept=".json" className="hidden" aria-hidden onChange={handleFileUpload} />
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-label="Import image into Advanced Studio workspace from menu"
+          onChange={handleImageFileUpload}
+        />
 
         {/* Right-click context menu (canvas) + Format dialog */}
         <CanvasContextMenu onOpenFormatDialog={openFormatDialog} />

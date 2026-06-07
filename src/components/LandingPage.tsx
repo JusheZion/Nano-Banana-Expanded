@@ -7,6 +7,7 @@ import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE, PRIMARY_BG_FLAT } from '@/shared/theme
 import {
   CREATIVE_PORTALS_ORDERED,
   PORTAL_ICON_GLITTER,
+  getPortalIcon,
   type PortalCatalogEntry,
 } from '@/shared/portalCatalog';
 import {
@@ -16,6 +17,7 @@ import {
 
 interface LandingPageProps {
   onNavigate?: (portal: Portal) => void;
+  onOpenAdvancedComicStudio?: () => void;
 }
 
 const HERO_LINE1 = 'ARCS - Assets References Comics & Stories';
@@ -58,7 +60,7 @@ function DoorSignInButton({ onClick, disabled }: { onClick: () => void; disabled
   );
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onOpenAdvancedComicStudio }) => {
   const { setTheme } = useTheme();
   const { isPhone } = useResponsiveLayout();
   const { user, ready, supabaseConfigured, openSignInModal, signOut } = useAuth();
@@ -238,13 +240,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visiblePortals.map((entry, i) => (
-          <PortalLandingCard
-            key={entry.portal}
-            entry={entry}
-            index={i}
-            onSelect={handleCardClick}
-            reducedMotion={reducedMotion}
-          />
+          <React.Fragment key={entry.portal}>
+            <PortalLandingCard
+              entry={entry}
+              index={i}
+              onSelect={handleCardClick}
+              reducedMotion={reducedMotion}
+            />
+            {entry.portal === 'comic' && onOpenAdvancedComicStudio ? (
+              <AdvancedComicLandingCard
+                index={i + 1}
+                onSelect={onOpenAdvancedComicStudio}
+                reducedMotion={reducedMotion}
+              />
+            ) : null}
+          </React.Fragment>
         ))}
       </div>
     </div>
@@ -319,6 +329,62 @@ function PortalLandingCard({
         <h3 className="text-2xl font-bold text-white mb-1 leading-none">{cardTitle}</h3>
         <p className="text-xs font-medium leading-snug max-w-prose" style={{ color: `${accentHex}ee` }}>
           {cardSubtitle}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AdvancedComicLandingCard({
+  index,
+  onSelect,
+  reducedMotion,
+}: {
+  index: number;
+  onSelect: () => void;
+  reducedMotion: boolean;
+}) {
+  const Icon = getPortalIcon('comic');
+  const accentHex = '#60a5fa';
+  const delay = reducedMotion ? 0 : index * 90;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`h-80 relative group cursor-pointer rounded-[24px] overflow-hidden shadow-2xl transition-all duration-500 outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 ${
+        reducedMotion ? '' : 'animate-landing-card-in'
+      }`}
+      style={{
+        animationDelay: `${delay}ms`,
+        borderWidth: 2,
+        borderColor: `${accentHex}99`,
+        boxShadow: `0 10px 40px -12px ${accentHex}44`,
+      }}
+      aria-label="Open Advanced Comic Creator workspace"
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+        style={{ backgroundImage: 'url(/assets/images/Aries%20In%20the%20Observatory.jpeg)' }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#07111f] via-[#1d4ed8]/45 to-transparent opacity-95 group-hover:opacity-85 transition-opacity" />
+      <div className="absolute bottom-0 left-0 p-6 w-full">
+        <div
+          className="w-10 h-10 rounded-full border border-white/25 flex items-center justify-center mb-4 shadow-md"
+          style={{ background: PORTAL_ICON_GLITTER }}
+        >
+          <Icon className="w-5 h-5" style={{ color: accentHex }} strokeWidth={2.25} />
+        </div>
+        <h3 className="text-2xl font-bold text-white mb-1 leading-none">Advanced Comic Creator</h3>
+        <p className="text-xs font-medium leading-snug max-w-prose" style={{ color: `${accentHex}ee` }}>
+          Jump straight into the canvas workspace for panels, lettering, images, layers, and export polish
         </p>
       </div>
     </div>

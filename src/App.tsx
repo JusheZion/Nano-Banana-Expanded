@@ -27,6 +27,7 @@ const PortalFallback = () => (
 
 function App() {
   const [activePortal, setActivePortal] = useState<Portal>('home');
+  const [advancedComicRequestKey, setAdvancedComicRequestKey] = useState(0);
   const [wikiJumpNonce, setWikiJumpNonce] = useState(0);
   const [wikiJump, setWikiJump] = useState<{ chapterId: string; headingId?: string } | null>(null);
   const { setTheme } = useTheme();
@@ -56,6 +57,15 @@ function App() {
     setWikiJump(opts);
     setWikiJumpNonce((n) => n + 1);
     setActivePortal('wiki');
+  }, []);
+
+  const openAdvancedComicStudio = useCallback(() => {
+    if (isPhoneRef.current) {
+      setActivePortal('home');
+      return;
+    }
+    setAdvancedComicRequestKey((key) => key + 1);
+    setActivePortal('comic');
   }, []);
 
   useEffect(() => {
@@ -96,8 +106,14 @@ function App() {
   }, [activePortal, setTheme]);
 
   return (
-    <AppShell activePortal={activePortal} setActivePortal={navigatePortal}>
-      {activePortal === 'home' && !isProtectedPortal(activePortal) && <LandingPage onNavigate={navigatePortal} />}
+    <AppShell
+      activePortal={activePortal}
+      setActivePortal={navigatePortal}
+      onOpenAdvancedComicStudio={openAdvancedComicStudio}
+    >
+      {activePortal === 'home' && !isProtectedPortal(activePortal) && (
+        <LandingPage onNavigate={navigatePortal} onOpenAdvancedComicStudio={openAdvancedComicStudio} />
+      )}
       {activePortal === 'studio' && (
         <ProtectedPortalGate>
           <Suspense fallback={<PortalFallback />}>
@@ -133,7 +149,7 @@ function App() {
       {activePortal === 'comic' && (
         <ProtectedPortalGate>
           <Suspense fallback={<PortalFallback />}>
-            <ComicPortal onNavigatePortal={navigatePortal} />
+            <ComicPortal onNavigatePortal={navigatePortal} advancedStudioRequestKey={advancedComicRequestKey} />
           </Suspense>
         </ProtectedPortalGate>
       )}

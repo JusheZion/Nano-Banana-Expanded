@@ -197,6 +197,7 @@ interface ComicState {
     reorderPages: (activeId: string, overId: string) => void;
     selectPage: (id: string) => void;
     addPanel: (pageId: string, panel: Omit<Panel, 'id' | 'type'>) => void;
+    insertImageIntoWorkspace: (imageUrl: string, options?: { width?: number; height?: number; sourceLabel?: string }) => void;
     updatePanel: (pageId: string, panelId: string, updates: Partial<Panel>) => void;
 
     addBalloon: (pageId: string, balloon: Omit<BalloonInstance, 'id' | 'type'>) => void;
@@ -679,6 +680,70 @@ export const useComicStore = create<ComicState>()(
                                 }
                                 : p
                         )
+                    };
+                }),
+
+                insertImageIntoWorkspace: (imageUrl: string, options?: { width?: number; height?: number; sourceLabel?: string }) => set((state: ComicState) => {
+                    const pageId = state.currentPageId ?? state.pages[0]?.id;
+                    if (!pageId || !imageUrl.trim()) return state;
+                    const page = state.pages.find(p => p.id === pageId);
+                    if (!page) return state;
+                    const selectedPanels = page.panels.filter(panel => state.selectedElementIds.includes(panel.id));
+                    if (selectedPanels.length > 0) {
+                        return {
+                            pages: state.pages.map(p =>
+                                p.id === pageId
+                                    ? {
+                                        ...p,
+                                        panels: p.panels.map(panel =>
+                                            state.selectedElementIds.includes(panel.id)
+                                                ? { ...panel, imageUrl }
+                                                : panel
+                                        )
+                                    }
+                                    : p
+                            )
+                        };
+                    }
+
+                    const newId = crypto.randomUUID();
+                    const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
+                    const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
+                    const width = Math.max(40, Math.min(620, Math.round(options?.width ?? 300)));
+                    const height = Math.max(40, Math.min(620, Math.round(options?.height ?? 300)));
+                    const pos = state.lastCanvasPosition?.pageId === pageId
+                        ? state.lastCanvasPosition
+                        : { pageId, x: 400, y: 600 };
+                    const x = Math.max(0, Math.min(800 - width, Math.round(pos.x - width / 2)));
+                    const y = Math.max(0, Math.min(1200 - height, Math.round(pos.y - height / 2)));
+                    const panel: Panel = {
+                        ...(genre.textureId !== undefined && { textureId: genre.textureId }),
+                        ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
+                        id: newId,
+                        type: 'panel',
+                        shapeType: 'rect',
+                        x,
+                        y,
+                        width,
+                        height,
+                        imageUrl,
+                        prompt: options?.sourceLabel,
+                        isVisible: true,
+                        isLocked: false,
+                        strokeColor: genre.palette?.border ?? '#000000',
+                    };
+
+                    return {
+                        pages: state.pages.map(p =>
+                            p.id === pageId
+                                ? {
+                                    ...p,
+                                    panels: [...p.panels, panel],
+                                    layerOrder: [...p.layerOrder, newId]
+                                }
+                                : p
+                        ),
+                        selectedElementIds: [newId]
                     };
                 }),
 

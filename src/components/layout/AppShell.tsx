@@ -33,6 +33,7 @@ interface AppShellProps {
   children: React.ReactNode;
   activePortal: Portal;
   setActivePortal: (portal: Portal) => void;
+  onOpenAdvancedComicStudio?: () => void;
 }
 
 function initialsForUser(u: User): string {
@@ -130,7 +131,12 @@ const MobileTab: React.FC<MobileTabProps> = ({ targetPortal, icon: Icon, label, 
   );
 };
 
-export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setActivePortal }) => {
+export const AppShell: React.FC<AppShellProps> = ({
+  children,
+  activePortal,
+  setActivePortal,
+  onOpenAdvancedComicStudio,
+}) => {
   const { setTheme } = useTheme();
   const { user, ready, supabaseConfigured, openSignInModal, signOut } = useAuth();
   const { isPhone, prefersHoverSidebar } = useResponsiveLayout();
@@ -299,15 +305,26 @@ export const AppShell: React.FC<AppShellProps> = ({ children, activePortal, setA
           )}
           {!sidebarExpanded && <div className="h-3 mt-3 mx-auto w-6 border-t border-white/10" />}
           {CREATIVE_PORTALS_ORDERED.map((entry) => (
-            <NavItem
-              key={entry.portal}
-              targetPortal={entry.portal}
-              icon={entry.Icon}
-              label={entry.navLabel}
-              sidebarExpanded={sidebarExpanded}
-              isActive={activePortal === entry.portal}
-              onSelect={handleNavClick}
-            />
+            <React.Fragment key={entry.portal}>
+              <NavItem
+                targetPortal={entry.portal}
+                icon={entry.Icon}
+                label={entry.navLabel}
+                sidebarExpanded={sidebarExpanded}
+                isActive={activePortal === entry.portal}
+                onSelect={handleNavClick}
+              />
+              {entry.portal === 'comic' && onOpenAdvancedComicStudio ? (
+                <NavItem
+                  targetPortal="comic"
+                  icon={entry.Icon}
+                  label="Advanced Comic Creator"
+                  sidebarExpanded={sidebarExpanded}
+                  isActive={activePortal === 'comic'}
+                  onSelect={onOpenAdvancedComicStudio}
+                />
+              ) : null}
+            </React.Fragment>
           ))}
         </nav>
 

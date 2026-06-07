@@ -10,7 +10,7 @@ import { ACCENT_GOLD_GRADIENT, ACCENT_BLUE_GRADIENT, ACCENT_GOLD_LIGHT } from '.
 const MENU_BAR_TEXT_BLUE = '#001a4d';
 /** Gold for hover text so it's readable on both gold bar and blue hover background */
 const HOVER_TEXT_GOLD = ACCENT_GOLD_LIGHT;
-const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
+const FIRST_STORED_IMAGE_URL = '/assets/images/Anunnaki Anubis.png';
 const SFX_OPTIONS = ['BOOM', 'ZAP', 'CRASH', 'POW', 'BAM', 'WHAM', 'SLAM', 'KAPOW', 'BANG'];
 
 export type MenuId = 'home' | 'edit' | 'view' | 'panel' | 'balloon' | 'text' | 'objects' | 'workflow' | null;
@@ -23,6 +23,7 @@ export interface MenuBarProps {
   onThemeClick: () => void;
   onSave: () => void;
   onLoad: () => void;
+  onImportImage: () => void;
   onExportPng: () => void;
   onExportPdf: () => void;
   onUndo: () => void;
@@ -69,6 +70,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     lastCanvasPosition,
     addBalloon,
     addOverlay,
+    insertImageIntoWorkspace,
     updatePanel,
     setKnifeMode,
     isKnifeMode,
@@ -229,16 +231,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
   };
 
   const handleInsertImage = () => {
-    const pageId = currentPageId ?? pages[0]?.id;
-    if (!pageId) return;
-    const page = pages.find(p => p.id === pageId);
-    if (!page) return;
-    const selectedPanelsInPage = page.panels.filter(p => selectedElementIds.includes(p.id));
-    if (selectedPanelsInPage.length > 0) {
-      selectedPanelsInPage.forEach(p => updatePanel(pageId, p.id, { imageUrl: PLACEHOLDER_IMAGE_URL }));
-    } else {
-      addPanel(pageId, { shapeType: 'rect', x: 50, y: 50, width: 300, height: 300, imageUrl: PLACEHOLDER_IMAGE_URL });
-    }
+    insertImageIntoWorkspace(FIRST_STORED_IMAGE_URL, { sourceLabel: 'Anunnaki Anubis.png' });
     close();
   };
 
@@ -280,6 +273,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       {menuWithDropdown('home', 'Home', null, (
         <div className={dropdownPanelClass} style={dropdownPanelStyle}>
           {item('Open…', '⌘O', props.onLoad)}
+          {item('Import image…', undefined, props.onImportImage)}
           {item('Save', '⌘S', props.onSave)}
           <div className="my-1 border-t border-white/15" />
           {item('Export as PNG', undefined, props.onExportPng)}
@@ -353,7 +347,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={() => { toggleDrawingMode(!isDrawingMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Pencil size={12} /> {isDrawingMode ? 'Exit Draw' : 'Draw'}</button>
           <button type="button" onClick={() => { setKnifeMode(!isKnifeMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> {isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'}</button>
-          <button type="button" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Insert Image</button>
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Insert stored image</button>
+          <button type="button" onClick={() => { props.onImportImage(); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Import image…</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Split selected panel</div>
           <button type="button" onClick={() => handleSplit('horizontal', 0)} className={dropdownItemClass} style={dropdownItemStyle}>Horizontal (row)</button>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { generatePrompt } from '../utils/promptMiddleware';
 
@@ -60,52 +60,18 @@ interface AssetLibraryProps {
 }
 
 export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, embedded }) => {
+    const imageImportInputRef = useRef<HTMLInputElement>(null);
     const {
         currentPageId,
         selectedElementIds,
-        updatePanel,
-        addPanel,
         pages,
         projectSettings,
-        currentGenreId
+        currentGenreId,
+        insertImageIntoWorkspace,
     } = useComicStore();
 
     const handleAssetClick = (assetUrl: string) => {
-        const currentPage = pages.find(p => p.id === currentPageId);
-        if (!currentPage) return;
-
-        // Load image to get dimensions
-        const img = new Image();
-        img.src = assetUrl;
-        img.onload = () => {
-            const aspectRatio = img.width / img.height;
-            // Default max dimension 300px
-            let width = 300;
-            let height = 300;
-
-            if (aspectRatio > 1) {
-                // Landscape
-                height = width / aspectRatio;
-            } else {
-                // Portrait
-                width = height * aspectRatio;
-            }
-
-            if (selectedElementIds.length > 0) {
-                // Check if selected element is a panel
-                const selectedPanels = currentPage.panels.filter(p => selectedElementIds.includes(p.id));
-                if (selectedPanels.length > 0) {
-                    selectedPanels.forEach(panel => {
-                        updatePanel(currentPage.id, panel.id, { imageUrl: assetUrl });
-                    });
-                } else {
-                    addPanel(currentPage.id, { shapeType: 'rect', x: 50, y: 50, width, height, imageUrl: assetUrl });
-                }
-            } else {
-                // No selection -> Create new panel
-                addPanel(currentPage.id, { shapeType: 'rect', x: 50, y: 50, width, height, imageUrl: assetUrl });
-            }
-        };
+        insertImageIntoWorkspace(assetUrl, { sourceLabel: assetUrl.split('/').pop() });
     };
 
     const handleMockAIGenerate = () => {
@@ -143,9 +109,31 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
         handleAssetClick(ASSETS[0]);
     };
 
+    const handleImageImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            if (result) {
+                insertImageIntoWorkspace(result, { sourceLabel: file.name || 'Imported image' });
+            }
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
     const content = (
         <>
-            <div className="p-4 border-b border-white/[0.08] shrink-0 space-y-2">
+            <div className="p-4 border-b border-white/[0.08] shrink-0 space-y-2 bg-[#0F0F12]/90">
+                <input
+                    ref={imageImportInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Import image into Advanced Studio workspace"
+                    onChange={handleImageImport}
+                />
                 <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }}
@@ -156,13 +144,24 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
                 </button>
                 <button
                     type="button"
+                    onClick={() => imageImportInputRef.current?.click()}
+                    className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white/90 border border-white/25 font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    Import local image
+                </button>
+                <button
+                    type="button"
                     onClick={handleMockAIGenerate}
                     className="w-full py-2.5 bg-[#00D1FF]/20 hover:bg-[#00D1FF]/30 text-[#00D1FF] border border-[#00D1FF]/40 font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                     <span className="text-xl">✨</span> Mock Generate Image
                 </button>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                    {ASSETS.length} stored images - scroll down for the full library
+                </p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 pb-20 columns-2 gap-3 space-y-3 min-h-0 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 pb-20 min-h-0 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-3">
                 {ASSETS.map((asset, index) => (
                     <button
                         key={index}
@@ -189,6 +188,7 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
                         </div>
                     </button>
                 ))}
+                </div>
             </div>
         </>
     );
