@@ -11,7 +11,8 @@ export type WriterWorkspaceTabId =
   | 'beats'
   | 'dialogue'
   | 'video'
-  | 'scripts';
+  | 'scripts'
+  | 'export';
 
 /** Narrative pipeline order: author source → synopsis → canon → production → review cockpit. */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
@@ -23,6 +24,7 @@ export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
   'video',
   'arc',
   'cockpit',
+  'export',
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
@@ -35,8 +37,9 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   lore: { ribbon: 'Canon', heading: 'Canon & lore' },
   beats: { ribbon: 'Beats', heading: 'Page Beats' },
   dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
-  video: { ribbon: 'Video', heading: 'Video' },
-  arc: { ribbon: 'Arc', heading: 'Arc Planner' },
+  video: { ribbon: 'Visual Prep', heading: 'Visual Prep' },
+  arc: { ribbon: 'Audit', heading: 'Audit' },
+  export: { ribbon: 'Export', heading: 'Export issue' },
 };
 
 export type WriterToolSaved = { at?: string; result?: unknown } | null;
@@ -98,6 +101,7 @@ export function getWriterSearchableText(ctx: WriterSearchContext): string {
       return [stringifyPreview(ctx.latestShotPlanJson)].filter(Boolean).join('\n\n');
     case 'arc':
       return formatArcReviewPlainText(ctx.pacingReview, ctx.canonCheck);
+    case 'export':
     case 'scripts':
       return [
         stringifyPreview(ctx.latestOutlineJson),

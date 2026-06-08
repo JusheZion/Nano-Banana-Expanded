@@ -53,7 +53,7 @@ export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
   { id: 'visual', label: 'Visual Prep', tab: 'video', eyebrow: 'Imageshop' },
   { id: 'audit', label: 'Audit', tab: 'arc', eyebrow: 'Review' },
   { id: 'cockpit', label: 'Cockpit', tab: 'cockpit', eyebrow: 'Compare' },
-  { id: 'export', label: 'Export', tab: 'scripts', eyebrow: 'Output' },
+  { id: 'export', label: 'Export', tab: 'export', eyebrow: 'Output' },
 ];
 
 export function getWriterWorkflowStepByTab(tab: WriterWorkspaceTabId): WriterWorkflowStepDefinition | undefined {
