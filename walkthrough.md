@@ -8665,3 +8665,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - In the next thread, refresh `git status --short` and split review/staging by scope before any commit or PR packaging.
+
+## Writers Workshop Outline and Beats Edit Discoverability - 2026-06-07
+
+### What changed
+- Made the existing saved-output editors easier to find from the workspaces where writers naturally look for them.
+- Added an `Edit outline JSON` action beside the latest saved outline preview in the Outline workspace.
+- Added `Edit this page's beats` to the selected-page Beats action row.
+- Added a quieter `Edit beats JSON` action to the selected-page beats preview header.
+- Kept the existing Scripts saved-output editor as the single save/validation surface, so outline and beats JSON still use the same database update paths and invalid JSON guards.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Added a small `openSavedOutputEditor` helper in `WriterPortal` that switches to the Scripts workspace and selects the requested saved-output editor tab.
+- The Outline action is disabled when there is no saved outline to edit.
+- The Beats actions are disabled until a page is selected.
+- This pass deliberately did not duplicate the outline/beats textareas inside the Outline or Beats tabs, avoiding a second save surface for the same JSON.
+- Existing prompt-library bridge edits in `WriterPortal.tsx` were preserved and not reverted.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerPageEditReview.test.ts src/portals/writer/__tests__/writerImageshopReturn.test.ts` passed 3 files / 8 tests.
+- `npm run build` passed with the existing large chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 warnings.
+- Browser QA on `http://127.0.0.1:5174/` loaded `ARCS Expanded` in the in-app browser with no console errors or warnings.
+- Browser QA confirmed `Edit outline JSON` appears enabled when a saved outline is loaded and clicking it opens the Scripts saved-output editor with the outline save control present.
+- Browser QA selected Page 8, opened Beats, confirmed both `Edit this page's beats` and `Edit beats JSON` are visible, and confirmed the primary beats edit action opens the Scripts saved-output editor with the beats save control present.
+
+### Outstanding issues
+- Screenshot capture through the in-app browser timed out during this QA pass; DOM and interaction checks were used as evidence instead.
+
+### Risks or caveats
+- The edit textareas still live in the Scripts saved-output editor. This pass adds direct access from Outline/Beats rather than moving or duplicating the editors.
+- The checkout currently contains broader prompt-library portal work on `codex/prompt-library-portal`; this pass touched only the Writer edit-affordance slice plus tracker/walkthrough docs.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- If users still expect inline editing directly inside Outline/Beats, consider a follow-up that embeds the same editor component in those workspaces rather than linking to Scripts.

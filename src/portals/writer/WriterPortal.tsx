@@ -3178,6 +3178,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
   }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId, pushHistory]);
 
+  const openSavedOutputEditor = useCallback((tab: ScriptsEditorTab) => {
+    setScriptsEditorTab(tab);
+    setActiveTab('scripts');
+  }, []);
+
   const updateBeatsPanelsDraft = useCallback(
     (operation: 'insert' | 'remove' | 'merge' | 'split' | 'up' | 'down') => {
       const parsed = parseBeatsEditDraft(beatsEditDraft);
@@ -4891,6 +4896,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             <button
                               type="button"
                               disabled={!latestOutline}
+                              onClick={() => openSavedOutputEditor('outline')}
+                              className="rounded-md border border-amber-800/35 bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-100 disabled:opacity-40"
+                            >
+                              Edit outline JSON
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!latestOutline}
                               onClick={() => {
                                 if (!latestOutline) return;
                                 downloadJsonFile(
@@ -5757,6 +5770,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </button>
                           <button
                             type="button"
+                            disabled={!selectedPageId}
+                            onClick={() => openSavedOutputEditor('beats')}
+                            className="rounded-lg border border-amber-800/35 bg-amber-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-100 disabled:opacity-40"
+                          >
+                            Edit this page&apos;s beats
+                          </button>
+                          <button
+                            type="button"
                             disabled={!selectedPageId || imageWorkshopBusy}
                             onClick={() => void openImageWorkshopFromWriter('page')}
                             className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
@@ -5798,9 +5819,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         className="min-w-0 flex flex-col xl:sticky xl:top-2 xl:max-h-[min(calc(100dvh-10rem),920px)] xl:min-h-[min(280px,40vh)]"
                         aria-label="Beats preview"
                       >
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50 mb-1 shrink-0">
-                          Beats for selected page
-                        </p>
+                        <div className="mb-1 flex shrink-0 flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Beats for selected page
+                          </p>
+                          <button
+                            type="button"
+                            disabled={!selectedPageId}
+                            onClick={() => openSavedOutputEditor('beats')}
+                            className="rounded-md border border-black/15 bg-white/75 px-2 py-1 text-[10px] font-bold text-black hover:bg-white disabled:opacity-40"
+                          >
+                            Edit beats JSON
+                          </button>
+                        </div>
                         {selectedPage?.beats_json ? (
                           <pre
                             className={`${preShell} ${preFont} flex-1 min-h-[min(200px,28vh)] max-h-[min(420px,50vh)] xl:min-h-[min(320px,45vh)] xl:max-h-[min(calc(100dvh-12rem),720px)]`}
