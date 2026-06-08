@@ -220,3 +220,51 @@ The Comic Studio now dynamically influences the artistic environment and AI prom
 - Verify create/edit/delete/favorite persistence with a signed-in ARCS user.
 - Verify save/use handoffs for Imageshop, Character Studio, Asset Studio, Guided Comic, and Writer.
 - Deploy ARCS through the existing Cloudflare pattern once QA is clean.
+
+## ARCS Prompt Library Supabase Migration Verification - 2026-06-08
+
+### What changed
+- Authenticated the local Supabase CLI for the linked ARCS project `vxclogwiytxjolisnakd`.
+- Verified the existing Data API exposed `public.prompts`, `prompt_dossier_tags`, and `prompt_dossier_versions`, but initially rejected the new ARCS provenance columns with `42703 column prompts.source_portal does not exist`.
+- Fetched the missing remote migration history file `20260528181346_create_prompt_dossier_schema.sql`, which represents the already-applied standalone Prompt Dossier schema.
+- Repaired the remote migration history for `20260414100000` after `db push` proved the legacy storage policy already existed but was absent from the migration ledger.
+- Applied `20260607000000_prompt_library_portal.sql` to the linked Supabase project.
+- Verified the Data API now accepts `prompts?select=id,source_portal,source_label,source_context,prompt_sections&limit=1`.
+
+### Files touched
+- `supabase/migrations/20260528181346_create_prompt_dossier_schema.sql`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- The first `supabase db push --include-all --yes` stopped on `policy "arcs_generations_select_legacy_root" for table "objects" already exists`, so no Prompt Library schema changes were applied during that failed attempt.
+- `supabase migration repair --status applied 20260414100000` was used only after the database proved the policy already existed.
+- A follow-up `supabase db push --dry-run` listed only `20260607000000_prompt_library_portal.sql`, and the final push applied only that Prompt Library migration.
+- Existing local migration files overwritten by `supabase migration fetch` were restored to the committed state; only the newly fetched missing remote migration file was kept.
+
+### Verification
+- `supabase db push --dry-run --include-all` listed `20260414100000_arcs_generations_legacy_root_select.sql` and `20260607000000_prompt_library_portal.sql`.
+- `supabase migration repair --status applied 20260414100000` completed successfully.
+- `supabase db push --dry-run` then listed only `20260607000000_prompt_library_portal.sql`.
+- `supabase db push --yes` applied `20260607000000_prompt_library_portal.sql` successfully.
+- Data API checks returned `200` for:
+  - `public.prompts` with `source_portal`, `source_label`, `source_context`, and `prompt_sections`
+  - `public.prompt_dossier_tags`
+  - `public.prompt_dossier_versions`
+- `supabase migration list --linked` showed local and remote aligned through `20260607000000`.
+
+### Outstanding issues
+- Authenticated browser CRUD QA is still required before calling Prompt Library persistence fully accepted.
+- Cross-portal handoff browser QA is still required after signed-in CRUD works.
+- Production deployment is still pending.
+
+### Risks or caveats
+- The remote migration ledger was repaired for `20260414100000` because the underlying storage policy already existed. This was a migration-history alignment, not a new storage policy application.
+- The Data API verification used anon access and proves endpoint/column visibility, not authenticated owner-scoped CRUD behavior.
+
+### Operator follow-up
+- Use a signed-in ARCS browser session for the next pass to verify create/edit/delete/favorite persistence and explicit save/use handoffs.
+
+### Next steps
+- Run signed-in Prompt Library CRUD QA.
+- Run source-portal save and outbound use handoff QA.
+- Deploy ARCS through the existing Cloudflare flow after browser QA passes.
