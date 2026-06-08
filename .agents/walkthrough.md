@@ -268,3 +268,181 @@ The Comic Studio now dynamically influences the artistic environment and AI prom
 - Run signed-in Prompt Library CRUD QA.
 - Run source-portal save and outbound use handoff QA.
 - Deploy ARCS through the existing Cloudflare flow after browser QA passes.
+
+## ARCS Prompt Library Signed-In CRUD QA - 2026-06-08
+
+### What changed
+- Ran the next Prompt Library QA pass against the local ARCS app with an already signed-in Supabase session.
+- Verified the Prompt Library portal uses the database-backed state rather than demo memory after auth is ready.
+- Created one temporary QA prompt, refreshed the app, confirmed the prompt persisted from Supabase, edited the same prompt, favorited it, refreshed again, deleted it, and confirmed the deletion after returning to Prompt Library from a fresh hub reload.
+- Confirmed the signed-in user's Prompt Library returned to an empty database state after cleanup.
+
+### Files touched
+- `.agents/walkthrough.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were required for this pass.
+- Local Vite served this checkout at `http://127.0.0.1:5174/`.
+- The QA prompt was titled `QA CRUD Prompt 2026-06-08 1780901971394`, then edited to `QA CRUD Prompt 2026-06-08 1780901971394 Edited`.
+- Create saved the prompt to Supabase and surfaced `v1` in the Versions panel.
+- Edit persisted the updated title and prompt text and surfaced `v2` plus `v1` in the Versions panel.
+- Favorite toggled successfully and remained visible after reload with the Favorites count at `1`.
+- Delete removed the prompt, cleared the detail pane, returned counts to `0`, and stayed deleted after a fresh navigation back into Prompt Library.
+
+### Verification
+- `git status --short --branch` confirmed the branch was clean before QA.
+- `npm run dev -- --host 127.0.0.1` started Vite for this checkout at `http://127.0.0.1:5174/`.
+- Browser QA: page identity was `http://127.0.0.1:5174/` with title `ARCS Expanded`.
+- Browser QA: initial app load and Prompt Library portal were non-blank with no framework error overlay.
+- Browser QA: console checks during load, create, refresh persistence, edit, favorite, delete, and final fresh-navigation deletion check returned no warnings or errors.
+- Browser QA: screenshots were captured for app load, Prompt Library load, create, refresh persistence, edit/version history, favorite, delete, and final empty-state verification.
+
+### Outstanding issues
+- Cross-portal save/use handoff QA is still required for Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Production Cloudflare deployment remains pending for this branch.
+
+### Risks or caveats
+- This pass covered the desktop-sized in-app browser viewport only.
+- The final page reload returned to the ARCS hub; deletion persistence was verified by reopening Prompt Library from navigation and confirming the QA record was absent.
+
+### Operator follow-up
+- Keep the standalone Prompt Library available until ARCS production CRUD, cross-portal handoffs, and production deployment are verified.
+
+### Next steps
+- Run cross-portal Prompt Library save/use handoff QA.
+- Deploy ARCS through the existing Cloudflare flow after browser QA is clean.
+
+## ARCS Prompt Library Outbound Use Handoff QA - 2026-06-08
+
+### What changed
+- Ran the next Prompt Library cross-portal QA slice against the local ARCS app with an already signed-in Supabase session.
+- Created one temporary Prompt Library QA record, then verified the outbound `Use in ...` handoff buttons for the three targets currently exposed by the Prompt Library detail pane:
+  - Illustrator's Imageshop
+  - Character Studio
+  - Asset Studio
+- Deleted the temporary QA prompt after the handoff checks and confirmed Prompt Library returned to an empty state.
+
+### Files touched
+- `.agents/walkthrough.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were required for this pass.
+- Local Vite served this checkout at `http://127.0.0.1:5174/`.
+- The QA prompt was titled `QA Handoff Prompt 2026-06-08 1780928882708`.
+- The QA prompt text included the marker `QA handoff marker 1780928882708` so each target portal could be verified from visible DOM text.
+- Imageshop consumed the Prompt Library use request, navigated to Illustrator's Imageshop, showed `Loaded "QA Handoff Prompt 2026-06-08 1780928882708" from Prompt Library.`, and exposed the QA marker in the prompt workspace.
+- Character Studio consumed the Prompt Library use request, navigated to Character Studio, pinned the Live Prompt editor, and exposed the QA marker in the override prompt textarea.
+- Asset Studio consumed the Prompt Library use request and navigated to Asset Studio. It initially landed on the References workspace, so the QA marker became visible after selecting the Asset Studio `Prompt` tab, where the override prompt textarea contained the handoff text.
+
+### Verification
+- `git status --short --branch` confirmed the only pre-existing dirty files were `.agents/walkthrough.md` and `walkthrough.md` from the prior CRUD QA entry.
+- `npm run dev -- --host 127.0.0.1` started Vite for this checkout at `http://127.0.0.1:5174/`.
+- Browser QA: app identity was `http://127.0.0.1:5174/` with title `ARCS Expanded`, signed-in session visible, and no framework error overlay.
+- Browser QA: Prompt Library create/save succeeded with `Prompt saved to Supabase.`
+- Browser QA: outbound `Use in Imageshop` navigated to Imageshop and displayed both the loaded-from-library notice and the QA marker.
+- Browser QA: outbound `Character Studio` use action navigated to Character Studio and displayed the QA marker in the pinned Live Prompt edit override.
+- Browser QA: outbound `Asset Studio` use action navigated to Asset Studio and displayed the QA marker after switching to the Asset Studio `Prompt` tab.
+- Browser QA: cleanup delete succeeded with `Prompt deleted.`, prompt counts returned to `0`, and the empty state was visible.
+- Browser QA: console checks during app load, prompt creation, all three handoffs, and cleanup returned no warnings or errors.
+
+### Outstanding issues
+- Source-portal `Save to Prompt Library` QA is still required for Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Production Cloudflare deployment remains pending for this branch.
+
+### Risks or caveats
+- This pass covered outbound Prompt Library use handoffs only, not source-portal save flows.
+- Asset Studio receives the handoff correctly, but its outer workspace remains on References until the user selects the `Prompt` tab. This may be acceptable or may deserve a UX follow-up if users expect the handoff to open directly on the Prompt workspace.
+- This pass covered the desktop-sized in-app browser viewport only.
+
+### Operator follow-up
+- Keep the standalone Prompt Library available until ARCS production CRUD, source save flows, cross-portal use flows, and production deployment are verified.
+
+### Next steps
+- Run source-portal `Save to Prompt Library` QA, starting with the lowest-friction visible prompt surfaces.
+- Decide whether Asset Studio handoffs should automatically switch the outer workspace to the `Prompt` tab.
+- Deploy ARCS through the existing Cloudflare flow after browser QA is clean.
+## ARCS Prompt Library Source Save QA and Fixes - 2026-06-08
+
+### What changed
+- Ran signed-in ARCS browser QA for source-portal `Save to Prompt Library` flows across Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Fixed Writer Prompt Library provenance labels so the saved source/title use `WRITER_WORKSPACE_TAB_LABELS[activeTab].heading` instead of stringifying the tab metadata object as `[object Object]`.
+- Fixed Guided Comic panel source-save discoverability by wiring the Prompt Library save callback to the visible production panel and `selectedProductionPanelMetadata`, then rendering `Save to Prompt Library` beside the visible panel visual prompt in the Panel Workspace.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- Writer QA opened the context menu item `Save visible text to Prompt Library`; the review modal now shows clean provenance like `Writer · Issue outline · page 1` instead of `Writer · [object Object] · page 1`.
+- Imageshop QA saved from `Imageshop · Page 8 Panel 1` with title `Page 8 Panel 1`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Character Studio QA saved from `Character Studio` with title `Character Studio prompt`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Asset Studio QA saved from `Asset Studio` with title `Asset Studio prompt`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Guided Comic QA used the dev-only `guidedComicLibraryFixture=many` fixture, which explicitly states real saved comics are not overwritten. The panel workspace now exposes `Save to Prompt Library` next to the visible visual prompt, saved `Guided Comic · page 1, panel 1`, then deleted the selected record and verified the Prompt Library prompt count returned to `0`.
+- Browser runtime caveat: the in-app Browser virtual clipboard was unavailable for modal text replacement, so QA used source-default titles and selected-record deletion instead of stamped title edits. Browser screenshot capture also timed out; DOM state and console health were used as proof.
+
+### Verification
+- Manual Browser QA: app identity `ARCS Expanded`, signed-in session visible, no relevant console warnings/errors during the source-save flows.
+- Manual Browser QA: Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic each opened the Prompt Library review/save path; temporary records were deleted afterward.
+- `npm run test -- --run src/stores/__tests__/promptLibraryBridge.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` - PASS, 3 files / 29 tests.
+- `git diff --check` - PASS.
+- `npm run build` - FAIL, blocked by current `src/portals/writer/WriterPortal.tsx` unused-symbol errors from the Writer edit-lock affordance work already present in the working tree (`Edit3`, `Lock`, `ShieldCheck`, `Unlock`, lock/draft helpers, and related unused state/callbacks).
+
+### Outstanding issues
+- Full build remains blocked until the current Writer edit-lock unused-symbol errors are resolved or the in-progress Writer affordance work is completed.
+- Production Cloudflare deployment and live smoke are still pending.
+- Asset Studio outbound Prompt Library handoff still has the previously noted UX caveat: the prompt loads correctly, but visibility may depend on the Prompt tab being selected.
+
+### Risks or caveats
+- The source-save QA pass is complete locally, but production is not deployed or smoke-tested.
+- Browser screenshot evidence could not be captured due the in-app Browser screenshot timeout, so this entry relies on DOM state, status text, console logs, and save/delete observations.
+
+### Operator follow-up
+- Decide whether to finish or temporarily neutralize the Writer edit-lock unused imports/state so `npm run build` can pass again.
+- Proceed to Cloudflare deployment only after build is green.
+
+### Next steps
+- Resolve the Writer build blocker, rerun `npm run build`, then deploy the Prompt Library branch and run live Prompt Library smoke QA.
+
+## Prompt Library and Writer Verification Deploy Readiness - 2026-06-08
+
+### What changed
+- Re-ran the full local verification stack after the concurrent Writer edit/lock work landed in the worktree and the earlier Writer unused-symbol build blocker cleared.
+- Confirmed the Prompt Library source-save fixes and Writer UX edit/lock work now build together locally.
+- Attempted the production Cloudflare deploy path for Worker `asset-reference-comics-studio`.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- No source code changes were required in this pass.
+- `npm run build` now passes after the Writer edit/lock worktree reached a buildable state.
+- `npx wrangler deploy --config ./wrangler.jsonc` reached Wrangler 4.80.0 but failed before upload because the local non-interactive environment does not have `CLOUDFLARE_API_TOKEN`.
+- The Cloudflare plugin did not expose an alternate authenticated deployment tool in this session, so production deploy/live smoke remains operator-blocked rather than code-blocked.
+
+### Verification
+- `npm run build` - PASS.
+- `npm run test` - PASS, 79 files / 429 tests.
+- `npm run lint` - PASS with 67 existing warnings and 0 errors.
+- `git diff --check` - PASS.
+- `npx wrangler deploy --config ./wrangler.jsonc` - BLOCKED: Wrangler reported `Failed to fetch auth token: 400 Bad Request` and requires `CLOUDFLARE_API_TOKEN` in non-interactive mode.
+
+### Outstanding issues
+- Production Cloudflare deployment and live smoke are still pending because local Wrangler auth is unavailable.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- The branch remains dirty with Prompt Library fixes, Writer edit/lock implementation files, tracker updates, and walkthrough updates. This pass did not revert or normalize unrelated worktree changes.
+- The local app was not re-smoked in Browser during this pass because the preceding QA passes already covered the Prompt Library source/save flows and Writer browser QA is documented in the immediately preceding Writer entry; this pass focused on build/test/lint/deploy readiness.
+
+### Operator follow-up
+- Provide/export a valid `CLOUDFLARE_API_TOKEN` for local Wrangler deploy, or trigger the connected Cloudflare Workers Build from a pushed/merged branch.
+- After deploy, run live smoke on `https://asset-reference-comics-studio.onyxzion.workers.dev/` for Prompt Library CRUD, source saves, outbound handoffs, and Writer lock/export surfaces.
+
+### Next steps
+- Complete production deploy/live smoke once Cloudflare auth or dashboard build access is available.

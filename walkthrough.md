@@ -9022,3 +9022,43 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - No documentation-only next step remains; continue from product review or deployment review as needed.
+
+## Prompt Library and Writer Verification Deploy Readiness - 2026-06-08
+
+### What changed
+- Re-ran the full local verification stack after the concurrent Writer edit/lock work landed in the worktree and the earlier Writer unused-symbol build blocker cleared.
+- Confirmed the Prompt Library source-save fixes and Writer UX edit/lock work now build together locally.
+- Attempted the production Cloudflare deploy path for Worker `asset-reference-comics-studio`.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- No source code changes were required in this pass.
+- `npm run build` now passes after the Writer edit/lock worktree reached a buildable state.
+- `npx wrangler deploy --config ./wrangler.jsonc` reached Wrangler 4.80.0 but failed before upload because the local non-interactive environment does not have `CLOUDFLARE_API_TOKEN`.
+- The Cloudflare plugin did not expose an alternate authenticated deployment tool in this session, so production deploy/live smoke remains operator-blocked rather than code-blocked.
+
+### Verification
+- `npm run build` - PASS.
+- `npm run test` - PASS, 79 files / 429 tests.
+- `npm run lint` - PASS with 67 existing warnings and 0 errors.
+- `git diff --check` - PASS.
+- `npx wrangler deploy --config ./wrangler.jsonc` - BLOCKED: Wrangler reported `Failed to fetch auth token: 400 Bad Request` and requires `CLOUDFLARE_API_TOKEN` in non-interactive mode.
+
+### Outstanding issues
+- Production Cloudflare deployment and live smoke are still pending because local Wrangler auth is unavailable.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- The branch remains dirty with Prompt Library fixes, Writer edit/lock implementation files, tracker updates, and walkthrough updates. This pass did not revert or normalize unrelated worktree changes.
+- The local app was not re-smoked in Browser during this pass because the preceding QA passes already covered the Prompt Library source/save flows and Writer browser QA is documented in the immediately preceding Writer entry; this pass focused on build/test/lint/deploy readiness.
+
+### Operator follow-up
+- Provide/export a valid `CLOUDFLARE_API_TOKEN` for local Wrangler deploy, or trigger the connected Cloudflare Workers Build from a pushed/merged branch.
+- After deploy, run live smoke on `https://asset-reference-comics-studio.onyxzion.workers.dev/` for Prompt Library CRUD, source saves, outbound handoffs, and Writer lock/export surfaces.
+
+### Next steps
+- Complete production deploy/live smoke once Cloudflare auth or dashboard build access is available.

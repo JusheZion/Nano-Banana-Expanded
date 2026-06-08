@@ -86,6 +86,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-l
 - [x] Pass 8: Outline and beats previews are readable-first, with advanced JSON moved behind disclosure and overwrite-capable actions showing scope.
 - [x] Pass 9: Structural cleanup adds the Export workspace, Guided/Advanced mode, restore snapshots, unified page selection, and clearer separation between safe preview/assist and overwrite actions.
 - [x] Verify: focused Writer tests passed; full suite passed with 79 files / 429 tests; `npm run build` passed; `npm run lint` passed with existing warnings only; `git diff --check` passed; signed-in browser QA passed at `http://127.0.0.1:5174/`.
+- [~] Deployment review: full local verification passed again on 2026-06-08, but direct Wrangler production deploy is blocked locally by missing `CLOUDFLARE_API_TOKEN`.
 - [ ] Follow-up: human product review should decide whether locks should also block manual saves or only AI/destructive overwrites.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE

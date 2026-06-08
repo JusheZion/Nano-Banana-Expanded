@@ -4185,34 +4185,6 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       visualStoryMetadata.panels.find((panel) => panel.panelNumber === selectedPanel.panelNumber) ?? null
     );
   }, [editableDialogueSeeds, npcReferenceNames, pageCards, pageLayoutTemplates, selectedPanel, writerDialogueSeeds]);
-  const saveSelectedPanelPromptToLibrary = useCallback(() => {
-    if (!selectedPanel || !selectedPanelVisualMetadata?.visualPrompt.trim()) return;
-    requestPromptLibrarySave({
-      sourcePortal: 'comic',
-      sourceLabel: `Guided Comic · page ${selectedPanel.pageNumber}, panel ${selectedPanel.panelNumber}`,
-      title: `Page ${selectedPanel.pageNumber}, panel ${selectedPanel.panelNumber} visual prompt`,
-      promptText: selectedPanelVisualMetadata.visualPrompt.trim(),
-      category: 'scene',
-      tags: ['guided-comic', 'panel-art'],
-      collections: ['ARCS handoffs'],
-      characters: selectedPanel.characters,
-      scenes: selectedPanel.location ? [selectedPanel.location] : [],
-      sourceContext: {
-        pageNumber: selectedPanel.pageNumber,
-        panelNumber: selectedPanel.panelNumber,
-        panelId: selectedPanel.id,
-        layoutIntent: selectedPanelVisualMetadata.layoutIntent,
-        status: panelArtStatuses[selectedPanel.id] ?? 'needs-art',
-      },
-      promptSections: {
-        visualPrompt: selectedPanelVisualMetadata.visualPrompt,
-        beatText: selectedPanel.beatText,
-        dialogue: selectedPanelVisualMetadata.dialogueText,
-        layoutIntent: selectedPanelVisualMetadata.layoutIntent,
-      },
-    });
-    setPrimaryActionMessage(`Saved page ${selectedPanel.pageNumber}, panel ${selectedPanel.panelNumber} prompt to Prompt Library.`);
-  }, [panelArtStatuses, requestPromptLibrarySave, selectedPanel, selectedPanelVisualMetadata]);
   const selectedPanelDialogueSeeds = useMemo(() => {
     if (!selectedPanel) return [];
     return (editableDialogueSeeds[selectedPanel.pageNumber] ?? [])
@@ -4379,6 +4351,63 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const selectedProductionPanelMetadata =
     selectedProductionVisualMetadata?.panels.find((panel) => panel.panelNumber === selectedProductionPanel?.panelNumber) ??
     null;
+  const saveSelectedPanelPromptToLibrary = useCallback(() => {
+    const metadata = selectedProductionPanelMetadata ?? selectedPanelVisualMetadata;
+    const panel =
+      selectedProductionPage && selectedProductionPanel
+        ? {
+            pageNumber: selectedProductionPage.pageNumber,
+            panelNumber: selectedProductionPanel.panelNumber,
+            panelId: selectedProductionPanel.panelId,
+            beatText: selectedProductionPanel.beatText,
+            status: selectedProductionPanel.status,
+          }
+        : selectedPanel
+          ? {
+              pageNumber: selectedPanel.pageNumber,
+              panelNumber: selectedPanel.panelNumber,
+              panelId: selectedPanel.id,
+              beatText: selectedPanel.beatText,
+              status: panelArtStatuses[selectedPanel.id] ?? 'needs-art',
+            }
+          : null;
+
+    if (!panel || !metadata?.visualPrompt.trim()) return;
+
+    requestPromptLibrarySave({
+      sourcePortal: 'comic',
+      sourceLabel: `Guided Comic · page ${panel.pageNumber}, panel ${panel.panelNumber}`,
+      title: `Page ${panel.pageNumber}, panel ${panel.panelNumber} visual prompt`,
+      promptText: metadata.visualPrompt.trim(),
+      category: 'scene',
+      tags: ['guided-comic', 'panel-art'],
+      collections: ['ARCS handoffs'],
+      characters: metadata.referenceNeeds.characters,
+      scenes: metadata.referenceNeeds.locations,
+      sourceContext: {
+        pageNumber: panel.pageNumber,
+        panelNumber: panel.panelNumber,
+        panelId: panel.panelId,
+        layoutIntent: metadata.layoutIntent,
+        status: panel.status,
+      },
+      promptSections: {
+        visualPrompt: metadata.visualPrompt,
+        beatText: panel.beatText,
+        dialogue: metadata.dialogueText,
+        layoutIntent: metadata.layoutIntent,
+      },
+    });
+    setPrimaryActionMessage(`Saved page ${panel.pageNumber}, panel ${panel.panelNumber} prompt to Prompt Library.`);
+  }, [
+    panelArtStatuses,
+    requestPromptLibrarySave,
+    selectedPanel,
+    selectedPanelVisualMetadata,
+    selectedProductionPage,
+    selectedProductionPanel,
+    selectedProductionPanelMetadata,
+  ]);
   const selectedProductionMissingReferences = selectedProductionPage
     ? getGuidedProductionMissingReferences(selectedProductionPage, {
         characterReferences,
@@ -6610,6 +6639,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   <span className="font-bold text-white/72">Visual prompt:</span>{' '}
                   {selectedProductionPanelMetadata?.visualPrompt || 'No visual prompt generated for this panel yet.'}
                 </p>
+                {selectedProductionPanelMetadata?.visualPrompt.trim() ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={saveSelectedPanelPromptToLibrary}
+                      className="rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50 hover:bg-amber-300/10"
+                    >
+                      Save to Prompt Library
+                    </button>
+                  </div>
+                ) : null}
                 <p>
                   <span className="font-bold text-white/72">Look:</span>{' '}
                   {[artDirection.artStyle, artDirection.renderingStyle, artDirection.colorMood, artDirection.lighting]
