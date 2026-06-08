@@ -169,18 +169,26 @@ export const WriterRibbon: React.FC<Props> = ({
         {activeMenu === 'file' && (
           <div className="flex flex-wrap items-center gap-2 px-2">
             {onSelectWorkspaceTabFromFile ? (
-              <Tooltip
-                content="Synopsis helper, issue pack copy/download, edit saved outline / beats / dialogue / shot plan"
-                side="bottom"
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectWorkspaceTabFromFile('scripts')}
-                  className="rounded-md border border-amber-800/40 bg-amber-100/90 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                >
-                  Synopsis helper
-                </button>
-              </Tooltip>
+              <>
+                <Tooltip content="Open the dedicated export workspace" side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => onSelectWorkspaceTabFromFile('export')}
+                    className="rounded-md border border-amber-800/40 bg-amber-100/90 px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                  >
+                    Export issue
+                  </button>
+                </Tooltip>
+                <Tooltip content="Advanced synopsis helper and saved-output editors" side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => onSelectWorkspaceTabFromFile('scripts')}
+                    className="rounded-md border border-black/15 bg-white/75 px-3 py-1.5 text-[11px] font-bold text-black/70 shadow-sm hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                  >
+                    Synopsis helper
+                  </button>
+                </Tooltip>
+              </>
             ) : null}
             <Tooltip content={WRITER_UI_TIPS.fileRibbon} side="bottom">
               <button

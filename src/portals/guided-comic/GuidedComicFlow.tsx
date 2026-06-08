@@ -57,6 +57,7 @@ import { guidedComicAssistResultSchema, issueOutlineSchema, WRITER_PAGE_BEATS_IS
 import type { GuidedComicAssistAction, GuidedComicAssistResult } from '@/shared/writer/types';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import type { ImageshopGenerationProvenance } from '@/portals/storyline/imageshopPagePanelQueue';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
@@ -1783,6 +1784,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const consumeVaultSelection = useGuidedComicVaultBridge((s) => s.consumeSelection);
   const requestGuidedComicHandoff = useImageWorkshopBridge((s) => s.requestGuidedComicHandoff);
   const consumeGuidedComicPanelImageReturn = useImageWorkshopBridge((s) => s.consumeGuidedComicPanelImageReturn);
+  const requestPromptLibrarySave = usePromptLibraryBridge((s) => s.requestSavePrompt);
   const requestLayoutHandoff = useGuidedComicLayoutBridge((s) => s.requestLayoutHandoff);
   const requestWriterIssueOpen = useWriterWorkshopBridge((s) => s.requestIssueOpen);
   const [libraryQaFixtureName] = useState(() => readGuidedComicLibraryQaFixtureName());
@@ -4349,6 +4351,63 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const selectedProductionPanelMetadata =
     selectedProductionVisualMetadata?.panels.find((panel) => panel.panelNumber === selectedProductionPanel?.panelNumber) ??
     null;
+  const saveSelectedPanelPromptToLibrary = useCallback(() => {
+    const metadata = selectedProductionPanelMetadata ?? selectedPanelVisualMetadata;
+    const panel =
+      selectedProductionPage && selectedProductionPanel
+        ? {
+            pageNumber: selectedProductionPage.pageNumber,
+            panelNumber: selectedProductionPanel.panelNumber,
+            panelId: selectedProductionPanel.panelId,
+            beatText: selectedProductionPanel.beatText,
+            status: selectedProductionPanel.status,
+          }
+        : selectedPanel
+          ? {
+              pageNumber: selectedPanel.pageNumber,
+              panelNumber: selectedPanel.panelNumber,
+              panelId: selectedPanel.id,
+              beatText: selectedPanel.beatText,
+              status: panelArtStatuses[selectedPanel.id] ?? 'needs-art',
+            }
+          : null;
+
+    if (!panel || !metadata?.visualPrompt.trim()) return;
+
+    requestPromptLibrarySave({
+      sourcePortal: 'comic',
+      sourceLabel: `Guided Comic · page ${panel.pageNumber}, panel ${panel.panelNumber}`,
+      title: `Page ${panel.pageNumber}, panel ${panel.panelNumber} visual prompt`,
+      promptText: metadata.visualPrompt.trim(),
+      category: 'scene',
+      tags: ['guided-comic', 'panel-art'],
+      collections: ['ARCS handoffs'],
+      characters: metadata.referenceNeeds.characters,
+      scenes: metadata.referenceNeeds.locations,
+      sourceContext: {
+        pageNumber: panel.pageNumber,
+        panelNumber: panel.panelNumber,
+        panelId: panel.panelId,
+        layoutIntent: metadata.layoutIntent,
+        status: panel.status,
+      },
+      promptSections: {
+        visualPrompt: metadata.visualPrompt,
+        beatText: panel.beatText,
+        dialogue: metadata.dialogueText,
+        layoutIntent: metadata.layoutIntent,
+      },
+    });
+    setPrimaryActionMessage(`Saved page ${panel.pageNumber}, panel ${panel.panelNumber} prompt to Prompt Library.`);
+  }, [
+    panelArtStatuses,
+    requestPromptLibrarySave,
+    selectedPanel,
+    selectedPanelVisualMetadata,
+    selectedProductionPage,
+    selectedProductionPanel,
+    selectedProductionPanelMetadata,
+  ]);
   const selectedProductionMissingReferences = selectedProductionPage
     ? getGuidedProductionMissingReferences(selectedProductionPage, {
         characterReferences,
@@ -6580,6 +6639,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   <span className="font-bold text-white/72">Visual prompt:</span>{' '}
                   {selectedProductionPanelMetadata?.visualPrompt || 'No visual prompt generated for this panel yet.'}
                 </p>
+                {selectedProductionPanelMetadata?.visualPrompt.trim() ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={saveSelectedPanelPromptToLibrary}
+                      className="rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50 hover:bg-amber-300/10"
+                    >
+                      Save to Prompt Library
+                    </button>
+                  </div>
+                ) : null}
                 <p>
                   <span className="font-bold text-white/72">Look:</span>{' '}
                   {[artDirection.artStyle, artDirection.renderingStyle, artDirection.colorMood, artDirection.lighting]
@@ -8830,9 +8900,18 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                   Beats, dialogue, references, and layout intent feed the Imageshop prompt and Advanced Studio handoff.
                                 </p>
                               </div>
-                              <span className="shrink-0 rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50">
-                                {selectedPanelVisualMetadata.layoutIntent}
-                              </span>
+                              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={saveSelectedPanelPromptToLibrary}
+                                  className="rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50 hover:bg-amber-300/10"
+                                >
+                                  Save to Prompt Library
+                                </button>
+                                <span className="rounded-full border border-amber-200/35 bg-black/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-50">
+                                  {selectedPanelVisualMetadata.layoutIntent}
+                                </span>
+                              </div>
                             </div>
                             <p className="mt-3 whitespace-pre-wrap rounded-lg border border-white/10 bg-black/25 p-3 text-xs leading-relaxed text-white/72">
                               {selectedPanelVisualMetadata.visualPrompt}

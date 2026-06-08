@@ -8665,3 +8665,400 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - In the next thread, refresh `git status --short` and split review/staging by scope before any commit or PR packaging.
+
+## Writers Workshop Outline and Beats Edit Discoverability - 2026-06-07
+
+### What changed
+- Made the existing saved-output editors easier to find from the workspaces where writers naturally look for them.
+- Added an `Edit outline JSON` action beside the latest saved outline preview in the Outline workspace.
+- Added `Edit this page's beats` to the selected-page Beats action row.
+- Added a quieter `Edit beats JSON` action to the selected-page beats preview header.
+- Kept the existing Scripts saved-output editor as the single save/validation surface, so outline and beats JSON still use the same database update paths and invalid JSON guards.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Added a small `openSavedOutputEditor` helper in `WriterPortal` that switches to the Scripts workspace and selects the requested saved-output editor tab.
+- The Outline action is disabled when there is no saved outline to edit.
+- The Beats actions are disabled until a page is selected.
+- This pass deliberately did not duplicate the outline/beats textareas inside the Outline or Beats tabs, avoiding a second save surface for the same JSON.
+- Existing prompt-library bridge edits in `WriterPortal.tsx` were preserved and not reverted.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerPageEditReview.test.ts src/portals/writer/__tests__/writerImageshopReturn.test.ts` passed 3 files / 8 tests.
+- `npm run build` passed with the existing large chunk warning.
+- `npm run lint` passed with 0 errors and the existing 67 warnings.
+- Browser QA on `http://127.0.0.1:5174/` loaded `ARCS Expanded` in the in-app browser with no console errors or warnings.
+- Browser QA confirmed `Edit outline JSON` appears enabled when a saved outline is loaded and clicking it opens the Scripts saved-output editor with the outline save control present.
+- Browser QA selected Page 8, opened Beats, confirmed both `Edit this page's beats` and `Edit beats JSON` are visible, and confirmed the primary beats edit action opens the Scripts saved-output editor with the beats save control present.
+
+### Outstanding issues
+- Screenshot capture through the in-app browser timed out during this QA pass; DOM and interaction checks were used as evidence instead.
+
+### Risks or caveats
+- The edit textareas still live in the Scripts saved-output editor. This pass adds direct access from Outline/Beats rather than moving or duplicating the editors.
+- The checkout currently contains broader prompt-library portal work on `codex/prompt-library-portal`; this pass touched only the Writer edit-affordance slice plus tracker/walkthrough docs.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- If users still expect inline editing directly inside Outline/Beats, consider a follow-up that embeds the same editor component in those workspaces rather than linking to Scripts.
+
+## ARCS Prompt Library Signed-In CRUD QA - 2026-06-08
+
+### What changed
+- Ran the next Prompt Library QA pass against the local ARCS app with an already signed-in Supabase session.
+- Verified the Prompt Library portal uses the database-backed state rather than demo memory after auth is ready.
+- Created one temporary QA prompt, refreshed the app, confirmed the prompt persisted from Supabase, edited the same prompt, favorited it, refreshed again, deleted it, and confirmed the deletion after returning to Prompt Library from a fresh hub reload.
+- Confirmed the signed-in user's Prompt Library returned to an empty database state after cleanup.
+
+### Files touched
+- `.agents/walkthrough.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were required for this pass.
+- Local Vite served this checkout at `http://127.0.0.1:5174/`.
+- The QA prompt was titled `QA CRUD Prompt 2026-06-08 1780901971394`, then edited to `QA CRUD Prompt 2026-06-08 1780901971394 Edited`.
+- Create saved the prompt to Supabase and surfaced `v1` in the Versions panel.
+- Edit persisted the updated title and prompt text and surfaced `v2` plus `v1` in the Versions panel.
+- Favorite toggled successfully and remained visible after reload with the Favorites count at `1`.
+- Delete removed the prompt, cleared the detail pane, returned counts to `0`, and stayed deleted after a fresh navigation back into Prompt Library.
+
+### Verification
+- `git status --short --branch` confirmed the branch was clean before QA.
+- `npm run dev -- --host 127.0.0.1` started Vite for this checkout at `http://127.0.0.1:5174/`.
+- Browser QA: page identity was `http://127.0.0.1:5174/` with title `ARCS Expanded`.
+- Browser QA: initial app load and Prompt Library portal were non-blank with no framework error overlay.
+- Browser QA: console checks during load, create, refresh persistence, edit, favorite, delete, and final fresh-navigation deletion check returned no warnings or errors.
+- Browser QA: screenshots were captured for app load, Prompt Library load, create, refresh persistence, edit/version history, favorite, delete, and final empty-state verification.
+
+### Outstanding issues
+- Cross-portal save/use handoff QA is still required for Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Production Cloudflare deployment remains pending for this branch.
+
+### Risks or caveats
+- This pass covered the desktop-sized in-app browser viewport only.
+- The final page reload returned to the ARCS hub; deletion persistence was verified by reopening Prompt Library from navigation and confirming the QA record was absent.
+
+### Operator follow-up
+- Keep the standalone Prompt Library available until ARCS production CRUD, cross-portal handoffs, and production deployment are verified.
+
+### Next steps
+- Run cross-portal Prompt Library save/use handoff QA.
+- Deploy ARCS through the existing Cloudflare flow after browser QA is clean.
+
+## ARCS Prompt Library Outbound Use Handoff QA - 2026-06-08
+
+### What changed
+- Ran the next Prompt Library cross-portal QA slice against the local ARCS app with an already signed-in Supabase session.
+- Created one temporary Prompt Library QA record, then verified the outbound `Use in ...` handoff buttons for the three targets currently exposed by the Prompt Library detail pane:
+  - Illustrator's Imageshop
+  - Character Studio
+  - Asset Studio
+- Deleted the temporary QA prompt after the handoff checks and confirmed Prompt Library returned to an empty state.
+
+### Files touched
+- `.agents/walkthrough.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were required for this pass.
+- Local Vite served this checkout at `http://127.0.0.1:5174/`.
+- The QA prompt was titled `QA Handoff Prompt 2026-06-08 1780928882708`.
+- The QA prompt text included the marker `QA handoff marker 1780928882708` so each target portal could be verified from visible DOM text.
+- Imageshop consumed the Prompt Library use request, navigated to Illustrator's Imageshop, showed `Loaded "QA Handoff Prompt 2026-06-08 1780928882708" from Prompt Library.`, and exposed the QA marker in the prompt workspace.
+- Character Studio consumed the Prompt Library use request, navigated to Character Studio, pinned the Live Prompt editor, and exposed the QA marker in the override prompt textarea.
+- Asset Studio consumed the Prompt Library use request and navigated to Asset Studio. It initially landed on the References workspace, so the QA marker became visible after selecting the Asset Studio `Prompt` tab, where the override prompt textarea contained the handoff text.
+
+### Verification
+- `git status --short --branch` confirmed the only pre-existing dirty files were `.agents/walkthrough.md` and `walkthrough.md` from the prior CRUD QA entry.
+- `npm run dev -- --host 127.0.0.1` started Vite for this checkout at `http://127.0.0.1:5174/`.
+- Browser QA: app identity was `http://127.0.0.1:5174/` with title `ARCS Expanded`, signed-in session visible, and no framework error overlay.
+- Browser QA: Prompt Library create/save succeeded with `Prompt saved to Supabase.`
+- Browser QA: outbound `Use in Imageshop` navigated to Imageshop and displayed both the loaded-from-library notice and the QA marker.
+- Browser QA: outbound `Character Studio` use action navigated to Character Studio and displayed the QA marker in the pinned Live Prompt edit override.
+- Browser QA: outbound `Asset Studio` use action navigated to Asset Studio and displayed the QA marker after switching to the Asset Studio `Prompt` tab.
+- Browser QA: cleanup delete succeeded with `Prompt deleted.`, prompt counts returned to `0`, and the empty state was visible.
+- Browser QA: console checks during app load, prompt creation, all three handoffs, and cleanup returned no warnings or errors.
+
+### Outstanding issues
+- Source-portal `Save to Prompt Library` QA is still required for Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Production Cloudflare deployment remains pending for this branch.
+
+### Risks or caveats
+- This pass covered outbound Prompt Library use handoffs only, not source-portal save flows.
+- Asset Studio receives the handoff correctly, but its outer workspace remains on References until the user selects the `Prompt` tab. This may be acceptable or may deserve a UX follow-up if users expect the handoff to open directly on the Prompt workspace.
+- This pass covered the desktop-sized in-app browser viewport only.
+
+### Operator follow-up
+- Keep the standalone Prompt Library available until ARCS production CRUD, source save flows, cross-portal use flows, and production deployment are verified.
+
+### Next steps
+- Run source-portal `Save to Prompt Library` QA, starting with the lowest-friction visible prompt surfaces.
+- Decide whether Asset Studio handoffs should automatically switch the outer workspace to the `Prompt` tab.
+- Deploy ARCS through the existing Cloudflare flow after browser QA is clean.
+
+## Writers Workshop First-Time User UX Audit - 2026-06-08
+
+### What changed
+- Ran a no-code, first-time-user UX audit of the Writers' Workshop portal against the local ARCS app.
+- Evaluated the portal as a non-technical, tired creator trying to continue one real issue workflow from outline through beats, dialogue, visual prep, audit/cockpit, and export.
+- Identified top UX issues for follow-up implementation, including excessive visible controls, conflicting primary actions, export discoverability failure, label drift, raw JSON prominence, and unclear workflow branching.
+
+### Files touched
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were made.
+- Local Vite was already serving this checkout at `http://127.0.0.1:5174/`.
+- The audit used the signed-in local session and the existing selected issue `Fabula Coniunctio Oppositorum` / `The Blackening`.
+- The first Writers' Workshop viewport exposed roughly 80 visible interactive controls before collapsing the workshop panels.
+- Collapsing the right workshop panel reduced visible controls to roughly 39, but the screen still retained the left app nav, ribbon, workflow chips, production map, central form content, and a disabled or ambiguous primary action.
+- Clicking the production map's `12 Export` step highlighted Export but opened the Synopsis helper surface, where export controls were buried among author-outline fields instead of presenting a dedicated export workspace.
+
+### Verification
+- Browser QA: opened `http://127.0.0.1:5174/` in the in-app browser and confirmed the app title was `ARCS Expanded`.
+- Browser QA: entered Writers' Workshop from the ARCS hub card rather than deep-linking.
+- Browser QA: inspected Outline, Beats, Dialogue, Video/Visual Prep, Arc/Audit, Cockpit, File, and production-map Export behavior.
+- Browser QA: captured viewport screenshots for the hub, Writer outline, Beats, Dialogue, and collapsed-panel states.
+- Browser QA: console error check returned no errors during the audit.
+
+### Outstanding issues
+- The portal needs a focused UX cleanup pass before it will feel approachable to a first-time creator.
+- No fixes were implemented in this pass because the user explicitly requested evaluation only.
+
+### Risks or caveats
+- This was a desktop-sized in-app browser audit only.
+- The audit did not create or delete production data and did not spend AI generation budget.
+- Findings reflect the actual signed-in populated issue experience; a blank account or empty issue may have additional onboarding issues.
+
+### Operator follow-up
+- Use the ranked UX issue list from the audit response as the starting backlog for the next Writer portal pass.
+
+### Next steps
+- Prioritize the export routing failure and the contradictory primary actions on completed stages before cosmetic cleanup.
+
+## Writers Workshop UX Edit And Lock Implementation Plan - 2026-06-08
+
+### What changed
+- Converted the first-time user UX audit findings into a prioritized implementation plan for Writers' Workshop.
+- Added the user's unresolved direct-edit discoverability issue as a first-class plan requirement: edit controls may exist in the portal, but they are still too hard to find from the actual Outline, Beats, and Dialogue workspaces.
+- Added a lock/protection tool requirement to prevent AI regeneration, clear actions, or batch operations from overwriting user-authored synopsis, outline instructions, outlines, page beats, dialogue, and related story fields.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-lock-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changes were made.
+- The plan groups work into Quick Wins, Medium Fixes, and Structural Changes.
+- The lock MVP is designed to use existing `writer_issues.notes` metadata first, avoiding a database migration unless implementation proves notes-based persistence is insufficient.
+- The plan prioritizes export routing, direct edit discoverability, truthful primary actions, panel density reduction, and label consistency before larger guided-mode or version-restore work.
+
+### Verification
+- File creation was verified by saving the plan under `docs/superpowers/plans/`.
+- No tests were run because this was a planning-only pass.
+
+### Outstanding issues
+- Implementation remains pending.
+- The plan still needs user approval before code changes begin.
+
+### Risks or caveats
+- Lock metadata stored in issue notes is intentionally conservative for the first pass; a future migration may be needed if locks must become queryable or auditable across issues.
+
+### Operator follow-up
+- Review and approve the plan scope before implementation.
+
+### Next steps
+- Start with Quick Win 1: fix Export routing.
+- Then implement Quick Win 2: make direct editing unmissable from the active workspaces.
+## ARCS Prompt Library Source Save QA and Fixes - 2026-06-08
+
+### What changed
+- Ran signed-in ARCS browser QA for source-portal `Save to Prompt Library` flows across Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic.
+- Fixed Writer Prompt Library provenance labels so the saved source/title use `WRITER_WORKSPACE_TAB_LABELS[activeTab].heading` instead of stringifying the tab metadata object as `[object Object]`.
+- Fixed Guided Comic panel source-save discoverability by wiring the Prompt Library save callback to the visible production panel and `selectedProductionPanelMetadata`, then rendering `Save to Prompt Library` beside the visible panel visual prompt in the Panel Workspace.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- Writer QA opened the context menu item `Save visible text to Prompt Library`; the review modal now shows clean provenance like `Writer · Issue outline · page 1` instead of `Writer · [object Object] · page 1`.
+- Imageshop QA saved from `Imageshop · Page 8 Panel 1` with title `Page 8 Panel 1`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Character Studio QA saved from `Character Studio` with title `Character Studio prompt`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Asset Studio QA saved from `Asset Studio` with title `Asset Studio prompt`, confirmed Supabase save, then deleted the selected Prompt Library record.
+- Guided Comic QA used the dev-only `guidedComicLibraryFixture=many` fixture, which explicitly states real saved comics are not overwritten. The panel workspace now exposes `Save to Prompt Library` next to the visible visual prompt, saved `Guided Comic · page 1, panel 1`, then deleted the selected record and verified the Prompt Library prompt count returned to `0`.
+- Browser runtime caveat: the in-app Browser virtual clipboard was unavailable for modal text replacement, so QA used source-default titles and selected-record deletion instead of stamped title edits. Browser screenshot capture also timed out; DOM state and console health were used as proof.
+
+### Verification
+- Manual Browser QA: app identity `ARCS Expanded`, signed-in session visible, no relevant console warnings/errors during the source-save flows.
+- Manual Browser QA: Writer, Imageshop, Character Studio, Asset Studio, and Guided Comic each opened the Prompt Library review/save path; temporary records were deleted afterward.
+- `npm run test -- --run src/stores/__tests__/promptLibraryBridge.test.ts src/portals/guided-comic/__tests__/guidedComicLibraryQaFixtures.test.ts src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts` - PASS, 3 files / 29 tests.
+- `git diff --check` - PASS.
+- `npm run build` - FAIL, blocked by current `src/portals/writer/WriterPortal.tsx` unused-symbol errors from the Writer edit-lock affordance work already present in the working tree (`Edit3`, `Lock`, `ShieldCheck`, `Unlock`, lock/draft helpers, and related unused state/callbacks).
+
+### Outstanding issues
+- Full build remains blocked until the current Writer edit-lock unused-symbol errors are resolved or the in-progress Writer affordance work is completed.
+- Production Cloudflare deployment and live smoke are still pending.
+- Asset Studio outbound Prompt Library handoff still has the previously noted UX caveat: the prompt loads correctly, but visibility may depend on the Prompt tab being selected.
+
+### Risks or caveats
+- The source-save QA pass is complete locally, but production is not deployed or smoke-tested.
+- Browser screenshot evidence could not be captured due the in-app Browser screenshot timeout, so this entry relies on DOM state, status text, console logs, and save/delete observations.
+
+### Operator follow-up
+- Decide whether to finish or temporarily neutralize the Writer edit-lock unused imports/state so `npm run build` can pass again.
+- Proceed to Cloudflare deployment only after build is green.
+
+### Next steps
+- Resolve the Writer build blocker, rerun `npm run build`, then deploy the Prompt Library branch and run live Prompt Library smoke QA.
+
+## Writers Workshop UX edit, export, and lock implementation - 2026-06-08
+
+### What changed
+- Implemented the approved Writers Workshop UX execution plan across export routing, direct edit discoverability, truthful primary actions, density cleanup, lock persistence, regeneration guards, draft persistence, readable previews, and structural workspace cleanup.
+- Added a dedicated `Export` workspace so the workflow export step opens visible preferred export, issue pack JSON, Markdown script, and Guided Comics handoff controls above the fold.
+- Added an always-visible edit/protect strip below the ribbon with direct actions for `Edit issue synopsis`, `Edit outline`, `Edit outline instructions`, `Edit Page N beats`, and `Edit Page N dialogue`.
+- Added persistent lock metadata in existing issue notes for synopsis, author outline, outline instructions, production defaults, latest outline, page beats, and page dialogue.
+- Added regeneration and destructive-action guards so locked outlines/pages are blocked or skipped before overwrite-capable actions run.
+- Added draft persistence for outline instructions, beats director notes, and visual creative brief before AI calls and on blur.
+- Added restore snapshot metadata before manual or AI overwrites of outline, page beats, page dialogue, and shot plan drafts.
+- Changed completed-stage primary actions to continue forward instead of regenerating by default, with regeneration left as an explicit secondary action.
+- Collapsed the right workshop dock by default, added Guided/Advanced mode, normalized `Visual Prep` and `Audit` labels, and added a unified top page selector.
+- Replaced raw JSON-first outline and beats previews with readable creator text first, leaving raw JSON under an `Advanced JSON` disclosure.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterRibbon.tsx`
+- `src/portals/writer/writerSearch.ts`
+- `src/portals/writer/writerNextStep.ts`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `src/portals/writer/writerProtectionLocks.ts`
+- `src/portals/writer/writerDraftPersistence.ts`
+- `src/portals/writer/writerRegenerationScope.ts`
+- `src/portals/writer/writerStorySnapshots.ts`
+- `src/portals/writer/__tests__/writerProtectionLocks.test.ts`
+- `src/portals/writer/__tests__/writerDraftPersistence.test.ts`
+- `src/portals/writer/__tests__/writerRegenerationScope.test.ts`
+- `src/portals/writer/__tests__/writerStorySnapshots.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Lock metadata is stored under `writer_issues.notes.writer_locks`; no schema migration was added.
+- Fragile draft metadata is stored under `writer_issues.notes.writer_drafts`; outline-instruction draft writes are skipped while the outline-instructions lock is active.
+- Restore/version snapshots are stored under `writer_issues.notes.writer_story_snapshots` and capped by the helper.
+- Batch page-beat generation uses explicit unlocked page IDs when locks are present; selected batch operations skip locked pages and show a safety message.
+- Pacing apply blocks if it would delete locked page beats or dialogue.
+- Pacing preview skips locked pages; preview apply checks the relevant page lock before writing beats or dialogue.
+- The old Synopsis helper and JSON editors remain available as advanced affordances; direct local editors now exist in the active Outline, Beats, and Dialogue workspaces.
+- Browser QA used the signed-in local app at `http://127.0.0.1:5174/`; a temporary Page 1 beats lock was created, verified after reload/reopen, tested against blocked regeneration, and then removed.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerProtectionLocks.test.ts src/portals/writer/__tests__/writerDraftPersistence.test.ts src/portals/writer/__tests__/writerRegenerationScope.test.ts src/portals/writer/__tests__/writerStorySnapshots.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerPageEditReview.test.ts` - PASS, 6 files / 13 tests.
+- `npm run test -- --run` - PASS, 79 files / 429 tests.
+- `npm run build` - PASS.
+- `npm run lint` - PASS with existing repo warnings only; no errors.
+- `git diff --check` - PASS.
+- Browser QA at `http://127.0.0.1:5174/` - PASS:
+  - opened Writers Workshop from the hub;
+  - confirmed direct edit controls and lock tools are visible without using File;
+  - confirmed Export workspace shows preferred export, issue pack JSON, Markdown script, and Guided Comics handoff above the fold;
+  - locked Page 1 beats, reloaded/reopened Writers Workshop, and confirmed it persisted as `Locked`;
+  - attempted `Regenerate page beats` while locked and confirmed the warning `Selected page beats is locked. Unlock it before regenerating, clearing, or overwriting it.`;
+  - removed the temporary Page 1 beats lock afterward;
+  - browser console warnings/errors remained empty during the Writer QA pass.
+
+### Outstanding issues
+- None for this implementation pass.
+
+### Risks or caveats
+- `src/portals/guided-comic/GuidedComicFlow.tsx`, `.agents/walkthrough.md`, and the plan document were already dirty or untracked outside this implementation slice; this pass did not revert or normalize unrelated work.
+- Browser QA used the existing signed-in local issue data and avoided leaving the temporary lock in place.
+
+### Operator follow-up
+- Review the new Writer UX in a normal human pass, especially whether locks should block manual saves or only AI/destructive overwrites.
+
+### Next steps
+- Deploy only after the broader branch state is reviewed, because unrelated dirty files are present in the worktree.
+
+## Writers Workshop concurrent pass tracker sync - 2026-06-08
+
+### What changed
+- Updated the active Writers Workshop UX edit/lock plan to record the nine approved passes as completed coordinated workstreams instead of leaving the plan in pre-implementation form.
+- Added a complete `tasks.md` tracker section for the Writers Workshop UX Edit And Lock Plan, including pass-by-pass status, verification results, and the remaining human product-review follow-up.
+
+### Files touched
+- `docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-lock-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No source code changed in this documentation sync.
+- The status update preserves the original plan detail and adds a dated implementation-status section at the top so future agents can quickly distinguish planned work from completed work.
+- The only open follow-up recorded is product judgment on whether locks should block manual saves or only AI/destructive overwrites.
+
+### Verification
+- Documentation-only verification:
+  - Confirmed the active plan document contains `Implementation Status - 2026-06-08`.
+  - Confirmed `tasks.md` contains `Writers Workshop — UX Edit And Lock Plan (2026-06-08) — COMPLETE`.
+  - Confirmed this walkthrough section was appended.
+
+### Outstanding issues
+- None for the documentation sync.
+
+### Risks or caveats
+- No tests were rerun because this pass only updated project documentation.
+
+### Operator follow-up
+- Review the Writer lock semantics in normal product use and decide whether manual saves should be blocked by locks.
+
+### Next steps
+- No documentation-only next step remains; continue from product review or deployment review as needed.
+
+## Prompt Library and Writer Verification Deploy Readiness - 2026-06-08
+
+### What changed
+- Re-ran the full local verification stack after the concurrent Writer edit/lock work landed in the worktree and the earlier Writer unused-symbol build blocker cleared.
+- Confirmed the Prompt Library source-save fixes and Writer UX edit/lock work now build together locally.
+- Attempted the production Cloudflare deploy path for Worker `asset-reference-comics-studio`.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- No source code changes were required in this pass.
+- `npm run build` now passes after the Writer edit/lock worktree reached a buildable state.
+- `npx wrangler deploy --config ./wrangler.jsonc` reached Wrangler 4.80.0 but failed before upload because the local non-interactive environment does not have `CLOUDFLARE_API_TOKEN`.
+- The Cloudflare plugin did not expose an alternate authenticated deployment tool in this session, so production deploy/live smoke remains operator-blocked rather than code-blocked.
+
+### Verification
+- `npm run build` - PASS.
+- `npm run test` - PASS, 79 files / 429 tests.
+- `npm run lint` - PASS with 67 existing warnings and 0 errors.
+- `git diff --check` - PASS.
+- `npx wrangler deploy --config ./wrangler.jsonc` - BLOCKED: Wrangler reported `Failed to fetch auth token: 400 Bad Request` and requires `CLOUDFLARE_API_TOKEN` in non-interactive mode.
+
+### Outstanding issues
+- Production Cloudflare deployment and live smoke are still pending because local Wrangler auth is unavailable.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- The branch remains dirty with Prompt Library fixes, Writer edit/lock implementation files, tracker updates, and walkthrough updates. This pass did not revert or normalize unrelated worktree changes.
+- The local app was not re-smoked in Browser during this pass because the preceding QA passes already covered the Prompt Library source/save flows and Writer browser QA is documented in the immediately preceding Writer entry; this pass focused on build/test/lint/deploy readiness.
+
+### Operator follow-up
+- Provide/export a valid `CLOUDFLARE_API_TOKEN` for local Wrangler deploy, or trigger the connected Cloudflare Workers Build from a pushed/merged branch.
+- After deploy, run live smoke on `https://asset-reference-comics-studio.onyxzion.workers.dev/` for Prompt Library CRUD, source saves, outbound handoffs, and Writer lock/export surfaces.
+
+### Next steps
+- Complete production deploy/live smoke once Cloudflare auth or dashboard build access is available.

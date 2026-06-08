@@ -9,13 +9,21 @@ describe('protected portals', () => {
   });
 
   it('protects creative workspace portals', () => {
-    const protectedPortals: Portal[] = ['studio', 'reference', 'lab', 'comic', 'assets', 'writer'];
+    const protectedPortals: Portal[] = ['studio', 'reference', 'prompts', 'lab', 'comic', 'assets', 'writer'];
     protectedPortals.forEach((portal) => {
       expect(isProtectedPortal(portal)).toBe(true);
     });
   });
 
   it('covers every current non-public portal intentionally', () => {
-    expect(Array.from(PROTECTED_PORTALS).sort()).toEqual(['assets', 'comic', 'lab', 'reference', 'studio', 'writer']);
+    expect(Array.from(PROTECTED_PORTALS).sort()).toEqual([
+      'assets',
+      'comic',
+      'lab',
+      'prompts',
+      'reference',
+      'studio',
+      'writer',
+    ]);
   });
 });

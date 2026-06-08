@@ -9,5 +9,6 @@ export type Portal =
   | 'lab'
   | 'comic'
   | 'assets'
+  | 'prompts'
   | 'writer'
   | 'wiki';

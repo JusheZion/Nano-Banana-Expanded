@@ -68,8 +68,26 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Add staged page-level edit review for outline, beats, and dialogue with explicit save, canon check, regenerate, and affected-page preview actions; no silent cascade overwrite.
 - [x] Verify Writer page-beats-to-Imageshop bridge with focused tests and browser smoke: page context reaches Imageshop, Writer map/return controls are present, and returned image provenance merge is covered by automated tests.
 - [x] Run approved live Writer-to-Imageshop generation on `Oratoria de Conjunctio Oppositorum` Issue 1 Page 8 Panel 1; fixed Writer handoff to populate the active Imageshop panel queue and verified returned `imageshop_output` merged into the Writer page beat.
+- [x] Improve Writers Workshop edit discoverability: Outline and Beats workspaces now expose direct actions that jump to the saved-output JSON editors.
 - [~] Run Obsidian lore import end-to-end QA: parser/reference tests, build, lint, Canon import UI smoke, manual lore create/edit, JSON import, reload persistence, and Cockpit Lore digest stripping passed; native file-picker/folder import, preview duplicate actions, Obsidian source badges, stored image counts, cloud image upload, and QA-card cleanup remain pending.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
+
+## Writers Workshop — UX Edit And Lock Plan (2026-06-08) — COMPLETE
+
+Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-lock-plan.md`](docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-lock-plan.md)
+
+- [x] Pass 1: Export routing opens a real Export workspace with preferred export, issue pack JSON, Markdown, and Guided Comics handoff visible above the fold.
+- [x] Pass 2: Direct edit controls are visible in the active story workspaces without relying on File or hidden JSON-only paths.
+- [x] Pass 3: Completed-stage primary actions continue forward instead of prompting users to regenerate already-complete work.
+- [x] Pass 4: Density and labels are cleaned up with the right workshop dock collapsed by default, Guided/Advanced mode, and normalized `Visual Prep`, `Audit`, and `Export` labels.
+- [x] Pass 5: Lock metadata persists under existing issue notes for synopsis, author outline, outline instructions, production defaults, latest outline, page beats, and dialogue.
+- [x] Pass 6: Regeneration, clear, pacing, preview-apply, and batch operations block or skip locked content with explicit warnings.
+- [x] Pass 7: Fragile outline instructions, beats director notes, and visual creative brief drafts persist before AI calls and on blur.
+- [x] Pass 8: Outline and beats previews are readable-first, with advanced JSON moved behind disclosure and overwrite-capable actions showing scope.
+- [x] Pass 9: Structural cleanup adds the Export workspace, Guided/Advanced mode, restore snapshots, unified page selection, and clearer separation between safe preview/assist and overwrite actions.
+- [x] Verify: focused Writer tests passed; full suite passed with 79 files / 429 tests; `npm run build` passed; `npm run lint` passed with existing warnings only; `git diff --check` passed; signed-in browser QA passed at `http://127.0.0.1:5174/`.
+- [~] Deployment review: full local verification passed again on 2026-06-08, but direct Wrangler production deploy is blocked locally by missing `CLOUDFLARE_API_TOKEN`.
+- [ ] Follow-up: human product review should decide whether locks should also block manual saves or only AI/destructive overwrites.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 

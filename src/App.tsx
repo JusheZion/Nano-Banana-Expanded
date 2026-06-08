@@ -6,6 +6,7 @@ import type { Portal } from '@/shared/portals';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import { AppShell } from './components/layout/AppShell';
 import { LandingPage } from './components/LandingPage';
 import { ProtectedPortalGate } from './components/auth/ProtectedPortalGate';
@@ -18,6 +19,7 @@ const PhotoLab = lazy(() => import('./portals/PhotoLab').then(m => ({ default: m
 const ComicPortal = lazy(() => import('./portals/ComicPortal').then(m => ({ default: m.ComicPortal })));
 const WriterPortal = lazy(() => import('./portals/writer/WriterPortal').then(m => ({ default: m.WriterPortal })));
 const WikiPortal = lazy(() => import('./portals/WikiPortal').then(m => ({ default: m.WikiPortal })));
+const PromptLibraryPortal = lazy(() => import('./portals/prompt-library/PromptLibraryPortal').then(m => ({ default: m.PromptLibraryPortal })));
 
 const PortalFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh] text-white/60">
@@ -40,6 +42,8 @@ function App() {
   const clearImageWorkshopPortalRequest = useImageWorkshopBridge((s) => s.clearPortalRequest);
   const guidedComicVaultPortalToOpen = useGuidedComicVaultBridge((s) => s.portalToOpen);
   const clearGuidedComicVaultPortalRequest = useGuidedComicVaultBridge((s) => s.clearPortalRequest);
+  const promptLibraryPortalToOpen = usePromptLibraryBridge((s) => s.portalToOpen);
+  const clearPromptLibraryPortalRequest = usePromptLibraryBridge((s) => s.clearPortalRequest);
   const isPhoneRef = useRef(isPhone);
   isPhoneRef.current = isPhone;
 
@@ -90,6 +94,13 @@ function App() {
   }, [guidedComicVaultPortalToOpen, clearGuidedComicVaultPortalRequest, navigatePortal]);
 
   useEffect(() => {
+    if (promptLibraryPortalToOpen) {
+      navigatePortal(promptLibraryPortalToOpen);
+      clearPromptLibraryPortalRequest();
+    }
+  }, [promptLibraryPortalToOpen, clearPromptLibraryPortalRequest, navigatePortal]);
+
+  useEffect(() => {
     if (isPhone && (activePortal === 'comic' || activePortal === 'lab')) {
       setActivePortal('home');
     }
@@ -100,6 +111,7 @@ function App() {
     else if (activePortal === 'reference' || activePortal === 'assets') setTheme('purple');
     else if (activePortal === 'lab') setTheme('purple');
     else if (activePortal === 'comic') setTheme('obsidian');
+    else if (activePortal === 'prompts') setTheme('gold');
     else if (activePortal === 'writer') setTheme('teal');
     else if (activePortal === 'wiki') setTheme('wiki');
     else setTheme('crimson');
@@ -143,6 +155,15 @@ function App() {
         <ProtectedPortalGate>
           <Suspense fallback={<PortalFallback />}>
             <PhotoLab />
+          </Suspense>
+        </ProtectedPortalGate>
+      )}
+      {activePortal === 'prompts' && (
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <div className="h-full min-h-0 flex flex-col overflow-hidden">
+              <PromptLibraryPortal />
+            </div>
           </Suspense>
         </ProtectedPortalGate>
       )}

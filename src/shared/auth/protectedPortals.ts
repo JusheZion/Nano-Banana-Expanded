@@ -6,6 +6,7 @@ export const PROTECTED_PORTALS: ReadonlySet<Portal> = new Set<Portal>([
   'lab',
   'comic',
   'assets',
+  'prompts',
   'writer',
 ]);
 

@@ -38,20 +38,22 @@ export function getWriterQuickGenerateNextHint(
       if (ctx.pagesWithBeats < ctx.pageCount) {
         return 'Next: finish beats, then Dialogue (⌥⌘5 / Alt+Ctrl+5) to draft script from beats.';
       }
-      return 'Next: Dialogue tab (⌥⌘5 / Alt+Ctrl+5) to draft script, or Video (⌥⌘6 / Alt+Ctrl+6) for shot planning.';
+      return 'Beats are complete. Continue to Dialogue or Visual Prep; regenerate only if you want to replace this page.';
     case 'dialogue':
       if (ctx.pageCount === 0) return 'Next: add pages and beats before dialogue.';
       if (ctx.pagesWithBeats === 0) return 'Next: generate page beats first (⌥⌘4 / Alt+Ctrl+4).';
       if (ctx.pagesWithScript < ctx.pagesWithBeats) {
-        return 'Next: draft dialogue per page, then Video (⌥⌘6 / Alt+Ctrl+6) or Arc (⌥⌘7 / Alt+Ctrl+7) for review.';
+        return 'Next: draft missing dialogue, then Visual Prep or Audit.';
       }
-      return 'Next: Video (⌥⌘6 / Alt+Ctrl+6) for shot list, or Arc (⌥⌘7 / Alt+Ctrl+7) for pacing / canon review.';
+      return 'Dialogue is complete. Continue to Visual Prep, Audit, or Export; regenerate only if you want to replace this page.';
     case 'video':
-      return 'Next: Arc tab (⌥⌘7 / Alt+Ctrl+7) for pacing/canon, or Cockpit (⌥⌘8 / Alt+Ctrl+8) to compare outputs.';
+      return 'Next: Audit for pacing/canon, Cockpit to compare outputs, or Export when the issue is ready.';
     case 'arc':
-      return 'Run pacing/canon on the Library issue, or batch-select issues above. Next: Cockpit (⌥⌘8 / Alt+Ctrl+8) for compare/review.';
+      return 'Run pacing/canon on the Library issue, then continue to Cockpit or Export.';
     case 'cockpit':
-      return 'Compare outline / beats / dialogue side-by-side, then use Idea assist for late-stage review and targeted fixes.';
+      return 'Compare outline / beats / dialogue side-by-side, then export or use Idea assist for late-stage review.';
+    case 'export':
+      return 'Download the preferred issue pack, Markdown script, JSON bundle, or Guided Comics handoff.';
     default:
       return '';
   }
