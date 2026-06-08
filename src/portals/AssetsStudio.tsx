@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Boxes,
@@ -18,6 +18,7 @@ import { Tooltip } from '@/shared/components/Tooltip';
 import { SearchableVaultSelect } from '@/shared/components/SearchableVaultSelect';
 import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import { buildAssetStudioPrompt } from '@/shared/utils/assetStudioPrompt';
 import {
   ASSET_SCENE_EMPTY_OF_FIGURES_CONSTRAINT,
@@ -157,6 +158,8 @@ export const AssetsStudio: React.FC = () => {
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
   const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
   const clearActiveImportForTarget = useStudioImportBridge((s) => s.clearActiveImportForTarget);
+  const requestPromptLibrarySave = usePromptLibraryBridge((s) => s.requestSavePrompt);
+  const consumePromptLibraryUseRequest = usePromptLibraryBridge((s) => s.consumeUseRequest);
 
   useEffect(() => {
     return () => {
@@ -174,6 +177,14 @@ export const AssetsStudio: React.FC = () => {
       useAssetStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
     }
   }, [consumeImportForTarget]);
+
+  useEffect(() => {
+    const request = consumePromptLibraryUseRequest('assets');
+    if (!request?.promptText.trim()) return;
+    useAssetStudioStore.getState().setVaultPromptOverride(request.promptText.trim());
+    setPromptPanelTab('edit');
+    setPromptPinned(true);
+  }, [consumePromptLibraryUseRequest]);
 
   useEffect(() => {
     setRecentAssets(getRecentAssets());
@@ -260,6 +271,44 @@ export const AssetsStudio: React.FC = () => {
     store.currentGenerationSeed != null
       ? `${compiledPrompt}\n\nUse seed: ${store.currentGenerationSeed} for consistency with the reference image.`
       : compiledPrompt;
+
+  const saveCurrentPromptToLibrary = useCallback(() => {
+    const promptText = displayPrompt.trim() || store.vaultPromptOverride.trim();
+    if (!promptText) return;
+    requestPromptLibrarySave({
+      sourcePortal: 'assets',
+      sourceLabel: 'Asset Studio',
+      title: 'Asset Studio prompt',
+      promptText,
+      category: 'scene',
+      tags: ['asset-studio', promptPanelTab],
+      collections: ['ARCS handoffs'],
+      sourceContext: {
+        promptPanelTab,
+        aspectRatio: store.aspectRatio,
+        effectiveAspectRatio,
+        hasLiveImage: Boolean(store.currentLiveImageUrl),
+        workspaceMode: store.workspaceMode,
+      },
+      promptSections: {
+        compiled: displayPrompt,
+        reference: aiReferencePrompt,
+        editOverride: store.vaultPromptOverride,
+        refinement: store.refinementPromptOverride,
+      },
+    });
+  }, [
+    aiReferencePrompt,
+    displayPrompt,
+    effectiveAspectRatio,
+    promptPanelTab,
+    requestPromptLibrarySave,
+    store.aspectRatio,
+    store.currentLiveImageUrl,
+    store.refinementPromptOverride,
+    store.vaultPromptOverride,
+    store.workspaceMode,
+  ]);
 
   const stories = getStoryPhotoCollections();
   const hasStories = stories.length > 0;
@@ -748,6 +797,7 @@ export const AssetsStudio: React.FC = () => {
             snippetTextInput={snippetTextInput}
             setSnippetTextInput={setSnippetTextInput}
             onRefine={handleRefineAsset}
+            onSaveToPromptLibrary={saveCurrentPromptToLibrary}
           />
           )}
 

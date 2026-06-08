@@ -26,6 +26,7 @@ type Props = {
   aiReferencePromptLoading: boolean;
   aiReferencePromptError: string | null;
   onDescribeLiveImage: () => void | Promise<void>;
+  onSaveToPromptLibrary: () => void;
   snippetNameInput: string;
   setSnippetNameInput: (v: string) => void;
   snippetTextInput: string;
@@ -44,6 +45,7 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
   aiReferencePromptLoading,
   aiReferencePromptError,
   onDescribeLiveImage,
+  onSaveToPromptLibrary,
   snippetNameInput,
   setSnippetNameInput,
   snippetTextInput,
@@ -314,6 +316,14 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
       )}
       <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
         <CopyButton text={displayPrompt} labelStyle={goldTextStyle} />
+        <button
+          type="button"
+          onClick={onSaveToPromptLibrary}
+          disabled={!displayPrompt.trim()}
+          className="px-2 py-1 rounded-full text-sm border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-45"
+        >
+          Save to Prompt Library
+        </button>
         {!phoneCompact && promptPinned && promptPanelTab === 'auto' && (
           <button
             type="button"

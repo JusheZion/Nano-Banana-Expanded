@@ -137,6 +137,7 @@ import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
 import {
   ACCENT_GOLD_GRADIENT,
@@ -731,6 +732,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const consumeImageshopWriterImageMapReturn = useImageWorkshopBridge(
     (s) => s.consumeImageshopWriterImageMapReturn,
   );
+  const requestPromptLibrarySave = usePromptLibraryBridge((s) => s.requestSavePrompt);
   const consumeRequestedIssueOpen = useWriterWorkshopBridge((s) => s.consumeRequestedIssueOpen);
 
   const toolErrorMessage = (res: { error: string; details?: string }) =>
@@ -1850,6 +1852,48 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!searchableText) return;
     void navigator.clipboard.writeText(searchableText);
   }, [searchableText]);
+
+  const saveVisibleTextToPromptLibrary = useCallback(() => {
+    const promptText = searchableText.trim();
+    if (!promptText) return;
+    const pageLabel = selectedPage ? ` · page ${selectedPage.page_number}` : '';
+    requestPromptLibrarySave({
+      sourcePortal: 'writer',
+      sourceLabel: `Writer · ${WRITER_WORKSPACE_TAB_LABELS[activeTab]}${pageLabel}`,
+      title: `${selectedIssue?.title || 'Writer issue'} · ${WRITER_WORKSPACE_TAB_LABELS[activeTab]}${pageLabel}`,
+      promptText,
+      category: activeTab === 'lore' ? 'project' : 'scene',
+      tags: ['writer', activeTab],
+      collections: ['ARCS handoffs'],
+      sourceContext: {
+        activeTab,
+        seriesId: selectedSeriesId,
+        seriesTitle: selectedSeries?.title,
+        issueId: selectedIssueId,
+        issueTitle: selectedIssue?.title,
+        issueNumber: selectedIssue?.issue_number,
+        pageId: selectedPage?.id,
+        pageNumber: selectedPage?.page_number,
+      },
+      promptSections: {
+        visibleText: promptText,
+        synopsis: selectedIssue?.synopsis ?? '',
+        pageBeats: selectedPage?.beats_json ?? null,
+        scriptText: selectedPage?.script_text ?? '',
+      },
+    });
+    pushHistory('saved visible Writer text to Prompt Library');
+  }, [
+    activeTab,
+    pushHistory,
+    requestPromptLibrarySave,
+    searchableText,
+    selectedIssue,
+    selectedIssueId,
+    selectedPage,
+    selectedSeries?.title,
+    selectedSeriesId,
+  ]);
 
   const onFindNext = useCallback(() => {
     if (findMatchCount <= 0) return;
@@ -3683,6 +3727,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     {
       label: 'Copy visible text',
       onClick: () => void copyVisibleText(),
+      disabled: !searchableText,
+    },
+    {
+      label: 'Save visible text to Prompt Library',
+      onClick: () => saveVisibleTextToPromptLibrary(),
       disabled: !searchableText,
     },
     {

@@ -118,6 +118,7 @@ import {
   type GuidedImageWorkshopHandoff,
   type GuidedImageWorkshopReference,
 } from '@/stores/imageWorkshopBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import {
   getCurrentImageshopProductionVersion,
   useImageshopProductionStore,
@@ -311,6 +312,8 @@ export function GenericImageLabPanel({
   const sendImageshopWriterImageMapBack = useImageWorkshopBridge((s) => s.sendImageshopWriterImageMapBack);
   const requestPortalOpen = useImageWorkshopBridge((s) => s.requestPortalOpen);
   const returnToGuidedComicFlow = useImageWorkshopBridge((s) => s.returnToGuidedComicFlow);
+  const requestPromptLibrarySave = usePromptLibraryBridge((s) => s.requestSavePrompt);
+  const consumePromptLibraryUseRequest = usePromptLibraryBridge((s) => s.consumeUseRequest);
   const [refs, setRefs] = useState<string[]>(() => Array.from({ length: 14 }, () => ''));
   const [context, setContext] = useState<LabContext>('character');
   const [modelId] = useState<OnyxModelId>('pro');
@@ -1724,6 +1727,55 @@ export function GenericImageLabPanel({
     [productionItems, selectedProductionItemId],
   );
 
+  useEffect(() => {
+    const request = consumePromptLibraryUseRequest('lab');
+    if (!request?.promptText.trim()) return;
+    const nextPrompt = request.promptText.trim();
+    setPromptRaw(nextPrompt);
+    setGuidedPromptTracksReferences(false);
+    updatePromptSection('main', nextPrompt);
+    setNotice(`Loaded "${request.title}" from Prompt Library.`);
+  }, [consumePromptLibraryUseRequest, updatePromptSection]);
+
+  const saveCurrentImageshopPromptToLibrary = useCallback(() => {
+    const promptText = effectivePrompt.trim();
+    if (!promptText) return;
+    requestPromptLibrarySave({
+      sourcePortal: 'lab',
+      sourceLabel: selectedProductionItem
+        ? `Imageshop · ${selectedProductionItem.label}`
+        : guidedPanelTarget
+          ? `Imageshop · page ${guidedPanelTarget.pageNumber}, panel ${guidedPanelTarget.panelNumber}`
+          : 'Imageshop',
+      title: selectedProductionItem?.label ?? 'Imageshop prompt',
+      promptText,
+      category: context === 'character' ? 'character' : 'scene',
+      tags: ['imageshop', context],
+      collections: ['ARCS handoffs'],
+      sourceContext: {
+        context,
+        aspectRatio,
+        generationMode,
+        selectedProductionItemId: selectedProductionItem?.id,
+        guidedPanelId: guidedPanelTarget?.panelId,
+      },
+      promptSections: {
+        ...promptWorkspace,
+        refined: promptRefined,
+      },
+    });
+  }, [
+    aspectRatio,
+    context,
+    effectivePrompt,
+    generationMode,
+    guidedPanelTarget,
+    promptRefined,
+    promptWorkspace,
+    requestPromptLibrarySave,
+    selectedProductionItem,
+  ]);
+
   const productionBoard = useMemo(
     () => (panelQueue ? buildImageshopProductionBoard(panelQueue, productionItems) : null),
     [panelQueue, productionItems],
@@ -2897,6 +2949,14 @@ export function GenericImageLabPanel({
             style={{ background: 'linear-gradient(90deg, #D4AF37, #FBBF24)' }}
           >
             {genBusy ? 'Generating…' : 'Generate'}
+          </button>
+          <button
+            type="button"
+            disabled={!effectivePrompt}
+            onClick={saveCurrentImageshopPromptToLibrary}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-amber-500/40 text-xs font-semibold text-amber-100 hover:bg-amber-500/15 disabled:opacity-45"
+          >
+            Save to Prompt Library
           </button>
           {!effectivePrompt ? (
             <p className="basis-full text-[11px] text-white/45">Add a prompt before generating.</p>

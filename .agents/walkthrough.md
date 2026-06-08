@@ -151,3 +151,72 @@ The Comic Studio now dynamically influences the artistic environment and AI prom
 *   **Centralized Presets:** A new `GENRE_REGISTRY` mapping contains styles for themes like Afrofuturism, Hardboiled Noir, and Celestial Romance, providing immediate access to specialized fonts, color palettes for Panel strokes and Page Backgrounds, and AI Tone Biases.
 *   **Prompt Middleware Upgrade:** The `MockAIGenerate` call inside the Asset Library now captures the `currentGenreId` from the active store, feeding its `aiBias` directly into the text LLM parser. For example, asking for "A Hero" under Cyberpunk now sends: *"A Hero, Set in a high-tech dystopian future environment..."*, ensuring generated assets immediately match the surrounding aesthetic.
 *   **Stateful Injection:** We injected Genre behavior natively into the `addPage`, `addBalloon`, and `addPanel` actions in `comicStore.ts`. Newly created speech balloons automatically adopt the target genre's custom font, and panels adapt their borders instantly. A global "Apply to All Pages" allows users to retroactively force a theme onto a layout in progress.
+
+## ARCS Prompt Library Native Portal - 2026-06-08
+
+### What changed
+- Added a protected ARCS-native Prompt Library portal under the new `prompts` portal id.
+- Registered Prompt Library in the portal catalog/navigation, app routing, prefetch map, theme handling, and protected portal coverage.
+- Ported the standalone Prompt Library repository/types/utilities/demo data/tests into `src/portals/prompt-library` and replaced standalone auth/client assumptions with ARCS `AuthContext` and the shared Supabase client.
+- Added an ARCS Supabase migration for the standalone-compatible `public.prompts` and `prompt_dossier_*` schema, including ARCS provenance columns:
+  - `source_portal`
+  - `source_label`
+  - `source_context`
+  - `prompt_sections`
+- Added `usePromptLibraryBridge` for explicit one-shot prompt handoffs and selected-prompt use requests.
+- Added explicit “Save to Prompt Library” actions in Character Studio, Asset Studio, Imageshop, and Guided Comic selected-panel prompt flows.
+- Added a Writer context action for saving the current visible Writer material into Prompt Library.
+- Added Prompt Library outbound “Use in Imageshop / Character Studio / Asset Studio” actions, with consuming behavior in those target portals.
+- Generated an ARCS-native Prompt Library UI concept for the accepted design direction: `/Users/apoaaron/.codex/generated_images/019e6f6c-6a83-72f3-8f5d-265cf20a9344/ig_09010d3a653d3ec1016a26052d30d081909cacf5ce697beae5.png`.
+
+### Files touched
+- `src/App.tsx`
+- `src/components/layout/AppShell.tsx`
+- `src/portals-prefetch.ts`
+- `src/shared/portals.ts`
+- `src/shared/portalCatalog.ts`
+- `src/shared/auth/protectedPortals.ts`
+- `src/shared/auth/__tests__/protectedPortals.test.ts`
+- `src/stores/promptLibraryBridge.ts`
+- `src/stores/__tests__/promptLibraryBridge.test.ts`
+- `src/portals/prompt-library/**`
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/AssetsStudio.tsx`
+- `src/portals/asset-studio/AssetStudioLivePromptPanel.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `supabase/migrations/20260607000000_prompt_library_portal.sql`
+
+### Implementation notes
+- Prompt Library remains modular rather than pasted as a second monolithic app.
+- The portal is protected like the other creative workspaces and uses ARCS sign-in/session state.
+- Standalone Prompt Library remains untouched and should not be deleted until ARCS production CRUD, persistence, and handoffs are verified and the user confirms no standalone export is needed.
+- Cross-portal awareness is intentionally explicit: users choose “Save to Prompt Library” or “Use in ...”; no background prompt harvesting was added.
+- The migration is idempotent in shape (`create table if not exists`, `alter table ... add column if not exists`, guarded policies) and preserves owner-scoped authenticated RLS.
+
+### Verification
+- `npm run test -- --run src/shared/auth/__tests__/protectedPortals.test.ts src/stores/__tests__/promptLibraryBridge.test.ts src/portals/prompt-library/lib/promptUtils.test.ts src/portals/prompt-library/lib/promptRepository.test.ts` passed.
+- `npm run test -- --run src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx src/portals/guided-comic/__tests__/guidedComicImageshopReturn.test.tsx` passed.
+- `npm run build` passed.
+
+### Outstanding issues
+- Browser QA and authenticated Supabase CRUD verification are still required before calling the ARCS Prompt Library fully operational.
+- Production deployment was not performed in this pass.
+- Supabase Data API visibility for the new ARCS migration still needs to be verified against the target production Supabase project after migration application.
+
+### Risks or caveats
+- Writer integration currently saves the visible Writer context through the context action system rather than a large new visible toolbar.
+- Full source-portal coverage is started for key surfaces, but additional refined actions may be useful after browser QA confirms where users naturally expect them.
+- Existing large bundle warnings remain from ARCS build output and were not introduced as a blocking error by this work.
+
+### Operator follow-up
+- Apply the new Supabase migration to the ARCS Supabase project before relying on live persistence.
+- Add production Supabase auth redirect settings only if the ARCS production origin changes.
+- Keep the standalone Prompt Library available until ARCS Prompt Library production CRUD and handoffs are verified.
+
+### Next steps
+- Run local browser QA for the Prompt Library portal at desktop and compact/mobile viewports.
+- Verify create/edit/delete/favorite persistence with a signed-in ARCS user.
+- Verify save/use handoffs for Imageshop, Character Studio, Asset Studio, Guided Comic, and Writer.
+- Deploy ARCS through the existing Cloudflare pattern once QA is clean.

@@ -176,6 +176,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     setMoreOpen(false);
     if (portal === 'studio' || portal === 'writer') setTheme('teal');
     else if (portal === 'reference' || portal === 'assets' || portal === 'lab') setTheme('purple');
+    else if (portal === 'prompts') setTheme('gold');
     else if (portal === 'comic') setTheme('obsidian');
     else if (portal === 'wiki') setTheme('wiki');
     else if (portal === 'home') setTheme('crimson');

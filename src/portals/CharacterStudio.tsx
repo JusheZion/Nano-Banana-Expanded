@@ -29,6 +29,7 @@ import {
   type WardrobeModifierCategory,
 } from '@/stores/characterStudioStore';
 import { useStudioImportBridge } from '@/stores/studioImportBridge';
+import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import { buildCharacterStudioPromptForApi } from '@/shared/utils/buildCharacterStudioPromptForApi';
 import {
   CHARACTER_STUDIO_BG_V4,
@@ -298,6 +299,8 @@ export const CharacterStudio: React.FC = () => {
   const consumeImportForTarget = useStudioImportBridge((s) => s.consumeImportForTarget);
   const requestReturnToSourceIfNeeded = useStudioImportBridge((s) => s.requestReturnToSourceIfNeeded);
   const clearActiveImportForTarget = useStudioImportBridge((s) => s.clearActiveImportForTarget);
+  const requestPromptLibrarySave = usePromptLibraryBridge((s) => s.requestSavePrompt);
+  const consumePromptLibraryUseRequest = usePromptLibraryBridge((s) => s.consumeUseRequest);
 
   useEffect(() => {
     return () => {
@@ -315,6 +318,14 @@ export const CharacterStudio: React.FC = () => {
       useCharacterStudioStore.getState().setLastUsedPrompt(chunk.promptHint.trim());
     }
   }, [consumeImportForTarget]);
+
+  useEffect(() => {
+    const request = consumePromptLibraryUseRequest('studio');
+    if (!request?.promptText.trim()) return;
+    useCharacterStudioStore.getState().setVaultPromptOverride(request.promptText.trim());
+    setPromptPanelTab('edit');
+    setPromptPinned(true);
+  }, [consumePromptLibraryUseRequest]);
 
   useEffect(() => {
     setRecentCharacters(getRecentCharacters());
@@ -383,6 +394,43 @@ export const CharacterStudio: React.FC = () => {
         : promptPanelTab === 'edit'
           ? store.vaultPromptOverride
           : store.refinementPromptOverride;
+
+  const saveCurrentPromptToLibrary = useCallback(() => {
+    const promptText = copyPromptText.trim() || displayPrompt.trim();
+    if (!promptText) return;
+    requestPromptLibrarySave({
+      sourcePortal: 'studio',
+      sourceLabel: 'Character Studio',
+      title: selectedPoseNameForPrompt ? `Character prompt · ${selectedPoseNameForPrompt}` : 'Character Studio prompt',
+      promptText,
+      category: 'character',
+      tags: ['character-studio', promptPanelTab],
+      collections: ['ARCS handoffs'],
+      sourceContext: {
+        promptPanelTab,
+        aspectRatio: store.aspectRatio,
+        hasLiveImage: Boolean(store.currentLiveImageUrl),
+        selectedPoseName: selectedPoseNameForPrompt,
+      },
+      promptSections: {
+        compiled: displayPrompt,
+        reference: aiReferencePrompt,
+        editOverride: store.vaultPromptOverride,
+        refinement: store.refinementPromptOverride,
+      },
+    });
+  }, [
+    aiReferencePrompt,
+    copyPromptText,
+    displayPrompt,
+    promptPanelTab,
+    requestPromptLibrarySave,
+    selectedPoseNameForPrompt,
+    store.aspectRatio,
+    store.currentLiveImageUrl,
+    store.refinementPromptOverride,
+    store.vaultPromptOverride,
+  ]);
 
   const activeReferenceForCompare =
     store.referenceImageUrls.find((u) => Boolean(u)) ?? store.currentLiveImageUrl ?? null;
@@ -1777,6 +1825,14 @@ export const CharacterStudio: React.FC = () => {
             )}
             <div className="mt-2 pt-2 border-t border-white/10 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
               <CopyButton text={copyPromptText} labelStyle={goldTextStyle} />
+              <button
+                type="button"
+                onClick={saveCurrentPromptToLibrary}
+                disabled={!copyPromptText.trim() && !displayPrompt.trim()}
+                className="px-2 py-1 rounded-full text-[10px] border border-amber-500/40 hover:bg-amber-500/20 disabled:opacity-45"
+              >
+                Save to Prompt Library
+              </button>
               {!phoneCompact && promptPinned && promptPanelTab === 'auto' && (
                 <button
                   type="button"
