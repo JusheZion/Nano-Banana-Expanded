@@ -9491,3 +9491,61 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Optionally add Character Studio and Asset Studio handoff screenshots in a future pass.
+
+## Writers Workshop Focused UX Reset - 2026-06-09
+
+### What changed
+- Added a tested `Dashboard` workspace as the default Writers Workshop entry point.
+- Added a first-class `Visual Canon` workspace and Dashboard card so issue visual references are no longer buried inside Foundation Hub.
+- Renamed the Writer view split from `Guided / Advanced` to `Focused / All Tools`.
+- Made Focused mode hide the full ribbon and production map while preserving them in All Tools.
+- Added a persistent top `Series / Issue / Page` selector strip so users can switch series without opening the right dock.
+- Compactly surfaced issue/page edit and lock status in Focused mode while keeping the full edit/lock strip in All Tools.
+- Updated Writer help copy for Focused / All Tools, Visual Canon, top selectors, and Export.
+- Added a durable UX location guide mapping old tool locations to new Focused locations.
+- Added a focused implementation tracker for this UX reset and synced `tasks.md`.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerSearch.ts`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `src/portals/writer/writerNextStep.ts`
+- `src/portals/writer/writerHelpRegistry.tsx`
+- `src/portals/writer/__tests__/writerWorkspaceModel.test.ts`
+- `src/portals/writer/__tests__/writerWorkflowChronology.test.ts`
+- `docs/writers-workshop-focused-ux-guide.md`
+- `docs/superpowers/plans/2026-06-09-writers-workshop-focused-ux-reset-plan.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The existing visual-reference storage key remains `writer_issues.notes.writer_visual_references`.
+- No Supabase migration or `writer-tools` prompt change was made.
+- Focused mode persists in local storage under `writerPortalViewMode`; All Tools remains available for raw JSON, batch actions, diagnostics, and dense navigation.
+- The Visual Canon workspace reuses the existing attach/remove/reference digest logic, with the AI context preview shown only in All Tools.
+- Browser QA used the signed-in local in-app browser session. The non-persistent series-switch check changed the selected series and then restored the original selection; no issue/reference data was created or deleted during this pass.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts` - PASS.
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts` - PASS.
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerProtectionLocks.test.ts src/portals/writer/__tests__/writerDraftPersistence.test.ts src/portals/writer/__tests__/writerRegenerationScope.test.ts` - PASS, 6 files / 15 tests.
+- `npm run test` - PASS, 81 files / 434 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Writers Workshop opens to the Dashboard in Focused mode; Series / Issue / Page selectors are visible without the dock; Visual Canon is reachable from Dashboard and the Focused rail; All Tools restores the ribbon and production map; Focused hides them again; series switching worked and was restored.
+
+### Outstanding issues
+- No new visual reference was attached during this smoke pass to avoid creating extra signed-in account data.
+- Deployment has not been performed for this branch.
+
+### Risks or caveats
+- The previous live QA already proved the visual-reference AI bridge. This pass moved the UI and reused that same storage/bridge path, but did not run a fresh beat-generation call with newly attached references.
+- The initial focused screen is meaningfully quieter, but WriterPortal remains a large component and should eventually be split into smaller workspace components.
+
+### Operator follow-up
+- Review the Focused Dashboard and Visual Canon workspace in the browser for subjective density and wording.
+- Decide whether this branch should be merged into the current Prompt Library branch or rebased onto `origin/main` before PR/push.
+
+### Next steps
+- Commit, push, and open a PR when the branch base is confirmed.

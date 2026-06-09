@@ -8,9 +8,11 @@ import {
 describe('writerWorkflowChronology', () => {
   it('models the user-facing chronology from Library through Export', () => {
     expect(WRITER_WORKFLOW_STEP_ORDER.map((step) => step.label)).toEqual([
-      'Library',
-      'Foundation',
+      'Dashboard',
+      'Selection',
+      'Story Setup',
       'Synopsis',
+      'Visual Canon',
       'Canon',
       'Outline',
       'Pages',
@@ -29,6 +31,7 @@ describe('writerWorkflowChronology', () => {
       hasIssue: true,
       hasFoundation: true,
       hasSynopsis: true,
+      hasVisualCanon: false,
       hasCanon: false,
       hasOutline: false,
       pageCount: 0,
@@ -44,6 +47,10 @@ describe('writerWorkflowChronology', () => {
       done: true,
       detail: 'Production defaults ready',
     });
+    expect(steps.find((step) => step.id === 'visual_canon')).toMatchObject({
+      done: false,
+      detail: 'Attach character/location/prop images',
+    });
     expect(steps.find((step) => step.id === 'canon')).toMatchObject({
       done: false,
       detail: 'Add lore before generation',
@@ -55,7 +62,9 @@ describe('writerWorkflowChronology', () => {
   });
 
   it('maps tabs to the earliest relevant workflow step', () => {
+    expect(getWriterWorkflowStepByTab('dashboard')?.id).toBe('dashboard');
     expect(getWriterWorkflowStepByTab('outline')?.id).toBe('foundation');
+    expect(getWriterWorkflowStepByTab('visual_canon')?.id).toBe('visual_canon');
     expect(getWriterWorkflowStepByTab('scripts')?.id).toBe('synopsis');
     expect(getWriterWorkflowStepByTab('lore')?.id).toBe('canon');
     expect(getWriterWorkflowStepByTab('beats')?.id).toBe('beats');

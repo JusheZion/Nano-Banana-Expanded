@@ -9,3 +9,8 @@ script = ""
 name = "Chrome Dev tools"
 icon = "tool"
 command = "npx y- chrome-devtools-mco@latest"
+
+[[actions]]
+name = "Supabase"
+icon = "tool"
+command = "https://mcp.supabase.com/mcp"

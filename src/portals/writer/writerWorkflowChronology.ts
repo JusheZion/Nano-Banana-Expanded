@@ -1,9 +1,11 @@
 import type { WriterWorkspaceTabId } from '@/portals/writer/writerSearch';
 
 export type WriterWorkflowStepId =
+  | 'dashboard'
   | 'library'
   | 'foundation'
   | 'synopsis'
+  | 'visual_canon'
   | 'canon'
   | 'outline'
   | 'pages'
@@ -31,6 +33,7 @@ export type WriterWorkflowContext = {
   hasIssue: boolean;
   hasFoundation: boolean;
   hasSynopsis: boolean;
+  hasVisualCanon: boolean;
   hasCanon: boolean;
   hasOutline: boolean;
   pageCount: number;
@@ -42,9 +45,11 @@ export type WriterWorkflowContext = {
 };
 
 export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
-  { id: 'library', label: 'Library', tab: 'outline', eyebrow: 'Select' },
-  { id: 'foundation', label: 'Foundation', tab: 'outline', eyebrow: 'Setup' },
+  { id: 'dashboard', label: 'Dashboard', tab: 'dashboard', eyebrow: 'Start' },
+  { id: 'library', label: 'Selection', tab: 'dashboard', eyebrow: 'Choose' },
+  { id: 'foundation', label: 'Story Setup', tab: 'outline', eyebrow: 'Setup' },
   { id: 'synopsis', label: 'Synopsis', tab: 'scripts', eyebrow: 'Author source' },
+  { id: 'visual_canon', label: 'Visual Canon', tab: 'visual_canon', eyebrow: 'References' },
   { id: 'canon', label: 'Canon', tab: 'lore', eyebrow: 'Lore' },
   { id: 'outline', label: 'Outline', tab: 'outline', eyebrow: 'Structure' },
   { id: 'pages', label: 'Pages', tab: 'outline', eyebrow: 'Rows' },
@@ -66,6 +71,12 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
   const dialogueDone = ctx.pageCount > 0 && ctx.pagesWithDialogue >= Math.max(1, ctx.pagesWithBeats);
   return WRITER_WORKFLOW_STEP_ORDER.map((step) => {
     switch (step.id) {
+      case 'dashboard':
+        return {
+          ...step,
+          done: ctx.hasSeries && ctx.hasIssue,
+          detail: ctx.hasSeries && ctx.hasIssue ? 'Issue ready' : 'Choose a series + issue',
+        };
       case 'library':
         return {
           ...step,
@@ -83,6 +94,12 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
           ...step,
           done: ctx.hasSynopsis,
           detail: ctx.hasSynopsis ? 'Author source ready' : 'Add outline/source',
+        };
+      case 'visual_canon':
+        return {
+          ...step,
+          done: ctx.hasVisualCanon,
+          detail: ctx.hasVisualCanon ? 'Image references attached' : 'Attach character/location/prop images',
         };
       case 'canon':
         return {

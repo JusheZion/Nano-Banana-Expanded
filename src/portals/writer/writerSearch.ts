@@ -4,9 +4,11 @@ export function escapeRegExp(s: string): string {
 }
 
 export type WriterWorkspaceTabId =
+  | 'dashboard'
   | 'cockpit'
   | 'arc'
   | 'outline'
+  | 'visual_canon'
   | 'lore'
   | 'beats'
   | 'dialogue'
@@ -16,23 +18,27 @@ export type WriterWorkspaceTabId =
 
 /** Narrative pipeline order: author source → synopsis → canon → production → review cockpit. */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
+  'dashboard',
   'outline',
-  'scripts',
-  'lore',
+  'visual_canon',
   'beats',
   'dialogue',
-  'video',
   'arc',
-  'cockpit',
   'export',
+  'scripts',
+  'lore',
+  'video',
+  'cockpit',
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
   WriterWorkspaceTabId,
   { ribbon: string; heading: string }
 > = {
+  dashboard: { ribbon: 'Dashboard', heading: 'Writer dashboard' },
   cockpit: { ribbon: 'Cockpit', heading: 'Writers’ cockpit' },
   outline: { ribbon: 'Outline', heading: 'Issue outline' },
+  visual_canon: { ribbon: 'Visual Canon', heading: 'Visual Canon' },
   scripts: { ribbon: 'Synopsis', heading: 'Synopsis helper' },
   lore: { ribbon: 'Canon', heading: 'Canon & lore' },
   beats: { ribbon: 'Beats', heading: 'Page Beats' },
@@ -87,6 +93,14 @@ function stringifyPreview(v: unknown): string {
 /** Plain text for in-viewport Find (current tab surface only). */
 export function getWriterSearchableText(ctx: WriterSearchContext): string {
   switch (ctx.activeTab) {
+    case 'dashboard':
+    case 'visual_canon':
+      return [
+        ctx.loreCardsFindText ?? '',
+        stringifyPreview(ctx.latestOutlineJson),
+      ]
+        .filter(Boolean)
+        .join('\n\n');
     case 'cockpit':
       return ctx.cockpitFindText ?? '';
     case 'outline':

@@ -106,6 +106,15 @@ import {
   type SynopsisHelperParts,
 } from '@/portals/writer/writerSynopsisHelper';
 import {
+  buildWriterVisualReferenceDigest,
+  mergeVisualReferencesIntoSynopsisParts,
+  mergeWriterVisualReferenceIntoNotes,
+  readWriterVisualReferencesFromNotes,
+  removeWriterVisualReferenceFromNotes,
+  type WriterVisualReference,
+  type WriterVisualReferenceKind,
+} from '@/portals/writer/writerVisualReferences';
+import {
   EMPTY_WRITER_PRODUCTION_DEFAULTS,
   mergeProductionDefaultsIntoNotes,
   productionDefaultsToPayload,
@@ -139,6 +148,7 @@ import {
   readWriterLocksFromNotes,
   writerPageBeatsLockKey,
   writerPageDialogueLockKey,
+  type WriterLockEntry,
   type WriterLockKey,
 } from '@/portals/writer/writerProtectionLocks';
 import {
@@ -162,8 +172,8 @@ import {
 } from '@/portals/writer/obsidianLoreImport';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { mergeImageshopImageMapIntoWriterBeats } from '@/portals/writer/writerImageshopReturn';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
+import { getCharacterAlbums, type VaultCharacterAlbum, type VaultCharacterItem } from '@/shared/api/arcsVault';
+import { getAssetAlbums, type VaultAssetAlbum, type VaultAssetItem } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
@@ -587,6 +597,14 @@ type PacingRegenerationPreviewPage = {
   proposed_script_text?: string;
 };
 
+function getWriterCharacterReferenceLabel(item: VaultCharacterItem, album: VaultCharacterAlbum): string {
+  return item.cast_name?.trim() || item.name?.trim() || item.profile_name?.trim() || album.profileName;
+}
+
+function getWriterAssetReferenceLabel(item: VaultAssetItem, album: VaultAssetAlbum): string {
+  return item.asset_name?.trim() || item.name?.trim() || item.collection_name?.trim() || album.collectionName;
+}
+
 export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
   const { isPhone } = useResponsiveLayout();
   const [seriesList, setSeriesList] = useState<WriterSeriesRow[]>([]);
@@ -594,16 +612,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [pages, setPages] = useState<WriterPageRow[]>([]);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<WriterWorkspaceTabId>('outline');
+  const [activeTab, setActiveTab] = useState<WriterWorkspaceTabId>('dashboard');
   const [activeRibbonMenu, setActiveRibbonMenu] = useState<WriterRibbonMenuId>('home');
   const [dockTab, setDockTab] = useState<WriterDockTabId>('library');
   const [dockCollapsed, setDockCollapsed] = useState(true);
-  const [writerGuidedMode, setWriterGuidedMode] = useState(true);
+  const [writerFocusedMode, setWriterFocusedMode] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('writerPortalViewMode') !== 'all-tools';
+  });
   const [writerSafetyMessage, setWriterSafetyMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isPhone) setDockCollapsed(true);
   }, [isPhone]);
+  useEffect(() => {
+    window.localStorage.setItem('writerPortalViewMode', writerFocusedMode ? 'focused' : 'all-tools');
+  }, [writerFocusedMode]);
   const [helpCategory, setHelpCategory] = useState<WriterHelpCategoryId | null>(null);
   const { user: authUser, ready: authReady, openSignInModal } = useAuth();
   const [aiAuthBannerDismissed, setAiAuthBannerDismissed] = useState(false);
@@ -690,6 +714,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
     ...EMPTY_SYNOPSIS_HELPER_PARTS,
   });
+  const [writerVisualReferenceAlbums, setWriterVisualReferenceAlbums] = useState<{
+    characters: VaultCharacterAlbum[];
+    assets: VaultAssetAlbum[];
+  }>({ characters: [], assets: [] });
+  const [writerVisualReferencesLoading, setWriterVisualReferencesLoading] = useState(false);
+  const [writerVisualReferencesBusy, setWriterVisualReferencesBusy] = useState(false);
+  const [writerVisualReferencesError, setWriterVisualReferencesError] = useState<string | null>(null);
+  const [writerVisualReferenceSource, setWriterVisualReferenceSource] = useState<'character_vault' | 'asset_vault'>(
+    'character_vault',
+  );
+  const [writerVisualReferenceId, setWriterVisualReferenceId] = useState('');
+  const [writerVisualReferenceKind, setWriterVisualReferenceKind] = useState<WriterVisualReferenceKind>('character');
+  const [writerVisualReferenceNote, setWriterVisualReferenceNote] = useState('');
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
   const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
@@ -1419,6 +1456,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
+    if (!selectedIssueId) {
+      setWriterVisualReferenceAlbums({ characters: [], assets: [] });
+      setWriterVisualReferenceId('');
+      setWriterVisualReferencesError(null);
+      return;
+    }
+    let cancelled = false;
+    setWriterVisualReferencesLoading(true);
+    setWriterVisualReferencesError(null);
+    void Promise.all([getCharacterAlbums(), getAssetAlbums()])
+      .then(([characters, assets]) => {
+        if (cancelled) return;
+        setWriterVisualReferenceAlbums({ characters, assets });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
+      })
+      .finally(() => {
+        if (!cancelled) setWriterVisualReferencesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIssueId]);
+
+  useEffect(() => {
+    setWriterVisualReferenceKind(writerVisualReferenceSource === 'character_vault' ? 'character' : 'prop');
+    setWriterVisualReferenceId('');
+  }, [writerVisualReferenceSource]);
+
+  useEffect(() => {
     const s = seriesList.find((x) => x.id === selectedSeriesId);
     setSeriesTitleDraft(s?.title ?? '');
     setSeriesLoglineDraft(s?.logline ?? '');
@@ -1428,6 +1497,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const latestShotPlan = shotPlans[0];
   const selectedIssue = issues.find((i) => i.id === selectedIssueId) ?? null;
   const writerLocks = useMemo(() => readWriterLocksFromNotes(selectedIssue?.notes), [selectedIssue?.notes]);
+  const writerVisualReferences = useMemo(
+    () => readWriterVisualReferencesFromNotes(selectedIssue?.notes),
+    [selectedIssue?.notes],
+  );
+  const writerVisualReferenceDigest = useMemo(
+    () => buildWriterVisualReferenceDigest(writerVisualReferences),
+    [writerVisualReferences],
+  );
+  const writerCharacterReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceAlbums.characters.flatMap((album) =>
+        album.items.map((item) => ({
+          id: item.id,
+          album,
+          item,
+          label: getWriterCharacterReferenceLabel(item, album),
+        })),
+      ),
+    [writerVisualReferenceAlbums.characters],
+  );
+  const writerAssetReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceAlbums.assets.flatMap((album) =>
+        album.items.map((item) => ({
+          id: item.id,
+          album,
+          item,
+          label: getWriterAssetReferenceLabel(item, album),
+        })),
+      ),
+    [writerVisualReferenceAlbums.assets],
+  );
   const toolCache = readWriterToolCache(selectedIssue?.notes);
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
@@ -1444,6 +1545,97 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return true;
     },
     [selectedIssueId],
+  );
+
+  const refreshWriterVisualReferenceAlbums = useCallback(async () => {
+    if (!selectedIssueId) return;
+    setWriterVisualReferencesLoading(true);
+    setWriterVisualReferencesError(null);
+    try {
+      const [characters, assets] = await Promise.all([getCharacterAlbums(), getAssetAlbums()]);
+      setWriterVisualReferenceAlbums({ characters, assets });
+    } catch (error) {
+      setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
+    } finally {
+      setWriterVisualReferencesLoading(false);
+    }
+  }, [selectedIssueId]);
+
+  const attachWriterVisualReference = useCallback(async () => {
+    if (!selectedIssue) return;
+    setWriterVisualReferencesError(null);
+    const source = writerVisualReferenceSource;
+    const selected =
+      source === 'character_vault'
+        ? writerCharacterReferenceOptions.find((option) => option.id === writerVisualReferenceId)
+        : writerAssetReferenceOptions.find((option) => option.id === writerVisualReferenceId);
+    if (!selected) {
+      setWriterVisualReferencesError('Choose a vault image to attach.');
+      return;
+    }
+
+    const ref: Omit<WriterVisualReference, 'id' | 'linkedAt'> = {
+      source,
+      sourceId: selected.id,
+      sourceLabel:
+        source === 'character_vault'
+          ? (selected as { album: VaultCharacterAlbum }).album.profileName
+          : (selected as { album: VaultAssetAlbum }).album.collectionName,
+      label: selected.label,
+      kind: source === 'character_vault' ? 'character' : writerVisualReferenceKind,
+      imageUrl:
+        source === 'character_vault'
+          ? (selected as { item: VaultCharacterItem }).item.image_url
+          : (selected as { item: VaultAssetItem }).item.image_url,
+      note: writerVisualReferenceNote.trim() || undefined,
+    };
+    let nextNotes = mergeWriterVisualReferenceIntoNotes(selectedIssue.notes, ref);
+    const nextSynopsisParts = mergeVisualReferencesIntoSynopsisParts(synopsisHelperParts, [
+      {
+        ...ref,
+        id: `${ref.source}:${ref.sourceId}`,
+        linkedAt: new Date().toISOString(),
+      },
+    ]);
+    nextNotes = mergeSynopsisHelperIntoNotes(nextNotes, nextSynopsisParts);
+
+    setWriterVisualReferencesBusy(true);
+    const ok = await updateSelectedIssueNotes(nextNotes);
+    setWriterVisualReferencesBusy(false);
+    if (!ok) {
+      setWriterVisualReferencesError('Could not attach this visual reference to the issue.');
+      return;
+    }
+    setSynopsisHelperParts(nextSynopsisParts);
+    setWriterVisualReferenceNote('');
+    pushHistory(`attached visual reference “${ref.label}”`);
+  }, [
+    selectedIssue,
+    writerVisualReferenceSource,
+    writerCharacterReferenceOptions,
+    writerVisualReferenceId,
+    writerAssetReferenceOptions,
+    writerVisualReferenceKind,
+    writerVisualReferenceNote,
+    synopsisHelperParts,
+    updateSelectedIssueNotes,
+    pushHistory,
+  ]);
+
+  const removeWriterVisualReference = useCallback(
+    async (ref: WriterVisualReference) => {
+      if (!selectedIssue) return;
+      setWriterVisualReferencesError(null);
+      setWriterVisualReferencesBusy(true);
+      const ok = await updateSelectedIssueNotes(removeWriterVisualReferenceFromNotes(selectedIssue.notes, ref.id));
+      setWriterVisualReferencesBusy(false);
+      if (!ok) {
+        setWriterVisualReferencesError('Could not remove this visual reference from the issue.');
+        return;
+      }
+      pushHistory(`removed visual reference “${ref.label}”`);
+    },
+    [selectedIssue, updateSelectedIssueNotes, pushHistory],
   );
 
   const persistWriterDrafts = useCallback(
@@ -3078,7 +3270,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ]);
 
   const quickGenerateLabel =
-    activeTab === 'scripts' || activeTab === 'lore'
+    activeTab === 'dashboard'
+      ? selectedIssueId
+        ? 'Continue issue'
+        : 'Select issue'
+      : activeTab === 'visual_canon'
+        ? writerVisualReferences.length > 0
+          ? 'Continue to beats'
+          : 'Attach references'
+    : activeTab === 'scripts' || activeTab === 'lore'
       ? 'Use tab actions'
       : activeTab === 'export'
         ? 'Export issue'
@@ -3230,6 +3430,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [preferredWriterExport, pushHistory]);
 
   const quickGenerate = useCallback(async () => {
+    if (activeTab === 'dashboard') {
+      if (!selectedIssueId) return;
+      if (!latestOutline) {
+        setActiveTab('outline');
+        return;
+      }
+      if (writerVisualReferences.length === 0) {
+        setActiveTab('visual_canon');
+        return;
+      }
+      if (!selectedPage?.beats_json) {
+        setActiveTab('beats');
+        return;
+      }
+      if (!selectedPage?.script_text?.trim()) {
+        setActiveTab('dialogue');
+        return;
+      }
+      setActiveTab('arc');
+      return;
+    }
+    if (activeTab === 'visual_canon') {
+      setActiveTab('beats');
+      return;
+    }
     if (activeTab === 'scripts' || activeTab === 'lore') return;
     if (activeTab === 'export' && selectedIssueId) {
       downloadPreferredWriterExport();
@@ -3306,6 +3531,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     selectedIssueId,
     selectedPageId,
     selectedPage,
+    writerVisualReferences.length,
     shotsBrief,
     outlineSupplementDraft,
     latestShotPlan,
@@ -4186,7 +4412,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
   const activeWorkflowStepId: WriterWorkflowStepId =
-    activeTab === 'outline'
+    activeTab === 'dashboard'
+      ? 'dashboard'
+      : activeTab === 'visual_canon'
+        ? 'visual_canon'
+        : activeTab === 'outline'
       ? !selectedSeriesId || !selectedIssueId
         ? 'library'
         : !latestOutline
@@ -4216,6 +4446,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     hasIssue: Boolean(selectedIssueId),
     hasFoundation: Boolean(selectedSeriesId),
     hasSynopsis: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
+    hasVisualCanon: writerVisualReferences.length > 0,
     hasCanon: loreCards.length > 0,
     hasOutline: Boolean(latestOutline),
     pageCount: sortedPages.length,
@@ -4427,6 +4658,48 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ) : null}
     </div>
   );
+  const lockedStoryPartCount = Object.values(writerLocks).filter((lock) => lock?.locked).length;
+  const focusedProtectionBar = (
+    <div className="border-b border-black/10 bg-white/40 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/45">
+          <ShieldCheck size={13} aria-hidden />
+          {lockedStoryPartCount} locked
+        </span>
+        <button
+          type="button"
+          disabled={!selectedIssueId}
+          onClick={() => {
+            setActiveTab('outline');
+            focusWriterElement('writer-issue-synopsis');
+          }}
+          className="rounded-md border border-black/15 bg-white/85 px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
+        >
+          Edit issue
+        </button>
+        <button
+          type="button"
+          disabled={!selectedPageId}
+          onClick={() => setActiveTab(selectedPage?.beats_json ? 'dialogue' : 'beats')}
+          className="rounded-md border border-black/15 bg-white/85 px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
+        >
+          Edit page
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('visual_canon')}
+          className="rounded-md border border-amber-800/25 bg-amber-50 px-2.5 py-1.5 text-[11px] font-black text-black hover:bg-amber-100"
+        >
+          Visual Canon
+        </button>
+        {writerSafetyMessage ? (
+          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-emerald-950">
+            {writerSafetyMessage}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
   const writerPhaseRail = (
     <div className="flex flex-col gap-1">
       {productionStages.map((stage, index) => (
@@ -4460,6 +4733,363 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           </span>
         </button>
       ))}
+    </div>
+  );
+
+  const focusedWorkflowStages = productionStages.filter((stage) =>
+    ['dashboard', 'foundation', 'visual_canon', 'outline', 'beats', 'dialogue', 'audit', 'export'].includes(stage.id),
+  );
+
+  const focusedWorkflowRail = (
+    <div className="flex-shrink-0 overflow-x-auto border-b border-white/25 bg-white/25 px-3 py-2 backdrop-blur-md [-webkit-overflow-scrolling:touch]">
+      <div className="flex min-w-max gap-1" aria-label="Focused Writer workflow">
+        {focusedWorkflowStages.map((stage) => (
+          <Tooltip
+            key={stage.id}
+            content={`${stage.label}: ${stage.detail}`}
+            side="bottom"
+          >
+            <button
+              type="button"
+              onClick={() => setActiveTab(stage.tab)}
+              className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                stage.current
+                  ? 'border-amber-800/45 bg-amber-100 text-black shadow-sm'
+                  : stage.done
+                    ? 'border-emerald-700/35 bg-emerald-50 text-emerald-950 hover:bg-white'
+                    : 'border-black/12 bg-white/55 text-black/58 hover:bg-white hover:text-black'
+              }`}
+            >
+              {stage.done ? <CheckCircle2 size={13} aria-hidden /> : null}
+              {stage.label}
+            </button>
+          </Tooltip>
+        ))}
+      </div>
+    </div>
+  );
+
+  const writerSelectionStrip = (
+    <div className="flex-shrink-0 border-b border-black/10 bg-white/55 px-3 py-2 backdrop-blur-md">
+      <div className="grid gap-2 lg:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_minmax(120px,0.65fr)_auto] lg:items-end">
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
+          Series
+          <div className="flex gap-1.5">
+            <select
+              value={selectedSeriesId ?? ''}
+              onChange={(event) => {
+                setSelectedSeriesId(event.target.value || null);
+                setSelectedIssueId(null);
+              }}
+              disabled={!supabaseOk || seriesList.length === 0}
+              className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+              aria-label="Select Writer series"
+            >
+              <option value="">Select series</option>
+              {seriesList.map((series) => (
+                <option key={series.id} value={series.id}>
+                  {series.title || 'Untitled series'}
+                </option>
+              ))}
+            </select>
+            <Tooltip content="Add a new series" side="bottom">
+              <button
+                type="button"
+                disabled={!supabaseOk || createSeriesBusy}
+                onClick={() => void handleCreateSeries()}
+                className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45"
+                aria-label="Add series"
+              >
+                +
+              </button>
+            </Tooltip>
+          </div>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
+          Issue
+          <div className="flex gap-1.5">
+            <select
+              value={selectedIssueId ?? ''}
+              onChange={(event) => setSelectedIssueId(event.target.value || null)}
+              disabled={!supabaseOk || !selectedSeriesId || issues.length === 0}
+              className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+              aria-label="Select Writer issue"
+            >
+              <option value="">Select issue</option>
+              {issues.map((issue) => (
+                <option key={issue.id} value={issue.id}>
+                  #{issue.issue_number}
+                  {issue.title ? ` - ${issue.title}` : ''}
+                </option>
+              ))}
+            </select>
+            <Tooltip content="Add an issue to the selected series" side="bottom">
+              <button
+                type="button"
+                disabled={!supabaseOk || !selectedSeriesId || createIssueBusy}
+                onClick={() => void handleAddWriterIssue()}
+                className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45"
+                aria-label="Add issue"
+              >
+                +
+              </button>
+            </Tooltip>
+          </div>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
+          Page
+          <select
+            value={selectedPageId ?? ''}
+            onChange={(event) => setSelectedPageId(event.target.value || null)}
+            disabled={!selectedIssueId || sortedPages.length === 0}
+            className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+            aria-label="Select Writer page"
+          >
+            <option value="">No page</option>
+            {sortedPages.map((page) => (
+              <option key={page.id} value={page.id}>
+                Page {page.page_number}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+          <Tooltip content={quickGenerateNextHint} side="bottom">
+            <button
+              type="button"
+              disabled={quickGenerateDisabled}
+              onClick={() => void quickGenerate()}
+              className="inline-flex min-h-[34px] items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: ACCENT_GOLD_GRADIENT }}
+            >
+              {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
+              {quickGenerateLabel}
+            </button>
+          </Tooltip>
+          <Tooltip content={writerFocusedMode ? 'Show every Writer tool, ribbon, JSON editor, and batch action' : 'Return to the calmer Writer workflow'} side="bottom">
+            <button
+              type="button"
+              onClick={() => setWriterFocusedMode((mode) => !mode)}
+              className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-black/65 hover:bg-white hover:text-black"
+            >
+              {writerFocusedMode ? 'All Tools' : 'Focused'}
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+  );
+
+  const visualCanonCounts = writerVisualReferences.reduce(
+    (counts, ref) => ({
+      ...counts,
+      [ref.kind]: counts[ref.kind] + 1,
+    }),
+    { character: 0, location: 0, prop: 0 } as Record<WriterVisualReferenceKind, number>,
+  );
+
+  const visualCanonControls = (
+    <div className="border-l-2 border-amber-800/35 bg-amber-50/55 px-3 py-3 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+              Visual Canon
+            </p>
+            <Tooltip content="Attach saved Character Vault and Asset Vault images so page-beat AI uses those designs instead of inventing new ones." side="bottom">
+              <button
+                type="button"
+                className="rounded p-0.5 text-black/42 hover:bg-black/10 hover:text-black"
+                aria-label="About Visual Canon"
+              >
+                <HelpCircle size={13} aria-hidden />
+              </button>
+            </Tooltip>
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-black/60">
+            Attached vault images are sent with page-beat AI calls as visual canon.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded bg-white/75 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+            {writerVisualReferences.length} attached
+          </span>
+          <button
+            type="button"
+            disabled={!selectedIssueId || writerVisualReferencesLoading}
+            onClick={() => void refreshWriterVisualReferenceAlbums()}
+            className="rounded-md border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-45"
+          >
+            {writerVisualReferencesLoading ? 'Loading...' : 'Refresh vault'}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        {[
+          ['Characters', visualCanonCounts.character],
+          ['Locations', visualCanonCounts.location],
+          ['Props', visualCanonCounts.prop],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-black/10 bg-white/60 px-3 py-2">
+            <p className="text-[9px] font-black uppercase tracking-wider text-black/42">{label}</p>
+            <p className="text-lg font-black text-black">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr]">
+        <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+          Vault
+          <select
+            value={writerVisualReferenceSource}
+            onChange={(e) =>
+              setWriterVisualReferenceSource(e.target.value as 'character_vault' | 'asset_vault')
+            }
+            disabled={!selectedIssueId || writerVisualReferencesBusy}
+            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+          >
+            <option value="character_vault">Character Vault</option>
+            <option value="asset_vault">Asset Vault</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+          Image
+          <select
+            value={writerVisualReferenceId}
+            onChange={(e) => setWriterVisualReferenceId(e.target.value)}
+            disabled={!selectedIssueId || writerVisualReferencesBusy}
+            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+          >
+            <option value="">Choose a saved image...</option>
+            {writerVisualReferenceSource === 'character_vault'
+              ? writerCharacterReferenceOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} / {option.album.profileName}
+                  </option>
+                ))
+              : writerAssetReferenceOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label} / {option.album.collectionName}
+                  </option>
+                ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+          Role
+          <select
+            value={writerVisualReferenceKind}
+            onChange={(e) =>
+              setWriterVisualReferenceKind(e.target.value as WriterVisualReferenceKind)
+            }
+            disabled={
+              !selectedIssueId ||
+              writerVisualReferencesBusy ||
+              writerVisualReferenceSource === 'character_vault'
+            }
+            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+          >
+            <option value="character">Character</option>
+            <option value="location">Location / set</option>
+            <option value="prop">Prop / asset</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+        Note
+        <input
+          type="text"
+          value={writerVisualReferenceNote}
+          onChange={(e) => setWriterVisualReferenceNote(e.target.value)}
+          disabled={!selectedIssueId || writerVisualReferencesBusy}
+          className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+          placeholder="e.g. use the cloak silhouette; keep the bronze mask"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={!selectedIssueId || !writerVisualReferenceId || writerVisualReferencesBusy}
+          onClick={() => void attachWriterVisualReference()}
+          className="rounded-lg border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-200 disabled:opacity-45"
+        >
+          {writerVisualReferencesBusy ? 'Saving...' : 'Attach to issue'}
+        </button>
+        <button
+          type="button"
+          disabled={!selectedIssueId}
+          onClick={() => setActiveTab('beats')}
+          className="rounded-lg border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
+        >
+          Continue to beats
+        </button>
+      </div>
+
+      {writerVisualReferencesError ? (
+        <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+          {writerVisualReferencesError}
+        </p>
+      ) : null}
+
+      {writerVisualReferences.length > 0 ? (
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {writerVisualReferences.map((ref) => (
+              <div
+                key={ref.id}
+                className="flex gap-2 rounded-lg border border-black/10 bg-white/65 p-2"
+              >
+                <div className="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10">
+                  <img
+                    src={ref.imageUrl}
+                    alt={ref.label}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-black text-black">{ref.label}</p>
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-black/45">
+                        {ref.kind} / {ref.source === 'character_vault' ? 'Character Vault' : 'Asset Vault'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={writerVisualReferencesBusy}
+                      onClick={() => void removeWriterVisualReference(ref)}
+                      className="rounded border border-black/15 bg-white/80 px-2 py-0.5 text-[9px] font-bold text-black disabled:opacity-40"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {ref.note ? (
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-black/60">
+                      {ref.note}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+          {!writerFocusedMode ? (
+            <details className="rounded-lg border border-black/10 bg-white/45 px-3 py-2">
+              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wide text-black/55">
+                AI context preview
+              </summary>
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-snug text-black/70">
+                {writerVisualReferenceDigest}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-black/15 bg-white/45 px-3 py-2 text-[11px] text-black/55">
+          No issue visual references attached yet.
+        </p>
+      )}
     </div>
   );
 
@@ -4599,7 +5229,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </p>
           </div>
 
-          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-8">
+          <div className={`${writerFocusedMode ? 'hidden' : 'grid'} grid-cols-4 gap-1.5 md:grid-cols-8`}>
             {[
               { label: 'Stages', value: `${completedStageCount}/${productionStages.length}` },
               { label: 'Pages', value: sortedPages.length || targetPageCount },
@@ -4620,19 +5250,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ))}
           </div>
 
-          <div className="flex min-w-0 items-center gap-2 lg:justify-end">
+          <div className={`${writerFocusedMode ? 'hidden' : 'flex'} min-w-0 items-center gap-2 lg:justify-end`}>
             <div className="hidden min-w-0 text-right lg:block">
               <p className="truncate text-[10px] font-bold uppercase tracking-wide text-black/45">Next action</p>
               <p className="max-w-[260px] truncate text-[11px] font-semibold text-black/65">{quickGenerateNextHint}</p>
             </div>
             <div className="inline-flex rounded-md border border-black/15 bg-white/35 p-0.5">
-              {(['Guided', 'Advanced'] as const).map((mode) => {
-                const active = writerGuidedMode ? mode === 'Guided' : mode === 'Advanced';
+              {(['Focused', 'All Tools'] as const).map((mode) => {
+                const active = writerFocusedMode ? mode === 'Focused' : mode === 'All Tools';
                 return (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setWriterGuidedMode(mode === 'Guided')}
+                    onClick={() => setWriterFocusedMode(mode === 'Focused')}
                     className={`rounded px-2 py-1 text-[10px] font-black uppercase tracking-wide transition ${
                       active ? 'bg-black text-white' : 'text-black/55 hover:bg-white/70 hover:text-black'
                     }`}
@@ -4693,48 +5323,54 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         </div>
       ) : null}
 
-      <WriterRibbon
-        activeMenu={activeRibbonMenu}
-        onActiveMenu={setActiveRibbonMenu}
-        workspaceTab={activeTab}
-        onWorkspaceTab={setActiveTab}
-        onSelectWorkspaceTabFromFile={(id) => {
-          setActiveRibbonMenu('home');
-          setActiveTab(id);
-        }}
-        findQuery={findQuery}
-        onFindQuery={setFindQuery}
-        findInputRef={findInputRef}
-        findMatchCount={findMatchCount}
-        findActiveIndex={findActiveIndex}
-        onFindNext={onFindNext}
-        onFindPrev={onFindPrev}
-        monospacePre={monospacePre}
-        onToggleMonospace={() => setMonospacePre((m) => !m)}
-        textScale={textScale}
-        onTextScale={setTextScale}
-        dockOpen={!dockCollapsed}
-        onToggleDock={() => setDockCollapsed((c) => !c)}
-        onCopyVisibleText={copyVisibleText}
-        canCopyVisible={searchableText.length > 0}
-        onRunPacing={runPacingFromRibbon}
-        onRunCanon={runCanonFromRibbon}
-        canRunReview={Boolean(supabaseOk && selectedIssueId)}
-        pacingLoading={pacingLoading || arcBatchBusy}
-        canonLoading={canonLoading || arcBatchBusy}
-        onQuickGenerate={() => void quickGenerate()}
-        quickGenerateLabel={quickGenerateLabel}
-        quickGenerateDisabled={quickGenerateDisabled}
-        quickGenerateLoading={quickGenerateLoading}
-        hasPrevPage={hasPrevPage}
-        hasNextPage={hasNextPage}
-        onPrevPage={onPrevPage}
-        onNextPage={onNextPage}
-        onOpenHelpCategory={(id) => setHelpCategory(id)}
-        quickGenerateNextHint={quickGenerateNextHint}
-      />
+      {writerSelectionStrip}
 
-      {editProtectionBar}
+      {!writerFocusedMode ? (
+        <WriterRibbon
+          activeMenu={activeRibbonMenu}
+          onActiveMenu={setActiveRibbonMenu}
+          workspaceTab={activeTab}
+          onWorkspaceTab={setActiveTab}
+          onSelectWorkspaceTabFromFile={(id) => {
+            setActiveRibbonMenu('home');
+            setActiveTab(id);
+          }}
+          findQuery={findQuery}
+          onFindQuery={setFindQuery}
+          findInputRef={findInputRef}
+          findMatchCount={findMatchCount}
+          findActiveIndex={findActiveIndex}
+          onFindNext={onFindNext}
+          onFindPrev={onFindPrev}
+          monospacePre={monospacePre}
+          onToggleMonospace={() => setMonospacePre((m) => !m)}
+          textScale={textScale}
+          onTextScale={setTextScale}
+          dockOpen={!dockCollapsed}
+          onToggleDock={() => setDockCollapsed((c) => !c)}
+          onCopyVisibleText={copyVisibleText}
+          canCopyVisible={searchableText.length > 0}
+          onRunPacing={runPacingFromRibbon}
+          onRunCanon={runCanonFromRibbon}
+          canRunReview={Boolean(supabaseOk && selectedIssueId)}
+          pacingLoading={pacingLoading || arcBatchBusy}
+          canonLoading={canonLoading || arcBatchBusy}
+          onQuickGenerate={() => void quickGenerate()}
+          quickGenerateLabel={quickGenerateLabel}
+          quickGenerateDisabled={quickGenerateDisabled}
+          quickGenerateLoading={quickGenerateLoading}
+          hasPrevPage={hasPrevPage}
+          hasNextPage={hasNextPage}
+          onPrevPage={onPrevPage}
+          onNextPage={onNextPage}
+          onOpenHelpCategory={(id) => setHelpCategory(id)}
+          quickGenerateNextHint={quickGenerateNextHint}
+        />
+      ) : null}
+
+      {writerFocusedMode ? focusedProtectionBar : editProtectionBar}
+
+      {writerFocusedMode ? focusedWorkflowRail : null}
 
       {isPhone ? (
         <div
@@ -4783,7 +5419,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div
         className={`flex-1 min-h-0 flex min-w-0 ${isPhone ? 'flex-col' : 'flex-row'}`}
       >
-        {!isPhone && !writerGuidedMode ? (
+        {!isPhone && !writerFocusedMode ? (
           <aside
             className="hidden w-[236px] shrink-0 border-r border-white/25 bg-white/[0.12] p-2 backdrop-blur-md xl:block"
             aria-label="Narrative production navigator"
@@ -4833,6 +5469,145 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     {imageWorkshopError}
                   </p>
                 ) : null}
+                {activeTab === 'dashboard' && (
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Current issue</p>
+                          <h3 className="mt-1 text-lg font-black leading-tight text-black">
+                            {selectedIssue
+                              ? `Issue ${selectedIssue.issue_number}${selectedIssue.title ? `: ${selectedIssue.title}` : ''}`
+                              : 'No issue selected'}
+                          </h3>
+                          <p className="mt-1 text-xs font-semibold text-black/55">
+                            {selectedSeries?.title || 'Select a series'} / {selectedPageLabel}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={quickGenerateDisabled}
+                          onClick={() => void quickGenerate()}
+                          className="rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
+                          style={{ background: ACCENT_GOLD_GRADIENT }}
+                        >
+                          {quickGenerateLabel}
+                        </button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        {[
+                          ['Outline', latestOutline ? 'Ready' : 'Needed'],
+                          ['Pages', `${sortedPages.length || 0}/${targetPageCount}`],
+                          ['Beats', `${pagesWithBeatsCount}/${Math.max(sortedPages.length, targetPageCount)}`],
+                          ['Dialogue', `${pagesWithScriptCount}/${Math.max(pagesWithBeatsCount, sortedPages.length)}`],
+                        ].map(([label, value]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => {
+                              if (label === 'Outline') setActiveTab('outline');
+                              else if (label === 'Dialogue') setActiveTab('dialogue');
+                              else setActiveTab('beats');
+                            }}
+                            className="rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-left hover:bg-white"
+                          >
+                            <p className="text-[9px] font-black uppercase tracking-wider text-black/42">{label}</p>
+                            <p className="text-sm font-black text-black">{value}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Visual Canon</p>
+                          <p className="mt-1 text-xs font-semibold text-black/60">
+                            {writerVisualReferences.length} attached / {visualCanonCounts.character} characters /{' '}
+                            {visualCanonCounts.location} locations / {visualCanonCounts.prop} props
+                          </p>
+                        </div>
+                        <Image size={18} className="shrink-0 text-black/45" aria-hidden />
+                      </div>
+                      {writerVisualReferences.length > 0 ? (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {writerVisualReferences.slice(0, 5).map((ref) => (
+                            <div key={ref.id} className="w-16 shrink-0">
+                              <div className="h-16 overflow-hidden rounded-md border border-black/10 bg-black/10">
+                                <img src={ref.imageUrl} alt={ref.label} className="h-full w-full object-cover" />
+                              </div>
+                              <p className="mt-1 truncate text-[9px] font-bold text-black/55">{ref.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-lg border border-dashed border-black/15 bg-white/55 px-3 py-2 text-xs text-black/55">
+                          No references attached.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('visual_canon')}
+                        className="w-full rounded-md border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black hover:bg-amber-50"
+                      >
+                        Open Visual Canon
+                      </button>
+                    </div>
+
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-3 xl:col-span-2`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Protected story parts</p>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('outline')}
+                          className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold text-black"
+                        >
+                          Manage locks
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {([
+                          { label: 'Synopsis', lock: writerLocks['issue.synopsis'] },
+                          { label: 'Outline instructions', lock: writerLocks['issue.outline_instructions'] },
+                          { label: 'Outline', lock: writerLocks['outline.latest'] },
+                          { label: 'Page beats', lock: selectedPage ? writerLocks[writerPageBeatsLockKey(selectedPage.id)] : null },
+                          { label: 'Dialogue', lock: selectedPage ? writerLocks[writerPageDialogueLockKey(selectedPage.id)] : null },
+                        ] satisfies Array<{ label: string; lock: WriterLockEntry | null | undefined }>).map(({ label, lock }) => (
+                          <span
+                            key={label}
+                            className={`rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${
+                              lock?.locked
+                                ? 'border-emerald-700/35 bg-emerald-50 text-emerald-950'
+                                : 'border-black/10 bg-white/55 text-black/45'
+                            }`}
+                          >
+                            {label}: {lock?.locked ? 'Locked' : 'Open'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'visual_canon' && (
+                  <div className="space-y-4">
+                    <div className={`${WRITER_GLASS_CARD} p-4 space-y-2`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Visual Canon</p>
+                          <h3 className="mt-1 text-lg font-black text-black">Issue reference images</h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('beats')}
+                          className="rounded-md border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white"
+                        >
+                          Continue to beats
+                        </button>
+                      </div>
+                    </div>
+                    {visualCanonControls}
+                  </div>
+                )}
                 {activeTab === 'cockpit' && (
                   <div className="space-y-4">
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
@@ -5189,6 +5964,29 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             }
                           />
                         </label>
+                        {!writerFocusedMode ? (
+                          visualCanonControls
+                        ) : (
+                          <div className="border-l-2 border-amber-800/35 bg-amber-50/60 px-3 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                                  Visual Canon moved
+                                </p>
+                                <p className="mt-1 text-[11px] leading-snug text-black/60">
+                                  Attach character, location, and prop references in the Visual Canon workspace.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('visual_canon')}
+                                className="rounded-md border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black"
+                              >
+                                Open Visual Canon
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
