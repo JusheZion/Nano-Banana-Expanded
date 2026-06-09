@@ -9709,6 +9709,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run build` - PASS with existing large chunk warnings.
 - `npm run lint` - PASS with 0 errors and 67 existing warnings.
 - `git diff --check` - PASS.
+- `git push origin main` - PASS, pushed `dd342e2 fix: tighten Writer menu previews`.
+- `npm run deploy` - PARTIAL: build passed, Wrangler deploy was blocked because this terminal does not have `CLOUDFLARE_API_TOKEN`.
+- Live Cloudflare poll - PASS: production `https://asset-reference-comics-studio.onyxzion.workers.dev/` switched from `/assets/index-49nOFr0K.js` to `/assets/index-DiiZaiK0.js` after the push.
+- Live bundle check - PASS: deployed `WriterPortal-D8vNUBXP.js` contains the Writer select labels/compact menu code, and deployed `PhotoLab-BNrATPOM.js` contains `Choose import art style`.
 
 ### Outstanding issues
 - None from the visible menu surfaces checked in this pass.
@@ -9716,9 +9720,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Risks or caveats
 - The audit focused on visible Writer/Visual Canon menus and Imageshop Import controls tied to the recent QoL work, not every hidden/native select elsewhere in the entire application.
 - Browser screenshot capture timed out during the pass, so verification is based on DOM state, ARIA state, option counts, and visible control labels.
+- Direct local Wrangler deployment remains unavailable in this terminal without `CLOUDFLARE_API_TOKEN`; this deployment landed through the connected Cloudflare build after pushing `main`.
 
 ### Operator follow-up
-- After deploy, recheck the live Writer Issue menu by typing `#` and confirming it shows a short `#1 - The Blackening` preview, not the full issue synopsis.
+- Optional live UI recheck: type `#` in the Writer Issue menu and confirm it shows a short `#1 - The Blackening` preview, not the full issue synopsis.
 
 ### Next steps
-- Commit, push, and deploy the menu QA follow-up.
+- None for this pass.
