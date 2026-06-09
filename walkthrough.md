@@ -9549,3 +9549,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit, push, and open a PR when the branch base is confirmed.
+
+## Writers Workshop Focused UX Main Merge - 2026-06-09
+
+### What changed
+- Fast-forwarded local `main` to `origin/main`.
+- Merged `codex/writer-focused-ux-reset` into `main` with merge commit `b536403`.
+- Resolved conflicts in `src/portals/writer/WriterPortal.tsx`, `tasks.md`, and `walkthrough.md`.
+- Preserved the Focused / All Tools Writer UX, Dashboard, Visual Canon workspace, top Series / Issue / Page selectors, visual-reference bridge, and Writer lock/draft safeguards.
+- Removed a merge-introduced duplicate `export` tab entry from `WRITER_WORKSPACE_TAB_ORDER`.
+- Pushed `main` to GitHub so Cloudflare Builds can deploy from the production branch.
+- Updated `tasks.md` to mark the focused Writer UX reset as merged to main.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerSearch.ts`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The merge brought along the already-committed branch changes for `AGENTS.md` DOX instructions and `.codex/environments/environment.toml` Supabase action.
+- The generated `supabase/functions/tsconfig.tsbuildinfo` file changed during build verification and was restored before commit.
+- Local browser smoke confirmed the merged app opens Writers Workshop with the new dashboard, top selectors, `All Tools` label, and `Visual Canon` entry. The browser’s remembered local mode affected which mode label was visible, but the old `Guided / Advanced` label was not present.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerProtectionLocks.test.ts src/portals/writer/__tests__/writerDraftPersistence.test.ts src/portals/writer/__tests__/writerRegenerationScope.test.ts` - PASS, 6 files / 15 tests.
+- `npm run test` - PASS, 81 files / 434 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- Local browser smoke at `http://127.0.0.1:5174/` - PASS for merged-main Writer dashboard, top selectors, and Visual Canon visibility.
+
+### Outstanding issues
+- Cloudflare production deployment verification is pending after the pushed `main` build completes.
+
+### Risks or caveats
+- Cloudflare Builds may take a few minutes after the GitHub push before the live Worker serves the new asset hashes.
+
+### Operator follow-up
+- Check the deployed live site after deployment verification confirms the new Worker asset is active.
+
+### Next steps
+- Verify the live Worker URL serves the merged Writer UX bundle.

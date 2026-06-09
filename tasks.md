@@ -94,7 +94,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-l
 - [x] Standalone Prompt Library archive deleted after ARCS production deploy, CRUD, persistence, outbound handoff, source-save, and cleanup smoke passed.
 - [x] Visual-reference QA pass: focused Writer tests, `npm run build`, `npm run lint`, `git diff --check`, Supabase deployed-function auth validation, signed-out browser smoke, and signed-in local in-app browser QA passed. The signed-in QA attached one Character Vault reference and one Asset Vault reference to a disposable Writer issue, confirmed persistence after reload, generated Page 1 beats through deployed `writer-tools`, and verified the beats used `Alpha Swag Aries` plus `Expanded View of Prime Hall` as visual canon. Temporary local QA issue/series cleanup is pending explicit deletion approval because it deletes real signed-in account data.
 
-## Writers Workshop — Focused UX Reset (2026-06-09) — COMPLETE LOCALLY
+## Writers Workshop — Focused UX Reset (2026-06-09) — MERGED TO MAIN
 
 Detailed tracker: [`docs/superpowers/plans/2026-06-09-writers-workshop-focused-ux-reset-plan.md`](docs/superpowers/plans/2026-06-09-writers-workshop-focused-ux-reset-plan.md)
 User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-focused-ux-guide.md)
@@ -108,6 +108,7 @@ User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-
 - [x] Compact the Focused edit/protection bar to reduce first-screen overload while retaining the full edit/lock strip in All Tools.
 - [x] Add a location map guide showing where moved Writer tools live now.
 - [x] Complete full tests, build, lint, diff check, and local browser QA.
+- [x] Merge `codex/writer-focused-ux-reset` into `main`, resolve the Writer workspace/docs conflicts, push `main` to GitHub, and confirm local merged-main smoke before deployment verification.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
