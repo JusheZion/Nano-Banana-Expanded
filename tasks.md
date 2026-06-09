@@ -86,8 +86,10 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-l
 - [x] Pass 8: Outline and beats previews are readable-first, with advanced JSON moved behind disclosure and overwrite-capable actions showing scope.
 - [x] Pass 9: Structural cleanup adds the Export workspace, Guided/Advanced mode, restore snapshots, unified page selection, and clearer separation between safe preview/assist and overwrite actions.
 - [x] Verify: focused Writer tests passed; full suite passed with 79 files / 429 tests; `npm run build` passed; `npm run lint` passed with existing warnings only; `git diff --check` passed; signed-in browser QA passed at `http://127.0.0.1:5174/`.
-- [~] Deployment review: full local verification passed again on 2026-06-08, but direct Wrangler production deploy is blocked locally by missing `CLOUDFLARE_API_TOKEN`.
-- [ ] Follow-up: human product review should decide whether locks should also block manual saves or only AI/destructive overwrites.
+- [x] Deployment review: Cloudflare Worker production deployment verified on 2026-06-08. Live URL `https://asset-reference-comics-studio.onyxzion.workers.dev/` returned HTTP 200, and 43 deployed JS/CSS assets matched local `dist` hashes byte-for-byte. Direct local Wrangler deploy still requires `CLOUDFLARE_API_TOKEN`, but the connected Cloudflare build is live.
+- [x] Production live smoke: completed in the user's real Chrome session signed in as `codex.ai@onyxzhuzh.com`. Verified Prompt Library create, reload persistence, edit/versioning, favorite, delete cleanup, outbound `Use in Imageshop`, and Imageshop source-save back to Prompt Library; final reload returned the production Prompt Library account to 0 prompts / 0 favorites / 0 collections / 0 entities.
+- [x] Product decision: Writer locks should block all saves, including manual saves, to prevent accidental user overwrites.
+- [x] Standalone Prompt Library archive deleted after ARCS production deploy, CRUD, persistence, outbound handoff, source-save, and cleanup smoke passed.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
