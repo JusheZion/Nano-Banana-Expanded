@@ -652,3 +652,47 @@ The Comic Studio now dynamically influences the artistic environment and AI prom
 
 ### Next steps
 - Let the Writers Workshop agent implement and verify lock-blocks-all-saves behavior.
+
+## Prompt Library Quick Start Guide - 2026-06-09
+
+### What changed
+- Added a user-facing Prompt Library quick start guide with screenshot-backed walkthroughs for opening the library, creating prompts, reviewing saved records, searching/filtering/favoriting, sending prompts to Imageshop, saving Imageshop prompts back to the library, and using import/export safely.
+- Captured six production screenshots from the live Cloudflare app while signed in as the ARCS agent account.
+- Created and deleted a temporary guide demo prompt so the production Prompt Library account returned to zero prompts after screenshot capture.
+
+### Files touched
+- `docs/prompt-library-quick-start-guide.md`
+- `docs/assets/prompt-library-quick-start/01-overview-empty-state.png`
+- `docs/assets/prompt-library-quick-start/02-new-prompt-editor-filled.png`
+- `docs/assets/prompt-library-quick-start/03-saved-prompt-detail.png`
+- `docs/assets/prompt-library-quick-start/04-search-favorites-filter.png`
+- `docs/assets/prompt-library-quick-start/05-imageshop-handoff.png`
+- `docs/assets/prompt-library-quick-start/06-imageshop-save-to-library-editor.png`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- The guide is Markdown so it can live directly in the repo and render screenshots with relative links.
+- Screenshots were captured from `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- The guide includes practical naming, tagging, collection, entity, favorite, versioning, handoff, source-save, import/export, and troubleshooting recommendations.
+- The Creative Production plugin was available but was not a close fit for this task because its exposed widgets are style/shot/moodboard intake surfaces rather than product documentation generation.
+- Product Design was referenced by the user, but no concrete Product Design callable surfaced in this session; the guide was produced from the live UI and repo source instead.
+
+### Verification
+- Chrome production screenshot pass: captured Prompt Library empty state, prompt editor, saved detail, search/favorites filter, Imageshop handoff, and Imageshop source-save editor.
+- Cleanup verification: after deleting the temporary guide prompt, the production Prompt Library showed `0` prompts, `0` favorites, `0` collections, and `0` entities.
+- Filesystem verification: confirmed the six screenshot assets exist under `docs/assets/prompt-library-quick-start/`.
+
+### Outstanding issues
+- The guide is drafted but not yet committed or pushed.
+- The screenshots demonstrate core flows but do not include Character Studio or Asset Studio target screens.
+
+### Risks or caveats
+- Two modal screenshots are partially cropped by the current Chrome viewport because the Prompt Library editor is wider than the visible production window; the fields and workflow remain visible enough for the guide.
+- Existing uncommitted Writer files and Writer docs from another agent remain in the working tree and were not modified intentionally.
+
+### Operator follow-up
+- Review the guide for tone and completeness, especially whether it should also become a Canva/PDF handout.
+
+### Next steps
+- Optionally add Character Studio and Asset Studio handoff screenshots in a future pass.
