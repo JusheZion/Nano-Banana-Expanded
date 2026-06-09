@@ -109,6 +109,7 @@ User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-
 - [x] Add a location map guide showing where moved Writer tools live now.
 - [x] Complete full tests, build, lint, diff check, and local browser QA.
 - [x] Merge `codex/writer-focused-ux-reset` into `main`, resolve the Writer workspace/docs conflicts, push `main` to GitHub, and confirm local merged-main smoke before deployment verification.
+- [x] Confirm Cloudflare production Worker deployed the merged build: live `index.html` now references `index-B7XZBLbN.js`, and the deployed Writer bundle contains Focused / All Tools and Visual Canon strings.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 

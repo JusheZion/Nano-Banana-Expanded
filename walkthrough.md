@@ -9581,13 +9581,19 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Local browser smoke at `http://127.0.0.1:5174/` - PASS for merged-main Writer dashboard, top selectors, and Visual Canon visibility.
 
 ### Outstanding issues
-- Cloudflare production deployment verification is pending after the pushed `main` build completes.
+- None.
 
 ### Risks or caveats
-- Cloudflare Builds may take a few minutes after the GitHub push before the live Worker serves the new asset hashes.
+- The production in-app browser smoke was stopped by the signed-out production auth gate, so deployed UI verification used bundle/hash evidence rather than an authenticated live account clickthrough.
 
 ### Operator follow-up
-- Check the deployed live site after deployment verification confirms the new Worker asset is active.
+- Sign into the deployed live site and check Writers Workshop from the normal account session.
 
 ### Next steps
-- Verify the live Worker URL serves the merged Writer UX bundle.
+- Continue subjective UX QA on the deployed Writers Workshop portal.
+
+### Deployment verification update
+- Production Worker URL: `https://asset-reference-comics-studio.onyxzion.workers.dev/`
+- Live `index.html` initially served the old `/assets/index-BRZgzHeH.js` bundle, then updated at poll attempt 8 to `/assets/index-B7XZBLbN.js`, matching the merged local production build.
+- The deployed `/assets/WriterPortal-P4xjwUW7.js` bundle was reachable from production and contained the new `Visual Canon`, `Focused`, and `All Tools` strings.
+- The in-app browser opened the deployed site but was signed out on the production origin and displayed the protected-workspace sign-in gate.
