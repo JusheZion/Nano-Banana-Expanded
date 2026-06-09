@@ -610,7 +610,15 @@ type WriterMenuOption = {
   id: string;
   label: string;
   meta?: string;
+  searchText?: string;
 };
+
+function compactWriterMenuMeta(raw: string | null | undefined, cap = 86): string | undefined {
+  const text = raw?.replace(/\s+/g, ' ').trim();
+  if (!text) return undefined;
+  if (text.length <= cap) return text;
+  return `${text.slice(0, Math.max(0, cap - 3)).trimEnd()}...`;
+}
 
 function readWriterLastWorkspace(): WriterLastWorkspace {
   const fallback: WriterLastWorkspace = {
@@ -675,7 +683,7 @@ function WriterSearchableMenu({
     const needle = query.trim().toLowerCase();
     if (!needle || selected?.label === query) return options.slice(0, 12);
     return options
-      .filter((option) => `${option.label} ${option.meta ?? ''}`.toLowerCase().includes(needle))
+      .filter((option) => `${option.label} ${option.meta ?? ''} ${option.searchText ?? ''}`.toLowerCase().includes(needle))
       .slice(0, 12);
   }, [options, query, selected?.label]);
 
@@ -769,6 +777,7 @@ function WriterSearchableMenu({
                 key={option.id}
                 type="button"
                 role="option"
+                aria-label={option.meta ? `${option.label}: ${option.meta}` : option.label}
                 aria-selected={option.id === value}
                 className={`flex w-full flex-col px-2.5 py-1.5 text-left normal-case tracking-normal hover:bg-amber-50 ${
                   index === activeIndex ? 'bg-amber-100' : ''
@@ -4885,6 +4894,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <label className="ml-auto flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-black/45">
           Page
           <select
+            aria-label="Choose Writer page"
             value={selectedPageId ?? ''}
             onChange={(event) => setSelectedPageId(event.target.value || null)}
             disabled={sortedPages.length === 0}
@@ -5029,12 +5039,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const seriesMenuOptions: WriterMenuOption[] = seriesList.map((series) => ({
     id: series.id,
     label: series.title || 'Untitled series',
-    meta: series.logline || undefined,
+    meta: compactWriterMenuMeta(series.logline),
+    searchText: series.logline || undefined,
   }));
   const issueMenuOptions: WriterMenuOption[] = issues.map((issue) => ({
     id: issue.id,
     label: `#${issue.issue_number}${issue.title ? ` - ${issue.title}` : ''}`,
-    meta: issue.synopsis || undefined,
+    meta: compactWriterMenuMeta(issue.synopsis),
+    searchText: issue.synopsis || undefined,
   }));
   const pageMenuOptions: WriterMenuOption[] = sortedPages.map((page) => ({
     id: page.id,
@@ -5226,6 +5238,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
           Vault
           <select
+            aria-label="Choose visual canon vault source"
             value={writerVisualReferenceSource}
             onChange={(e) =>
               setWriterVisualReferenceSource(e.target.value as 'character_vault' | 'asset_vault')
@@ -5261,6 +5274,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
           Role
           <select
+            aria-label="Choose visual canon reference role"
             value={writerVisualReferenceKind}
             onChange={(e) =>
               setWriterVisualReferenceKind(e.target.value as WriterVisualReferenceKind)

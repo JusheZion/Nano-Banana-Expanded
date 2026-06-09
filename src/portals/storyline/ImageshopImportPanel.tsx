@@ -503,6 +503,7 @@ export function ImageshopImportPanel() {
       <div className="mt-2">
         <label className="text-[10px] text-white/45 uppercase">Art style (optional)</label>
         <select
+          aria-label="Choose import art style"
           className="mt-0.5 w-full max-w-xs rounded-lg bg-black/40 border border-white/15 px-2 py-1.5 text-xs"
           value={importStylePreset}
           onChange={(e) => setImportStylePreset(e.target.value)}

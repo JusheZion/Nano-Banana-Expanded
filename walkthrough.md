@@ -9678,3 +9678,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit, push, and verify the live Worker bundle.
+
+## Writer And Imageshop Menu QA Follow-Up - 2026-06-09
+
+### What changed
+- Audited the visible Writers Workshop menu surfaces after the first overlay hotfix: Series, Issue, Page, Visual Canon Profile, Visual Canon Collection, Visual Canon Vault, Visual Canon Role, and the All Tools page selector.
+- Fixed the Series and Issue search result metadata so dropdown rows show compact previews instead of raw long story/logline/synopsis text.
+- Kept full series logline and issue synopsis text searchable via `searchText`, so compact menu display does not remove search coverage.
+- Added explicit accessible labels to Writer menu option buttons and native select menus.
+- Audited the Imageshop Import tab menu and added an explicit label to the art-style dropdown.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- `WriterSearchableMenu` now supports a display `meta` and separate `searchText`.
+- `compactWriterMenuMeta` normalizes whitespace and caps menu preview text, preventing an issue synopsis from becoming the visible menu body.
+- Writer select labels added: `Choose Writer page`, `Choose visual canon vault source`, and `Choose visual canon reference role`.
+- Imageshop Import select label added: `Choose import art style`.
+
+### Verification
+- Browser QA at `http://127.0.0.1:5174/` - PASS: clicking/focusing Writer comboboxes keeps `aria-expanded="false"` and shows no options.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: typing into Series, Issue, Page, Visual Canon Profile, and Visual Canon Collection opens bounded search results capped at 12 options.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Issue menu option text is compact instead of the previous full synopsis/instructions block.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: visible Writer native selects expose explicit labels.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Imageshop Import art-style dropdown exposes `Choose import art style`.
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` - PASS, 3 files / 35 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+- None from the visible menu surfaces checked in this pass.
+
+### Risks or caveats
+- The audit focused on visible Writer/Visual Canon menus and Imageshop Import controls tied to the recent QoL work, not every hidden/native select elsewhere in the entire application.
+- Browser screenshot capture timed out during the pass, so verification is based on DOM state, ARIA state, option counts, and visible control labels.
+
+### Operator follow-up
+- After deploy, recheck the live Writer Issue menu by typing `#` and confirming it shows a short `#1 - The Blackening` preview, not the full issue synopsis.
+
+### Next steps
+- Commit, push, and deploy the menu QA follow-up.
