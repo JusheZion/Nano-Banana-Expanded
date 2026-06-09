@@ -69,6 +69,8 @@ Detailed tracker: [`docs/superpowers/plans/2026-05-31-writers-workshop-narrative
 - [x] Verify Writer page-beats-to-Imageshop bridge with focused tests and browser smoke: page context reaches Imageshop, Writer map/return controls are present, and returned image provenance merge is covered by automated tests.
 - [x] Run approved live Writer-to-Imageshop generation on `Oratoria de Conjunctio Oppositorum` Issue 1 Page 8 Panel 1; fixed Writer handoff to populate the active Imageshop panel queue and verified returned `imageshop_output` merged into the Writer page beat.
 - [x] Improve Writers Workshop edit discoverability: Outline and Beats workspaces now expose direct actions that jump to the saved-output JSON editors.
+- [x] Add issue-level visual references from Character Vault and Asset Vault: Foundation Hub can attach vault images to the active issue, sync reference names into synopsis helper fields, and writer-tools now sends attached reference images/text as hard visual canon for page-beat generation.
+- [x] Deploy visual-reference-aware `writer-tools`: Supabase project `vxclogwiytxjolisnakd` shows `writer-tools` ACTIVE version 48, updated `2026-06-08 22:09:57 UTC`.
 - [~] Run Obsidian lore import end-to-end QA: parser/reference tests, build, lint, Canon import UI smoke, manual lore create/edit, JSON import, reload persistence, and Cockpit Lore digest stripping passed; native file-picker/folder import, preview duplicate actions, Obsidian source badges, stored image counts, cloud image upload, and QA-card cleanup remain pending.
 - [~] Reduce ribbon/workspace density: branch/audit actions are grouped; full ribbon compaction remains future polish.
 
@@ -90,6 +92,7 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-l
 - [x] Production live smoke: completed in the user's real Chrome session signed in as `codex.ai@onyxzhuzh.com`. Verified Prompt Library create, reload persistence, edit/versioning, favorite, delete cleanup, outbound `Use in Imageshop`, and Imageshop source-save back to Prompt Library; final reload returned the production Prompt Library account to 0 prompts / 0 favorites / 0 collections / 0 entities.
 - [x] Product decision: Writer locks should block all saves, including manual saves, to prevent accidental user overwrites.
 - [x] Standalone Prompt Library archive deleted after ARCS production deploy, CRUD, persistence, outbound handoff, source-save, and cleanup smoke passed.
+- [x] Visual-reference QA pass: focused Writer tests, `npm run build`, `npm run lint`, `git diff --check`, Supabase deployed-function auth validation, signed-out browser smoke, and signed-in local in-app browser QA passed. The signed-in QA attached one Character Vault reference and one Asset Vault reference to a disposable Writer issue, confirmed persistence after reload, generated Page 1 beats through deployed `writer-tools`, and verified the beats used `Alpha Swag Aries` plus `Expanded View of Prime Hall` as visual canon. Temporary local QA issue/series cleanup is pending explicit deletion approval because it deletes real signed-in account data.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 

@@ -106,6 +106,15 @@ import {
   type SynopsisHelperParts,
 } from '@/portals/writer/writerSynopsisHelper';
 import {
+  buildWriterVisualReferenceDigest,
+  mergeVisualReferencesIntoSynopsisParts,
+  mergeWriterVisualReferenceIntoNotes,
+  readWriterVisualReferencesFromNotes,
+  removeWriterVisualReferenceFromNotes,
+  type WriterVisualReference,
+  type WriterVisualReferenceKind,
+} from '@/portals/writer/writerVisualReferences';
+import {
   EMPTY_WRITER_PRODUCTION_DEFAULTS,
   mergeProductionDefaultsIntoNotes,
   productionDefaultsToPayload,
@@ -162,8 +171,8 @@ import {
 } from '@/portals/writer/obsidianLoreImport';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { mergeImageshopImageMapIntoWriterBeats } from '@/portals/writer/writerImageshopReturn';
-import { getCharacterAlbums } from '@/shared/api/arcsVault';
-import { getAssetAlbums } from '@/shared/api/arcsAssetVault';
+import { getCharacterAlbums, type VaultCharacterAlbum, type VaultCharacterItem } from '@/shared/api/arcsVault';
+import { getAssetAlbums, type VaultAssetAlbum, type VaultAssetItem } from '@/shared/api/arcsAssetVault';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { useResponsiveLayout } from '@/shared/context/ResponsiveLayoutContext';
 import { useImageWorkshopBridge } from '@/stores/imageWorkshopBridge';
@@ -587,6 +596,14 @@ type PacingRegenerationPreviewPage = {
   proposed_script_text?: string;
 };
 
+function getWriterCharacterReferenceLabel(item: VaultCharacterItem, album: VaultCharacterAlbum): string {
+  return item.cast_name?.trim() || item.name?.trim() || item.profile_name?.trim() || album.profileName;
+}
+
+function getWriterAssetReferenceLabel(item: VaultAssetItem, album: VaultAssetAlbum): string {
+  return item.asset_name?.trim() || item.name?.trim() || item.collection_name?.trim() || album.collectionName;
+}
+
 export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
   const { isPhone } = useResponsiveLayout();
   const [seriesList, setSeriesList] = useState<WriterSeriesRow[]>([]);
@@ -690,6 +707,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [synopsisHelperParts, setSynopsisHelperParts] = useState<SynopsisHelperParts>({
     ...EMPTY_SYNOPSIS_HELPER_PARTS,
   });
+  const [writerVisualReferenceAlbums, setWriterVisualReferenceAlbums] = useState<{
+    characters: VaultCharacterAlbum[];
+    assets: VaultAssetAlbum[];
+  }>({ characters: [], assets: [] });
+  const [writerVisualReferencesLoading, setWriterVisualReferencesLoading] = useState(false);
+  const [writerVisualReferencesBusy, setWriterVisualReferencesBusy] = useState(false);
+  const [writerVisualReferencesError, setWriterVisualReferencesError] = useState<string | null>(null);
+  const [writerVisualReferenceSource, setWriterVisualReferenceSource] = useState<'character_vault' | 'asset_vault'>(
+    'character_vault',
+  );
+  const [writerVisualReferenceId, setWriterVisualReferenceId] = useState('');
+  const [writerVisualReferenceKind, setWriterVisualReferenceKind] = useState<WriterVisualReferenceKind>('character');
+  const [writerVisualReferenceNote, setWriterVisualReferenceNote] = useState('');
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
   const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
@@ -1419,6 +1449,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [selectedIssueId, issues, selectedSeries]);
 
   useEffect(() => {
+    if (!selectedIssueId) {
+      setWriterVisualReferenceAlbums({ characters: [], assets: [] });
+      setWriterVisualReferenceId('');
+      setWriterVisualReferencesError(null);
+      return;
+    }
+    let cancelled = false;
+    setWriterVisualReferencesLoading(true);
+    setWriterVisualReferencesError(null);
+    void Promise.all([getCharacterAlbums(), getAssetAlbums()])
+      .then(([characters, assets]) => {
+        if (cancelled) return;
+        setWriterVisualReferenceAlbums({ characters, assets });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
+      })
+      .finally(() => {
+        if (!cancelled) setWriterVisualReferencesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedIssueId]);
+
+  useEffect(() => {
+    setWriterVisualReferenceKind(writerVisualReferenceSource === 'character_vault' ? 'character' : 'prop');
+    setWriterVisualReferenceId('');
+  }, [writerVisualReferenceSource]);
+
+  useEffect(() => {
     const s = seriesList.find((x) => x.id === selectedSeriesId);
     setSeriesTitleDraft(s?.title ?? '');
     setSeriesLoglineDraft(s?.logline ?? '');
@@ -1428,6 +1490,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const latestShotPlan = shotPlans[0];
   const selectedIssue = issues.find((i) => i.id === selectedIssueId) ?? null;
   const writerLocks = useMemo(() => readWriterLocksFromNotes(selectedIssue?.notes), [selectedIssue?.notes]);
+  const writerVisualReferences = useMemo(
+    () => readWriterVisualReferencesFromNotes(selectedIssue?.notes),
+    [selectedIssue?.notes],
+  );
+  const writerVisualReferenceDigest = useMemo(
+    () => buildWriterVisualReferenceDigest(writerVisualReferences),
+    [writerVisualReferences],
+  );
+  const writerCharacterReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceAlbums.characters.flatMap((album) =>
+        album.items.map((item) => ({
+          id: item.id,
+          album,
+          item,
+          label: getWriterCharacterReferenceLabel(item, album),
+        })),
+      ),
+    [writerVisualReferenceAlbums.characters],
+  );
+  const writerAssetReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceAlbums.assets.flatMap((album) =>
+        album.items.map((item) => ({
+          id: item.id,
+          album,
+          item,
+          label: getWriterAssetReferenceLabel(item, album),
+        })),
+      ),
+    [writerVisualReferenceAlbums.assets],
+  );
   const toolCache = readWriterToolCache(selectedIssue?.notes);
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
@@ -1444,6 +1538,97 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return true;
     },
     [selectedIssueId],
+  );
+
+  const refreshWriterVisualReferenceAlbums = useCallback(async () => {
+    if (!selectedIssueId) return;
+    setWriterVisualReferencesLoading(true);
+    setWriterVisualReferencesError(null);
+    try {
+      const [characters, assets] = await Promise.all([getCharacterAlbums(), getAssetAlbums()]);
+      setWriterVisualReferenceAlbums({ characters, assets });
+    } catch (error) {
+      setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not load vault references.');
+    } finally {
+      setWriterVisualReferencesLoading(false);
+    }
+  }, [selectedIssueId]);
+
+  const attachWriterVisualReference = useCallback(async () => {
+    if (!selectedIssue) return;
+    setWriterVisualReferencesError(null);
+    const source = writerVisualReferenceSource;
+    const selected =
+      source === 'character_vault'
+        ? writerCharacterReferenceOptions.find((option) => option.id === writerVisualReferenceId)
+        : writerAssetReferenceOptions.find((option) => option.id === writerVisualReferenceId);
+    if (!selected) {
+      setWriterVisualReferencesError('Choose a vault image to attach.');
+      return;
+    }
+
+    const ref: Omit<WriterVisualReference, 'id' | 'linkedAt'> = {
+      source,
+      sourceId: selected.id,
+      sourceLabel:
+        source === 'character_vault'
+          ? (selected as { album: VaultCharacterAlbum }).album.profileName
+          : (selected as { album: VaultAssetAlbum }).album.collectionName,
+      label: selected.label,
+      kind: source === 'character_vault' ? 'character' : writerVisualReferenceKind,
+      imageUrl:
+        source === 'character_vault'
+          ? (selected as { item: VaultCharacterItem }).item.image_url
+          : (selected as { item: VaultAssetItem }).item.image_url,
+      note: writerVisualReferenceNote.trim() || undefined,
+    };
+    let nextNotes = mergeWriterVisualReferenceIntoNotes(selectedIssue.notes, ref);
+    const nextSynopsisParts = mergeVisualReferencesIntoSynopsisParts(synopsisHelperParts, [
+      {
+        ...ref,
+        id: `${ref.source}:${ref.sourceId}`,
+        linkedAt: new Date().toISOString(),
+      },
+    ]);
+    nextNotes = mergeSynopsisHelperIntoNotes(nextNotes, nextSynopsisParts);
+
+    setWriterVisualReferencesBusy(true);
+    const ok = await updateSelectedIssueNotes(nextNotes);
+    setWriterVisualReferencesBusy(false);
+    if (!ok) {
+      setWriterVisualReferencesError('Could not attach this visual reference to the issue.');
+      return;
+    }
+    setSynopsisHelperParts(nextSynopsisParts);
+    setWriterVisualReferenceNote('');
+    pushHistory(`attached visual reference “${ref.label}”`);
+  }, [
+    selectedIssue,
+    writerVisualReferenceSource,
+    writerCharacterReferenceOptions,
+    writerVisualReferenceId,
+    writerAssetReferenceOptions,
+    writerVisualReferenceKind,
+    writerVisualReferenceNote,
+    synopsisHelperParts,
+    updateSelectedIssueNotes,
+    pushHistory,
+  ]);
+
+  const removeWriterVisualReference = useCallback(
+    async (ref: WriterVisualReference) => {
+      if (!selectedIssue) return;
+      setWriterVisualReferencesError(null);
+      setWriterVisualReferencesBusy(true);
+      const ok = await updateSelectedIssueNotes(removeWriterVisualReferenceFromNotes(selectedIssue.notes, ref.id));
+      setWriterVisualReferencesBusy(false);
+      if (!ok) {
+        setWriterVisualReferencesError('Could not remove this visual reference from the issue.');
+        return;
+      }
+      pushHistory(`removed visual reference “${ref.label}”`);
+    },
+    [selectedIssue, updateSelectedIssueNotes, pushHistory],
   );
 
   const persistWriterDrafts = useCallback(
@@ -5189,6 +5374,172 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             }
                           />
                         </label>
+                        <div className="border-l-2 border-amber-800/35 bg-amber-50/55 px-3 py-3 space-y-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                                Visual references for this issue
+                              </p>
+                              <p className="mt-1 text-[11px] leading-snug text-black/60">
+                                Attached vault images are sent with page-beat AI calls as visual canon.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!selectedIssueId || writerVisualReferencesLoading}
+                              onClick={() => void refreshWriterVisualReferenceAlbums()}
+                              className="rounded-md border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-45"
+                            >
+                              {writerVisualReferencesLoading ? 'Loading...' : 'Refresh vault'}
+                            </button>
+                          </div>
+
+                          <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr]">
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Vault
+                              <select
+                                value={writerVisualReferenceSource}
+                                onChange={(e) =>
+                                  setWriterVisualReferenceSource(e.target.value as 'character_vault' | 'asset_vault')
+                                }
+                                disabled={!selectedIssueId || writerVisualReferencesBusy}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="character_vault">Character Vault</option>
+                                <option value="asset_vault">Asset Vault</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Image
+                              <select
+                                value={writerVisualReferenceId}
+                                onChange={(e) => setWriterVisualReferenceId(e.target.value)}
+                                disabled={!selectedIssueId || writerVisualReferencesBusy}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="">Choose a saved image...</option>
+                                {writerVisualReferenceSource === 'character_vault'
+                                  ? writerCharacterReferenceOptions.map((option) => (
+                                      <option key={option.id} value={option.id}>
+                                        {option.label} / {option.album.profileName}
+                                      </option>
+                                    ))
+                                  : writerAssetReferenceOptions.map((option) => (
+                                      <option key={option.id} value={option.id}>
+                                        {option.label} / {option.album.collectionName}
+                                      </option>
+                                    ))}
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Role
+                              <select
+                                value={writerVisualReferenceKind}
+                                onChange={(e) =>
+                                  setWriterVisualReferenceKind(e.target.value as WriterVisualReferenceKind)
+                                }
+                                disabled={
+                                  !selectedIssueId ||
+                                  writerVisualReferencesBusy ||
+                                  writerVisualReferenceSource === 'character_vault'
+                                }
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              >
+                                <option value="character">Character</option>
+                                <option value="location">Location / set</option>
+                                <option value="prop">Prop / asset</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                            Note
+                            <input
+                              type="text"
+                              value={writerVisualReferenceNote}
+                              onChange={(e) => setWriterVisualReferenceNote(e.target.value)}
+                              disabled={!selectedIssueId || writerVisualReferencesBusy}
+                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                              placeholder="e.g. use the cloak silhouette; keep the bronze mask"
+                            />
+                          </label>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!selectedIssueId || !writerVisualReferenceId || writerVisualReferencesBusy}
+                              onClick={() => void attachWriterVisualReference()}
+                              className="rounded-lg border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-200 disabled:opacity-45"
+                            >
+                              {writerVisualReferencesBusy ? 'Saving...' : 'Attach to issue'}
+                            </button>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-black/45">
+                              {writerVisualReferences.length} attached
+                            </span>
+                          </div>
+
+                          {writerVisualReferencesError ? (
+                            <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                              {writerVisualReferencesError}
+                            </p>
+                          ) : null}
+
+                          {writerVisualReferences.length > 0 ? (
+                            <div className="space-y-2">
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {writerVisualReferences.map((ref) => (
+                                  <div
+                                    key={ref.id}
+                                    className="flex gap-2 rounded-lg border border-black/10 bg-white/65 p-2"
+                                  >
+                                    <div className="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10">
+                                      <img
+                                        src={ref.imageUrl}
+                                        alt={ref.label}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-[11px] font-black text-black">{ref.label}</p>
+                                          <p className="text-[9px] font-bold uppercase tracking-wide text-black/45">
+                                            {ref.kind} / {ref.source === 'character_vault' ? 'Character Vault' : 'Asset Vault'}
+                                          </p>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          disabled={writerVisualReferencesBusy}
+                                          onClick={() => void removeWriterVisualReference(ref)}
+                                          className="rounded border border-black/15 bg-white/80 px-2 py-0.5 text-[9px] font-bold text-black disabled:opacity-40"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                      {ref.note ? (
+                                        <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-black/60">
+                                          {ref.note}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <details className="rounded-lg border border-black/10 bg-white/45 px-3 py-2">
+                                <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wide text-black/55">
+                                  AI context preview
+                                </summary>
+                                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-snug text-black/70">
+                                  {writerVisualReferenceDigest}
+                                </pre>
+                              </details>
+                            </div>
+                          ) : (
+                            <p className="rounded-lg border border-dashed border-black/15 bg-white/45 px-3 py-2 text-[11px] text-black/55">
+                              No issue visual references attached yet.
+                            </p>
+                          )}
+                        </div>
                         <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>

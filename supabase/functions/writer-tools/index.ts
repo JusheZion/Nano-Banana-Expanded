@@ -58,6 +58,20 @@ function readWriterToolCache(notes: unknown): Record<string, unknown> {
   return asJsonObject(asJsonObject(notes).writer_tool_cache);
 }
 
+type WriterVisualReferenceKind = 'character' | 'location' | 'prop';
+type WriterVisualReferenceSource = 'character_vault' | 'asset_vault';
+
+type WriterVisualReference = {
+  id: string;
+  source: WriterVisualReferenceSource;
+  sourceId: string;
+  sourceLabel: string;
+  label: string;
+  kind: WriterVisualReferenceKind;
+  imageUrl: string;
+  note?: string;
+};
+
 type IssueRow = {
   id: string;
   series_id: string;
@@ -248,12 +262,13 @@ async function callGeminiJson(args: {
   user: string;
   preferredModel: string;
   apiKey: string;
+  userParts?: GeminiContentPart[];
   /** Lower = stick closer to prompt (default 0.65). */
   temperature?: number;
 }): Promise<unknown> {
   const body = {
     systemInstruction: { parts: [{ text: args.system }] },
-    contents: [{ role: 'user', parts: [{ text: args.user }] }],
+    contents: [{ role: 'user', parts: [{ text: args.user }, ...(args.userParts ?? [])] }],
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: args.temperature ?? 0.65,
@@ -540,6 +555,9 @@ function buildPageBeatsUserPrompt(args: {
   priorPagesDigest: string;
   directorNotesForBeats?: string;
   loreCardsDigest?: string;
+  visualReferenceDigest?: string;
+  visualReferenceImagesLoaded?: string[];
+  visualReferenceImagesSkipped?: string[];
   productionDefaults: Required<WriterProductionDefaultsPayload>;
 }): string {
   const outlineBeatContext = extractOutlineBeatContextForPage(args.latestOutline, args.page.page_number);
@@ -571,6 +589,20 @@ function buildPageBeatsUserPrompt(args: {
     args.loreCardsDigest?.trim()
       ? `Series lore cards (reference only; use for texture and consistency):\n${args.loreCardsDigest.trim()}`
       : '',
+    args.visualReferenceDigest?.trim()
+      ? [
+          'Issue visual references (hard visual canon from attached vault images):',
+          jsonForPrompt(args.visualReferenceDigest.trim(), PAGE_BEATS_PROMPT_CAPS.visualReferences),
+          args.visualReferenceImagesLoaded && args.visualReferenceImagesLoaded.length > 0
+            ? `Attached image parts loaded for: ${args.visualReferenceImagesLoaded.join(', ')}`
+            : 'No image parts were loaded; use the text labels and URLs as reference records.',
+          args.visualReferenceImagesSkipped && args.visualReferenceImagesSkipped.length > 0
+            ? `Image parts skipped: ${args.visualReferenceImagesSkipped.join(', ')}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : '',
     '',
     'Return JSON:',
     '{ "page_number_ref": number (optional), "one_line_hook": string (optional), "characters": string[], "locations": string[], "art_style": string, "panels": [ { "index"?: number, "action": string (required), "composition"?: string, "emotion"?: string, "dialogue_placeholder"?: string, "sfx"?: string } ] }',
@@ -578,6 +610,8 @@ function buildPageBeatsUserPrompt(args: {
     `Set "art_style" to this exact resolved production default unless the page has a more specific saved style bible instruction: ${JSON.stringify(args.productionDefaults.art_style)}.`,
     'Set "characters" to the character names who appear on this page. Pull names only from the exact outline beat, synopsis/source outline/helper cast text, cast rows, or lore cards. If no source-grounded character appears, return an empty array.',
     'Set "locations" to the page settings/locations. Pull values only from the outline beat scene, synopsis/source outline/helper locations text, location rows, or lore cards. If no source-grounded setting appears, return an empty array.',
+    'When Issue visual references include a matching character, location, or prop, use that reference as canon for appearance, costume, silhouette, materials, colors, and design language. Do not invent or redesign attached vault references.',
+    'If a visually referenced character, location, or prop appears on this page, use the exact reference label in characters, locations, panel action, or composition as appropriate.',
     'Do not invent new character names, species, factions, buildings, rooms, or settings just to fill characters/locations metadata.',
     'Hard constraint: advance the story; do not re-state page 1 beats on later pages.',
     'When the outline context includes "Reserved for page N only", those events must not appear in this page\'s panels — stop one beat earlier.',
@@ -711,10 +745,139 @@ const PAGE_BEATS_PROMPT_CAPS = {
   cast: 8000,
   locations: 4000,
   styleBibles: 8000,
+  visualReferences: 6000,
   /** Prior full beats_json when regenerating; large panels blow past Edge limits if unbounded. */
   existingBeats: 14_000,
   outlineBeat: 6000,
 } as const;
+
+const WRITER_VISUAL_REFERENCES_NOTES_KEY = 'writer_visual_references';
+const WRITER_VISUAL_REFERENCE_IMAGE_LIMIT = 6;
+const WRITER_VISUAL_REFERENCE_MAX_BYTES = 4_000_000;
+
+type GeminiContentPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
+
+const VALID_VISUAL_REFERENCE_KINDS = new Set<WriterVisualReferenceKind>(['character', 'location', 'prop']);
+const VALID_VISUAL_REFERENCE_SOURCES = new Set<WriterVisualReferenceSource>(['character_vault', 'asset_vault']);
+
+function sanitizeVisualReferenceText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function defaultVisualReferenceKind(source: WriterVisualReferenceSource): WriterVisualReferenceKind {
+  return source === 'character_vault' ? 'character' : 'prop';
+}
+
+function readIssueVisualReferences(notes: Record<string, unknown>): WriterVisualReference[] {
+  const raw = asJsonObject(notes)[WRITER_VISUAL_REFERENCES_NOTES_KEY];
+  if (!Array.isArray(raw)) return [];
+
+  const refs: WriterVisualReference[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const sourceRaw = sanitizeVisualReferenceText(row.source);
+    if (!VALID_VISUAL_REFERENCE_SOURCES.has(sourceRaw as WriterVisualReferenceSource)) continue;
+    const source = sourceRaw as WriterVisualReferenceSource;
+    const sourceId = sanitizeVisualReferenceText(row.source_id ?? row.sourceId);
+    const label = sanitizeVisualReferenceText(row.label);
+    const imageUrl = sanitizeVisualReferenceText(row.image_url ?? row.imageUrl);
+    if (!sourceId || !label || !imageUrl) continue;
+
+    const id = sanitizeVisualReferenceText(row.id) || `${source}:${sourceId}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const kindRaw = sanitizeVisualReferenceText(row.kind);
+    refs.push({
+      id,
+      source,
+      sourceId,
+      sourceLabel: sanitizeVisualReferenceText(row.source_label ?? row.sourceLabel) || sourceId,
+      label,
+      kind: VALID_VISUAL_REFERENCE_KINDS.has(kindRaw as WriterVisualReferenceKind)
+        ? (kindRaw as WriterVisualReferenceKind)
+        : defaultVisualReferenceKind(source),
+      imageUrl,
+      note: sanitizeVisualReferenceText(row.note) || undefined,
+    });
+  }
+  return refs;
+}
+
+function buildIssueVisualReferenceDigest(refs: WriterVisualReference[]): string {
+  if (refs.length === 0) return '';
+  return refs
+    .map((ref, index) => {
+      const role =
+        ref.kind === 'character'
+          ? 'Character design'
+          : ref.kind === 'location'
+            ? 'Location or set design'
+            : 'Prop or asset design';
+      return [
+        `${index + 1}. ${role}: ${ref.label}`,
+        `Source: ${ref.source === 'character_vault' ? 'Character Vault' : 'Asset Vault'} / ${ref.sourceLabel}`,
+        `Image URL: ${ref.imageUrl}`,
+        ref.note ? `Note: ${ref.note}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    })
+    .join('\n\n');
+}
+
+function base64FromArrayBuffer(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function fetchVisualReferenceImageParts(
+  refs: WriterVisualReference[],
+): Promise<{ parts: GeminiContentPart[]; loaded: string[]; skipped: string[] }> {
+  const parts: GeminiContentPart[] = [];
+  const loaded: string[] = [];
+  const skipped: string[] = [];
+
+  for (const ref of refs.slice(0, WRITER_VISUAL_REFERENCE_IMAGE_LIMIT)) {
+    try {
+      const res = await fetch(ref.imageUrl);
+      if (!res.ok) {
+        skipped.push(`${ref.label} (${res.status})`);
+        continue;
+      }
+      const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png';
+      if (!mimeType.startsWith('image/')) {
+        skipped.push(`${ref.label} (not an image)`);
+        continue;
+      }
+      const buffer = await res.arrayBuffer();
+      if (buffer.byteLength > WRITER_VISUAL_REFERENCE_MAX_BYTES) {
+        skipped.push(`${ref.label} (image too large)`);
+        continue;
+      }
+      parts.push({
+        text: `Visual reference image for ${ref.kind}: ${ref.label}. Use this as canon; do not redesign it.`,
+      });
+      parts.push({ inlineData: { mimeType, data: base64FromArrayBuffer(buffer) } });
+      loaded.push(ref.label);
+    } catch (e) {
+      skipped.push(`${ref.label} (${e instanceof Error ? e.message : 'fetch failed'})`);
+    }
+  }
+
+  if (refs.length > WRITER_VISUAL_REFERENCE_IMAGE_LIMIT) {
+    skipped.push(`${refs.length - WRITER_VISUAL_REFERENCE_IMAGE_LIMIT} extra reference(s) over image cap`);
+  }
+  return { parts, loaded, skipped };
+}
 
 function pageHasPanelBeats(beatsJson: unknown): boolean {
   const panels = (beatsJson as { panels?: unknown } | null)?.panels;
@@ -754,6 +917,9 @@ async function executeSinglePageBeats(
   const system =
     'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
   const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
+  const visualReferences = readIssueVisualReferences(issueRow.notes);
+  const visualReferenceDigest = buildIssueVisualReferenceDigest(visualReferences);
+  const visualReferenceImages = await fetchVisualReferenceImageParts(visualReferences);
   const userPrompt = buildPageBeatsUserPrompt({
     page,
     issue: issueRow,
@@ -764,6 +930,9 @@ async function executeSinglePageBeats(
     priorPagesDigest,
     directorNotesForBeats,
     loreCardsDigest: loreDigest,
+    visualReferenceDigest,
+    visualReferenceImagesLoaded: visualReferenceImages.loaded,
+    visualReferenceImagesSkipped: visualReferenceImages.skipped,
     productionDefaults: productionDefaults ?? resolveProductionDefaultsPayload(issueRow),
   });
   let beatsJson: unknown;
@@ -771,6 +940,7 @@ async function executeSinglePageBeats(
     beatsJson = await callGeminiJson({
       system,
       user: userPrompt,
+      userParts: visualReferenceImages.parts,
       preferredModel: geminiModel,
       apiKey: geminiKey,
     });

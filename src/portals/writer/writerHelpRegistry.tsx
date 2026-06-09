@@ -73,7 +73,7 @@ export const WRITER_UI_TIPS = {
   loreTab:
     'Series-scoped lore cards (world, characters, places, rules). Cards marked “Include in AI prompts” are loaded into Generate outline and page beats (writer-tools) as reference text — stay under large bibles or the digest truncates. Requires Supabase migration writer_lore_cards.',
   beatsTab:
-    'Panel-level beats use the latest issue outline plus cast and locations. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Rules for the outline from Scripts (saved as notes.synopsis_helper.rules) are included on every page-beats call, including Generate all beats. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
+    'Panel-level beats use the latest issue outline plus cast, locations, and issue visual references attached in Foundation Hub. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Rules for the outline from Scripts (saved as notes.synopsis_helper.rules) are included on every page-beats call, including Generate all beats. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
   beatsDirectorNotes:
     'Optional text sent only when generating page beats (not outlines). Use for double-page spreads (which page is left/right), requested panel shapes (tall strip, hero panel, inset), tone, or “more environmental detail / less talking heads.” Applies to Generate page beats, Generate all beats batches, and the ribbon quick-generate on the Beats tab.',
   beatsNeedPage: 'Select an issue that has pages, then choose a page in the Library.',
@@ -221,7 +221,7 @@ export function WriterHelpCategoryBody({
           </p>
           {h('Beats & dialogue')}
           <p>
-            Beats use the latest outline, cast, and locations. Dialogue drafts from beats + outline and saves script text on
+            Beats use the latest outline, cast, locations, and attached visual references. Dialogue drafts from beats + outline and saves script text on
             the page.
           </p>
           {h('Video / shot plan')}
