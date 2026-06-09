@@ -94,6 +94,21 @@ Detailed tracker: [`docs/superpowers/plans/2026-06-08-writers-workshop-ux-edit-l
 - [x] Standalone Prompt Library archive deleted after ARCS production deploy, CRUD, persistence, outbound handoff, source-save, and cleanup smoke passed.
 - [x] Visual-reference QA pass: focused Writer tests, `npm run build`, `npm run lint`, `git diff --check`, Supabase deployed-function auth validation, signed-out browser smoke, and signed-in local in-app browser QA passed. The signed-in QA attached one Character Vault reference and one Asset Vault reference to a disposable Writer issue, confirmed persistence after reload, generated Page 1 beats through deployed `writer-tools`, and verified the beats used `Alpha Swag Aries` plus `Expanded View of Prime Hall` as visual canon. Temporary local QA issue/series cleanup is pending explicit deletion approval because it deletes real signed-in account data.
 
+## Writers Workshop — Focused UX Reset (2026-06-09) — COMPLETE LOCALLY
+
+Detailed tracker: [`docs/superpowers/plans/2026-06-09-writers-workshop-focused-ux-reset-plan.md`](docs/superpowers/plans/2026-06-09-writers-workshop-focused-ux-reset-plan.md)
+User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-focused-ux-guide.md)
+
+- [x] Add tested `Dashboard` and `Visual Canon` Writer workspaces.
+- [x] Rename the Writer mode split from `Guided / Advanced` to `Focused / All Tools`.
+- [x] Make Focused mode the default Writer entry path and persist the selected mode in local storage.
+- [x] Add always-visible top Series / Issue / Page selectors so switching series no longer depends on the hidden dock.
+- [x] Hide the full ribbon and production map in Focused mode while keeping them available in All Tools.
+- [x] Promote issue visual references into a first-class Visual Canon workspace and Dashboard card.
+- [x] Compact the Focused edit/protection bar to reduce first-screen overload while retaining the full edit/lock strip in All Tools.
+- [x] Add a location map guide showing where moved Writer tools live now.
+- [x] Complete full tests, build, lint, diff check, and local browser QA.
+
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
 - [x] **Prompt helper:** [`imageshopImportPrompt.ts`](src/portals/storyline/imageshopImportPrompt.ts) — `buildImageshopImportPrompt` (retouch / optional `ART_STYLE_LIBRARY` / notes); [`imageshopImportPrompt.test.ts`](src/portals/storyline/__tests__/imageshopImportPrompt.test.ts)

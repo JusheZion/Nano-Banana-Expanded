@@ -200,11 +200,17 @@ export function WriterHelpCategoryBody({
           </p>
           {h('Library & selection')}
           <p>
-            In <strong>Library</strong> (<kbd className="rounded bg-black/10 px-1">⌘⇧H</kbd> or book icon), choose a series,
-            then an issue. Re-click the issue if fields stay disabled.
+            Use the top <strong>Series / Issue / Page</strong> strip to choose the active work. The Library dock is still
+            available in All Tools, but core selection no longer depends on opening it.
           </p>
           <p>
-            Workspace <kbd className="rounded bg-black/10 px-1">⌘2</kbd> opens <strong>Issue Outline</strong> for story fields.
+            <strong>Focused</strong> mode shows Dashboard, Visual Canon, and the main writing path. <strong>All Tools</strong>{' '}
+            restores the ribbon, production map, raw JSON, and batch controls.
+          </p>
+          {h('Visual Canon')}
+          <p>
+            Attach Character Vault and Asset Vault images in <strong>Visual Canon</strong> so page-beat AI uses those designs
+            instead of inventing new appearances.
           </p>
           {wikiLink}
         </>
@@ -214,9 +220,9 @@ export function WriterHelpCategoryBody({
         <>
           {h('Pages')}
           <p>
-            <strong>Page beats</strong> and <strong>dialogue</strong> need a <strong>page</strong> selected under Library →
-            Pages. Outline generation does not create <code className="rounded bg-black/10 px-1">writer_pages</code> rows — use{' '}
-            <strong>Add page</strong> (next number) in the Library when the list is empty, then pick the page and run beats or
+            <strong>Page beats</strong> and <strong>dialogue</strong> need a <strong>page</strong> selected in the top strip.
+            Outline generation does not create <code className="rounded bg-black/10 px-1">writer_pages</code> rows — use{' '}
+            <strong>Add page</strong> when the list is empty, then pick the page and run beats or
             dialogue.
           </p>
           {h('Beats & dialogue')}
@@ -243,8 +249,8 @@ export function WriterHelpCategoryBody({
           </p>
           {h('Exports')}
           <p>
-            Download outline JSON, shot plans, and bundles from the <strong>Video</strong> tab or the context menu on the
-            reading area. The <strong>File</strong> ribbon summarizes export locations.
+            Download issue packs, Markdown, JSON, and Guided Comics handoff files from the <strong>Export</strong> workspace.
+            All Tools keeps the advanced export and raw-output helpers available.
           </p>
           {h('Find')}
           <p>
@@ -259,9 +265,9 @@ export function WriterHelpCategoryBody({
         <>
         <ul className="list-disc pl-4 space-y-2">
           <li>
-            <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘8</kbd> (Mac) or{' '}
-            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">8</kbd> — workspace:
-            Cockpit, Outline, Lore, Beats, Dialogue, Video, Arc, Scripts (plain ⌘1–9 is reserved by the browser)
+            <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘9</kbd> (Mac) or{' '}
+            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">9</kbd> — focused workspaces:
+            Dashboard, Outline, Visual Canon, Beats, Dialogue, Audit, Export, Synopsis, Canon
           </li>
           <li>
             <strong>File</strong> → <strong>Scripts & exports</strong> — jump to synopsis helper and issue pack
