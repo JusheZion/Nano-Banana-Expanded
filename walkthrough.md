@@ -9643,3 +9643,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit, push, and deploy this QoL pass after review.
+
+## Writer Search Menu Overlay Hotfix - 2026-06-09
+
+### What changed
+- Fixed the Writer top selector comboboxes so a plain click/focus no longer opens the full dropdown list.
+- Search menus now open when the user types or presses ArrowDown, preserving type-to-search behavior without covering the workflow rail on first click.
+- Capped visible menu options to 12 and raised the dropdown z-index above the focused workflow rail when it is intentionally open.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- The bug was caused by `WriterSearchableMenu` calling `setOpen(true)` on focus. A selected/filled Series input therefore opened the whole list immediately and visually collided with the rail/content beneath it.
+- The selector strip now has a higher stacking context and the dropdown uses a higher z-index so intentional search results render above neighboring controls.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` - PASS, 4 files / 38 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- Browser reproduction at `http://127.0.0.1:5174/` - PASS: clicking the Series combobox focuses it, `aria-expanded` remains `false`, and `Clear selection` is not visible.
+- Browser search check at `http://127.0.0.1:5174/` - PASS: typing `Untitled` in the Series combobox opens the filtered option list.
+
+### Outstanding issues
+- None.
+
+### Risks or caveats
+- Users who want to browse without typing can use ArrowDown to open the menu.
+
+### Operator follow-up
+- Recheck the deployed Writer Series field after Cloudflare deploys this hotfix.
+
+### Next steps
+- Commit, push, and verify the live Worker bundle.

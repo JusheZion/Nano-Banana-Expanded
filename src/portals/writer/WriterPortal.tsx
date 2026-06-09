@@ -673,10 +673,10 @@ function WriterSearchableMenu({
 
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle || selected?.label === query) return options.slice(0, 80);
+    if (!needle || selected?.label === query) return options.slice(0, 12);
     return options
       .filter((option) => `${option.label} ${option.meta ?? ''}`.toLowerCase().includes(needle))
-      .slice(0, 80);
+      .slice(0, 12);
   }, [options, query, selected?.label]);
 
   const pick = useCallback(
@@ -708,7 +708,6 @@ function WriterSearchableMenu({
         }}
         onFocus={() => {
           if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-          setOpen(true);
         }}
         onBlur={() => {
           blurTimerRef.current = setTimeout(() => {
@@ -751,7 +750,7 @@ function WriterSearchableMenu({
         className="min-w-0 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black placeholder:text-black/35 disabled:opacity-45"
       />
       {open && !disabled ? (
-        <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-black/15 bg-white py-1 text-left shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-[90] mt-1 max-h-48 overflow-y-auto rounded-lg border border-black/15 bg-white py-1 text-left shadow-xl">
           {value ? (
             <button
               type="button"
@@ -5048,7 +5047,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }));
 
   const writerSelectionStrip = (
-    <div className="flex-shrink-0 border-b border-black/10 bg-white/55 px-3 py-2 backdrop-blur-md">
+    <div className="relative z-40 flex-shrink-0 border-b border-black/10 bg-white/55 px-3 py-2 backdrop-blur-md">
       <div className="grid gap-2 lg:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_minmax(120px,0.65fr)_auto] lg:items-end">
         <div className="flex min-w-0 gap-1.5">
           <div className="min-w-0 flex-1">
