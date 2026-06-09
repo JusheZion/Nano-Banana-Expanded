@@ -446,3 +446,209 @@ The Comic Studio now dynamically influences the artistic environment and AI prom
 
 ### Next steps
 - Complete production deploy/live smoke once Cloudflare auth or dashboard build access is available.
+
+## Prompt Library Cloudflare Deployment Verification - 2026-06-08
+
+### What changed
+- Verified the connected Cloudflare Worker deployment for `asset-reference-comics-studio` after the Prompt Library branch was pushed.
+- Confirmed the live production URL serves the ARCS app and that the deployed JS/CSS asset bytes match the locally verified `dist` output.
+- Updated the project tracker so deployment review is no longer listed as pending for this pass.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- The dashboard screenshot supplied by the user showed active Cloudflare deployment version `2c6ac3b0`, deployed approximately one minute earlier, carrying the `codex/prompt library portal` deployment description.
+- The live HTML at `https://asset-reference-comics-studio.onyxzion.workers.dev/` references `/assets/index-BRZgzHeH.js` and `/assets/index-DlsUrZzp.css`, matching the local verified build output.
+- A Node-based hash comparison fetched every deployed `.js` and `.css` file under `/assets/` and compared it with local `dist/assets`.
+- The first Node fetch attempt failed inside the sandbox with `ENOTFOUND`; the same read-only verification command passed when rerun with network access.
+- This pass did not push the docs-only update, because pushing another commit could trigger a fresh Cloudflare deployment and require a new deployment verification loop.
+
+### Verification
+- `curl -sSI https://asset-reference-comics-studio.onyxzion.workers.dev/` - PASS, returned HTTP 200 from Cloudflare.
+- `curl -sS https://asset-reference-comics-studio.onyxzion.workers.dev/` - PASS, returned `ARCS Expanded` HTML referencing the deployed Vite assets.
+- Hash comparison of deployed JS/CSS against local `dist/assets` - PASS, 43 files checked / 43 matched / 0 mismatches.
+
+### Outstanding issues
+- Live authenticated Prompt Library CRUD/source-save/outbound handoff smoke on the production URL is still optional follow-up if the user wants end-to-end production interaction proof after the byte-level deployment check.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- The app does not currently embed an explicit git SHA/build marker in the runtime, so verification used Cloudflare dashboard context plus byte-for-byte deployed asset comparison instead of an in-app commit label.
+- Direct local Wrangler deployment remains blocked without `CLOUDFLARE_API_TOKEN`, but the connected Cloudflare build path is confirmed live.
+
+### Operator follow-up
+- If a future push triggers a newer Cloudflare version, rerun the live URL and asset-hash verification for that new version.
+
+### Next steps
+- Run production authenticated smoke only if final product acceptance needs real CRUD/handoff interaction on the live URL rather than deployment verification.
+
+## Prompt Library Production Auth Smoke Blocker - 2026-06-08
+
+### What changed
+- Began the next pass as production signed-in Prompt Library smoke against the live Cloudflare URL.
+- Confirmed the deployed Prompt Library remains protected in production and requires an authenticated ARCS session.
+- Attempted to create/sign in the requested ARCS agent account `codex.ai@onyxzhuzh.com`.
+- Recorded the live-smoke blocker in `tasks.md`.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- The production app loaded successfully at `https://asset-reference-comics-studio.onyxzion.workers.dev/` and showed the protected Prompt Library sign-in gate.
+- The live ARCS sign-up flow accepted the agent email/password submission but returned to the sign-in form; a follow-up sign-in attempt returned `Invalid login credentials`.
+- A direct Supabase Auth probe using the app's public anon client confirmed the underlying state: sign-in failed, sign-up succeeded, a user id was returned, no session was issued, and one identity was present.
+- The absence of a session after successful sign-up means Supabase email confirmation is required before this account can be used for live Prompt Library CRUD.
+- No password was written to repository documentation.
+
+### Verification
+- Browser QA: live Prompt Library route shows `Sign in to continue` for production.
+- Direct Supabase Auth probe: `signUpOk: true`, `signUpUserIdPresent: true`, `signUpSessionPresent: false`, `signUpIdentitiesCount: 1`.
+- Direct Supabase Auth probe: `signInError: Invalid login credentials` before email confirmation.
+
+### Outstanding issues
+- Production authenticated Prompt Library CRUD/source-save/outbound handoff smoke is blocked until `codex.ai@onyxzhuzh.com` is confirmed from its email inbox or the user explicitly approves an admin-side confirmation path.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- Because no authenticated production session exists yet, this pass did not create, edit, favorite, delete, or hand off live Prompt Library records.
+- Manually confirming auth users through database/admin tooling should be treated as an operator-approved action, not an automatic workaround.
+
+### Operator follow-up
+- Open the confirmation email for `codex.ai@onyxzhuzh.com` and complete the confirmation link, then rerun production Prompt Library smoke.
+- If the inbox confirmation path is unavailable, explicitly approve an admin-side confirmation/reset approach before continuing.
+
+### Next steps
+- After email confirmation, sign in on the live Cloudflare app and run production Prompt Library CRUD plus one source-save and one outbound-use handoff smoke, then clean up the temporary prompt record.
+
+## Prompt Library Production Auth Follow-up - 2026-06-08
+
+### What changed
+- Confirmed that a temporary password was generated during the ARCS agent account sign-up attempt and was not written to repository documentation.
+- Retried production auth after the user reported that `codex.ai@onyxzhuzh.com` was email-confirmed.
+- Narrowed the remaining blocker from email confirmation to an unusable/unknown password or an auth-admin reset requirement.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- The in-app Browser could open the live production Prompt Library auth modal, but text entry into the auth fields failed because this Browser session reports `Browser Use virtual clipboard is not installed` for both `fill` and `type` paths.
+- A direct Supabase Auth sign-in probe using the same app anon client still returned `Invalid login credentials` after email confirmation was reported.
+- Supabase CLI is installed locally, but `supabase projects list -o json` reported `Access token not provided`, so CLI admin inspection/reset is not available in this session.
+- No service-role key or local admin auth helper was found in repo environment files.
+
+### Verification
+- Browser QA: production Prompt Library auth modal remains reachable on the live Cloudflare URL.
+- Direct Supabase Auth probe: sign-in for `codex.ai@onyxzhuzh.com` still returned `Invalid login credentials`.
+- `supabase projects list -o json` - BLOCKED: `Access token not provided`.
+- `rg -n "service_role|SUPABASE_SERVICE|SERVICE_ROLE|auth\\.admin|resetPassword|updateUser|inviteUser|createUser" .env* supabase src package.json` - no local service-role/admin helper found.
+
+### Outstanding issues
+- Production authenticated Prompt Library CRUD/source-save/outbound handoff smoke remains blocked until the ARCS agent account has a known working password or an authenticated admin path is approved and available.
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+
+### Risks or caveats
+- The temporary password generated during signup should be treated as disposable and rotated once access is established.
+- Because the Browser typing path is currently blocked by the missing virtual clipboard, a working password may still need to be verified through direct Supabase Auth or another browser surface if the in-app Browser cannot type.
+
+### Operator follow-up
+- Use the ARCS/Supabase password reset flow for `codex.ai@onyxzhuzh.com`, or provide the password set during confirmation if one was created.
+- Alternatively, re-authenticate the Supabase MCP/CLI and explicitly approve an admin-side reset/confirmation path.
+
+### Next steps
+- Once a working password exists, run production Prompt Library CRUD plus one source-save and one outbound-use handoff smoke, then clean up temporary prompt records.
+
+## Prompt Library Production Chrome Smoke Complete - 2026-06-08
+
+### What changed
+- Completed live production Prompt Library smoke on the deployed Cloudflare Worker using the user's real Chrome session.
+- Verified the ARCS agent session is active in production as `codex.ai@onyxzhuzh.com`.
+- Ran production Prompt Library CRUD, reload persistence, outbound handoff, source-save, and cleanup checks.
+- Updated `tasks.md` so production live smoke is marked complete instead of auth-blocked.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+
+### Implementation notes
+- Claimed the user's Chrome tab with title `ARCS Expanded` and URL `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Chrome landed in Writers' Workshop with the `CO` signed-in profile button, confirming the real browser session was authenticated.
+- The live Prompt Library initially showed `Database connected. Create your first prompt.` with `0` prompts for the agent account.
+- Created temporary prompt `QA Production Prompt 1780965189825`, saved it to Supabase, and observed `Prompt saved to Supabase.`
+- Reloaded the live app, reopened Prompt Library, and confirmed the prompt rehydrated from Supabase with `Database library synced.`
+- Edited the same prompt body and confirmed version history updated to `v2 Saved from editor` above `v1 Initial draft.`
+- Favorited the prompt and confirmed Favorites count moved to `1` with `Prompt favorited.`
+- Sent the prompt through outbound `Use in Imageshop`; Imageshop loaded the prompt and displayed `Loaded "QA Production Prompt 1780965189825" from Prompt Library.` with the edited marker in the prompt workspace.
+- From Imageshop, used `Save to Prompt Library`; the source-save editor opened with provenance `Imageshop · Imageshop item 1`, saved a second temporary source prompt, and displayed `Prompt saved to Supabase.`
+- Deleted the Imageshop source-save record and the original QA prompt. Final production Prompt Library reload showed `0` prompts, `0` favorites, `0` collections, and `0` entities, and the QA marker was absent.
+
+### Verification
+- Chrome production QA: signed-in session visible as `CO` / `codex.ai@onyxzhuzh.com`.
+- Chrome production QA: create/save showed `PROMPTS 1` and `Prompt saved to Supabase.`
+- Chrome production QA: reload persistence showed the saved prompt after reopening Prompt Library.
+- Chrome production QA: edit/versioning showed `v2 Saved from editor` and the edited marker.
+- Chrome production QA: favorite showed `FAVORITES 1` and `Prompt favorited.`
+- Chrome production QA: outbound `Use in Imageshop` loaded the prompt marker into Imageshop.
+- Chrome production QA: Imageshop source-save created a second Prompt Library record with source context `LAB`.
+- Chrome production QA: cleanup deleted both temporary records and final reload showed the account returned to empty Prompt Library state.
+
+### Outstanding issues
+- Human product review is still needed for whether Writer locks should block manual saves or only AI/destructive overwrites.
+- Standalone Prompt Library deletion still requires explicit user approval; ARCS production Prompt Library is now deployed and smoke-tested.
+
+### Risks or caveats
+- Chrome automation had to use direct DOM-node clicks for the left-nav Prompt Library item after reload because role-based clicks sometimes landed on Reference Vault in this browser session.
+- The edited QA prompt body duplicated the original sentence before the edit suffix during automation typing, but the edit/versioning behavior still proved persistence and `v2` creation.
+- The Imageshop source-save title also retained the original `Imageshop item 1` prefix before the QA suffix during automation typing, but the saved source record still proved source provenance and Prompt Library persistence.
+
+### Operator follow-up
+- Rotate or store the `codex.ai@onyxzhuzh.com` ARCS password according to the team's preferred credential practice.
+- Decide whether the standalone Prompt Library can be archived/deleted now that ARCS production deploy, CRUD, outbound handoff, source-save, and cleanup smoke have passed.
+
+### Next steps
+- Complete the remaining Writer lock product review, then decide whether to remove the standalone Prompt Library.
+
+## Prompt Library Archive Deletion and Writer Lock Decision - 2026-06-08
+
+### What changed
+- Recorded the product decision that Writer locks should block all saves, including manual saves, to prevent accidental overwrites.
+- Deleted the standalone Prompt Library archive folders now that ARCS production Prompt Library deploy, CRUD, persistence, outbound handoff, source-save, and cleanup smoke have passed.
+- Updated `tasks.md` so the Writer lock product decision and standalone archive deletion are no longer open follow-ups.
+
+### Files touched
+- `tasks.md`
+- `walkthrough.md`
+- `.agents/walkthrough.md`
+- Deleted outside this repo:
+  - `/Users/apoaaron/Documents/New project 3`
+  - `/Users/apoaaron/Documents/Prompt Library`
+
+### Implementation notes
+- The active ARCS Prompt Library remains in `src/portals/prompt-library/**`; only the standalone archive/project copies outside the ARCS workspace were removed.
+- The in-repo `archived/gpt-image-2-worker/` folder was not removed because it is unrelated to the standalone Prompt Library archive.
+- No Writer source files were changed in this pass because another agent is actively working on Writers Workshop.
+
+### Verification
+- Confirmed `/Users/apoaaron/Documents/New project 3` and `/Users/apoaaron/Documents/Prompt Library` no longer exist after deletion.
+- Confirmed `tasks.md` records the Writer lock decision and standalone Prompt Library archive deletion.
+- Confirmed this walkthrough entry was appended.
+
+### Outstanding issues
+- Writer implementation still needs to enforce the accepted product decision that locks block all saves; that work is left to the active Writers Workshop agent.
+
+### Risks or caveats
+- The standalone archive deletion is filesystem-only and outside this repo, so the removal itself is not represented in Git history for the ARCS workspace.
+- If the standalone Prompt Library needs to be recovered later, it will need to come from backup, Git remote/history, or other external source.
+
+### Operator follow-up
+- Tell the Writers Workshop agent that the accepted lock behavior is: locks block all saves, not only AI/destructive overwrites.
+
+### Next steps
+- Let the Writers Workshop agent implement and verify lock-blocks-all-saves behavior.
