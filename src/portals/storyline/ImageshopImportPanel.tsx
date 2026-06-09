@@ -45,6 +45,7 @@ type ImageshopProcessingSnapshot = {
 
 export function ImageshopImportPanel() {
   const [importObjectUrl, setImportObjectUrl] = useState<string | null>(null);
+  const [importOriginalDataUrl, setImportOriginalDataUrl] = useState<string | null>(null);
   const [importFileName, setImportFileName] = useState<string>('');
   const [importRetouch, setImportRetouch] = useState(true);
   const [importStylePreset, setImportStylePreset] = useState('');
@@ -155,6 +156,7 @@ export function ImageshopImportPanel() {
       setImportProcessedUrl(null);
       setImportProcessingSnapshot(null);
       setImportSeed(null);
+      setImportOriginalDataUrl(null);
       const file = files?.[0];
       if (!file) return;
       if (!file.type.startsWith('image/')) {
@@ -178,6 +180,15 @@ export function ImageshopImportPanel() {
         return URL.createObjectURL(file);
       });
       setImportFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') setImportOriginalDataUrl(reader.result);
+      };
+      reader.onerror = () => {
+        setImportOriginalDataUrl(null);
+        setImportError('Could not prepare this image for direct vault upload.');
+      };
+      reader.readAsDataURL(file);
     },
     []
   );
@@ -257,9 +268,20 @@ export function ImageshopImportPanel() {
     [vaultCollectionOptions]
   );
 
-  const handleSave = useCallback(async () => {
-    if (!importProcessedUrl) {
-      setImportSaveError('Process an image before saving.');
+  const handleSave = useCallback(async (source: 'processed' | 'original' = 'processed') => {
+    const imageUrl = source === 'original' ? importOriginalDataUrl : importProcessedUrl;
+    const seedForSave = source === 'original' ? null : importSeed;
+    const processingForSave =
+      source === 'original'
+        ? {
+            ...processingMeta,
+            directUpload: true,
+            sourceFileName: importFileName || undefined,
+          }
+        : processingForPersist;
+
+    if (!imageUrl) {
+      setImportSaveError(source === 'original' ? 'Choose an image before uploading.' : 'Process an image before saving.');
       return;
     }
     setImportSaveError(null);
@@ -268,10 +290,12 @@ export function ImageshopImportPanel() {
     try {
       if (importVaultTarget === 'npc') {
         const label = npcLabel.trim() || 'Imported ref';
-        saveGeneration('supporting_reference', importProcessedUrl, importSeed ?? undefined, {
+        saveGeneration('supporting_reference', imageUrl, seedForSave ?? undefined, {
           supportingLabel: label,
         });
-        setImportSaveNotice(`Saved to NPC Vault as "${label}".`);
+        setImportSaveNotice(
+          source === 'original' ? `Uploaded original to NPC Vault as "${label}".` : `Saved to NPC Vault as "${label}".`,
+        );
         return;
       }
 
@@ -290,12 +314,12 @@ export function ImageshopImportPanel() {
 
         if (supabaseReady) {
           const result = await saveImportedImageToCharacterVault({
-            imageUrl: importProcessedUrl,
+            imageUrl,
             baseName: baseNameForId,
             profileName: profileForInsert,
             castName: cast,
-            seed: importSeed,
-            processing: processingForPersist,
+            seed: seedForSave,
+            processing: processingForSave,
           });
           if (!result.ok) {
             setImportSaveError(result.error ?? 'Save failed');
@@ -307,20 +331,24 @@ export function ImageshopImportPanel() {
               image_url: result.imageUrl,
               profile_name: profileForInsert ?? null,
               cast_name: cast ?? null,
-              seed: importSeed,
+              seed: seedForSave,
             });
-            saveGeneration('character', result.imageUrl, importSeed ?? undefined, {
+            saveGeneration('character', result.imageUrl, seedForSave ?? undefined, {
               profileName: profileForInsert,
               castName: cast,
             });
           }
         } else {
-          saveGeneration('character', importProcessedUrl, importSeed ?? undefined, {
+          saveGeneration('character', imageUrl, seedForSave ?? undefined, {
             profileName: profileForInsert,
             castName: cast,
           });
         }
-        setImportSaveNotice(`Saved to Character Vault as "${profileNameForDb}".`);
+        setImportSaveNotice(
+          source === 'original'
+            ? `Uploaded original to Character Vault as "${profileNameForDb}".`
+            : `Saved to Character Vault as "${profileNameForDb}".`,
+        );
         return;
       }
 
@@ -339,12 +367,12 @@ export function ImageshopImportPanel() {
 
         if (supabaseReady) {
           const result = await saveImportedImageToAssetVault({
-            imageUrl: importProcessedUrl,
+            imageUrl,
             baseName: baseNameForId,
             collectionName: collectionInsert,
             assetName: asset,
-            seed: importSeed,
-            processing: processingForPersist,
+            seed: seedForSave,
+            processing: processingForSave,
           });
           if (!result.ok) {
             setImportSaveError(result.error ?? 'Save failed');
@@ -356,20 +384,24 @@ export function ImageshopImportPanel() {
               image_url: result.imageUrl,
               collection_name: collectionInsert ?? null,
               asset_name: asset ?? null,
-              seed: importSeed,
+              seed: seedForSave,
             });
-            saveGeneration('asset', result.imageUrl, importSeed ?? undefined, {
+            saveGeneration('asset', result.imageUrl, seedForSave ?? undefined, {
               collectionName: collectionInsert,
               assetName: asset,
             });
           }
         } else {
-          saveGeneration('asset', importProcessedUrl, importSeed ?? undefined, {
+          saveGeneration('asset', imageUrl, seedForSave ?? undefined, {
             collectionName: collectionInsert,
             assetName: asset,
           });
         }
-        setImportSaveNotice(`Saved to Asset Vault collection "${collectionForDb}".`);
+        setImportSaveNotice(
+          source === 'original'
+            ? `Uploaded original to Asset Vault collection "${collectionForDb}".`
+            : `Saved to Asset Vault collection "${collectionForDb}".`,
+        );
       }
     } finally {
       setImportSavePending(false);
@@ -380,11 +412,14 @@ export function ImageshopImportPanel() {
     collectionName,
     getMatchedCollection,
     getMatchedProfile,
+    importFileName,
+    importOriginalDataUrl,
     importProcessedUrl,
     importSeed,
     importVaultTarget,
     npcLabel,
     processingForPersist,
+    processingMeta,
     profileName,
     supabaseReady,
   ]);
@@ -625,6 +660,16 @@ export function ImageshopImportPanel() {
       {importSaveNotice ? <p className="mt-2 text-xs text-emerald-200/90">{importSaveNotice}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
+        <Tooltip content="Upload the chosen source image directly to the selected vault without running the image model" side="top">
+          <button
+            type="button"
+            disabled={importSavePending || !importOriginalDataUrl}
+            onClick={() => void handleSave('original')}
+            className="px-3 py-2 rounded-full text-xs border border-emerald-300/45 text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-50"
+          >
+            {importSavePending ? 'Saving…' : 'Upload original'}
+          </button>
+        </Tooltip>
         <Tooltip content="Send source image to the model with your options" side="top">
           <button
             type="button"
@@ -643,7 +688,7 @@ export function ImageshopImportPanel() {
           <button
             type="button"
             disabled={importSavePending || !importProcessedUrl}
-            onClick={() => void handleSave()}
+            onClick={() => void handleSave('processed')}
             className="px-3 py-2 rounded-full text-xs border border-amber-400/40 text-amber-100 hover:bg-amber-500/15 disabled:opacity-50"
           >
             {importSavePending ? 'Saving…' : 'Save to vault'}

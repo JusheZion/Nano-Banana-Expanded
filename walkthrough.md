@@ -9597,3 +9597,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Live `index.html` initially served the old `/assets/index-BRZgzHeH.js` bundle, then updated at poll attempt 8 to `/assets/index-B7XZBLbN.js`, matching the merged local production build.
 - The deployed `/assets/WriterPortal-P4xjwUW7.js` bundle was reachable from production and contained the new `Visual Canon`, `Focused`, and `All Tools` strings.
 - The in-app browser opened the deployed site but was signed out on the production origin and displayed the protected-workspace sign-in gate.
+
+## Writers Workshop And Imageshop QoL Pass - 2026-06-09
+
+### What changed
+- Writers Workshop now stores the last selected series, issue, page, and workspace tab in `localStorage` under `writerPortalLastWorkspace`.
+- Writers Workshop no longer silently falls back to the first series, issue, or page when there is no valid saved selection.
+- Replaced the top Series / Issue / Page native selects with type-to-search combobox menus.
+- Visual Canon now filters Character Vault references by profile and Asset Vault references by collection before image selection.
+- Visual Canon image selection is now multi-select, with `Select visible` and `Clear` controls, so multiple cast/asset references can be attached to an issue in one save.
+- Imageshop import now reads the chosen file as a durable data URL and exposes `Upload original`, allowing direct vault upload without first running the generative `Process` step.
+- Added an exploration backlog note for issue-alignment metadata in Character/Asset Vaults so one image can be tagged to multiple Writer books/issues later.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The Writer last-workspace restore validates saved IDs against loaded rows. If a saved series/issue/page no longer exists, the UI stays unselected instead of jumping to the first record.
+- The searchable Writer menus are local React controls inside `WriterPortal.tsx` and do not change database contracts.
+- Visual Canon continues to persist references in `writer_issues.notes.writer_visual_references`; no Supabase migration was added.
+- Direct Imageshop original upload reuses the existing Character/Asset/NPC vault save paths and tags processing metadata with `directUpload: true`.
+- Issue-alignment for vault images was intentionally not implemented because it likely needs either metadata contract expansion or schema/UI work across Character Vault, Asset Vault, and Writer Visual Canon.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/storyline/__tests__/GenericImageLabPanel.productionStudio.test.tsx` - PASS, 4 files / 38 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- Browser smoke at `http://127.0.0.1:5174/` - PASS: Writers Workshop loads with no auto-selected first series, Series / Issue / Page are searchable comboboxes, and Visual Canon remains visible.
+- Browser smoke at `http://127.0.0.1:5174/` - PASS: Imageshop Import tab exposes `Upload original`, `Process`, and `Save to vault`.
+
+### Outstanding issues
+- Issue-alignment in the vaults remains an exploration item.
+
+### Risks or caveats
+- Direct original upload depends on the browser successfully reading the selected file as a data URL before upload.
+- Visual Canon multi-select was smoke-tested for UI presence and covered by existing visual-reference persistence tests, but no live vault attachment was performed in this quick pass.
+
+### Operator follow-up
+- Try Visual Canon with a real Character Vault profile containing multiple cast images and confirm the grouping language feels right.
+- Decide whether issue-alignment should live in vault item metadata, a join table, or a Writer-owned notes bridge before implementation.
+
+### Next steps
+- Commit, push, and deploy this QoL pass after review.

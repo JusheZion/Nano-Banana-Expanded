@@ -597,6 +597,205 @@ type PacingRegenerationPreviewPage = {
   proposed_script_text?: string;
 };
 
+const WRITER_LAST_WORKSPACE_KEY = 'writerPortalLastWorkspace';
+
+type WriterLastWorkspace = {
+  seriesId: string | null;
+  issueId: string | null;
+  pageId: string | null;
+  tabId: WriterWorkspaceTabId;
+};
+
+type WriterMenuOption = {
+  id: string;
+  label: string;
+  meta?: string;
+};
+
+function readWriterLastWorkspace(): WriterLastWorkspace {
+  const fallback: WriterLastWorkspace = {
+    seriesId: null,
+    issueId: null,
+    pageId: null,
+    tabId: 'dashboard',
+  };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(WRITER_LAST_WORKSPACE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<WriterLastWorkspace>;
+    const tabId =
+      parsed.tabId && WRITER_WORKSPACE_TAB_ORDER.includes(parsed.tabId) ? parsed.tabId : fallback.tabId;
+    return {
+      seriesId: typeof parsed.seriesId === 'string' ? parsed.seriesId : null,
+      issueId: typeof parsed.issueId === 'string' ? parsed.issueId : null,
+      pageId: typeof parsed.pageId === 'string' ? parsed.pageId : null,
+      tabId,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function WriterSearchableMenu({
+  label,
+  value,
+  onChange,
+  options,
+  disabled = false,
+  placeholder,
+  ariaLabel,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (next: string | null) => void;
+  options: WriterMenuOption[];
+  disabled?: boolean;
+  placeholder: string;
+  ariaLabel: string;
+}) {
+  const selected = options.find((option) => option.id === value) ?? null;
+  const [query, setQuery] = useState(selected?.label ?? '');
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setQuery(selected?.label ?? '');
+  }, [selected?.label]);
+
+  useEffect(
+    () => () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    },
+    [],
+  );
+
+  const filteredOptions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle || selected?.label === query) return options.slice(0, 80);
+    return options
+      .filter((option) => `${option.label} ${option.meta ?? ''}`.toLowerCase().includes(needle))
+      .slice(0, 80);
+  }, [options, query, selected?.label]);
+
+  const pick = useCallback(
+    (option: WriterMenuOption | null) => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+      onChange(option?.id ?? null);
+      setQuery(option?.label ?? '');
+      setOpen(false);
+      setActiveIndex(-1);
+    },
+    [onChange],
+  );
+
+  return (
+    <label className="relative flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
+      {label}
+      <input
+        type="text"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-expanded={open && !disabled}
+        disabled={disabled}
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+          setActiveIndex(-1);
+          if (!event.target.value.trim()) onChange(null);
+        }}
+        onFocus={() => {
+          if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          blurTimerRef.current = setTimeout(() => {
+            setOpen(false);
+            setActiveIndex(-1);
+            setQuery(selected?.label ?? '');
+          }, 160);
+        }}
+        onKeyDown={(event) => {
+          if (disabled) return;
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setOpen(false);
+            setActiveIndex(-1);
+            setQuery(selected?.label ?? '');
+            return;
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) =>
+              filteredOptions.length === 0 ? -1 : (index + 1) % filteredOptions.length,
+            );
+            return;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) =>
+              filteredOptions.length === 0 ? -1 : index <= 0 ? filteredOptions.length - 1 : index - 1,
+            );
+            return;
+          }
+          if (event.key === 'Enter' && open && activeIndex >= 0 && activeIndex < filteredOptions.length) {
+            event.preventDefault();
+            pick(filteredOptions[activeIndex]!);
+          }
+        }}
+        placeholder={placeholder}
+        className="min-w-0 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black placeholder:text-black/35 disabled:opacity-45"
+      />
+      {open && !disabled ? (
+        <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-black/15 bg-white py-1 text-left shadow-xl">
+          {value ? (
+            <button
+              type="button"
+              className="flex w-full px-2.5 py-1.5 text-left text-[11px] font-bold normal-case tracking-normal text-black/55 hover:bg-black/5"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                pick(null);
+              }}
+            >
+              Clear selection
+            </button>
+          ) : null}
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option, index) => (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={option.id === value}
+                className={`flex w-full flex-col px-2.5 py-1.5 text-left normal-case tracking-normal hover:bg-amber-50 ${
+                  index === activeIndex ? 'bg-amber-100' : ''
+                }`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  pick(option);
+                }}
+              >
+                <span className="truncate text-xs font-black text-black">{option.label}</span>
+                {option.meta ? (
+                  <span className="truncate text-[10px] font-semibold text-black/45">{option.meta}</span>
+                ) : null}
+              </button>
+            ))
+          ) : (
+            <p className="px-2.5 py-2 text-[11px] font-semibold normal-case tracking-normal text-black/45">
+              No matches.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </label>
+  );
+}
+
 function getWriterCharacterReferenceLabel(item: VaultCharacterItem, album: VaultCharacterAlbum): string {
   return item.cast_name?.trim() || item.name?.trim() || item.profile_name?.trim() || album.profileName;
 }
@@ -607,12 +806,22 @@ function getWriterAssetReferenceLabel(item: VaultAssetItem, album: VaultAssetAlb
 
 export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
   const { isPhone } = useResponsiveLayout();
+  const initialWriterWorkspaceRef = useRef<WriterLastWorkspace>(readWriterLastWorkspace());
   const [seriesList, setSeriesList] = useState<WriterSeriesRow[]>([]);
   const [issues, setIssues] = useState<WriterIssueRow[]>([]);
   const [pages, setPages] = useState<WriterPageRow[]>([]);
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<WriterWorkspaceTabId>('dashboard');
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(
+    initialWriterWorkspaceRef.current.seriesId,
+  );
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(
+    initialWriterWorkspaceRef.current.issueId,
+  );
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(
+    initialWriterWorkspaceRef.current.pageId,
+  );
+  const [activeTab, setActiveTab] = useState<WriterWorkspaceTabId>(
+    initialWriterWorkspaceRef.current.tabId,
+  );
   const [activeRibbonMenu, setActiveRibbonMenu] = useState<WriterRibbonMenuId>('home');
   const [dockTab, setDockTab] = useState<WriterDockTabId>('library');
   const [dockCollapsed, setDockCollapsed] = useState(true);
@@ -628,6 +837,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   useEffect(() => {
     window.localStorage.setItem('writerPortalViewMode', writerFocusedMode ? 'focused' : 'all-tools');
   }, [writerFocusedMode]);
+  useEffect(() => {
+    window.localStorage.setItem(
+      WRITER_LAST_WORKSPACE_KEY,
+      JSON.stringify({
+        seriesId: selectedSeriesId,
+        issueId: selectedIssueId,
+        pageId: selectedPageId,
+        tabId: activeTab,
+      } satisfies WriterLastWorkspace),
+    );
+  }, [activeTab, selectedIssueId, selectedPageId, selectedSeriesId]);
   const [helpCategory, setHelpCategory] = useState<WriterHelpCategoryId | null>(null);
   const { user: authUser, ready: authReady, openSignInModal } = useAuth();
   const [aiAuthBannerDismissed, setAiAuthBannerDismissed] = useState(false);
@@ -641,7 +861,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [outlineGenLoading, setOutlineGenLoading] = useState(false);
   const [outlineGenError, setOutlineGenError] = useState<string | null>(null);
   const [outlineDeleteBusy, setOutlineDeleteBusy] = useState(false);
-  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
@@ -724,7 +943,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [writerVisualReferenceSource, setWriterVisualReferenceSource] = useState<'character_vault' | 'asset_vault'>(
     'character_vault',
   );
-  const [writerVisualReferenceId, setWriterVisualReferenceId] = useState('');
+  const [writerVisualReferenceProfile, setWriterVisualReferenceProfile] = useState('');
+  const [writerVisualReferenceCollection, setWriterVisualReferenceCollection] = useState('');
+  const [writerVisualReferenceIds, setWriterVisualReferenceIds] = useState<string[]>([]);
   const [writerVisualReferenceKind, setWriterVisualReferenceKind] = useState<WriterVisualReferenceKind>('character');
   const [writerVisualReferenceNote, setWriterVisualReferenceNote] = useState('');
   const [authorOutlineText, setAuthorOutlineText] = useState('');
@@ -786,7 +1007,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setPages(pageRows);
     setSelectedPageId((prev) => {
       if (prev && pageRows.some((p) => p.id === prev)) return prev;
-      return pageRows[0]?.id ?? null;
+      return null;
     });
   }, [selectedIssueId]);
 
@@ -879,9 +1100,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
       const rows = await listWriterSeries();
       setSeriesList(rows);
-      const nextSeriesId = rows[0]?.id ?? null;
       setSelectedSeriesId((current) =>
-        current && current !== series.id && rows.some((row) => row.id === current) ? current : nextSeriesId,
+        current && current !== series.id && rows.some((row) => row.id === current) ? current : null,
       );
       if (selectedSeriesId === series.id) {
         setIssues([]);
@@ -1014,7 +1234,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setSeriesList(rows);
       setSelectedSeriesId((prev) => {
         if (prev && rows.some((r) => r.id === prev)) return prev;
-        return rows[0]?.id ?? null;
+        return null;
       });
     })();
     return () => {
@@ -1070,7 +1290,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const rows = await listWriterIssues(selectedSeriesId);
       setIssues(rows);
       setSelectedIssueId((current) =>
-        current && current !== issue.id && rows.some((row) => row.id === current) ? current : rows[0]?.id ?? null,
+        current && current !== issue.id && rows.some((row) => row.id === current) ? current : null,
       );
       if (selectedIssueId === issue.id) {
         setPages([]);
@@ -1092,7 +1312,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const rows = await listWriterIssues(selectedSeriesId);
       if (cancelled) return;
       setIssues(rows);
-      setSelectedIssueId((prev) => (prev && rows.some((row) => row.id === prev) ? prev : rows[0]?.id ?? null));
+      setSelectedIssueId((prev) => (prev && rows.some((row) => row.id === prev) ? prev : null));
     })();
     return () => {
       cancelled = true;
@@ -1120,7 +1340,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setShotPlans(planRows);
       setSelectedPageId((prev) => {
         if (prev && pageRows.some((p) => p.id === prev)) return prev;
-        return pageRows[0]?.id ?? null;
+        return null;
       });
     })();
     return () => {
@@ -1458,7 +1678,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   useEffect(() => {
     if (!selectedIssueId) {
       setWriterVisualReferenceAlbums({ characters: [], assets: [] });
-      setWriterVisualReferenceId('');
+      setWriterVisualReferenceIds([]);
+      setWriterVisualReferenceProfile('');
+      setWriterVisualReferenceCollection('');
       setWriterVisualReferencesError(null);
       return;
     }
@@ -1484,8 +1706,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   useEffect(() => {
     setWriterVisualReferenceKind(writerVisualReferenceSource === 'character_vault' ? 'character' : 'prop');
-    setWriterVisualReferenceId('');
+    setWriterVisualReferenceIds([]);
   }, [writerVisualReferenceSource]);
+
+  useEffect(() => {
+    setWriterVisualReferenceIds([]);
+  }, [writerVisualReferenceProfile, writerVisualReferenceCollection]);
 
   useEffect(() => {
     const s = seriesList.find((x) => x.id === selectedSeriesId);
@@ -1529,6 +1755,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ),
     [writerVisualReferenceAlbums.assets],
   );
+  const writerVisualReferenceProfileOptions = useMemo(
+    () => [...new Set(writerVisualReferenceAlbums.characters.map((album) => album.profileName))].sort(),
+    [writerVisualReferenceAlbums.characters],
+  );
+  const writerVisualReferenceCollectionOptions = useMemo(
+    () => [...new Set(writerVisualReferenceAlbums.assets.map((album) => album.collectionName))].sort(),
+    [writerVisualReferenceAlbums.assets],
+  );
+  const visibleWriterCharacterReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceProfile
+        ? writerCharacterReferenceOptions.filter(
+            (option) => option.album.profileName === writerVisualReferenceProfile,
+          )
+        : writerCharacterReferenceOptions,
+    [writerCharacterReferenceOptions, writerVisualReferenceProfile],
+  );
+  const visibleWriterAssetReferenceOptions = useMemo(
+    () =>
+      writerVisualReferenceCollection
+        ? writerAssetReferenceOptions.filter(
+            (option) => option.album.collectionName === writerVisualReferenceCollection,
+          )
+        : writerAssetReferenceOptions,
+    [writerAssetReferenceOptions, writerVisualReferenceCollection],
+  );
   const toolCache = readWriterToolCache(selectedIssue?.notes);
   const pacingSaved = toolCache?.pacing_review as { at?: string; result?: unknown } | undefined;
   const canonSaved = toolCache?.canon_check as { at?: string; result?: unknown } | undefined;
@@ -1565,16 +1817,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!selectedIssue) return;
     setWriterVisualReferencesError(null);
     const source = writerVisualReferenceSource;
-    const selected =
+    const selectedOptions =
       source === 'character_vault'
-        ? writerCharacterReferenceOptions.find((option) => option.id === writerVisualReferenceId)
-        : writerAssetReferenceOptions.find((option) => option.id === writerVisualReferenceId);
-    if (!selected) {
-      setWriterVisualReferencesError('Choose a vault image to attach.');
+        ? writerCharacterReferenceOptions.filter((option) => writerVisualReferenceIds.includes(option.id))
+        : writerAssetReferenceOptions.filter((option) => writerVisualReferenceIds.includes(option.id));
+    if (selectedOptions.length === 0) {
+      setWriterVisualReferencesError('Choose one or more vault images to attach.');
       return;
     }
 
-    const ref: Omit<WriterVisualReference, 'id' | 'linkedAt'> = {
+    const refs: Omit<WriterVisualReference, 'id' | 'linkedAt'>[] = selectedOptions.map((selected) => ({
       source,
       sourceId: selected.id,
       sourceLabel:
@@ -1588,15 +1840,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           ? (selected as { item: VaultCharacterItem }).item.image_url
           : (selected as { item: VaultAssetItem }).item.image_url,
       note: writerVisualReferenceNote.trim() || undefined,
-    };
-    let nextNotes = mergeWriterVisualReferenceIntoNotes(selectedIssue.notes, ref);
-    const nextSynopsisParts = mergeVisualReferencesIntoSynopsisParts(synopsisHelperParts, [
-      {
+    }));
+    let nextNotes = refs.reduce(
+      (notes, ref) => mergeWriterVisualReferenceIntoNotes(notes, ref),
+      selectedIssue.notes,
+    );
+    const linkedAt = new Date().toISOString();
+    const nextSynopsisParts = mergeVisualReferencesIntoSynopsisParts(
+      synopsisHelperParts,
+      refs.map((ref) => ({
         ...ref,
         id: `${ref.source}:${ref.sourceId}`,
-        linkedAt: new Date().toISOString(),
-      },
-    ]);
+        linkedAt,
+      })),
+    );
     nextNotes = mergeSynopsisHelperIntoNotes(nextNotes, nextSynopsisParts);
 
     setWriterVisualReferencesBusy(true);
@@ -1607,13 +1864,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     setSynopsisHelperParts(nextSynopsisParts);
+    setWriterVisualReferenceIds([]);
     setWriterVisualReferenceNote('');
-    pushHistory(`attached visual reference “${ref.label}”`);
+    pushHistory(`attached ${refs.length} visual reference${refs.length === 1 ? '' : 's'}`);
   }, [
     selectedIssue,
     writerVisualReferenceSource,
     writerCharacterReferenceOptions,
-    writerVisualReferenceId,
+    writerVisualReferenceIds,
     writerAssetReferenceOptions,
     writerVisualReferenceKind,
     writerVisualReferenceNote,
@@ -4769,29 +5027,45 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     </div>
   );
 
+  const seriesMenuOptions: WriterMenuOption[] = seriesList.map((series) => ({
+    id: series.id,
+    label: series.title || 'Untitled series',
+    meta: series.logline || undefined,
+  }));
+  const issueMenuOptions: WriterMenuOption[] = issues.map((issue) => ({
+    id: issue.id,
+    label: `#${issue.issue_number}${issue.title ? ` - ${issue.title}` : ''}`,
+    meta: issue.synopsis || undefined,
+  }));
+  const pageMenuOptions: WriterMenuOption[] = sortedPages.map((page) => ({
+    id: page.id,
+    label: `Page ${page.page_number}`,
+    meta: page.script_text?.trim()
+      ? 'Dialogue saved'
+      : page.beats_json
+        ? 'Beats saved'
+        : 'No saved beats',
+  }));
+
   const writerSelectionStrip = (
     <div className="flex-shrink-0 border-b border-black/10 bg-white/55 px-3 py-2 backdrop-blur-md">
       <div className="grid gap-2 lg:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_minmax(120px,0.65fr)_auto] lg:items-end">
-        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
-          Series
-          <div className="flex gap-1.5">
-            <select
-              value={selectedSeriesId ?? ''}
-              onChange={(event) => {
-                setSelectedSeriesId(event.target.value || null);
+        <div className="flex min-w-0 gap-1.5">
+          <div className="min-w-0 flex-1">
+            <WriterSearchableMenu
+              label="Series"
+              value={selectedSeriesId}
+              onChange={(next) => {
+                setSelectedSeriesId(next);
                 setSelectedIssueId(null);
+                setSelectedPageId(null);
               }}
+              options={seriesMenuOptions}
               disabled={!supabaseOk || seriesList.length === 0}
-              className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
-              aria-label="Select Writer series"
-            >
-              <option value="">Select series</option>
-              {seriesList.map((series) => (
-                <option key={series.id} value={series.id}>
-                  {series.title || 'Untitled series'}
-                </option>
-              ))}
-            </select>
+              placeholder="Type to search series..."
+              ariaLabel="Select Writer series"
+            />
+          </div>
             <Tooltip content="Add a new series" side="bottom">
               <button
                 type="button"
@@ -4803,26 +5077,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 +
               </button>
             </Tooltip>
-          </div>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
-          Issue
-          <div className="flex gap-1.5">
-            <select
-              value={selectedIssueId ?? ''}
-              onChange={(event) => setSelectedIssueId(event.target.value || null)}
+        </div>
+        <div className="flex min-w-0 gap-1.5">
+          <div className="min-w-0 flex-1">
+            <WriterSearchableMenu
+              label="Issue"
+              value={selectedIssueId}
+              onChange={(next) => {
+                setSelectedIssueId(next);
+                setSelectedPageId(null);
+              }}
+              options={issueMenuOptions}
               disabled={!supabaseOk || !selectedSeriesId || issues.length === 0}
-              className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
-              aria-label="Select Writer issue"
-            >
-              <option value="">Select issue</option>
-              {issues.map((issue) => (
-                <option key={issue.id} value={issue.id}>
-                  #{issue.issue_number}
-                  {issue.title ? ` - ${issue.title}` : ''}
-                </option>
-              ))}
-            </select>
+              placeholder="Type to search issues..."
+              ariaLabel="Select Writer issue"
+            />
+          </div>
             <Tooltip content="Add an issue to the selected series" side="bottom">
               <button
                 type="button"
@@ -4834,25 +5104,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 +
               </button>
             </Tooltip>
-          </div>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
-          Page
-          <select
-            value={selectedPageId ?? ''}
-            onChange={(event) => setSelectedPageId(event.target.value || null)}
-            disabled={!selectedIssueId || sortedPages.length === 0}
-            className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black disabled:opacity-45"
-            aria-label="Select Writer page"
-          >
-            <option value="">No page</option>
-            {sortedPages.map((page) => (
-              <option key={page.id} value={page.id}>
-                Page {page.page_number}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
+        <WriterSearchableMenu
+          label="Page"
+          value={selectedPageId}
+          onChange={setSelectedPageId}
+          options={pageMenuOptions}
+          disabled={!selectedIssueId || sortedPages.length === 0}
+          placeholder="Type to search pages..."
+          ariaLabel="Select Writer page"
+        />
         <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
           <Tooltip content={quickGenerateNextHint} side="bottom">
             <button
@@ -4887,6 +5148,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }),
     { character: 0, location: 0, prop: 0 } as Record<WriterVisualReferenceKind, number>,
   );
+  const writerVisualProfileMenuOptions: WriterMenuOption[] = writerVisualReferenceProfileOptions.map((profile) => ({
+    id: profile,
+    label: profile,
+  }));
+  const writerVisualCollectionMenuOptions: WriterMenuOption[] = writerVisualReferenceCollectionOptions.map(
+    (collection) => ({
+      id: collection,
+      label: collection,
+    }),
+  );
+  const writerVisualReferenceRows =
+    writerVisualReferenceSource === 'character_vault'
+      ? visibleWriterCharacterReferenceOptions.map((option) => ({
+          id: option.id,
+          label: option.label,
+          meta: option.album.profileName,
+          imageUrl: option.item.image_url,
+        }))
+      : visibleWriterAssetReferenceOptions.map((option) => ({
+          id: option.id,
+          label: option.label,
+          meta: option.album.collectionName,
+          imageUrl: option.item.image_url,
+        }));
 
   const visualCanonControls = (
     <div className="border-l-2 border-amber-800/35 bg-amber-50/55 px-3 py-3 space-y-3">
@@ -4938,7 +5223,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ))}
       </div>
 
-      <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr]">
+      <div className="grid gap-2 md:grid-cols-[0.8fr_1fr_0.75fr]">
         <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
           Vault
           <select
@@ -4953,28 +5238,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <option value="asset_vault">Asset Vault</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-          Image
-          <select
-            value={writerVisualReferenceId}
-            onChange={(e) => setWriterVisualReferenceId(e.target.value)}
+        {writerVisualReferenceSource === 'character_vault' ? (
+          <WriterSearchableMenu
+            label="Profile"
+            value={writerVisualReferenceProfile || null}
+            onChange={(next) => setWriterVisualReferenceProfile(next ?? '')}
+            options={writerVisualProfileMenuOptions}
             disabled={!selectedIssueId || writerVisualReferencesBusy}
-            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-          >
-            <option value="">Choose a saved image...</option>
-            {writerVisualReferenceSource === 'character_vault'
-              ? writerCharacterReferenceOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label} / {option.album.profileName}
-                  </option>
-                ))
-              : writerAssetReferenceOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label} / {option.album.collectionName}
-                  </option>
-                ))}
-          </select>
-        </label>
+            placeholder="Type to search profiles..."
+            ariaLabel="Filter visual canon by character profile"
+          />
+        ) : (
+          <WriterSearchableMenu
+            label="Collection"
+            value={writerVisualReferenceCollection || null}
+            onChange={(next) => setWriterVisualReferenceCollection(next ?? '')}
+            options={writerVisualCollectionMenuOptions}
+            disabled={!selectedIssueId || writerVisualReferencesBusy}
+            placeholder="Type to search collections..."
+            ariaLabel="Filter visual canon by asset collection"
+          />
+        )}
         <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
           Role
           <select
@@ -4996,6 +5280,85 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         </label>
       </div>
 
+      <div className="rounded-lg border border-black/10 bg-white/50 p-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+              {writerVisualReferenceSource === 'character_vault' ? 'Cast images' : 'Asset images'}
+            </p>
+            <p className="text-[11px] leading-snug text-black/55">
+              Tick one or more saved images to attach them to this issue.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={writerVisualReferenceRows.length === 0 || writerVisualReferencesBusy}
+              onClick={() => setWriterVisualReferenceIds(writerVisualReferenceRows.map((row) => row.id))}
+              className="rounded border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-45"
+            >
+              Select visible
+            </button>
+            <button
+              type="button"
+              disabled={writerVisualReferenceIds.length === 0 || writerVisualReferencesBusy}
+              onClick={() => setWriterVisualReferenceIds([])}
+              className="rounded border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-45"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        {writerVisualReferenceRows.length > 0 ? (
+          <div className="grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+            {writerVisualReferenceRows.map((row) => {
+              const selected = writerVisualReferenceIds.includes(row.id);
+              return (
+                <label
+                  key={row.id}
+                  className={`flex cursor-pointer gap-2 rounded-lg border p-2 transition ${
+                    selected
+                      ? 'border-amber-800/45 bg-amber-100/80'
+                      : 'border-black/10 bg-white/70 hover:bg-white'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    disabled={writerVisualReferencesBusy}
+                    onChange={(event) =>
+                      setWriterVisualReferenceIds((prev) =>
+                        event.target.checked
+                          ? [...new Set([...prev, row.id])]
+                          : prev.filter((id) => id !== row.id),
+                      )
+                    }
+                    className="mt-1"
+                  />
+                  <span className="h-14 w-11 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10">
+                    <img src={row.imageUrl} alt="" className="h-full w-full object-cover" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11px] font-black text-black">{row.label}</span>
+                    <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-black/45">
+                      {row.meta}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="rounded-md bg-white/70 px-2 py-2 text-[11px] font-semibold text-black/50">
+            {writerVisualReferencesLoading
+              ? 'Loading vault images...'
+              : writerVisualReferenceSource === 'character_vault'
+                ? 'No character images match this profile.'
+                : 'No asset images match this collection.'}
+          </p>
+        )}
+      </div>
+
       <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
         Note
         <input
@@ -5011,11 +5374,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={!selectedIssueId || !writerVisualReferenceId || writerVisualReferencesBusy}
+          disabled={!selectedIssueId || writerVisualReferenceIds.length === 0 || writerVisualReferencesBusy}
           onClick={() => void attachWriterVisualReference()}
           className="rounded-lg border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-200 disabled:opacity-45"
         >
-          {writerVisualReferencesBusy ? 'Saving...' : 'Attach to issue'}
+          {writerVisualReferencesBusy
+            ? 'Saving...'
+            : `Attach ${writerVisualReferenceIds.length || ''} to issue`}
         </button>
         <button
           type="button"

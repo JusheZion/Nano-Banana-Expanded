@@ -110,11 +110,14 @@ User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-
 - [x] Complete full tests, build, lint, diff check, and local browser QA.
 - [x] Merge `codex/writer-focused-ux-reset` into `main`, resolve the Writer workspace/docs conflicts, push `main` to GitHub, and confirm local merged-main smoke before deployment verification.
 - [x] Confirm Cloudflare production Worker deployed the merged build: live `index.html` now references `index-B7XZBLbN.js`, and the deployed Writer bundle contains Focused / All Tools and Visual Canon strings.
+- [x] QoL follow-up: persist last Writer series/issue/page/workspace, replace top Writer selectors with type-to-search menus, split Visual Canon selection by profile/collection, add multi-select attachment, and add Imageshop `Upload original` for one-click vault import without model processing.
+- [ ] Explore issue-alignment metadata in Character/Asset Vaults so the same image can be tagged to multiple Writer issues/books and surfaced automatically in Visual Canon.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
 - [x] **Prompt helper:** [`imageshopImportPrompt.ts`](src/portals/storyline/imageshopImportPrompt.ts) — `buildImageshopImportPrompt` (retouch / optional `ART_STYLE_LIBRARY` / notes); [`imageshopImportPrompt.test.ts`](src/portals/storyline/__tests__/imageshopImportPrompt.test.ts)
 - [x] **UI:** [`ImageshopImportPanel.tsx`](src/portals/storyline/ImageshopImportPanel.tsx) embedded in [`GenericImageLabPanel.tsx`](src/portals/storyline/GenericImageLabPanel.tsx) — file pick (size cap), Process via `generateImage` (import as ref slot 0), before/after preview, vault target NPC / Character / Asset + save
+- [x] **QoL:** Imageshop import now supports `Upload original` to save the picked source image directly to the selected vault without running `Process` first.
 - [x] **Persistence:** [`saveImportedImageToCharacterVault`](src/shared/api/arcsPersistence.ts) / [`saveImportedImageToAssetVault`](src/shared/api/arcsPersistence.ts) with `metadata_tags.source` **`imageshop_import`**; NPC via [`saveGeneration`](src/shared/utils/generationOutputRouter.ts)(`supporting_reference`); local fallback when Supabase unavailable; recent cache via [`addRecentFromCharacter`](src/shared/utils/recentGenerations.ts) / [`addRecentFromAsset`](src/shared/utils/recentGenerations.ts) on successful DB save
 - [x] **Verify:** `npm run test -- --run`, `npm run build`; update `walkthrough.md`
 
