@@ -9777,3 +9777,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for deployment; optional signed-in live smoke remains.
+
+## Writer Visual Canon Signed Image Fix - 2026-06-10
+
+### What changed
+- Fixed Writers' Workshop Visual Canon thumbnails so Character Vault / Asset Vault images render through the shared signed-storage image path instead of raw private bucket URLs.
+- Fixed the `writer-tools` page-beats image ingestion path so issue visual references are signed before the Edge Function fetches them for Gemini inline image parts.
+- Preserved the existing text digest behavior as a fallback, but private `arcs-generations` images now have a proper path to load as actual multimodal image inputs.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `supabase/functions/writer-tools/index.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Visual Canon now uses `VaultImageWithFallback` for selectable vault rows, attached-reference cards, and the Dashboard visual-canon strip.
+- `writer-tools` now detects `/storage/v1/object/public|sign/arcs-generations/...` URLs, creates a fresh signed URL with the caller-scoped Supabase client, and retries legacy flat object paths with the authenticated user folder prefix.
+- If signing still fails, the function falls back to the stored URL and records the image as skipped if fetch fails, so page-beat generation can continue with the digest instead of hard-failing.
+- Checked the Supabase changelog for relevant recent Storage signed URL breaking changes; none were found in the recent changelog slice reviewed.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts` - PASS, 3 files / 8 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- Browser QA at `http://localhost:5174/` - PASS: Visual Canon reference images resolve to signed Supabase Storage URLs, first visible thumbnails have nonzero natural dimensions, and broken visible visual-reference image count is 0.
+
+### Outstanding issues
+- `writer-tools` still needs to be deployed for the Edge Function image-signing fix to affect production AI calls.
+
+### Risks or caveats
+- Browser QA confirmed thumbnail signing/loading on the local signed-in page. It did not generate a new page-beats response because that would consume AI and mutate issue page data.
+- Visual references beyond the current scroll viewport may remain lazy-loaded until scrolled into view; this is expected.
+
+### Operator follow-up
+- After deployment, run one signed-in page-beats generation with attached visual references and confirm the prompt status reports loaded visual reference images rather than skipped images.
+
+### Next steps
+- Commit, push, deploy the app bundle, and deploy `writer-tools`.

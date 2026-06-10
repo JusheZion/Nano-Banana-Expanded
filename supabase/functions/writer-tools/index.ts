@@ -754,6 +754,7 @@ const PAGE_BEATS_PROMPT_CAPS = {
 const WRITER_VISUAL_REFERENCES_NOTES_KEY = 'writer_visual_references';
 const WRITER_VISUAL_REFERENCE_IMAGE_LIMIT = 6;
 const WRITER_VISUAL_REFERENCE_MAX_BYTES = 4_000_000;
+const ARCS_GENERATIONS_BUCKET = 'arcs-generations';
 
 type GeminiContentPart =
   | { text: string }
@@ -839,7 +840,51 @@ function base64FromArrayBuffer(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function extractArcsGenerationsObjectPath(imageUrl: string): string | null {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  const trimmed = imageUrl.trim();
+  const match = trimmed.match(/\/storage\/v1\/object\/(?:public|sign)\/arcs-generations\/([^?#]+)/i);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function isFreshSignedArcsUrl(url: string): boolean {
+  return /\/object\/sign\/arcs-generations\//.test(url) && url.includes('token=');
+}
+
+function isObjectNotFoundStorageError(err: { message?: string } | null | undefined): boolean {
+  const message = (err?.message ?? '').toLowerCase();
+  return message.includes('not found') || message.includes('does not exist');
+}
+
+async function createSignedVisualReferenceUrl(
+  supabase: SupabaseAdmin,
+  imageUrl: string,
+): Promise<string> {
+  if (!imageUrl || isFreshSignedArcsUrl(imageUrl)) return imageUrl;
+  const path = extractArcsGenerationsObjectPath(imageUrl);
+  if (!path) return imageUrl;
+
+  const first = await supabase.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(path, 3600);
+  if (first.data?.signedUrl && !first.error) return first.data.signedUrl;
+
+  if (!isObjectNotFoundStorageError(first.error) || path.includes('/')) return imageUrl;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return imageUrl;
+
+  const nested = `${uid}/${path}`;
+  const second = await supabase.storage.from(ARCS_GENERATIONS_BUCKET).createSignedUrl(nested, 3600);
+  if (second.data?.signedUrl && !second.error) return second.data.signedUrl;
+  return imageUrl;
+}
+
 async function fetchVisualReferenceImageParts(
+  supabase: SupabaseAdmin,
   refs: WriterVisualReference[],
 ): Promise<{ parts: GeminiContentPart[]; loaded: string[]; skipped: string[] }> {
   const parts: GeminiContentPart[] = [];
@@ -848,7 +893,8 @@ async function fetchVisualReferenceImageParts(
 
   for (const ref of refs.slice(0, WRITER_VISUAL_REFERENCE_IMAGE_LIMIT)) {
     try {
-      const res = await fetch(ref.imageUrl);
+      const imageUrl = await createSignedVisualReferenceUrl(supabase, ref.imageUrl);
+      const res = await fetch(imageUrl);
       if (!res.ok) {
         skipped.push(`${ref.label} (${res.status})`);
         continue;
@@ -919,7 +965,7 @@ async function executeSinglePageBeats(
   const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
   const visualReferences = readIssueVisualReferences(issueRow.notes);
   const visualReferenceDigest = buildIssueVisualReferenceDigest(visualReferences);
-  const visualReferenceImages = await fetchVisualReferenceImageParts(visualReferences);
+  const visualReferenceImages = await fetchVisualReferenceImageParts(supabase, visualReferences);
   const userPrompt = buildPageBeatsUserPrompt({
     page,
     issue: issueRow,

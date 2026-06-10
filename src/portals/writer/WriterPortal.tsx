@@ -51,6 +51,7 @@ import { invokeWriterTools } from '@/shared/api/writerTools';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { uploadImageFileToArcsGenerations } from '@/shared/api/arcsPersistence';
 import { useAuth } from '@/shared/context/AuthContext';
+import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import { shotPlanJsonToCsv } from '@/portals/writer/shotPlanCsv';
 import { WriterShotStoryboardStrip } from '@/portals/writer/WriterShotStoryboardStrip';
 import { WriterContextMenu } from '@/portals/writer/WriterContextMenu';
@@ -5348,9 +5349,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     }
                     className="mt-1"
                   />
-                  <span className="h-14 w-11 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10">
-                    <img src={row.imageUrl} alt="" className="h-full w-full object-cover" />
-                  </span>
+                  <VaultImageWithFallback
+                    src={row.imageUrl}
+                    alt={`${row.label} visual reference`}
+                    frameClassName="h-14 w-11 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10"
+                    imgClassName="h-full w-full object-cover"
+                  />
                   <span className="min-w-0">
                     <span className="block truncate text-[11px] font-black text-black">{row.label}</span>
                     <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-black/45">
@@ -5419,13 +5423,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 key={ref.id}
                 className="flex gap-2 rounded-lg border border-black/10 bg-white/65 p-2"
               >
-                <div className="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10">
-                  <img
-                    src={ref.imageUrl}
-                    alt={ref.label}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+                <VaultImageWithFallback
+                  src={ref.imageUrl}
+                  alt={ref.label}
+                  frameClassName="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10"
+                  imgClassName="h-full w-full object-cover"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -5912,7 +5915,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           {writerVisualReferences.slice(0, 5).map((ref) => (
                             <div key={ref.id} className="w-16 shrink-0">
                               <div className="h-16 overflow-hidden rounded-md border border-black/10 bg-black/10">
-                                <img src={ref.imageUrl} alt={ref.label} className="h-full w-full object-cover" />
+                                <VaultImageWithFallback
+                                  src={ref.imageUrl}
+                                  alt={ref.label}
+                                  frameClassName="h-full w-full"
+                                  imgClassName="h-full w-full object-cover"
+                                />
                               </div>
                               <p className="mt-1 truncate text-[9px] font-bold text-black/55">{ref.label}</p>
                             </div>
