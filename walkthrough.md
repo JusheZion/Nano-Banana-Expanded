@@ -9760,6 +9760,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run lint` - PASS with 0 errors and 67 existing warnings.
 - `git diff --check` - PASS.
 - `git push origin main` - PASS, pushed the keyboard shortcut QA commit to `main`.
+- `npm run deploy` - PARTIAL: local build passed, but Wrangler upload was blocked because the terminal does not have `CLOUDFLARE_API_TOKEN`.
+- Live Cloudflare verification - PASS: production `https://asset-reference-comics-studio.onyxzion.workers.dev/` loaded in the in-app browser and serves the current build entry bundle `/assets/index-Cdgey5K5.js`.
 
 ### Outstanding issues
 - The browser tool could not type into the Character Studio custom tag input because its text-entry path reported a missing virtual clipboard, so that specific Return-to-save behavior is verified by source review and build rather than browser text entry.
@@ -9767,9 +9769,11 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Risks or caveats
 - This pass focused on common keyboard expectations and custom controls discovered by source/DOM audit. It did not add a full automated keyboard regression suite for every portal screen.
 - Advanced Comic already has global copy/cut/paste/delete/undo handlers in `ComicLayout.tsx`; no Advanced Comic changes were needed.
+- Direct local Wrangler deployment remains unavailable in this terminal without `CLOUDFLARE_API_TOKEN`; this production update landed through the connected Cloudflare build after `main` was pushed.
+- Production protected-workspace spot checks require signing in on the live origin; the unsigned live browser session reached the sign-in gate.
 
 ### Operator follow-up
-- After deployment, spot-check Prompt Library prompt editing, Character DNA Lock, Asset Architectural Lock, and Guided Comic layout panel selection on the live site.
+- Sign in on the live site and spot-check Prompt Library prompt editing, Character DNA Lock, Asset Architectural Lock, and Guided Comic layout panel selection.
 
 ### Next steps
-- Deploy when ready.
+- None for deployment; optional signed-in live smoke remains.
