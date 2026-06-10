@@ -406,8 +406,14 @@ export const AssetStudioLivePromptPanel: React.FC<Props> = ({
           <div
             role="button"
             tabIndex={0}
+            aria-label="Toggle architectural lock"
+            aria-pressed={store.architecturalLock}
             onClick={() => store.setArchitecturalLock(!store.architecturalLock)}
-            onKeyDown={(e) => e.key === 'Enter' && store.setArchitecturalLock(!store.architecturalLock)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              store.setArchitecturalLock(!store.architecturalLock);
+            }}
             className="w-9 h-4 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
             style={store.architecturalLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
           >

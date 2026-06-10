@@ -9365,6 +9365,12 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                                       setActivePageNumber(page.pageNumber);
                                       setSelectedPanelId(panelId);
                                     }}
+                                    onKeyDown={(event) => {
+                                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                                      event.preventDefault();
+                                      setActivePageNumber(page.pageNumber);
+                                      setSelectedPanelId(panelId);
+                                    }}
                                     onPointerDown={(event) => {
                                       if (layoutDisclosureMode === 'edit' && shouldStartGuidedPanelMoveDrag(event.target)) {
                                         startLayoutPanelEdit(event, page.pageNumber, panel, 'move');

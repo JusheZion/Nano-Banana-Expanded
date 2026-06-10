@@ -212,6 +212,11 @@ function SectionAddToLibrary({
         type="text"
         value={input}
         onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          handleSave();
+        }}
         placeholder="Add custom..."
         className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
       />
@@ -1915,8 +1920,14 @@ export const CharacterStudio: React.FC = () => {
                 <div
                   role="button"
                   tabIndex={0}
+                  aria-label="Toggle DNA lock"
+                  aria-pressed={store.dnaLock}
                   onClick={() => store.setDnaLock(!store.dnaLock)}
-                  onKeyDown={(e) => e.key === 'Enter' && store.setDnaLock(!store.dnaLock)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    store.setDnaLock(!store.dnaLock);
+                  }}
                   className="w-9 h-4 rounded-full p-0.5 transition-colors duration-300 bg-white/10"
                   style={store.dnaLock ? { background: ACCENT_GOLD_GRADIENT } : undefined}
                 >

@@ -9727,3 +9727,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this pass.
+
+## Cross-Portal Keyboard Shortcut QA - 2026-06-10
+
+### What changed
+- Audited the main portal keyboard surfaces for Return/Enter activation and common copy/paste behavior: Hub navigation, Writers' Workshop, Character Studio, Asset Studio, Reference Vault, Prompt Library, Illustrator's Imageshop, Comic Creator, Advanced Comic Creator, and Wiki ARC Portal.
+- Fixed Prompt Library's prompt editor so Return in single-line fields saves the prompt when the required prompt body is present.
+- Fixed Character Studio's custom tag field so Return saves the entered tag instead of doing nothing.
+- Fixed Character Studio's DNA Lock and Asset Studio's Architectural Lock custom switches so both Space and Return toggle them, with `aria-pressed` exposed for assistive tech and QA.
+- Fixed a Guided Comic layout panel selector so Space and Return select the panel the same way a click does.
+
+### Files touched
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/asset-studio/AssetStudioLivePromptPanel.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- Existing native buttons, tabs, selects, inputs, and textareas were left alone so browser-default Ctrl/Cmd+C, Ctrl/Cmd+V, and Return behavior remains intact.
+- Existing shortcut handlers were confirmed in source for Writer workspace shortcuts, Character/Asset Ctrl/Cmd+Enter generation, Imageshop beat generation, Guided Comic paste targets, and Advanced Comic copy/cut/paste/delete/undo handling.
+- Prompt Library now uses a real form submit plus an explicit form-level Enter handler for single-line inputs; textareas still keep normal newline behavior.
+- Custom switch-like controls now expose `aria-label` and `aria-pressed` and support both Space and Return, matching expected keyboard control behavior.
+
+### Verification
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Prompt Library opens from the sidebar and Return in the Title field saves/closes the prompt editor when prompt text is present.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Character Studio DNA Lock toggles false -> true with Space and true -> false with Return.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: Asset Studio Architectural Lock toggles false -> true with Space and true -> false with Return.
+- Browser/source QA - PASS: Hub cards and sidebar portal navigation use native buttons; Writer, Imageshop, Guided Comic, Advanced Comic, Reference Vault, and Wiki portal shortcut surfaces retain their existing native or explicit handlers.
+- `npm run test -- --run src/portals/guided-comic/__tests__/guidedComicPageNavigator.test.ts src/modes/comic/components/__tests__/MenuBar.test.tsx src/portals/prompt-library/lib/promptUtils.test.ts` - PASS, 3 files / 16 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+- `git push origin main` - PASS, pushed the keyboard shortcut QA commit to `main`.
+
+### Outstanding issues
+- The browser tool could not type into the Character Studio custom tag input because its text-entry path reported a missing virtual clipboard, so that specific Return-to-save behavior is verified by source review and build rather than browser text entry.
+
+### Risks or caveats
+- This pass focused on common keyboard expectations and custom controls discovered by source/DOM audit. It did not add a full automated keyboard regression suite for every portal screen.
+- Advanced Comic already has global copy/cut/paste/delete/undo handlers in `ComicLayout.tsx`; no Advanced Comic changes were needed.
+
+### Operator follow-up
+- After deployment, spot-check Prompt Library prompt editing, Character DNA Lock, Asset Architectural Lock, and Guided Comic layout panel selection on the live site.
+
+### Next steps
+- Deploy when ready.

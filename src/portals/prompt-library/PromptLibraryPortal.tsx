@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import {
   Archive,
   Boxes,
@@ -445,9 +446,26 @@ function PromptEditor({
     setLocalDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function saveDraft() {
+    if (!localDraft.promptText.trim()) return;
+    onSave(localDraft);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    saveDraft();
+  }
+
+  function handleEditorKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    const target = event.target as HTMLElement;
+    if (event.key !== 'Enter' || target.tagName !== 'INPUT') return;
+    event.preventDefault();
+    saveDraft();
+  }
+
   return (
     <div className="prompt-library-modal" role="dialog" aria-modal="true" aria-label="Prompt editor">
-      <div className="prompt-library-editor">
+      <form className="prompt-library-editor" onSubmit={handleSubmit} onKeyDown={handleEditorKeyDown}>
         <header>
           <div>
             <p>{localDraft.sourceLabel || 'Manual prompt'}</p>
@@ -512,11 +530,11 @@ function PromptEditor({
           <button type="button" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" onClick={() => onSave(localDraft)} disabled={!localDraft.promptText.trim()}>
+          <button type="submit" disabled={!localDraft.promptText.trim()}>
             Save to Library
           </button>
         </footer>
-      </div>
+      </form>
     </div>
   );
 }
