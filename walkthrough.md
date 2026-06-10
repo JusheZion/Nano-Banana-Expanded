@@ -9804,9 +9804,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Browser QA at `http://localhost:5174/` - PASS: Visual Canon reference images resolve to signed Supabase Storage URLs, first visible thumbnails have nonzero natural dimensions, and broken visible visual-reference image count is 0.
 - `git push origin main` - PASS, pushed `d29b01e fix: sign Writer visual canon images`.
 - `supabase functions deploy writer-tools --project-ref vxclogwiytxjolisnakd --use-api --no-verify-jwt` - PASS.
+- Live Cloudflare verification - PASS: production `https://asset-reference-comics-studio.onyxzion.workers.dev/` now serves `/assets/index-Clt3iIH_.js`, matching the current build that includes the Visual Canon signed-image UI fix.
 
 ### Outstanding issues
-- Production Cloudflare app bundle verification is still pending after the push.
+- None for this pass.
 
 ### Risks or caveats
 - Browser QA confirmed thumbnail signing/loading on the local signed-in page. It did not generate a new page-beats response because that would consume AI and mutate issue page data.
@@ -9816,4 +9817,4 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - After Cloudflare finishes deploying the pushed app bundle, run one signed-in page-beats generation with attached visual references and confirm the prompt status reports loaded visual reference images rather than skipped images.
 
 ### Next steps
-- Verify the Cloudflare app bundle once the connected build catches up.
+- Optional signed-in live smoke: generate one page-beats pass with attached visual references and confirm the prompt status reports loaded visual reference images.
