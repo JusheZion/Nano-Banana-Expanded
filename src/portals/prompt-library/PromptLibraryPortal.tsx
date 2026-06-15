@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { FormEvent, KeyboardEvent } from 'react';
+import type { FormEvent, KeyboardEvent, MouseEvent } from 'react';
 import {
   Archive,
   ArrowDown,
@@ -97,6 +97,7 @@ export function PromptLibraryPortal() {
   const [filters, setFilters] = useState<LibraryFilters>(defaultFilters);
   const [editorDraft, setEditorDraft] = useState<PromptDraft | null>(null);
   const [combineSelectionIds, setCombineSelectionIds] = useState<string[]>([]);
+  const [lastCombineIndex, setLastCombineIndex] = useState<number | null>(null);
   const [status, setStatus] = useState('Prompt Library ready. Sign in to persist ARCS prompt intelligence.');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -174,15 +175,59 @@ export function PromptLibraryPortal() {
     }
   }
 
-  function toggleCombineSelection(prompt: PromptRecord, checked: boolean) {
-    setCombineSelectionIds((current) => {
-      if (!checked) return current.filter((id) => id !== prompt.id);
-      if (current.includes(prompt.id) || current.length >= 3) return current;
-      return [...current, prompt.id];
-    });
-    if (checked && combineSelectionIds.length >= 3 && !combineSelectionIds.includes(prompt.id)) {
-      setStatus('Combine prompt limit reached. Remove one source before adding another.');
+  function toggleCombineSelection(prompt: PromptRecord, promptIndex: number, checked?: boolean) {
+    const isSelected = combineSelectionIds.includes(prompt.id);
+    const shouldSelect = checked ?? !isSelected;
+    setSelectedId(prompt.id);
+    setLastCombineIndex(promptIndex);
+
+    if (!shouldSelect) {
+      setCombineSelectionIds((current) => current.filter((id) => id !== prompt.id));
+      return;
     }
+
+    if (isSelected) return;
+    if (combineSelectionIds.length >= 3) {
+      setStatus('Combine prompt limit reached. Remove one source before adding another.');
+      return;
+    }
+    setCombineSelectionIds((current) => [...current, prompt.id]);
+  }
+
+  function selectCombineRange(promptIndex: number) {
+    const anchorIndex = lastCombineIndex ?? promptIndex;
+    const start = Math.min(anchorIndex, promptIndex);
+    const end = Math.max(anchorIndex, promptIndex);
+    const rangeIds = visiblePrompts.slice(start, end + 1).map((prompt) => prompt.id);
+    const limitedIds = rangeIds.slice(0, 3);
+    setCombineSelectionIds(limitedIds);
+    setSelectedId(visiblePrompts[promptIndex]?.id ?? selectedId);
+    setLastCombineIndex(promptIndex);
+    if (rangeIds.length > 3) {
+      setStatus('Combine supports up to 3 prompts. Selected the first 3 prompts in that range.');
+    }
+  }
+
+  function handlePromptRowClick(prompt: PromptRecord, promptIndex: number, event: MouseEvent<HTMLButtonElement>) {
+    if (event.shiftKey) {
+      selectCombineRange(promptIndex);
+      return;
+    }
+    if (event.metaKey || event.ctrlKey) {
+      toggleCombineSelection(prompt, promptIndex);
+      return;
+    }
+    setSelectedId(prompt.id);
+  }
+
+  function handlePromptRowKeyDown(prompt: PromptRecord, promptIndex: number, event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== ' ') return;
+    event.preventDefault();
+    if (event.shiftKey) {
+      selectCombineRange(promptIndex);
+      return;
+    }
+    toggleCombineSelection(prompt, promptIndex);
   }
 
   function moveCombineSelection(promptId: string, direction: -1 | 1) {
@@ -371,7 +416,7 @@ export function PromptLibraryPortal() {
           />
 
           <div className="prompt-library-list" aria-label="Prompt list">
-            {visiblePrompts.map((prompt) => {
+            {visiblePrompts.map((prompt, index) => {
               const isSelectedForCombine = combineSelectionIds.includes(prompt.id);
               const combineDisabled = !isSelectedForCombine && combineSelectionIds.length >= 3;
               return (
@@ -385,12 +430,20 @@ export function PromptLibraryPortal() {
                       type="checkbox"
                       checked={isSelectedForCombine}
                       disabled={combineDisabled}
-                      onChange={(event) => toggleCombineSelection(prompt, event.target.checked)}
+                      onChange={(event) => toggleCombineSelection(prompt, index, event.target.checked)}
                       aria-label={`Select ${prompt.title} for combine`}
                     />
-                    {isSelectedForCombine ? <Check size={14} /> : <Combine size={14} />}
+                    <span className="prompt-library-combine-check-box" aria-hidden>
+                      {isSelectedForCombine ? <Check size={14} /> : null}
+                    </span>
+                    <span className="prompt-library-combine-check-text">{isSelectedForCombine ? 'Selected' : 'Select'}</span>
                   </label>
-                  <button type="button" className="prompt-library-row-main" onClick={() => setSelectedId(prompt.id)}>
+                  <button
+                    type="button"
+                    className="prompt-library-row-main"
+                    onClick={(event) => handlePromptRowClick(prompt, index, event)}
+                    onKeyDown={(event) => handlePromptRowKeyDown(prompt, index, event)}
+                  >
                     <strong>{prompt.title}</strong>
                     <small>{prompt.sourceLabel || categoryMeta[prompt.category].label}</small>
                   </button>

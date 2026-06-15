@@ -9918,3 +9918,52 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Optional future polish: add a small title-edit field in the combine tray before saving if operators want to rename combined prompts inline instead of editing afterward.
+
+## Prompt Library Combine Selection Affordance Polish - 2026-06-15
+
+### What changed
+- Replaced the ambiguous icon-only combine checkbox with a visible `Select` / `Selected` row control so users can tell how to choose source prompts.
+- Added shortcut multi-select support from prompt rows:
+  - `Cmd`/`Ctrl` + click toggles a row into or out of the combine selection.
+  - `Shift` + click range-selects visible prompts, capped at the existing 3-prompt combine limit.
+  - Space toggles combine selection for the focused row, and `Shift` + Space range-selects from the last combine anchor.
+- Kept normal row click behavior for browsing/previewing a prompt without unexpectedly adding it to a combined prompt.
+- Tightened row CSS so the category stripe no longer leaks onto nested row labels.
+- Added component coverage for shortcut multi-select and shift range selection.
+
+### Files touched
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.test.tsx`
+- `src/portals/prompt-library/promptLibrary.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The Prompt Library list now has a text-labeled combine control on every prompt row, backed by the existing semantic checkbox and accessible label.
+- The row title button remains the preview/browse target; modifier-click and keyboard selection are additive shortcuts rather than replacing normal navigation.
+- Range selection uses the current filtered/visible prompt order and caps the range to three prompts to match the combine workflow contract.
+- Local rendered QA intentionally did not click `Save combined prompt` in a signed-in browser session, to avoid creating a real database prompt record.
+
+### Verification
+- `npm run test -- src/portals/prompt-library/PromptLibraryPortal.test.tsx src/portals/prompt-library/lib/promptUtils.test.ts` - PASS, 2 files / 14 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `npm run test` - PASS, 82 files / 441 tests.
+- `git diff --check` - PASS.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: opened Prompt Library, confirmed row controls expose literal `Select` labels, selected one prompt through the visible checkbox, selected a second prompt with `Cmd`/`Ctrl` row click, confirmed `2/3 selected`, confirmed `Save combined prompt` enabled, cleared selection, used Space plus Shift-click to select a 3-prompt range, confirmed `3/3 selected`, and confirmed no browser console errors.
+- Screenshot evidence - PASS: captured a rendered Prompt Library state with three combined prompts selected and the combine stack visible.
+- `npm run deploy` - PASS; deployed Worker `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev` with version `38e4d453-2cc2-4881-abe6-30ac4df8f8b9`.
+- Live reachability at `https://asset-reference-comics-studio.onyxzion.workers.dev` - PASS: ARCS hub loaded with title `ARCS Expanded`.
+- Live Prompt Library feature smoke - BLOCKED by the live sign-in gate because no dedicated ARCS QA account credentials were available in this session.
+
+### Outstanding issues
+- Signed-in live Prompt Library combine verification remains blocked until an ARCS AI-agent/QA account is available.
+
+### Risks or caveats
+- The feature now supports keyboard/mouse multi-select shortcuts, but the visible `Select` control remains the primary discoverable path.
+- The shortcut behavior is scoped to prompt rows and does not create global keyboard shortcuts.
+
+### Operator follow-up
+- Optional: create a dedicated ARCS QA account for future signed-in live smoke checks.
+
+### Next steps
+- None for this selection-affordance polish.

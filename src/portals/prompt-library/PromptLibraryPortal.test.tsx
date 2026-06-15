@@ -53,4 +53,24 @@ describe('PromptLibraryPortal', () => {
     expect(screen.getByText(/## Source 1: Kron base profile/)).toBeTruthy();
     expect(screen.getByText(/## Source 2: Kron temple reveal/)).toBeTruthy();
   });
+
+  it('supports shortcut multi-select from prompt rows', () => {
+    render(<PromptLibraryPortal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Kron base profile/ }), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: /Kron temple reveal/ }), { metaKey: true });
+
+    expect(screen.getByText('2/3 selected')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Save combined prompt' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('supports shift range selection from prompt rows', () => {
+    render(<PromptLibraryPortal />);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /Kron base profile/ }), { key: ' ' });
+    fireEvent.click(screen.getByRole('button', { name: /Ceremonial armor/ }), { shiftKey: true });
+
+    expect(screen.getByText('3/3 selected')).toBeTruthy();
+    expect(screen.getByText('Combined: Kron base profile + Kron temple reveal + 1 more')).toBeTruthy();
+  });
 });
