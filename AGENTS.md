@@ -436,4 +436,18 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ## Child DOX Index
 
-This project is not yet indexed. Before continuing you must scan the project, build the DOX tree and replace this message with the actual index. Go deep and scan files recursively to properly evaluate complexity and create nested DOX files where needed.
+- No nested `AGENTS.md` files currently exist; this root file owns the active contract for the whole repository.
+- `.agents/` contains project standards, handoff workflows, historical task files, and design/UX reference material. Read relevant workflow files before handoff or process-heavy work.
+- `.codex/`, `.cursor/`, `.superpowers/`, `.vscode/`, and `.worktrees/` contain local agent/editor/worktree support files. Preserve unless a task explicitly targets tooling.
+- `archived/` contains retired or reference implementation material.
+- `docs/` contains product guides, implementation plans, audits, and exported intake documents.
+- `exports/` contains generated/exported prompt-vault artifacts.
+- `patches/` contains dependency patch-package patches.
+- `public/` contains static web assets, wiki output, and the web manifest.
+- `reference/` contains visual/source reference material and Obsidian vault imports.
+- `scripts/` contains local utility scripts.
+- `src/` contains the React/Vite application. Major subareas include shared app shell/components, portal implementations, stores, content, styles, and utilities.
+- `src/portals/` owns top-level portal UIs, including Prompt Library, Writer, Imageshop/Storyline, Guided Comic, Asset Studio, and supporting tests.
+- `supabase/` contains Supabase config, Edge Functions, and migrations. For Supabase work, verify MCP/tool/auth exposure and migration scope before editing.
+- `worker/` and `wrangler.jsonc` contain Cloudflare Worker/deploy configuration. For deploy work, verify Cloudflare auth/tooling before publishing.
+- Root files (`package.json`, Vite/TypeScript/Tailwind/ESLint configs, `walkthrough.md`, `tasks.md`, and implementation plans) own app-wide build, verification, and continuity records.

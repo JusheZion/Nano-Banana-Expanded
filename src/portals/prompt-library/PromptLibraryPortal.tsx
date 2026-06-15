@@ -4,6 +4,7 @@ import {
   Archive,
   Boxes,
   Copy,
+  CopyPlus,
   Database,
   Download,
   Edit3,
@@ -59,6 +60,27 @@ function getErrorMessage(error: unknown, fallback: string) {
     if (typeof message === 'string' && message.trim()) return message;
   }
   return fallback;
+}
+
+async function writeTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      const copied = document.execCommand('copy');
+      if (!copied) throw new Error('Fallback clipboard copy failed.');
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  }
 }
 
 export function PromptLibraryPortal() {
@@ -165,8 +187,12 @@ export function PromptLibraryPortal() {
   }
 
   async function handleCopy(prompt: PromptRecord) {
-    await navigator.clipboard.writeText(prompt.promptText);
-    setStatus('Prompt copied.');
+    try {
+      await writeTextToClipboard(prompt.promptText);
+      setStatus('Prompt copied.');
+    } catch (error) {
+      setStatus(getErrorMessage(error, 'Copy failed. Check browser clipboard permissions.'));
+    }
   }
 
   function handleExport() {
@@ -317,8 +343,11 @@ export function PromptLibraryPortal() {
                   <button type="button" onClick={() => setEditorDraft(draftFromPrompt(selectedPrompt))} aria-label="Edit prompt">
                     <Edit3 size={16} />
                   </button>
-                  <button type="button" onClick={() => setEditorDraft(duplicatePrompt(selectedPrompt))} aria-label="Duplicate prompt">
+                  <button type="button" onClick={() => void handleCopy(selectedPrompt)} aria-label="Copy prompt to clipboard">
                     <Copy size={16} />
+                  </button>
+                  <button type="button" onClick={() => setEditorDraft(duplicatePrompt(selectedPrompt))} aria-label="Duplicate prompt">
+                    <CopyPlus size={16} />
                   </button>
                   <button type="button" onClick={() => void handleDelete(selectedPrompt)} aria-label="Delete prompt">
                     <Trash2 size={16} />

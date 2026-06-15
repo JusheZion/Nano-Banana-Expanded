@@ -9818,3 +9818,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Optional signed-in live smoke: generate one page-beats pass with attached visual references and confirm the prompt status reports loaded visual reference images.
+
+## Prompt Library Copy Button Fix - 2026-06-15
+
+### What changed
+- Fixed the Prompt Library detail-header copy action so the copy-looking icon copies the selected prompt text to the clipboard instead of opening an edit/duplicate prompt screen.
+- Kept duplicate prompt creation available as a separate header action with a distinct `CopyPlus` icon and `Duplicate prompt` accessible name.
+- Added a clipboard fallback path that uses a temporary textarea plus `document.execCommand('copy')` when `navigator.clipboard.writeText` is denied by the browser.
+- Added a Prompt Library regression test covering the header copy action and the clipboard-permission fallback path.
+- Replaced the placeholder root DOX Child Index in `AGENTS.md` with the scanned top-level repository map required by the project contract.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- Root cause: the top-right detail-header icon used the `Copy` glyph but was wired to `setEditorDraft(duplicatePrompt(selectedPrompt))`, so it looked like a clipboard-copy action while actually launching an editable duplicate draft.
+- The fix makes the `Copy` glyph perform clipboard copy consistently with the lower text `Copy` button, while the duplicate action remains nearby but visually distinct.
+- Operational preflight: GitHub CLI is authenticated for `JusheZion`; Wrangler CLI is authenticated for the Cloudflare account and deployed successfully; Cloudflare MCP tools are exposed and callable in this session; the Browser plugin is exposed through the current Browser/Node bridge path, while the older hard-coded project Browser Use path is stale in this plugin cache.
+- Local server used for browser QA: `npm run dev -- --host 127.0.0.1` from the repository root; Vite selected `http://127.0.0.1:5174/` because the default port was not used.
+
+### Verification
+- Regression-first check: `npm run test -- src/portals/prompt-library/PromptLibraryPortal.test.tsx` - FAIL before the component fix because no `Copy prompt to clipboard` header action existed.
+- `npm run test -- src/portals/prompt-library/PromptLibraryPortal.test.tsx src/portals/prompt-library/lib/promptUtils.test.ts src/portals/prompt-library/lib/promptRepository.test.ts` - PASS, 3 files / 10 tests.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: opened Prompt Library, clicked `Copy prompt to clipboard`, confirmed `Prompt copied.`, confirmed no `Prompt editor` dialog opened, and confirmed browser clipboard text length was nonzero.
+- `git diff --check` - PASS.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `npm run test` - PASS, 82 files / 436 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run deploy` - PASS; deployed Worker `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev` with version `41b4a1cd-de77-4370-a5a4-8645cf39f465`.
+- Live smoke at `https://asset-reference-comics-studio.onyxzion.workers.dev` - BLOCKED for signed-in Prompt Library verification by the live sign-in gate; no dedicated ARCS AI-agent/QA account credentials were available in this session.
+
+### Outstanding issues
+- Signed-in live Prompt Library copy verification remains blocked until an ARCS QA account is available for agents.
+
+### Risks or caveats
+- The local browser smoke used the active in-app browser session and did not require creating or changing a Prompt Library record.
+- `document.execCommand('copy')` is deprecated but remains an appropriate fallback for browser permission denial; the primary path still uses `navigator.clipboard.writeText`.
+- The DOX update was limited to replacing the required placeholder Child Index with a concise repo map; no nested `AGENTS.md` files were created because this narrow fix did not establish a new durable local contract.
+
+### Operator follow-up
+- Optional but recommended: create a dedicated ARCS AI-agent/QA user so future signed-in live smoke checks do not depend on personal/admin sessions.
+
+### Next steps
+- None for the copy-button bug fix.
