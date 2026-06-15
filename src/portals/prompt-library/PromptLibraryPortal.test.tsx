@@ -73,4 +73,16 @@ describe('PromptLibraryPortal', () => {
     expect(screen.getByText('3/3 selected')).toBeTruthy();
     expect(screen.getByText('Combined: Kron base profile + Kron temple reveal + 1 more')).toBeTruthy();
   });
+
+  it('keeps combine controls out of the prompt list column', () => {
+    const { container } = render(<PromptLibraryPortal />);
+
+    const promptList = container.querySelector('.prompt-library-list');
+    const rightPanel = container.querySelector('.prompt-library-right');
+
+    expect(promptList?.querySelector('.prompt-library-combine-tray')).toBeNull();
+    expect(rightPanel?.querySelector('.prompt-library-combine-tray')).toBeTruthy();
+    expect(container.querySelector('.prompt-library-combine-check-text')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Select Kron base profile for combine' })).toBeTruthy();
+  });
 });

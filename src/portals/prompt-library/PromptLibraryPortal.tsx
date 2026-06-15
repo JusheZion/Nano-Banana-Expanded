@@ -405,16 +405,6 @@ export function PromptLibraryPortal() {
             </div>
           </div>
 
-          <CombineTray
-            selectedPrompts={combineSelection}
-            draft={combineDraft}
-            isBusy={isBusy}
-            onClear={() => setCombineSelectionIds([])}
-            onMove={moveCombineSelection}
-            onRemove={(promptId) => setCombineSelectionIds((current) => current.filter((id) => id !== promptId))}
-            onSave={() => void handleSaveCombinedPrompt()}
-          />
-
           <div className="prompt-library-list" aria-label="Prompt list">
             {visiblePrompts.map((prompt, index) => {
               const isSelectedForCombine = combineSelectionIds.includes(prompt.id);
@@ -436,7 +426,6 @@ export function PromptLibraryPortal() {
                     <span className="prompt-library-combine-check-box" aria-hidden>
                       {isSelectedForCombine ? <Check size={14} /> : null}
                     </span>
-                    <span className="prompt-library-combine-check-text">{isSelectedForCombine ? 'Selected' : 'Select'}</span>
                   </label>
                   <button
                     type="button"
@@ -519,6 +508,15 @@ export function PromptLibraryPortal() {
             <Database size={16} />
             <span>{isBusy ? 'Syncing…' : status}</span>
           </div>
+          <CombineTray
+            selectedPrompts={combineSelection}
+            draft={combineDraft}
+            isBusy={isBusy}
+            onClear={() => setCombineSelectionIds([])}
+            onMove={moveCombineSelection}
+            onRemove={(promptId) => setCombineSelectionIds((current) => current.filter((id) => id !== promptId))}
+            onSave={() => void handleSaveCombinedPrompt()}
+          />
           <ProvenancePanel prompt={selectedPrompt} />
           <VersionsPanel prompt={selectedPrompt} />
         </aside>

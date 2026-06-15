@@ -9533,6 +9533,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run build` - PASS with existing large chunk warnings.
 - `npm run lint` - PASS with 0 errors and 67 existing warnings.
 - `git diff --check` - PASS.
+- `npm run deploy` - PASS; deployed Worker `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev` with version `65a3f629-f016-4239-b402-cc57ad880bcc`.
+- Live reachability smoke - PASS: `curl -I -L --max-time 20 https://asset-reference-comics-studio.onyxzion.workers.dev/` returned HTTP 200.
 - Browser QA at `http://127.0.0.1:5174/` - PASS: Writers Workshop opens to the Dashboard in Focused mode; Series / Issue / Page selectors are visible without the dock; Visual Canon is reachable from Dashboard and the Focused rail; All Tools restores the ribbon and production map; Focused hides them again; series switching worked and was restored.
 
 ### Outstanding issues
@@ -9967,3 +9969,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this selection-affordance polish.
+
+## Prompt Library Combine Builder Right Panel Layout - 2026-06-15
+
+### What changed
+- Moved the `Combine builder` interface out of the left prompt-list column and into the right inspector panel so selecting prompts no longer compresses the prompt list.
+- Removed the visible `Select` / `Selected` text from prompt-row selectors while preserving the accessible checkbox label and keyboard/mouse shortcut behavior.
+- Restored prompt rows to a compact checkbox-only selector column so long prompt titles have more horizontal room.
+- Prevented right-panel children from flex-shrinking into slivers; the right inspector now scrolls naturally when the combine builder plus metadata exceed the viewport.
+- Kept the active combine workflow near the top of the right inspector, directly below status, with Source Context and Versions below it.
+- Added a component regression test that ensures the combine tray is not rendered inside the prompt list and that the compact selector remains accessible.
+
+### Files touched
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.test.tsx`
+- `src/portals/prompt-library/promptLibrary.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The left column now owns only stats, filters, and the prompt list; the right column owns the combine workflow and supporting inspector metadata.
+- The checkbox still exposes labels such as `Select Kron base profile for combine` to assistive tech and tests, but it no longer renders the text label that caused row overflow.
+- The right panel uses non-shrinking children plus panel scrolling so the combine builder does not collapse adjacent Source Context or Versions panels.
+- UI-critic pass moved the combine tray above Source Context/Versions after detecting that placing it lower could push the save action below the initial right-panel viewport.
+
+### Verification
+- `npm run test -- src/portals/prompt-library/PromptLibraryPortal.test.tsx src/portals/prompt-library/lib/promptUtils.test.ts` - PASS, 2 files / 15 tests.
+- Browser QA at `http://127.0.0.1:5174/` - PARTIAL PASS before the browser screenshot subsystem timed out: opened Prompt Library, selected two prompts, confirmed the combine tray lived in the right panel only, confirmed the left prompt list no longer contained the tray, confirmed row selector controls had no visible text, confirmed selected stack and preview had no horizontal overflow, and confirmed Save enabled.
+- Browser screenshot after the first rendered check - PASS, captured the active combine stack in the right panel; later screenshot/click attempts became BLOCKED by repeated in-app browser `Page.captureScreenshot` / `Runtime.evaluate` timeouts.
+- `npm run test` - PASS, 82 files / 442 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- `git diff --check` - PASS.
+
+### Outstanding issues
+- None for the local layout fix.
+
+### Risks or caveats
+- Final rendered re-check relied on DOM measurement and automated tests after the in-app browser tab became unreliable from screenshot timeouts.
+- Live signed-in Prompt Library feature smoke still requires a dedicated ARCS QA account if exact production data-state testing is needed.
+
+### Operator follow-up
+- Optional: create a dedicated ARCS QA account for future signed-in live smoke checks.
+
+### Next steps
+- None for this layout fix.
