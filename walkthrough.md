@@ -10000,6 +10000,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run build` - PASS with existing large chunk warnings.
 - `npm run lint` - PASS with 0 errors and 67 existing warnings.
 - `git diff --check` - PASS.
+- Initial live smoke gap - FOUND: after the earlier deploy, the public URL still served stale HTML referencing `/assets/index-C_-M9o8i.js`, so the user could still see the old left-column combine builder.
+- Redeploy correction - PASS: reran `npm run deploy`; deployed Worker version `f96207f7-b932-49b2-9be5-df6bffb8196c`.
+- Live asset verification - PASS: `curl -sL https://asset-reference-comics-studio.onyxzion.workers.dev/` now references `/assets/index-CfApuzFt.js`.
+- Live JavaScript verification - PASS: `/assets/index-CfApuzFt.js` returns JavaScript, and the live Prompt Library chunk contains `prompt-library-combine-tray` plus `prompt-library-right` while no longer containing `prompt-library-combine-check-text`.
 
 ### Outstanding issues
 - None for the local layout fix.
