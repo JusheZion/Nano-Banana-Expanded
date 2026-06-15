@@ -35,4 +35,22 @@ describe('PromptLibraryPortal', () => {
     expect(screen.queryByRole('dialog', { name: 'Prompt editor' })).toBeNull();
     expect(screen.getByText('Prompt copied.')).toBeTruthy();
   });
+
+  it('combines selected prompts into a new selected library prompt', async () => {
+    render(<PromptLibraryPortal />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Kron base profile for combine' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Kron temple reveal for combine' }));
+
+    expect(screen.getByText('2/3 selected')).toBeTruthy();
+    expect(screen.getByText('Combined: Kron base profile + Kron temple reveal')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save combined prompt' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Combined: Kron base profile + Kron temple reveal' })).toBeTruthy());
+    expect(screen.getByText('0/3 selected')).toBeTruthy();
+    expect(screen.getByText(/Combined 2 prompts into/)).toBeTruthy();
+    expect(screen.getByText(/## Source 1: Kron base profile/)).toBeTruthy();
+    expect(screen.getByText(/## Source 2: Kron temple reveal/)).toBeTruthy();
+  });
 });

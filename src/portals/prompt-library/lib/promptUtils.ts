@@ -141,6 +141,79 @@ export function duplicatePrompt(prompt: PromptRecord): PromptDraft {
   };
 }
 
+export function combinePrompts(prompts: PromptRecord[]): PromptDraft {
+  if (prompts.length < 2 || prompts.length > 3) {
+    throw new Error("Combine prompts requires 2 to 3 source prompts.");
+  }
+
+  const sourceTitles = prompts.map((prompt) => prompt.title);
+  const sharedCategory = prompts.every((prompt) => prompt.category === prompts[0].category) ? prompts[0].category : "project";
+  const sharedModel = prompts.every((prompt) => prompt.model === prompts[0].model) ? prompts[0].model : prompts[0].model || "gpt-4o";
+  const mergedVariables = mergeVariables(prompts.flatMap((prompt) => prompt.variables));
+  const promptText = prompts
+    .map((prompt, index) => [`## Source ${index + 1}: ${prompt.title}`, prompt.promptText.trim()].join("\n\n"))
+    .join("\n\n---\n\n");
+
+  return {
+    title: buildCombinedTitle(sourceTitles),
+    promptText,
+    category: sharedCategory,
+    notes: `Combined from ${prompts.length} Prompt Library records: ${sourceTitles.join(", ")}.`,
+    model: sharedModel,
+    status: "active",
+    isFavorite: false,
+    tags: joinUniqueText([...prompts.flatMap((prompt) => prompt.tags), "combined"]),
+    collections: joinUniqueText(prompts.flatMap((prompt) => prompt.collections)),
+    characters: joinUniqueText(prompts.flatMap((prompt) => prompt.characters.map((entity) => entity.name))),
+    looks: joinUniqueText(prompts.flatMap((prompt) => prompt.looks.map((entity) => entity.name))),
+    scenes: joinUniqueText(prompts.flatMap((prompt) => prompt.scenes.map((entity) => entity.name))),
+    variables: formatVariables(mergedVariables),
+    sourcePortal: "manual",
+    sourceLabel: "Prompt Library combine",
+    sourceContext: {
+      combinedFrom: prompts.map((prompt, index) => ({
+        order: index + 1,
+        id: prompt.id,
+        title: prompt.title,
+        category: prompt.category,
+        sourceLabel: prompt.sourceLabel || "",
+      })),
+    },
+    promptSections: {
+      combinedSources: prompts.map((prompt, index) => ({
+        order: index + 1,
+        id: prompt.id,
+        title: prompt.title,
+        promptText: prompt.promptText,
+      })),
+    },
+  };
+}
+
+function buildCombinedTitle(titles: string[]) {
+  if (titles.length === 2) return `Combined: ${titles[0]} + ${titles[1]}`;
+  return `Combined: ${titles[0]} + ${titles[1]} + 1 more`;
+}
+
+function joinUniqueText(values: string[]) {
+  return normalizeList(values.join(", ")).join(", ");
+}
+
+function mergeVariables(variables: PromptVariable[]): PromptVariable[] {
+  const byName = new Map<string, PromptVariable>();
+  variables.forEach((variable) => {
+    const key = variable.name.toLowerCase();
+    const existing = byName.get(key);
+    byName.set(key, {
+      ...variable,
+      id: existing?.id ?? variable.id,
+      defaultValue: existing?.defaultValue || variable.defaultValue,
+      isRequired: Boolean(existing?.isRequired || variable.isRequired),
+    });
+  });
+  return [...byName.values()];
+}
+
 export function matchesPrompt(prompt: PromptRecord, filters: LibraryFilters): boolean {
   if (filters.favoritesOnly && !prompt.isFavorite) return false;
   if (filters.category !== "all" && prompt.category !== filters.category) return false;

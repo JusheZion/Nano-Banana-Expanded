@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { demoPrompts } from "../data/demoData";
 import {
+  combinePrompts,
   createPromptFromDraft,
   duplicatePrompt,
   filterPrompts,
@@ -71,6 +72,33 @@ describe("prompt utilities", () => {
     expect(draft.id).toBeUndefined();
     expect(draft.title).toBe("Kron temple reveal copy");
     expect(draft.isFavorite).toBe(false);
+  });
+
+  it("combines two or three prompts into a provenance-rich draft", () => {
+    const draft = combinePrompts([demoPrompts[0], demoPrompts[1], demoPrompts[3]]);
+
+    expect(draft.id).toBeUndefined();
+    expect(draft.title).toBe("Combined: Kron base profile + Kron temple reveal + 1 more");
+    expect(draft.category).toBe("project");
+    expect(draft.isFavorite).toBe(false);
+    expect(draft.promptText).toContain("## Source 1: Kron base profile");
+    expect(draft.promptText).toContain("## Source 2: Kron temple reveal");
+    expect(draft.promptText).toContain("## Source 3: Lush manga shading");
+    expect(draft.tags).toContain("combined");
+    expect(draft.tags).toContain("Kron");
+    expect(draft.collections).toContain("Issue 1: Awakening");
+    expect(draft.characters).toBe("Kron");
+    expect(draft.looks).toBe("Ceremonial Armor");
+    expect(draft.scenes).toBe("Temple Interior");
+    expect(draft.variables).toContain("lighting | dramatic | required");
+    expect(draft.sourceLabel).toBe("Prompt Library combine");
+    expect(draft.sourceContext?.combinedFrom).toHaveLength(3);
+    expect(draft.promptSections?.combinedSources).toHaveLength(3);
+  });
+
+  it("rejects combine drafts outside the 2 to 3 prompt range", () => {
+    expect(() => combinePrompts([demoPrompts[0]])).toThrow("2 to 3");
+    expect(() => combinePrompts([demoPrompts[0], demoPrompts[1], demoPrompts[2], demoPrompts[3]])).toThrow("2 to 3");
   });
 
   it("preserves ARCS provenance metadata when creating prompt records", () => {

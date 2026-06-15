@@ -9864,3 +9864,57 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for the copy-button bug fix.
+
+## Prompt Library Combine Prompts Workflow - 2026-06-15
+
+### What changed
+- Added a documented action plan for the polished Prompt Library combine workflow.
+- Added deterministic prompt-combine utilities that merge 2-3 prompts into a new editable `PromptDraft`.
+- Added Prompt Library multi-select controls with a 3-prompt cap, selected-count feedback, ordered source stack, remove/clear controls, reorder controls, preview, and quick-save through the existing prompt save path.
+- Added metadata/provenance preservation for combined drafts: de-duplicated tags, collections, linked entity names, variables, source context, and structured `promptSections.combinedSources`.
+- Added regression coverage for utility behavior, invalid selection counts, and the component-level save flow.
+
+### Files touched
+- `docs/plans/2026-06-15-prompt-library-combine-prompts-action-plan.md`
+- `src/portals/prompt-library/PromptLibraryPortal.tsx`
+- `src/portals/prompt-library/PromptLibraryPortal.test.tsx`
+- `src/portals/prompt-library/lib/promptUtils.ts`
+- `src/portals/prompt-library/lib/promptUtils.test.ts`
+- `src/portals/prompt-library/promptLibrary.css`
+- `walkthrough.md`
+
+### Implementation notes
+- Combined prompt titles use `Combined: A + B` for two sources and `Combined: A + B + 1 more` for three sources.
+- Combined prompt bodies are ordered with source headings and dividers so the resulting prompt remains auditable and easy to edit.
+- The left prompt list now uses a semantic checkbox plus a separate row button, preserving click-to-view behavior while making combine selection accessible.
+- UI critic pass revised the checkbox hit target, selected checkmark state, and focus-visible rings before browser QA.
+- No migration was required; persistence reuses the existing `savePrompt` path for signed-in users and session-memory behavior for demo/signed-out mode.
+
+### Verification
+- `npm run test -- src/portals/prompt-library/lib/promptUtils.test.ts` - FAIL on the first draft because combine metadata returned arrays where `PromptDraft` expects comma strings; fixed before UI wiring.
+- `npm run test -- src/portals/prompt-library/lib/promptUtils.test.ts` - PASS after draft-shape fix.
+- `npm run test -- src/portals/prompt-library/PromptLibraryPortal.test.tsx src/portals/prompt-library/lib/promptUtils.test.ts src/portals/prompt-library/lib/promptRepository.test.ts` - PASS, 3 files / 13 tests.
+- Browser QA at `http://127.0.0.1:5174/` - PASS: opened Prompt Library, selected two existing signed-in library prompts, confirmed `2/3 selected`, confirmed preview title, confirmed Save enabled, moved the first selected prompt down, confirmed preview title reordered, cleared selection, confirmed `0/3 selected`, Save disabled, and no relevant console errors.
+- Browser screenshot capture - BLOCKED: the in-app browser timed out on `Page.captureScreenshot`; DOM state and console checks completed.
+- `git diff --check` - PASS.
+- `npm run test` - PASS, 82 files / 439 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors and 67 existing warnings.
+- Cloudflare MCP exposure check - PASS; Cloudflare MCP was callable, and the repo deploy continued through the established Wrangler path.
+- `npm run deploy` - PASS; deployed Worker `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev` with version `e706fe72-d343-48fa-b394-53b11eedc0b4`.
+- Live reachability at `https://asset-reference-comics-studio.onyxzion.workers.dev` - PASS: ARCS hub loaded.
+- Live Prompt Library feature smoke - BLOCKED by the live sign-in gate because no dedicated ARCS QA account credentials were available in this session.
+
+### Outstanding issues
+- Signed-in live Prompt Library combine verification remains blocked until an ARCS AI-agent/QA account is available.
+
+### Risks or caveats
+- Local rendered QA intentionally avoided clicking `Save combined prompt` in a signed-in database session to avoid creating test records in the user's real Prompt Library. The save path is covered by component tests using signed-out/demo state.
+- The combine utility preserves editable metadata and provenance but does not attempt semantic rewriting; it creates an auditable unified draft from selected source prompts.
+- The browser screenshot timeout appears to be tooling/CDP related; DOM and console verification passed.
+
+### Operator follow-up
+- Optional: create a dedicated ARCS QA account for future signed-in live smoke checks.
+
+### Next steps
+- Optional future polish: add a small title-edit field in the combine tray before saving if operators want to rename combined prompts inline instead of editing afterward.

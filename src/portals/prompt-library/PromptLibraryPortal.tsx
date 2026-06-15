@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   Boxes,
+  Check,
+  Combine,
   Copy,
   CopyPlus,
   Database,
@@ -26,6 +30,7 @@ import { usePromptLibraryBridge, handoffToPromptDraft } from '@/stores/promptLib
 import { demoPrompts } from './data/demoData';
 import {
   categoryMeta,
+  combinePrompts,
   createExport,
   createPromptFromDraft,
   draftFromPrompt,
@@ -91,12 +96,24 @@ export function PromptLibraryPortal() {
   const [selectedId, setSelectedId] = useState(demoPrompts[1]?.id ?? demoPrompts[0]?.id ?? '');
   const [filters, setFilters] = useState<LibraryFilters>(defaultFilters);
   const [editorDraft, setEditorDraft] = useState<PromptDraft | null>(null);
+  const [combineSelectionIds, setCombineSelectionIds] = useState<string[]>([]);
   const [status, setStatus] = useState('Prompt Library ready. Sign in to persist ARCS prompt intelligence.');
   const [isBusy, setIsBusy] = useState(false);
 
   const isDatabaseReady = Boolean(supabase && user);
   const visiblePrompts = useMemo(() => filterPrompts(prompts, filters), [prompts, filters]);
   const selectedPrompt = prompts.find((prompt) => prompt.id === selectedId) ?? visiblePrompts[0] ?? prompts[0] ?? null;
+  const combineSelection = useMemo(
+    () =>
+      combineSelectionIds
+        .map((id) => prompts.find((prompt) => prompt.id === id))
+        .filter((prompt): prompt is PromptRecord => Boolean(prompt)),
+    [combineSelectionIds, prompts],
+  );
+  const combineDraft = useMemo(
+    () => (combineSelection.length >= 2 && combineSelection.length <= 3 ? combinePrompts(combineSelection) : null),
+    [combineSelection],
+  );
   const stats = useMemo(() => buildStats(prompts), [prompts]);
 
   useEffect(() => {
@@ -148,11 +165,43 @@ export function PromptLibraryPortal() {
       }
       setEditorDraft(null);
       setStatus(isDatabaseReady ? 'Prompt saved to Supabase.' : 'Prompt saved in demo memory for this session.');
+      return true;
     } catch (error) {
       setStatus(getErrorMessage(error, 'Prompt save failed.'));
+      return false;
     } finally {
       setIsBusy(false);
     }
+  }
+
+  function toggleCombineSelection(prompt: PromptRecord, checked: boolean) {
+    setCombineSelectionIds((current) => {
+      if (!checked) return current.filter((id) => id !== prompt.id);
+      if (current.includes(prompt.id) || current.length >= 3) return current;
+      return [...current, prompt.id];
+    });
+    if (checked && combineSelectionIds.length >= 3 && !combineSelectionIds.includes(prompt.id)) {
+      setStatus('Combine prompt limit reached. Remove one source before adding another.');
+    }
+  }
+
+  function moveCombineSelection(promptId: string, direction: -1 | 1) {
+    setCombineSelectionIds((current) => {
+      const index = current.indexOf(promptId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
+
+  async function handleSaveCombinedPrompt() {
+    if (!combineDraft) return;
+    const saved = await handleSave(combineDraft);
+    if (!saved) return;
+    setCombineSelectionIds([]);
+    setStatus(`Combined ${combineSelection.length} prompts into "${combineDraft.title}".`);
   }
 
   async function handleFavorite(prompt: PromptRecord) {
@@ -311,19 +360,43 @@ export function PromptLibraryPortal() {
             </div>
           </div>
 
+          <CombineTray
+            selectedPrompts={combineSelection}
+            draft={combineDraft}
+            isBusy={isBusy}
+            onClear={() => setCombineSelectionIds([])}
+            onMove={moveCombineSelection}
+            onRemove={(promptId) => setCombineSelectionIds((current) => current.filter((id) => id !== promptId))}
+            onSave={() => void handleSaveCombinedPrompt()}
+          />
+
           <div className="prompt-library-list" aria-label="Prompt list">
-            {visiblePrompts.map((prompt) => (
-              <button
-                type="button"
-                key={prompt.id}
-                className={`prompt-library-row ${prompt.id === selectedPrompt?.id ? 'is-active' : ''}`}
-                onClick={() => setSelectedId(prompt.id)}
-              >
-                <span style={{ borderColor: categoryMeta[prompt.category].accent }} />
-                <strong>{prompt.title}</strong>
-                <small>{prompt.sourceLabel || categoryMeta[prompt.category].label}</small>
-              </button>
-            ))}
+            {visiblePrompts.map((prompt) => {
+              const isSelectedForCombine = combineSelectionIds.includes(prompt.id);
+              const combineDisabled = !isSelectedForCombine && combineSelectionIds.length >= 3;
+              return (
+                <div
+                  key={prompt.id}
+                  className={`prompt-library-row ${prompt.id === selectedPrompt?.id ? 'is-active' : ''} ${isSelectedForCombine ? 'is-combining' : ''}`}
+                >
+                  <span style={{ borderColor: categoryMeta[prompt.category].accent }} />
+                  <label className="prompt-library-combine-check">
+                    <input
+                      type="checkbox"
+                      checked={isSelectedForCombine}
+                      disabled={combineDisabled}
+                      onChange={(event) => toggleCombineSelection(prompt, event.target.checked)}
+                      aria-label={`Select ${prompt.title} for combine`}
+                    />
+                    {isSelectedForCombine ? <Check size={14} /> : <Combine size={14} />}
+                  </label>
+                  <button type="button" className="prompt-library-row-main" onClick={() => setSelectedId(prompt.id)}>
+                    <strong>{prompt.title}</strong>
+                    <small>{prompt.sourceLabel || categoryMeta[prompt.category].label}</small>
+                  </button>
+                </div>
+              );
+            })}
             {!visiblePrompts.length && <p className="prompt-library-empty">No prompts match the active filters.</p>}
           </div>
         </aside>
@@ -416,6 +489,79 @@ function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function CombineTray({
+  selectedPrompts,
+  draft,
+  isBusy,
+  onClear,
+  onMove,
+  onRemove,
+  onSave,
+}: {
+  selectedPrompts: PromptRecord[];
+  draft: PromptDraft | null;
+  isBusy: boolean;
+  onClear: () => void;
+  onMove: (promptId: string, direction: -1 | 1) => void;
+  onRemove: (promptId: string) => void;
+  onSave: () => void;
+}) {
+  const canSave = Boolean(draft) && !isBusy;
+
+  return (
+    <section className="prompt-library-combine-tray" aria-label="Combine prompts">
+      <header>
+        <div>
+          <p>Combine builder</p>
+          <strong>{selectedPrompts.length}/3 selected</strong>
+        </div>
+        <button type="button" onClick={onClear} disabled={!selectedPrompts.length}>
+          Clear
+        </button>
+      </header>
+
+      {selectedPrompts.length ? (
+        <ol className="prompt-library-combine-stack">
+          {selectedPrompts.map((prompt, index) => (
+            <li key={prompt.id}>
+              <span>{index + 1}</span>
+              <button type="button" onClick={() => onMove(prompt.id, -1)} disabled={index === 0} aria-label={`Move ${prompt.title} up`}>
+                <ArrowUp size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(prompt.id, 1)}
+                disabled={index === selectedPrompts.length - 1}
+                aria-label={`Move ${prompt.title} down`}
+              >
+                <ArrowDown size={13} />
+              </button>
+              <strong>{prompt.title}</strong>
+              <button type="button" onClick={() => onRemove(prompt.id)} aria-label={`Remove ${prompt.title} from combine`}>
+                <X size={13} />
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="prompt-library-muted">Select 2-3 prompts to build a unified prompt.</p>
+      )}
+
+      {draft ? (
+        <div className="prompt-library-combine-preview">
+          <span>Preview</span>
+          <strong>{draft.title}</strong>
+          <p>{draft.promptText.slice(0, 220)}{draft.promptText.length > 220 ? '...' : ''}</p>
+        </div>
+      ) : null}
+
+      <button type="button" className="prompt-library-combine-save" onClick={onSave} disabled={!canSave}>
+        <Combine size={14} /> Save combined prompt
+      </button>
+    </section>
   );
 }
 
