@@ -10121,3 +10121,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue the remaining app-wide user-facing completeness passes from `docs/audits/2026-06-23-user-facing-feature-completeness-inventory.md` when ready.
+
+## Writers' Workshop Deep Product UX Audit - 2026-06-23
+
+### What changed
+- Added a corrective deep product UX audit after user review showed the Writers' Workshop polish pass was not deep enough.
+- Documented that the portal is functional but still not product-polished because several screens expose technical language, mix unrelated inputs/outputs, bury useful tools, and show redundant or empty panels in the primary workflow.
+- Captured findings from the live deployed page, the user's screenshot, source inspection, the previous UX audit, the user-facing completeness inventory, and two read-only subagent audits.
+- Defined a safer phased path: start with language/prerequisite clarity, then separate workflow spaces, then archive advanced panels, then improve the story-map/hierarchy feature, then run local/live QA.
+
+### Files touched
+- `docs/audits/2026-06-23-writers-workshop-deep-product-audit.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This was documentation-only; no app runtime behavior changed.
+- The audit specifically calls out remaining issues with `notes.*` labels, raw JSON/database language, unclear author-outline modes, hierarchy-tree discoverability, mixed Foundation/Outline/Synopsis responsibilities, repeated lock/protection language, scattered export actions, and empty/disabled controls without enough prerequisite guidance.
+- The recommended next implementation step is Pass 1: remove technical language from the primary path, add consequence copy to controls such as Preserve/Structure/Expand, and add inline prerequisite text near disabled actions.
+
+### Verification
+- Live browser inspection: confirmed the deployed ARCS tab at `https://asset-reference-comics-studio.onyxzion.workers.dev/` and inspected visible Writers' Workshop shell controls/states.
+- Source inspection: reviewed Writer workflow/page mappings and user-facing labels in `WriterPortal.tsx`, `writerSearch.ts`, and `writerWorkflowChronology.ts`.
+- Subagent audits: completed read-only audits for language/affordance issues and workflow-boundary/redundancy issues.
+- No build or app test was run because this pass only added documentation.
+
+### Outstanding issues
+- Writers' Workshop still needs implementation passes to resolve the audit findings.
+
+### Risks or caveats
+- The prior deployed code remains unchanged; this audit corrects the project record and defines follow-up work rather than shipping UI changes.
+
+### Operator follow-up
+- Decide whether to begin Pass 1 now or review the deep audit first.
+
+### Next steps
+- Begin Writers' Workshop Deep Product UX Pass 1: language and prerequisite clarity.
