@@ -10104,16 +10104,20 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `git diff --check` - PASS.
 - Rendered local browser smoke at `http://127.0.0.1:5174/` - PASS. Confirmed the Simple Writer workflow rail, Visual Canon snapshot/refresh controls, Imageshop Prep handoff status panel, Send selected page / Send shot plan / Send outline controls, production branch copy, and old `Visual Prep` / cockpit labels absent from the checked Writer surfaces.
 - Manual code review - PASS, no blocking findings. Multi-agent review was not used because the active tool contract only allows spawning a sub-agent when explicitly requested.
+- `git push origin main` - PASS, pushed `f042b85`.
+- `npm run deploy` - PASS, deployed Cloudflare Worker/site `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev` with version `c02fd3d5-ea3b-4ee2-97df-4f11caf28fef`.
+- Live static smoke - PASS. The live HTML loads `index-C-73MGt7.js`, which references `WriterPortal-B0HgKasi.js`; the live Writer bundle contains `Imageshop Prep`, `Imageshop handoff status`, `Refresh attached refs`, and `Compare & Review`, with zero occurrences of `Visual Prep`, `Visual prep`, `visual prep`, `Writers' cockpit`, `Writers’ cockpit`, or `About the cockpit`.
+- Live browser smoke - PARTIAL PASS. The live site loaded and the protected Writer card opened the expected `Sign in to continue` gate; signed-in live Writer UI smoke was not attempted because no dedicated QA account credentials were available in the live origin browser session.
 
 ### Outstanding issues
-- Deploy and live smoke are pending.
+- None for the deployed code. A signed-in live UI walkthrough can be repeated later with a dedicated QA account.
 
 ### Risks or caveats
 - The Visual Canon attached-reference refresh is manual by design; automatic live Vault sync remains intentionally deferred because it can affect cross-portal expectations.
 - Existing localStorage values remain `focused` and `all-tools` for compatibility even though the visible labels now read Simple Workflow and Advanced Tools.
 
 ### Operator follow-up
-- None at this stage.
+- Optional: provide or create a dedicated live QA account for future signed-in browser checks.
 
 ### Next steps
-- Commit, push, merge to `main`, deploy, and run live verification.
+- Continue the remaining app-wide user-facing completeness passes from `docs/audits/2026-06-23-user-facing-feature-completeness-inventory.md` when ready.
