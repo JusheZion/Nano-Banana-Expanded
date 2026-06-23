@@ -10107,17 +10107,17 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `git push origin main` - PASS, pushed `f042b85`.
 - `npm run deploy` - PASS, deployed Cloudflare Worker/site `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev`; final deploy from pushed `main` produced version `75446c7a-e27d-447b-bb54-6f212d4ed0e9` with no changed app assets after the walkthrough-only commit.
 - Live static smoke - PASS. The live HTML loads `index-C-73MGt7.js`, which references `WriterPortal-B0HgKasi.js`; the live Writer bundle contains `Imageshop Prep`, `Imageshop handoff status`, `Refresh attached refs`, and `Compare & Review`, with zero occurrences of `Visual Prep`, `Visual prep`, `visual prep`, `Writers' cockpit`, `Writers’ cockpit`, or `About the cockpit`.
-- Live browser smoke - PARTIAL PASS. The live site loaded and the protected Writer card opened the expected `Sign in to continue` gate; signed-in live Writer UI smoke was not attempted because no dedicated QA account credentials were available in the live origin browser session.
+- Signed-in live Chrome smoke - PASS. Using the dedicated ARCS QA account on `https://asset-reference-comics-studio.onyxzion.workers.dev/`, confirmed the protected Writer workspace loads after sign-in, the Simple Writer workflow rail renders, `Imageshop Prep`, `Story Review`, `Compare & Review`, Visual Canon snapshot copy, `Refresh vault`, `Refresh attached refs`, Imageshop handoff status, Send selected page / Send shot plan / Send outline controls, production branch copy, and review-notes export copy render on the live deployed site. Confirmed old `Visual Prep` / cockpit labels are absent from the checked Writer surfaces and no console errors were captured during the smoke.
 
 ### Outstanding issues
-- None for the deployed code. A signed-in live UI walkthrough can be repeated later with a dedicated QA account.
+- None for the deployed code.
 
 ### Risks or caveats
 - The Visual Canon attached-reference refresh is manual by design; automatic live Vault sync remains intentionally deferred because it can affect cross-portal expectations.
 - Existing localStorage values remain `focused` and `all-tools` for compatibility even though the visible labels now read Simple Workflow and Advanced Tools.
 
 ### Operator follow-up
-- Optional: provide or create a dedicated live QA account for future signed-in browser checks.
+- None.
 
 ### Next steps
 - Continue the remaining app-wide user-facing completeness passes from `docs/audits/2026-06-23-user-facing-feature-completeness-inventory.md` when ready.
