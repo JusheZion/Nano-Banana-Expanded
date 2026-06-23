@@ -10189,10 +10189,15 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts` - PASS after workflow model changes.
 - `npm run test -- --run` - PASS, 82 files / 443 tests.
 - `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing warnings.
 - Local signed-in Playwright smoke at `http://localhost:8787/?smoke=rail-pages` - PASS. Confirmed the simple workflow rail includes Author Source, Story Map, and Pages; Foundation, Outline, Pages, and Story Map each route to distinct headings and content.
+- `git diff --check` - PASS.
+- `npm run deploy` - PASS, deployed Cloudflare Worker/site `asset-reference-comics-studio` to `https://asset-reference-comics-studio.onyxzion.workers.dev`; version `cfce41f0-a49e-4c03-a094-e23ba0760348`.
+- Live static smoke - PASS. The deployed Writer bundle contains the new Author Source, Story Map, Pages, Create missing pages, What to paste, and Advanced exports strings.
+- Live signed-in Playwright smoke - PASS. Using the ARCS QA account on `https://asset-reference-comics-studio.onyxzion.workers.dev/?smoke=writers-ux`, confirmed the protected Writers' Workshop loads and the simple workflow rail includes Author Source, Story Map, Pages, Outline, Beats, Dialogue, Imageshop Prep, Story Review, Compare & Review, and Export.
 
 ### Outstanding issues
-- Live deployment and live signed-in smoke are pending at the time of this entry.
+- None for this shipped pass.
 
 ### Risks or caveats
 - This is still an incremental UX pass, not a full redesign of every Writers' Workshop tool.
@@ -10202,4 +10207,4 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Commit and push the implementation, deploy the Cloudflare Worker/site, then perform signed-in live smoke.
+- Continue the remaining app-wide UX/completeness passes when ready.
