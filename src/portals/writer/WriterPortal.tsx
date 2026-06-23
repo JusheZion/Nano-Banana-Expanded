@@ -112,6 +112,7 @@ import {
   mergeWriterVisualReferenceIntoNotes,
   readWriterVisualReferencesFromNotes,
   removeWriterVisualReferenceFromNotes,
+  updateWriterVisualReferenceInNotes,
   type WriterVisualReference,
   type WriterVisualReferenceKind,
 } from '@/portals/writer/writerVisualReferences';
@@ -203,11 +204,6 @@ const titleTextStyle: React.CSSProperties = {
 /** Frosted panels — tiffany workspace shows through (parity with Character / Assets studios). */
 const WRITER_GLASS_CARD =
   'rounded-2xl border border-white/35 bg-white/20 backdrop-blur-md shadow-lg shadow-teal-900/25';
-
-const TABS: { id: WriterWorkspaceTabId; label: string }[] = WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
-  id,
-  label: WRITER_WORKSPACE_TAB_LABELS[id].heading,
-}));
 
 type WriterProductionStage = WriterWorkflowStep & { current: boolean };
 
@@ -881,6 +877,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [beatsBatchSource, setBeatsBatchSource] = useState<'all' | 'picked' | null>(null);
   const [imageWorkshopBusy, setImageWorkshopBusy] = useState(false);
   const [imageWorkshopError, setImageWorkshopError] = useState<string | null>(null);
+  const [imageWorkshopStatus, setImageWorkshopStatus] = useState<{
+    kind: 'handoff' | 'return';
+    title: string;
+    detail: string;
+    at: string;
+    pageId?: string | null;
+  } | null>(null);
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
   /** When "Skip pages that already have beats" is off, server advances by batch_offset; client tracks it across rounds. */
   const beatsBatchOffsetFullPassRef = useRef(0);
@@ -957,6 +960,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [writerVisualReferenceIds, setWriterVisualReferenceIds] = useState<string[]>([]);
   const [writerVisualReferenceKind, setWriterVisualReferenceKind] = useState<WriterVisualReferenceKind>('character');
   const [writerVisualReferenceNote, setWriterVisualReferenceNote] = useState('');
+  const [writerVisualReferenceEditDrafts, setWriterVisualReferenceEditDrafts] = useState<
+    Record<string, { label: string; kind: WriterVisualReferenceKind; note: string }>
+  >({});
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
   const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
@@ -1190,6 +1196,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
       const pageRows = await listWriterPages(targetIssue.id);
       let appliedPanels = 0;
+      let firstAppliedPageId: string | null = null;
       for (const imageMapPage of imageMap.pages) {
         const firstMappedPanel = imageMapPage.panels[0];
         const page = pageRows.find(
@@ -1199,6 +1206,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         );
         if (!page) continue;
 
+        firstAppliedPageId ??= page.id;
         let nextBeatsJson = page.beats_json;
         for (const imageMapPanel of imageMapPage.panels) {
           nextBeatsJson = mergeImageshopImageMapIntoWriterBeats({
@@ -1218,13 +1226,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setIssues(targetIssues);
       setSelectedIssueId(targetIssue.id);
       setPages(refreshedPages);
-      setSelectedPageId((current) =>
-        current && refreshedPages.some((page) => page.id === current)
-          ? current
-          : refreshedPages[0]?.id ?? null,
-      );
+      setSelectedPageId((current) => {
+        if (firstAppliedPageId && refreshedPages.some((page) => page.id === firstAppliedPageId)) {
+          return firstAppliedPageId;
+        }
+        return current && refreshedPages.some((page) => page.id === current) ? current : refreshedPages[0]?.id ?? null;
+      });
       setDockTab('library');
       setDockCollapsed(false);
+      setActiveTab('beats');
+      setImageWorkshopStatus({
+        kind: 'return',
+        title: 'Imageshop return applied',
+        detail: `${appliedPanels} panel image${appliedPanels === 1 ? '' : 's'} updated on issue #${targetIssue.issue_number}. Review the affected page beats next.`,
+        at: imageMap.exported_at,
+        pageId: firstAppliedPageId ?? refreshedPages[0]?.id ?? null,
+      });
       pushHistory(
         `applied ${appliedPanels} Imageshop panel image${appliedPanels === 1 ? '' : 's'} to issue #${targetIssue.issue_number}`,
       );
@@ -1736,6 +1753,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => readWriterVisualReferencesFromNotes(selectedIssue?.notes),
     [selectedIssue?.notes],
   );
+  useEffect(() => {
+    setWriterVisualReferenceEditDrafts(
+      Object.fromEntries(
+        writerVisualReferences.map((ref) => [
+          ref.id,
+          {
+            label: ref.label,
+            kind: ref.kind,
+            note: ref.note ?? '',
+          },
+        ]),
+      ),
+    );
+  }, [writerVisualReferences]);
   const writerVisualReferenceDigest = useMemo(
     () => buildWriterVisualReferenceDigest(writerVisualReferences),
     [writerVisualReferences],
@@ -1904,6 +1935,86 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     },
     [selectedIssue, updateSelectedIssueNotes, pushHistory],
   );
+
+  const saveWriterVisualReferenceEdit = useCallback(
+    async (ref: WriterVisualReference) => {
+      if (!selectedIssue) return;
+      const draft = writerVisualReferenceEditDrafts[ref.id];
+      if (!draft) return;
+      setWriterVisualReferencesError(null);
+      setWriterVisualReferencesBusy(true);
+      const ok = await updateSelectedIssueNotes(
+        updateWriterVisualReferenceInNotes(selectedIssue.notes, ref.id, {
+          label: draft.label,
+          kind: draft.kind,
+          note: draft.note,
+        }),
+      );
+      setWriterVisualReferencesBusy(false);
+      if (!ok) {
+        setWriterVisualReferencesError('Could not update this visual reference.');
+        return;
+      }
+      pushHistory(`updated visual reference “${draft.label.trim() || ref.label}”`);
+    },
+    [selectedIssue, writerVisualReferenceEditDrafts, updateSelectedIssueNotes, pushHistory],
+  );
+
+  const refreshAttachedWriterVisualReferences = useCallback(async () => {
+    if (!selectedIssue || writerVisualReferences.length === 0) return;
+    setWriterVisualReferencesError(null);
+    setWriterVisualReferencesBusy(true);
+    setWriterVisualReferencesLoading(true);
+    try {
+      const [characters, assets] = await Promise.all([getCharacterAlbums(), getAssetAlbums()]);
+      setWriterVisualReferenceAlbums({ characters, assets });
+      let refreshedCount = 0;
+      let nextNotes = selectedIssue.notes;
+
+      for (const ref of writerVisualReferences) {
+        if (ref.source === 'character_vault') {
+          const match = characters
+            .flatMap((album) => album.items.map((item) => ({ album, item })))
+            .find(({ item }) => item.id === ref.sourceId);
+          if (!match) continue;
+          nextNotes = updateWriterVisualReferenceInNotes(nextNotes, ref.id, {
+            sourceLabel: match.album.profileName,
+            label: getWriterCharacterReferenceLabel(match.item, match.album),
+            imageUrl: match.item.image_url,
+          });
+          refreshedCount += 1;
+        } else {
+          const match = assets
+            .flatMap((album) => album.items.map((item) => ({ album, item })))
+            .find(({ item }) => item.id === ref.sourceId);
+          if (!match) continue;
+          nextNotes = updateWriterVisualReferenceInNotes(nextNotes, ref.id, {
+            sourceLabel: match.album.collectionName,
+            label: getWriterAssetReferenceLabel(match.item, match.album),
+            imageUrl: match.item.image_url,
+          });
+          refreshedCount += 1;
+        }
+      }
+
+      if (refreshedCount === 0) {
+        setWriterVisualReferencesError('No attached references matched current Vault images.');
+        return;
+      }
+
+      const ok = await updateSelectedIssueNotes(nextNotes);
+      if (!ok) {
+        setWriterVisualReferencesError('Could not refresh attached visual references.');
+        return;
+      }
+      pushHistory(`refreshed ${refreshedCount} attached visual reference${refreshedCount === 1 ? '' : 's'} from Vault`);
+    } catch (error) {
+      setWriterVisualReferencesError(error instanceof Error ? error.message : 'Could not refresh attached references.');
+    } finally {
+      setWriterVisualReferencesBusy(false);
+      setWriterVisualReferencesLoading(false);
+    }
+  }, [selectedIssue, writerVisualReferences, updateSelectedIssueNotes, pushHistory]);
 
   const persistWriterDrafts = useCallback(
     async (drafts: Partial<Record<WriterDraftKey, string>>) => {
@@ -2106,6 +2217,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         });
 
         requestWriterHandoff(draft);
+        setImageWorkshopStatus({
+          kind: 'handoff',
+          title:
+            mode === 'page'
+              ? 'Page sent to Imageshop'
+              : mode === 'shot-plan'
+                ? 'Shot plan sent to Imageshop'
+                : 'Outline sent to Imageshop',
+          detail:
+            mode === 'page'
+              ? `Sent ${selectedPage ? `Page ${selectedPage.page_number}` : 'the selected page'} with beats, script, lore, and Vault references.`
+              : mode === 'shot-plan'
+                ? 'Sent the latest shot plan with issue context, lore, and Vault references.'
+                : 'Sent the issue outline with story context, lore, and Vault references.',
+          at: new Date().toISOString(),
+          pageId: mode === 'page' ? selectedPage?.id ?? null : null,
+        });
         pushHistory(
           mode === 'page'
             ? 'sent page to Illustrator’s Imageshop'
@@ -3565,7 +3693,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	              : 'Generate page beats'
 	            : activeTab === 'dialogue'
 	              ? selectedPage?.script_text?.trim()
-	                ? 'Continue to Visual Prep'
+	                ? 'Continue to Imageshop Prep'
 	                : 'Draft dialogue'
 	              : 'Generate shot plan';
 
@@ -4611,7 +4739,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const helpPanel = (
     <div className="space-y-3 text-[11px] text-black/75 leading-relaxed">
       <div className="flex items-center gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Shortcuts</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Help / Shortcuts</p>
         <WriterSectionTip tipKey="dockShortcutsBlurb" label="Keyboard shortcuts summary" />
       </div>
       <p className="text-[10px] text-black/50 leading-snug">
@@ -4729,7 +4857,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const activeStage = productionStages.find((stage) => stage.current) ?? productionStages.find((stage) => stage.tab === activeTab);
   const completedStageCount = productionStages.filter((stage) => stage.done).length;
   const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
-  const workspaceHeading = TABS.find((x) => x.id === activeTab)?.label ?? 'Workspace';
+  const activeWorkspaceLabel = WRITER_WORKSPACE_TAB_LABELS[activeTab];
+  const workspaceHeading = activeWorkspaceLabel.heading;
+  const workspaceDescription = activeWorkspaceLabel.description;
   const focusWriterElement = useCallback((id: string) => {
     window.requestAnimationFrame(() => {
       document.getElementById(id)?.focus();
@@ -4761,7 +4891,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         targetLabel: 'latest outline',
         overwriteLabels: latestOutline && !writerLocks['outline.latest'] ? ['Latest outline'] : [],
         lockedLabels: writerLocks['outline.latest'] ? ['Latest outline'] : [],
-        downstreamLabels: ['Page rows, beats, dialogue, and Visual Prep may need review after outline changes'],
+        downstreamLabels: ['Page rows, beats, dialogue, and Imageshop Prep may need review after outline changes'],
       }),
     [latestOutline, writerLocks],
   );
@@ -5005,12 +5135,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   );
 
   const focusedWorkflowStages = productionStages.filter((stage) =>
-    ['dashboard', 'foundation', 'visual_canon', 'outline', 'beats', 'dialogue', 'audit', 'export'].includes(stage.id),
+    [
+      'dashboard',
+      'foundation',
+      'synopsis',
+      'visual_canon',
+      'canon',
+      'outline',
+      'beats',
+      'dialogue',
+      'visual',
+      'audit',
+      'cockpit',
+      'export',
+    ].includes(stage.id),
   );
 
   const focusedWorkflowRail = (
     <div className="flex-shrink-0 overflow-x-auto border-b border-white/25 bg-white/25 px-3 py-2 backdrop-blur-md [-webkit-overflow-scrolling:touch]">
-      <div className="flex min-w-max gap-1" aria-label="Focused Writer workflow">
+      <div className="flex min-w-max gap-1" aria-label="Simple Writer workflow">
         {focusedWorkflowStages.map((stage) => (
           <Tooltip
             key={stage.id}
@@ -5139,13 +5282,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               {quickGenerateLabel}
             </button>
           </Tooltip>
-          <Tooltip content={writerFocusedMode ? 'Show every Writer tool, ribbon, JSON editor, and batch action' : 'Return to the calmer Writer workflow'} side="bottom">
+          <Tooltip
+            content={
+              writerFocusedMode
+                ? 'Advanced Tools shows the full ribbon, JSON editors, batch actions, and diagnostics.'
+                : 'Simple Workflow shows the main writing path with fewer controls.'
+            }
+            side="bottom"
+          >
             <button
               type="button"
               onClick={() => setWriterFocusedMode((mode) => !mode)}
               className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-black/65 hover:bg-white hover:text-black"
             >
-              {writerFocusedMode ? 'All Tools' : 'Focused'}
+              {writerFocusedMode ? 'Advanced Tools' : 'Simple Workflow'}
             </button>
           </Tooltip>
         </div>
@@ -5193,7 +5343,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
               Visual Canon
             </p>
-            <Tooltip content="Attach saved Character Vault and Asset Vault images so page-beat AI uses those designs instead of inventing new ones." side="bottom">
+            <Tooltip content="Attach saved Character Vault and Asset Vault images so page-beat AI keeps those designs consistent." side="bottom">
               <button
                 type="button"
                 className="rounded p-0.5 text-black/42 hover:bg-black/10 hover:text-black"
@@ -5204,7 +5354,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </Tooltip>
           </div>
           <p className="mt-1 text-[11px] leading-snug text-black/60">
-            Attached vault images are sent with page-beat AI calls as visual canon.
+            Attached vault images are sent with page-beat AI calls as visual canon. They are saved as issue snapshots; use Refresh vault to load the latest Vault choices before attaching more.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -5216,8 +5366,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             disabled={!selectedIssueId || writerVisualReferencesLoading}
             onClick={() => void refreshWriterVisualReferenceAlbums()}
             className="rounded-md border border-black/15 bg-white/80 px-2 py-1 text-[10px] font-bold text-black disabled:opacity-45"
+            title="Reload available Character Vault and Asset Vault images. Already-attached issue references stay unchanged in this pass."
           >
             {writerVisualReferencesLoading ? 'Loading...' : 'Refresh vault'}
+          </button>
+          <button
+            type="button"
+            disabled={!selectedIssueId || writerVisualReferences.length === 0 || writerVisualReferencesBusy}
+            onClick={() => void refreshAttachedWriterVisualReferences()}
+            className="rounded-md border border-emerald-800/25 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-950 disabled:opacity-45"
+            title="Update attached reference names and images from the Vault while keeping your saved role and note."
+          >
+            Refresh attached refs
           </button>
         </div>
       </div>
@@ -5301,7 +5461,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               {writerVisualReferenceSource === 'character_vault' ? 'Cast images' : 'Asset images'}
             </p>
             <p className="text-[11px] leading-snug text-black/55">
-              Tick one or more saved images to attach them to this issue.
+              Tick one or more saved images to attach them to this issue. Character Vault images attach as characters; Asset Vault images can be locations or props.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -5386,6 +5546,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
           placeholder="e.g. use the cloak silhouette; keep the bronze mask"
         />
+        <span className="text-[10px] leading-snug text-black/48">
+          Notes are saved with the issue reference and included as AI guidance for page beats.
+        </span>
       </label>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -5399,6 +5562,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ? 'Saving...'
             : `Attach ${writerVisualReferenceIds.length || ''} to issue`}
         </button>
+        <span className="max-w-md text-[10px] font-semibold leading-snug text-black/50">
+          Attach saves a snapshot to this issue and adds reference notes to the synopsis helper.
+        </span>
         <button
           type="button"
           disabled={!selectedIssueId}
@@ -5418,42 +5584,115 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       {writerVisualReferences.length > 0 ? (
         <div className="space-y-2">
           <div className="grid gap-2 sm:grid-cols-2">
-            {writerVisualReferences.map((ref) => (
-              <div
-                key={ref.id}
-                className="flex gap-2 rounded-lg border border-black/10 bg-white/65 p-2"
-              >
-                <VaultImageWithFallback
-                  src={ref.imageUrl}
-                  alt={ref.label}
-                  frameClassName="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10"
-                  imgClassName="h-full w-full object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-[11px] font-black text-black">{ref.label}</p>
-                      <p className="text-[9px] font-bold uppercase tracking-wide text-black/45">
-                        {ref.kind} / {ref.source === 'character_vault' ? 'Character Vault' : 'Asset Vault'}
-                      </p>
+            {writerVisualReferences.map((ref) => {
+              const draft = writerVisualReferenceEditDrafts[ref.id] ?? {
+                label: ref.label,
+                kind: ref.kind,
+                note: ref.note ?? '',
+              };
+              const changed =
+                draft.label.trim() !== ref.label ||
+                draft.kind !== ref.kind ||
+                draft.note.trim() !== (ref.note ?? '');
+              return (
+                <div
+                  key={ref.id}
+                  className="flex gap-2 rounded-lg border border-black/10 bg-white/65 p-2"
+                >
+                  <VaultImageWithFallback
+                    src={ref.imageUrl}
+                    alt={draft.label || ref.label}
+                    frameClassName="h-16 w-12 shrink-0 overflow-hidden rounded border border-black/10 bg-black/10"
+                    imgClassName="h-full w-full object-cover"
+                  />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-black text-black">{ref.label}</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-black/45">
+                          {ref.source === 'character_vault' ? 'Character Vault' : 'Asset Vault'} / {ref.sourceLabel}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={writerVisualReferencesBusy}
+                        onClick={() => void removeWriterVisualReference(ref)}
+                        className="rounded border border-black/15 bg-white/80 px-2 py-0.5 text-[9px] font-bold text-black disabled:opacity-40"
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={writerVisualReferencesBusy}
-                      onClick={() => void removeWriterVisualReference(ref)}
-                      className="rounded border border-black/15 bg-white/80 px-2 py-0.5 text-[9px] font-bold text-black disabled:opacity-40"
-                    >
-                      Remove
-                    </button>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-wide text-black/45">
+                        Label
+                        <input
+                          type="text"
+                          value={draft.label}
+                          disabled={writerVisualReferencesBusy}
+                          onChange={(event) =>
+                            setWriterVisualReferenceEditDrafts((prev) => ({
+                              ...prev,
+                              [ref.id]: { ...draft, label: event.target.value },
+                            }))
+                          }
+                          className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] font-semibold normal-case tracking-normal text-black disabled:opacity-50"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-wide text-black/45">
+                        Role
+                        <select
+                          value={draft.kind}
+                          disabled={writerVisualReferencesBusy}
+                          onChange={(event) =>
+                            setWriterVisualReferenceEditDrafts((prev) => ({
+                              ...prev,
+                              [ref.id]: {
+                                ...draft,
+                                kind: event.target.value as WriterVisualReferenceKind,
+                              },
+                            }))
+                          }
+                          className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] font-semibold normal-case tracking-normal text-black disabled:opacity-50"
+                        >
+                          <option value="character">Character</option>
+                          <option value="location">Location</option>
+                          <option value="prop">Prop</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="flex flex-col gap-1 text-[9px] font-bold uppercase tracking-wide text-black/45">
+                      Note
+                      <input
+                        type="text"
+                        value={draft.note}
+                        disabled={writerVisualReferencesBusy}
+                        onChange={(event) =>
+                          setWriterVisualReferenceEditDrafts((prev) => ({
+                            ...prev,
+                            [ref.id]: { ...draft, note: event.target.value },
+                          }))
+                        }
+                        className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] font-semibold normal-case tracking-normal text-black disabled:opacity-50"
+                        placeholder="Optional AI guidance for this reference"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={writerVisualReferencesBusy || !changed}
+                        onClick={() => void saveWriterVisualReferenceEdit(ref)}
+                        className="rounded border border-emerald-800/25 bg-emerald-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-950 disabled:opacity-40"
+                      >
+                        Save reference
+                      </button>
+                      <span className="text-[10px] leading-snug text-black/45">
+                        Edits update this issue reference. Synopsis helper text is not rewritten automatically.
+                      </span>
+                    </div>
                   </div>
-                  {ref.note ? (
-                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-black/60">
-                      {ref.note}
-                    </p>
-                  ) : null}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {!writerFocusedMode ? (
             <details className="rounded-lg border border-black/10 bg-white/45 px-3 py-2">
@@ -5578,7 +5817,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </button>
           </div>
           <p className="text-[10px] leading-snug text-black/52">
-            Generated previews open on Audit and still require per-page apply. Nothing here silently
+            Generated previews open on Story Review and still require per-page apply. Nothing here silently
             rewrites another layer.
           </p>
         </div>
@@ -5618,7 +5857,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               { label: 'Script', value: pagesWithScriptCount },
               { label: 'Canon', value: loreCards.length },
               { label: 'Shots', value: latestShotPlan ? 1 : 0 },
-              { label: 'Audit', value: reviewReady ? 1 : 0 },
+              { label: 'Review', value: reviewReady ? 1 : 0 },
               { label: 'Tab', value: activeStage?.label ?? workspaceHeading },
             ].map((item) => (
               <div
@@ -5637,17 +5876,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               <p className="max-w-[260px] truncate text-[11px] font-semibold text-black/65">{quickGenerateNextHint}</p>
             </div>
             <div className="inline-flex rounded-md border border-black/15 bg-white/35 p-0.5">
-              {(['Focused', 'All Tools'] as const).map((mode) => {
-                const active = writerFocusedMode ? mode === 'Focused' : mode === 'All Tools';
+              {(['Simple Workflow', 'Advanced Tools'] as const).map((mode) => {
+                const active = writerFocusedMode ? mode === 'Simple Workflow' : mode === 'Advanced Tools';
                 return (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setWriterFocusedMode(mode === 'Focused')}
+                    onClick={() => setWriterFocusedMode(mode === 'Simple Workflow')}
                     className={`rounded px-2 py-1 text-[10px] font-black uppercase tracking-wide transition ${
                       active ? 'bg-black text-white' : 'text-black/55 hover:bg-white/70 hover:text-black'
                     }`}
                     aria-pressed={active}
+                    title={
+                      mode === 'Simple Workflow'
+                        ? 'Show the main writing path with fewer controls.'
+                        : 'Show the full ribbon, JSON editors, batch actions, and diagnostics.'
+                    }
                   >
                     {mode}
                   </button>
@@ -5831,6 +6075,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
                         {workspaceHeading}
                       </h2>
+                      <p className="mt-1 max-w-2xl text-xs font-semibold leading-snug text-black/58">
+                        {workspaceDescription}
+                      </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
                       <span className="border-l border-black/15 bg-white/35 px-2 py-1">
@@ -5845,6 +6092,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                   </div>
                 </div>
+                {writerFocusedMode ? (
+                  <div className="rounded-xl border border-amber-800/20 bg-amber-50/70 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
+                          What should I do next?
+                        </p>
+                        <p className="mt-0.5 text-[11px] font-semibold leading-snug text-black/65">
+                          {quickGenerateNextHint}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={quickGenerateDisabled}
+                        onClick={() => void quickGenerate()}
+                        className="inline-flex min-h-[32px] shrink-0 items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+                        style={{ background: ACCENT_GOLD_GRADIENT }}
+                      >
+                        {quickGenerateLoading ? <Loader2 size={13} className="animate-spin" aria-hidden /> : null}
+                        {quickGenerateLabel}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {imageWorkshopError ? (
                   <p className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">
                     {imageWorkshopError}
@@ -6000,7 +6271,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                            Writers&apos; cockpit
+                            Compare & Review
                           </p>
                           <p className="text-xs text-black/70 leading-snug max-w-3xl">
                             Compare up to three read-only views side-by-side. Beats/Dialogue/Shot plan digests follow your{' '}
@@ -6026,7 +6297,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </p>
                           )}
                         </div>
-                        <WriterSectionTip tipKey="cockpitTab" label="About the cockpit" />
+                        <WriterSectionTip tipKey="cockpitTab" label="About Compare & Review" />
                       </div>
                     </div>
 
@@ -6253,7 +6524,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         className={`${WRITER_GLASS_CARD} p-4 space-y-2 border-amber-400/40 bg-amber-50/30`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation Hub</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation</p>
                           <Tooltip content={WRITER_UI_TIPS.storyContextSupabase} side="left">
                             <button
                               type="button"
@@ -6272,7 +6543,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                            Foundation Hub → story context
+                            Foundation → story context
                           </p>
                           {dockCollapsed ? (
                             <Tooltip content={WRITER_UI_TIPS.dockLibraryHidden} side="left">
@@ -6377,7 +6648,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-                                Foundation Hub / production defaults
+                                Foundation / production defaults
                               </p>
                               <p className="mt-1 text-[11px] leading-snug text-black/60">
                                 Saved in existing notes metadata. Issue defaults override series defaults and are sent
@@ -6903,7 +7174,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
                             </div>
                             <p className="mt-2 text-[11px] leading-snug text-black/58">
-                              Foundation Hub defaults now travel with generation so comic medium, panel density,
+                              Foundation defaults now travel with generation so comic medium, panel density,
                               style, canon, and character consistency do not have to be retyped on each prompt.
                             </p>
                           </div>
@@ -7833,7 +8104,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                        {dialogueLoading
 	                          ? 'Drafting…'
 	                          : selectedPage?.script_text?.trim()
-	                            ? 'Continue to Visual Prep'
+	                            ? 'Continue to Imageshop Prep'
 	                            : 'Draft dialogue'}
 	                      </button>
 	                      {selectedPage?.script_text?.trim() ? (
@@ -8489,6 +8760,86 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="videoTab" label="About shot plans and video" />
                     </div>
+                    <div className="rounded-xl border border-amber-800/20 bg-amber-50/75 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/70">
+                            Imageshop handoff status
+                          </p>
+                          <p className="mt-1 max-w-2xl text-[11px] leading-snug text-black/62">
+                            Use this workspace when the story is ready for visual planning. Writers sends issue context,
+                            selected page beats or the shot plan, Story Canon, and Visual Canon references to Illustrator&apos;s Imageshop.
+                          </p>
+                        </div>
+                        <span className="rounded bg-white/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                          {imageWorkshopBusy ? 'opening' : latestShotPlan ? 'shot plan ready' : selectedPage?.beats_json ? 'page ready' : 'prep needed'}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {[
+                          ['Issue', selectedIssue ? `#${selectedIssue.issue_number}` : 'Select issue'],
+                          ['Page beats', selectedPage?.beats_json ? `Page ${selectedPage.page_number}` : 'No selected page beats'],
+                          ['Shot plan', latestShotPlan ? `v${latestShotPlan.version}` : 'Generate first'],
+                          ['References', `${writerVisualReferences.length} visual / ${loreCards.length} canon`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-lg border border-black/10 bg-white/65 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-wide text-black/42">{label}</p>
+                            <p className="mt-0.5 truncate text-[11px] font-bold text-black/75">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={!selectedIssueId || !selectedPage?.beats_json || imageWorkshopBusy}
+                          onClick={() => void openImageWorkshopFromWriter('page')}
+                          className="rounded-md border border-black/15 bg-white/85 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black disabled:opacity-45"
+                        >
+                          Send selected page
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!selectedIssueId || !latestShotPlan || imageWorkshopBusy}
+                          onClick={() => void openImageWorkshopFromWriter('shot-plan')}
+                          className="rounded-md border border-black/15 bg-white/85 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black disabled:opacity-45"
+                        >
+                          Send shot plan
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!selectedIssueId || !latestOutline || imageWorkshopBusy}
+                          onClick={() => void openImageWorkshopFromWriter('outline')}
+                          className="rounded-md border border-black/15 bg-white/85 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black disabled:opacity-45"
+                        >
+                          Send outline
+                        </button>
+                      </div>
+                      {imageWorkshopStatus ? (
+                        <div className="mt-3 rounded-lg border border-black/10 bg-white/70 px-3 py-2">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-black text-black">{imageWorkshopStatus.title}</p>
+                              <p className="mt-0.5 text-[10px] leading-snug text-black/58">{imageWorkshopStatus.detail}</p>
+                              <p className="mt-1 text-[9px] font-bold uppercase tracking-wide text-black/38">
+                                {new Date(imageWorkshopStatus.at).toLocaleString()}
+                              </p>
+                            </div>
+                            {imageWorkshopStatus.kind === 'return' ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (imageWorkshopStatus.pageId) setSelectedPageId(imageWorkshopStatus.pageId);
+                                  setActiveTab('beats');
+                                }}
+                                className="rounded-md border border-emerald-800/25 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-950"
+                              >
+                                Open page beats
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="space-y-3 rounded-xl border border-black/10 bg-white/40 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -8496,7 +8847,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             Production branches
                           </p>
                           <p className="mt-1 text-[11px] leading-snug text-black/60">
-                            Branch from the same issue pack into visual prep, dialogue, exports, or Guided Comics handoff.
+                            Branch from the same issue pack into Imageshop Prep, dialogue, exports, or Guided Comics handoff.
                           </p>
                         </div>
                         <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
@@ -8814,8 +9165,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                            ['Pages', `${sortedPages.length}/${targetPageCount}`],
 	                            ['Beats', `${pagesWithBeatsCount}/${sortedPages.length || targetPageCount}`],
 	                            ['Dialogue', `${pagesWithScriptCount}/${sortedPages.length || targetPageCount}`],
-	                            ['Visual Prep', latestShotPlan ? `v${latestShotPlan.version}` : 'missing'],
-	                            ['Audit', reviewReady ? 'available' : 'not run'],
+	                            ['Imageshop Prep', latestShotPlan ? `v${latestShotPlan.version}` : 'missing'],
+	                            ['Story Review', reviewReady ? 'available' : 'not run'],
 	                          ].map(([label, value]) => (
 	                            <div key={label} className="bg-white/65 px-2 py-1">
 	                              <dt className="text-[9px] font-black uppercase tracking-wide text-black/42">{label}</dt>

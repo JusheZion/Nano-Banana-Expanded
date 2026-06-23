@@ -10017,3 +10017,103 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this layout fix.
+
+## Writers' Workshop UX Audit - 2026-06-23
+
+### What changed
+- Conducted an audit-only review of Writers' Workshop UX, focused on workflow order, labels, helper notes/tooltips, Visual Canon image alignment, Vault sync friction, and low-risk improvements that preserve the working app.
+- Added a durable audit artifact with findings and phased recommendations.
+- Added a later app-wide user-facing feature completeness standards pass to the phased recommendations, keeping it separate from the immediate low-risk Writers' Workshop clarity work.
+- Confirmed through source review and rendered local inspection that Writers' Workshop is functional but has overlapping navigation systems, technical help copy, and snapshot-based Visual Canon/Vault attachment behavior that can feel like sync friction.
+
+### Files touched
+- `docs/audits/2026-06-23-writers-workshop-ux-audit.md`
+- `walkthrough.md`
+
+### Implementation notes
+- No application code was changed.
+- The audit recommends starting with a low-risk copy/navigation clarity pass before adding Visual Canon edit/refresh affordances.
+- The new standards pass is intentionally framed as a later, incremental cross-app inventory and portal-by-portal completeness effort rather than an immediate implementation priority.
+- The Visual Canon/Vault finding is based on attached references being stored as issue-note snapshots with merge/remove helpers, but no in-place update helper for role, label, note, or image URL.
+- The Imageshop bridge finding preserves the current product contract: Writers supplies story/page/panel context while Illustrator's Imageshop owns image production.
+
+### Verification
+- Source review: inspected Writers' Workshop workflow, ribbon, dock, help registry, next-step, Visual Canon, and Imageshop return files.
+- Browser QA: ran the local app at `http://127.0.0.1:5174/`, opened Writers' Workshop, confirmed the first screen shows multiple simultaneous navigation/workflow surfaces, and inspected the Visual Canon attachment area.
+- No test suite was run because this was documentation/audit-only work with no runtime code changes.
+
+### Outstanding issues
+- None for the audit itself.
+
+### Risks or caveats
+- The rendered audit pass used local app state and existing saved data; production state may differ.
+- Recommendations are not yet implemented.
+
+### Operator follow-up
+- Review and approve the desired first implementation slice before code changes.
+
+### Next steps
+- Recommended first slice: Phase 1 clarity pass with label alignment, plain-language helper notes, and tooltip/help copy cleanup only.
+
+## Writers' Workshop UX Audit Updates Implementation - 2026-06-23
+
+### What changed
+- Implemented the first Writers' Workshop UX audit update passes across workflow clarity, Visual Canon editability, Imageshop Prep clarity, workflow guidance, Vault sync guardrails, and app-wide completeness inventory.
+- Renamed Writer-facing stages and workspaces from more technical labels to clearer user task language: `Foundation`, `Synopsis Helper`, `Story Canon`, `Imageshop Prep`, `Story Review`, and `Compare & Review`.
+- Added plain-language workspace descriptions and a Simple Workflow `What should I do next?` panel driven by the existing next-step logic.
+- Renamed the mode language from `Focused` / `All Tools` to `Simple Workflow` / `Advanced Tools` while preserving the existing localStorage mode values for compatibility.
+- Added Visual Canon copy explaining that attached Vault references are issue snapshots.
+- Added attached Visual Canon reference editing for label, role, and note.
+- Added a `Refresh attached refs` action that updates attached reference labels/images/source labels from the Vault while preserving role and note.
+- Added an Imageshop Prep handoff/status panel explaining what Writers sends to Illustrator's Imageshop and where returned panel images should be reviewed.
+- Added a cross-app user-facing feature completeness inventory for future portal-by-portal work.
+
+### Files touched
+- `docs/audits/2026-06-23-user-facing-feature-completeness-inventory.md`
+- `docs/audits/2026-06-23-writers-workshop-ux-audit.md`
+- `docs/writers-workshop-focused-ux-guide.md`
+- `src/content/wiki/lab.md`
+- `src/content/wiki/writer.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterStudioDock.tsx`
+- `src/portals/writer/__tests__/writerProductionBranches.test.ts`
+- `src/portals/writer/__tests__/writerVisualReferences.test.ts`
+- `src/portals/writer/__tests__/writerWorkflowChronology.test.ts`
+- `src/portals/writer/__tests__/writerWorkspaceModel.test.ts`
+- `src/portals/writer/writerHelpRegistry.tsx`
+- `src/portals/writer/writerNextStep.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/writerSearch.ts`
+- `src/portals/writer/writerVisualReferences.ts`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `src/portals/writer/writerWorkspaceShortcuts.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- No Supabase schema or AI-generation API behavior changed.
+- Visual Canon still stores issue-level reference snapshots, but users can now edit the attached reference metadata and manually refresh attached labels/images from Vault metadata.
+- The refresh action intentionally does not rewrite generated page beats or previously appended synopsis helper lines.
+- Imageshop handoff payload construction and return merge logic were preserved; the new panel explains current readiness, sends page/shot-plan/outline handoffs, and records the latest handoff/return status.
+- The app-wide completeness pass is documented as an inventory and recommended execution order, not a broad implementation rewrite.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionBranches.test.ts src/portals/writer/__tests__/writerVisualReferences.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts src/portals/writer/__tests__/writerWorkspaceModel.test.ts src/content/wiki/writerWikiAnchors.test.ts` - PASS, 5 files / 20 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing warnings.
+- `npm run test` - PASS, 82 files / 443 tests.
+- `git diff --check` - PASS.
+- Rendered local browser smoke at `http://127.0.0.1:5174/` - PASS. Confirmed the Simple Writer workflow rail, Visual Canon snapshot/refresh controls, Imageshop Prep handoff status panel, Send selected page / Send shot plan / Send outline controls, production branch copy, and old `Visual Prep` / cockpit labels absent from the checked Writer surfaces.
+- Manual code review - PASS, no blocking findings. Multi-agent review was not used because the active tool contract only allows spawning a sub-agent when explicitly requested.
+
+### Outstanding issues
+- Deploy and live smoke are pending.
+
+### Risks or caveats
+- The Visual Canon attached-reference refresh is manual by design; automatic live Vault sync remains intentionally deferred because it can affect cross-portal expectations.
+- Existing localStorage values remain `focused` and `all-tools` for compatibility even though the visible labels now read Simple Workflow and Advanced Tools.
+
+### Operator follow-up
+- None at this stage.
+
+### Next steps
+- Commit, push, merge to `main`, deploy, and run live verification.

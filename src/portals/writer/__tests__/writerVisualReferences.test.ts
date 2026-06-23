@@ -5,6 +5,7 @@ import {
   mergeWriterVisualReferenceIntoNotes,
   readWriterVisualReferencesFromNotes,
   removeWriterVisualReferenceFromNotes,
+  updateWriterVisualReferenceInNotes,
 } from '@/portals/writer/writerVisualReferences';
 import { EMPTY_SYNOPSIS_HELPER_PARTS } from '@/portals/writer/writerSynopsisHelper';
 
@@ -51,6 +52,37 @@ describe('writerVisualReferences', () => {
     const next = removeWriterVisualReferenceFromNotes(notes, 'asset_vault:asset-1');
     expect(next.production_defaults).toEqual({ medium_type: 'comic' });
     expect(readWriterVisualReferencesFromNotes(next)).toEqual([]);
+  });
+
+  it('updates an attached reference without dropping unrelated metadata or the original linked time', () => {
+    const notes = mergeWriterVisualReferenceIntoNotes(
+      { writer_tool_cache: { canon_check: { at: 'now' } } },
+      {
+        source: 'asset_vault',
+        sourceId: 'asset-1',
+        sourceLabel: 'Relic room',
+        label: 'Bronze mask',
+        kind: 'prop',
+        imageUrl: 'https://example.com/mask.png',
+        note: 'Original note',
+        linkedAt: '2026-06-01T00:00:00.000Z',
+      },
+    );
+
+    const next = updateWriterVisualReferenceInNotes(notes, 'asset_vault:asset-1', {
+      label: 'Bronze mask closeup',
+      kind: 'location',
+      note: 'Treat as the relic chamber set.',
+    });
+
+    expect(next.writer_tool_cache).toEqual({ canon_check: { at: 'now' } });
+    expect(readWriterVisualReferencesFromNotes(next)[0]).toMatchObject({
+      label: 'Bronze mask closeup',
+      kind: 'location',
+      note: 'Treat as the relic chamber set.',
+      imageUrl: 'https://example.com/mask.png',
+      linkedAt: '2026-06-01T00:00:00.000Z',
+    });
   });
 
   it('builds prompt digest and synopsis helper additions', () => {

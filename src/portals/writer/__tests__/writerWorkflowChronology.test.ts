@@ -9,18 +9,18 @@ describe('writerWorkflowChronology', () => {
   it('models the user-facing chronology from Library through Export', () => {
     expect(WRITER_WORKFLOW_STEP_ORDER.map((step) => step.label)).toEqual([
       'Dashboard',
-      'Selection',
-      'Story Setup',
+      'Choose Story',
+      'Foundation',
       'Synopsis',
       'Visual Canon',
-      'Canon',
+      'Story Canon',
       'Outline',
       'Pages',
       'Beats',
       'Dialogue',
-      'Visual Prep',
-      'Audit',
-      'Cockpit',
+      'Imageshop Prep',
+      'Story Review',
+      'Compare & Review',
       'Export',
     ]);
   });
@@ -49,15 +49,15 @@ describe('writerWorkflowChronology', () => {
     });
     expect(steps.find((step) => step.id === 'visual_canon')).toMatchObject({
       done: false,
-      detail: 'Attach character/location/prop images',
+      detail: 'Attach images for AI consistency',
     });
     expect(steps.find((step) => step.id === 'canon')).toMatchObject({
       done: false,
-      detail: 'Add lore before generation',
+      detail: 'Choose lore for AI prompts',
     });
     expect(steps.find((step) => step.id === 'cockpit')).toMatchObject({
       done: false,
-      detail: 'Late-stage compare',
+      detail: 'Compare saved outputs',
     });
   });
 

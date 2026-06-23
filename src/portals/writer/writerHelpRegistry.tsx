@@ -27,8 +27,8 @@ export const WRITER_HELP_CATEGORIES: {
   sublabel: string;
   Icon: CatIcon;
 }[] = [
-  { id: 'setup', label: 'Setup', sublabel: 'Env & AI', Icon: Plug },
-  { id: 'workflow', label: 'Outline', sublabel: 'Library & story', Icon: FileText },
+  { id: 'setup', label: 'Setup', sublabel: 'Sign-in & AI', Icon: Plug },
+  { id: 'workflow', label: 'Workflow', sublabel: 'Story path', Icon: FileText },
   { id: 'pages_tools', label: 'Pages', sublabel: 'Beats & video', Icon: LayoutGrid },
   { id: 'review_export', label: 'Review', sublabel: 'Arc & exports', Icon: Scale },
   { id: 'keyboard', label: 'Keys', sublabel: 'Shortcuts', Icon: Keyboard },
@@ -69,24 +69,24 @@ export const WRITER_UI_TIPS = {
   outlinePreview:
     'Latest saved outline JSON for this issue. Generate a new version from Issue Outline → Target pages → Generate outline.',
   cockpitTab:
-    'Three columns for comparing outline / beats / dialogue / arc / lore / shot plan at once. The Idea assist bar can include any combination of column digests in one prompt (read-only previews; use other tabs to edit and save).',
+    'Compare & Review shows three read-only columns for outline, beats, dialogue, story review notes, lore, or shot plan. The Idea assist bar can include any combination of column digests in one prompt; use other tabs to edit and save.',
   loreTab:
     'Series-scoped lore cards (world, characters, places, rules). Cards marked “Include in AI prompts” are loaded into Generate outline and page beats (writer-tools) as reference text — stay under large bibles or the digest truncates. Requires Supabase migration writer_lore_cards.',
   beatsTab:
-    'Panel-level beats use the latest issue outline plus cast, locations, and issue visual references attached in Foundation Hub. Pick a page in Library → Pages, then generate. Results save to writer_pages.beats_json. Rules for the outline from Scripts (saved as notes.synopsis_helper.rules) are included on every page-beats call, including Generate all beats. Optional Director notes for beats apply only to page-beats calls (single page, batch, ribbon) — use for spreads, layout variety, or extra detail; Issue synopsis drives outline_issue.',
+    'Page Beats writes panel-level story beats for the selected page. It uses the latest outline, included Story Canon cards, and Visual Canon references attached to the issue. Director notes are optional and apply only to beat generation.',
   beatsDirectorNotes:
     'Optional text sent only when generating page beats (not outlines). Use for double-page spreads (which page is left/right), requested panel shapes (tall strip, hero panel, inset), tone, or “more environmental detail / less talking heads.” Applies to Generate page beats, Generate all beats batches, and the ribbon quick-generate on the Beats tab.',
   beatsNeedPage: 'Select an issue that has pages, then choose a page in the Library.',
   dialogueTab:
     'Draft dialogue from the page’s beats and outline. Pick comic script or screenplay style, then run on the selected page. Saves to writer_pages.script_text.',
   arcTab:
-    'Pacing review and canon check run on the whole Library issue (single-issue buttons), or use Batch arc tools to check multiple issues at once. Results save on each issue under notes.writer_tool_cache (no separate Save step).',
+    'Story Review runs pacing and canon checks on the selected issue. Results save automatically on the issue; there is no separate save step.',
   videoTab:
-    'Shot plans use the latest outline and page digests. Versions are stored in writer_video_shot_plans. Use the buttons below to export JSON, CSV, or a full issue pack.',
+    'Imageshop Prep creates shot plans from the latest outline and page digests. Use it before sending visual context to Illustrator’s Imageshop or exporting shot-plan files.',
   scriptsTab:
-    'Synopsis helper fields save to notes.synopsis_helper; use Build synopsis to fill the Issue Outline synopsis draft, then Save story context on Issue Outline. Rules for the outline is sent to the page-beats model (single page, batch, ribbon) after you Save helper to issue notes — use it for constraints like “no repeating beats across adjacent pages.” Copy or download a full issue pack (synopsis, outline, shot plan, all page beats & dialogue, arc cache). Edit saved outline / beats / dialogue / shot plan JSON and save to the database (valid JSON required for JSON fields).',
+    'Synopsis Helper shapes author source notes before outline or beat generation. Save helper notes to the issue when you want its rules and source structure included in later AI calls.',
   fileRibbon:
-    'Open Scripts & exports from here (or Home → workspace Scripts). Issue pack and exports live there; Video tab has shot plan files too. AI tools need a signed-in Supabase session.',
+    'Open Synopsis Helper or Export from here. AI tools need a signed-in session.',
   insertRibbon: 'Snippets and templates can be added here in a future update.',
   reviewPacing:
     'Run pacing review for the selected issue. Uses the Issue Outline target page count (Outline tab) so the model can compare plan vs script length. On success, the result is saved to issue notes (writer_tool_cache.pacing_review), including required length_alignment with an editorial recommended page count/range and concrete cut/add suggestions when the target differs.',
@@ -95,7 +95,7 @@ export const WRITER_UI_TIPS = {
   aiQuickGenerate: 'Runs the primary AI action for the current workspace tab (outline, beats, dialogue, etc.).',
   activityPanel: 'A short log of AI tool runs. Open Ribbon → Help for full workflow guides.',
   dockShortcutsBlurb:
-    'Workspace tabs: ⌥⌘1–8 (Mac) or Alt+Ctrl+1–8 (Win/Linux) — not plain ⌘1–9 (browser switches tabs). File → Scripts & exports also opens the Scripts tab. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
+    'Workspace tabs 1–9: use ⌥⌘ plus the number on Mac, or Alt+Ctrl plus the number on Windows/Linux. Tabs after 9 are opened from the workspace tabs. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
 } as const;
 
@@ -201,11 +201,11 @@ export function WriterHelpCategoryBody({
           {h('Library & selection')}
           <p>
             Use the top <strong>Series / Issue / Page</strong> strip to choose the active work. The Library dock is still
-            available in All Tools, but core selection no longer depends on opening it.
+            available in Advanced Tools, but core selection no longer depends on opening it.
           </p>
           <p>
-            <strong>Focused</strong> mode shows Dashboard, Visual Canon, and the main writing path. <strong>All Tools</strong>{' '}
-            restores the ribbon, production map, raw JSON, and batch controls.
+            <strong>Simple Workflow</strong> shows Dashboard, Visual Canon, and the main writing path.{' '}
+            <strong>Advanced Tools</strong> restores the ribbon, production map, raw JSON, and batch controls.
           </p>
           {h('Visual Canon')}
           <p>
@@ -220,7 +220,7 @@ export function WriterHelpCategoryBody({
         <>
           {h('Pages')}
           <p>
-            <strong>Page beats</strong> and <strong>dialogue</strong> need a <strong>page</strong> selected in the top strip.
+            <strong>Page Beats</strong> and <strong>Dialogue</strong> need a <strong>page</strong> selected in the top strip.
             Outline generation does not create <code className="rounded bg-black/10 px-1">writer_pages</code> rows — use{' '}
             <strong>Add page</strong> when the list is empty, then pick the page and run beats or
             dialogue.
@@ -232,8 +232,8 @@ export function WriterHelpCategoryBody({
           </p>
           {h('Video / shot plan')}
           <p>
-            Shot plans combine the latest outline and page digests. Export JSON, CSV, or an issue pack from the Video
-            workspace.
+            Imageshop Prep combines the latest outline and page digests into shot-plan context. Export JSON, CSV, or an
+            issue pack from that workspace.
           </p>
           {wikiLink}
         </>
@@ -243,14 +243,14 @@ export function WriterHelpCategoryBody({
         <>
           {h('Pacing & canon')}
           <p>
-            <strong>Pacing review</strong> and <strong>canon check</strong> are issue-level. When a run succeeds, results are{' '}
+            <strong>Pacing review</strong> and <strong>canon check</strong> are issue-level Story Review tools. When a run succeeds, results are{' '}
             <strong>saved automatically</strong> on the issue under{' '}
             <code className="rounded bg-black/10 px-1">notes.writer_tool_cache</code> — there is no separate save button.
           </p>
           {h('Exports')}
           <p>
             Download issue packs, Markdown, JSON, and Guided Comics handoff files from the <strong>Export</strong> workspace.
-            All Tools keeps the advanced export and raw-output helpers available.
+            Advanced Tools keeps the advanced export and raw-output helpers available.
           </p>
           {h('Find')}
           <p>
@@ -266,8 +266,8 @@ export function WriterHelpCategoryBody({
         <ul className="list-disc pl-4 space-y-2">
           <li>
             <kbd className="rounded bg-black/10 px-1">⌥⌘1</kbd>–<kbd className="rounded bg-black/10 px-1">⌥⌘9</kbd> (Mac) or{' '}
-            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">9</kbd> — focused workspaces:
-            Dashboard, Outline, Visual Canon, Beats, Dialogue, Audit, Export, Synopsis, Canon
+            <kbd className="rounded bg-black/10 px-1">Alt+Ctrl+1</kbd>–<kbd className="rounded bg-black/10 px-1">9</kbd> — first nine workspaces:
+            Dashboard, Foundation, Synopsis Helper, Visual Canon, Story Canon, Page Beats, Dialogue, Imageshop Prep, Story Review
           </li>
           <li>
             <strong>File</strong> → <strong>Scripts & exports</strong> — jump to synopsis helper and issue pack
@@ -276,7 +276,7 @@ export function WriterHelpCategoryBody({
             <kbd className="rounded bg-black/10 px-1">⌘F</kbd> — focus Find
           </li>
           <li>
-            <kbd className="rounded bg-black/10 px-1">⌘⇧H</kbd> — show or hide Library / Activity / Shortcuts
+            <kbd className="rounded bg-black/10 px-1">⌘⇧H</kbd> — show or hide Library / Activity / Help
           </li>
           <li>
             <kbd className="rounded bg-black/10 px-1">Esc</kbd> — clear find (when Find is focused)

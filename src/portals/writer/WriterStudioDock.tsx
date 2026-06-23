@@ -14,7 +14,7 @@ type TabDef = {
 const DOCK_TABS: TabDef[] = [
   { id: 'library', label: 'Library', icon: <BookOpen size={16} aria-hidden /> },
   { id: 'activity', label: 'Activity', icon: <History size={16} aria-hidden /> },
-  { id: 'help', label: 'Shortcuts', icon: <Keyboard size={16} aria-hidden /> },
+  { id: 'help', label: 'Help / Shortcuts', icon: <Keyboard size={16} aria-hidden /> },
 ];
 
 type Props = {

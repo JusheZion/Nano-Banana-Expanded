@@ -20,32 +20,76 @@ export type WriterWorkspaceTabId =
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
   'dashboard',
   'outline',
+  'scripts',
   'visual_canon',
+  'lore',
   'beats',
   'dialogue',
-  'arc',
-  'export',
-  'scripts',
-  'lore',
   'video',
+  'arc',
   'cockpit',
+  'export',
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
   WriterWorkspaceTabId,
-  { ribbon: string; heading: string }
+  { ribbon: string; heading: string; description: string }
 > = {
-  dashboard: { ribbon: 'Dashboard', heading: 'Writer dashboard' },
-  cockpit: { ribbon: 'Cockpit', heading: 'Writers’ cockpit' },
-  outline: { ribbon: 'Outline', heading: 'Issue outline' },
-  visual_canon: { ribbon: 'Visual Canon', heading: 'Visual Canon' },
-  scripts: { ribbon: 'Synopsis', heading: 'Synopsis helper' },
-  lore: { ribbon: 'Canon', heading: 'Canon & lore' },
-  beats: { ribbon: 'Beats', heading: 'Page Beats' },
-  dialogue: { ribbon: 'Dialogue', heading: 'Dialogue' },
-  video: { ribbon: 'Visual Prep', heading: 'Visual Prep' },
-  arc: { ribbon: 'Audit', heading: 'Audit' },
-  export: { ribbon: 'Export', heading: 'Export issue' },
+  dashboard: {
+    ribbon: 'Dashboard',
+    heading: 'Writer dashboard',
+    description: 'Check the active issue, next step, locks, and readiness before generating.',
+  },
+  outline: {
+    ribbon: 'Foundation',
+    heading: 'Foundation & Outline',
+    description: 'Set the story basics, production defaults, outline, and page target.',
+  },
+  scripts: {
+    ribbon: 'Synopsis Helper',
+    heading: 'Synopsis helper',
+    description: 'Shape author notes and source material before the outline or beats are regenerated.',
+  },
+  visual_canon: {
+    ribbon: 'Visual Canon',
+    heading: 'Visual Canon',
+    description: 'Attach images the AI should keep consistent when it writes page beats.',
+  },
+  lore: {
+    ribbon: 'Story Canon',
+    heading: 'Story Canon (Lore)',
+    description: 'Choose the world rules, characters, places, and lore cards included in AI prompts.',
+  },
+  beats: {
+    ribbon: 'Page Beats',
+    heading: 'Page Beats',
+    description: 'Generate or edit panel-level story beats for the selected page.',
+  },
+  dialogue: {
+    ribbon: 'Dialogue',
+    heading: 'Dialogue',
+    description: 'Draft or edit script text from the selected page beats and issue outline.',
+  },
+  video: {
+    ribbon: 'Imageshop Prep',
+    heading: 'Imageshop Prep',
+    description: 'Prepare shot plans and handoff context for Illustrator’s Imageshop.',
+  },
+  arc: {
+    ribbon: 'Story Review',
+    heading: 'Story Review',
+    description: 'Run pacing and canon checks before comparing or exporting the issue.',
+  },
+  cockpit: {
+    ribbon: 'Compare',
+    heading: 'Compare & Review',
+    description: 'Compare outline, beats, dialogue, review notes, lore, and shot plans side by side.',
+  },
+  export: {
+    ribbon: 'Export',
+    heading: 'Export issue',
+    description: 'Download issue packs, scripts, JSON bundles, and handoff files.',
+  },
 };
 
 export type WriterToolSaved = { at?: string; result?: unknown } | null;

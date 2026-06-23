@@ -1,6 +1,6 @@
 # Writers' Workshop
 
-_Last reviewed: 2026-04-21_
+_Last reviewed: 2026-06-23_
 
 Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon), and **shot plans**. This article is the **long-form** companion to the in-app **Ribbon → Help** modal.
 
@@ -16,13 +16,13 @@ Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon),
 
 - **Library**: pick a **series**, then an **issue**. Re-select the issue if fields stay disabled.
 - **Issue outline**: story context saves to `writer_issues` / `writer_series` — no spreadsheet upload.
-- **Workspace tabs**: ⌘2 focuses Issue Outline (see **Keyboard** below).
+- **Simple Workflow**: follow Dashboard, Foundation, Synopsis Helper, Visual Canon, Story Canon, Page Beats, Dialogue, Imageshop Prep, Story Review, Compare & Review, and Export.
 
 ## Pages tools
 
 - **Pages** live under Library → Pages. Outline generation does **not** auto-create page rows — use **Add page** when the list is empty.
 - **Beats** and **dialogue** attach to the selected page; outputs persist to `writer_pages`.
-- **Video / shot plans**: combine outline + page digests; export JSON, CSV, or issue pack from the Video tab.
+- **Imageshop Prep / shot plans**: combine outline + page digests; export JSON, CSV, or issue pack from the Imageshop Prep tab.
 
 ## Review export
 
@@ -33,10 +33,11 @@ Series, issues, **pages**, AI tooling (outline, beats, dialogue, pacing, canon),
 
 | Shortcut | Action |
 |----------|--------|
-| ⌥⌘1–8 (Mac) / Alt+Ctrl+1–8 | Cockpit, Outline, Lore, Beats, Dialogue, Video, Arc, Scripts (not ⌘1–9 — browser tabs) |
-| File → Scripts & exports | Open Scripts tab from any ribbon |
+| ⌥⌘1–9 (Mac) / Alt+Ctrl+1–9 | Dashboard, Foundation, Synopsis Helper, Visual Canon, Story Canon, Page Beats, Dialogue, Imageshop Prep, Story Review (not ⌘1–9 — browser tabs) |
+| Workspace tabs | Open Compare & Review or Export when a tab is past the digit shortcuts |
+| File → Synopsis Helper / Export | Open helper and export workspaces from any ribbon |
 | ⌘F | Focus Find |
-| ⌘⇧H | Show / hide Library, Activity, Shortcuts |
+| ⌘⇧H | Show / hide Library, Activity, Help |
 | Esc | Clear find (when focused) |
 
 ## Screenshot

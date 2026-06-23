@@ -23,37 +23,37 @@ export function getWriterQuickGenerateNextHint(
       return 'Use the dashboard to confirm the series, issue, page, locks, and Visual Canon before continuing.';
     case 'outline':
       if (!ctx.hasOutline) {
-        return 'Next: add story setup and Visual Canon, then generate the issue outline.';
+        return 'Next: complete Foundation basics and Visual Canon, then generate the issue outline.';
       }
       if (ctx.pageCount < ctx.targetPageCount) {
         return 'Next: use “Sync pages to target” so every page row exists, then Page Beats.';
       }
       return 'Next: Page Beats — pick pages, generate per page, or run “Generate all beats”.';
     case 'visual_canon':
-      return 'Attach character, location, and prop images the AI must treat as visual canon before writing beats.';
+      return 'Attach character, location, and prop images the AI should keep consistent before writing beats.';
     case 'scripts':
       return 'Use Synopsis helper for author outline/source structure before regenerating outline or beats.';
     case 'lore':
-      return 'Canon cards marked “Include in AI prompts” are sent to Generate outline and page beats. Next: Page Beats.';
+      return 'Story Canon cards marked “Include in AI prompts” are sent to Generate outline and page beats. Next: Page Beats.';
     case 'beats':
       if (ctx.pageCount === 0) {
         return 'Next: sync pages from Issue Outline (target pages) or add pages in the Library.';
       }
       if (ctx.pagesWithBeats < ctx.pageCount) {
-        return 'Next: finish beats, then Dialogue (⌥⌘5 / Alt+Ctrl+5) to draft script from beats.';
+        return 'Next: finish page beats, then open Dialogue to draft script from beats.';
       }
-      return 'Beats are complete. Continue to Dialogue or Visual Prep; regenerate only if you want to replace this page.';
+      return 'Beats are complete. Continue to Dialogue or Imageshop Prep; regenerate only if you want to replace this page.';
     case 'dialogue':
       if (ctx.pageCount === 0) return 'Next: add pages and beats before dialogue.';
-      if (ctx.pagesWithBeats === 0) return 'Next: generate page beats first (⌥⌘4 / Alt+Ctrl+4).';
+      if (ctx.pagesWithBeats === 0) return 'Next: generate page beats first.';
       if (ctx.pagesWithScript < ctx.pagesWithBeats) {
-        return 'Next: draft missing dialogue, then Visual Prep or Audit.';
+        return 'Next: draft missing dialogue, then Imageshop Prep or Story Review.';
       }
-      return 'Dialogue is complete. Continue to Visual Prep, Audit, or Export; regenerate only if you want to replace this page.';
+      return 'Dialogue is complete. Continue to Imageshop Prep, Story Review, or Export; regenerate only if you want to replace this page.';
     case 'video':
-      return 'Next: Audit for pacing/canon, Cockpit to compare outputs, or Export when the issue is ready.';
+      return 'Next: Story Review for pacing/canon, Compare & Review for saved outputs, or Export when the issue is ready.';
     case 'arc':
-      return 'Run pacing/canon on the Library issue, then continue to Cockpit or Export.';
+      return 'Run pacing/canon on the selected issue, then continue to Compare & Review or Export.';
     case 'cockpit':
       return 'Compare outline / beats / dialogue side-by-side, then export or use Idea assist for late-stage review.';
     case 'export':

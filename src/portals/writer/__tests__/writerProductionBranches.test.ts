@@ -23,7 +23,7 @@ describe('writerProductionBranches', () => {
 
   it('exports the expected production branch option definitions', () => {
     expect(WRITER_PRODUCTION_BRANCH_OPTIONS).toEqual([
-      { id: 'visual_prep', label: 'Visual prep' },
+      { id: 'visual_prep', label: 'Imageshop Prep' },
       { id: 'dialogue', label: 'Dialogue' },
       { id: 'exports', label: 'Exports' },
       { id: 'guided_comics_handoff', label: 'Guided Comics handoff' },

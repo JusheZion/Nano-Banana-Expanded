@@ -125,6 +125,31 @@ export function removeWriterVisualReferenceFromNotes(
   };
 }
 
+export function updateWriterVisualReferenceInNotes(
+  notes: Record<string, unknown> | undefined,
+  referenceIdToUpdate: string,
+  updates: Partial<Pick<WriterVisualReference, 'sourceLabel' | 'label' | 'kind' | 'imageUrl' | 'note'>>,
+): Record<string, unknown> {
+  const refs = readWriterVisualReferencesFromNotes(notes).map((ref) => {
+    if (ref.id !== referenceIdToUpdate) return ref;
+    const hasNoteUpdate = Object.hasOwn(updates, 'note');
+    return {
+      ...ref,
+      ...updates,
+      sourceLabel: sanitizeText(updates.sourceLabel) || ref.sourceLabel,
+      label: sanitizeText(updates.label) || ref.label,
+      kind: readKind(updates.kind, ref.kind),
+      imageUrl: sanitizeText(updates.imageUrl) || ref.imageUrl,
+      note: hasNoteUpdate ? sanitizeText(updates.note) || undefined : ref.note,
+      linkedAt: ref.linkedAt,
+    };
+  });
+  return {
+    ...asNotesObject(notes),
+    [WRITER_VISUAL_REFERENCES_NOTES_KEY]: refs.map(serializeReference),
+  };
+}
+
 export function buildWriterVisualReferenceDigest(refs: WriterVisualReference[]): string {
   if (refs.length === 0) return '';
   return refs

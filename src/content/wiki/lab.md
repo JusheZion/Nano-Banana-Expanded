@@ -1,6 +1,6 @@
 # Illustrator’s Imageshop
 
-_Last reviewed: 2026-04-05_
+_Last reviewed: 2026-06-23_
 
 > **Note:** In code and types this portal is still `lab`. In the UI it now appears as **Illustrator’s Imageshop**.
 
@@ -8,12 +8,12 @@ Illustrator’s Imageshop is the visual orchestration layer between Writers' Wor
 
 ## Navigation map
 
-- **Rows / panes**: Visual Prep + production libraries | timeline + preview | beat detail ∥ Image Lab (layout varies by viewport).
+- **Rows / panes**: Imageshop Prep + production libraries | timeline + preview | beat detail ∥ Image Lab (layout varies by viewport).
 - **Magenta–violet** shell tokens (`STORYLINE_DIRECTOR_BG` family) distinguish this mode inside the app.
 
 ## Tools & functions
 
-- **Visual Prep** — takes Writer context, groups matched refs / quick refs / studio escalations.
+- **Imageshop Prep** — takes Writer context, groups matched refs / quick refs / studio escalations.
 - **Per-beat generation** — aspect ratio, reference strength, cast/asset links.
 - **Save to Asset vault** — persists sequences when configured.
 - **Open in Character / Assets Studio** — uses the studio import bridge with return-to-origin metadata.

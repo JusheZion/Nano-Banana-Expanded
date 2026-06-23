@@ -46,18 +46,18 @@ export type WriterWorkflowContext = {
 
 export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', tab: 'dashboard', eyebrow: 'Start' },
-  { id: 'library', label: 'Selection', tab: 'dashboard', eyebrow: 'Choose' },
-  { id: 'foundation', label: 'Story Setup', tab: 'outline', eyebrow: 'Setup' },
+  { id: 'library', label: 'Choose Story', tab: 'dashboard', eyebrow: 'Select' },
+  { id: 'foundation', label: 'Foundation', tab: 'outline', eyebrow: 'Setup' },
   { id: 'synopsis', label: 'Synopsis', tab: 'scripts', eyebrow: 'Author source' },
   { id: 'visual_canon', label: 'Visual Canon', tab: 'visual_canon', eyebrow: 'References' },
-  { id: 'canon', label: 'Canon', tab: 'lore', eyebrow: 'Lore' },
+  { id: 'canon', label: 'Story Canon', tab: 'lore', eyebrow: 'Lore' },
   { id: 'outline', label: 'Outline', tab: 'outline', eyebrow: 'Structure' },
   { id: 'pages', label: 'Pages', tab: 'outline', eyebrow: 'Rows' },
   { id: 'beats', label: 'Beats', tab: 'beats', eyebrow: 'Panels' },
   { id: 'dialogue', label: 'Dialogue', tab: 'dialogue', eyebrow: 'Script' },
-  { id: 'visual', label: 'Visual Prep', tab: 'video', eyebrow: 'Imageshop' },
-  { id: 'audit', label: 'Audit', tab: 'arc', eyebrow: 'Review' },
-  { id: 'cockpit', label: 'Cockpit', tab: 'cockpit', eyebrow: 'Compare' },
+  { id: 'visual', label: 'Imageshop Prep', tab: 'video', eyebrow: 'Imageshop' },
+  { id: 'audit', label: 'Story Review', tab: 'arc', eyebrow: 'Review' },
+  { id: 'cockpit', label: 'Compare & Review', tab: 'cockpit', eyebrow: 'Compare' },
   { id: 'export', label: 'Export', tab: 'export', eyebrow: 'Output' },
 ];
 
@@ -99,13 +99,13 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
         return {
           ...step,
           done: ctx.hasVisualCanon,
-          detail: ctx.hasVisualCanon ? 'Image references attached' : 'Attach character/location/prop images',
+          detail: ctx.hasVisualCanon ? 'Image references attached' : 'Attach images for AI consistency',
         };
       case 'canon':
         return {
           ...step,
           done: ctx.hasCanon,
-          detail: ctx.hasCanon ? 'Lore included' : 'Add lore before generation',
+          detail: ctx.hasCanon ? 'Story lore included' : 'Choose lore for AI prompts',
         };
       case 'outline':
         return {
@@ -135,25 +135,25 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
         return {
           ...step,
           done: ctx.hasShotPlan,
-          detail: ctx.hasShotPlan ? 'Shot plan saved' : 'Send page or shot plan',
+          detail: ctx.hasShotPlan ? 'Shot plan saved' : 'Prepare Imageshop handoff',
         };
       case 'audit':
         return {
           ...step,
           done: ctx.hasAudit,
-          detail: ctx.hasAudit ? 'Review cached' : 'Run pacing + canon',
+          detail: ctx.hasAudit ? 'Review saved' : 'Run pacing and canon checks',
         };
       case 'cockpit':
         return {
           ...step,
           done: false,
-          detail: 'Late-stage compare',
+          detail: 'Compare saved outputs',
         };
       case 'export':
         return {
           ...step,
           done: ctx.hasOutline || ctx.pagesWithBeats > 0 || ctx.pagesWithDialogue > 0,
-          detail: 'Preferred + handoff files',
+          detail: 'Download handoff files',
         };
       default:
         return {

@@ -27,7 +27,7 @@ export const WRITER_AUDIT_MODE_OPTIONS: WriterProductionOption<WriterAuditModeId
 ];
 
 export const WRITER_PRODUCTION_BRANCH_OPTIONS: WriterProductionOption<WriterProductionBranchId>[] = [
-  { id: 'visual_prep', label: 'Visual prep' },
+  { id: 'visual_prep', label: 'Imageshop Prep' },
   { id: 'dialogue', label: 'Dialogue' },
   { id: 'exports', label: 'Exports' },
   { id: 'guided_comics_handoff', label: 'Guided Comics handoff' },
@@ -246,11 +246,11 @@ export function summarizeWriterProductionBranches(args: {
         ...option,
         ready: args.hasShotPlan || args.pagesWithBeats > 0,
         summary: args.hasShotPlan
-          ? 'Shot plan is ready for visual prep.'
+          ? 'Shot plan is ready for Imageshop Prep.'
           : args.pagesWithBeats > 0
             ? 'Page beats are ready; generate a shot plan or send selected art context forward.'
-            : 'Generate page beats before visual prep.',
-        actionLabel: args.hasShotPlan ? 'Open visual prep' : 'Prepare visuals',
+            : 'Generate page beats before Imageshop Prep.',
+        actionLabel: args.hasShotPlan ? 'Open Imageshop Prep' : 'Prepare Imageshop',
       };
     }
     if (option.id === 'dialogue') {
@@ -268,7 +268,7 @@ export function summarizeWriterProductionBranches(args: {
       return {
         ...option,
         ready: args.hasOutline || args.pagesWithBeats > 0 || args.pagesWithDialogue > 0,
-        summary: 'Export issue pack, markdown summary, selected beats, dialogue, and audit text.',
+        summary: 'Export issue pack, markdown summary, selected beats, dialogue, and review notes.',
         actionLabel: 'Open exports',
       };
     }
