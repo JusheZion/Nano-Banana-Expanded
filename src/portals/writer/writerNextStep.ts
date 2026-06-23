@@ -57,7 +57,7 @@ export function getWriterQuickGenerateNextHint(
     case 'cockpit':
       return 'Compare outline / beats / dialogue side-by-side, then export or use Idea assist for late-stage review.';
     case 'export':
-      return 'Download the preferred issue pack, Markdown script, JSON bundle, or Guided Comics handoff.';
+      return 'Download the preferred issue pack, readable script, full project data file, or Guided Comics handoff.';
     default:
       return '';
   }

@@ -5,6 +5,7 @@ export type WriterWorkflowStepId =
   | 'library'
   | 'foundation'
   | 'synopsis'
+  | 'story_map'
   | 'visual_canon'
   | 'canon'
   | 'outline'
@@ -33,6 +34,7 @@ export type WriterWorkflowContext = {
   hasIssue: boolean;
   hasFoundation: boolean;
   hasSynopsis: boolean;
+  hasStoryMap: boolean;
   hasVisualCanon: boolean;
   hasCanon: boolean;
   hasOutline: boolean;
@@ -48,7 +50,8 @@ export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', tab: 'dashboard', eyebrow: 'Start' },
   { id: 'library', label: 'Choose Story', tab: 'dashboard', eyebrow: 'Select' },
   { id: 'foundation', label: 'Foundation', tab: 'outline', eyebrow: 'Setup' },
-  { id: 'synopsis', label: 'Synopsis', tab: 'scripts', eyebrow: 'Author source' },
+  { id: 'synopsis', label: 'Author Source', tab: 'scripts', eyebrow: 'Source' },
+  { id: 'story_map', label: 'Story Map', tab: 'scripts', eyebrow: 'Map' },
   { id: 'visual_canon', label: 'Visual Canon', tab: 'visual_canon', eyebrow: 'References' },
   { id: 'canon', label: 'Story Canon', tab: 'lore', eyebrow: 'Lore' },
   { id: 'outline', label: 'Outline', tab: 'outline', eyebrow: 'Structure' },
@@ -94,6 +97,12 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
           ...step,
           done: ctx.hasSynopsis,
           detail: ctx.hasSynopsis ? 'Author source ready' : 'Add outline/source',
+        };
+      case 'story_map':
+        return {
+          ...step,
+          done: ctx.hasStoryMap,
+          detail: ctx.hasStoryMap ? 'Story map saved' : 'Map arcs, pages, scenes, and beats',
         };
       case 'visual_canon':
         return {

@@ -11,7 +11,8 @@ describe('writerWorkflowChronology', () => {
       'Dashboard',
       'Choose Story',
       'Foundation',
-      'Synopsis',
+      'Author Source',
+      'Story Map',
       'Visual Canon',
       'Story Canon',
       'Outline',
@@ -31,6 +32,7 @@ describe('writerWorkflowChronology', () => {
       hasIssue: true,
       hasFoundation: true,
       hasSynopsis: true,
+      hasStoryMap: false,
       hasVisualCanon: false,
       hasCanon: false,
       hasOutline: false,
@@ -50,6 +52,10 @@ describe('writerWorkflowChronology', () => {
     expect(steps.find((step) => step.id === 'visual_canon')).toMatchObject({
       done: false,
       detail: 'Attach images for AI consistency',
+    });
+    expect(steps.find((step) => step.id === 'story_map')).toMatchObject({
+      done: false,
+      detail: 'Map arcs, pages, scenes, and beats',
     });
     expect(steps.find((step) => step.id === 'canon')).toMatchObject({
       done: false,

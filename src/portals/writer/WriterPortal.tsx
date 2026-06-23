@@ -88,6 +88,7 @@ import {
   buildWriterWorkflowSteps,
   type WriterWorkflowStep,
   type WriterWorkflowStepId,
+  WRITER_WORKFLOW_STEP_ORDER,
 } from '@/portals/writer/writerWorkflowChronology';
 import {
   buildWriterPageEditReview,
@@ -827,6 +828,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [activeTab, setActiveTab] = useState<WriterWorkspaceTabId>(
     initialWriterWorkspaceRef.current.tabId,
   );
+  const [activeWorkflowOverride, setActiveWorkflowOverride] = useState<WriterWorkflowStepId | null>(null);
   const [activeRibbonMenu, setActiveRibbonMenu] = useState<WriterRibbonMenuId>('home');
   const [dockTab, setDockTab] = useState<WriterDockTabId>('library');
   const [dockCollapsed, setDockCollapsed] = useState(true);
@@ -2992,7 +2994,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     if (
       !window.confirm(
-        `Delete ${selectedPageIdsForBatch.length} page row(s) from the database? Page numbers may leave gaps (e.g. 1,2,4). This cannot be undone.`,
+        `Delete ${selectedPageIdsForBatch.length} page row(s)? Page numbers may leave gaps (e.g. 1,2,4). This cannot be undone.`,
       )
     ) {
       return;
@@ -4022,7 +4024,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!selectedIssueId || !selectedIssue) return;
     const raw = hierarchyImportDraft.trim();
     if (!raw) {
-      setHierarchyImportError('Paste an outline tree or JSON payload before saving.');
+      setHierarchyImportError('Paste a story map or outline before saving.');
       return;
     }
 
@@ -4030,7 +4032,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ? importHierarchyFromJson(raw)
       : importHierarchyFromText(raw);
     if (nodes.length === 0) {
-      setHierarchyImportError('No hierarchy nodes were found. Include arc/book/issue/chapter/page/scene/beat labels.');
+      setHierarchyImportError('No story map items were found. Use labels like Arc, Issue, Page, Scene, or Beat.');
       return;
     }
 
@@ -4041,17 +4043,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     });
     setScriptsBusy(false);
     if (!ok) {
-      setHierarchyImportError('Could not save hierarchy tree. Check Supabase.');
+      setHierarchyImportError('Could not save the story map.');
       return;
     }
     await refreshIssuesForSeries();
-    pushHistory(`saved hierarchy tree (${nodes.length} root node${nodes.length === 1 ? '' : 's'})`);
+    pushHistory(`saved story map (${nodes.length} root item${nodes.length === 1 ? '' : 's'})`);
   }, [selectedIssueId, selectedIssue, hierarchyImportDraft, refreshIssuesForSeries, pushHistory]);
 
   const saveEditedHierarchyToNotes = useCallback(async () => {
     if (!selectedIssueId || !selectedIssue) return;
     if (hierarchyEditNodes.length === 0) {
-      setHierarchyEditError('No hierarchy nodes to save.');
+      setHierarchyEditError('No story map items to save.');
       return;
     }
     setHierarchyEditError(null);
@@ -4061,11 +4063,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     });
     setScriptsBusy(false);
     if (!ok) {
-      setHierarchyEditError('Could not save hierarchy edits. Check Supabase.');
+      setHierarchyEditError('Could not save story map edits.');
       return;
     }
     await refreshIssuesForSeries();
-    pushHistory('saved hierarchy tree edits');
+    pushHistory('saved story map edits');
   }, [selectedIssueId, selectedIssue, hierarchyEditNodes, refreshIssuesForSeries, pushHistory]);
 
   const saveProductionDefaultsToNotes = useCallback(async () => {
@@ -4332,7 +4334,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <button
               type="button"
               className="rounded p-0.5 text-black/45 hover:text-black/75 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-              aria-label="About series and Supabase"
+              aria-label="About series setup"
             >
               <HelpCircle size={13} aria-hidden />
             </button>
@@ -4593,7 +4595,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
               title="Download selected beats as plain text"
             >
-              Beats .txt
+              Beats notes
             </button>
             <button
               type="button"
@@ -4602,7 +4604,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
               title="Download selected beats as Markdown"
             >
-              Beats .md
+              Formatted beats
             </button>
             <button
               type="button"
@@ -4619,7 +4621,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
               title="Download selected dialogue as plain text"
             >
-              Dialogue .txt
+              Dialogue notes
             </button>
             <button
               type="button"
@@ -4628,7 +4630,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               className="rounded-md px-2 py-1 text-[10px] font-bold text-black/75 border border-black/15 bg-white/70 disabled:opacity-45"
               title="Download selected dialogue as Fountain"
             >
-              Dialogue .fountain
+              Script format
             </button>
             <button
               type="button"
@@ -4760,7 +4762,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       disabled: !searchableText,
     },
     {
-      label: 'Copy outline JSON',
+      label: 'Copy outline data (advanced)',
       onClick: () => {
         if (!latestOutline) return;
         void navigator.clipboard.writeText(JSON.stringify(latestOutline.outline_json, null, 2));
@@ -4768,7 +4770,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       disabled: !latestOutline,
     },
     {
-      label: 'Download outline JSON',
+      label: 'Download outline data (advanced)',
       onClick: () => {
         if (!latestOutline) return;
         downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json);
@@ -4777,12 +4779,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       disabled: !latestOutline,
     },
     {
-      label: 'Copy issue pack (JSON)',
+      label: 'Copy full project data (advanced)',
       onClick: () => copyIssuePackJson(),
       disabled: !selectedIssueId,
     },
     {
-      label: 'Download issue pack',
+      label: 'Download full project data',
       onClick: () => {
         downloadJsonFile('writer-issue-pack.json', issuePackObject);
       },
@@ -4806,7 +4808,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
 
   const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
-  const activeWorkflowStepId: WriterWorkflowStepId =
+  const derivedWorkflowStepId: WriterWorkflowStepId =
     activeTab === 'dashboard'
       ? 'dashboard'
       : activeTab === 'visual_canon'
@@ -4820,9 +4822,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ? 'pages'
             : 'outline'
       : activeTab === 'scripts'
-        ? scriptsEditorTab === 'synopsis'
-          ? 'synopsis'
-          : 'export'
+        ? 'synopsis'
         : activeTab === 'export'
           ? 'export'
         : activeTab === 'lore'
@@ -4836,11 +4836,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 : activeTab === 'arc'
                   ? 'audit'
                   : 'cockpit';
+  const activeWorkflowOverrideTab = activeWorkflowOverride
+    ? WRITER_WORKFLOW_STEP_ORDER.find((step) => step.id === activeWorkflowOverride)?.tab
+    : null;
+  const activeWorkflowStepId: WriterWorkflowStepId =
+    activeWorkflowOverride && activeWorkflowOverrideTab === activeTab
+      ? activeWorkflowOverride
+      : derivedWorkflowStepId;
+  const outlineWorkspaceStep: 'foundation' | 'outline' | 'pages' =
+    activeTab === 'outline' &&
+    (activeWorkflowStepId === 'foundation' || activeWorkflowStepId === 'outline' || activeWorkflowStepId === 'pages')
+      ? activeWorkflowStepId
+      : 'foundation';
+  const scriptsWorkspaceStep: 'synopsis' | 'story_map' =
+    activeTab === 'scripts' && activeWorkflowStepId === 'story_map' ? 'story_map' : 'synopsis';
   const productionStages: WriterProductionStage[] = buildWriterWorkflowSteps({
     hasSeries: Boolean(selectedSeriesId),
     hasIssue: Boolean(selectedIssueId),
     hasFoundation: Boolean(selectedSeriesId),
     hasSynopsis: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
+    hasStoryMap: hierarchyNodes.length > 0,
     hasVisualCanon: writerVisualReferences.length > 0,
     hasCanon: loreCards.length > 0,
     hasOutline: Boolean(latestOutline),
@@ -4858,12 +4873,38 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const completedStageCount = productionStages.filter((stage) => stage.done).length;
   const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
   const activeWorkspaceLabel = WRITER_WORKSPACE_TAB_LABELS[activeTab];
-  const workspaceHeading = activeWorkspaceLabel.heading;
-  const workspaceDescription = activeWorkspaceLabel.description;
+  const workspaceHeading =
+    activeTab === 'outline'
+      ? outlineWorkspaceStep === 'foundation'
+        ? 'Foundation'
+        : outlineWorkspaceStep === 'pages'
+          ? 'Pages'
+          : 'Outline'
+      : activeTab === 'scripts'
+        ? scriptsWorkspaceStep === 'story_map'
+          ? 'Story Map'
+          : 'Author Source'
+        : activeWorkspaceLabel.heading;
+  const workspaceDescription =
+    activeTab === 'outline'
+      ? outlineWorkspaceStep === 'foundation'
+        ? 'Set the story basics and production defaults that guide later AI work.'
+        : outlineWorkspaceStep === 'pages'
+          ? 'Create and review one editable row for each page before beats and dialogue.'
+          : 'Generate, review, and revise the saved issue outline.'
+      : activeTab === 'scripts'
+        ? scriptsWorkspaceStep === 'story_map'
+          ? 'Map arcs, pages, scenes, and beats so ARCS keeps the story structure in order.'
+          : 'Save the source outline and guidance ARCS should follow.'
+        : activeWorkspaceLabel.description;
   const focusWriterElement = useCallback((id: string) => {
     window.requestAnimationFrame(() => {
       document.getElementById(id)?.focus();
     });
+  }, []);
+  const openWriterWorkflowStage = useCallback((stage: Pick<WriterProductionStage, 'id' | 'tab'>) => {
+    setActiveWorkflowOverride(stage.id);
+    setActiveTab(stage.tab);
   }, []);
   const renderLockButton = (key: WriterLockKey, label: string) => {
     const locked = Boolean(writerLocks[key]?.locked);
@@ -4877,10 +4918,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ? 'border-emerald-700/45 bg-emerald-100/90 text-emerald-950 hover:bg-emerald-50'
             : 'border-black/15 bg-white/75 text-black/60 hover:bg-white hover:text-black'
         }`}
-        title={locked ? `${label} is locked` : `Lock ${label}`}
+        title={
+          locked
+            ? `${label} is protected from overwrite actions`
+            : `Allow AI and clear actions to overwrite ${label}`
+        }
       >
         {locked ? <Lock size={12} aria-hidden /> : <Unlock size={12} aria-hidden />}
-        {locked ? 'Locked' : 'Lock'}
+        {locked ? 'Protected' : 'Can overwrite'}
       </button>
     );
   };
@@ -5013,7 +5058,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         </button>
         <span className="ml-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/40">
           <ShieldCheck size={13} aria-hidden />
-          Protect
+          Overwrite
         </span>
         {renderLockButton('issue.synopsis', 'Issue synopsis')}
         {renderLockButton('issue.author_outline', 'Author outline')}
@@ -5062,7 +5107,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/45">
           <ShieldCheck size={13} aria-hidden />
-          {lockedStoryPartCount} locked
+          {lockedStoryPartCount} protected
         </span>
         <button
           type="button"
@@ -5104,7 +5149,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <button
           key={stage.id}
           type="button"
-          onClick={() => setActiveTab(stage.tab)}
+          onClick={() => openWriterWorkflowStage(stage)}
           className={`group grid grid-cols-[1.35rem_minmax(0,1fr)] gap-2 border-l-2 px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40 ${
             stage.current
               ? 'border-amber-700 bg-amber-100/85 text-black shadow-sm'
@@ -5139,9 +5184,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       'dashboard',
       'foundation',
       'synopsis',
+      'story_map',
       'visual_canon',
       'canon',
       'outline',
+      'pages',
       'beats',
       'dialogue',
       'visual',
@@ -5162,7 +5209,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           >
             <button
               type="button"
-              onClick={() => setActiveTab(stage.tab)}
+              onClick={() => openWriterWorkflowStage(stage)}
               className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
                 stage.current
                   ? 'border-amber-800/45 bg-amber-100 text-black shadow-sm'
@@ -5285,7 +5332,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <Tooltip
             content={
               writerFocusedMode
-                ? 'Advanced Tools shows the full ribbon, JSON editors, batch actions, and diagnostics.'
+                ? 'Advanced Tools shows the full ribbon, raw data editors, batch actions, and diagnostics.'
                 : 'Simple Workflow shows the main writing path with fewer controls.'
             }
             side="bottom"
@@ -5890,7 +5937,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     title={
                       mode === 'Simple Workflow'
                         ? 'Show the main writing path with fewer controls.'
-                        : 'Show the full ribbon, JSON editors, batch actions, and diagnostics.'
+                        : 'Show the full ribbon, raw data editors, batch actions, and diagnostics.'
                     }
                   >
                     {mode}
@@ -5918,7 +5965,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           role="status"
         >
           <p className="flex-1 min-w-0 leading-snug">
-            <span className="font-bold">Sign in for AI tools.</span> Writer-tools expects a logged-in Supabase user (JWT).
+	            <span className="font-bold">Sign in for AI tools.</span> ARCS needs an active account session before it can run AI actions.
             Use the sidebar account control or{' '}
             <button
               type="button"
@@ -6007,7 +6054,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               <button
                 key={stage.id}
                 type="button"
-                onClick={() => setActiveTab(stage.tab)}
+                onClick={() => openWriterWorkflowStage(stage)}
                 className={`shrink-0 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
                   stage.current
                     ? 'border-amber-700 bg-amber-100 text-black'
@@ -6213,13 +6260,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3 xl:col-span-2`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Protected story parts</p>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                          Overwrite protection
+                        </p>
                         <button
                           type="button"
                           onClick={() => setActiveTab('outline')}
                           className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold text-black"
                         >
-                          Manage locks
+                          Choose what AI can replace
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -6238,7 +6287,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 : 'border-black/10 bg-white/55 text-black/45'
                             }`}
                           >
-                            {label}: {lock?.locked ? 'Locked' : 'Open'}
+                            {label}: {lock?.locked ? 'Protected' : 'Can overwrite'}
                           </span>
                         ))}
                       </div>
@@ -6322,7 +6371,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 checked={cockpitIncludeLeft}
                                 onChange={(e) => setCockpitIncludeLeft(e.target.checked)}
                               />
-                              Include left digest
+	                              Include {COCKPIT_VIEW_OPTIONS.find((o) => o.id === cockpitLeftView)?.label ?? 'left column'} column
                             </label>
                             <label className="inline-flex items-center gap-2">
                               <input
@@ -6330,7 +6379,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 checked={cockpitIncludeMiddle}
                                 onChange={(e) => setCockpitIncludeMiddle(e.target.checked)}
                               />
-                              Include middle digest
+	                              Include {COCKPIT_VIEW_OPTIONS.find((o) => o.id === cockpitMiddleView)?.label ?? 'middle column'} column
                             </label>
                             <label className="inline-flex items-center gap-2">
                               <input
@@ -6338,7 +6387,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 checked={cockpitIncludeRight}
                                 onChange={(e) => setCockpitIncludeRight(e.target.checked)}
                               />
-                              Include right digest
+	                              Include {COCKPIT_VIEW_OPTIONS.find((o) => o.id === cockpitRightView)?.label ?? 'right column'} column
                             </label>
                           </div>
 
@@ -6356,7 +6405,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </label>
 
                           <div className="flex flex-wrap gap-2 text-[10px] text-black/55">
-                            <span className="font-bold text-black/45 uppercase tracking-wide">Focus for page_id</span>
+	                            <span className="font-bold text-black/45 uppercase tracking-wide">Focus on selected page</span>
                             <button
                               type="button"
                               className={`rounded-full px-2 py-0.5 border ${
@@ -6391,8 +6440,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               Right
                             </button>
                             <span className="text-black/45">
-                              (Used when the focused column is Beats or Dialogue — sends optional <code className="font-mono">page_id</code>
-                              )
+	                              Used when the focused column is Beats or Dialogue.
                             </span>
                           </div>
 
@@ -6419,7 +6467,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               onClick={() => appendTextToField(setBeatsEditDraft, cockpitIdeaOutput)}
                               className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
                             >
-                              Append to beats JSON draft
+	                              Add to page beats draft (advanced)
                             </button>
                             <button
                               type="button"
@@ -6517,26 +6565,33 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   </div>
                 )}
                 {activeTab === 'outline' && (
-                  <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(300px,40%)] xl:items-start xl:gap-4">
+                  <div
+                    className={`flex min-w-0 flex-col gap-4 xl:grid xl:items-start xl:gap-4 ${
+                      outlineWorkspaceStep === 'outline'
+                        ? 'xl:grid-cols-[minmax(0,1fr)_minmax(300px,40%)]'
+                        : 'xl:grid-cols-[minmax(0,1fr)]'
+                    }`}
+                  >
                     <div className="min-w-0 space-y-4">
-                    {!supabaseOk ? (
+                    {outlineWorkspaceStep === 'foundation' ? (
+                    !supabaseOk ? (
                       <div
                         className={`${WRITER_GLASS_CARD} p-4 space-y-2 border-amber-400/40 bg-amber-50/30`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation</p>
+	                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation</p>
                           <Tooltip content={WRITER_UI_TIPS.storyContextSupabase} side="left">
                             <button
                               type="button"
                               className="rounded-md p-1 text-amber-900/80 hover:bg-amber-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                              aria-label="How to configure Supabase"
+                              aria-label="Why story fields cannot save yet"
                             >
                               <HelpCircle size={15} aria-hidden />
                             </button>
                           </Tooltip>
                         </div>
                         <p className="text-xs text-amber-950/90 leading-snug">
-                          Add Supabase env vars and restart the dev server to enable fields below.
+	                          Project setup is required before story fields can save.
                         </p>
                       </div>
                     ) : (
@@ -6648,16 +6703,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
                               <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-                                Foundation / production defaults
-                              </p>
-                              <p className="mt-1 text-[11px] leading-snug text-black/60">
-                                Saved in existing notes metadata. Issue defaults override series defaults and are sent
-                                to outline, beats, dialogue, visual planning, and issue pack exports.
-                              </p>
-                            </div>
-                            <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                              notes.production_defaults
-                            </span>
+	                                Story settings for AI and exports
+	                              </p>
+	                              <p className="mt-1 text-[11px] leading-snug text-black/60">
+	                                These settings tell ARCS what kind of project you are making and shape outline,
+	                                beats, dialogue, Imageshop prep, and downloads.
+	                              </p>
+	                            </div>
+	                            <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+	                              <summary className="cursor-pointer">Advanced details</summary>
+	                              <span className="mt-1 block normal-case tracking-normal">Saved with this issue as story settings.</span>
+	                            </details>
                           </div>
                           <div className="grid gap-2 sm:grid-cols-2">
                             <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
@@ -6748,8 +6804,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 disabled={!selectedSeriesId}
                                 className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
                               >
-                                <option value="issue_pack_json">Issue pack JSON</option>
-                                <option value="comic_script_markdown">Comic script markdown</option>
+	                                <option value="issue_pack_json">Full project data file</option>
+	                                <option value="comic_script_markdown">Readable comic script</option>
                                 <option value="guided_comic_handoff">Guided Comics handoff</option>
                                 <option value="fountain_screenplay">Fountain screenplay</option>
                                 <option value="prose_manuscript">Prose manuscript</option>
@@ -6859,7 +6915,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           {contextSaveLoading ? 'Saving…' : 'Save story context'}
                         </button>
                       </div>
-                    )}
+                    )
+                    ) : null}
+                    {outlineWorkspaceStep === 'outline' ? (
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                     <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-outline-supplement">
                       <span className="inline-flex items-center gap-1.5">
@@ -6938,21 +6996,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             : 'Regenerate with page-coverage hint'}
                         </button>
                       )}
-                      <Tooltip content={WRITER_UI_TIPS.syncPagesToTarget} side="bottom">
-                        <button
-                          type="button"
-                          disabled={!supabaseOk || !selectedIssueId || syncPagesBusy}
-                          onClick={() => void runSyncPagesToTarget()}
-                          className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                        >
-                          {syncPagesBusy ? 'Syncing…' : 'Sync pages to target'}
-                        </button>
-                      </Tooltip>
                     </div>
                     {renderScopePreview(outlineRegenerationScope)}
-                    {syncPagesError && (
-                      <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{syncPagesError}</p>
-                    )}
                     {outlineGenError && (
                       <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{outlineGenError}</p>
                     )}
@@ -6974,7 +7019,96 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       </div>
                     )}
                     </div>
+                    ) : null}
+                    {outlineWorkspaceStep === 'pages' ? (
+                      <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-black/55">Pages</p>
+                            <p className="mt-1 max-w-2xl text-xs leading-snug text-black/60">
+                              Create one editable row for each story page. Page rows are the bridge between the issue
+                              outline and the page-by-page Beats and Dialogue workspaces.
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-black/10 bg-white/55 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black/55">
+                            {sortedPages.length}/{targetPageCount} ready
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-pages-target">
+                            Target pages
+                            <input
+                              id="writer-pages-target"
+                              name="writer-pages-target"
+                              type="number"
+                              min={1}
+                              max={200}
+                              value={targetPageCount}
+                              onChange={(e) => setTargetPageCount(Number(e.target.value) || 1)}
+                              className="w-28 rounded-lg border border-black/15 bg-white/90 px-2 py-1.5 text-sm text-black"
+                            />
+                          </label>
+                          <Tooltip content={WRITER_UI_TIPS.syncPagesToTarget} side="bottom">
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || !selectedIssueId || syncPagesBusy}
+                              onClick={() => void runSyncPagesToTarget()}
+                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {syncPagesBusy ? 'Creating pages…' : 'Create missing pages'}
+                            </button>
+                          </Tooltip>
+                          <button
+                            type="button"
+                            disabled={!selectedPageId}
+                            onClick={() => setActiveTab(selectedPage?.beats_json ? 'dialogue' : 'beats')}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-2 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            Open selected page
+                          </button>
+                        </div>
+                        {syncPagesError ? (
+                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{syncPagesError}</p>
+                        ) : null}
+                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                          {sortedPages.length > 0 ? (
+                            sortedPages.map((page) => {
+                              const isSelected = page.id === selectedPageId;
+                              return (
+                                <button
+                                  key={page.id}
+                                  type="button"
+                                  onClick={() => setSelectedPageId(page.id)}
+                                  className={`rounded-lg border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40 ${
+                                    isSelected
+                                      ? 'border-amber-700 bg-amber-100/80 text-black'
+                                      : 'border-black/10 bg-white/60 text-black/70 hover:bg-white'
+                                  }`}
+                                >
+                                  <span className="block text-[10px] font-black uppercase tracking-wider text-black/45">
+                                    Page {page.page_number}
+                                  </span>
+                                  <span className="mt-1 block text-xs font-semibold leading-snug">
+                                    {(page.beats_json as PageBeatsJson | null | undefined)?.panels?.length
+                                      ? 'Beats ready'
+                                      : 'Needs beats'}
+                                    {' · '}
+                                    {(page.script_text ?? '').trim() ? 'Dialogue ready' : 'Needs dialogue'}
+                                  </span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <p className="rounded-lg border border-black/10 bg-white/55 px-3 py-3 text-xs text-black/60">
+                              No page rows yet. Set a target page count, then create the missing pages.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
                     </div>
+                    {outlineWorkspaceStep === 'outline' ? (
                     <aside
                       className="custom-scrollbar min-w-0 space-y-4 xl:sticky xl:top-2 xl:max-h-[min(calc(100dvh-9rem),920px)] xl:overflow-y-auto xl:overscroll-y-contain"
                       aria-label="Outline preview"
@@ -7100,7 +7234,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                            </pre>
 	                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
 	                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
-	                                Advanced JSON
+		                                Advanced data
 	                              </summary>
 	                              <pre
 	                                className={`${preShell} ${preFont} mt-2 max-h-[min(360px,42vh)] min-h-[10rem]`}
@@ -7118,6 +7252,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         )}
                       </div>
                     </aside>
+                    ) : null}
                   </div>
                 )}
                 {activeTab === 'lore' && (
@@ -7345,16 +7480,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             className="w-full flex items-center justify-between gap-2 text-left"
                           >
                             <span className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                              Import JSON
+	                              Import lore cards (advanced)
                             </span>
                             <span className="text-[10px] font-bold text-black/50">{loreImportOpen ? 'Hide' : 'Show'}</span>
                           </button>
                           {loreImportOpen ? (
                             <div className="space-y-2">
                               <p className="text-xs text-black/60 leading-snug">
-                                Paste a JSON array of objects with <strong>title</strong> (required) and optional{' '}
-                                <strong>category</strong>, <strong>body</strong>, <strong>include_in_prompt</strong>.
-                                Duplicates are skipped by normalized (category,title).
+	                                Paste a list of lore-card objects. Title is required; category, body, and whether the
+	                                card should guide AI prompts are optional. Duplicate category/title pairs are skipped.
                               </p>
                               <textarea
                                 value={loreImportJsonDraft}
@@ -8047,7 +8181,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                            </pre>
 	                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
 	                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
-	                                Advanced JSON
+		                                Advanced data
 	                              </summary>
 	                              <pre className={`${preShell} ${preFont} mt-2 max-h-[min(320px,42vh)]`}>
 	                                <WriterHighlightedText
@@ -8926,7 +9060,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                       }}
                                       className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                                     >
-                                      JSON
+	                                      Full data
                                     </button>
                                     <button
                                       type="button"
@@ -8944,7 +9078,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     onClick={() => downloadGuidedComicsHandoff()}
                                     className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/70 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                                   >
-                                    Handoff JSON
+	                                    Guided handoff
                                   </button>
                                 ) : null}
                               </div>
@@ -8997,7 +9131,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         }}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
-                        Download shot plan JSON
+	                        Download shot plan data
                       </button>
                       <button
                         type="button"
@@ -9027,7 +9161,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         }}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
-                        Download outline JSON
+                        Download outline data
                       </button>
                       <button
                         type="button"
@@ -9069,7 +9203,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         }}
                         className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
                       >
-                        Download issue pack
+	                        Download full project data
                       </button>
                     </div>
                     <div>
@@ -9126,7 +9260,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                        onClick={() => downloadJsonFile('writer-issue-pack.json', issuePackObject)}
 	                        className="rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
 	                      >
-	                        Issue pack JSON
+		                        Full project data
 	                        <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">
 	                          Full structured bundle
 	                        </span>
@@ -9233,52 +9367,64 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-lg font-bold text-black">Synopsis helper</p>
-                        <p className="mt-0.5 text-xs text-black/58">
-                          Put your author outline/source structure here before AI starts filling gaps.
-                        </p>
+	                        <p className="text-lg font-bold text-black">
+                            {scriptsWorkspaceStep === 'story_map' ? 'Story Map' : 'Author Source'}
+                          </p>
+	                        <p className="mt-0.5 text-xs text-black/58">
+                            {scriptsWorkspaceStep === 'story_map'
+                              ? 'Map arcs, pages, scenes, and beats so ARCS can keep the issue structure in order.'
+                              : 'Paste your source outline and guidance before ARCS generates or revises the issue outline.'}
+	                        </p>
                       </div>
                       <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
                     </div>
                     {!selectedIssueId ? (
-                      <p className="text-sm text-black/55">Select an issue in the Library to use this tab.</p>
+	                      <p className="text-sm text-black/55">
+	                        Select an issue from the top Issue menu, or open Library for the full list.
+	                      </p>
                     ) : (
                       <>
                         {scriptsError && (
                           <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
                         )}
-                        {pageEditReviewPanel}
+                        {scriptsWorkspaceStep === 'synopsis' ? pageEditReviewPanel : null}
+                        {scriptsWorkspaceStep === 'synopsis' ? (
                         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                           <div className="border-l-2 border-black/60 bg-white/55 px-3 py-3 space-y-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div>
                                 <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-                                  Author outline intake
-                                </p>
-                                <p className="mt-1 text-xs leading-snug text-black/68">
-                                  Paste your real outline here. It is saved separately from the issue synopsis and is
-                                  sent directly to <strong>Generate outline</strong> so AI restructures your story
-                                  instead of inventing a replacement.
-                                </p>
-                              </div>
-                              <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                                notes.author_outline
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
-                              {(
-                                [
-                                  ['preserve', 'Preserve', 'Keep order and named events strict.'],
-                                  ['structure', 'Structure', 'Organize into production beats.'],
-                                  ['expand', 'Expand', 'Add connective tissue around your spine.'],
-                                ] as const
-                              ).map(([id, label, description]) => (
+	                                  Author outline source
+	                                </p>
+	                                <p className="mt-1 text-xs leading-snug text-black/68">
+	                                  Paste your real outline here. It is saved separately from the issue synopsis and is
+	                                  sent directly to <strong>Generate outline</strong> so AI restructures your story
+	                                  instead of inventing a replacement.
+	                                </p>
+	                              </div>
+	                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+	                                <summary className="cursor-pointer">Advanced details</summary>
+	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as your author source.</span>
+	                              </details>
+	                            </div>
+	                            <p className="text-[11px] leading-snug text-black/60">
+	                              Choose how strictly ARCS should follow the outline you pasted. This choice does not
+	                              change your source text; it affects the next generated issue outline.
+	                            </p>
+	                            <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
+	                              {(
+	                                [
+	                                  ['preserve', 'Keep my order', 'Keep order and named events strict.'],
+	                                  ['structure', 'Organize into production outline', 'Organize into production beats.'],
+	                                  ['expand', 'Add missing connective scenes', 'Add connective tissue around your spine.'],
+	                                ] as const
+	                              ).map(([id, label, description]) => (
                                 <button
                                   key={id}
                                   type="button"
                                   onClick={() => setAuthorOutlineMode(id)}
                                   title={description}
-                                  className={`rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                                  className={`rounded-md border px-2.5 py-1 text-[11px] font-bold leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
                                     authorOutlineMode === id
                                       ? 'border-black/60 bg-black text-white'
                                       : 'border-black/15 bg-white/75 text-black/65 hover:bg-white'
@@ -9316,16 +9462,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </div>
                           </div>
                           <div className="border-l-2 border-emerald-700 bg-emerald-50/65 px-3 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
-                              Generation contract
+	                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+	                              What this affects
                             </p>
                             <div className="mt-2 space-y-2 text-[11px] leading-snug text-black/66">
                               <p>
                                 <strong>Issue synopsis</strong> is the short pitch/logline context.
                               </p>
                               <p>
-                                <strong>Author outline</strong> is the source structure AI must preserve, structure, or
-                                expand when generating the saved Issue Outline.
+	                                <strong>Author outline</strong> is the source structure ARCS should keep, organize, or
+	                                expand when generating the saved Issue Outline.
                               </p>
                               <p>
                                 <strong>Canon cards</strong> still supply visual/world facts before beats are generated.
@@ -9339,31 +9485,42 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </div>
                           </div>
                         </div>
+                        ) : null}
+                        {scriptsWorkspaceStep === 'story_map' ? (
                         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
                           <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div>
                                 <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                                  Hierarchy tree import
-                                </p>
-                                <p className="mt-1 text-[11px] leading-snug text-black/60">
-                                  Paste .txt, .md, or JSON structure. It normalizes into arc → book/issue/episode →
-                                  chapter/page/scene → beat metadata on the issue notes.
-                                </p>
-                              </div>
-                              <span className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                                notes.hierarchy_tree
-                              </span>
-                            </div>
+	                                  Story map
+	                                </p>
+	                                <p className="mt-1 text-[11px] leading-snug text-black/60">
+	                                  Turn an outline into a story map so ARCS can keep arcs, issues, pages, scenes, and
+	                                  beats in order during generation.
+	                                </p>
+	                              </div>
+	                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+	                                <summary className="cursor-pointer">Advanced details</summary>
+	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as the story map.</span>
+	                              </details>
+	                            </div>
                             <textarea
                               value={hierarchyImportDraft}
                               onChange={(e) => setHierarchyImportDraft(e.target.value)}
                               rows={7}
                               className="w-full min-h-[150px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                              placeholder={'# Arc: Haunted semester\n## Issue 1: First misfire\n### Page 1\n- Beat: Classroom spell goes wrong\n- Beat: Mentor interrupts'}
+                              placeholder={'Arc: Haunted semester\nIssue 1: First misfire\nPage 1\n- Beat: Classroom spell goes wrong\n- Beat: Mentor interrupts'}
                             />
+                            <div className="rounded-lg border border-emerald-700/20 bg-emerald-50/70 px-3 py-2 text-[11px] leading-snug text-black/68">
+                              <p className="font-black uppercase tracking-wider text-emerald-950/65">What to paste</p>
+                              <p className="mt-1">
+                                Use simple labels such as <strong>Arc</strong>, <strong>Issue</strong>,{' '}
+                                <strong>Page</strong>, <strong>Scene</strong>, and <strong>Beat</strong>. ARCS turns
+                                those labels into an ordered map it can reuse when generating outlines and page beats.
+                              </p>
+                            </div>
                             <label className="inline-flex w-fit cursor-pointer items-center rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-within:ring-2 focus-within:ring-black/25">
-                              Import .txt/.md/JSON file
+	                              Import from file (advanced)
                               <input
                                 type="file"
                                 accept=".txt,.md,.markdown,.json,application/json,text/plain,text/markdown"
@@ -9409,7 +9566,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                                 style={{ background: ACCENT_GOLD_GRADIENT }}
                               >
-                                {scriptsBusy ? 'Saving…' : 'Import/save tree'}
+	                                {scriptsBusy ? 'Saving…' : 'Save story map'}
                               </button>
                             </div>
                             {hierarchyImportError ? (
@@ -9420,7 +9577,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </div>
                           <div className="space-y-3 rounded-xl border border-black/10 bg-white/45 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                              Saved hierarchy tree
+	                              Saved story map
                             </p>
                             {hierarchyNodes.length ? (
                               <>
@@ -9435,7 +9592,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                                     style={{ background: ACCENT_GOLD_GRADIENT }}
                                   >
-                                    {scriptsBusy ? 'Saving…' : 'Save tree edits'}
+	                                    {scriptsBusy ? 'Saving…' : 'Save story map edits'}
                                   </button>
                                   <button
                                     type="button"
@@ -9455,7 +9612,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 ) : null}
                                 <details className="text-[10px] text-black/45">
                                   <summary className="cursor-pointer font-bold uppercase tracking-wide">
-                                    Read-only outline view
+                                    Preview as outline
                                   </summary>
                                   <div className="mt-2 rounded-md bg-white/55 p-2">
                                     {renderHierarchyNodes(hierarchyNodes)}
@@ -9464,12 +9621,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </>
                             ) : (
                               <p className="text-xs text-black/50">
-                                No hierarchy saved yet. Import from your outline or helper before generation.
+                                No story map saved yet. Import from your outline or helper before generation.
                               </p>
                             )}
                           </div>
                         </div>
-                        {sortedPages.length > 0 ? (
+                        ) : null}
+                        {scriptsWorkspaceStep === 'synopsis' && sortedPages.length > 0 ? (
                           <div
                             className="rounded-xl border border-black/10 bg-white/40 px-3 py-2.5 space-y-2"
                             aria-label="Panel beats coverage for this issue"
@@ -9483,7 +9641,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </p>
                             </div>
                             <p className="text-[9px] text-black/45 leading-snug">
-                              Green dot = saved beats in the database. Click a page to open the Beats tab and select it.
+	                              Green dot = saved beats. Click a page to open the Beats tab and select it.
                             </p>
                             <div className="flex flex-wrap gap-1 max-h-[4.5rem] overflow-y-auto custom-scrollbar pr-0.5">
                               {sortedPages.map((p) => {
@@ -9519,17 +9677,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </div>
                           </div>
                         ) : null}
+                        {scriptsWorkspaceStep === 'synopsis' ? (
                         <div className="grid gap-6 xl:grid-cols-2">
                           <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
                               Synopsis helper
                             </p>
                             <p className="text-[11px] text-black/60 leading-snug">
-                              Structured fields save under{' '}
-                              <code className="rounded bg-black/10 px-1">notes.synopsis_helper</code> on the issue row.
-                              Build a labeled synopsis into the Issue Outline draft, then{' '}
-                              <strong>Save story context</strong> there to persist it as{' '}
-                              <code className="rounded bg-black/10 px-1">synopsis</code>.
+	                              These fields save with the issue as source guidance. Copy the helper text into outline
+	                              instructions, then review and save story context before generating a new outline.
                             </p>
                             <div className="space-y-2 max-h-[min(480px,55vh)] overflow-y-auto custom-scrollbar pr-1">
                               <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
@@ -9621,7 +9777,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 onClick={() => void saveSynopsisHelperToNotes()}
                                 className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45"
                               >
-                                {scriptsBusy ? 'Saving…' : 'Save helper to issue notes'}
+	                                {scriptsBusy ? 'Saving…' : 'Save synopsis helper'}
                               </button>
                               <button
                                 type="button"
@@ -9629,21 +9785,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-lg px-3 py-2 text-[11px] font-bold text-black shadow-sm disabled:opacity-45"
                                 style={{ background: ACCENT_GOLD_GRADIENT }}
                               >
-                                Build synopsis → Issue Outline draft
+	                                Copy helper text into outline instructions
                               </button>
                             </div>
                           </div>
-                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                              Copy & download
-                            </p>
+                          <details className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
+                              Advanced exports
+                            </summary>
+                            <div className="mt-3 space-y-3">
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => copyIssuePackJson()}
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
                               >
-                                Copy issue pack (JSON)
+	                                Copy full project data (advanced)
                               </button>
                               <button
                                 type="button"
@@ -9662,14 +9819,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 }}
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
                               >
-                                Download issue pack
+	                                Download full project data
                               </button>
                               <button
                                 type="button"
                                 onClick={() => downloadIssuePackMarkdown()}
                                 className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
                               >
-                                Download issue pack .md
+	                                Download readable issue pack
                               </button>
                               <button
                                 type="button"
@@ -9704,24 +9861,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </button>
                             </div>
                             <p className="text-[10px] text-black/50 leading-snug">
-                              Issue pack includes synopsis, full outline &amp; shot plan JSON, all page beats and
-                              dialogue, and pacing/canon cache. For selected pages only, use Library → Pages batch
-                              actions.
+	                              The full project data file includes synopsis, saved outline, shot plan, all page beats,
+	                              dialogue, and review notes. For selected pages only, use the Pages batch actions.
                             </p>
-                          </div>
+                            </div>
+                          </details>
                         </div>
-                        <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                            Edit saved outputs
-                          </p>
+                        ) : null}
+                        {scriptsWorkspaceStep === 'synopsis' ? (
+                        <details className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                          <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
+	                            Advanced saved-output editor
+                          </summary>
+                          <div className="mt-3 space-y-3">
                           <div className="flex flex-wrap gap-1.5">
                             {(
                               [
                                 ['synopsis', 'Synopsis preview'],
-                                ['outline', 'Outline JSON'],
-                                ['beats', 'Beats JSON'],
-                                ['dialogue', 'Dialogue'],
-                                ['video', 'Shot plan JSON'],
+	                                ['outline', 'Outline data'],
+	                                ['beats', 'Page beats data'],
+	                                ['dialogue', 'Dialogue'],
+	                                ['video', 'Shot plan data'],
                               ] as const
                             ).map(([id, label]) => (
                               <button
@@ -9775,7 +9935,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               ) : (
                                 <>
                                   <p className="text-[10px] text-black/50">
-                                    Editing outline v{latestOutline.version}. Invalid JSON will not save.
+	                                    Editing outline v{latestOutline.version}. Invalid data format will not save.
                                   </p>
                                   <textarea
                                     value={outlineEditDraft}
@@ -9790,7 +9950,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
                                     style={{ background: ACCENT_GOLD_GRADIENT }}
                                   >
-                                    {scriptsBusy ? 'Saving…' : 'Save outline to database'}
+	                                    {scriptsBusy ? 'Saving…' : 'Save outline changes'}
                                   </button>
                                 </>
                               )}
@@ -9799,11 +9959,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           {scriptsEditorTab === 'beats' && (
                             <div className="space-y-2">
                               {!selectedPage ? (
-                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+	                                <p className="text-xs text-black/50">
+	                                  Select a page from the top Page menu, or open Library for the full list.
+	                                </p>
                               ) : (
                                 <>
                                   <p className="text-[10px] text-black/50">
-                                    Page {selectedPage.page_number}. Empty JSON clears beats.
+	                                    Page {selectedPage.page_number}. Clearing this box removes saved beats for this page.
                                   </p>
                                   <div className="rounded-xl border border-black/10 bg-white/45 p-3 space-y-2">
                                     <div className="flex flex-wrap items-end gap-2">
@@ -9840,7 +10002,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     <p className="text-[10px] leading-snug text-black/50">
                                       These controls rewrite only the page <code className="rounded bg-black/10 px-1">panels</code>{' '}
                                       array in the draft. Page-level characters, locations, and art style stay intact
-                                      unless you edit the JSON directly.
+	                                      unless you edit the advanced data directly.
                                     </p>
                                   </div>
                                   <textarea
@@ -9856,7 +10018,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
                                     style={{ background: ACCENT_GOLD_GRADIENT }}
                                   >
-                                    {scriptsBusy ? 'Saving…' : 'Save beats to database'}
+	                                    {scriptsBusy ? 'Saving…' : 'Save beat changes'}
                                   </button>
                                 </>
                               )}
@@ -9865,10 +10027,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           {scriptsEditorTab === 'dialogue' && (
                             <div className="space-y-2">
                               {!selectedPage ? (
-                                <p className="text-xs text-black/50">Select a page in the Library.</p>
+	                                <p className="text-xs text-black/50">
+	                                  Select a page from the top Page menu, or open Library for the full list.
+	                                </p>
                               ) : (
                                 <>
-                                  <p className="text-[10px] text-black/50">Page {selectedPage.page_number} script_text</p>
+	                                  <p className="text-[10px] text-black/50">Page {selectedPage.page_number} dialogue</p>
                                   <textarea
                                     value={dialogueEditDraft}
                                     onChange={(e) => setDialogueEditDraft(e.target.value)}
@@ -9881,7 +10045,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
                                     style={{ background: ACCENT_GOLD_GRADIENT }}
                                   >
-                                    {scriptsBusy ? 'Saving…' : 'Save dialogue to database'}
+	                                    {scriptsBusy ? 'Saving…' : 'Save dialogue changes'}
                                   </button>
                                 </>
                               )}
@@ -9909,13 +10073,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
                                     style={{ background: ACCENT_GOLD_GRADIENT }}
                                   >
-                                    {scriptsBusy ? 'Saving…' : 'Save shot plan to database'}
+	                                    {scriptsBusy ? 'Saving…' : 'Save shot plan changes'}
                                   </button>
                                 </>
                               )}
                             </div>
                           )}
-                        </div>
+                          </div>
+                        </details>
+                        ) : null}
                       </>
                     )}
                   </div>

@@ -268,7 +268,7 @@ export function summarizeWriterProductionBranches(args: {
       return {
         ...option,
         ready: args.hasOutline || args.pagesWithBeats > 0 || args.pagesWithDialogue > 0,
-        summary: 'Export issue pack, markdown summary, selected beats, dialogue, and review notes.',
+        summary: 'Export readable scripts, full project data, selected beats, dialogue, and review notes.',
         actionLabel: 'Open exports',
       };
     }
@@ -441,7 +441,7 @@ export function buildPreferredWriterExport(issuePack: WriterIssuePackLike): Writ
     case 'comic_script_markdown':
       return {
         kind: 'text',
-        label: 'Download comic script markdown',
+        label: 'Download readable comic script',
         filename: 'writer-issue-pack.md',
         mime: 'text/markdown;charset=utf-8',
         body: formatIssuePackAsMarkdown(issuePack),
@@ -481,7 +481,7 @@ export function buildPreferredWriterExport(issuePack: WriterIssuePackLike): Writ
     default:
       return {
         kind: 'json',
-        label: 'Download issue pack JSON',
+        label: 'Download full project data',
         filename: 'writer-issue-pack.json',
         data: issuePack,
       };

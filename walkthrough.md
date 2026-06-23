@@ -10156,3 +10156,50 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Begin Writers' Workshop Deep Product UX Pass 1: language and prerequisite clarity.
+
+## Writers' Workshop Deep UX Implementation Passes - 2026-06-23
+
+### What changed
+- Implemented the first deep UX cleanup passes from the Writers' Workshop product audit.
+- Replaced primary-path technical labels with clearer user-facing language, including overwrite protection, story settings, full project data, readable scripts, and friendlier setup/session messaging.
+- Split the shared Writer workflow into clearer user steps: Foundation, Author Source, Story Map, Outline, Pages, Beats, Dialogue, Imageshop Prep, Story Review, Compare & Review, and Export.
+- Added Story Map as a first-class workflow step and made Pages visible in the simple workflow rail.
+- Moved noisy export/raw saved-output tools into collapsed advanced drawers so they remain available without crowding the normal Author Source path.
+- Improved Story Map guidance with plain-language examples, friendlier validation messages, and “Story Map” wording instead of hierarchy-tree language.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerWorkflowChronology.test.ts`
+- `src/portals/writer/writerHelpRegistry.tsx`
+- `src/portals/writer/writerNextStep.ts`
+- `src/portals/writer/writerProductionBranches.ts`
+- `src/portals/writer/writerSearch.ts`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- No Supabase schema, Edge Function contract, or AI-generation API behavior changed.
+- The workflow split is implemented with a focused workflow-step override, so shared underlying tabs can still render distinct user spaces without changing the stored data model.
+- Foundation now focuses on story context and production settings; Outline focuses on outline generation/review; Pages focuses on page-row creation and selection.
+- Author Source and Story Map remain backed by the existing issue notes structures, but they are presented as separate workflow stops.
+- Advanced data editors and redundant export controls remain available in collapsed advanced drawers for recovery and operator workflows.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerProductionBranches.test.ts src/portals/writer/__tests__/writerWorkflowChronology.test.ts` - PASS, 2 files / 12 tests.
+- `npm run test -- --run src/portals/writer/__tests__/writerWorkflowChronology.test.ts` - PASS after workflow model changes.
+- `npm run test -- --run` - PASS, 82 files / 443 tests.
+- `npm run build` - PASS with existing large chunk warnings.
+- Local signed-in Playwright smoke at `http://localhost:8787/?smoke=rail-pages` - PASS. Confirmed the simple workflow rail includes Author Source, Story Map, and Pages; Foundation, Outline, Pages, and Story Map each route to distinct headings and content.
+
+### Outstanding issues
+- Live deployment and live signed-in smoke are pending at the time of this entry.
+
+### Risks or caveats
+- This is still an incremental UX pass, not a full redesign of every Writers' Workshop tool.
+- Existing persisted tab/workspace state is preserved for compatibility.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit and push the implementation, deploy the Cloudflare Worker/site, then perform signed-in live smoke.

@@ -88,7 +88,7 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
   export: {
     ribbon: 'Export',
     heading: 'Export issue',
-    description: 'Download issue packs, scripts, JSON bundles, and handoff files.',
+    description: 'Download readable scripts, full project data, and handoff files.',
   },
 };
 
