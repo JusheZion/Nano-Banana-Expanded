@@ -4925,7 +4925,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         }
       >
         {locked ? <Lock size={12} aria-hidden /> : <Unlock size={12} aria-hidden />}
-        {locked ? 'Protected' : 'Can overwrite'}
+        {locked ? 'Protected' : label}
       </button>
     );
   };
@@ -5056,9 +5056,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         >
           Edit {selectedPage ? `Page ${selectedPage.page_number}` : 'page'} dialogue
         </button>
-        <span className="ml-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/40">
+        <span className="ml-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/40" title="Click a lock to protect content from being overwritten by AI actions">
           <ShieldCheck size={13} aria-hidden />
-          Overwrite
+          Protect
         </span>
         {renderLockButton('issue.synopsis', 'Issue synopsis')}
         {renderLockButton('issue.author_outline', 'Author outline')}
@@ -5332,8 +5332,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <Tooltip
             content={
               writerFocusedMode
-                ? 'Advanced Tools shows the full ribbon, raw data editors, batch actions, and diagnostics.'
-                : 'Simple Workflow shows the main writing path with fewer controls.'
+                ? 'Power User mode — shows full ribbon, sidebar map, raw data editors, and batch actions.'
+                : 'Simple Workflow — guided linear path with fewer controls.'
             }
             side="bottom"
           >
@@ -5342,7 +5342,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               onClick={() => setWriterFocusedMode((mode) => !mode)}
               className="rounded-md border border-black/15 bg-white/80 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-black/65 hover:bg-white hover:text-black"
             >
-              {writerFocusedMode ? 'Advanced Tools' : 'Simple Workflow'}
+              {writerFocusedMode ? '⚡ Power User' : 'Simple Workflow'}
             </button>
           </Tooltip>
         </div>
@@ -6094,7 +6094,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       >
         {!isPhone && !writerFocusedMode ? (
           <aside
-            className="hidden w-[236px] shrink-0 border-r border-white/25 bg-white/[0.12] p-2 backdrop-blur-md xl:block"
+            className="hidden w-[236px] shrink-0 flex-col overflow-y-auto border-r border-white/25 bg-white/[0.12] p-2 backdrop-blur-md xl:flex"
             aria-label="Narrative production navigator"
           >
             <div className="mb-2 border-b border-black/10 px-2 pb-2">
@@ -7996,6 +7996,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     </label>
                                     <button
                                       type="button"
+                                      title="Select this page in the Library panel to scope beats and dialogue previews"
                                       className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
                                       onClick={() => setSelectedPageId(p.id)}
                                     >
@@ -8418,6 +8419,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </label>
                               <button
                                 type="button"
+                                title="Select this issue in the Library panel to focus review output on this issue"
                                 className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
                                 onClick={() => setSelectedIssueId(iss.id)}
                               >
