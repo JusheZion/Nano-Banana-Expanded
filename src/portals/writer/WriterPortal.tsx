@@ -465,6 +465,26 @@ function serializeBeatsEditDraft(value: PageBeatsJson & Record<string, unknown>)
   return JSON.stringify(value, null, 2);
 }
 
+function formatBeatsAsLines(beatsJson: PageBeatsJson | null | undefined): string {
+  if (!beatsJson?.panels?.length) return '';
+  return beatsJson.panels.map((panel, i) => `${i + 1}. ${panel.action ?? ''}`).join('\n');
+}
+
+function parseBeatsLines(text: string, existingJson?: PageBeatsJson | null): PageBeatsJson {
+  const existingPanels = existingJson?.panels ?? [];
+  const lines = text
+    .split('\n')
+    .map((l) => l.replace(/^\d+[.)]\s*/, '').trim())
+    .filter(Boolean);
+  const panels = lines.map((action, i) => ({
+    ...existingPanels[i],
+    action,
+    index: i + 1,
+  }));
+  const { panels: _p, ...pageFields } = existingJson ?? { panels: [] as PageBeatsJson['panels'] };
+  return { ...pageFields, panels };
+}
+
 function readBeatPanelIndex(raw: string, panelsLength: number, allowEnd = false): number | null {
   const value = Number.parseInt(raw, 10);
   const upper = allowEnd ? panelsLength + 1 : panelsLength;
@@ -981,6 +1001,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
   const [outlineEditDraft, setOutlineEditDraft] = useState('');
   const [beatsEditDraft, setBeatsEditDraft] = useState('');
+  const [beatsEditorMode, setBeatsEditorMode] = useState<'text' | 'json'>('text');
   const [beatPanelIndexDraft, setBeatPanelIndexDraft] = useState('1');
   const [dialogueEditDraft, setDialogueEditDraft] = useState('');
   const [shotEditDraft, setShotEditDraft] = useState('');
@@ -3960,7 +3981,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     setBeatsEditDraft(
-      selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
+      beatsEditorMode === 'text'
+        ? formatBeatsAsLines(selectedPage.beats_json as PageBeatsJson | null)
+        : selectedPage.beats_json ? JSON.stringify(selectedPage.beats_json, null, 2) : '',
     );
     setDialogueEditDraft(selectedPage.script_text ?? '');
     // Sync when the logical row fields change, not when `pages` replaces row object identity (e.g. batch `setPages`).
@@ -4153,6 +4176,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory(`saved edited outline v${latestOutline.version}`);
   }, [latestOutline, outlineEditDraft, guardWriterLock, persistWriterSnapshot, pushHistory]);
 
+  const switchBeatsEditorMode = useCallback((next: 'text' | 'json') => {
+    if (next === beatsEditorMode) return;
+    if (next === 'json') {
+      const asJson = parseBeatsLines(beatsEditDraft, selectedPage?.beats_json as PageBeatsJson | null);
+      setBeatsEditDraft(JSON.stringify(asJson, null, 2));
+    } else {
+      try {
+        const asJson = JSON.parse(beatsEditDraft.trim() || '{"panels":[]}') as PageBeatsJson;
+        setBeatsEditDraft(formatBeatsAsLines(asJson));
+      } catch {
+        setBeatsEditDraft(formatBeatsAsLines(selectedPage?.beats_json as PageBeatsJson | null));
+      }
+    }
+    setBeatsEditorMode(next);
+  }, [beatsEditorMode, beatsEditDraft, selectedPage?.beats_json]);
+
   const saveBeatsEdit = useCallback(async () => {
     if (!selectedPageId || !selectedPage) return;
     if (!guardWriterLock(writerPageBeatsLockKey(selectedPageId), `Page ${selectedPage.page_number} beats`)) return;
@@ -4160,16 +4199,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     let parsed: Record<string, unknown> | null = null;
     const raw = beatsEditDraft.trim();
     if (raw) {
-      try {
-        const v = JSON.parse(raw);
-        if (!v || typeof v !== 'object' || Array.isArray(v)) {
-          setScriptsError('Beats must be a JSON object.');
+      if (beatsEditorMode === 'text') {
+        parsed = parseBeatsLines(raw, selectedPage.beats_json as PageBeatsJson | null) as Record<string, unknown>;
+      } else {
+        try {
+          const v = JSON.parse(raw);
+          if (!v || typeof v !== 'object' || Array.isArray(v)) {
+            setScriptsError('Beats must be a JSON object.');
+            return;
+          }
+          parsed = v as Record<string, unknown>;
+        } catch {
+          setScriptsError('Beats JSON is invalid.');
           return;
         }
-        parsed = v as Record<string, unknown>;
-      } catch {
-        setScriptsError('Beats JSON is invalid.');
-        return;
       }
     }
     if (selectedPage.beats_json) {
@@ -4191,7 +4234,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPages(pageRows);
     }
     pushHistory(`saved edited beats (page ${selectedPage.page_number})`);
-  }, [selectedPageId, selectedPage, beatsEditDraft, selectedIssueId, guardWriterLock, persistWriterSnapshot, pushHistory]);
+  }, [selectedPageId, selectedPage, beatsEditDraft, beatsEditorMode, selectedIssueId, guardWriterLock, persistWriterSnapshot, pushHistory]);
 
   const openSavedOutputEditor = useCallback((tab: ScriptsEditorTab) => {
     setScriptsEditorTab(tab);
@@ -8133,17 +8176,40 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                              <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
 	                                Direct edit Page {selectedPage.page_number} beats
 	                              </p>
-	                              {renderLockButton(
-	                                writerPageBeatsLockKey(selectedPage.id),
-	                                `Page ${selectedPage.page_number} beats`,
-	                              )}
+	                              <div className="flex items-center gap-1.5">
+	                                {(['text', 'json'] as const).map((m) => (
+	                                  <button
+	                                    key={m}
+	                                    type="button"
+	                                    onClick={() => switchBeatsEditorMode(m)}
+	                                    className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+	                                      beatsEditorMode === m
+	                                        ? 'bg-black text-white'
+	                                        : 'border border-black/20 bg-white/70 text-black/55 hover:bg-white'
+	                                    }`}
+	                                  >
+	                                    {m === 'text' ? 'Plain text' : 'JSON'}
+	                                  </button>
+	                                ))}
+	                                {renderLockButton(
+	                                  writerPageBeatsLockKey(selectedPage.id),
+	                                  `Page ${selectedPage.page_number} beats`,
+	                                )}
+	                              </div>
 	                            </div>
 	                            <textarea
 	                              id="writer-beats-inline-editor"
 	                              value={beatsEditDraft}
 	                              onChange={(e) => setBeatsEditDraft(e.target.value)}
 	                              rows={9}
-	                              className="w-full resize-y rounded-lg border border-black/15 bg-white px-2 py-1.5 font-mono text-xs text-black disabled:opacity-50"
+	                              placeholder={
+	                                beatsEditorMode === 'text'
+	                                  ? 'One panel per line:\n1. Hero enters the chamber\n2. Door grinds shut behind them\n3. A faint glow from the far wall'
+	                                  : '{"panels":[{"action":"\u2026"}]}'
+	                              }
+	                              className={`w-full resize-y rounded-lg border border-black/15 bg-white px-2 py-1.5 text-xs text-black disabled:opacity-50 ${
+	                                beatsEditorMode === 'json' ? 'font-mono' : 'font-sans'
+	                              }`}
 	                            />
 	                            <div className="mt-2 flex flex-wrap gap-2">
 	                              <button
@@ -8166,6 +8232,895 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                            </div>
 	                          </div>
 	                        ) : null}
+	                        {latestOutline ? (
+	                          <div className="space-y-2">
+	                            <pre
+	                              className={`${preShell} font-sans max-h-[min(360px,42vh)] min-h-[10rem] xl:max-h-[min(420px,calc(100dvh-18rem))]`}
+	                            >
+	                              <WriterHighlightedText
+	                                text={formatOutlineAsText(latestOutline.outline_json)}
+	                                query={findQuery}
+	                                activeMatchIndex={findActiveIndex}
+	                              />
+	                            </pre>
+	                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
+	                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
+		                                Advanced data
+	                              </summary>
+	                              <pre
+	                                className={`${preShell} ${preFont} mt-2 max-h-[min(360px,42vh)] min-h-[10rem]`}
+	                              >
+	                                <WriterHighlightedText
+	                                  text={outlineJsonString}
+	                                  query={findQuery}
+	                                  activeMatchIndex={findActiveIndex}
+	                                />
+	                              </pre>
+	                            </details>
+	                          </div>
+	                        ) : (
+                          <p className="text-xs text-black/55">No outlines for this issue yet.</p>
+                        )}
+                      </div>
+                    </aside>
+                    ) : null}
+                  </div>
+                )}
+                {activeTab === 'lore' && (
+                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                        Canon gate
+                      </p>
+                      <WriterSectionTip tipKey="loreTab" label="About lore cards" />
+                    </div>
+                    {!selectedSeriesId ? (
+                      <p className="text-xs text-black/50">{WRITER_UI_TIPS.seriesLibrary}</p>
+                    ) : (
+                      <>
+                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+                          <div className="border-l-2 border-amber-700 bg-amber-50/70 px-3 py-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
+                              Pre-lore intake
+                            </p>
+                            <p className="mt-1 text-xs leading-snug text-black/70">
+                              Add canonical descriptions before regenerating outline or page beats. If a school,
+                              device, species, character appearance, faction, or rule is missing here, the model can
+                              invent it. Included canon cards are sent to <strong>Generate outline</strong> and{' '}
+                              <strong>page beats</strong>.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || !selectedIssueId || loreAssistLoading}
+                                onClick={() => void runLoreGapAssist()}
+                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-45"
+                                style={{ background: ACCENT_GOLD_GRADIENT }}
+                              >
+                                {loreAssistLoading ? 'Scanning…' : 'Suggest missing lore'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || !selectedIssueId || canonLoading}
+                                onClick={() => void runCanonFromRibbon()}
+                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
+                              >
+                                {canonLoading ? 'Checking…' : 'Post-lore canon check'}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="border-l-2 border-emerald-600 bg-emerald-50/60 px-3 py-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+                              Generation contract
+                            </p>
+                            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                              <span className="bg-white/60 px-2 py-1">Outline uses canon</span>
+                              <span className="bg-white/60 px-2 py-1">Beats use canon</span>
+                              <span className="bg-white/60 px-2 py-1">No video assumptions</span>
+                              <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
+                            </div>
+                            <p className="mt-2 text-[11px] leading-snug text-black/58">
+                              Foundation defaults now travel with generation so comic medium, panel density,
+                              style, canon, and character consistency do not have to be retyped on each prompt.
+                            </p>
+                          </div>
+                        </div>
+                        {loreAssistError ? (
+                          <p className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{loreAssistError}</p>
+                        ) : null}
+                        {loreAssistOutput.trim() ? (
+                          <div className="border border-black/10 bg-white/45 p-3 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                AI lore suggestions
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void navigator.clipboard.writeText(loreAssistOutput)}
+                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
+                                >
+                                  Copy
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => appendTextToField(setLoreDraftBody, loreAssistOutput)}
+                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
+                                >
+                                  Append to card body
+                                </button>
+                              </div>
+                            </div>
+                            <pre className={`${preShell} ${preFont} max-h-[min(300px,38vh)]`}>
+                              <WriterHighlightedText
+                                text={loreAssistOutput}
+                                query={findQuery}
+                                activeMatchIndex={findActiveIndex}
+                              />
+                            </pre>
+                          </div>
+                        ) : null}
+                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            {loreEditingId ? 'Edit card' : 'New card'}
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                              Title
+                              <input
+                                type="text"
+                                value={loreDraftTitle}
+                                onChange={(e) => setLoreDraftTitle(e.target.value)}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
+                                placeholder="e.g. The Silver Compact"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                              Category
+                              <input
+                                type="text"
+                                value={loreDraftCategory}
+                                onChange={(e) => setLoreDraftCategory(e.target.value)}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
+                                placeholder="world · character · place · rule · timeline"
+                              />
+                            </label>
+                          </div>
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
+                            Body
+                            <textarea
+                              value={loreDraftBody}
+                              onChange={(e) => setLoreDraftBody(e.target.value)}
+                              rows={5}
+                              className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[100px]"
+                              placeholder="Facts, tone, relationships, geography — what the AI should remember."
+                            />
+                          </label>
+                          <div className="flex flex-wrap items-center gap-4">
+                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={loreDraftInclude}
+                                onChange={(e) => setLoreDraftInclude(e.target.checked)}
+                                className="rounded border-black/30"
+                              />
+                              Include in AI prompts
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/70">
+                              Sort order
+                              <input
+                                type="number"
+                                value={loreDraftSort}
+                                onChange={(e) => setLoreDraftSort(Number(e.target.value) || 0)}
+                                className="w-20 rounded-lg border border-black/15 bg-white px-2 py-1 text-sm text-black"
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || loreBusy || !loreDraftTitle.trim()}
+                              onClick={async () => {
+                                if (!selectedSeriesId || !loreDraftTitle.trim()) return;
+                                setLoreBusy(true);
+                                if (loreEditingId) {
+                                  const ok = await updateWriterLoreCard(loreEditingId, {
+                                    title: loreDraftTitle.trim(),
+                                    category: loreDraftCategory.trim() || 'general',
+                                    body: loreDraftBody,
+                                    include_in_prompt: loreDraftInclude,
+                                    sort_order: loreDraftSort,
+                                  });
+                                  setLoreBusy(false);
+                                  if (!ok) {
+                                    pushHistory('error: save lore card');
+                                    return;
+                                  }
+                                  pushHistory('updated lore card');
+                                } else {
+                                  const row = await createWriterLoreCard({
+                                    series_id: selectedSeriesId,
+                                    title: loreDraftTitle.trim(),
+                                    category: loreDraftCategory.trim() || 'world',
+                                    body: loreDraftBody,
+                                    include_in_prompt: loreDraftInclude,
+                                    sort_order: loreDraftSort,
+                                  });
+                                  setLoreBusy(false);
+                                  if (!row) {
+                                    pushHistory('error: create lore card');
+                                    return;
+                                  }
+                                  pushHistory('created lore card');
+                                }
+                                setLoreEditingId(null);
+                                setLoreDraftTitle('');
+                                setLoreDraftCategory('world');
+                                setLoreDraftBody('');
+                                setLoreDraftInclude(true);
+                                setLoreDraftSort(0);
+                                await reloadLoreCards();
+                              }}
+                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {loreEditingId ? 'Save changes' : 'Add card'}
+                            </button>
+                            {loreEditingId ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLoreEditingId(null);
+                                  setLoreDraftTitle('');
+                                  setLoreDraftCategory('world');
+                                  setLoreDraftBody('');
+                                  setLoreDraftInclude(true);
+                                  setLoreDraftSort(0);
+                                }}
+                                className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80"
+                              >
+                                Cancel edit
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
+                          <button
+                            type="button"
+                            onClick={() => setLoreImportOpen((v) => !v)}
+                            className="w-full flex items-center justify-between gap-2 text-left"
+                          >
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+	                              Import lore cards (advanced)
+                            </span>
+                            <span className="text-[10px] font-bold text-black/50">{loreImportOpen ? 'Hide' : 'Show'}</span>
+                          </button>
+                          {loreImportOpen ? (
+                            <div className="space-y-2">
+                              <p className="text-xs text-black/60 leading-snug">
+	                                Paste a list of lore-card objects. Title is required; category, body, and whether the
+	                                card should guide AI prompts are optional. Duplicate category/title pairs are skipped.
+                              </p>
+                              <textarea
+                                value={loreImportJsonDraft}
+                                onChange={(e) => setLoreImportJsonDraft(e.target.value)}
+                                rows={8}
+                                className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-xs text-black font-mono resize-y min-h-[140px]"
+                                placeholder='[\n  {"title":"The Silver Compact","category":"world","body":"...","include_in_prompt":true}\n]'
+                              />
+                              {loreImportError ? (
+                                <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{loreImportError}</p>
+                              ) : null}
+                              {loreImportResult ? (
+                                <p className="text-xs text-emerald-900 bg-emerald-100/70 rounded-lg px-3 py-2">
+                                  Imported {loreImportResult.imported}. Skipped duplicates (existing):{' '}
+                                  {loreImportResult.skippedExisting}. Skipped duplicates (payload):{' '}
+                                  {loreImportResult.skippedPayload}. Invalid: {loreImportResult.invalid}.
+                                </p>
+                              ) : null}
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || loreImportBusy || !loreImportJsonDraft.trim()}
+                                  onClick={() => void runLoreJsonImport()}
+                                  className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                                >
+                                  {loreImportBusy ? 'Importing…' : 'Import'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={loreImportBusy}
+                                  onClick={() => {
+                                    setLoreImportJsonDraft('');
+                                    setLoreImportError(null);
+                                    setLoreImportResult(null);
+                                  }}
+                                  className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80 disabled:opacity-45"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="border border-black/10 bg-white/45 p-3 space-y-3 max-w-5xl">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                Import from Obsidian
+                              </p>
+                              <p className="mt-1 max-w-2xl text-xs leading-snug text-black/62">
+                                Select Markdown notes, images, or a vault folder. Notes stay in Markdown, wiki links are
+                                detected, and image embeds become visual references on the imported lore card.
+                              </p>
+                            </div>
+                            <label className="flex items-center gap-2 text-[11px] font-bold text-black/65">
+                              Type filter
+                              <select
+                                value={loreObsidianTypeFilter}
+                                onChange={(e) => setLoreObsidianTypeFilter(e.target.value)}
+                                className="rounded-md border border-black/15 bg-white px-2 py-1 text-xs text-black"
+                              >
+                                <option value="">All types</option>
+                                {OBSIDIAN_LORE_TYPE_OPTIONS.map((type) => (
+                                  <option key={type} value={type}>
+                                    {type}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <input
+                            ref={loreObsidianFileInputRef}
+                            type="file"
+                            multiple
+                            accept=".md,.markdown,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                          />
+                          <input
+                            ref={loreObsidianFolderInputRef}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            {...{ webkitdirectory: '', directory: '' }}
+                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={loreImportBusy}
+                              onClick={() => loreObsidianFileInputRef.current?.click()}
+                              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-black text-black shadow-sm transition hover:-translate-y-0.5 disabled:opacity-45"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              <FileUp className="h-4 w-4" />
+                              Select notes/images
+                            </button>
+                            <button
+                              type="button"
+                              disabled={loreImportBusy}
+                              onClick={() => loreObsidianFolderInputRef.current?.click()}
+                              className="inline-flex items-center gap-2 rounded-md border border-black/20 bg-white/85 px-3 py-2 text-xs font-bold text-black transition hover:bg-white disabled:opacity-45"
+                            >
+                              <FolderOpen className="h-4 w-4" />
+                              Select vault folder
+                            </button>
+                            {loreObsidianEntries.length > 0 ? (
+                              <button
+                                type="button"
+                                disabled={loreImportBusy}
+                                onClick={() => {
+                                  setLoreObsidianEntries([]);
+                                  setLoreObsidianSelectedIds([]);
+                                  setLoreObsidianError(null);
+                                  setLoreObsidianResult(null);
+                                }}
+                                className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-xs font-bold text-black/65 transition hover:bg-white disabled:opacity-45"
+                              >
+                                Clear preview
+                              </button>
+                            ) : null}
+                          </div>
+                          {loreObsidianError ? (
+                            <p className="flex items-start gap-2 bg-red-100/80 px-3 py-2 text-xs text-red-900">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                              <span>{loreObsidianError}</span>
+                            </p>
+                          ) : null}
+                          {loreObsidianResult ? (
+                            <div className="bg-emerald-100/75 px-3 py-2 text-xs text-emerald-950">
+                              Imported {loreObsidianResult.imported}. Updated {loreObsidianResult.updated}. Skipped{' '}
+                              {loreObsidianResult.skipped}. Failed {loreObsidianResult.failed}. Stored images{' '}
+                              {loreObsidianResult.storedImages}.
+                              {loreObsidianResult.warnings.length > 0 ? (
+                                <ul className="mt-1 list-disc pl-4 text-amber-950">
+                                  {loreObsidianResult.warnings.slice(0, 5).map((warning) => (
+                                    <li key={warning}>{warning}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {loreObsidianEntries.length > 0 ? (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/10 pt-3">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
+                                  Preview {loreObsidianSelectedIds.length}/{loreObsidianEntries.length} selected
+                                </p>
+                                <button
+                                  type="button"
+                                  disabled={!supabaseOk || loreImportBusy || loreObsidianSelectedIds.length === 0}
+                                  onClick={() => void runLoreObsidianImport()}
+                                  className="rounded-md px-4 py-2 text-xs font-black text-black shadow-sm disabled:opacity-45"
+                                  style={{ background: ACCENT_GOLD_GRADIENT }}
+                                >
+                                  {loreImportBusy ? 'Importing…' : 'Confirm import'}
+                                </button>
+                              </div>
+                              <ul className="grid gap-2">
+                                {loreObsidianEntries.map((entry) => {
+                                  const selected = loreObsidianSelectedIds.includes(entry.id);
+                                  return (
+                                    <li
+                                      key={entry.id}
+                                      className={`border px-3 py-2 transition ${
+                                        selected
+                                          ? 'border-amber-500/70 bg-amber-50/75'
+                                          : 'border-black/10 bg-white/35 opacity-70'
+                                      }`}
+                                    >
+                                      <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            onChange={() => toggleLoreObsidianEntry(entry.id)}
+                                            className="mt-1 rounded border-black/30"
+                                          />
+                                          <span className="min-w-0">
+                                            <span className="block truncate text-sm font-black text-black">
+                                              {entry.title}
+                                              <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-black/45">
+                                                {entry.category}
+                                              </span>
+                                            </span>
+                                            <span className="mt-0.5 block truncate text-[11px] text-black/48">
+                                              {entry.sourcePath}
+                                            </span>
+                                          </span>
+                                        </label>
+                                        {entry.duplicateOf ? (
+                                          <label className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                                            Duplicate
+                                            <select
+                                              value={entry.duplicateAction}
+                                              onChange={(e) =>
+                                                setLoreObsidianEntryAction(
+                                                  entry.id,
+                                                  e.target.value as ObsidianLoreDuplicateAction,
+                                                )
+                                              }
+                                              className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] normal-case tracking-normal text-black"
+                                            >
+                                              <option value="skip">skip</option>
+                                              <option value="overwrite">overwrite</option>
+                                              <option value="merge">merge</option>
+                                              <option value="create_duplicate">create duplicate</option>
+                                            </select>
+                                          </label>
+                                        ) : null}
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/58">
+                                        {entry.tags.slice(0, 6).map((tag) => (
+                                          <span key={tag} className="bg-white/70 px-2 py-1">
+                                            #{tag}
+                                          </span>
+                                        ))}
+                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
+                                          {entry.links.length} links
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
+                                          <Image className="h-3 w-3" />
+                                          {entry.images.filter((image) => image.status === 'resolved').length}/
+                                          {entry.images.length} images
+                                        </span>
+                                        {entry.linkedLoreReferences.length > 0 ? (
+                                          <span className="bg-emerald-100/90 px-2 py-1 text-emerald-950">
+                                            {entry.linkedLoreReferences.length} matched refs
+                                          </span>
+                                        ) : null}
+                                        {entry.warnings.length > 0 ? (
+                                          <span className="bg-amber-100/90 px-2 py-1 text-amber-950">
+                                            {entry.warnings.length} warnings
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      {entry.links.length > 0 || entry.images.length > 0 || entry.warnings.length > 0 ? (
+                                        <div className="mt-2 grid gap-2 text-[11px] text-black/62 md:grid-cols-3">
+                                          <p>
+                                            <strong>Links:</strong>{' '}
+                                            {entry.links.map((link) => link.target).join(', ') || 'none'}
+                                          </p>
+                                          <p>
+                                            <strong>Images:</strong>{' '}
+                                            {entry.images.map((image) => image.fileName).join(', ') || 'none'}
+                                          </p>
+                                          <p className={entry.warnings.length > 0 ? 'text-amber-950' : ''}>
+                                            <strong>Warnings:</strong> {entry.warnings.join(' ') || 'none'}
+                                          </p>
+                                        </div>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                            Cards ({loreCards.length})
+                          </p>
+                          {loreBusy && loreCards.length === 0 ? (
+                            <p className="text-xs text-black/50">Loading…</p>
+                          ) : loreCards.length === 0 ? (
+                            <p className="text-xs text-black/50">No lore cards yet. Add one above.</p>
+                          ) : (
+                            <ul className="space-y-2 max-w-4xl">
+                              {loreCards.map((c) => {
+                                const importMetadata = readLoreImportMetadataFromBody(c.body);
+                                const cleanBody = stripLoreImportMetadataFromBody(c.body);
+                                const storedImageCount =
+                                  importMetadata?.images?.filter((image) => Boolean(image.storageUrl)).length ?? 0;
+                                return (
+                                  <li
+                                    key={c.id}
+                                    className="rounded-xl border border-black/10 bg-white/35 p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-black truncate">
+                                        {c.title || 'Untitled'}
+                                        <span className="font-normal text-black/55 text-xs ml-2">
+                                          ({c.category})
+                                        </span>
+                                        {!c.include_in_prompt ? (
+                                          <span className="ml-2 text-[10px] font-bold uppercase text-amber-900/80">
+                                            excluded from AI
+                                          </span>
+                                        ) : null}
+                                      </p>
+                                      {importMetadata ? (
+                                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/52">
+                                          <span className="bg-white/70 px-2 py-0.5">Obsidian</span>
+                                          <span className="bg-white/70 px-2 py-0.5 truncate max-w-[280px]">
+                                            {importMetadata.sourcePath}
+                                          </span>
+                                          {importMetadata.tags?.slice(0, 4).map((tag) => (
+                                            <span key={tag} className="bg-white/70 px-2 py-0.5">
+                                              #{tag}
+                                            </span>
+                                          ))}
+                                          {importMetadata.images && importMetadata.images.length > 0 ? (
+                                            <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-0.5">
+                                              <Image className="h-3 w-3" />
+                                              {storedImageCount}/{importMetadata.images.length} visual refs
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                      <p className="text-xs text-black/75 whitespace-pre-wrap mt-1">
+                                        {cleanBody || '(empty body)'}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLoreEditingId(c.id);
+                                        setLoreDraftTitle(c.title);
+                                        setLoreDraftCategory(c.category);
+                                        setLoreDraftBody(c.body);
+                                        setLoreDraftInclude(c.include_in_prompt);
+                                        setLoreDraftSort(c.sort_order);
+                                      }}
+                                      className="rounded-md px-2 py-1 text-[10px] font-bold border border-black/20 bg-white/80"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={loreBusy}
+                                      onClick={async () => {
+                                        if (!window.confirm('Delete this lore card?')) return;
+                                        setLoreBusy(true);
+                                        const ok = await deleteWriterLoreCard(c.id);
+                                        setLoreBusy(false);
+                                        if (!ok) {
+                                          pushHistory('error: delete lore card');
+                                          return;
+                                        }
+                                        if (loreEditingId === c.id) {
+                                          setLoreEditingId(null);
+                                          setLoreDraftTitle('');
+                                          setLoreDraftCategory('world');
+                                          setLoreDraftBody('');
+                                          setLoreDraftInclude(true);
+                                          setLoreDraftSort(0);
+                                        }
+                                        pushHistory('deleted lore card');
+                                        await reloadLoreCards();
+                                      }}
+                                      className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900 border border-red-300/70 bg-red-50/90"
+                                    >
+                                      Delete
+                                    </button>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {activeTab === 'beats' && (
+                  <div className={`${WRITER_GLASS_CARD} p-4`}>
+                    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,48%)] xl:items-start xl:gap-4">
+                      <div className="min-w-0 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                            Page beats
+                          </p>
+                          <WriterSectionTip tipKey="beatsTab" label="About page beats" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={beatsSkipExisting}
+                              onChange={(e) => setBeatsSkipExisting(e.target.checked)}
+                              className="rounded border-black/30"
+                            />
+                            Skip pages that already have beats
+                          </label>
+                          <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                            <button
+                              type="button"
+                              disabled={
+                                !supabaseOk ||
+                                !selectedIssueId ||
+                                sortedPages.length === 0 ||
+                                beatsBatchBusy ||
+                                beatsLoading
+                              }
+                              onClick={() => void runBatchPageBeats()}
+                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
+                            </button>
+                          </Tooltip>
+                          {beatsBatchBusy && beatsBatchSource === 'all' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                beatsBatchAbortRef.current?.abort();
+                              }}
+                              className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
+                            >
+                              Cancel after this batch
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="space-y-1 min-w-0 xl:max-w-none">
+                          <div className="flex items-center gap-1.5">
+                            <label
+                              className="text-[11px] font-semibold text-black/70"
+                              htmlFor="writer-beats-director-notes"
+                            >
+                              Director notes for beats (optional)
+                            </label>
+                            <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
+                          </div>
+                          <textarea
+                            id="writer-beats-director-notes"
+                            name="writer-beats-director-notes"
+                            rows={4}
+	                            value={beatsDirectorNotesDraft}
+	                            onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
+	                            onBlur={() => void persistWriterDrafts({ beats_director_notes: beatsDirectorNotesDraft })}
+	                            disabled={!selectedIssueId}
+                            placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
+                            className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[72px] disabled:opacity-50"
+                          />
+                        </div>
+                        {selectedPage ? (
+                          <div className="grid gap-2 rounded-xl border border-black/10 bg-white/45 p-3 sm:grid-cols-3">
+                            {[
+                              ['Characters', selectedPageMetadata.characters],
+                              ['Locations', selectedPageMetadata.locations],
+                              ['Art style', selectedPageMetadata.artStyle],
+                            ].map(([label, value]) => (
+                              <div key={label} className="min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-wider text-black/45">
+                                  {label}
+                                </p>
+                                <p className="mt-1 text-[11px] font-semibold leading-snug text-black/75 break-words">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {sortedPages.length > 0 ? (
+                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                                  Pick pages for one batch (max {WRITER_PAGE_BEATS_ISSUE_MAX})
+                                </p>
+                                <WriterSectionTip tipKey="beatsMultiPick" label="About multi-select beats" />
+                              </div>
+                              <button
+                                type="button"
+                                disabled={!supabaseOk || beatsBatchBusy || beatsPickPageIds.length === 0}
+                                onClick={() => setBeatsPickPageIds([])}
+                                className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
+                              >
+                                Clear picks
+                              </button>
+                            </div>
+                            <ul className="space-y-1.5 max-h-[min(200px,28vh)] overflow-y-auto custom-scrollbar -mx-1 px-1">
+                              {sortedPages.map((p) => {
+                                const checked = beatsPickPageIds.includes(p.id);
+                                const atCap =
+                                  beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX && !checked;
+                                return (
+                                  <li key={p.id} className="flex items-start gap-2 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      id={`writer-beats-pick-${p.id}`}
+                                      checked={checked}
+                                      onChange={() => {
+                                        setBeatsPickPageIds((prev) => {
+                                          if (prev.includes(p.id)) return prev.filter((x) => x !== p.id);
+                                          if (prev.length >= WRITER_PAGE_BEATS_ISSUE_MAX) return prev;
+                                          return [...prev, p.id];
+                                        });
+                                      }}
+                                      disabled={!supabaseOk || beatsBatchBusy || atCap}
+                                      className="mt-0.5 rounded border-black/25"
+                                    />
+                                    <label
+                                      htmlFor={`writer-beats-pick-${p.id}`}
+                                      className={`cursor-pointer flex-1 min-w-0 leading-snug ${atCap ? 'opacity-50' : ''}`}
+                                    >
+                                      <span className="font-semibold text-black">Page {p.page_number}</span>
+                                      {pageRowHasPanelBeats(p) ? (
+                                        <span className="text-black/55"> — has beats</span>
+                                      ) : null}
+                                    </label>
+                                    <button
+                                      type="button"
+                                      title="Select this page in the Library panel to scope beats and dialogue previews"
+                                      className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
+                                      onClick={() => setSelectedPageId(p.id)}
+                                    >
+                                      Library
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
+                              <button
+                                type="button"
+                                disabled={
+                                  !supabaseOk ||
+                                  !selectedIssueId ||
+                                  beatsPickOrdered.length === 0 ||
+                                  beatsBatchBusy ||
+                                  beatsLoading
+                                }
+                                onClick={() => void runSelectedBatchPageBeats()}
+                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                              >
+                                {beatsBatchBusy && beatsBatchSource === 'picked'
+                                  ? beatsBatchLabel || 'Batch…'
+                                  : `Generate beats for selected (${beatsPickOrdered.length})`}
+                              </button>
+                            </Tooltip>
+                            {beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX ? (
+                              <p className="text-[10px] text-black/50">
+                                Maximum {WRITER_PAGE_BEATS_ISSUE_MAX} pages per batch. Clear a pick to choose
+                                another.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {!selectedPageId && sortedPages.length > 0 && (
+                          <p className="text-xs text-black/50">
+                            Select a page in the Library to preview, use picks above, or Generate all beats (
+                            {WRITER_PAGE_BEATS_ISSUE_MAX} pages per server round).
+                          </p>
+                        )}
+                        {sortedPages.length === 0 && (
+                          <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+	                          <button
+	                            type="button"
+	                            disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
+	                            onClick={() => {
+	                              if (selectedPage?.beats_json) setActiveTab('dialogue');
+	                              else void runSelectedPageBeatsGeneration();
+	                            }}
+	                            className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+	                            style={{ background: ACCENT_GOLD_GRADIENT }}
+	                          >
+	                            {beatsLoading ? 'Generating…' : selectedPage?.beats_json ? 'Continue to Dialogue' : 'Generate page beats'}
+	                          </button>
+	                          {selectedPage?.beats_json ? (
+	                            <button
+	                              type="button"
+	                              disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
+	                              onClick={() => void runSelectedPageBeatsGeneration()}
+	                              className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+	                            >
+	                              Regenerate page beats
+	                            </button>
+	                          ) : null}
+	                          <button
+	                            type="button"
+	                            disabled={!selectedPageId}
+	                            onClick={() => focusWriterElement('writer-beats-inline-editor')}
+	                            className="rounded-lg border border-amber-800/35 bg-amber-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-100 disabled:opacity-40"
+	                          >
+	                            Edit this page&apos;s beats
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!selectedPageId || imageWorkshopBusy}
+                            onClick={() => void openImageWorkshopFromWriter('page')}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            {imageWorkshopBusy ? 'Opening…' : 'Send page to Illustrator’s Imageshop'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!selectedPage?.beats_json}
+                            onClick={() => {
+                              if (!selectedPage?.beats_json) return;
+                              downloadJsonFile(
+                                `writer-beats-page-${selectedPage.page_number}.json`,
+                                selectedPage.beats_json,
+                              );
+                              pushHistory(`downloaded beats page ${selectedPage.page_number}`);
+                            }}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            Download beats (this page)
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              !supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json
+                            }
+                            onClick={() => void clearBeatsForSelectedPage()}
+                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                          >
+                            Clear beats (this page)
+                          </button>
+                        </div>
+	                        {beatsError && (
+	                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
+	                        )}
+	                        {renderScopePreview(selectedBeatsScope)}
+	                        
 	                        {pageEditReviewPanel}
 	                      </div>
                       <aside
