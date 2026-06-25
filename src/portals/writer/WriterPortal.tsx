@@ -5898,18 +5898,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
           <div className={`${writerFocusedMode ? 'hidden' : 'grid'} grid-cols-4 gap-1.5 md:grid-cols-8`}>
             {[
-              { label: 'Stages', value: `${completedStageCount}/${productionStages.length}` },
-              { label: 'Pages', value: sortedPages.length || targetPageCount },
-              { label: 'Beats', value: pagesWithBeatsCount },
-              { label: 'Script', value: pagesWithScriptCount },
-              { label: 'Canon', value: loreCards.length },
-              { label: 'Shots', value: latestShotPlan ? 1 : 0 },
-              { label: 'Review', value: reviewReady ? 1 : 0 },
-              { label: 'Tab', value: activeStage?.label ?? workspaceHeading },
+              { label: 'Done',   value: `${completedStageCount}/${productionStages.length}`, title: 'Completed workflow stages' },
+              { label: 'Pages',  value: sortedPages.length || targetPageCount, title: 'Total pages' },
+              { label: 'Beats',  value: pagesWithBeatsCount, title: 'Pages with beats generated' },
+              { label: 'Script', value: pagesWithScriptCount, title: 'Pages with dialogue scripted' },
+              { label: 'Lore',   value: loreCards.length, title: 'Lore cards in story canon' },
+              { label: 'Shots',  value: latestShotPlan ? 1 : 0, title: 'Shot plan ready' },
+              { label: 'Review', value: reviewReady ? 1 : 0, title: 'Story review complete' },
+              { label: 'Stage',  value: activeStage?.label ?? workspaceHeading, title: 'Current workflow stage' },
             ].map((item) => (
               <div
                 key={item.label}
-                className="min-w-0 border-l border-black/15 bg-white/30 px-2 py-1 text-black/75"
+                title={item.title}
+                className="min-w-0 border-l border-black/15 bg-white/30 px-2 py-1 text-black/75 cursor-default"
               >
                 <p className="truncate text-[8px] font-black uppercase tracking-wider text-black/42">{item.label}</p>
                 <p className="truncate text-[12px] font-black leading-tight text-black">{item.value}</p>
@@ -5920,7 +5921,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <div className={`${writerFocusedMode ? 'hidden' : 'flex'} min-w-0 items-center gap-2 lg:justify-end`}>
             <div className="hidden min-w-0 text-right lg:block">
               <p className="truncate text-[10px] font-bold uppercase tracking-wide text-black/45">Next action</p>
-              <p className="max-w-[260px] truncate text-[11px] font-semibold text-black/65">{quickGenerateNextHint}</p>
+              <p className="max-w-[280px] text-[11px] font-semibold text-black/65 leading-snug line-clamp-2">{quickGenerateNextHint}</p>
             </div>
             <div className="inline-flex rounded-md border border-black/15 bg-white/35 p-0.5">
               {(['Simple Workflow', 'Advanced Tools'] as const).map((mode) => {

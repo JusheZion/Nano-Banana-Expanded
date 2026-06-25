@@ -16,19 +16,24 @@ export type WriterWorkspaceTabId =
   | 'scripts'
   | 'export';
 
-/** Narrative pipeline order: author source → synopsis → canon → production → review cockpit. */
+/**
+ * Narrative pipeline order — matches writerWorkflowChronology.ts step sequence:
+ * dashboard → foundation/outline → synopsis helper (scripts) → visual canon
+ * → story canon (lore) → page beats → dialogue → imageshop prep (video)
+ * → story review (arc) → compare (cockpit) → export
+ */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
-  'dashboard',
-  'outline',
-  'scripts',
-  'visual_canon',
-  'lore',
-  'beats',
-  'dialogue',
-  'video',
-  'arc',
-  'cockpit',
-  'export',
+  'dashboard',    // 01 Start — choose series + issue
+  'outline',      // 02 Foundation — production defaults, page target
+  'scripts',      // 03 Author Source + Synopsis Helper
+  'visual_canon', // 04 Visual Canon — image references
+  'lore',         // 05 Story Canon — lore cards
+  'beats',        // 06 Page Beats — panel-level story beats
+  'dialogue',     // 07 Dialogue — scripted speech
+  'video',        // 08 Imageshop Prep — shot plans
+  'arc',          // 09 Story Review — pacing + canon checks
+  'cockpit',      // 10 Compare & Review
+  'export',       // 11 Export — download handoff files
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
