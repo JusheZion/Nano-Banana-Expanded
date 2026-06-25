@@ -32,7 +32,7 @@ export function getWriterQuickGenerateNextHint(
     case 'visual_canon':
       return 'Attach character, location, and prop images the AI should keep consistent before writing beats.';
     case 'scripts':
-      return 'Use Synopsis helper for author outline/source structure before regenerating outline or beats.';
+      return 'Paste your outline (any format) in My Outline, then use the mode buttons to tell ARCS how closely to follow it.';
     case 'lore':
       return 'Story Canon cards marked “Include in AI prompts” are sent to Generate outline and page beats. Next: Page Beats.';
     case 'beats':

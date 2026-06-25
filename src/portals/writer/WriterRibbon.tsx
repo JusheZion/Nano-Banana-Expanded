@@ -38,11 +38,12 @@ const MENUS: { id: WriterRibbonMenuId; label: string }[] = [
   { id: 'help', label: 'Help' },
 ];
 
-const WORKSPACE_TABS: { id: WriterWorkspaceTabId; label: string }[] =
-  WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
+function buildWorkspaceTabs(overrides?: Partial<Record<WriterWorkspaceTabId, string>>) {
+  return WRITER_WORKSPACE_TAB_ORDER.map((id) => ({
     id,
-    label: WRITER_WORKSPACE_TAB_LABELS[id].ribbon,
+    label: overrides?.[id] ?? WRITER_WORKSPACE_TAB_LABELS[id].ribbon,
   }));
+}
 
 const RIBBON_DIVIDER = <div className="h-8 w-px bg-black/15 shrink-0 mx-1" aria-hidden />;
 
@@ -84,6 +85,8 @@ type Props = {
   quickGenerateNextHint?: string;
   /** Switch workspace tab and show Home ribbon (e.g. from File menu). */
   onSelectWorkspaceTabFromFile?: (id: WriterWorkspaceTabId) => void;
+  /** Override display labels for specific workspace tabs (e.g. medium-specific beats terminology). */
+  tabLabelOverrides?: Partial<Record<WriterWorkspaceTabId, string>>;
 };
 
 export const WriterRibbon: React.FC<Props> = ({
@@ -122,7 +125,9 @@ export const WriterRibbon: React.FC<Props> = ({
   onOpenHelpCategory,
   quickGenerateNextHint,
   onSelectWorkspaceTabFromFile,
+  tabLabelOverrides,
 }) => {
+  const workspaceTabs = buildWorkspaceTabs(tabLabelOverrides);
   const { isPhone } = useResponsiveLayout();
 
   return (
@@ -207,7 +212,7 @@ export const WriterRibbon: React.FC<Props> = ({
             <div className="flex flex-col gap-0.5 px-2 border-r border-black/10 pr-3">
               <span className="text-[9px] font-bold uppercase tracking-wider text-black/45">Workspace</span>
               <div className="flex flex-wrap gap-1">
-                {WORKSPACE_TABS.map((t) => (
+                {workspaceTabs.map((t) => (
                   <Tooltip
                     key={t.id}
                     content={`${t.label} — ${workspaceTabShortcutHint(t.id)}`}

@@ -185,6 +185,9 @@ export function buildProductionDefaultsPromptBlock(defaults: WriterProductionDef
     `Preferred output format: ${defaults.outputFormat}`,
     `Strict canon: ${defaults.strictCanon ? 'yes' : 'no'}`,
     `No video assumptions: ${defaults.noVideoAssumptions ? 'yes' : 'no'}`,
+    defaults.mediumType === 'comic'
+      ? 'Each story beat represents one panel. Write beats at the panel level — one beat, one panel.'
+      : '',
     defaults.noVideoAssumptions && defaults.mediumType === 'comic'
       ? 'Do not translate the story into video, trailer, camera-shot, or animation language unless the active tool explicitly asks for visual planning.'
       : '',

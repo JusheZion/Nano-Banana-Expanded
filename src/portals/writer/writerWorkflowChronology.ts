@@ -50,7 +50,7 @@ export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', tab: 'dashboard', eyebrow: 'Start' },
   { id: 'library', label: 'Choose Story', tab: 'dashboard', eyebrow: 'Select' },
   { id: 'foundation', label: 'Foundation', tab: 'outline', eyebrow: 'Setup' },
-  { id: 'synopsis', label: 'Author Source', tab: 'scripts', eyebrow: 'Source' },
+  { id: 'synopsis', label: 'My Outline', tab: 'scripts', eyebrow: 'Source' },
   { id: 'story_map', label: 'Story Map', tab: 'scripts', eyebrow: 'Map' },
   { id: 'visual_canon', label: 'Visual Canon', tab: 'visual_canon', eyebrow: 'References' },
   { id: 'canon', label: 'Story Canon', tab: 'lore', eyebrow: 'Lore' },
@@ -96,7 +96,7 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
         return {
           ...step,
           done: ctx.hasSynopsis,
-          detail: ctx.hasSynopsis ? 'Author source ready' : 'Add outline/source',
+          detail: ctx.hasSynopsis ? 'My outline saved' : 'Paste your outline',
         };
       case 'story_map':
         return {

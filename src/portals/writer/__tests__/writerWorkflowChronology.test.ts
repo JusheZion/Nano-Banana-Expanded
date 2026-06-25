@@ -11,7 +11,7 @@ describe('writerWorkflowChronology', () => {
       'Dashboard',
       'Choose Story',
       'Foundation',
-      'Author Source',
+      'My Outline',
       'Story Map',
       'Visual Canon',
       'Story Canon',

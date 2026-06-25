@@ -714,6 +714,7 @@ function WriterSearchableMenu({
         }}
         onFocus={() => {
           if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+          setOpen(true);
         }}
         onBlur={() => {
           blurTimerRef.current = setTimeout(() => {
@@ -3596,8 +3597,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const foundationContext = truncateWriterPromptText(
       [
         `Series logline:\n${seriesLoglineDraft.trim() || '(none)'}`,
-        `Issue synopsis / author source:\n${issueSynopsisDraft.trim() || '(none)'}`,
-        `Author outline source (${authorOutlineMode}):\n${authorOutlineText.trim() || '(none)'}`,
+        `Issue synopsis / my outline:\n${issueSynopsisDraft.trim() || '(none)'}`,
+        `My outline (${authorOutlineMode}):\n${authorOutlineText.trim() || '(none)'}`,
         `Production defaults:\n${JSON.stringify(productionDefaultsPayload, null, 2)}`,
       ].join('\n\n'),
       16_000,
@@ -4873,6 +4874,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const completedStageCount = productionStages.filter((stage) => stage.done).length;
   const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
   const activeWorkspaceLabel = WRITER_WORKSPACE_TAB_LABELS[activeTab];
+  const beatsTabLabel =
+    productionDefaultsDraft.mediumType === 'comic' ? 'Panels'
+    : productionDefaultsDraft.mediumType === 'book' ? 'Scenes'
+    : productionDefaultsDraft.mediumType === 'screenplay' ? 'Scenes'
+    : productionDefaultsDraft.mediumType === 'video' ? 'Shots'
+    : 'Page Beats';
   const workspaceHeading =
     activeTab === 'outline'
       ? outlineWorkspaceStep === 'foundation'
@@ -4883,8 +4890,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       : activeTab === 'scripts'
         ? scriptsWorkspaceStep === 'story_map'
           ? 'Story Map'
-          : 'Author Source'
-        : activeWorkspaceLabel.heading;
+          : 'My Outline'
+        : activeTab === 'beats'
+          ? beatsTabLabel
+          : activeWorkspaceLabel.heading;
   const workspaceDescription =
     activeTab === 'outline'
       ? outlineWorkspaceStep === 'foundation'
@@ -4895,7 +4904,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       : activeTab === 'scripts'
         ? scriptsWorkspaceStep === 'story_map'
           ? 'Map arcs, pages, scenes, and beats so ARCS keeps the story structure in order.'
-          : 'Save the source outline and guidance ARCS should follow.'
+          : 'Paste your outline in any format — bullet list, summary, or notes. ARCS reads it when generating the issue outline.'
         : activeWorkspaceLabel.description;
   const focusWriterElement = useCallback((id: string) => {
     window.requestAnimationFrame(() => {
@@ -5184,7 +5193,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       'dashboard',
       'foundation',
       'synopsis',
-      'story_map',
       'visual_canon',
       'canon',
       'outline',
@@ -5902,7 +5910,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             {[
               { label: 'Done',   value: `${completedStageCount}/${productionStages.length}`, title: 'Completed workflow stages' },
               { label: 'Pages',  value: sortedPages.length || targetPageCount, title: 'Total pages' },
-              { label: 'Beats',  value: pagesWithBeatsCount, title: 'Pages with beats generated' },
+              { label: beatsTabLabel === 'Page Beats' ? 'Beats' : beatsTabLabel,  value: pagesWithBeatsCount, title: 'Pages with beats generated' },
               { label: 'Script', value: pagesWithScriptCount, title: 'Pages with dialogue scripted' },
               { label: 'Lore',   value: loreCards.length, title: 'Lore cards in story canon' },
               { label: 'Shots',  value: latestShotPlan ? 1 : 0, title: 'Shot plan ready' },
@@ -6030,6 +6038,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           onNextPage={onNextPage}
           onOpenHelpCategory={(id) => setHelpCategory(id)}
           quickGenerateNextHint={quickGenerateNextHint}
+          tabLabelOverrides={{ beats: beatsTabLabel }}
         />
       ) : null}
 
@@ -6923,27 +6932,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     ) : null}
                     {outlineWorkspaceStep === 'outline' ? (
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
-                    <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-outline-supplement">
-                      <span className="inline-flex items-center gap-1.5">
-                        Outline instructions for AI (optional)
-                        <WriterSectionTip tipKey="outlineInstructionsOptional" label="About outline instructions" />
-                      </span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
+                          AI Outline Instructions
+                        </p>
+                        <WriterSectionTip tipKey="outlineInstructionsOptional" label="About AI outline instructions" />
+                      </div>
+                      <p className="text-xs leading-snug text-black/60" title="Any format works — paste a paragraph, a list, or rough notes. ARCS reads these alongside your outline when generating.">
+                        Tell ARCS what to keep, avoid, or emphasize. Any format — a sentence, bullets, or rough notes.
+                      </p>
                       <textarea
                         id="writer-outline-supplement"
                         name="writer-outline-supplement"
 	                        value={outlineSupplementDraft}
 	                        onChange={(e) => setOutlineSupplementDraft(e.target.value)}
 	                        onBlur={() => void persistWriterDrafts({ outline_instructions: outlineSupplementDraft })}
-	                        rows={3}
+	                        rows={4}
                         disabled={!selectedIssueId}
-                        className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-lg border border-black/15 bg-white px-2 py-2 text-sm text-black resize-y min-h-[72px] disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder={
                           selectedIssueId
-                            ? 'Optional: pacing, tone, act breaks, or “more pages per beat”. Sent only with Generate outline — not saved to the issue row.'
+                            ? 'Examples: "keep the school setting", "act 2 should feel slower", "aim for 3–4 beats per page", "don\'t add characters I haven\'t named"…'
                             : 'Select an issue…'
                         }
                       />
-                    </label>
+                    </div>
                     <div className="flex flex-wrap items-end gap-3">
                       <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-target-pages">
                         Target pages
@@ -9374,12 +9388,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
 	                        <p className="text-lg font-bold text-black">
-                            {scriptsWorkspaceStep === 'story_map' ? 'Story Map' : 'Author Source'}
+                            {scriptsWorkspaceStep === 'story_map' ? 'Story Map' : 'My Outline'}
                           </p>
 	                        <p className="mt-0.5 text-xs text-black/58">
                             {scriptsWorkspaceStep === 'story_map'
                               ? 'Map arcs, pages, scenes, and beats so ARCS can keep the issue structure in order.'
-                              : 'Paste your source outline and guidance before ARCS generates or revises the issue outline.'}
+                              : 'Paste your outline in any format — bullet list, summary, or prose notes. ARCS reads it when generating or revising the issue outline.'}
 	                        </p>
                       </div>
                       <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
@@ -9404,17 +9418,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div>
                                 <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-	                                  Author outline source
+	                                  My Outline
 	                                </p>
 	                                <p className="mt-1 text-xs leading-snug text-black/68">
-	                                  Paste your real outline here. It is saved separately from the issue synopsis and is
-	                                  sent directly to <strong>Generate outline</strong> so AI restructures your story
-	                                  instead of inventing a replacement.
+	                                  Paste your outline in any format — a list, a summary, or rough notes. ARCS
+	                                  sends it to <strong>Generate outline</strong> and uses your structure instead of
+	                                  inventing one.
 	                                </p>
 	                              </div>
 	                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
 	                                <summary className="cursor-pointer">Advanced details</summary>
-	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as your author source.</span>
+	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as your outline.</span>
 	                              </details>
 	                            </div>
 	                            <p className="text-[11px] leading-snug text-black/60">
@@ -9459,7 +9473,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                                 style={{ background: ACCENT_GOLD_GRADIENT }}
                               >
-                                {scriptsBusy ? 'Saving…' : 'Save author outline'}
+                                {scriptsBusy ? 'Saving…' : 'Save my outline'}
                               </button>
                               <button
                                 type="button"
@@ -9467,7 +9481,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 onClick={() => appendTextToField(setOutlineSupplementDraft, authorOutlineText)}
                                 className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                               >
-                                Copy into outline instructions
+                                Copy to AI instructions
                               </button>
                             </div>
                           </div>
@@ -9480,7 +9494,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 <strong>Issue synopsis</strong> is the short pitch/logline context.
                               </p>
                               <p>
-	                                <strong>Author outline</strong> is the source structure ARCS should keep, organize, or
+	                                <strong>My Outline</strong> is the source structure ARCS should keep, organize, or
 	                                expand when generating the saved Issue Outline.
                               </p>
                               <p>

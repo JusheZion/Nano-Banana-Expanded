@@ -14,8 +14,8 @@ describe('writerWorkspaceModel', () => {
       'lore',
       'beats',
       'dialogue',
-      'video',
       'arc',
+      'video',
     ]);
     expect(WRITER_WORKSPACE_TAB_LABELS.dashboard).toMatchObject({
       ribbon: 'Dashboard',
