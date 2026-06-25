@@ -5317,18 +5317,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           ariaLabel="Select Writer page"
         />
         <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
-          <Tooltip content={quickGenerateNextHint} side="bottom">
             <button
               type="button"
               disabled={quickGenerateDisabled}
               onClick={() => void quickGenerate()}
+              title={quickGenerateLabel}
               className="inline-flex min-h-[34px] items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
               style={{ background: ACCENT_GOLD_GRADIENT }}
             >
               {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
               {quickGenerateLabel}
             </button>
-          </Tooltip>
           <Tooltip
             content={
               writerFocusedMode
@@ -5442,6 +5441,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ))}
       </div>
 
+      <p className="text-[10px] text-black/50 leading-snug">
+        Step 1 — choose a <strong className="text-black/65">Vault</strong>, then type a profile or collection name to filter. Step 2 — tick images to attach them. Step 3 — save.
+      </p>
       <div className="grid gap-2 md:grid-cols-[0.8fr_1fr_0.75fr]">
         <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
           Vault
@@ -5896,7 +5898,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </p>
           </div>
 
-          <div className={`${writerFocusedMode ? 'hidden' : 'grid'} grid-cols-4 gap-1.5 md:grid-cols-8`}>
+          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-8">
             {[
               { label: 'Done',   value: `${completedStageCount}/${productionStages.length}`, title: 'Completed workflow stages' },
               { label: 'Pages',  value: sortedPages.length || targetPageCount, title: 'Total pages' },
@@ -5918,7 +5920,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ))}
           </div>
 
-          <div className={`${writerFocusedMode ? 'hidden' : 'flex'} min-w-0 items-center gap-2 lg:justify-end`}>
+          <div className="flex min-w-0 items-center gap-2 lg:justify-end">
             <div className="hidden min-w-0 text-right lg:block">
               <p className="truncate text-[10px] font-bold uppercase tracking-wide text-black/45">Next action</p>
               <p className="max-w-[280px] text-[11px] font-semibold text-black/65 leading-snug line-clamp-2">{quickGenerateNextHint}</p>
@@ -5946,16 +5948,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 );
               })}
             </div>
-            <button
-              type="button"
-              disabled={quickGenerateDisabled}
-              onClick={() => void quickGenerate()}
-              className="inline-flex min-h-[34px] shrink-0 items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
-              style={{ background: ACCENT_GOLD_GRADIENT }}
-            >
-              {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
-              {quickGenerateLabel}
-            </button>
           </div>
         </div>
       </header>
@@ -6312,7 +6304,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </button>
                       </div>
                     </div>
-                    {visualCanonControls}
+                    {!selectedIssueId ? (
+                      <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-5 text-center space-y-2">
+                        <p className="text-sm font-bold text-amber-900">No issue selected</p>
+                        <p className="text-xs text-amber-900/70 leading-snug">
+                          Choose a series and issue from the <strong>toolbar above</strong> to attach visual references.
+                          The toolbar dropdowns are searchable — type to filter.
+                        </p>
+                      </div>
+                    ) : visualCanonControls}
                   </div>
                 )}
                 {activeTab === 'cockpit' && (
@@ -6662,6 +6662,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </label>
                         <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-logline">
                           Series logline
+                          <span className="text-[10px] font-normal text-black/50 normal-case tracking-normal">
+                            One or two sentences: who is the protagonist, what do they want, and what stands in their way? Used by AI when generating outlines and beats.
+                          </span>
                           <textarea
                             id="writer-series-logline"
                             name="writer-series-logline"
@@ -6683,11 +6686,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <div className="border-l-2 border-amber-800/35 bg-amber-50/60 px-3 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                                <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
                                   Visual Canon moved
                                 </p>
-                                <p className="mt-1 text-[11px] leading-snug text-black/60">
-                                  Attach character, location, and prop references in the Visual Canon workspace.
+                                <p className="mt-1 text-sm leading-snug text-black/70">
+                                  Attach character, location, and prop reference images in the <strong>Visual Canon</strong> tab — AI uses them to keep designs consistent across beats.
                                 </p>
                               </div>
                               <button
@@ -6703,13 +6706,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-	                                Story settings for AI and exports
-	                              </p>
-	                              <p className="mt-1 text-[11px] leading-snug text-black/60">
-	                                These settings tell ARCS what kind of project you are making and shape outline,
-	                                beats, dialogue, Imageshop prep, and downloads.
-	                              </p>
+                              <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
+                                Story settings for AI and exports
+                              </p>
+                              <p className="mt-1 text-sm leading-snug text-black/70">
+                                These settings tell ARCS what kind of project you are making and shape outline,
+                                beats, dialogue, Imageshop prep, and downloads.
+                              </p>
 	                            </div>
 	                            <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
 	                              <summary className="cursor-pointer">Advanced details</summary>
@@ -6757,7 +6760,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 <option value="shared_universe">Shared universe</option>
                               </select>
                             </label>
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70" title="Sparse: 3-4 panels/page (big visuals, wide shots). Standard: 5-6 panels/page. Dense: 7-9 panels/page (fast action, dialogue-heavy). AI uses this when writing page beats.">
                               Comic panel density
                               <select
                                 value={productionDefaultsDraft.comicPanelDensity}
@@ -9382,9 +9385,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
                     </div>
                     {!selectedIssueId ? (
-	                      <p className="text-sm text-black/55">
-	                        Select an issue from the top Issue menu, or open Library for the full list.
-	                      </p>
+                      <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-5 text-center space-y-2">
+                        <p className="text-sm font-bold text-amber-900">No issue selected</p>
+                        <p className="text-xs text-amber-900/70 leading-snug">
+                          Choose a series and issue from the <strong>toolbar above</strong> to unlock this tab.
+                          The toolbar dropdowns are searchable — type to filter.
+                        </p>
+                      </div>
                     ) : (
                       <>
                         {scriptsError && (
@@ -9963,7 +9970,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             <div className="space-y-2">
                               {!selectedPage ? (
 	                                <p className="text-xs text-black/50">
-	                                  Select a page from the top Page menu, or open Library for the full list.
+                                  Select a page from the top Page menu, or open Library for the full list.
 	                                </p>
                               ) : (
                                 <>
@@ -10031,7 +10038,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             <div className="space-y-2">
                               {!selectedPage ? (
 	                                <p className="text-xs text-black/50">
-	                                  Select a page from the top Page menu, or open Library for the full list.
+                                  Select a page from the top Page menu, or open Library for the full list.
 	                                </p>
                               ) : (
                                 <>
