@@ -7804,7 +7804,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 )}
                 {activeTab === 'beats' && (
                   <div className={`${WRITER_GLASS_CARD} p-4`}>
-                    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,48%)] xl:items-start xl:gap-4">
+                    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] xl:items-start xl:gap-4">
                       <div className="min-w-0 space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
@@ -7979,8 +7979,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         ) : null}
                         {!selectedPageId && sortedPages.length > 0 && (
                           <p className="text-xs text-black/50">
-                            Select a page in the Library to preview, use picks above, or Generate all beats (
-                            {WRITER_PAGE_BEATS_ISSUE_MAX} pages per server round).
+                            Pick pages above or use &ldquo;Generate all beats&rdquo; ({WRITER_PAGE_BEATS_ISSUE_MAX} pages
+                            per server round). Page previews open on the right.
                           </p>
                         )}
                         {sortedPages.length === 0 && (
@@ -8126,47 +8126,79 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       >
                         <div className="mb-1 flex shrink-0 flex-wrap items-center justify-between gap-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                            Beats for selected page
+                            {selectedPage ? `Beats preview - Page ${selectedPage.page_number}` : 'Beats preview'}
                           </p>
-	                          <button
-	                            type="button"
-	                            disabled={!selectedPageId}
-	                            onClick={() => focusWriterElement('writer-beats-inline-editor')}
-	                            className="rounded-md border border-black/15 bg-white/75 px-2 py-1 text-[10px] font-bold text-black hover:bg-white disabled:opacity-40"
-	                          >
-	                            Edit beats
-	                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-0.5" role="group" aria-label="Preview text size">
+                              {(['sm', 'md', 'lg'] as const).map((size) => (
+                                <button
+                                  key={size}
+                                  type="button"
+                                  onClick={() => setTextScale(size)}
+                                  aria-pressed={textScale === size}
+                                  title={`Preview text size: ${size === 'sm' ? 'small' : size === 'md' ? 'medium' : 'large'}`}
+                                  className={`rounded px-1.5 py-0.5 font-bold leading-none ${
+                                    size === 'sm' ? 'text-[10px]' : size === 'md' ? 'text-xs' : 'text-sm'
+                                  } ${
+                                    textScale === size
+                                      ? 'bg-black text-white'
+                                      : 'border border-black/20 bg-white/70 text-black/55 hover:bg-white'
+                                  }`}
+                                >
+                                  A
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!selectedPageId}
+                              onClick={() => focusWriterElement('writer-beats-inline-editor')}
+                              className="rounded-md border border-black/15 bg-white/75 px-2 py-1 text-[10px] font-bold text-black hover:bg-white disabled:opacity-40"
+                            >
+                              Edit beats
+                            </button>
+                          </div>
                         </div>
-	                        {selectedPage?.beats_json ? (
-	                          <div className="space-y-2">
-	                            <pre
-	                              className={`${preShell} font-sans flex-1 min-h-[min(200px,28vh)] max-h-[min(360px,45vh)] xl:min-h-[min(280px,38vh)]`}
-	                            >
-	                              <WriterHighlightedText
-	                                text={formatBeatsBundleAsText([
-	                                  { page_number: selectedPage.page_number, beats_json: selectedPage.beats_json },
-	                                ])}
-	                                query={findQuery}
-	                                activeMatchIndex={findActiveIndex}
-	                              />
-	                            </pre>
-	                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
-	                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
-		                                Advanced data
-	                              </summary>
-	                              <pre className={`${preShell} ${preFont} mt-2 max-h-[min(320px,42vh)]`}>
-	                                <WriterHighlightedText
-	                                  text={beatsJsonString}
-	                                  query={findQuery}
-	                                  activeMatchIndex={findActiveIndex}
-	                                />
-	                              </pre>
-	                            </details>
-	                          </div>
-	                        ) : (
-                          <p className="text-xs text-black/50 rounded-xl border border-white/20 bg-black/10 px-3 py-4 xl:flex-1 xl:min-h-[12rem]">
-                            No beats yet for this page.
-                          </p>
+                        {selectedPage?.beats_json ? (
+                          <div className="space-y-2">
+                            <pre
+                              className={`${preShell} font-sans flex-1 min-h-[min(200px,28vh)] max-h-[min(360px,45vh)] xl:min-h-[min(280px,38vh)]`}
+                            >
+                              <WriterHighlightedText
+                                text={formatBeatsBundleAsText([
+                                  { page_number: selectedPage.page_number, beats_json: selectedPage.beats_json },
+                                ])}
+                                query={findQuery}
+                                activeMatchIndex={findActiveIndex}
+                              />
+                            </pre>
+                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
+                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
+                                Advanced data
+                              </summary>
+                              <pre className={`${preShell} ${preFont} mt-2 max-h-[min(320px,42vh)]`}>
+                                <WriterHighlightedText
+                                  text={beatsJsonString}
+                                  query={findQuery}
+                                  activeMatchIndex={findActiveIndex}
+                                />
+                              </pre>
+                            </details>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-black/55 rounded-xl border border-white/20 bg-black/10 px-3 py-4 xl:flex-1 xl:min-h-[12rem] space-y-1.5">
+                            {selectedPage ? (
+                              <>
+                                <p className="font-bold text-black/70">No beats yet for Page {selectedPage.page_number}.</p>
+                                <p>Generate them with "Generate page beats" on the left, or click "Edit beats" to write them here.</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-bold text-black/70">Nothing to preview yet.</p>
+                                <p>Pick a page from the Page menu above or the Library to preview and edit its beats here.</p>
+                              </>
+                            )}
+                          </div>
                         )}
                       </aside>
                     </div>
