@@ -6652,6 +6652,46 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None.
 
+## Kitana Dossier Visual Fidelity Refinement - 2026-06-24
+
+### What changed
+- Reworked the Kitana dossier from a loose dashboard into a high-density premium character-poster layout modeled on the supplied reference image.
+- Replaced the earlier section-swapping structure with a single ornate dossier canvas: masthead, oversized Kitana title, central official render stage, left profile/lore column, right royal lineage/relationship/fatality column, lower powers/stats/bio/timeline/source panels, and footer focus controls.
+- Added responsive first-viewport handling so opening the dossier from a lower landing card scrolls the dossier to the top instead of preserving the hub scroll position.
+- Added explicit `.kitana-dossier` CSS in `src/styles/theme.css` for the premium typography, gold/sapphire palette, ornate frame surfaces, active controls, and render sizing because the new arbitrary Tailwind utilities were not reliably reflected in the in-app browser computed styles.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The supplied screenshot was treated as the visual contract: large title/key-art dominance, ornamental gold borders, compact lore blocks, lineage tower, relationship register, stat bars, powers, fatalities, timeline, and premium black/gold/sapphire tone.
+- Lore was kept source-safe rather than copying the reference image's inaccuracies wholesale. In particular, the MK1 relationship note keeps Mileena as Kitana's older sister and Kitana as the younger sister/commander.
+- The dossier remains interactive through render-selection controls and footer focus controls while presenting the infographic content together like the reference.
+- Official render references remain externally hosted and include a fallback state if the remote render source fails.
+
+### Verification
+- `npm run build` - PASS.
+- `npm run lint` - PASS with 0 errors / 67 pre-existing unrelated warnings.
+- `git diff --check` - PASS.
+- In-app Browser visual inspection initially reproduced the issue: the dossier opened mid-scroll from the landing card and showed the profile facts before the title/key art.
+- In-app Browser DOM/computed-style inspection then found the arbitrary Tailwind title/color utilities present in class names but not reflected in computed styles (`14px`/white title), which led to the explicit CSS fix.
+- Post-fix built CSS verification confirmed `kitana-title` and `kitana-dossier__canvas` rules are present in the production CSS bundle.
+
+### Outstanding issues
+- Final screenshot capture after the CSS fix could not be completed because the in-app Browser CDP calls began timing out during click/screenshot actions. This is recorded as browser-tool instability, not a build failure.
+
+### Risks or caveats
+- The current browser evidence confirms the original visual problems and the presence of the compiled fix, but a final human or fresh-browser visual pass is still recommended.
+- The page still uses externally hosted official render URLs, so availability depends on those sources continuing to serve the images.
+
+### Operator follow-up
+- Refresh `http://127.0.0.1:5174/`, open `Kitana Lore Dossier`, and visually confirm the first viewport now starts at the title/key-art poster composition.
+
+### Next steps
+- None.
+
 ## Obsidian Lore Import for Writers Workshop - 2026-06-01
 
 ### What changed
@@ -10208,3 +10248,384 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue the remaining app-wide UX/completeness passes when ready.
+
+## Kitana Lore Dossier Portal - 2026-06-24
+
+### What changed
+- Added a new `Lore Dossier` portal to the ARCS app and wired it into the central portal type, catalog, lazy loader, prefetch path, desktop navigation, landing cards, and mobile More menu.
+- Created a premium Kitana dossier with a luxury black, gold, and sapphire palette; official promotional render references; dashboard-style section switching; qualitative character stats; timeline; relationships; powers; fatalities; and Edenian/New Era royal lineage.
+- Added visible source/provenance notes for Mortal Kombat character data and Warner Bros./NetherRealm-owned artwork, keeping the official render references externally hosted rather than copying them into the repo.
+- Added a render-unavailable fallback state so the dossier remains usable if a remote promotional render URL fails.
+
+### Files touched
+- `src/App.tsx`
+- `src/components/layout/AppShell.tsx`
+- `src/portals-prefetch.ts`
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/shared/portalCatalog.ts`
+- `src/shared/portals.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The lore surface is public/unprotected, like the wiki, because it is a read-only dossier rather than a user data or generation workspace.
+- Render switching, dossier section switching, source links, and mobile navigation are implemented with native buttons/anchors and visible focus/hover states.
+- The fatality register uses the current MK1 names from the checked source: `Royal Blender`, `Last Kiss`, and animality `Royal Nectar`.
+- Character stats are explicitly labeled as qualitative dossier ratings, not official NetherRealm numeric stats.
+- The lineage panel distinguishes legacy Edenian lineage from MK1 New Era Outworld succession to avoid collapsing timelines into one canon.
+
+### Verification
+- `npm run build` - PASS.
+- `npm run lint` - PASS with 0 errors / 67 pre-existing warnings in unrelated files.
+- `git diff --check` - PASS.
+- Local server preflight: no listener on `5174`; started `npm run dev -- --host 127.0.0.1`, confirmed Vite at `http://127.0.0.1:5174/`.
+- Local server health check: `curl -I --max-time 10 http://127.0.0.1:5174/` returned `HTTP/1.1 200 OK`.
+- Browser QA attempted through the required in-app Browser path, but the Browser runtime blocked the localhost navigation by URL policy. This is recorded as environment/access blocked, not as failed product behavior.
+
+### Outstanding issues
+- Visual/browser smoke could not be completed in the active Browser session because localhost navigation was blocked by the Browser Use URL policy.
+
+### Risks or caveats
+- The dossier depends on externally hosted official promotional render references. If those URLs move or hotlinking is blocked, the UI shows the fallback state and the source panel remains available.
+- Mortal Kombat names, characters, renders, and trademarks are owned by Warner Bros./NetherRealm; this is a local/reference dossier with visible source attribution, not a new licensed asset pack.
+
+### Operator follow-up
+- Optional: rerun browser QA in a session where the Browser plugin can access localhost, or use an approved external browser validation path if policy permits.
+
+### Next steps
+- None.
+
+## Kitana Dossier Premium Template Refinement - 2026-06-24
+
+### What changed
+- Reworked the Kitana Lore Dossier portal into a fixed-ratio premium infographic template board modeled after the supplied ChatGPT reference image.
+- Added a template toolbar with three visual variants: Royal Dossier, Sapphire Intel, and Edenian Archive.
+- Switched the default official render to the stronger MKWarehouse Kitana fan render and added `referrerPolicy="no-referrer"` so the browser receives the clean render instead of an anti-hotlink watermark image.
+- Rebalanced the poster composition around a luxury black, antique-gold, and sapphire palette with ornate borders, fixed infographic zones, a central hero render, character stats, timeline, relationships, fatalities, powers, royal lineage, and biographical data.
+- Tightened poster copy and list spacing so relationships and powers fit inside the fixed infographic panels without scroll behavior.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The portal is now closer to a reusable template system than a conventional responsive content page: the dossier plate uses a fixed `2 / 3` aspect ratio to preserve poster composition.
+- Official render references are still externally hosted rather than copied into the repository.
+- Browser QA showed MKWarehouse returns a hotlink/watermark-style image when the render request includes the localhost referrer; the image now opts out of sending a referrer.
+- The template controls remain outside the poster plate so the exported/design surface itself stays visually clean.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing warnings in unrelated files.
+- `git diff --check` - PASS.
+- Local server check: confirmed `node` is listening on `127.0.0.1:5174`.
+- In-app browser QA: opened the Kitana Lore Dossier from the local landing card, confirmed the dossier DOM renders the template controls, official render image, lineage, stats, timeline, bio panel, and source links.
+- Visual QA: captured mobile-width and desktop-width in-app screenshots. The first screenshot exposed the hotlink watermark issue; after adding `referrerPolicy="no-referrer"`, the clean official render displayed and the desktop poster composition was visually checked.
+
+### Outstanding issues
+- None for this refinement pass.
+
+### Risks or caveats
+- The poster still depends on externally hosted MKWarehouse render URLs. If those URLs move or change behavior, the UI will use the existing render-unavailable fallback.
+- Mortal Kombat characters, names, renders, and trademarks remain Warner Bros./NetherRealm-owned material; this local dossier keeps visible source attribution and does not vendor the artwork.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Optional: promote this proven dossier-board structure into a reusable skill or template generator for future character dossiers.
+
+## Kitana Dossier Luxury Feedback Pass - 2026-06-24
+
+### What changed
+- Applied the user's premium-design critique to the Kitana dossier template with a stronger luxury material pass.
+- Replaced flat corn-yellow styling with layered metallic gold gradients, glow effects, luminous borders, gold timeline nodes, and shimmer treatment on active controls and titles.
+- Added a translucent oversized Kitana render underlayer with blur, mask, opacity, and blend-mode treatment so empty space reads as layered poster composition instead of dead background.
+- Replaced flat relationship initials with official MKWarehouse portrait images for Mileena, Sindel, Kitana/Jerrod context, and Liu Kang.
+- Replaced generic finisher placeholders with official Kitana fatality thumbnails plus a style/fashion card, with edge masks and blended image treatment.
+- Reworked the lineage panel into canon-scoped cards for New Era court, legacy Edenia, and Kitana's royal station to avoid implying a confused single family tree.
+- Changed narrow viewport behavior so the dossier preserves a 1024px high-resolution poster board instead of shrinking into unreadable text.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The pass keeps official render references externally hosted and uses `referrerPolicy="no-referrer"` for the added image assets.
+- The finisher panel intentionally shows two official fatality cards and one fashion/style card rather than inventing a third fatality image that the source page did not expose.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Local server check: confirmed Vite responds at `http://127.0.0.1:5174/`.
+- In-app browser QA: captured a desktop poster screenshot after the luxury pass and verified the clean render, metallic gold treatment, image-led relationship cards, lineage cards, and finisher/style image panel.
+- In-app browser narrow viewport QA: confirmed the poster now preserves a 1024px board for readability rather than scaling down into blurry/unreadable text.
+
+### Outstanding issues
+- None for this polish pass.
+
+### Risks or caveats
+- The dossier still depends on externally hosted MKWarehouse image URLs. If those URLs move or change hotlink behavior, affected images may fall back or fail to render.
+- Mortal Kombat characters, names, renders, and trademarks remain Warner Bros./NetherRealm-owned material; the dossier continues to use visible source attribution and does not vendor the artwork.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Optional: extract the refined high-resolution dossier-board pattern into a reusable character dossier skill/template.
+
+## Kitana Dossier Craftsmanship Pass - 2026-06-25
+
+### What changed
+- Applied the user's second critique as a craftsmanship pass focused on typography, canon accuracy, alignment discipline, image quality, and premium-detail consistency.
+- Changed the dossier font language toward high-contrast serif families and reduced over-capitalization so titles, labels, and panel headings have clearer hierarchy.
+- Tightened crowded areas, especially the left-side fact ribbons and character stats panel, so text no longer feels jammed against borders or competing with the quote block.
+- Corrected the lineage/relationship presentation so Jerrod is no longer represented with an incorrect Kitana image; the father entry now uses a gold monogram seal when no safe official portrait is available.
+- Reworked lineage copy around the MK1 New Era source facts: Sindel is mother of Mileena and Kitana, Mileena is the older twin and heir, and Jerrod is identified as Kitana's father in classic Edenian canon.
+- Replaced flat one-dimensional power icons with premium numbered medallions and removed the weak CSS triangle fan graphic in favor of an official MKWarehouse Kitana gear fan image.
+- Simplified and corrected the timeline so game-era labels are not duplicated and spelling/tense are more consistent.
+- Added more ornate corner/border flourishes with diamond details and angled gold accents so the frame reads less like plain right-angle segments.
+- Adjusted layering/z-index around the hero title so the final `A` in Kitana is not obscured by decorative image treatment.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- Source checks were refreshed against MKWarehouse Kitana and Sindel pages before changing lineage and New Era relationship copy.
+- The official fan gear image is still externally hosted, matching the existing source-attribution pattern rather than vendoring Warner Bros./NetherRealm-owned artwork.
+- The pass intentionally avoids making this a reusable skill; the user explicitly said the dossier is not ready for skill extraction yet.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Source spot checks: reviewed MKWarehouse Kitana and Sindel pages for New Era relationship/lineage wording.
+- Visual QA: used local Chrome against `http://127.0.0.1:5174/` and captured `/tmp/kitana-craftsmanship-desktop-final.png`; verified the fan uses the official gear image, Jerrod has no false Kitana portrait, timeline labels are de-duplicated, and the title remains unobscured.
+
+### Outstanding issues
+- None for this craftsmanship pass.
+
+### Risks or caveats
+- The in-app browser's CDP bridge became unstable during screenshot/DOM checks, so the final visual verification used system Chrome against the same local Vite URL.
+- The dossier still depends on externally hosted MKWarehouse image URLs. If those URLs move or change hotlink behavior, affected images may fail or use fallback treatment.
+- Mortal Kombat characters, names, renders, and trademarks remain Warner Bros./NetherRealm-owned material; the dossier continues to use visible source attribution and does not vendor the artwork.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue visual refinement before considering skill extraction, with particular attention to export resolution, official asset reliability, and whether the remaining panel graphics match the quality of the main Kitana render.
+
+## Kitana Dossier Reference-Led Rebuild - 2026-06-25
+
+### What changed
+- Rebuilt the Kitana dossier layout around the user's three new dossier examples instead of continuing incremental polish on the earlier ChatGPT-inspired board.
+- Changed the poster hierarchy to an image-led composition: large title and full Kitana render on the left, compact trait cards and a core concept panel on the upper right, stacked ability rows with real official-image windows, and dense bottom dossier panels.
+- Replaced the previous generic panel rhythm with reference-style sections for strengths, pressure points, hero attributes, Edenian royal lineage, equipment, finishers/showcase, and timeline.
+- Expanded official/MKWarehouse asset use to include Kitana portrait variants, fatality cards, brutality/taunt cards, DeepDish showcase art, and multiple official gear fan images.
+- Removed remaining weak icon language from the poster surface; the dossier now uses text plaques, image crops, numbered medallions, and crafted CSS ornamentation rather than one-dimensional lucide-style icons.
+- Corrected the ability-row layout after screenshot QA showed the first version inflated image rows vertically; all ability rows are now fixed-height compact strips.
+- Tightened copy density so ability rows, bottom cards, and stat bars fit without obvious clipping; all five stat bars are visible in the final screenshot QA.
+- Preserved the canon-safe lineage rule: Jerrod uses a gold monogram seal and never a false Kitana/parent portrait.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The pass follows the visual-source-fidelity requirement by treating the supplied dossier images as layout contracts: large cinematic character art, dense ornamental framing, image-backed ability/equipment sections, and compact bottom intelligence panels.
+- The poster still uses externally referenced MKWarehouse assets rather than copying Warner Bros./NetherRealm-owned files into the repository.
+- The in-app browser automation used a temporary viewport override only for full-board visual QA of the fixed 2:3 poster, then reset the viewport before closeout.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Browser QA: opened the existing `http://127.0.0.1:5174/` app in the in-app browser, activated the `Lore Dossier` portal through the visible navigation, and captured `/tmp/kitana-reference-redesign-final-iab.png`.
+- Screenshot QA confirmed: the board renders at 1024 x 1536, five ability rows are fixed at 112px height, all five stat rows are present, and Jerrod has no image element.
+
+### Outstanding issues
+- None for this rebuild pass.
+
+### Risks or caveats
+- The result is still an interactive web poster, not a true single generated bitmap export. A future export path should be judged separately.
+- The dossier continues to depend on externally hosted MKWarehouse image URLs. If those URLs move or change hotlink behavior, affected images may fail or require fallback treatment.
+- Mortal Kombat characters, names, renders, and trademarks remain Warner Bros./NetherRealm-owned material; the dossier continues to use visible source attribution and does not vendor the artwork.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue judging against screenshot evidence before skill extraction. The dossier is closer to the supplied examples now, but it should not become a reusable skill until export quality, asset resilience, and one more strict visual comparison pass are complete.
+
+## Kitana Dossier Browser Comment Fixes - 2026-06-25
+
+### What changed
+- Applied the user's ten browser comments as targeted QA defects against the Kitana dossier.
+- Removed the redundant role/realm/weapon/debut fact list from beneath the title so the left title/render area has less overlap pressure.
+- Protected the `Kitana` title by moving the main render stage lower and increasing the title zone priority; browser QA confirmed the title and active render rectangles no longer overlap.
+- Replaced the first ability-row image with the square Kitana portrait and adjusted image object positioning so the face is the focus rather than an awkward torso crop.
+- Vertically tightened the Core Concept content so the paragraph sits centered between the heading divider and lower panel border.
+- Swapped the visual hierarchy in the top trait boxes so labels carry the larger gold treatment and values become smaller sapphire supporting text.
+- Changed the vertical ability row labels to gradient-gold plaques with Kitana-blue lettering.
+- Replaced the mixed circle-plus-bar stat panel with a single SVG radar chart plus compact stat labels; removed the old bar graph DOM entirely.
+- Renamed `Edenian Royal Lineage` to `Edenian Nobility`, removed the Jerrod seal/card, and added Jade as an Edenian noble/ally card using a resolved MKWarehouse Jade render URL.
+- Changed Kitana's nobility-card role from `Younger twin / Defender` to `Princess / Defender` to avoid the awkward wrapping called out in the browser comment.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The Jade render URL was checked with `curl -I` against MKWarehouse before use.
+- The in-app browser plugin path rotated during QA; the session reconnected through the current browser plugin version before rerunning the checks.
+- A full-page in-app screenshot and viewport screenshot both timed out through CDP after the fixes. A macOS fallback screencapture captured the wrong Chrome window, so it was deleted and not used as evidence.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Browser QA at the user's commented viewport size (`1728 x 903`) confirmed:
+  - title/render overlap: `false`;
+  - title fact rows: `0`;
+  - first ability image source: `Kitana-Square.png`;
+  - first ability image object position: `50% 18%`;
+  - Core Concept vertical center delta: `4px`;
+  - stat bars: `0`;
+  - radar charts: `1`;
+  - lineage title: `Edenian Nobility`;
+  - Jade present: `true`;
+  - Jerrod present: `false`.
+- Browser viewport override was reset after QA.
+
+### Outstanding issues
+- None for the ten browser comments addressed in this pass.
+
+### Risks or caveats
+- Screenshot capture through the in-app browser timed out during this pass, so verification relies on DOM geometry/style checks rather than an attached corrected screenshot.
+- The dossier continues to depend on externally hosted MKWarehouse image URLs. If those URLs move or change hotlink behavior, affected images may fail or require fallback treatment.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Re-run screenshot capture in a fresh browser session if visual evidence is required for presentation, then continue with export-quality work only after the corrected layout is visually accepted.
+
+## Kitana Dossier Bottom Section QA Fixes - 2026-06-25
+
+### What changed
+- Addressed the user's latest browser comments against the lower half of the Kitana dossier.
+- Removed the `Pressure Points` panel so the lower section could use the available space for larger typography and less cramped information density.
+- Expanded the `Strengths`, `Hero Attributes`, and `Edenian Nobility` panels across the freed first-row width.
+- Replaced the numbered Strengths markers with CSS-drawn fan, wind, gem, and crown effect motifs using sapphire/gold gradients and glow.
+- Tightened the nobility card role/detail spacing so `Princess / Defender` and similar labels sit closer to their supporting text.
+- Reworked timeline badges into small logo-like MK plaques with separate `MK` and era marks rather than plain single text blocks.
+- Removed the diagonal corner slants by disabling the ornate corner `::after` pieces that overlapped the inner border.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The bottom layout now keeps the first lower row to three larger panels: Strengths, Hero Attributes, and Edenian Nobility.
+- The Strengths motifs are decorative and marked `aria-hidden`, preserving clean accessible text for the section.
+- Timeline badges remain text-rendered rather than copied official game logos, but the markup and CSS now present them as distinct era plaques.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Browser QA at the user's commented viewport size (`1728 x 903`) confirmed:
+  - `Pressure Points` present: `false`;
+  - effect marks: `4`;
+  - Strengths marker text: empty strings for all four markers;
+  - Strengths title font: `14px`;
+  - Strengths detail font: `11.5px`;
+  - lineage role font: `10.5px`;
+  - lineage detail font: `10px`;
+  - lineage role line height: `11.34px`;
+  - timeline badges: `6`;
+  - timeline badge markup with separate `MK` and era mark: `true`;
+  - ornate corner slant display: `none`;
+  - Jade present: `true`;
+  - Jerrod present: `false`.
+- Browser viewport override was reset after QA.
+
+### Outstanding issues
+- None for this bottom-section QA pass.
+
+### Risks or caveats
+- The timeline plaques are CSS/text treatments, not official logo image assets. This avoids vendoring trademarked logo artwork but may still be less exact than using licensed logo assets.
+- The dossier continues to depend on externally hosted MKWarehouse image URLs. If those URLs move or change hotlink behavior, affected images may fail or require fallback treatment.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with visual acceptance review in the browser. If the layout is accepted, the remaining high-value step is an export-quality pass that turns the web dossier into a reliable single-image or template artifact.
+
+## Kitana Dossier Royal Blue Palette and Footer Polish - 2026-06-25
+
+### What changed
+- Applied the user's palette and footer feedback to the active Kitana V2 dossier.
+- Replaced the remaining icy/light-blue V2 accents with darker Kitana royal blue variables: `--mk-v2-blue: #2356bd`, `--mk-v2-blue-hot: #173f96`, and a shared `--mk-v2-blue-rgb` value for glow effects.
+- Shifted the dossier plate background toward black gradients with restrained royal-blue/gold glow instead of broad blue illumination.
+- Updated V2 ghost, render, panel, row image, icon, lineage, finisher label, and radar-chart accents to use the royal-blue system.
+- Strengthened the radar chart with a more visible gold/royal-blue outer glow, inset glow, and darker royal-blue fill.
+- Removed duplicated timeline era labels underneath the MK plaques and increased the timeline detail text size.
+- Simplified the footer so `Duty is the blade. Loyalty is the shield.` sits alone on one centered line.
+- Moved the official-reference/canon/legal note from the poster footer into the source/citation strip below the dossier.
+
+### Files touched
+- `src/portals/lore/KitanaLoreDossier.tsx`
+- `src/styles/theme.css`
+- `walkthrough.md`
+
+### Implementation notes
+- The timeline still uses CSS/text plaques rather than official logo image assets, but no longer repeats the era text underneath each plaque.
+- The source strip now carries the reference/canon/trademark note so the poster footer can function as a visual motto rather than metadata.
+- No AGENTS.md update was needed during the DOX closeout because the change did not alter repository contracts, ownership, workflows, or durable operating rules.
+
+### Verification
+- `npm run build` - PASS with existing large chunk warnings.
+- `npm run lint` - PASS with 0 errors / 67 existing unrelated warnings.
+- `git diff --check` - PASS.
+- Targeted CSS scan over the active V2 dossier slice found no remaining old icy-blue values such as `117, 188, 255`, `118, 188, 255`, `#8fd1ff`, `#77c8ff`, `#62b4ff`, `#3e9cff`, `#c7e8ff`, or `#76bcff`.
+- Browser QA at `1728 x 903` confirmed:
+  - active V2 blue: `#2356bd`;
+  - active V2 hot blue: `#173f96`;
+  - dossier background: black linear gradient with royal-blue/gold radial glows;
+  - render and ghost filters use `rgba(35, 86, 189, ...)`;
+  - radar chart has gold and royal-blue glow shadows;
+  - lineage role color: `rgb(35, 86, 189)`;
+  - timeline duplicated `strong` labels: `0`;
+  - timeline detail font: `10.8px`;
+  - footer extra span count: `0`;
+  - footer text: `Duty is the blade. Loyalty is the shield.`;
+  - source strip contains the official-reference note.
+- Browser viewport override was reset after QA.
+
+### Outstanding issues
+- None for this palette/footer pass.
+
+### Risks or caveats
+- The older non-V2 experimental dossier styles still contain their own legacy blue variables, but the active V2 dossier requested in this feedback now uses the royal-blue system.
+- The timeline plaques remain stylized text treatments rather than licensed game-logo image assets.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Review the royal-blue pass visually in the browser. If accepted, the next practical polish target is hiding or reorganizing the builder controls above the dossier so the artifact reads less like a workbench and more like a final premium template.

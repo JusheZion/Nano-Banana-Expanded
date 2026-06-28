@@ -32,5 +32,8 @@ export function prefetchPortal(portal: Portal): void {
     case 'wiki':
       void import('./portals/WikiPortal');
       return;
+    case 'lore':
+      void import('./portals/lore/KitanaLoreDossier');
+      return;
   }
 }

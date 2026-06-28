@@ -20,6 +20,7 @@ const ComicPortal = lazy(() => import('./portals/ComicPortal').then(m => ({ defa
 const WriterPortal = lazy(() => import('./portals/writer/WriterPortal').then(m => ({ default: m.WriterPortal })));
 const WikiPortal = lazy(() => import('./portals/WikiPortal').then(m => ({ default: m.WikiPortal })));
 const PromptLibraryPortal = lazy(() => import('./portals/prompt-library/PromptLibraryPortal').then(m => ({ default: m.PromptLibraryPortal })));
+const KitanaLoreDossier = lazy(() => import('./portals/lore/KitanaLoreDossier').then(m => ({ default: m.KitanaLoreDossier })));
 
 const PortalFallback = () => (
   <div className="flex items-center justify-center min-h-[40vh] text-white/60">
@@ -114,6 +115,7 @@ function App() {
     else if (activePortal === 'prompts') setTheme('gold');
     else if (activePortal === 'writer') setTheme('teal');
     else if (activePortal === 'wiki') setTheme('wiki');
+    else if (activePortal === 'lore') setTheme('obsidian');
     else setTheme('crimson');
   }, [activePortal, setTheme]);
 
@@ -186,6 +188,11 @@ function App() {
       {activePortal === 'wiki' && (
         <Suspense fallback={<PortalFallback />}>
           <WikiPortal jumpNonce={wikiJumpNonce} jump={wikiJump} onNavigatePortal={navigatePortal} />
+        </Suspense>
+      )}
+      {activePortal === 'lore' && (
+        <Suspense fallback={<PortalFallback />}>
+          <KitanaLoreDossier />
         </Suspense>
       )}
     </AppShell>

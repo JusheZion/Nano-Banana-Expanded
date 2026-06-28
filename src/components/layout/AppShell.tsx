@@ -146,6 +146,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const accountWrapRef = useRef<HTMLDivElement>(null);
   const mobileHeaderRef = useRef<HTMLElement>(null);
   const moreColumnRef = useRef<HTMLDivElement>(null);
+  const LoreIcon = getPortalIcon('lore');
 
   useEffect(() => {
     if (isPhone) {
@@ -179,6 +180,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     else if (portal === 'prompts') setTheme('gold');
     else if (portal === 'comic') setTheme('obsidian');
     else if (portal === 'wiki') setTheme('wiki');
+    else if (portal === 'lore') setTheme('obsidian');
     else if (portal === 'home') setTheme('crimson');
   };
 
@@ -472,6 +474,15 @@ export const AppShell: React.FC<AppShellProps> = ({
                   >
                     <BookMarked className="w-5 h-5 shrink-0" aria-hidden />
                     Wiki ARC Portal
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-1 w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                    onClick={() => handleNavClick('lore')}
+                    style={{ color: activePortal === 'lore' ? '#80c8ff' : '#fff' }}
+                  >
+                    <LoreIcon className="w-5 h-5 shrink-0" aria-hidden />
+                    Kitana Lore Dossier
                   </button>
                   {supabaseConfigured && ready && user ? (
                     <button

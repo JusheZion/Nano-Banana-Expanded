@@ -7,6 +7,7 @@ import {
   MessageCircle,
   PenLine,
   ScrollText,
+  Sparkles,
   User,
 } from 'lucide-react';
 import type { Portal } from '@/shared/portals';
@@ -115,6 +116,16 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Guided Tutorials on all App Tools & Features',
     accentHex: '#d946a3',
     Icon: BookMarked,
+  },
+  {
+    portal: 'lore',
+    theme: 'obsidian',
+    navLabel: 'Lore Dossier',
+    cardTitle: 'Kitana Lore Dossier',
+    cardSubtitle: 'Premium Mortal Kombat royal archive: stats, lineage, powers, timeline, and finishers',
+    accentHex: '#1d78c8',
+    Icon: Sparkles,
+    cardImageUrl: 'https://www.mortalkombatwarehouse.com/mk12/renders/ekk/K1_KitanaRenders_Action-pose.png',
   },
 ];
 
