@@ -23,7 +23,7 @@ export function getWriterQuickGenerateNextHint(
       return 'Use the dashboard to confirm the series, issue, page, locks, and Visual Canon before continuing.';
     case 'outline':
       if (!ctx.hasOutline) {
-        return 'Next: complete Foundation basics and Visual Canon, then generate the issue outline.';
+        return 'Next: fill in story context on the Dashboard, attach Visual Canon images, then generate the issue outline.';
       }
       if (ctx.pageCount < ctx.targetPageCount) {
         return 'Next: use “Sync pages to target” so every page row exists, then Page Beats.';

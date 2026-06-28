@@ -6,10 +6,9 @@ import {
 
 describe('writerWorkspaceModel', () => {
   it('starts with a focused dashboard and exposes Visual Canon as a first-class workspace', () => {
-    expect(WRITER_WORKSPACE_TAB_ORDER.slice(0, 9)).toEqual([
+    expect(WRITER_WORKSPACE_TAB_ORDER.slice(0, 8)).toEqual([
       'dashboard',
       'outline',
-      'scripts',
       'visual_canon',
       'lore',
       'beats',

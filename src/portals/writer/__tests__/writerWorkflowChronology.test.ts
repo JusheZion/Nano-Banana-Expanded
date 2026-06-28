@@ -11,8 +11,6 @@ describe('writerWorkflowChronology', () => {
       'Dashboard',
       'Choose Story',
       'Foundation',
-      'My Outline',
-      'Story Map',
       'Visual Canon',
       'Story Canon',
       'Outline',
@@ -31,8 +29,6 @@ describe('writerWorkflowChronology', () => {
       hasSeries: true,
       hasIssue: true,
       hasFoundation: true,
-      hasSynopsis: true,
-      hasStoryMap: false,
       hasVisualCanon: false,
       hasCanon: false,
       hasOutline: false,
@@ -53,10 +49,6 @@ describe('writerWorkflowChronology', () => {
       done: false,
       detail: 'Attach images for AI consistency',
     });
-    expect(steps.find((step) => step.id === 'story_map')).toMatchObject({
-      done: false,
-      detail: 'Map arcs, pages, scenes, and beats',
-    });
     expect(steps.find((step) => step.id === 'canon')).toMatchObject({
       done: false,
       detail: 'Choose lore for AI prompts',
@@ -69,9 +61,8 @@ describe('writerWorkflowChronology', () => {
 
   it('maps tabs to the earliest relevant workflow step', () => {
     expect(getWriterWorkflowStepByTab('dashboard')?.id).toBe('dashboard');
-    expect(getWriterWorkflowStepByTab('outline')?.id).toBe('foundation');
+    expect(getWriterWorkflowStepByTab('outline')?.id).toBe('outline');
     expect(getWriterWorkflowStepByTab('visual_canon')?.id).toBe('visual_canon');
-    expect(getWriterWorkflowStepByTab('scripts')?.id).toBe('synopsis');
     expect(getWriterWorkflowStepByTab('lore')?.id).toBe('canon');
     expect(getWriterWorkflowStepByTab('beats')?.id).toBe('beats');
     expect(getWriterWorkflowStepByTab('dialogue')?.id).toBe('dialogue');

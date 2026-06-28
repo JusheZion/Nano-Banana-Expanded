@@ -126,17 +126,6 @@ import {
   type WriterProductionDefaults,
 } from '@/portals/writer/writerProductionDefaults';
 import {
-  WRITER_HIERARCHY_NODE_KINDS,
-  deleteHierarchyNode,
-  importHierarchyFromJson,
-  importHierarchyFromText,
-  mergeHierarchyIntoNotes,
-  moveHierarchyNode,
-  readHierarchyFromNotes,
-  updateHierarchyNode,
-  type WriterHierarchyNode,
-} from '@/portals/writer/writerHierarchy';
-import {
   buildGuidedComicsHandoffExport,
   buildPreferredWriterExport,
   formatIssuePackAsMarkdown,
@@ -501,85 +490,6 @@ function makeInsertedBeatPanel(index: number): PageBeatPanelDraft {
 
 function renumberBeatPanels(panels: PageBeatPanelDraft[]): PageBeatPanelDraft[] {
   return panels.map((panel, index) => ({ ...panel, index: index + 1 }));
-}
-
-function renderHierarchyNodes(nodes: WriterHierarchyNode[], depth = 0): React.ReactNode {
-  if (!nodes.length) return null;
-  return (
-    <ul className={depth === 0 ? 'space-y-1.5' : 'mt-1 space-y-1 border-l border-black/10 pl-3'}>
-      {nodes.map((node) => (
-        <li key={node.id} className="text-[11px] leading-snug text-black/75">
-          <span className="font-bold uppercase tracking-wide text-black/45">{node.kind}</span>{' '}
-          <span className="font-semibold text-black">{node.title}</span>
-          {renderHierarchyNodes(node.children, depth + 1)}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function renderEditableHierarchyNodes(
-  nodes: WriterHierarchyNode[],
-  onChange: (nodes: WriterHierarchyNode[]) => void,
-  depth = 0,
-  rootNodes = nodes,
-): React.ReactNode {
-  if (!nodes.length) return null;
-  return (
-    <ul className={depth === 0 ? 'space-y-2' : 'mt-2 space-y-2 border-l border-black/10 pl-3'}>
-      {nodes.map((node) => (
-        <li key={node.id} className="space-y-1.5 rounded-md border border-black/10 bg-white/65 px-2 py-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <select
-              value={node.kind}
-              onChange={(event) =>
-                onChange(updateHierarchyNode(rootNodes, node.id, { kind: event.target.value as WriterHierarchyNode['kind'] }))
-              }
-              className="rounded border border-black/15 bg-white px-1.5 py-1 text-[10px] font-bold uppercase text-black/65"
-              aria-label={`Kind for ${node.title}`}
-            >
-              {WRITER_HIERARCHY_NODE_KINDS.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-            </select>
-            <input
-              value={node.title}
-              onChange={(event) => onChange(updateHierarchyNode(rootNodes, node.id, { title: event.target.value }))}
-              className="min-w-[160px] flex-1 rounded border border-black/15 bg-white px-2 py-1 text-xs font-semibold text-black"
-              aria-label={`Title for ${node.title}`}
-            />
-            <button
-              type="button"
-              onClick={() => onChange(moveHierarchyNode(rootNodes, node.id, 'up'))}
-              className="rounded border border-black/15 bg-white px-2 py-1 text-[10px] font-black text-black/65"
-              aria-label={`Move ${node.title} up`}
-            >
-              Up
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange(moveHierarchyNode(rootNodes, node.id, 'down'))}
-              className="rounded border border-black/15 bg-white px-2 py-1 text-[10px] font-black text-black/65"
-              aria-label={`Move ${node.title} down`}
-            >
-              Down
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange(deleteHierarchyNode(rootNodes, node.id))}
-              className="rounded border border-red-900/20 bg-red-50 px-2 py-1 text-[10px] font-black text-red-800"
-              aria-label={`Delete ${node.title}`}
-            >
-              Delete
-            </button>
-          </div>
-          {renderEditableHierarchyNodes(node.children, onChange, depth + 1, rootNodes)}
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 function downloadJsonFile(filename: string, data: unknown) {
@@ -988,10 +898,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   >({});
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
-  const [hierarchyImportDraft, setHierarchyImportDraft] = useState('');
-  const [hierarchyImportError, setHierarchyImportError] = useState<string | null>(null);
-  const [hierarchyEditNodes, setHierarchyEditNodes] = useState<WriterHierarchyNode[]>([]);
-  const [hierarchyEditError, setHierarchyEditError] = useState<string | null>(null);
   const [productionDefaultsDraft, setProductionDefaultsDraft] = useState<WriterProductionDefaults>({
     ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
   });
@@ -1718,9 +1624,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setProductionDefaultsDraft(readProductionDefaultsFromNotes(selectedSeries?.notes));
     }
     setProductionDefaultsError(null);
-    setHierarchyImportDraft('');
-    setHierarchyImportError(null);
-    setHierarchyEditError(null);
     setPacingPreviewPages([]);
     setPacingPreviewError(null);
   }, [selectedIssueId, issues, selectedSeries]);
@@ -2112,14 +2015,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [selectedIssue?.notes],
   );
 
-  const hierarchyNodes = useMemo(
-    () => readHierarchyFromNotes(selectedIssue?.notes),
-    [selectedIssue?.notes],
-  );
-  useEffect(() => {
-    setHierarchyEditNodes(hierarchyNodes);
-    setHierarchyEditError(null);
-  }, [hierarchyNodes]);
   const selectedPageMetadata = useMemo(
     () => summarizePageBeatMetadata((selectedPage?.beats_json as PageBeatsJson | null | undefined) ?? null),
     [selectedPage?.beats_json],
@@ -4002,21 +3897,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     void navigator.clipboard.writeText(JSON.stringify(issuePackObject, null, 2));
   }, [issuePackObject]);
 
-  const saveSynopsisHelperToNotes = useCallback(async () => {
-    if (!selectedIssueId || !selectedIssue) return;
-    setScriptsError(null);
-    setScriptsBusy(true);
-    const merged = mergeSynopsisHelperIntoNotes(selectedIssue.notes, synopsisHelperParts);
-    const ok = await updateWriterIssue(selectedIssueId, { notes: merged });
-    setScriptsBusy(false);
-    if (!ok) {
-      setScriptsError('Could not save synopsis helper. Check Supabase.');
-      return;
-    }
-    await refreshIssuesForSeries();
-    pushHistory('saved synopsis helper fields to issue notes');
-  }, [selectedIssueId, selectedIssue, synopsisHelperParts, refreshIssuesForSeries, pushHistory]);
-
   const saveAuthorOutlineToNotes = useCallback(async () => {
     if (!selectedIssueId || !selectedIssue) return;
     if (!guardWriterLock('issue.author_outline', 'Author outline')) return;
@@ -4043,56 +3923,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     guardWriterLock,
     pushHistory,
   ]);
-
-  const saveHierarchyToNotes = useCallback(async () => {
-    if (!selectedIssueId || !selectedIssue) return;
-    const raw = hierarchyImportDraft.trim();
-    if (!raw) {
-      setHierarchyImportError('Paste a story map or outline before saving.');
-      return;
-    }
-
-    const nodes = raw.startsWith('{') || raw.startsWith('[')
-      ? importHierarchyFromJson(raw)
-      : importHierarchyFromText(raw);
-    if (nodes.length === 0) {
-      setHierarchyImportError('No story map items were found. Use labels like Arc, Issue, Page, Scene, or Beat.');
-      return;
-    }
-
-    setHierarchyImportError(null);
-    setScriptsBusy(true);
-    const ok = await updateWriterIssue(selectedIssueId, {
-      notes: mergeHierarchyIntoNotes(selectedIssue.notes, nodes, { source: 'paste/import' }),
-    });
-    setScriptsBusy(false);
-    if (!ok) {
-      setHierarchyImportError('Could not save the story map.');
-      return;
-    }
-    await refreshIssuesForSeries();
-    pushHistory(`saved story map (${nodes.length} root item${nodes.length === 1 ? '' : 's'})`);
-  }, [selectedIssueId, selectedIssue, hierarchyImportDraft, refreshIssuesForSeries, pushHistory]);
-
-  const saveEditedHierarchyToNotes = useCallback(async () => {
-    if (!selectedIssueId || !selectedIssue) return;
-    if (hierarchyEditNodes.length === 0) {
-      setHierarchyEditError('No story map items to save.');
-      return;
-    }
-    setHierarchyEditError(null);
-    setScriptsBusy(true);
-    const ok = await updateWriterIssue(selectedIssueId, {
-      notes: mergeHierarchyIntoNotes(selectedIssue.notes, hierarchyEditNodes, { source: 'manual-edit' }),
-    });
-    setScriptsBusy(false);
-    if (!ok) {
-      setHierarchyEditError('Could not save story map edits.');
-      return;
-    }
-    await refreshIssuesForSeries();
-    pushHistory('saved story map edits');
-  }, [selectedIssueId, selectedIssue, hierarchyEditNodes, refreshIssuesForSeries, pushHistory]);
 
   const saveProductionDefaultsToNotes = useCallback(async () => {
     if (!selectedSeriesId) return;
@@ -4131,18 +3961,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     guardWriterLock,
     pushHistory,
   ]);
-
-  const applyBuiltSynopsis = useCallback(() => {
-    if (!guardWriterLock('issue.synopsis', 'Issue synopsis')) return;
-    const doc = buildSynopsisDocumentFromParts(synopsisHelperParts);
-    if (!doc) {
-      setScriptsError('Fill at least one synopsis helper field to build.');
-      return;
-    }
-    setScriptsError(null);
-    setIssueSynopsisDraft(doc);
-    pushHistory('built synopsis from helper (review in Issue Outline → Save story context)');
-  }, [synopsisHelperParts, guardWriterLock, pushHistory]);
 
   const saveOutlineEdit = useCallback(async () => {
     if (!latestOutline) return;
@@ -4865,9 +4683,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           : sortedPages.length < targetPageCount
             ? 'pages'
             : 'outline'
-      : activeTab === 'scripts'
-        ? 'synopsis'
-        : activeTab === 'export'
+      : activeTab === 'export'
           ? 'export'
         : activeTab === 'lore'
           ? 'canon'
@@ -4887,19 +4703,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeWorkflowOverride && activeWorkflowOverrideTab === activeTab
       ? activeWorkflowOverride
       : derivedWorkflowStepId;
-  const outlineWorkspaceStep: 'foundation' | 'outline' | 'pages' =
+  const outlineWorkspaceStep: 'outline' | 'pages' =
     activeTab === 'outline' &&
-    (activeWorkflowStepId === 'foundation' || activeWorkflowStepId === 'outline' || activeWorkflowStepId === 'pages')
+    (activeWorkflowStepId === 'outline' || activeWorkflowStepId === 'pages')
       ? activeWorkflowStepId
-      : 'foundation';
-  const scriptsWorkspaceStep: 'synopsis' | 'story_map' =
-    activeTab === 'scripts' && activeWorkflowStepId === 'story_map' ? 'story_map' : 'synopsis';
+      : 'outline';
   const productionStages: WriterProductionStage[] = buildWriterWorkflowSteps({
     hasSeries: Boolean(selectedSeriesId),
     hasIssue: Boolean(selectedIssueId),
     hasFoundation: Boolean(selectedSeriesId),
-    hasSynopsis: Boolean(authorOutlineText.trim() || issueSynopsisDraft.trim()),
-    hasStoryMap: hierarchyNodes.length > 0,
     hasVisualCanon: writerVisualReferences.length > 0,
     hasCanon: loreCards.length > 0,
     hasOutline: Boolean(latestOutline),
@@ -4925,30 +4737,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     : 'Page Beats';
   const workspaceHeading =
     activeTab === 'outline'
-      ? outlineWorkspaceStep === 'foundation'
-        ? 'Foundation'
-        : outlineWorkspaceStep === 'pages'
-          ? 'Pages'
-          : 'Outline'
-      : activeTab === 'scripts'
-        ? scriptsWorkspaceStep === 'story_map'
-          ? 'Story Map'
-          : 'My Outline'
-        : activeTab === 'beats'
+      ? outlineWorkspaceStep === 'pages'
+        ? 'Pages'
+        : 'Outline'
+      : activeTab === 'beats'
           ? beatsTabLabel
           : activeWorkspaceLabel.heading;
   const workspaceDescription =
     activeTab === 'outline'
-      ? outlineWorkspaceStep === 'foundation'
-        ? 'Set the story basics and production defaults that guide later AI work.'
-        : outlineWorkspaceStep === 'pages'
-          ? 'Create and review one editable row for each page before beats and dialogue.'
-          : 'Generate, review, and revise the saved issue outline.'
-      : activeTab === 'scripts'
-        ? scriptsWorkspaceStep === 'story_map'
-          ? 'Map arcs, pages, scenes, and beats so ARCS keeps the story structure in order.'
-          : 'Paste your outline in any format — bullet list, summary, or notes. ARCS reads it when generating the issue outline.'
-        : activeWorkspaceLabel.description;
+      ? outlineWorkspaceStep === 'pages'
+        ? 'Create and review one editable row for each page before beats and dialogue.'
+        : 'Generate, review, and revise the saved issue outline.'
+      : activeWorkspaceLabel.description;
   const focusWriterElement = useCallback((id: string) => {
     window.requestAnimationFrame(() => {
       document.getElementById(id)?.focus();
@@ -5235,7 +5035,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [
       'dashboard',
       'foundation',
-      'synopsis',
       'visual_canon',
       'canon',
       'outline',
@@ -6337,6 +6136,334 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         ))}
                       </div>
                     </div>
+                    {!supabaseOk ? (
+                      <div
+                        className={`${WRITER_GLASS_CARD} p-4 space-y-2 border-amber-400/40 bg-amber-50/30 xl:col-span-2`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Story setup</p>
+                          <Tooltip content={WRITER_UI_TIPS.storyContextSupabase} side="left">
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-amber-900/80 hover:bg-amber-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                              aria-label="Why story fields cannot save yet"
+                            >
+                              <HelpCircle size={15} aria-hidden />
+                            </button>
+                          </Tooltip>
+                        </div>
+                        <p className="text-xs text-amber-950/90 leading-snug">
+                          Project setup is required before story fields can save.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className={`${WRITER_GLASS_CARD} p-4 space-y-3 xl:col-span-2`}>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
+                              Story context
+                            </p>
+                            {dockCollapsed ? (
+                              <Tooltip content={WRITER_UI_TIPS.dockLibraryHidden} side="left">
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center rounded-md p-1 text-amber-900/90 bg-amber-100/80 border border-amber-200/80 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                                  aria-label="Library panel is hidden"
+                                >
+                                  <HelpCircle size={14} aria-hidden />
+                                </button>
+                              </Tooltip>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-title">
+                              Series title
+                              <input
+                                id="writer-series-title"
+                                name="writer-series-title"
+                                type="text"
+                                value={seriesTitleDraft}
+                                onChange={(e) => setSeriesTitleDraft(e.target.value)}
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder={
+                                  selectedSeriesId ? 'e.g. Midnight Archives' : 'Select a series in Library…'
+                                }
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-issue-title">
+                              Issue title
+                              <input
+                                id="writer-issue-title"
+                                name="writer-issue-title"
+                                type="text"
+                                value={issueTitleDraft}
+                                onChange={(e) => setIssueTitleDraft(e.target.value)}
+                                disabled={!selectedIssueId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder={
+                                  selectedIssueId ? 'e.g. The door in the cellar' : 'Select an issue in Library to edit…'
+                                }
+                              />
+                            </label>
+                          </div>
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-issue-synopsis">
+                            Issue synopsis
+                            <textarea
+                              id="writer-issue-synopsis"
+                              name="writer-issue-synopsis"
+                              value={issueSynopsisDraft}
+                              onChange={(e) => setIssueSynopsisDraft(e.target.value)}
+                              rows={5}
+                              disabled={!selectedIssueId}
+                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder={
+                                selectedIssueId
+                                  ? 'What happens in this issue — beats, twists, character goals…'
+                                  : 'Select an issue in Library to edit…'
+                              }
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-logline">
+                            Series logline
+                            <span className="text-[10px] font-normal text-black/50 normal-case tracking-normal">
+                              One or two sentences: who is the protagonist, what do they want, and what stands in their way? Used by AI when generating outlines and beats.
+                            </span>
+                            <textarea
+                              id="writer-series-logline"
+                              name="writer-series-logline"
+                              value={seriesLoglineDraft}
+                              onChange={(e) => setSeriesLoglineDraft(e.target.value)}
+                              rows={3}
+                              disabled={!selectedSeriesId}
+                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder={
+                                selectedSeriesId
+                                  ? 'One- or two-sentence series premise'
+                                  : 'Select a series in Library…'
+                              }
+                            />
+                          </label>
+                          {contextSaveError && (
+                            <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{contextSaveError}</p>
+                          )}
+                          <button
+                            type="button"
+                            disabled={contextSaveLoading || !selectedSeriesId}
+                            onClick={async () => {
+                              if (!selectedSeriesId) return;
+                              setContextSaveError(null);
+                              setContextSaveLoading(true);
+                              let okIssue = true;
+                              if (selectedIssueId) {
+                                const synopsisChanged =
+                                  issueSynopsisDraft.trim() !== (selectedIssue?.synopsis ?? '').trim();
+                                if (synopsisChanged && !guardWriterLock('issue.synopsis', 'Issue synopsis')) {
+                                  setContextSaveLoading(false);
+                                  return;
+                                }
+                                okIssue = await updateWriterIssue(selectedIssueId, {
+                                  title: issueTitleDraft.trim() || null,
+                                  synopsis: issueSynopsisDraft.trim() || null,
+                                });
+                              }
+                              const okSeries = await updateWriterSeries(selectedSeriesId, {
+                                title: seriesTitleDraft.trim() || null,
+                                logline: seriesLoglineDraft.trim() || null,
+                              });
+                              setContextSaveLoading(false);
+                              if (!okIssue || !okSeries) {
+                                setContextSaveError('Could not save story context. Check Supabase connection and tables.');
+                                return;
+                              }
+                              await refreshIssuesForSeries();
+                              const seriesRows = await listWriterSeries();
+                              setSeriesList(seriesRows);
+                              pushHistory(
+                                selectedIssueId ? 'saved story context' : 'saved series title & logline',
+                              );
+                            }}
+                            className="rounded-lg px-4 py-2 text-xs font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45 disabled:pointer-events-none"
+                          >
+                            {contextSaveLoading ? 'Saving…' : 'Save story context'}
+                          </button>
+                        </div>
+                        <div className={`${WRITER_GLASS_CARD} p-4 xl:col-span-2`}>
+                          <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
+                                  Story settings for AI and exports
+                                </p>
+                                <p className="mt-1 text-sm leading-snug text-black/70">
+                                  These settings tell ARCS what kind of project you are making and shape outline,
+                                  beats, dialogue, Imageshop prep, and downloads.
+                                </p>
+                              </div>
+                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                                <summary className="cursor-pointer">Advanced details</summary>
+                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as story settings.</span>
+                              </details>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Medium type
+                                <select
+                                  value={productionDefaultsDraft.mediumType}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      mediumType: e.target.value as WriterProductionDefaults['mediumType'],
+                                    }))
+                                  }
+                                  disabled={!selectedSeriesId}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                >
+                                  <option value="comic">Comic</option>
+                                  <option value="book">Book</option>
+                                  <option value="screenplay">Screenplay</option>
+                                  <option value="video">Video</option>
+                                  <option value="wiki">Lore wiki</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Narrative scope
+                                <select
+                                  value={productionDefaultsDraft.narrativeScope}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      narrativeScope: e.target.value as WriterProductionDefaults['narrativeScope'],
+                                    }))
+                                  }
+                                  disabled={!selectedSeriesId}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                >
+                                  <option value="single_issue">Single issue</option>
+                                  <option value="multi_issue_arc">Multi-issue arc</option>
+                                  <option value="book">Book</option>
+                                  <option value="episode">Episode</option>
+                                  <option value="shared_universe">Shared universe</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70" title="Sparse: 3-4 panels/page (big visuals, wide shots). Standard: 5-6 panels/page. Dense: 7-9 panels/page (fast action, dialogue-heavy). AI uses this when writing page beats.">
+                                Comic panel density
+                                <select
+                                  value={productionDefaultsDraft.comicPanelDensity}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      comicPanelDensity: e.target.value as WriterProductionDefaults['comicPanelDensity'],
+                                    }))
+                                  }
+                                  disabled={!selectedSeriesId}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                >
+                                  <option value="sparse">Sparse</option>
+                                  <option value="standard">Standard</option>
+                                  <option value="dense">Dense</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Character consistency
+                                <select
+                                  value={productionDefaultsDraft.characterConsistency}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      characterConsistency: e.target.value as WriterProductionDefaults['characterConsistency'],
+                                    }))
+                                  }
+                                  disabled={!selectedSeriesId}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                >
+                                  <option value="strict">Strict</option>
+                                  <option value="standard">Standard</option>
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                                Preferred export
+                                <select
+                                  value={productionDefaultsDraft.outputFormat}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      outputFormat: e.target.value as WriterProductionDefaults['outputFormat'],
+                                    }))
+                                  }
+                                  disabled={!selectedSeriesId}
+                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                >
+                                  <option value="issue_pack_json">Full project data file</option>
+                                  <option value="comic_script_markdown">Readable comic script</option>
+                                  <option value="guided_comic_handoff">Guided Comics handoff</option>
+                                  <option value="fountain_screenplay">Fountain screenplay</option>
+                                  <option value="prose_manuscript">Prose manuscript</option>
+                                  <option value="lore_wiki">Lore wiki</option>
+                                </select>
+                              </label>
+                            </div>
+                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
+                              Art style
+                              <input
+                                type="text"
+                                value={productionDefaultsDraft.artStyle}
+                                onChange={(e) =>
+                                  setProductionDefaultsDraft((p) => ({ ...p, artStyle: e.target.value }))
+                                }
+                                disabled={!selectedSeriesId}
+                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
+                                placeholder="e.g. consistent comic-book line art"
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-black/70">
+                              <label className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={productionDefaultsDraft.strictCanon}
+                                  disabled={!selectedSeriesId}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({ ...p, strictCanon: e.target.checked }))
+                                  }
+                                />
+                                Strict canon
+                              </label>
+                              <label className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={productionDefaultsDraft.noVideoAssumptions}
+                                  disabled={!selectedSeriesId}
+                                  onChange={(e) =>
+                                    setProductionDefaultsDraft((p) => ({
+                                      ...p,
+                                      noVideoAssumptions: e.target.checked,
+                                    }))
+                                  }
+                                />
+                                No video assumptions
+                              </label>
+                            </div>
+                            {productionDefaultsError ? (
+                              <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
+                                {productionDefaultsError}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              disabled={!supabaseOk || !selectedSeriesId || productionDefaultsBusy}
+                              onClick={() => void saveProductionDefaultsToNotes()}
+                              className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                            >
+                              {productionDefaultsBusy
+                                ? 'Saving…'
+                                : selectedIssueId
+                                  ? 'Save issue defaults'
+                                  : 'Save series defaults'}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
                 {activeTab === 'visual_canon' && (
@@ -6626,353 +6753,111 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     }`}
                   >
                     <div className="min-w-0 space-y-4">
-                    {outlineWorkspaceStep === 'foundation' ? (
-                    !supabaseOk ? (
-                      <div
-                        className={`${WRITER_GLASS_CARD} p-4 space-y-2 border-amber-400/40 bg-amber-50/30`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-	                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">Foundation</p>
-                          <Tooltip content={WRITER_UI_TIPS.storyContextSupabase} side="left">
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-amber-900/80 hover:bg-amber-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                              aria-label="Why story fields cannot save yet"
-                            >
-                              <HelpCircle size={15} aria-hidden />
-                            </button>
-                          </Tooltip>
-                        </div>
-                        <p className="text-xs text-amber-950/90 leading-snug">
-	                          Project setup is required before story fields can save.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                            Foundation → story context
-                          </p>
-                          {dockCollapsed ? (
-                            <Tooltip content={WRITER_UI_TIPS.dockLibraryHidden} side="left">
-                              <button
-                                type="button"
-                                className="inline-flex items-center rounded-md p-1 text-amber-900/90 bg-amber-100/80 border border-amber-200/80 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                                aria-label="Library panel is hidden"
-                              >
-                                <HelpCircle size={14} aria-hidden />
-                              </button>
-                            </Tooltip>
-                          ) : null}
-                        </div>
-                        <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-title">
-                          Series title
-                          <input
-                            id="writer-series-title"
-                            name="writer-series-title"
-                            type="text"
-                            value={seriesTitleDraft}
-                            onChange={(e) => setSeriesTitleDraft(e.target.value)}
-                            disabled={!selectedSeriesId}
-                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder={
-                              selectedSeriesId ? 'e.g. Midnight Archives' : 'Select a series in Library…'
-                            }
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-issue-title">
-                          Issue title
-                          <input
-                            id="writer-issue-title"
-                            name="writer-issue-title"
-                            type="text"
-                            value={issueTitleDraft}
-                            onChange={(e) => setIssueTitleDraft(e.target.value)}
-                            disabled={!selectedIssueId}
-                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder={
-                              selectedIssueId ? 'e.g. The door in the cellar' : 'Select an issue in Library to edit…'
-                            }
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-issue-synopsis">
-                          Issue synopsis
-                          <textarea
-                            id="writer-issue-synopsis"
-                            name="writer-issue-synopsis"
-                            value={issueSynopsisDraft}
-                            onChange={(e) => setIssueSynopsisDraft(e.target.value)}
-                            rows={5}
-                            disabled={!selectedIssueId}
-                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder={
-                              selectedIssueId
-                                ? 'What happens in this issue — beats, twists, character goals…'
-                                : 'Select an issue in Library to edit…'
-                            }
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70" htmlFor="writer-series-logline">
-                          Series logline
-                          <span className="text-[10px] font-normal text-black/50 normal-case tracking-normal">
-                            One or two sentences: who is the protagonist, what do they want, and what stands in their way? Used by AI when generating outlines and beats.
-                          </span>
-                          <textarea
-                            id="writer-series-logline"
-                            name="writer-series-logline"
-                            value={seriesLoglineDraft}
-                            onChange={(e) => setSeriesLoglineDraft(e.target.value)}
-                            rows={3}
-                            disabled={!selectedSeriesId}
-                            className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[56px] disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder={
-                              selectedSeriesId
-                                ? 'One- or two-sentence series premise'
-                                : 'Select a series in Library…'
-                            }
-                          />
-                        </label>
-                        {!writerFocusedMode ? (
-                          visualCanonControls
-                        ) : (
-                          <div className="border-l-2 border-amber-800/35 bg-amber-50/60 px-3 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
-                                  Visual Canon moved
-                                </p>
-                                <p className="mt-1 text-sm leading-snug text-black/70">
-                                  Attach character, location, and prop reference images in the <strong>Visual Canon</strong> tab — AI uses them to keep designs consistent across beats.
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setActiveTab('visual_canon')}
-                                className="rounded-md border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black"
-                              >
-                                Open Visual Canon
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        <div className="border-l-2 border-black/30 bg-white/45 px-3 py-3 space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-wider text-black/70">
-                                Story settings for AI and exports
-                              </p>
-                              <p className="mt-1 text-sm leading-snug text-black/70">
-                                These settings tell ARCS what kind of project you are making and shape outline,
-                                beats, dialogue, Imageshop prep, and downloads.
-                              </p>
-	                            </div>
-	                            <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-	                              <summary className="cursor-pointer">Advanced details</summary>
-	                              <span className="mt-1 block normal-case tracking-normal">Saved with this issue as story settings.</span>
-	                            </details>
-                          </div>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                              Medium type
-                              <select
-                                value={productionDefaultsDraft.mediumType}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    mediumType: e.target.value as WriterProductionDefaults['mediumType'],
-                                  }))
-                                }
-                                disabled={!selectedSeriesId}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              >
-                                <option value="comic">Comic</option>
-                                <option value="book">Book</option>
-                                <option value="screenplay">Screenplay</option>
-                                <option value="video">Video</option>
-                                <option value="wiki">Lore wiki</option>
-                              </select>
-                            </label>
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                              Narrative scope
-                              <select
-                                value={productionDefaultsDraft.narrativeScope}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    narrativeScope: e.target.value as WriterProductionDefaults['narrativeScope'],
-                                  }))
-                                }
-                                disabled={!selectedSeriesId}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              >
-                                <option value="single_issue">Single issue</option>
-                                <option value="multi_issue_arc">Multi-issue arc</option>
-                                <option value="book">Book</option>
-                                <option value="episode">Episode</option>
-                                <option value="shared_universe">Shared universe</option>
-                              </select>
-                            </label>
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70" title="Sparse: 3-4 panels/page (big visuals, wide shots). Standard: 5-6 panels/page. Dense: 7-9 panels/page (fast action, dialogue-heavy). AI uses this when writing page beats.">
-                              Comic panel density
-                              <select
-                                value={productionDefaultsDraft.comicPanelDensity}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    comicPanelDensity: e.target.value as WriterProductionDefaults['comicPanelDensity'],
-                                  }))
-                                }
-                                disabled={!selectedSeriesId}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              >
-                                <option value="sparse">Sparse</option>
-                                <option value="standard">Standard</option>
-                                <option value="dense">Dense</option>
-                              </select>
-                            </label>
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                              Character consistency
-                              <select
-                                value={productionDefaultsDraft.characterConsistency}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    characterConsistency: e.target.value as WriterProductionDefaults['characterConsistency'],
-                                  }))
-                                }
-                                disabled={!selectedSeriesId}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              >
-                                <option value="strict">Strict</option>
-                                <option value="standard">Standard</option>
-                              </select>
-                            </label>
-                            <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                              Preferred export
-                              <select
-                                value={productionDefaultsDraft.outputFormat}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    outputFormat: e.target.value as WriterProductionDefaults['outputFormat'],
-                                  }))
-                                }
-                                disabled={!selectedSeriesId}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              >
-	                                <option value="issue_pack_json">Full project data file</option>
-	                                <option value="comic_script_markdown">Readable comic script</option>
-                                <option value="guided_comic_handoff">Guided Comics handoff</option>
-                                <option value="fountain_screenplay">Fountain screenplay</option>
-                                <option value="prose_manuscript">Prose manuscript</option>
-                                <option value="lore_wiki">Lore wiki</option>
-                              </select>
-                            </label>
-                          </div>
-                          <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                            Art style
-                            <input
-                              type="text"
-                              value={productionDefaultsDraft.artStyle}
-                              onChange={(e) =>
-                                setProductionDefaultsDraft((p) => ({ ...p, artStyle: e.target.value }))
-                              }
-                              disabled={!selectedSeriesId}
-                              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
-                              placeholder="e.g. consistent comic-book line art"
-                            />
-                          </label>
-                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-black/70">
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={productionDefaultsDraft.strictCanon}
-                                disabled={!selectedSeriesId}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({ ...p, strictCanon: e.target.checked }))
-                                }
-                              />
-                              Strict canon
-                            </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={productionDefaultsDraft.noVideoAssumptions}
-                                disabled={!selectedSeriesId}
-                                onChange={(e) =>
-                                  setProductionDefaultsDraft((p) => ({
-                                    ...p,
-                                    noVideoAssumptions: e.target.checked,
-                                  }))
-                                }
-                              />
-                              No video assumptions
-                            </label>
-                          </div>
-                          {productionDefaultsError ? (
-                            <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
-                              {productionDefaultsError}
+                    {outlineWorkspaceStep === 'outline' ? (
+                    <>
+                    {scriptsError && (
+                      <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
+                    )}
+                    {pageEditReviewPanel}
+                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                      <div className="border-l-2 border-black/60 bg-white/55 px-3 py-3 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
+                              My Outline
                             </p>
-                          ) : null}
+                            <p className="mt-1 text-xs leading-snug text-black/68">
+                              Paste your outline in any format — a list, a summary, or rough notes. ARCS
+                              sends it to <strong>Generate outline</strong> and uses your structure instead of
+                              inventing one.
+                            </p>
+                          </div>
+                          <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                            <summary className="cursor-pointer">Advanced details</summary>
+                            <span className="mt-1 block normal-case tracking-normal">Saved with this issue as your outline.</span>
+                          </details>
+                        </div>
+                        <p className="text-[11px] leading-snug text-black/60">
+                          Choose how strictly ARCS should follow the outline you pasted. This choice does not
+                          change your source text; it affects the next generated issue outline.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
+                          {(
+                            [
+                              ['preserve', 'Keep my order', 'Keep order and named events strict.'],
+                              ['structure', 'Organize into production outline', 'Organize into production beats.'],
+                              ['expand', 'Add missing connective scenes', 'Add connective tissue around your spine.'],
+                            ] as const
+                          ).map(([id, label, description]) => (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => setAuthorOutlineMode(id)}
+                              title={description}
+                              className={`rounded-md border px-2.5 py-1 text-[11px] font-bold leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+                                authorOutlineMode === id
+                                  ? 'border-black/60 bg-black text-white'
+                                  : 'border-black/15 bg-white/75 text-black/65 hover:bg-white'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={authorOutlineText}
+                          onChange={(e) => setAuthorOutlineText(e.target.value)}
+                          rows={8}
+                          className="w-full min-h-[180px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                          placeholder={'Paste or draft your issue/book outline here…\n\nExample:\nPage 1: Opening classroom misfire.\nPage 2: Vision escalates.\nPage 3: Mentor interrupts.'}
+                        />
+                        <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            disabled={!supabaseOk || !selectedSeriesId || productionDefaultsBusy}
-                            onClick={() => void saveProductionDefaultsToNotes()}
-                            className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                            disabled={!supabaseOk || scriptsBusy}
+                            onClick={() => void saveAuthorOutlineToNotes()}
+                            className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                            style={{ background: ACCENT_GOLD_GRADIENT }}
                           >
-                            {productionDefaultsBusy
-                              ? 'Saving…'
-                              : selectedIssueId
-                                ? 'Save issue defaults'
-                                : 'Save series defaults'}
+                            {scriptsBusy ? 'Saving…' : 'Save my outline'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!authorOutlineText.trim()}
+                            onClick={() => appendTextToField(setOutlineSupplementDraft, authorOutlineText)}
+                            className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                          >
+                            Copy to AI instructions
                           </button>
                         </div>
-                        {contextSaveError && (
-                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{contextSaveError}</p>
-                        )}
-                        <button
-                          type="button"
-                          disabled={contextSaveLoading || !selectedSeriesId}
-                          onClick={async () => {
-                            if (!selectedSeriesId) return;
-                            setContextSaveError(null);
-                            setContextSaveLoading(true);
-                            let okIssue = true;
-                            if (selectedIssueId) {
-                              const synopsisChanged =
-                                issueSynopsisDraft.trim() !== (selectedIssue?.synopsis ?? '').trim();
-                              if (synopsisChanged && !guardWriterLock('issue.synopsis', 'Issue synopsis')) {
-                                setContextSaveLoading(false);
-                                return;
-                              }
-                              okIssue = await updateWriterIssue(selectedIssueId, {
-                                title: issueTitleDraft.trim() || null,
-                                synopsis: issueSynopsisDraft.trim() || null,
-                              });
-                            }
-                            const okSeries = await updateWriterSeries(selectedSeriesId, {
-                              title: seriesTitleDraft.trim() || null,
-                              logline: seriesLoglineDraft.trim() || null,
-                            });
-                            setContextSaveLoading(false);
-                            if (!okIssue || !okSeries) {
-                              setContextSaveError('Could not save story context. Check Supabase connection and tables.');
-                              return;
-                            }
-                            await refreshIssuesForSeries();
-                            const seriesRows = await listWriterSeries();
-                            setSeriesList(seriesRows);
-                            pushHistory(
-                              selectedIssueId ? 'saved story context' : 'saved series title & logline',
-                            );
-                          }}
-                          className="rounded-lg px-4 py-2 text-xs font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                        >
-                          {contextSaveLoading ? 'Saving…' : 'Save story context'}
-                        </button>
                       </div>
-                    )
+                      <div className="border-l-2 border-emerald-700 bg-emerald-50/65 px-3 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+                          What this affects
+                        </p>
+                        <div className="mt-2 space-y-2 text-[11px] leading-snug text-black/66">
+                          <p>
+                            <strong>Issue synopsis</strong> is the short pitch/logline context.
+                          </p>
+                          <p>
+                            <strong>My Outline</strong> is the source structure ARCS should keep, organize, or
+                            expand when generating the saved Issue Outline.
+                          </p>
+                          <p>
+                            <strong>Canon cards</strong> still supply visual/world facts before beats are generated.
+                          </p>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                          <span className="bg-white/65 px-2 py-1">Source first</span>
+                          <span className="bg-white/65 px-2 py-1">Canon checked</span>
+                          <span className="bg-white/65 px-2 py-1">AI structures</span>
+                          <span className="bg-white/65 px-2 py-1">User owns story</span>
+                        </div>
+                      </div>
+                    </div>
+                    </>
                     ) : null}
+
                     {outlineWorkspaceStep === 'outline' ? (
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                     <div className="flex flex-col gap-2">
@@ -8232,894 +8117,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                            </div>
 	                          </div>
 	                        ) : null}
-	                        {latestOutline ? (
-	                          <div className="space-y-2">
-	                            <pre
-	                              className={`${preShell} font-sans max-h-[min(360px,42vh)] min-h-[10rem] xl:max-h-[min(420px,calc(100dvh-18rem))]`}
-	                            >
-	                              <WriterHighlightedText
-	                                text={formatOutlineAsText(latestOutline.outline_json)}
-	                                query={findQuery}
-	                                activeMatchIndex={findActiveIndex}
-	                              />
-	                            </pre>
-	                            <details className="rounded-lg border border-black/10 bg-white/50 px-3 py-2">
-	                              <summary className="cursor-pointer text-[10px] font-black uppercase tracking-wider text-black/50">
-		                                Advanced data
-	                              </summary>
-	                              <pre
-	                                className={`${preShell} ${preFont} mt-2 max-h-[min(360px,42vh)] min-h-[10rem]`}
-	                              >
-	                                <WriterHighlightedText
-	                                  text={outlineJsonString}
-	                                  query={findQuery}
-	                                  activeMatchIndex={findActiveIndex}
-	                                />
-	                              </pre>
-	                            </details>
-	                          </div>
-	                        ) : (
-                          <p className="text-xs text-black/55">No outlines for this issue yet.</p>
-                        )}
-                      </div>
-                    </aside>
-                    ) : null}
-                  </div>
-                )}
-                {activeTab === 'lore' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                        Canon gate
-                      </p>
-                      <WriterSectionTip tipKey="loreTab" label="About lore cards" />
-                    </div>
-                    {!selectedSeriesId ? (
-                      <p className="text-xs text-black/50">{WRITER_UI_TIPS.seriesLibrary}</p>
-                    ) : (
-                      <>
-                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-                          <div className="border-l-2 border-amber-700 bg-amber-50/70 px-3 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
-                              Pre-lore intake
-                            </p>
-                            <p className="mt-1 text-xs leading-snug text-black/70">
-                              Add canonical descriptions before regenerating outline or page beats. If a school,
-                              device, species, character appearance, faction, or rule is missing here, the model can
-                              invent it. Included canon cards are sent to <strong>Generate outline</strong> and{' '}
-                              <strong>page beats</strong>.
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || !selectedIssueId || loreAssistLoading}
-                                onClick={() => void runLoreGapAssist()}
-                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-45"
-                                style={{ background: ACCENT_GOLD_GRADIENT }}
-                              >
-                                {loreAssistLoading ? 'Scanning…' : 'Suggest missing lore'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || !selectedIssueId || canonLoading}
-                                onClick={() => void runCanonFromRibbon()}
-                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
-                              >
-                                {canonLoading ? 'Checking…' : 'Post-lore canon check'}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="border-l-2 border-emerald-600 bg-emerald-50/60 px-3 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
-                              Generation contract
-                            </p>
-                            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                              <span className="bg-white/60 px-2 py-1">Outline uses canon</span>
-                              <span className="bg-white/60 px-2 py-1">Beats use canon</span>
-                              <span className="bg-white/60 px-2 py-1">No video assumptions</span>
-                              <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
-                            </div>
-                            <p className="mt-2 text-[11px] leading-snug text-black/58">
-                              Foundation defaults now travel with generation so comic medium, panel density,
-                              style, canon, and character consistency do not have to be retyped on each prompt.
-                            </p>
-                          </div>
-                        </div>
-                        {loreAssistError ? (
-                          <p className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{loreAssistError}</p>
-                        ) : null}
-                        {loreAssistOutput.trim() ? (
-                          <div className="border border-black/10 bg-white/45 p-3 space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
-                                AI lore suggestions
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void navigator.clipboard.writeText(loreAssistOutput)}
-                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
-                                >
-                                  Copy
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => appendTextToField(setLoreDraftBody, loreAssistOutput)}
-                                  className="rounded-md border border-black/20 bg-white/80 px-2 py-1 text-[10px] font-bold text-black"
-                                >
-                                  Append to card body
-                                </button>
-                              </div>
-                            </div>
-                            <pre className={`${preShell} ${preFont} max-h-[min(300px,38vh)]`}>
-                              <WriterHighlightedText
-                                text={loreAssistOutput}
-                                query={findQuery}
-                                activeMatchIndex={findActiveIndex}
-                              />
-                            </pre>
-                          </div>
-                        ) : null}
-                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                            {loreEditingId ? 'Edit card' : 'New card'}
-                          </p>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
-                              Title
-                              <input
-                                type="text"
-                                value={loreDraftTitle}
-                                onChange={(e) => setLoreDraftTitle(e.target.value)}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
-                                placeholder="e.g. The Silver Compact"
-                              />
-                            </label>
-                            <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
-                              Category
-                              <input
-                                type="text"
-                                value={loreDraftCategory}
-                                onChange={(e) => setLoreDraftCategory(e.target.value)}
-                                className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black"
-                                placeholder="world · character · place · rule · timeline"
-                              />
-                            </label>
-                          </div>
-                          <label className="flex flex-col gap-1 text-[11px] font-semibold text-black/70">
-                            Body
-                            <textarea
-                              value={loreDraftBody}
-                              onChange={(e) => setLoreDraftBody(e.target.value)}
-                              rows={5}
-                              className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[100px]"
-                              placeholder="Facts, tone, relationships, geography — what the AI should remember."
-                            />
-                          </label>
-                          <div className="flex flex-wrap items-center gap-4">
-                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={loreDraftInclude}
-                                onChange={(e) => setLoreDraftInclude(e.target.checked)}
-                                className="rounded border-black/30"
-                              />
-                              Include in AI prompts
-                            </label>
-                            <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/70">
-                              Sort order
-                              <input
-                                type="number"
-                                value={loreDraftSort}
-                                onChange={(e) => setLoreDraftSort(Number(e.target.value) || 0)}
-                                className="w-20 rounded-lg border border-black/15 bg-white px-2 py-1 text-sm text-black"
-                              />
-                            </label>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={!supabaseOk || loreBusy || !loreDraftTitle.trim()}
-                              onClick={async () => {
-                                if (!selectedSeriesId || !loreDraftTitle.trim()) return;
-                                setLoreBusy(true);
-                                if (loreEditingId) {
-                                  const ok = await updateWriterLoreCard(loreEditingId, {
-                                    title: loreDraftTitle.trim(),
-                                    category: loreDraftCategory.trim() || 'general',
-                                    body: loreDraftBody,
-                                    include_in_prompt: loreDraftInclude,
-                                    sort_order: loreDraftSort,
-                                  });
-                                  setLoreBusy(false);
-                                  if (!ok) {
-                                    pushHistory('error: save lore card');
-                                    return;
-                                  }
-                                  pushHistory('updated lore card');
-                                } else {
-                                  const row = await createWriterLoreCard({
-                                    series_id: selectedSeriesId,
-                                    title: loreDraftTitle.trim(),
-                                    category: loreDraftCategory.trim() || 'world',
-                                    body: loreDraftBody,
-                                    include_in_prompt: loreDraftInclude,
-                                    sort_order: loreDraftSort,
-                                  });
-                                  setLoreBusy(false);
-                                  if (!row) {
-                                    pushHistory('error: create lore card');
-                                    return;
-                                  }
-                                  pushHistory('created lore card');
-                                }
-                                setLoreEditingId(null);
-                                setLoreDraftTitle('');
-                                setLoreDraftCategory('world');
-                                setLoreDraftBody('');
-                                setLoreDraftInclude(true);
-                                setLoreDraftSort(0);
-                                await reloadLoreCards();
-                              }}
-                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
-                              style={{ background: ACCENT_GOLD_GRADIENT }}
-                            >
-                              {loreEditingId ? 'Save changes' : 'Add card'}
-                            </button>
-                            {loreEditingId ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setLoreEditingId(null);
-                                  setLoreDraftTitle('');
-                                  setLoreDraftCategory('world');
-                                  setLoreDraftBody('');
-                                  setLoreDraftInclude(true);
-                                  setLoreDraftSort(0);
-                                }}
-                                className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80"
-                              >
-                                Cancel edit
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
-                          <button
-                            type="button"
-                            onClick={() => setLoreImportOpen((v) => !v)}
-                            className="w-full flex items-center justify-between gap-2 text-left"
-                          >
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-	                              Import lore cards (advanced)
-                            </span>
-                            <span className="text-[10px] font-bold text-black/50">{loreImportOpen ? 'Hide' : 'Show'}</span>
-                          </button>
-                          {loreImportOpen ? (
-                            <div className="space-y-2">
-                              <p className="text-xs text-black/60 leading-snug">
-	                                Paste a list of lore-card objects. Title is required; category, body, and whether the
-	                                card should guide AI prompts are optional. Duplicate category/title pairs are skipped.
-                              </p>
-                              <textarea
-                                value={loreImportJsonDraft}
-                                onChange={(e) => setLoreImportJsonDraft(e.target.value)}
-                                rows={8}
-                                className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-xs text-black font-mono resize-y min-h-[140px]"
-                                placeholder='[\n  {"title":"The Silver Compact","category":"world","body":"...","include_in_prompt":true}\n]'
-                              />
-                              {loreImportError ? (
-                                <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{loreImportError}</p>
-                              ) : null}
-                              {loreImportResult ? (
-                                <p className="text-xs text-emerald-900 bg-emerald-100/70 rounded-lg px-3 py-2">
-                                  Imported {loreImportResult.imported}. Skipped duplicates (existing):{' '}
-                                  {loreImportResult.skippedExisting}. Skipped duplicates (payload):{' '}
-                                  {loreImportResult.skippedPayload}. Invalid: {loreImportResult.invalid}.
-                                </p>
-                              ) : null}
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  disabled={!supabaseOk || loreImportBusy || !loreImportJsonDraft.trim()}
-                                  onClick={() => void runLoreJsonImport()}
-                                  className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                                  style={{ background: ACCENT_GOLD_GRADIENT }}
-                                >
-                                  {loreImportBusy ? 'Importing…' : 'Import'}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={loreImportBusy}
-                                  onClick={() => {
-                                    setLoreImportJsonDraft('');
-                                    setLoreImportError(null);
-                                    setLoreImportResult(null);
-                                  }}
-                                  className="rounded-lg px-3 py-2 text-xs font-semibold text-black/70 border border-black/20 bg-white/80 disabled:opacity-45"
-                                >
-                                  Clear
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="border border-black/10 bg-white/45 p-3 space-y-3 max-w-5xl">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
-                                Import from Obsidian
-                              </p>
-                              <p className="mt-1 max-w-2xl text-xs leading-snug text-black/62">
-                                Select Markdown notes, images, or a vault folder. Notes stay in Markdown, wiki links are
-                                detected, and image embeds become visual references on the imported lore card.
-                              </p>
-                            </div>
-                            <label className="flex items-center gap-2 text-[11px] font-bold text-black/65">
-                              Type filter
-                              <select
-                                value={loreObsidianTypeFilter}
-                                onChange={(e) => setLoreObsidianTypeFilter(e.target.value)}
-                                className="rounded-md border border-black/15 bg-white px-2 py-1 text-xs text-black"
-                              >
-                                <option value="">All types</option>
-                                {OBSIDIAN_LORE_TYPE_OPTIONS.map((type) => (
-                                  <option key={type} value={type}>
-                                    {type}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
-                          <input
-                            ref={loreObsidianFileInputRef}
-                            type="file"
-                            multiple
-                            accept=".md,.markdown,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
-                            className="hidden"
-                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
-                          />
-                          <input
-                            ref={loreObsidianFolderInputRef}
-                            type="file"
-                            multiple
-                            className="hidden"
-                            {...{ webkitdirectory: '', directory: '' }}
-                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={loreImportBusy}
-                              onClick={() => loreObsidianFileInputRef.current?.click()}
-                              className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-black text-black shadow-sm transition hover:-translate-y-0.5 disabled:opacity-45"
-                              style={{ background: ACCENT_GOLD_GRADIENT }}
-                            >
-                              <FileUp className="h-4 w-4" />
-                              Select notes/images
-                            </button>
-                            <button
-                              type="button"
-                              disabled={loreImportBusy}
-                              onClick={() => loreObsidianFolderInputRef.current?.click()}
-                              className="inline-flex items-center gap-2 rounded-md border border-black/20 bg-white/85 px-3 py-2 text-xs font-bold text-black transition hover:bg-white disabled:opacity-45"
-                            >
-                              <FolderOpen className="h-4 w-4" />
-                              Select vault folder
-                            </button>
-                            {loreObsidianEntries.length > 0 ? (
-                              <button
-                                type="button"
-                                disabled={loreImportBusy}
-                                onClick={() => {
-                                  setLoreObsidianEntries([]);
-                                  setLoreObsidianSelectedIds([]);
-                                  setLoreObsidianError(null);
-                                  setLoreObsidianResult(null);
-                                }}
-                                className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-xs font-bold text-black/65 transition hover:bg-white disabled:opacity-45"
-                              >
-                                Clear preview
-                              </button>
-                            ) : null}
-                          </div>
-                          {loreObsidianError ? (
-                            <p className="flex items-start gap-2 bg-red-100/80 px-3 py-2 text-xs text-red-900">
-                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                              <span>{loreObsidianError}</span>
-                            </p>
-                          ) : null}
-                          {loreObsidianResult ? (
-                            <div className="bg-emerald-100/75 px-3 py-2 text-xs text-emerald-950">
-                              Imported {loreObsidianResult.imported}. Updated {loreObsidianResult.updated}. Skipped{' '}
-                              {loreObsidianResult.skipped}. Failed {loreObsidianResult.failed}. Stored images{' '}
-                              {loreObsidianResult.storedImages}.
-                              {loreObsidianResult.warnings.length > 0 ? (
-                                <ul className="mt-1 list-disc pl-4 text-amber-950">
-                                  {loreObsidianResult.warnings.slice(0, 5).map((warning) => (
-                                    <li key={warning}>{warning}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {loreObsidianEntries.length > 0 ? (
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/10 pt-3">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-black/50">
-                                  Preview {loreObsidianSelectedIds.length}/{loreObsidianEntries.length} selected
-                                </p>
-                                <button
-                                  type="button"
-                                  disabled={!supabaseOk || loreImportBusy || loreObsidianSelectedIds.length === 0}
-                                  onClick={() => void runLoreObsidianImport()}
-                                  className="rounded-md px-4 py-2 text-xs font-black text-black shadow-sm disabled:opacity-45"
-                                  style={{ background: ACCENT_GOLD_GRADIENT }}
-                                >
-                                  {loreImportBusy ? 'Importing…' : 'Confirm import'}
-                                </button>
-                              </div>
-                              <ul className="grid gap-2">
-                                {loreObsidianEntries.map((entry) => {
-                                  const selected = loreObsidianSelectedIds.includes(entry.id);
-                                  return (
-                                    <li
-                                      key={entry.id}
-                                      className={`border px-3 py-2 transition ${
-                                        selected
-                                          ? 'border-amber-500/70 bg-amber-50/75'
-                                          : 'border-black/10 bg-white/35 opacity-70'
-                                      }`}
-                                    >
-                                      <div className="flex flex-wrap items-start justify-between gap-3">
-                                        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
-                                          <input
-                                            type="checkbox"
-                                            checked={selected}
-                                            onChange={() => toggleLoreObsidianEntry(entry.id)}
-                                            className="mt-1 rounded border-black/30"
-                                          />
-                                          <span className="min-w-0">
-                                            <span className="block truncate text-sm font-black text-black">
-                                              {entry.title}
-                                              <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-black/45">
-                                                {entry.category}
-                                              </span>
-                                            </span>
-                                            <span className="mt-0.5 block truncate text-[11px] text-black/48">
-                                              {entry.sourcePath}
-                                            </span>
-                                          </span>
-                                        </label>
-                                        {entry.duplicateOf ? (
-                                          <label className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                                            Duplicate
-                                            <select
-                                              value={entry.duplicateAction}
-                                              onChange={(e) =>
-                                                setLoreObsidianEntryAction(
-                                                  entry.id,
-                                                  e.target.value as ObsidianLoreDuplicateAction,
-                                                )
-                                              }
-                                              className="rounded-md border border-black/15 bg-white px-2 py-1 text-[11px] normal-case tracking-normal text-black"
-                                            >
-                                              <option value="skip">skip</option>
-                                              <option value="overwrite">overwrite</option>
-                                              <option value="merge">merge</option>
-                                              <option value="create_duplicate">create duplicate</option>
-                                            </select>
-                                          </label>
-                                        ) : null}
-                                      </div>
-                                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/58">
-                                        {entry.tags.slice(0, 6).map((tag) => (
-                                          <span key={tag} className="bg-white/70 px-2 py-1">
-                                            #{tag}
-                                          </span>
-                                        ))}
-                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
-                                          {entry.links.length} links
-                                        </span>
-                                        <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-1">
-                                          <Image className="h-3 w-3" />
-                                          {entry.images.filter((image) => image.status === 'resolved').length}/
-                                          {entry.images.length} images
-                                        </span>
-                                        {entry.linkedLoreReferences.length > 0 ? (
-                                          <span className="bg-emerald-100/90 px-2 py-1 text-emerald-950">
-                                            {entry.linkedLoreReferences.length} matched refs
-                                          </span>
-                                        ) : null}
-                                        {entry.warnings.length > 0 ? (
-                                          <span className="bg-amber-100/90 px-2 py-1 text-amber-950">
-                                            {entry.warnings.length} warnings
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                      {entry.links.length > 0 || entry.images.length > 0 || entry.warnings.length > 0 ? (
-                                        <div className="mt-2 grid gap-2 text-[11px] text-black/62 md:grid-cols-3">
-                                          <p>
-                                            <strong>Links:</strong>{' '}
-                                            {entry.links.map((link) => link.target).join(', ') || 'none'}
-                                          </p>
-                                          <p>
-                                            <strong>Images:</strong>{' '}
-                                            {entry.images.map((image) => image.fileName).join(', ') || 'none'}
-                                          </p>
-                                          <p className={entry.warnings.length > 0 ? 'text-amber-950' : ''}>
-                                            <strong>Warnings:</strong> {entry.warnings.join(' ') || 'none'}
-                                          </p>
-                                        </div>
-                                      ) : null}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                            Cards ({loreCards.length})
-                          </p>
-                          {loreBusy && loreCards.length === 0 ? (
-                            <p className="text-xs text-black/50">Loading…</p>
-                          ) : loreCards.length === 0 ? (
-                            <p className="text-xs text-black/50">No lore cards yet. Add one above.</p>
-                          ) : (
-                            <ul className="space-y-2 max-w-4xl">
-                              {loreCards.map((c) => {
-                                const importMetadata = readLoreImportMetadataFromBody(c.body);
-                                const cleanBody = stripLoreImportMetadataFromBody(c.body);
-                                const storedImageCount =
-                                  importMetadata?.images?.filter((image) => Boolean(image.storageUrl)).length ?? 0;
-                                return (
-                                  <li
-                                    key={c.id}
-                                    className="rounded-xl border border-black/10 bg-white/35 p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
-                                  >
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-bold text-black truncate">
-                                        {c.title || 'Untitled'}
-                                        <span className="font-normal text-black/55 text-xs ml-2">
-                                          ({c.category})
-                                        </span>
-                                        {!c.include_in_prompt ? (
-                                          <span className="ml-2 text-[10px] font-bold uppercase text-amber-900/80">
-                                            excluded from AI
-                                          </span>
-                                        ) : null}
-                                      </p>
-                                      {importMetadata ? (
-                                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/52">
-                                          <span className="bg-white/70 px-2 py-0.5">Obsidian</span>
-                                          <span className="bg-white/70 px-2 py-0.5 truncate max-w-[280px]">
-                                            {importMetadata.sourcePath}
-                                          </span>
-                                          {importMetadata.tags?.slice(0, 4).map((tag) => (
-                                            <span key={tag} className="bg-white/70 px-2 py-0.5">
-                                              #{tag}
-                                            </span>
-                                          ))}
-                                          {importMetadata.images && importMetadata.images.length > 0 ? (
-                                            <span className="inline-flex items-center gap-1 bg-white/70 px-2 py-0.5">
-                                              <Image className="h-3 w-3" />
-                                              {storedImageCount}/{importMetadata.images.length} visual refs
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      ) : null}
-                                      <p className="text-xs text-black/75 whitespace-pre-wrap mt-1">
-                                        {cleanBody || '(empty body)'}
-                                      </p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setLoreEditingId(c.id);
-                                        setLoreDraftTitle(c.title);
-                                        setLoreDraftCategory(c.category);
-                                        setLoreDraftBody(c.body);
-                                        setLoreDraftInclude(c.include_in_prompt);
-                                        setLoreDraftSort(c.sort_order);
-                                      }}
-                                      className="rounded-md px-2 py-1 text-[10px] font-bold border border-black/20 bg-white/80"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={loreBusy}
-                                      onClick={async () => {
-                                        if (!window.confirm('Delete this lore card?')) return;
-                                        setLoreBusy(true);
-                                        const ok = await deleteWriterLoreCard(c.id);
-                                        setLoreBusy(false);
-                                        if (!ok) {
-                                          pushHistory('error: delete lore card');
-                                          return;
-                                        }
-                                        if (loreEditingId === c.id) {
-                                          setLoreEditingId(null);
-                                          setLoreDraftTitle('');
-                                          setLoreDraftCategory('world');
-                                          setLoreDraftBody('');
-                                          setLoreDraftInclude(true);
-                                          setLoreDraftSort(0);
-                                        }
-                                        pushHistory('deleted lore card');
-                                        await reloadLoreCards();
-                                      }}
-                                      className="rounded-md px-2 py-1 text-[10px] font-bold text-red-900 border border-red-300/70 bg-red-50/90"
-                                    >
-                                      Delete
-                                    </button>
-                                    </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {activeTab === 'beats' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4`}>
-                    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(320px,48%)] xl:items-start xl:gap-4">
-                      <div className="min-w-0 space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                            Page beats
-                          </p>
-                          <WriterSectionTip tipKey="beatsTab" label="About page beats" />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-black/75 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={beatsSkipExisting}
-                              onChange={(e) => setBeatsSkipExisting(e.target.checked)}
-                              className="rounded border-black/30"
-                            />
-                            Skip pages that already have beats
-                          </label>
-                          <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
-                            <button
-                              type="button"
-                              disabled={
-                                !supabaseOk ||
-                                !selectedIssueId ||
-                                sortedPages.length === 0 ||
-                                beatsBatchBusy ||
-                                beatsLoading
-                              }
-                              onClick={() => void runBatchPageBeats()}
-                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                              style={{ background: ACCENT_GOLD_GRADIENT }}
-                            >
-                              {beatsBatchBusy ? beatsBatchLabel || 'Batch…' : 'Generate all beats'}
-                            </button>
-                          </Tooltip>
-                          {beatsBatchBusy && beatsBatchSource === 'all' ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                beatsBatchAbortRef.current?.abort();
-                              }}
-                              className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
-                            >
-                              Cancel after this batch
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="space-y-1 min-w-0 xl:max-w-none">
-                          <div className="flex items-center gap-1.5">
-                            <label
-                              className="text-[11px] font-semibold text-black/70"
-                              htmlFor="writer-beats-director-notes"
-                            >
-                              Director notes for beats (optional)
-                            </label>
-                            <WriterSectionTip tipKey="beatsDirectorNotes" label="About director notes for beats" />
-                          </div>
-                          <textarea
-                            id="writer-beats-director-notes"
-                            name="writer-beats-director-notes"
-                            rows={4}
-	                            value={beatsDirectorNotesDraft}
-	                            onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)}
-	                            onBlur={() => void persistWriterDrafts({ beats_director_notes: beatsDirectorNotesDraft })}
-	                            disabled={!selectedIssueId}
-                            placeholder="e.g. Pages 3–4 = double-page spread (council); vary panel sizes; more props/lighting detail. Not sent to outline — only page_beats."
-                            className="w-full rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y min-h-[72px] disabled:opacity-50"
-                          />
-                        </div>
-                        {selectedPage ? (
-                          <div className="grid gap-2 rounded-xl border border-black/10 bg-white/45 p-3 sm:grid-cols-3">
-                            {[
-                              ['Characters', selectedPageMetadata.characters],
-                              ['Locations', selectedPageMetadata.locations],
-                              ['Art style', selectedPageMetadata.artStyle],
-                            ].map(([label, value]) => (
-                              <div key={label} className="min-w-0">
-                                <p className="text-[9px] font-black uppercase tracking-wider text-black/45">
-                                  {label}
-                                </p>
-                                <p className="mt-1 text-[11px] font-semibold leading-snug text-black/75 break-words">
-                                  {value}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {sortedPages.length > 0 ? (
-                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                                  Pick pages for one batch (max {WRITER_PAGE_BEATS_ISSUE_MAX})
-                                </p>
-                                <WriterSectionTip tipKey="beatsMultiPick" label="About multi-select beats" />
-                              </div>
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || beatsBatchBusy || beatsPickPageIds.length === 0}
-                                onClick={() => setBeatsPickPageIds([])}
-                                className="rounded-md px-2 py-1 text-[10px] font-bold text-black border border-black/15 bg-white/80 hover:bg-white disabled:opacity-45"
-                              >
-                                Clear picks
-                              </button>
-                            </div>
-                            <ul className="space-y-1.5 max-h-[min(200px,28vh)] overflow-y-auto custom-scrollbar -mx-1 px-1">
-                              {sortedPages.map((p) => {
-                                const checked = beatsPickPageIds.includes(p.id);
-                                const atCap =
-                                  beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX && !checked;
-                                return (
-                                  <li key={p.id} className="flex items-start gap-2 text-[11px]">
-                                    <input
-                                      type="checkbox"
-                                      id={`writer-beats-pick-${p.id}`}
-                                      checked={checked}
-                                      onChange={() => {
-                                        setBeatsPickPageIds((prev) => {
-                                          if (prev.includes(p.id)) return prev.filter((x) => x !== p.id);
-                                          if (prev.length >= WRITER_PAGE_BEATS_ISSUE_MAX) return prev;
-                                          return [...prev, p.id];
-                                        });
-                                      }}
-                                      disabled={!supabaseOk || beatsBatchBusy || atCap}
-                                      className="mt-0.5 rounded border-black/25"
-                                    />
-                                    <label
-                                      htmlFor={`writer-beats-pick-${p.id}`}
-                                      className={`cursor-pointer flex-1 min-w-0 leading-snug ${atCap ? 'opacity-50' : ''}`}
-                                    >
-                                      <span className="font-semibold text-black">Page {p.page_number}</span>
-                                      {pageRowHasPanelBeats(p) ? (
-                                        <span className="text-black/55"> — has beats</span>
-                                      ) : null}
-                                    </label>
-                                    <button
-                                      type="button"
-                                      title="Select this page in the Library panel to scope beats and dialogue previews"
-                                      className="shrink-0 text-[10px] font-bold text-amber-900/80 underline decoration-amber-900/30 underline-offset-2 hover:text-black"
-                                      onClick={() => setSelectedPageId(p.id)}
-                                    >
-                                      Library
-                                    </button>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                            <Tooltip content={WRITER_UI_TIPS.batchPageBeats} side="bottom">
-                              <button
-                                type="button"
-                                disabled={
-                                  !supabaseOk ||
-                                  !selectedIssueId ||
-                                  beatsPickOrdered.length === 0 ||
-                                  beatsBatchBusy ||
-                                  beatsLoading
-                                }
-                                onClick={() => void runSelectedBatchPageBeats()}
-                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-amber-800/35 bg-amber-50/90 shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-                              >
-                                {beatsBatchBusy && beatsBatchSource === 'picked'
-                                  ? beatsBatchLabel || 'Batch…'
-                                  : `Generate beats for selected (${beatsPickOrdered.length})`}
-                              </button>
-                            </Tooltip>
-                            {beatsPickPageIds.length >= WRITER_PAGE_BEATS_ISSUE_MAX ? (
-                              <p className="text-[10px] text-black/50">
-                                Maximum {WRITER_PAGE_BEATS_ISSUE_MAX} pages per batch. Clear a pick to choose
-                                another.
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {!selectedPageId && sortedPages.length > 0 && (
-                          <p className="text-xs text-black/50">
-                            Select a page in the Library to preview, use picks above, or Generate all beats (
-                            {WRITER_PAGE_BEATS_ISSUE_MAX} pages per server round).
-                          </p>
-                        )}
-                        {sortedPages.length === 0 && (
-                          <p className="text-xs text-black/50">{WRITER_UI_TIPS.beatsNeedPage}</p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2">
-	                          <button
-	                            type="button"
-	                            disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
-	                            onClick={() => {
-	                              if (selectedPage?.beats_json) setActiveTab('dialogue');
-	                              else void runSelectedPageBeatsGeneration();
-	                            }}
-	                            className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
-	                            style={{ background: ACCENT_GOLD_GRADIENT }}
-	                          >
-	                            {beatsLoading ? 'Generating…' : selectedPage?.beats_json ? 'Continue to Dialogue' : 'Generate page beats'}
-	                          </button>
-	                          {selectedPage?.beats_json ? (
-	                            <button
-	                              type="button"
-	                              disabled={!supabaseOk || !selectedPageId || beatsLoading || beatsBatchBusy}
-	                              onClick={() => void runSelectedPageBeatsGeneration()}
-	                              className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-	                            >
-	                              Regenerate page beats
-	                            </button>
-	                          ) : null}
-	                          <button
-	                            type="button"
-	                            disabled={!selectedPageId}
-	                            onClick={() => focusWriterElement('writer-beats-inline-editor')}
-	                            className="rounded-lg border border-amber-800/35 bg-amber-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-100 disabled:opacity-40"
-	                          >
-	                            Edit this page&apos;s beats
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!selectedPageId || imageWorkshopBusy}
-                            onClick={() => void openImageWorkshopFromWriter('page')}
-                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                          >
-                            {imageWorkshopBusy ? 'Opening…' : 'Send page to Illustrator’s Imageshop'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!selectedPage?.beats_json}
-                            onClick={() => {
-                              if (!selectedPage?.beats_json) return;
-                              downloadJsonFile(
-                                `writer-beats-page-${selectedPage.page_number}.json`,
-                                selectedPage.beats_json,
-                              );
-                              pushHistory(`downloaded beats page ${selectedPage.page_number}`);
-                            }}
-                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                          >
-                            Download beats (this page)
-                          </button>
-                          <button
-                            type="button"
-                            disabled={
-                              !supabaseOk || !selectedPageId || libraryPagesBusy || !selectedPage?.beats_json
-                            }
-                            onClick={() => void clearBeatsForSelectedPage()}
-                            className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                          >
-                            Clear beats (this page)
-                          </button>
-                        </div>
-	                        {beatsError && (
-	                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
-	                        )}
-	                        {renderScopePreview(selectedBeatsScope)}
 	                        
 	                        {pageEditReviewPanel}
 	                      </div>
@@ -9990,14 +8987,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                     if (option.id === 'dialogue') {
                                       setActiveTab('dialogue');
                                     } else if (option.id === 'exports') {
-                                      setActiveTab('scripts');
-                                      setScriptsEditorTab('synopsis');
+                                      setActiveTab('export');
                                     } else if (option.id === 'guided_comics_handoff') {
                                       setProductionDefaultsDraft((p) => ({
                                         ...p,
                                         outputFormat: 'guided_comic_handoff',
                                       }));
-                                      setActiveTab('scripts');
+                                      setActiveTab('export');
                                     } else {
                                       setActiveTab('video');
                                     }
@@ -10339,515 +9335,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                  </div>
 	                )}
 	                {activeTab === 'scripts' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-	                        <p className="text-lg font-bold text-black">
-                            {scriptsWorkspaceStep === 'story_map' ? 'Story Map' : 'My Outline'}
-                          </p>
-	                        <p className="mt-0.5 text-xs text-black/58">
-                            {scriptsWorkspaceStep === 'story_map'
-                              ? 'Map arcs, pages, scenes, and beats so ARCS can keep the issue structure in order.'
-                              : 'Paste your outline in any format — bullet list, summary, or prose notes. ARCS reads it when generating or revising the issue outline.'}
-	                        </p>
-                      </div>
-                      <WriterSectionTip tipKey="scriptsTab" label="About synopsis helper and exports" />
-                    </div>
-                    {!selectedIssueId ? (
-                      <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-5 text-center space-y-2">
-                        <p className="text-sm font-bold text-amber-900">No issue selected</p>
-                        <p className="text-xs text-amber-900/70 leading-snug">
-                          Choose a series and issue from the <strong>toolbar above</strong> to unlock this tab.
-                          The toolbar dropdowns are searchable — type to filter.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {scriptsError && (
-                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{scriptsError}</p>
-                        )}
-                        {scriptsWorkspaceStep === 'synopsis' ? pageEditReviewPanel : null}
-                        {scriptsWorkspaceStep === 'synopsis' ? (
-                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-                          <div className="border-l-2 border-black/60 bg-white/55 px-3 py-3 space-y-3">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
-	                                  My Outline
-	                                </p>
-	                                <p className="mt-1 text-xs leading-snug text-black/68">
-	                                  Paste your outline in any format — a list, a summary, or rough notes. ARCS
-	                                  sends it to <strong>Generate outline</strong> and uses your structure instead of
-	                                  inventing one.
-	                                </p>
-	                              </div>
-	                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-	                                <summary className="cursor-pointer">Advanced details</summary>
-	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as your outline.</span>
-	                              </details>
-	                            </div>
-	                            <p className="text-[11px] leading-snug text-black/60">
-	                              Choose how strictly ARCS should follow the outline you pasted. This choice does not
-	                              change your source text; it affects the next generated issue outline.
-	                            </p>
-	                            <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
-	                              {(
-	                                [
-	                                  ['preserve', 'Keep my order', 'Keep order and named events strict.'],
-	                                  ['structure', 'Organize into production outline', 'Organize into production beats.'],
-	                                  ['expand', 'Add missing connective scenes', 'Add connective tissue around your spine.'],
-	                                ] as const
-	                              ).map(([id, label, description]) => (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  onClick={() => setAuthorOutlineMode(id)}
-                                  title={description}
-                                  className={`rounded-md border px-2.5 py-1 text-[11px] font-bold leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                                    authorOutlineMode === id
-                                      ? 'border-black/60 bg-black text-white'
-                                      : 'border-black/15 bg-white/75 text-black/65 hover:bg-white'
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                            <textarea
-                              value={authorOutlineText}
-                              onChange={(e) => setAuthorOutlineText(e.target.value)}
-                              rows={8}
-                              className="w-full min-h-[180px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                              placeholder={'Paste or draft your issue/book outline here…\n\nExample:\nPage 1: Opening classroom misfire.\nPage 2: Vision escalates.\nPage 3: Mentor interrupts.'}
-                            />
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || scriptsBusy}
-                                onClick={() => void saveAuthorOutlineToNotes()}
-                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                                style={{ background: ACCENT_GOLD_GRADIENT }}
-                              >
-                                {scriptsBusy ? 'Saving…' : 'Save my outline'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!authorOutlineText.trim()}
-                                onClick={() => appendTextToField(setOutlineSupplementDraft, authorOutlineText)}
-                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                              >
-                                Copy to AI instructions
-                              </button>
-                            </div>
-                          </div>
-                          <div className="border-l-2 border-emerald-700 bg-emerald-50/65 px-3 py-3">
-	                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
-	                              What this affects
-                            </p>
-                            <div className="mt-2 space-y-2 text-[11px] leading-snug text-black/66">
-                              <p>
-                                <strong>Issue synopsis</strong> is the short pitch/logline context.
-                              </p>
-                              <p>
-	                                <strong>My Outline</strong> is the source structure ARCS should keep, organize, or
-	                                expand when generating the saved Issue Outline.
-                              </p>
-                              <p>
-                                <strong>Canon cards</strong> still supply visual/world facts before beats are generated.
-                              </p>
-                            </div>
-                            <div className="mt-3 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                              <span className="bg-white/65 px-2 py-1">Source first</span>
-                              <span className="bg-white/65 px-2 py-1">Canon checked</span>
-                              <span className="bg-white/65 px-2 py-1">AI structures</span>
-                              <span className="bg-white/65 px-2 py-1">User owns story</span>
-                            </div>
-                          </div>
-                        </div>
-                        ) : null}
-                        {scriptsWorkspaceStep === 'story_map' ? (
-                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
-                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-	                                  Story map
-	                                </p>
-	                                <p className="mt-1 text-[11px] leading-snug text-black/60">
-	                                  Turn an outline into a story map so ARCS can keep arcs, issues, pages, scenes, and
-	                                  beats in order during generation.
-	                                </p>
-	                              </div>
-	                              <details className="rounded bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
-	                                <summary className="cursor-pointer">Advanced details</summary>
-	                                <span className="mt-1 block normal-case tracking-normal">Saved with this issue as the story map.</span>
-	                              </details>
-	                            </div>
-                            <textarea
-                              value={hierarchyImportDraft}
-                              onChange={(e) => setHierarchyImportDraft(e.target.value)}
-                              rows={7}
-                              className="w-full min-h-[150px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                              placeholder={'Arc: Haunted semester\nIssue 1: First misfire\nPage 1\n- Beat: Classroom spell goes wrong\n- Beat: Mentor interrupts'}
-                            />
-                            <div className="rounded-lg border border-emerald-700/20 bg-emerald-50/70 px-3 py-2 text-[11px] leading-snug text-black/68">
-                              <p className="font-black uppercase tracking-wider text-emerald-950/65">What to paste</p>
-                              <p className="mt-1">
-                                Use simple labels such as <strong>Arc</strong>, <strong>Issue</strong>,{' '}
-                                <strong>Page</strong>, <strong>Scene</strong>, and <strong>Beat</strong>. ARCS turns
-                                those labels into an ordered map it can reuse when generating outlines and page beats.
-                              </p>
-                            </div>
-                            <label className="inline-flex w-fit cursor-pointer items-center rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-within:ring-2 focus-within:ring-black/25">
-	                              Import from file (advanced)
-                              <input
-                                type="file"
-                                accept=".txt,.md,.markdown,.json,application/json,text/plain,text/markdown"
-                                className="sr-only"
-                                onChange={(event) => {
-                                  const file = event.currentTarget.files?.[0];
-                                  if (!file) return;
-                                  void file.text().then((text) => {
-                                    setHierarchyImportDraft(text);
-                                    setHierarchyImportError(null);
-                                  });
-                                  event.currentTarget.value = '';
-                                }}
-                              />
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={!authorOutlineText.trim()}
-                                onClick={() => {
-                                  setHierarchyImportDraft(authorOutlineText);
-                                  setHierarchyImportError(null);
-                                }}
-                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                              >
-                                Use author outline
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!buildSynopsisDocumentFromParts(synopsisHelperParts)}
-                                onClick={() => {
-                                  setHierarchyImportDraft(buildSynopsisDocumentFromParts(synopsisHelperParts));
-                                  setHierarchyImportError(null);
-                                }}
-                                className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                              >
-                                Use synopsis helper
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || scriptsBusy || !hierarchyImportDraft.trim()}
-                                onClick={() => void saveHierarchyToNotes()}
-                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                                style={{ background: ACCENT_GOLD_GRADIENT }}
-                              >
-	                                {scriptsBusy ? 'Saving…' : 'Save story map'}
-                              </button>
-                            </div>
-                            {hierarchyImportError ? (
-                              <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
-                                {hierarchyImportError}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="space-y-3 rounded-xl border border-black/10 bg-white/45 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-	                              Saved story map
-                            </p>
-                            {hierarchyNodes.length ? (
-                              <>
-                                <div className="max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                                  {renderEditableHierarchyNodes(hierarchyEditNodes, setHierarchyEditNodes)}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    disabled={!supabaseOk || scriptsBusy || hierarchyEditNodes.length === 0}
-                                    onClick={() => void saveEditedHierarchyToNotes()}
-                                    className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
-                                    style={{ background: ACCENT_GOLD_GRADIENT }}
-                                  >
-	                                    {scriptsBusy ? 'Saving…' : 'Save story map edits'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setHierarchyEditNodes(hierarchyNodes);
-                                      setHierarchyEditError(null);
-                                    }}
-                                    className="rounded-md border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-                                  >
-                                    Reset edits
-                                  </button>
-                                </div>
-                                {hierarchyEditError ? (
-                                  <p className="rounded-md bg-red-100/90 px-2 py-1.5 text-[11px] text-red-800">
-                                    {hierarchyEditError}
-                                  </p>
-                                ) : null}
-                                <details className="text-[10px] text-black/45">
-                                  <summary className="cursor-pointer font-bold uppercase tracking-wide">
-                                    Preview as outline
-                                  </summary>
-                                  <div className="mt-2 rounded-md bg-white/55 p-2">
-                                    {renderHierarchyNodes(hierarchyNodes)}
-                                  </div>
-                                </details>
-                              </>
-                            ) : (
-                              <p className="text-xs text-black/50">
-                                No story map saved yet. Import from your outline or helper before generation.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        ) : null}
-                        {scriptsWorkspaceStep === 'synopsis' && sortedPages.length > 0 ? (
-                          <div
-                            className="rounded-xl border border-black/10 bg-white/40 px-3 py-2.5 space-y-2"
-                            aria-label="Panel beats coverage for this issue"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
-                                Panel beats (this issue)
-                              </p>
-                              <p className="text-[11px] font-semibold text-black/70 tabular-nums">
-                                {pagesWithBeatsCount} / {sortedPages.length} pages
-                              </p>
-                            </div>
-                            <p className="text-[9px] text-black/45 leading-snug">
-	                              Green dot = saved beats. Click a page to open the Beats tab and select it.
-                            </p>
-                            <div className="flex flex-wrap gap-1 max-h-[4.5rem] overflow-y-auto custom-scrollbar pr-0.5">
-                              {sortedPages.map((p) => {
-                                const hasBeats = pageRowHasPanelBeats(p);
-                                return (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedPageId(p.id);
-                                      setActiveTab('beats');
-                                      setDockCollapsed(false);
-                                      setDockTab('library');
-                                    }}
-                                    className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
-                                      selectedPageId === p.id
-                                        ? 'border-amber-700/80 bg-amber-100/90 text-black'
-                                        : 'border-black/15 bg-white/70 text-black/75 hover:bg-white'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                        hasBeats
-                                          ? 'bg-emerald-600'
-                                          : 'bg-black/12 ring-1 ring-inset ring-black/12'
-                                      }`}
-                                      aria-hidden
-                                    />
-                                    {p.page_number}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
-                        {scriptsWorkspaceStep === 'synopsis' ? (
-                        <div className="grid gap-6 xl:grid-cols-2">
-                          <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
-                              Synopsis helper
-                            </p>
-                            <p className="text-[11px] text-black/60 leading-snug">
-	                              These fields save with the issue as source guidance. Copy the helper text into outline
-	                              instructions, then review and save story context before generating a new outline.
-                            </p>
-                            <div className="space-y-2 max-h-[min(480px,55vh)] overflow-y-auto custom-scrollbar pr-1">
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Logline
-                                <textarea
-                                  value={synopsisHelperParts.logline}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, logline: e.target.value }))
-                                  }
-                                  rows={2}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                  placeholder="One or two sentences…"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Must-happen beats (one per line, in order)
-                                <textarea
-                                  value={synopsisHelperParts.mustHappen}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, mustHappen: e.target.value }))
-                                  }
-                                  rows={5}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y font-mono text-xs"
-                                  placeholder={'1. …\n2. …'}
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Pacing / structure
-                                <textarea
-                                  value={synopsisHelperParts.pacingNotes}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, pacingNotes: e.target.value }))
-                                  }
-                                  rows={2}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                  placeholder="Act breaks, page targets, midpoint…"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Cast (this issue)
-                                <textarea
-                                  value={synopsisHelperParts.castGoals}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, castGoals: e.target.value }))
-                                  }
-                                  rows={3}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Factions / threats
-                                <textarea
-                                  value={synopsisHelperParts.factions}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, factions: e.target.value }))
-                                  }
-                                  rows={2}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Locations / sets
-                                <textarea
-                                  value={synopsisHelperParts.locations}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, locations: e.target.value }))
-                                  }
-                                  rows={2}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                />
-                              </label>
-                              <label className="flex flex-col gap-1 text-[10px] font-semibold text-black/70">
-                                Rules for the outline
-                                <textarea
-                                  value={synopsisHelperParts.rules}
-                                  onChange={(e) =>
-                                    setSynopsisHelperParts((p) => ({ ...p, rules: e.target.value }))
-                                  }
-                                  rows={2}
-                                  className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black resize-y"
-                                  placeholder="e.g. no repeating beats across adjacent pages…"
-                                />
-                              </label>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                disabled={!supabaseOk || scriptsBusy}
-                                onClick={() => void saveSynopsisHelperToNotes()}
-                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black border border-black/20 bg-white shadow-sm disabled:opacity-45"
-                              >
-	                                {scriptsBusy ? 'Saving…' : 'Save synopsis helper'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => applyBuiltSynopsis()}
-                                className="rounded-lg px-3 py-2 text-[11px] font-bold text-black shadow-sm disabled:opacity-45"
-                                style={{ background: ACCENT_GOLD_GRADIENT }}
-                              >
-	                                Copy helper text into outline instructions
-                              </button>
-                            </div>
-                          </div>
-                          <details className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
-                              Advanced exports
-                            </summary>
-                            <div className="mt-3 space-y-3">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => copyIssuePackJson()}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
-                              >
-	                                Copy full project data (advanced)
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!selectedIssueId}
-                                onClick={() => downloadPreferredWriterExport()}
-                                className="rounded-lg px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-40"
-                                style={{ background: ACCENT_GOLD_GRADIENT }}
-                              >
-                                {preferredWriterExport.label}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  downloadJsonFile('writer-issue-pack.json', issuePackObject);
-                                  pushHistory('downloaded issue pack');
-                                }}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
-                              >
-	                                Download full project data
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadIssuePackMarkdown()}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black"
-                              >
-	                                Download readable issue pack
-                              </button>
-                              <button
-                                type="button"
-                                disabled={sortedPages.length === 0}
-                                onClick={() => downloadGuidedComicsHandoff()}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                              >
-                                Download Guided Comics handoff
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!arcReviewPlain}
-                                onClick={() => void navigator.clipboard.writeText(arcReviewPlain)}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                              >
-                                Copy arc review
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!arcReviewPlain}
-                                onClick={() => {
-                                  downloadTextFile(
-                                    'writer-arc-review.txt',
-                                    arcReviewPlain,
-                                    'text/plain;charset=utf-8',
-                                  );
-                                  pushHistory('downloaded arc review');
-                                }}
-                                className="rounded-lg border border-black/20 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-black disabled:opacity-40"
-                              >
-                                Download arc review
-                              </button>
-                            </div>
-                            <p className="text-[10px] text-black/50 leading-snug">
-	                              The full project data file includes synopsis, saved outline, shot plan, all page beats,
-	                              dialogue, and review notes. For selected pages only, use the Pages batch actions.
-                            </p>
-                            </div>
-                          </details>
-                        </div>
-                        ) : null}
-                        {scriptsWorkspaceStep === 'synopsis' ? (
+                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                         <details className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
                           <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
 	                            Advanced saved-output editor
@@ -11060,9 +9548,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           )}
                           </div>
                         </details>
-                        ) : null}
-                      </>
-                    )}
                   </div>
                 )}
               </div>

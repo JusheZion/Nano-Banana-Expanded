@@ -23,17 +23,16 @@ export type WriterWorkspaceTabId =
  * → imageshop prep (video) → compare (cockpit) → export
  */
 export const WRITER_WORKSPACE_TAB_ORDER: WriterWorkspaceTabId[] = [
-  'dashboard',    // 01 Start — choose series + issue
-  'outline',      // 02 Foundation — production defaults, page target
-  'scripts',      // 03 Author Source + Synopsis Helper
-  'visual_canon', // 04 Visual Canon — image references
-  'lore',         // 05 Story Canon — lore cards
-  'beats',        // 06 Page Beats — panel-level story beats
-  'dialogue',     // 07 Dialogue — scripted speech
-  'arc',          // 08 Story Review — pacing + canon checks
-  'video',        // 09 Imageshop Prep — shot plans
-  'cockpit',      // 10 Compare & Review
-  'export',       // 11 Export — download handoff files
+  'dashboard',    // 01 Start — story context, story settings, status
+  'outline',      // 02 Outline — my outline, AI instructions, generate, pages
+  'visual_canon', // 03 Visual Canon — image references
+  'lore',         // 04 Story Canon — lore cards
+  'beats',        // 05 Page Beats — panel-level story beats
+  'dialogue',     // 06 Dialogue — scripted speech
+  'arc',          // 07 Story Review — pacing + canon checks
+  'video',        // 08 Imageshop Prep — shot plans
+  'cockpit',      // 09 Compare & Review
+  'export',       // 10 Export — download handoff files
 ];
 
 export const WRITER_WORKSPACE_TAB_LABELS: Record<
@@ -46,14 +45,14 @@ export const WRITER_WORKSPACE_TAB_LABELS: Record<
     description: 'Check the active issue, next step, locks, and readiness before generating.',
   },
   outline: {
-    ribbon: 'Foundation',
-    heading: 'Foundation & Outline',
-    description: 'Set the story basics, production defaults, outline, and page target.',
+    ribbon: 'Outline',
+    heading: 'Outline',
+    description: 'Paste your outline, set AI instructions, generate the issue outline, and manage pages.',
   },
   scripts: {
-    ribbon: 'Synopsis Helper',
-    heading: 'Synopsis helper',
-    description: 'Shape author notes and source material before the outline or beats are regenerated.',
+    ribbon: 'My Outline',
+    heading: 'My Outline',
+    description: 'Paste your outline in any format. ARCS reads it when generating the issue outline.',
   },
   visual_canon: {
     ribbon: 'Visual Canon',
