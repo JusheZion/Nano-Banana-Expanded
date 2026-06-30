@@ -75,6 +75,7 @@ import {
   formatDialogueBundleAsText,
   formatOutlineAsMarkdown,
   formatOutlineAsText,
+  parseOutlineText,
 } from '@/portals/writer/writerExportFormats';
 import {
   countFindMatches,
@@ -906,6 +907,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   type ScriptsEditorTab = 'synopsis' | 'outline' | 'beats' | 'dialogue' | 'video';
   const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
   const [outlineEditDraft, setOutlineEditDraft] = useState('');
+  const [outlineEditorMode, setOutlineEditorMode] = useState<'text' | 'json'>('text');
   const [beatsEditDraft, setBeatsEditDraft] = useState('');
   const [beatsEditorMode, setBeatsEditorMode] = useState<'text' | 'json'>('text');
   const [beatPanelIndexDraft, setBeatPanelIndexDraft] = useState('1');
@@ -3866,7 +3868,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setOutlineEditDraft('');
       return;
     }
-    setOutlineEditDraft(JSON.stringify(latestOutline.outline_json, null, 2));
+    setOutlineEditDraft(
+      outlineEditorMode === 'text'
+        ? formatOutlineAsText(latestOutline.outline_json)
+        : JSON.stringify(latestOutline.outline_json, null, 2),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- outlineEditorMode omitted: re-init only on outline change, not on mode toggle (handled by switchOutlineEditorMode).
   }, [latestOutline]);
 
   useEffect(() => {
@@ -3966,16 +3973,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!latestOutline) return;
     if (!guardWriterLock('outline.latest', 'Latest outline')) return;
     setScriptsError(null);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(outlineEditDraft || '{}');
-    } catch {
-      setScriptsError('Outline JSON is invalid.');
-      return;
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      setScriptsError('Outline must be a JSON object.');
-      return;
+    let parsed: Record<string, unknown>;
+    if (outlineEditorMode === 'text') {
+      // Merge the parsed plain-text fields into the existing JSON so any data the
+      // readable view does not surface (extra top-level fields) is preserved.
+      const existing = (latestOutline.outline_json ?? {}) as Record<string, unknown>;
+      parsed = { ...existing, ...parseOutlineText(outlineEditDraft) };
+    } else {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(outlineEditDraft || '{}');
+      } catch {
+        setScriptsError('Outline JSON is invalid.');
+        return;
+      }
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        setScriptsError('Outline must be a JSON object.');
+        return;
+      }
+      parsed = raw as Record<string, unknown>;
     }
     await persistWriterSnapshot({
       key: 'outline.latest',
@@ -3983,7 +3999,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       value: latestOutline.outline_json,
     });
     setScriptsBusy(true);
-    const ok = await updateWriterIssueOutlineJson(latestOutline.id, parsed as Record<string, unknown>);
+    const ok = await updateWriterIssueOutlineJson(latestOutline.id, parsed);
     setScriptsBusy(false);
     if (!ok) {
       setScriptsError('Could not save outline. Check Supabase / permissions.');
@@ -3992,7 +4008,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const rows = await listWriterOutlinesForIssue(latestOutline.issue_id);
     setOutlines(rows);
     pushHistory(`saved edited outline v${latestOutline.version}`);
-  }, [latestOutline, outlineEditDraft, guardWriterLock, persistWriterSnapshot, pushHistory]);
+  }, [latestOutline, outlineEditDraft, outlineEditorMode, guardWriterLock, persistWriterSnapshot, pushHistory]);
+
+  const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
+    if (next === outlineEditorMode) return;
+    if (next === 'json') {
+      const existing = (latestOutline?.outline_json ?? {}) as Record<string, unknown>;
+      const merged = { ...existing, ...parseOutlineText(outlineEditDraft) };
+      setOutlineEditDraft(JSON.stringify(merged, null, 2));
+    } else {
+      try {
+        const obj = JSON.parse(outlineEditDraft.trim() || '{}');
+        setOutlineEditDraft(formatOutlineAsText(obj));
+      } catch {
+        setOutlineEditDraft(formatOutlineAsText(latestOutline?.outline_json));
+      }
+    }
+    setOutlineEditorMode(next);
+  }, [outlineEditorMode, outlineEditDraft, latestOutline]);
 
   const switchBeatsEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === beatsEditorMode) return;
@@ -7136,14 +7169,33 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                              <p className="text-[10px] font-black uppercase tracking-wider text-black/55">
 	                                Direct edit outline
 	                              </p>
-	                              {renderLockButton('outline.latest', 'Latest outline')}
+	                              <div className="flex items-center gap-1.5">
+	                                <div className="flex items-center gap-0.5" role="group" aria-label="Outline editor mode">
+	                                  {(['text', 'json'] as const).map((mode) => (
+	                                    <button
+	                                      key={mode}
+	                                      type="button"
+	                                      onClick={() => switchOutlineEditorMode(mode)}
+	                                      aria-pressed={outlineEditorMode === mode}
+	                                      className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+	                                        outlineEditorMode === mode
+	                                          ? 'bg-black text-white'
+	                                          : 'border border-black/20 bg-white/70 text-black/55 hover:bg-white'
+	                                      }`}
+	                                    >
+	                                      {mode === 'text' ? 'Plain text' : 'JSON'}
+	                                    </button>
+	                                  ))}
+	                                </div>
+	                                {renderLockButton('outline.latest', 'Latest outline')}
+	                              </div>
 	                            </div>
 	                            <textarea
 	                              id="writer-outline-inline-editor"
 	                              value={outlineEditDraft}
 	                              onChange={(e) => setOutlineEditDraft(e.target.value)}
 	                              rows={8}
-	                              className="w-full resize-y rounded-lg border border-black/15 bg-white px-2 py-1.5 font-mono text-xs text-black disabled:opacity-50"
+	                              className={`w-full resize-y rounded-lg border border-black/15 bg-white px-2 py-1.5 ${outlineEditorMode === 'json' ? 'font-mono' : 'font-sans'} text-xs text-black disabled:opacity-50`}
 	                              disabled={!latestOutline}
 	                            />
 	                            <div className="mt-2 flex flex-wrap gap-2">
@@ -7159,7 +7211,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                              <button
 	                                type="button"
 	                                disabled={!latestOutline}
-	                                onClick={() => openSavedOutputEditor('outline')}
+	                                onClick={() => { switchOutlineEditorMode('json'); openSavedOutputEditor('outline'); }}
 	                                className="rounded-md border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black disabled:opacity-45"
 	                              >
 	                                Advanced editor

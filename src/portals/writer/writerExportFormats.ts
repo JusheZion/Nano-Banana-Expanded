@@ -60,6 +60,111 @@ export function formatOutlineAsText(outlineJson: unknown): string {
   return `${lines.join('\n')}\n`;
 }
 
+function splitOnFirst(s: string, sep: string): [string, string] {
+  const i = s.indexOf(sep);
+  if (i < 0) return [s, ''];
+  return [s.slice(0, i), s.slice(i + sep.length)];
+}
+
+function parseOutlineActLine(body: string): { name?: string; goal?: string; summary?: string } {
+  let name = body.trim();
+  let goal = '';
+  let summary = '';
+  const em = body.indexOf(' — ');
+  if (em >= 0) {
+    name = body.slice(0, em).trim();
+    const [g, s] = splitOnFirst(body.slice(em + 3), ': ');
+    goal = g.trim();
+    summary = s.trim();
+  } else {
+    const [n, s] = splitOnFirst(body, ': ');
+    name = n.trim();
+    summary = s.trim();
+  }
+  const act: { name?: string; goal?: string; summary?: string } = {};
+  if (name) act.name = name;
+  if (goal) act.goal = goal;
+  if (summary) act.summary = summary;
+  return act;
+}
+
+function parseOutlineBeatLine(body: string): OutlineBeat {
+  let s = body.trim();
+  let turn = '';
+  const turnMatch = s.match(/\s*\(turn:\s*([^)]*)\)\s*$/i);
+  if (turnMatch) {
+    turn = turnMatch[1].trim();
+    s = s.slice(0, turnMatch.index).trim();
+  }
+  let head = s;
+  let scene = '';
+  let summary = '';
+  const em = s.indexOf(' — ');
+  if (em >= 0) {
+    head = s.slice(0, em).trim();
+    const [sc, su] = splitOnFirst(s.slice(em + 3), ': ');
+    scene = sc.trim();
+    summary = su.trim();
+  } else {
+    const [h, su] = splitOnFirst(s, ': ');
+    head = h.trim();
+    summary = su.trim();
+  }
+  const beat: OutlineBeat = {};
+  const pm = head.match(/Page\s+(\d+)/i);
+  if (pm) beat.page_target = Number(pm[1]);
+  if (scene) beat.scene = scene;
+  if (summary) beat.summary = summary;
+  if (turn) beat.emotional_turn = turn;
+  return beat;
+}
+
+/**
+ * Inverse of {@link formatOutlineAsText}. Parses the readable TITLE/PREMISE/ACTS/
+ * PAGE BEATS format back into outline fields so the plain-text editor can round-trip.
+ * Only returns the fields it recognizes — callers should merge into the existing
+ * outline JSON to preserve any other top-level data.
+ */
+export function parseOutlineText(text: string): OutlineJsonLike {
+  const result: OutlineJsonLike = {};
+  const acts: NonNullable<OutlineJsonLike['acts']> = [];
+  const beats: OutlineBeat[] = [];
+  let section: 'none' | 'acts' | 'beats' = 'none';
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const upper = line.toUpperCase();
+    if (upper.startsWith('TITLE:')) {
+      result.title = line.slice(line.indexOf(':') + 1).trim();
+      section = 'none';
+      continue;
+    }
+    if (upper.startsWith('PREMISE:')) {
+      result.premise = line.slice(line.indexOf(':') + 1).trim();
+      section = 'none';
+      continue;
+    }
+    if (upper === 'ACTS:') {
+      section = 'acts';
+      continue;
+    }
+    if (upper === 'PAGE BEATS:') {
+      section = 'beats';
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      const body = line.replace(/^[-*]\s+/, '');
+      if (section === 'acts') acts.push(parseOutlineActLine(body));
+      else if (section === 'beats') beats.push(parseOutlineBeatLine(body));
+    }
+  }
+
+  if (acts.length) result.acts = acts;
+  if (beats.length) result.page_beats = beats;
+  return result;
+}
+
 export function formatOutlineAsMarkdown(outlineJson: unknown): string {
   const o = asOutlineJsonLike(outlineJson);
   if (!o) return '# Outline\n\n(missing)\n';
