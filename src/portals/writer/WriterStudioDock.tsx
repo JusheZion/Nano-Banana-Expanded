@@ -27,6 +27,9 @@ type Props = {
   onToggleCollapse: () => void;
   /** Full-width bottom dock on narrow phones (vs right sidebar). */
   phoneLayout?: boolean;
+  /** Focused workflow uses the Figma Story Library rail instead of the multi-tool dock. */
+  storyLibraryOnly?: boolean;
+  onAddStory?: () => void;
 };
 
 export const WriterStudioDock: React.FC<Props> = ({
@@ -38,6 +41,8 @@ export const WriterStudioDock: React.FC<Props> = ({
   collapsed,
   onToggleCollapse,
   phoneLayout = false,
+  storyLibraryOnly = false,
+  onAddStory,
 }) => {
   const content =
     activeTabId === 'library' ? library : activeTabId === 'activity' ? activity : help;
@@ -120,10 +125,18 @@ export const WriterStudioDock: React.FC<Props> = ({
 
   return (
     <div
-      className="flex-shrink-0 flex flex-col border-l border-white/30 bg-white/15 backdrop-blur-md w-[min(100%,min(92vw,340px))] min-w-[260px] max-w-[380px] min-h-0 shadow-lg shadow-teal-900/10"
+      className={`flex-shrink-0 flex flex-col border-l border-white/30 bg-white/20 backdrop-blur-md min-h-0 shadow-lg shadow-teal-900/10 ${
+        storyLibraryOnly ? 'w-[280px]' : 'w-[min(100%,min(92vw,280px))] min-w-[260px] max-w-[320px]'
+      }`}
       role="region"
       aria-label="Workshop panels"
     >
+      {storyLibraryOnly ? (
+        <div className="flex min-h-[56px] shrink-0 items-center justify-between border-b border-black/10 px-5">
+          <span className="text-[14px] font-black uppercase tracking-wide text-black">Story Library</span>
+          <button type="button" onClick={onAddStory} disabled={!onAddStory} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-2xl font-light leading-none text-black hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-40" aria-label="Create new series">+</button>
+        </div>
+      ) : (
       <div className="flex border-b border-black/10 shrink-0" style={{ background: WRITERS_GOLD_SLANT }}>
         {DOCK_TABS.map((t) => (
           <Tooltip key={t.id} content={t.label} side="bottom">
@@ -155,6 +168,7 @@ export const WriterStudioDock: React.FC<Props> = ({
           </button>
         </Tooltip>
       </div>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 text-black/80">{content}</div>
     </div>
   );

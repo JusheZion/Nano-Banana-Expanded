@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Circle,
   Edit3,
@@ -1298,7 +1299,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setShotPlans(planRows);
       setSelectedPageId((prev) => {
         if (prev && pageRows.some((p) => p.id === prev)) return prev;
-        return null;
+        return [...pageRows].sort((a, b) => a.page_number - b.page_number)[0]?.id ?? null;
       });
     })();
     return () => {
@@ -2178,7 +2179,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       requestWriterHandoff,
       selectedIssue,
       selectedPage,
-      selectedSeries?.title,
+      selectedSeries,
       selectedSeriesId,
     ],
   );
@@ -3461,7 +3462,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
     }
     return outlineJsonString;
-  }, [latestOutline?.outline_json, outlineJsonString, selectedPage?.page_number]);
+  }, [latestOutline?.outline_json, outlineJsonString, selectedPage]);
   let pageEditLayer: WriterPageEditLayer | null = null;
   if (activeTab === 'beats' || activeTab === 'dialogue') {
     pageEditLayer = activeTab;
@@ -4612,6 +4613,49 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     </div>
   );
 
+  const focusedLibraryPanel = (
+    <div className="flex min-h-0 flex-col gap-3 p-2 text-black">
+      {seriesList.length === 0 ? (
+        <div className="space-y-3 px-2 py-3">
+          <p className="text-xs font-semibold text-black/45">No series active</p>
+          <button type="button" disabled={!supabaseOk || createSeriesBusy} onClick={() => void handleCreateSeries()} className="w-full rounded-lg px-3 py-2 text-xs font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{createSeriesBusy ? 'Creating…' : 'Create first series'}</button>
+        </div>
+      ) : (
+        seriesList.map((series) => {
+          const activeSeries = selectedSeriesId === series.id;
+          return (
+            <div key={series.id} className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!activeSeries) {
+                    setSelectedSeriesId(series.id);
+                    setSelectedIssueId(null);
+                  }
+                }}
+                className={`w-full rounded-lg border px-3 py-3 text-left ${activeSeries ? 'border-amber-600 bg-white/70' : 'border-transparent hover:bg-white/35'}`}
+              >
+                <span className="block truncate text-xs font-black">{series.title || 'Untitled series'}</span>
+                {activeSeries ? <span className="mt-1 block text-[10px] font-semibold text-black/48">{issues.length ? `${issues.length} issue${issues.length === 1 ? '' : 's'}` : 'No issues yet'}</span> : null}
+              </button>
+              {activeSeries ? (
+                <div className="space-y-1 pl-3">
+                  {issues.map((issue) => (
+                    <button key={issue.id} type="button" onClick={() => setSelectedIssueId(issue.id)} className={`w-full rounded-md px-3 py-2 text-left text-xs font-semibold ${selectedIssueId === issue.id ? 'bg-black/10 text-black' : 'text-black/60 hover:bg-white/35'}`}>
+                      #{issue.issue_number}{issue.title ? ` — ${issue.title}` : ''}
+                    </button>
+                  ))}
+                  {issues.length === 0 ? <p className="px-3 py-2 text-xs font-semibold text-black/42">No issues yet</p> : null}
+                  <button type="button" disabled={!supabaseOk || createIssueBusy} onClick={() => void handleAddWriterIssue()} className="px-3 py-2 text-[10px] font-black uppercase tracking-wide text-amber-800 disabled:opacity-45">+ Add issue</button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
   const activityPanel = (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -4772,9 +4816,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     activeTab === 'outline'
       ? outlineWorkspaceStep === 'pages'
         ? 'Pages'
-        : 'Outline'
+        : writerFocusedMode ? 'My Outline' : 'Outline'
+      : activeTab === 'lore'
+        ? activeWorkflowStepId === 'foundation' ? 'Story Foundation' : 'Story Canon'
       : activeTab === 'beats'
-          ? beatsTabLabel
+          ? `Pages & ${beatsTabLabel}`
+          : activeTab === 'video'
+            ? 'Production Branches'
+            : activeTab === 'arc'
+              ? 'Story Review'
+              : activeTab === 'export'
+                ? 'Export Options'
           : activeWorkspaceLabel.heading;
   const workspaceDescription =
     activeTab === 'outline'
@@ -4986,48 +5038,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ) : null}
     </div>
   );
-  const lockedStoryPartCount = Object.values(writerLocks).filter((lock) => lock?.locked).length;
-  const focusedProtectionBar = (
-    <div className="border-b border-black/10 bg-white/40 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-black/45">
-          <ShieldCheck size={13} aria-hidden />
-          {lockedStoryPartCount} protected
-        </span>
-        <button
-          type="button"
-          disabled={!selectedIssueId}
-          onClick={() => {
-            setActiveTab('outline');
-            focusWriterElement('writer-issue-synopsis');
-          }}
-          className="rounded-md border border-black/15 bg-white/85 px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
-        >
-          Edit issue
-        </button>
-        <button
-          type="button"
-          disabled={!selectedPageId}
-          onClick={() => setActiveTab(selectedPage?.beats_json ? 'dialogue' : 'beats')}
-          className="rounded-md border border-black/15 bg-white/85 px-2.5 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
-        >
-          Edit page
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('visual_canon')}
-          className="rounded-md border border-amber-800/25 bg-amber-50 px-2.5 py-1.5 text-[11px] font-black text-black hover:bg-amber-100"
-        >
-          Visual Canon
-        </button>
-        {writerSafetyMessage ? (
-          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-emerald-950">
-            {writerSafetyMessage}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
   const writerPhaseRail = (
     <div className="flex flex-col gap-1">
       {productionStages.map((stage, index) => (
@@ -5081,10 +5091,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     ].includes(stage.id),
   );
 
+  const focusedWorkflowGroups: Array<{ label?: string; stages: WriterProductionStage[] }> = [
+    { stages: focusedWorkflowStages.filter((stage) => stage.id === 'dashboard') },
+    { label: 'Write', stages: focusedWorkflowStages.filter((stage) => ['foundation', 'canon', 'outline'].includes(stage.id)) },
+    { label: 'Build', stages: focusedWorkflowStages.filter((stage) => ['beats', 'dialogue'].includes(stage.id)) },
+    { label: 'Produce', stages: focusedWorkflowStages.filter((stage) => ['visual', 'audit', 'cockpit', 'export'].includes(stage.id)) },
+  ];
+
   const focusedWorkflowRail = (
-    <div className="flex-shrink-0 overflow-x-auto border-b border-white/25 bg-white/25 px-3 py-2 backdrop-blur-md [-webkit-overflow-scrolling:touch]">
-      <div className="flex min-w-max gap-1" aria-label="Simple Writer workflow">
-        {focusedWorkflowStages.map((stage) => (
+    <div className="flex-shrink-0 overflow-x-auto border-b border-white/25 bg-white/25 px-5 py-3 backdrop-blur-md [-webkit-overflow-scrolling:touch] xl:px-8">
+      <div className="flex min-w-max items-center gap-3" aria-label="Simple Writer workflow">
+        {focusedWorkflowGroups.map((group, groupIndex) => (
+          <div key={group.label ?? 'dashboard'} className={`flex items-center gap-1 ${groupIndex > 0 ? 'border-l border-black/20 pl-3' : ''}`}>
+            {group.label ? <span className="mr-1 text-[9px] font-black uppercase tracking-wider text-black/45">{group.label}</span> : null}
+            {group.stages.map((stage) => (
           <Tooltip
             key={stage.id}
             content={`${stage.label}: ${stage.detail}`}
@@ -5093,18 +5113,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <button
               type="button"
               onClick={() => openWriterWorkflowStage(stage)}
-              className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
+              className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-3 py-1 text-[10px] font-black uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
                 stage.current
-                  ? 'border-amber-800/45 bg-amber-100 text-black shadow-sm'
+                  ? 'bg-amber-100 text-black shadow-sm'
                   : stage.done
-                    ? 'border-emerald-700/35 bg-emerald-50 text-emerald-950 hover:bg-white'
-                    : 'border-black/12 bg-white/55 text-black/58 hover:bg-white hover:text-black'
+                    ? 'text-black/75 hover:bg-white/45'
+                    : 'text-black/48 hover:bg-white/40 hover:text-black'
               }`}
             >
               {stage.done ? <CheckCircle2 size={13} aria-hidden /> : null}
-              {stage.label}
+              {stage.id === 'pages' || stage.id === 'beats' ? 'Pages & Beats' : stage.label}
             </button>
           </Tooltip>
+            ))}
+          </div>
         ))}
       </div>
     </div>
@@ -5757,6 +5779,485 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     </div>
   );
 
+  const dashboardEmptyState = (
+    <div className="mx-auto flex min-h-[min(620px,70vh)] w-full max-w-5xl flex-col items-center justify-center gap-8 px-4 py-12 text-center">
+      <div className="space-y-3">
+        <h2 className="font-serif text-4xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
+          Start your story
+        </h2>
+        <p className="text-sm font-semibold text-black/55 sm:text-lg">
+          Create a new series or select an existing one to begin writing.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          disabled={!supabaseOk || createSeriesBusy}
+          onClick={() => void handleCreateSeries()}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-amber-900/25 px-5 py-2.5 text-sm font-black text-black shadow-sm transition hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:translate-y-0 disabled:opacity-45"
+          style={{ background: ACCENT_GOLD_GRADIENT }}
+        >
+          {createSeriesBusy ? 'Creating…' : 'Create New Series'}
+          <ArrowRight size={16} aria-hidden />
+        </button>
+        <button
+          type="button"
+          disabled={seriesList.length === 0}
+          onClick={() => setDockCollapsed(false)}
+          className="min-h-[44px] rounded-full border-2 border-amber-700/55 bg-white/20 px-5 py-2.5 text-sm font-black text-black transition hover:bg-white/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:opacity-45"
+        >
+          Open Existing Series
+        </button>
+      </div>
+      <div className="grid w-full gap-4 pt-6 text-left md:grid-cols-3">
+        {[
+          ['01', 'Build your outline', 'Shape the story foundation and structure.'],
+          ['02', 'Generate beats & dialogue', 'Move page by page from action to script.'],
+          ['03', 'Export to production', 'Prepare the finished issue for the next tool.'],
+        ].map(([number, title, detail]) => (
+          <div
+            key={number}
+            className="border-l-2 border-amber-700/40 bg-white/20 px-5 py-5 backdrop-blur-sm"
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/38">{number}</p>
+            <p className="mt-3 text-sm font-black text-black">{title}</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-black/50">{detail}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const focusedSeriesDashboard = selectedSeries && !selectedIssue ? (
+    <div className="space-y-6">
+      <section className={`${WRITER_GLASS_CARD} grid gap-6 p-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.9fr)]`}>
+        <div>
+          <h3 className="font-serif text-3xl font-semibold text-slate-950">Series Overview</h3>
+          <label className="mt-5 block text-[10px] font-black uppercase tracking-[0.16em] text-black/55" htmlFor="focused-series-logline">
+            Logline
+            <textarea
+              id="focused-series-logline"
+              value={seriesLoglineDraft}
+              onChange={(event) => setSeriesLoglineDraft(event.target.value)}
+              rows={3}
+              className="mt-2 min-h-[74px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-4 text-sm font-medium normal-case leading-relaxed tracking-normal text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+              placeholder="Describe the series premise..."
+            />
+          </label>
+          {contextSaveError ? <p className="mt-3 text-xs font-semibold text-red-800">{contextSaveError}</p> : null}
+          <button
+            type="button"
+            disabled={contextSaveLoading}
+            onClick={async () => {
+              setContextSaveError(null);
+              setContextSaveLoading(true);
+              const ok = await updateWriterSeries(selectedSeries.id, {
+                title: seriesTitleDraft.trim() || null,
+                logline: seriesLoglineDraft.trim() || null,
+              });
+              setContextSaveLoading(false);
+              if (!ok) {
+                setContextSaveError('Could not save story context. Check Supabase connection and tables.');
+                return;
+              }
+              setSeriesList(await listWriterSeries());
+              pushHistory('saved series title & logline');
+            }}
+            className="mt-4 rounded-lg border border-amber-900/25 px-5 py-2.5 text-xs font-black text-black shadow-sm disabled:opacity-45"
+            style={{ background: ACCENT_GOLD_GRADIENT }}
+          >
+            {contextSaveLoading ? 'Saving…' : 'Save story context'}
+          </button>
+        </div>
+        <div className="border-l border-black/15 pl-6">
+          <p className="text-sm font-black text-black">Metadata</p>
+          <dl className="mt-5 space-y-2 text-xs font-semibold text-black/58">
+            <div className="flex gap-2"><dt>Created:</dt><dd>{new Date(selectedSeries.created_at).toLocaleDateString()}</dd></div>
+            <div className="flex gap-2"><dt>Project:</dt><dd>{selectedSeries.genre?.trim() || 'Writers\' Workshop series'}</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section className={`${WRITER_GLASS_CARD} min-h-[210px] p-6`}>
+        <h3 className="font-serif text-2xl font-semibold text-slate-950">Issue Manager</h3>
+        <div className="flex min-h-[130px] flex-col items-center justify-center gap-4 text-center">
+          <p className="text-sm font-semibold text-black/52">No issues yet — create your first issue to start scripting</p>
+          <button
+            type="button"
+            disabled={!supabaseOk || createIssueBusy}
+            onClick={() => void handleAddWriterIssue()}
+            className="rounded-lg border border-amber-900/25 px-5 py-2.5 text-xs font-black text-black shadow-sm disabled:opacity-45"
+            style={{ background: ACCENT_GOLD_GRADIENT }}
+          >
+            {createIssueBusy ? 'Creating…' : `Create Issue #${nextIssueNumber}`}
+          </button>
+        </div>
+      </section>
+
+      <details className="rounded-xl border border-amber-900/20 bg-white/90 px-5 py-4 text-black shadow-sm">
+        <summary className="cursor-pointer text-xs font-black">Story Settings for AI and Exports</summary>
+        <p className="mt-3 text-xs font-semibold leading-relaxed text-black/55">
+          Open Foundation to configure the defaults shared by outlines, beats, dialogue, Imageshop Prep, and exports.
+        </p>
+        <button type="button" onClick={() => setActiveTab('lore')} className="mt-3 text-xs font-black text-amber-800 underline underline-offset-2">
+          Open Foundation settings
+        </button>
+      </details>
+    </div>
+  ) : null;
+
+  const focusedDashboard = selectedSeries && selectedIssue ? (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Outline', value: latestOutline ? 'Ready' : 'Not started', detail: latestOutline ? 'Story structure is ready.' : 'Build the issue structure.', tab: 'outline' as WriterWorkspaceTabId },
+          { label: 'Pages', value: `${sortedPages.length}/${targetPageCount}`, detail: 'Pages created for this issue.', tab: 'beats' as WriterWorkspaceTabId },
+          { label: 'Beats', value: `${pagesWithBeatsCount}/${Math.max(sortedPages.length, targetPageCount)}`, detail: 'Pages with scene beats.', tab: 'beats' as WriterWorkspaceTabId },
+          { label: 'Dialogue', value: `${pagesWithScriptCount}/${Math.max(pagesWithBeatsCount, sortedPages.length, 1)}`, detail: 'Pages with finished dialogue.', tab: 'dialogue' as WriterWorkspaceTabId },
+        ].map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => setActiveTab(item.tab)}
+            className={`${WRITER_GLASS_CARD} min-h-[96px] p-4 text-left transition hover:-translate-y-0.5 hover:bg-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">{item.label}</p>
+            <p className="mt-2 font-serif text-2xl font-semibold text-slate-950">{item.value}</p>
+            <p className="mt-1 text-[11px] font-semibold leading-snug text-black/52">{item.detail}</p>
+          </button>
+        ))}
+      </div>
+
+      <section className={`${WRITER_GLASS_CARD} flex flex-wrap items-center justify-between gap-5 p-6`}>
+        <div className="min-w-0 max-w-2xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Next action</p>
+          <h3 className="mt-2 font-serif text-2xl font-semibold text-slate-950">Keep the story moving</h3>
+          <p className="mt-1 text-sm font-semibold leading-relaxed text-black/58">{quickGenerateNextHint}</p>
+        </div>
+        <button
+          type="button"
+          disabled={quickGenerateDisabled}
+          onClick={() => void quickGenerate()}
+          className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-amber-900/30 px-5 py-2 text-xs font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
+          style={{ background: ACCENT_GOLD_GRADIENT }}
+        >
+          {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
+          {quickGenerateLabel}
+        </button>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className={`${WRITER_GLASS_CARD} flex min-h-[190px] flex-col p-6`}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Story context</p>
+          <h3 className="mt-2 font-serif text-2xl font-semibold text-slate-950">
+            {selectedIssue ? `Issue ${selectedIssue.issue_number}${selectedIssue.title ? `: ${selectedIssue.title}` : ''}` : selectedSeries.title}
+          </h3>
+          <p className="mt-4 line-clamp-4 text-sm font-semibold leading-relaxed text-black/60">
+            {selectedIssue?.synopsis?.trim() || selectedSeries.logline?.trim() || 'Add a synopsis and logline to give every writing tool the same story context.'}
+          </p>
+          <button type="button" onClick={() => setActiveTab('outline')} className="mt-auto self-start rounded-md border border-black/15 bg-white/65 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-black">
+            Edit story context
+          </button>
+        </section>
+
+        <section className={`${WRITER_GLASS_CARD} flex min-h-[190px] flex-col p-6`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Visual Canon</p>
+              <h3 className="mt-2 font-serif text-2xl font-semibold text-slate-950">Keep every image consistent</h3>
+            </div>
+            <Image size={20} className="shrink-0 text-black/45" aria-hidden />
+          </div>
+          <p className="mt-4 text-sm font-semibold leading-relaxed text-black/60">
+            {writerVisualReferences.length} references · {visualCanonCounts.character} characters · {visualCanonCounts.location} locations · {visualCanonCounts.prop} props
+          </p>
+          <button type="button" onClick={() => setActiveTab('visual_canon')} className="mt-auto self-start rounded-md border border-black/15 bg-white/65 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-black">
+            Open Visual Canon
+          </button>
+        </section>
+      </div>
+
+      <section className={`${WRITER_GLASS_CARD} flex flex-wrap items-center justify-between gap-3 px-5 py-4`}>
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Overwrite protection</p>
+          <p className="mt-1 text-xs font-semibold text-black/58">Protect approved writing before asking AI to regenerate it.</p>
+        </div>
+        <button type="button" onClick={() => setActiveTab('outline')} className="rounded-md border border-black/15 bg-white/65 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-black">
+          Choose what AI can replace
+        </button>
+      </section>
+    </div>
+  ) : null;
+
+  const focusedOutline = (
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+      <div className="space-y-4">
+        <section className={`${WRITER_GLASS_CARD} flex min-h-[606px] flex-col p-6`}>
+          <textarea
+            value={authorOutlineText}
+            onChange={(e) => setAuthorOutlineText(e.target.value)}
+            className="min-h-[500px] w-full flex-1 resize-none rounded-lg border border-white/50 bg-white/25 p-5 text-base leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            placeholder="Paste your outline in any format — a list, summary, or rough notes..."
+          />
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-4 text-[11px] font-semibold text-black/60" aria-label="Outline generation preferences">
+              <button type="button" aria-pressed={authorOutlineMode === 'preserve'} onClick={() => setAuthorOutlineMode('preserve')} className="inline-flex items-center gap-2">
+                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${authorOutlineMode === 'preserve' ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${authorOutlineMode === 'preserve' ? 'ml-auto' : ''}`} /></span>
+                Source first
+              </button>
+              <span className="inline-flex items-center gap-2" title={canonSaved?.result ? 'A saved canon check is available' : 'Run Story Review to create a canon check'}>
+                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${canonSaved?.result ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${canonSaved?.result ? 'ml-auto' : ''}`} /></span>
+                Canon checked
+              </span>
+              <button type="button" aria-pressed={authorOutlineMode === 'structure'} onClick={() => setAuthorOutlineMode('structure')} className="inline-flex items-center gap-2">
+                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${authorOutlineMode === 'structure' ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${authorOutlineMode === 'structure' ? 'ml-auto' : ''}`} /></span>
+                AI structures
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" disabled={!supabaseOk || !selectedIssueId || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
+                {outlineGenLoading ? 'Generating…' : 'Generate Outline'}
+              </button>
+              <button type="button" onClick={() => setAuthorOutlineMode('preserve')} className="rounded-lg border-2 border-amber-700/55 bg-white/20 px-5 py-2.5 text-sm font-black text-black">
+                Keep my order
+              </button>
+            </div>
+          </div>
+        </section>
+        <button type="button" onClick={() => setActiveWorkflowOverride('pages')} className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-white/75 px-5 py-4 text-left text-xs font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25">
+          Edit Current Page Review <ArrowRight size={18} aria-hidden />
+        </button>
+      </div>
+      <div className="space-y-6">
+        <section className={`${WRITER_GLASS_CARD} min-h-[230px] p-6`}>
+          <h3 className="font-serif text-2xl font-semibold text-slate-950">Latest Saved Outline</h3>
+          <div className="mt-10 text-center text-sm font-semibold text-black/45">
+            {latestOutline ? <pre className="max-h-32 overflow-hidden whitespace-pre-wrap text-left font-sans">{formatOutlineAsText(latestOutline.outline_json)}</pre> : <p>No outlines for this issue yet.</p>}
+          </div>
+          <div className="mt-5 flex justify-center gap-4 text-xs font-bold text-black/50">
+            <button type="button" disabled={!latestOutline} onClick={() => openSavedOutputEditor('outline')} className="disabled:opacity-35">Edit outline</button>
+            <button type="button" disabled={!latestOutline} onClick={() => latestOutline && downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json)} className="disabled:opacity-35">Download outline</button>
+          </div>
+        </section>
+        <section className={`${WRITER_GLASS_CARD} p-6`}>
+          <h3 className="font-serif text-2xl font-semibold text-slate-950">What This Affects</h3>
+          <div className="mt-5 space-y-4 text-sm font-medium text-black/72">
+            <p>Determines final pacing and target page count</p>
+            <p>Directly structures beat generation</p>
+            <p>Maintains pacing tension across visual breaks</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+
+  const focusedPagesAndBeats = (
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <aside className={`${WRITER_GLASS_CARD} flex h-[720px] flex-col overflow-hidden`} aria-label="Issue pages">
+        <div className="flex items-center justify-between border-b border-black/10 p-5">
+          <h3 className="font-serif text-xl font-semibold text-slate-950">Target Pages: {targetPageCount}</h3>
+          <button type="button" disabled={!supabaseOk || !selectedIssueId || syncPagesBusy} onClick={() => void runSyncPagesToTarget()} className="rounded-md px-3 py-1.5 text-[10px] font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Sync</button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {sortedPages.map((page) => {
+            const active = page.id === selectedPageId;
+            const hasBeats = pageRowHasPanelBeats(page);
+            return (
+              <button key={page.id} type="button" onClick={() => setSelectedPageId(page.id)} className={`flex w-full items-center justify-between px-5 py-4 text-left text-sm font-black transition ${active ? 'text-black shadow-inner' : 'text-black/75 hover:bg-white/35'}`} style={active ? { background: ACCENT_GOLD_GRADIENT } : undefined}>
+                Page {page.page_number}
+                <span className="rounded px-2 py-1 text-[9px] font-black" style={{ background: hasBeats ? 'rgba(255,255,255,.45)' : 'rgba(0,0,0,.06)' }}>{hasBeats ? 'Has Beats' : 'Empty'}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="border-t border-black/10 p-5">
+          <button type="button" disabled={!supabaseOk || !selectedIssueId || syncPagesBusy} onClick={() => void runSyncPagesToTarget()} className="w-full rounded-lg border-2 border-amber-700/55 bg-white/25 px-4 py-2 text-xs font-black text-black disabled:opacity-45">Create missing pages</button>
+        </div>
+      </aside>
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <h3 className="font-serif text-2xl font-semibold text-slate-950">{selectedPage ? `Page ${selectedPage.page_number} — Beats` : 'Select a page'}</h3>
+          <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
+        </div>
+        <label className="mt-6 inline-flex items-center gap-3 text-sm font-semibold text-black/72"><input type="checkbox" checked={beatsSkipExisting} onChange={(e) => setBeatsSkipExisting(e.target.checked)} /> Skip existing beats</label>
+        <div className="mt-7">
+          <p className="text-[10px] font-black uppercase tracking-wider text-black/50">Beats Preview</p>
+          {selectedPage?.beats_json ? (
+            <pre className="mt-4 min-h-[180px] whitespace-pre-wrap rounded-lg bg-white/90 p-4 font-sans text-sm leading-relaxed text-black">{formatBeatsBundleAsText([{ page_number: selectedPage.page_number, beats_json: selectedPage.beats_json }])}</pre>
+          ) : (
+            <div className="mt-4 rounded-lg border border-dashed border-black/15 bg-white/30 px-5 py-12 text-center text-sm font-semibold text-black/45">No beats yet for this page.</div>
+          )}
+        </div>
+        <label className="mt-6 block text-[10px] font-black uppercase tracking-wider text-black/50">Director Notes (Optional)
+          <textarea value={beatsDirectorNotesDraft} onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)} onBlur={() => void persistWriterDrafts({ beats_director_notes: beatsDirectorNotesDraft })} className="mt-2 min-h-[50px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-3 text-sm font-medium normal-case tracking-normal text-black" placeholder="Add visual cues or atmospheric direction..." />
+        </label>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border border-black/10 bg-white/10 p-4">
+          <div className="flex gap-4 text-xs font-bold text-black/55">
+            <button type="button" disabled={!selectedPage?.beats_json} onClick={() => selectedPage?.beats_json && downloadJsonFile(`writer-beats-page-${selectedPage.page_number}.json`, selectedPage.beats_json)}>Download beats</button>
+            <button type="button" disabled={!selectedPage?.beats_json} onClick={() => void clearBeatsForSelectedPage()} className="text-red-600">Clear beats</button>
+          </div>
+          <button type="button" disabled={!selectedPageId || imageWorkshopBusy} onClick={() => void openImageWorkshopFromWriter('page')} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Send page to Imageshop <ArrowRight size={16} className="ml-2 inline" aria-hidden /></button>
+        </div>
+      </section>
+    </div>
+  );
+
+  const focusedDialogue = (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-serif text-2xl font-semibold text-slate-950">{selectedPage ? `Page ${selectedPage.page_number} — Dialogue` : 'Select a page'}</h3>
+            <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-black/65">Style:
+              <select value={dialogueStyle} onChange={(e) => setDialogueStyle(e.target.value as 'comic_script' | 'screenplay_light')} className="bg-transparent font-black text-black focus-visible:outline-none"><option value="comic_script">Comic Script</option><option value="screenplay_light">Screenplay (light)</option></select>
+            </label>
+          </div>
+          <button type="button" disabled={!supabaseOk || !selectedPageId || dialogueLoading || libraryPagesBusy} onClick={() => void runSelectedPageDialogueGeneration()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{dialogueLoading ? 'Drafting…' : 'Draft Dialogue ✨'}</button>
+        </div>
+        <div className="mt-6 min-h-[420px] rounded-lg bg-white/90 p-6 text-sm leading-relaxed text-black shadow-inner">
+          {selectedPage?.script_text?.trim() ? <pre className="whitespace-pre-wrap font-sans">{selectedPage.script_text}</pre> : <p className="pt-28 text-center font-semibold text-black/40">No dialogue has been drafted for this page.</p>}
+        </div>
+        <div className="mt-5 flex gap-5 text-xs font-bold text-black/55">
+          <button type="button" disabled={!selectedPage?.script_text?.trim()} onClick={() => selectedPage?.script_text && downloadTextFile(`writer-dialogue-page-${selectedPage.page_number}.txt`, selectedPage.script_text, 'text/plain;charset=utf-8')}>Download dialogue (this page)</button>
+          <button type="button" disabled={!selectedPage?.script_text?.trim()} onClick={() => void clearDialogueForSelectedPage()} className="text-red-600">Clear dialogue</button>
+        </div>
+      </section>
+      <button type="button" onClick={() => setActiveWorkflowOverride('pages')} className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-white/75 px-5 py-4 text-left text-xs font-black text-black hover:bg-white">Edit Current Page Review <ArrowRight size={18} aria-hidden /></button>
+    </div>
+  );
+
+  const focusedImageshopPrep = (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between"><h3 className="font-serif text-3xl font-semibold text-slate-950">Production Branches</h3><span className="rounded bg-white/25 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black/55">Branch-ready</span></div>
+        {[
+          { title: 'Imageshop Prep', detail: selectedPage?.beats_json ? `Page ${selectedPage.page_number} is ready for visual planning` : 'Generate page beats before Imageshop Prep', action: 'Open Imageshop', click: () => void openImageWorkshopFromWriter(latestShotPlan ? 'shot-plan' : 'page') },
+          { title: 'Dialogue', detail: selectedPage?.script_text?.trim() ? 'Dialogue is ready' : 'Create pages before dialogue production', action: 'Open Dialogue', click: () => setActiveTab('dialogue') },
+          { title: 'Exports', detail: 'Download the current production package', action: 'Open Exports', click: () => setActiveTab('export') },
+        ].map((branch) => <section key={branch.title} className={`${WRITER_GLASS_CARD} flex items-center justify-between gap-4 p-6`}><div><h4 className="font-serif text-xl font-semibold text-slate-950">{branch.title}</h4><p className="mt-1 text-sm font-medium text-black/55">{branch.detail}</p></div><button type="button" onClick={branch.click} className="shrink-0 text-xs font-black text-amber-800 underline underline-offset-2">{branch.action}</button></section>)}
+      </div>
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <h3 className="font-serif text-2xl font-semibold text-slate-950">Send to</h3>
+        <div className="mt-5 space-y-3">
+          {[
+            ['Send Selected Page', Boolean(selectedPage?.beats_json), () => void openImageWorkshopFromWriter('page')],
+            ['Send Shot Plan', Boolean(latestShotPlan), () => void openImageWorkshopFromWriter('shot-plan')],
+            ['Send Outline', Boolean(latestOutline), () => void openImageWorkshopFromWriter('outline')],
+          ].map(([label, enabled, click], index) => <button key={String(label)} type="button" disabled={!enabled || imageWorkshopBusy} onClick={click as () => void} className={`w-full rounded-lg px-4 py-3 text-left text-xs font-black text-black disabled:opacity-40 ${index === 0 ? '' : 'border border-black/10 bg-white/15'}`} style={index === 0 ? { background: ACCENT_GOLD_GRADIENT } : undefined}>{String(label)}</button>)}
+        </div>
+        <label className="mt-6 block text-[10px] font-black uppercase tracking-wider text-black/50">Creative Brief (Optional)<textarea value={shotsBrief} onChange={(e) => setShotsBrief(e.target.value)} onBlur={() => void persistWriterDrafts({ visual_creative_brief: shotsBrief })} className="mt-2 min-h-[160px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-4 text-sm font-medium normal-case tracking-normal text-black" placeholder="Include instructions for the illustrator..." /></label>
+        <button type="button" disabled={!supabaseOk || !selectedIssueId || shotsLoading} onClick={() => void quickGenerate()} className="mt-5 rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{shotsLoading ? 'Planning…' : 'Generate Shot Plan'}</button>
+      </section>
+    </div>
+  );
+
+  const focusedStoryReview = (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <h3 className="font-serif text-2xl font-semibold text-slate-950">Batch ARC Tools</h3>
+        <ul className="mt-5 space-y-3">
+          {sortedIssuesForArc.map((issue) => (
+            <li key={issue.id} className="flex items-center gap-3 rounded-lg bg-white/90 px-4 py-3 text-sm font-black text-black">
+              <input
+                type="checkbox"
+                id={`focused-arc-${issue.id}`}
+                checked={arcSelectedIssueIds.includes(issue.id)}
+                onChange={() => setArcSelectedIssueIds((current) => current.includes(issue.id) ? current.filter((id) => id !== issue.id) : [...current, issue.id])}
+                disabled={!supabaseOk || arcBatchBusy}
+              />
+              <label htmlFor={`focused-arc-${issue.id}`} className="min-w-0 flex-1 cursor-pointer">#{issue.issue_number}{issue.title ? ` — ${issue.title}` : ''}</label>
+              <button type="button" onClick={() => setSelectedIssueId(issue.id)} className="text-xs text-amber-800 underline underline-offset-2">Library</button>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex gap-4 text-xs font-bold text-black/55">
+            <button type="button" disabled={!supabaseOk || arcBatchBusy} onClick={() => setArcSelectedIssueIds(sortedIssuesForArc.map((issue) => issue.id))}>Select all</button>
+            <button type="button" disabled={!supabaseOk || arcBatchBusy} onClick={() => setArcSelectedIssueIds([])}>Clear</button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={!supabaseOk || arcBatchIssueIdsOrdered.length === 0 || arcBatchBusy || pacingLoading || canonLoading} onClick={() => void runArcToolBatch('pacing_review')} className="rounded-lg border-2 border-amber-700/70 bg-white/25 px-5 py-2.5 text-xs font-black text-amber-900 disabled:opacity-45">Run pacing on selected ({arcBatchIssueIdsOrdered.length})</button>
+            <button type="button" disabled={!supabaseOk || arcBatchIssueIdsOrdered.length === 0 || arcBatchBusy || pacingLoading || canonLoading} onClick={() => void runArcToolBatch('canon_check')} className="rounded-lg border-2 border-amber-700/70 bg-white/25 px-5 py-2.5 text-xs font-black text-amber-900 disabled:opacity-45">Run canon on selected ({arcBatchIssueIdsOrdered.length})</button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        {[{
+          title: 'Pacing Review',
+          saved: pacingSaved,
+          loading: pacingLoading,
+          action: runPacingFromRibbon,
+          button: 'Run pacing review',
+        }, {
+          title: 'Canon Check',
+          saved: canonSaved,
+          loading: canonLoading,
+          action: runCanonFromRibbon,
+          button: 'Run canon check',
+        }].map((review) => (
+          <section key={review.title} className={`${WRITER_GLASS_CARD} p-6`}>
+            <h3 className="font-serif text-2xl font-semibold text-slate-950">{review.title}</h3>
+            <div className="mt-5 min-h-[150px] rounded-lg bg-white/90 p-5 text-sm text-black">
+              {review.saved?.result ? <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">{JSON.stringify(review.saved.result, null, 2)}</pre> : <div className="flex min-h-[110px] flex-col items-center justify-center gap-4 text-center"><p className="font-semibold text-black/42">No {review.title.toLowerCase()} results available.</p><button type="button" disabled={!selectedIssueId || review.loading} onClick={() => void review.action()} className="rounded-lg px-5 py-2.5 text-xs font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{review.loading ? 'Running…' : review.button}</button></div>}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <h3 className="font-serif text-2xl font-semibold text-slate-950">Readiness Summary</h3>
+        <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
+          {[
+            ['Foundation', Boolean(selectedSeries)],
+            ['Outline', Boolean(latestOutline)],
+            ['Dialogue', pagesWithScriptCount > 0],
+            ['Canon', Boolean(canonSaved?.result)],
+          ].map(([label, ready]) => <div key={String(label)}><dt className="text-[10px] font-black uppercase tracking-wide text-black/45">{String(label)}</dt><dd className="mt-1 text-sm font-black text-black"><span className={`mr-2 inline-block h-2 w-2 rounded-full ${ready ? 'bg-emerald-500' : 'bg-amber-400'}`} />{ready ? 'OK' : 'PENDING'}</dd></div>)}
+        </dl>
+      </section>
+    </div>
+  );
+
+  const focusedExport = (
+    <div className="mx-auto max-w-6xl space-y-7">
+      <section className={`${WRITER_GLASS_CARD} flex flex-wrap items-center justify-between gap-4 p-6`}>
+        <div>
+          <h3 className="font-serif text-xl font-semibold text-slate-950">Preferred Export: {preferredWriterExport.label}</h3>
+          <p className="mt-1 text-sm font-medium text-black/55">Change this anytime in Story Settings</p>
+        </div>
+        <button type="button" disabled={!selectedIssueId} onClick={() => downloadPreferredWriterExport()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
+      </section>
+
+      <section>
+        <h3 className="font-serif text-3xl font-semibold text-slate-950">Export Options</h3>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:max-w-3xl">
+          {[
+            { title: 'Full Project Data', ext: '.json', detail: 'Complete backup including metadata, lore, and history.', enabled: Boolean(selectedIssueId), action: () => downloadJsonFile('writer-issue-pack.json', issuePackObject) },
+            { title: 'Outline', ext: '.txt', detail: 'A plain text version of your latest story outline.', enabled: Boolean(latestOutline), action: () => latestOutline && downloadTextFile(`writer-outline-v${latestOutline.version}.txt`, formatOutlineAsText(latestOutline.outline_json), 'text/plain;charset=utf-8') },
+            { title: 'Script', ext: '.md', detail: 'Formatted markdown script for dialogue and panels.', enabled: Boolean(selectedIssueId), action: () => downloadIssuePackMarkdown() },
+            { title: 'Shot Plan', ext: '.csv', detail: 'Spreadsheet for production handoff to illustrators.', enabled: Boolean(latestShotPlan), action: () => latestShotPlan && downloadTextFile(`writer-shot-plan-v${latestShotPlan.version}.csv`, shotPlanJsonToCsv(latestShotPlan.shot_plan_json), 'text/csv;charset=utf-8') },
+            { title: 'Guided Comics Package', ext: '.json', detail: 'Structured handoff ready for the Comic Creator portal.', enabled: sortedPages.length > 0, action: () => downloadGuidedComicsHandoff() },
+          ].map((option) => (
+            <article key={option.title} className={`${WRITER_GLASS_CARD} flex min-h-[220px] flex-col p-6`}>
+              <h4 className="font-serif text-xl font-semibold text-slate-950">{option.title}</h4>
+              <p className="mt-1 text-xs font-black text-amber-700">{option.ext}</p>
+              <p className="mt-5 text-sm font-medium leading-relaxed text-black/60">{option.detail}</p>
+              <button type="button" disabled={!option.enabled} onClick={option.action} className="mt-auto self-start rounded-lg border-2 border-amber-700/65 bg-white/20 px-5 py-2 text-xs font-black text-amber-900 disabled:opacity-40">Download</button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={`${WRITER_GLASS_CARD} p-6`}>
+        <h3 className="font-serif text-2xl font-semibold text-slate-950">Export History</h3>
+        <div className="mt-5 rounded-lg bg-white/70 px-5 py-8 text-center text-sm font-semibold text-black/45">
+          Downloads are created locally and are not retained by ARCS. Use the export options above to create the latest package.
+        </div>
+      </section>
+    </div>
+  );
+
   return (
     <div
       className="flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
@@ -5766,12 +6267,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         className="flex-shrink-0 border-b border-black/10"
         style={{ background: WRITERS_GOLD_SLANT }}
       >
-        <div className="grid gap-2 px-3 py-2 lg:grid-cols-[minmax(240px,1.1fr)_minmax(360px,1.5fr)_minmax(220px,auto)] lg:items-center">
+        <div className="grid gap-3 px-5 py-3 lg:grid-cols-[minmax(260px,1fr)_minmax(320px,auto)_auto] lg:items-center xl:px-8">
           <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-black/45">
-              Narrative Production System
-            </p>
-            <h1 className="truncate text-lg font-black tracking-tight" style={titleTextStyle}>
+            <h1 className="truncate font-serif text-2xl font-semibold tracking-tight" style={titleTextStyle}>
               Writers&apos; Workshop
             </h1>
             <p className="mt-0.5 truncate text-[11px] font-semibold text-black/55">
@@ -5781,21 +6279,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </p>
           </div>
 
-          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-8">
+          <div className="grid grid-cols-4 gap-3">
             {[
               { label: 'Done',   value: `${completedStageCount}/${productionStages.length}`, title: 'Completed workflow stages' },
               { label: 'Pages',  value: sortedPages.length || targetPageCount, title: 'Total pages' },
-              { label: beatsTabLabel === 'Page Beats' ? 'Beats' : beatsTabLabel,  value: pagesWithBeatsCount, title: 'Pages with beats generated' },
-              { label: 'Script', value: pagesWithScriptCount, title: 'Pages with dialogue scripted' },
+              { label: productionDefaultsDraft.mediumType === 'comic' ? 'Panels' : beatsTabLabel, value: pagesWithBeatsCount, title: 'Pages with beats generated' },
               { label: 'Lore',   value: loreCards.length, title: 'Lore cards in story canon' },
-              { label: 'Shots',  value: latestShotPlan ? 1 : 0, title: 'Shot plan ready' },
-              { label: 'Review', value: reviewReady ? 1 : 0, title: 'Story review complete' },
-              { label: 'Stage',  value: activeStage?.label ?? workspaceHeading, title: 'Current workflow stage' },
             ].map((item) => (
               <div
                 key={item.label}
                 title={item.title}
-                className="min-w-0 border-l border-black/15 bg-white/30 px-2 py-1 text-black/75 cursor-default"
+                className="min-w-[58px] px-2 py-1 text-black/75 cursor-default"
               >
                 <p className="truncate text-[8px] font-black uppercase tracking-wider text-black/42">{item.label}</p>
                 <p className="truncate text-[12px] font-black leading-tight text-black">{item.value}</p>
@@ -5804,12 +6298,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           </div>
 
           <div className="flex min-w-0 items-center gap-2 lg:justify-end">
-            <div className="hidden min-w-0 text-right lg:block">
+            <div className={`hidden min-w-0 text-right lg:block ${writerFocusedMode ? 'lg:hidden' : ''}`}>
               <p className="truncate text-[10px] font-bold uppercase tracking-wide text-black/45">Next action</p>
               <p className="max-w-[280px] text-[11px] font-semibold text-black/65 leading-snug line-clamp-2">{quickGenerateNextHint}</p>
             </div>
             <div className="inline-flex rounded-md border border-black/15 bg-white/35 p-0.5">
-              {(['Simple Workflow', 'Advanced Tools'] as const).map((mode) => {
+              {(['Simple Workflow', 'Advanced Tools'] as const).filter((mode) => !writerFocusedMode || mode === 'Simple Workflow').map((mode) => {
                 const active = writerFocusedMode ? mode === 'Simple Workflow' : mode === 'Advanced Tools';
                 return (
                   <button
@@ -5871,7 +6365,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         </div>
       ) : null}
 
-      {writerSelectionStrip}
+      {!writerFocusedMode ? writerSelectionStrip : null}
 
       {!writerFocusedMode ? (
         <WriterRibbon
@@ -5917,7 +6411,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         />
       ) : null}
 
-      {writerFocusedMode ? focusedProtectionBar : editProtectionBar}
+      {!writerFocusedMode ? editProtectionBar : null}
 
       {writerFocusedMode ? focusedWorkflowRail : null}
 
@@ -5986,24 +6480,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
             <div
               className={`flex-1 min-h-0 overflow-y-scroll overscroll-y-contain scrollbar-gutter-stable custom-scrollbar min-w-0 ${
-                isPhone ? 'p-3 pb-28' : 'p-4 pb-10'
+                isPhone ? 'p-3 pb-28' : writerFocusedMode ? 'p-6 pb-10 xl:p-10' : 'p-6 pb-10 xl:p-8'
               }`}
             >
               <div className="w-full min-w-0 space-y-4 text-slate-900/90">
-                <div className="border-b border-black/10 pb-3">
+                <div className={writerFocusedMode ? '' : 'border-b border-black/10 pb-3'}>
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-black/42">
+                      <p className={`${writerFocusedMode ? 'hidden' : ''} text-[9px] font-black uppercase tracking-[0.22em] text-black/42`}>
                         {activeStage?.eyebrow ?? 'Workspace'} · {activeStage?.detail ?? 'Focus mode'}
                       </p>
-                      <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">
+                      <h2 className={`${writerFocusedMode && activeTab !== 'lore' && activeTab !== 'outline' ? 'hidden' : ''} mt-1 font-serif text-3xl font-semibold tracking-tight text-slate-950 xl:text-4xl`}>
                         {workspaceHeading}
                       </h2>
-                      <p className="mt-1 max-w-2xl text-xs font-semibold leading-snug text-black/58">
+                      <p className={`${writerFocusedMode ? 'hidden' : ''} mt-1 max-w-2xl text-xs font-semibold leading-snug text-black/58`}>
                         {workspaceDescription}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
+                    <div className={`${writerFocusedMode ? 'hidden' : ''} flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55`}>
                       <span className="border-l border-black/15 bg-white/35 px-2 py-1">
                         {selectedIssue ? `Issue ${selectedIssue.issue_number}` : 'No issue'}
                       </span>
@@ -6016,36 +6510,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                   </div>
                 </div>
-                {writerFocusedMode ? (
-                  <div className="rounded-xl border border-amber-800/20 bg-amber-50/70 px-3 py-2">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
-                          What should I do next?
-                        </p>
-                        <p className="mt-0.5 text-[11px] font-semibold leading-snug text-black/65">
-                          {quickGenerateNextHint}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={quickGenerateDisabled}
-                        onClick={() => void quickGenerate()}
-                        className="inline-flex min-h-[32px] shrink-0 items-center gap-2 rounded-md border border-amber-900/30 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black shadow-sm transition hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
-                        style={{ background: ACCENT_GOLD_GRADIENT }}
-                      >
-                        {quickGenerateLoading ? <Loader2 size={13} className="animate-spin" aria-hidden /> : null}
-                        {quickGenerateLabel}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
                 {imageWorkshopError ? (
                   <p className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">
                     {imageWorkshopError}
                   </p>
                 ) : null}
-                {activeTab === 'dashboard' && (
+                {activeTab === 'dashboard' && !selectedSeries ? dashboardEmptyState : null}
+                {activeTab === 'dashboard' && selectedSeries && !selectedIssue && writerFocusedMode ? focusedSeriesDashboard : null}
+                {activeTab === 'dashboard' && selectedSeries && selectedIssue && writerFocusedMode ? focusedDashboard : null}
+                {activeTab === 'dashboard' && selectedSeries && !writerFocusedMode && (
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
                     <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -6777,7 +7250,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     ) : null}
                   </div>
                 )}
-                {activeTab === 'outline' && (
+                {activeTab === 'outline' && writerFocusedMode ? focusedOutline : null}
+                {activeTab === 'outline' && !writerFocusedMode && (
                   <div
                     className={`flex min-w-0 flex-col gap-4 xl:grid xl:items-start xl:gap-4 ${
                       outlineWorkspaceStep === 'outline'
@@ -7254,8 +7728,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   </div>
                 )}
                 {activeTab === 'lore' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-4">
+                    <div className={`${writerFocusedMode ? 'hidden' : 'flex'} flex-wrap items-center justify-between gap-2`}>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/55">
                         Canon gate
                       </p>
@@ -7265,12 +7739,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <p className="text-xs text-black/50">{WRITER_UI_TIPS.seriesLibrary}</p>
                     ) : (
                       <>
-                        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-                          <div className="border-l-2 border-amber-700 bg-amber-50/70 px-3 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-950/65">
+                        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+                          <div className="rounded-xl border border-white/35 bg-white/25 p-6">
+                            <p className="font-serif text-2xl font-semibold text-black">
                               Pre-lore intake
                             </p>
-                            <p className="mt-1 text-xs leading-snug text-black/70">
+                            <p className="mt-5 rounded-lg border border-amber-700/20 bg-white/10 p-4 text-sm leading-relaxed text-black/75">
                               Add canonical descriptions before regenerating outline or page beats. If a school,
                               device, species, character appearance, faction, or rule is missing here, the model can
                               invent it. Included canon cards are sent to <strong>Generate outline</strong> and{' '}
@@ -7296,15 +7770,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               </button>
                             </div>
                           </div>
-                          <div className="border-l-2 border-emerald-600 bg-emerald-50/60 px-3 py-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-950/65">
+                          <div className="rounded-xl border border-white/35 bg-white/25 p-6">
+                            <p className="font-serif text-2xl font-semibold text-black">
                               Generation contract
                             </p>
-                            <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px] font-bold uppercase tracking-wide text-black/55">
-                              <span className="bg-white/60 px-2 py-1">Outline uses canon</span>
-                              <span className="bg-white/60 px-2 py-1">Beats use canon</span>
-                              <span className="bg-white/60 px-2 py-1">No video assumptions</span>
-                              <span className="bg-white/60 px-2 py-1">Visual details explicit</span>
+                            <div className="mt-5 grid gap-4 text-sm font-semibold text-black/75">
+                              {['Outline uses canon', 'Beats use canon', 'No video assumptions', 'Visual details explicit'].map((label) => (
+                                <span key={label} className="flex items-center justify-between gap-4">
+                                  {label}
+                                  <span className="relative h-6 w-11 rounded-full bg-amber-500/90 shadow-inner" aria-hidden>
+                                    <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white shadow" />
+                                  </span>
+                                </span>
+                              ))}
                             </div>
                             <p className="mt-2 text-[11px] leading-snug text-black/58">
                               Foundation defaults now travel with generation so comic medium, panel density,
@@ -7347,8 +7825,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </pre>
                           </div>
                         ) : null}
-                        <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">
+                        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
+                        <div className="rounded-xl border border-white/35 bg-white/25 p-6 space-y-5">
+                          <p className="font-serif text-2xl font-semibold text-black">
                             {loreEditingId ? 'Edit card' : 'New card'}
                           </p>
                           <div className="grid gap-3 sm:grid-cols-2">
@@ -7471,6 +7950,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             ) : null}
                           </div>
                         </div>
+                        <div className="rounded-xl border border-white/35 bg-white/25 p-6">
+                          <p className="font-serif text-2xl font-semibold text-black">Synchronized Defaults</p>
+                          <p className="mt-5 text-sm leading-relaxed text-black/55">
+                            These settings keep generated outlines, beats, dialogue, and production handoffs anchored to the selected story canon and production defaults.
+                          </p>
+                        </div>
+                        </div>
+                        {!writerFocusedMode ? (
+                          <>
                         <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
                           <button
                             type="button"
@@ -7850,12 +8338,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </ul>
                           )}
                         </div>
+                          </>
+                        ) : null}
                       </>
                     )}
                   </div>
                 )}
-                {activeTab === 'beats' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4`}>
+                {activeTab === 'beats' && writerFocusedMode ? focusedPagesAndBeats : null}
+                {activeTab === 'beats' && !writerFocusedMode && (
+                  <div className="border-l-2 border-black/15 bg-white/20 p-4 backdrop-blur-sm">
                     <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] xl:items-start xl:gap-4">
                       <div className="min-w-0 space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -8256,8 +8747,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                   </div>
                 )}
-                {activeTab === 'dialogue' && (
-                  <div className="space-y-4">
+                {activeTab === 'dialogue' && writerFocusedMode ? focusedDialogue : null}
+                {activeTab === 'dialogue' && !writerFocusedMode && (
+                  <div className="mx-auto w-full max-w-4xl space-y-4">
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="dialogueTab" label="About dialogue drafting" />
                     </div>
@@ -8401,8 +8893,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                   </div>
                 )}
-                {activeTab === 'arc' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-6`}>
+                {activeTab === 'arc' && writerFocusedMode ? focusedStoryReview : null}
+                {activeTab === 'arc' && !writerFocusedMode && (
+                  <div className={`space-y-6 ${writerFocusedMode ? 'mx-auto max-w-6xl' : ''}`}>
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="arcTab" label="About pacing and canon" />
                     </div>
@@ -8945,8 +9438,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     ) : null}
                   </div>
                 )}
-                {activeTab === 'video' && (
-                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
+                {activeTab === 'video' && writerFocusedMode ? focusedImageshopPrep : null}
+                {activeTab === 'video' && !writerFocusedMode && (
+                  <div className="space-y-4">
                     <div className="flex items-center justify-end">
                       <WriterSectionTip tipKey="videoTab" label="About shot plans and video" />
                     </div>
@@ -9283,8 +9777,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                     </div>
                   </div>
                 )}
-	                {activeTab === 'export' && (
-	                  <div className={`${WRITER_GLASS_CARD} p-4 space-y-4`}>
+	                {activeTab === 'export' && writerFocusedMode ? focusedExport : null}
+	                {activeTab === 'export' && !writerFocusedMode && (
+	                  <div className={`space-y-5 ${writerFocusedMode ? 'mx-auto max-w-6xl' : ''}`}>
+	                    {writerFocusedMode ? (
+	                      <section className={`${WRITER_GLASS_CARD} flex flex-wrap items-center justify-between gap-4 p-6`}>
+	                        <div>
+	                          <h3 className="font-serif text-xl font-semibold text-slate-950">Preferred Export: {preferredWriterExport.label}</h3>
+	                          <p className="mt-1 text-sm font-medium text-black/55">Change this anytime in Story Settings</p>
+	                        </div>
+	                        <button type="button" disabled={!selectedIssueId} onClick={() => downloadPreferredWriterExport()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
+	                      </section>
+	                    ) : null}
 	                    <div className="flex flex-wrap items-start justify-between gap-3">
 	                      <div>
 	                        <p className="text-lg font-black text-black">Export issue</p>
@@ -9296,7 +9800,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                        Preferred: {preferredWriterExport.label}
 	                      </span>
 	                    </div>
-	                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+	                    <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
 	                      <button
 	                        type="button"
 	                        disabled={!selectedIssueId}
@@ -9642,12 +10146,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <WriterStudioDock
           activeTabId={dockTab}
           onTabChange={setDockTab}
-          library={libraryPanel}
+          library={writerFocusedMode && !isPhone ? focusedLibraryPanel : libraryPanel}
           activity={activityPanel}
           help={helpPanel}
-          collapsed={dockCollapsed}
-          onToggleCollapse={() => setDockCollapsed((c) => !c)}
+          collapsed={writerFocusedMode && !isPhone ? false : dockCollapsed}
+          onToggleCollapse={() => {
+            if (!writerFocusedMode || isPhone) setDockCollapsed((c) => !c);
+          }}
           phoneLayout={isPhone}
+          storyLibraryOnly={writerFocusedMode && !isPhone}
+          onAddStory={writerFocusedMode && !isPhone && supabaseOk && !createSeriesBusy ? () => void handleCreateSeries() : undefined}
         />
       </div>
     </div>

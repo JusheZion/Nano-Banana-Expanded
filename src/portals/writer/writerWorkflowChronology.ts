@@ -45,7 +45,7 @@ export type WriterWorkflowContext = {
 export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
   { id: 'dashboard', label: 'Dashboard', tab: 'dashboard', eyebrow: 'Start' },
   { id: 'library', label: 'Choose Story', tab: 'dashboard', eyebrow: 'Select' },
-  { id: 'foundation', label: 'Foundation', tab: 'dashboard', eyebrow: 'Setup' },
+  { id: 'foundation', label: 'Foundation', tab: 'lore', eyebrow: 'Setup' },
   { id: 'visual_canon', label: 'Visual Canon', tab: 'visual_canon', eyebrow: 'References' },
   { id: 'canon', label: 'Story Canon', tab: 'lore', eyebrow: 'Lore' },
   { id: 'outline', label: 'Outline', tab: 'outline', eyebrow: 'Structure' },
@@ -59,7 +59,9 @@ export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
 ];
 
 export function getWriterWorkflowStepByTab(tab: WriterWorkspaceTabId): WriterWorkflowStepDefinition | undefined {
-  return WRITER_WORKFLOW_STEP_ORDER.find((step) => step.tab === tab && step.id !== 'library');
+  return WRITER_WORKFLOW_STEP_ORDER.find(
+    (step) => step.tab === tab && step.id !== 'library' && step.id !== 'foundation',
+  );
 }
 
 export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWorkflowStep[] {
