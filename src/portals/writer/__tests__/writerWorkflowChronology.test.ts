@@ -38,6 +38,7 @@ describe('writerWorkflowChronology', () => {
       pagesWithDialogue: 0,
       hasShotPlan: false,
       hasAudit: false,
+      hasComparison: false,
     });
 
     expect(steps.map((step) => step.label)).toEqual(WRITER_WORKFLOW_STEP_ORDER.map((step) => step.label));
@@ -56,6 +57,29 @@ describe('writerWorkflowChronology', () => {
     expect(steps.find((step) => step.id === 'cockpit')).toMatchObject({
       done: false,
       detail: 'Compare saved outputs',
+    });
+  });
+
+  it('counts Compare & Review only after the user marks the comparison reviewed', () => {
+    const steps = buildWriterWorkflowSteps({
+      hasSeries: true,
+      hasIssue: true,
+      hasFoundation: true,
+      hasVisualCanon: true,
+      hasCanon: true,
+      hasOutline: true,
+      pageCount: 1,
+      targetPageCount: 1,
+      pagesWithBeats: 1,
+      pagesWithDialogue: 1,
+      hasShotPlan: true,
+      hasAudit: true,
+      hasComparison: true,
+    });
+
+    expect(steps.find((step) => step.id === 'cockpit')).toMatchObject({
+      done: true,
+      detail: 'Comparison reviewed',
     });
   });
 

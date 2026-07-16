@@ -156,6 +156,7 @@ describe('writersWorkshopBridge', () => {
         },
       },
       created_at: '2026-05-11T12:00:00.000Z',
+      deleted_at: null,
     };
 
     const foundation = mapWriterIssueToGuidedStoryFoundation(issue, {

@@ -40,12 +40,13 @@ import type { Portal } from '@/shared/portals';
 import {
   createWriterIssue,
   createWriterSeries,
-  deleteWriterIssue,
   ensureWriterPagesToCount,
+  getNextWriterIssueNumber,
   listWriterIssues,
   listWriterOutlinesForIssue,
   listWriterPages,
   listWriterSeries,
+  trashWriterIssue,
   updateWriterIssue,
   updateWriterSeries,
   type WriterIssueRow,
@@ -3053,23 +3054,23 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const deleteSelectedWriterIssue = async () => {
     const issueOption = selectedWriterBridgeIssue;
     if (!issueOption) {
-      setWriterBridgeError('Select a Writer issue before deleting.');
+      setWriterBridgeError('Select a Writer issue before moving it to Trash.');
       return;
     }
 
     const confirmed = window.confirm(
-      `Delete Writer issue #${issueOption.issue.issue_number}${
+      `Move Writer issue #${issueOption.issue.issue_number}${
         issueOption.issue.title ? `: ${issueOption.issue.title}` : ''
-      }? This also removes its saved pages, beats, dialogue, outlines, and shot plans.`,
+      } to Recoverable Trash? Its saved pages, beats, dialogue, outlines, and shot plans will be preserved.`,
     );
     if (!confirmed) return;
 
     setWriterBridgeBusyAction('delete');
     setWriterBridgeError(null);
-    const ok = await deleteWriterIssue(issueOption.issue.id);
+    const ok = await trashWriterIssue(issueOption.issue.id);
     if (!ok) {
       setWriterBridgeBusyAction(null);
-      setWriterBridgeError('Could not delete the Writer issue. Confirm you are signed in and own this Writer series.');
+      setWriterBridgeError('Could not move the Writer issue to Trash. Confirm you are signed in and own this Writer series.');
       return;
     }
 
@@ -3083,7 +3084,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     setWriterBridgeSelectedIssueId(nextIssueId);
     setWriterBridgeBusyAction(null);
     await loadWriterBridgeOptions(nextIssueId);
-    setWriterBridgeMessage(`Deleted Writer issue #${issueOption.issue.issue_number}.`);
+    setWriterBridgeMessage(`Moved Writer issue #${issueOption.issue.issue_number} to Recoverable Trash.`);
   };
   const createLinkedWriterIssueFromGuidedStory = async () => {
     setWriterBridgeError(null);
@@ -3112,9 +3113,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       return;
     }
 
-    const issueNumber =
-      draft.issueNumber ??
-      Math.max(0, ...writerBridgeIssues.filter((issue) => issue.series_id === seriesRow.id).map((issue) => issue.issue_number)) + 1;
+    const issueNumber = draft.issueNumber ?? await getNextWriterIssueNumber(seriesRow.id);
     const existingLocalIssue = writerBridgeIssues.find(
       (issue) => issue.series_id === seriesRow.id && issue.issue_number === issueNumber,
     );
@@ -5510,7 +5509,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                   className="inline-flex items-center justify-center gap-2 rounded-md border border-rose-200/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  Delete selected Writer issue
+                  Move selected Writer issue to Trash
                 </button>
               </div>
               {writerBridgeMessage ? <p className="mt-3 text-xs leading-relaxed text-cyan-50/70">{writerBridgeMessage}</p> : null}
@@ -8218,8 +8217,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
                             <GuidedProgressButton
                               type="button"
                               isLoading={writerBridgeBusyAction === 'delete'}
-                              loadingLabel="Deleting..."
-                              idleLabel="Delete selected issue"
+                              loadingLabel="Moving to Trash..."
+                              idleLabel="Move selected issue to Trash"
                               icon={<Trash2 className="h-3.5 w-3.5" aria-hidden />}
                               disabled={Boolean(writerBridgeBusyAction) || !selectedWriterBridgeIssue}
                               onClick={() => void deleteSelectedWriterIssue()}

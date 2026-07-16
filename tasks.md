@@ -113,6 +113,22 @@ User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-
 - [x] QoL follow-up: persist last Writer series/issue/page/workspace, replace top Writer selectors with type-to-search menus, split Visual Canon selection by profile/collection, add multi-select attachment, and add Imageshop `Upload original` for one-click vault import without model processing.
 - [ ] Explore issue-alignment metadata in Character/Asset Vaults so the same image can be tagged to multiple Writer issues/books and surfaced automatically in Visual Canon.
 
+## Writers' Workshop — User-Facing Feature Completeness (2026-07-16) — IN PROGRESS
+
+Audit and acceptance matrix: [`docs/audits/2026-07-16-writers-workshop-feature-completeness-audit.md`](docs/audits/2026-07-16-writers-workshop-feature-completeness-audit.md)
+
+- [x] Pass 1: Capture signed-in current-state evidence and complete parallel workflow, accessibility/responsive, and persistence/architecture audits.
+- [x] Pass 2: Define the 13-stage completeness matrix and approved Recoverable Trash contract for series/issues.
+- [x] Pass 3: Add discoverable series/issue management menus, rename, Move to Trash, restore, Undo, and equivalent contextual access.
+- [x] Audit 1: Verify Passes 1-3 and resolve every scoped failure before continuing.
+- [x] Pass 4: Improve discoverability, prerequisite explanations, selected-scope metrics, and workflow completion criteria.
+- [x] Pass 5: Complete recovery, persistence, loading, empty, success, error, and permission states.
+- [x] Pass 6: Complete accessibility, keyboard, contrast, reduced-motion, and responsive behavior.
+- [x] Midpoint audit: Verify Passes 4-6 with code, component, responsive, and signed-in browser evidence; repair status classification, duplicate announcements, empty-page editing, menu keyboard/context behavior, and touch targets found by the audit.
+- [x] Pass 7: Exercise every primary interaction across all 13 Writer stages with a signed-in disposable 22-page issue; validate five export files and move all three disposable series to Recoverable Trash after QA.
+- [x] Pass 8: Add regression tests, help content, user guidance, and durable operations documentation.
+- [ ] Pass 9: Run full regression and final ReAct, QA, and UI/UX audits; deploy and verify the signed-in live site.
+
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
 - [x] **Prompt helper:** [`imageshopImportPrompt.ts`](src/portals/storyline/imageshopImportPrompt.ts) — `buildImageshopImportPrompt` (retouch / optional `ART_STYLE_LIBRARY` / notes); [`imageshopImportPrompt.test.ts`](src/portals/storyline/__tests__/imageshopImportPrompt.test.ts)

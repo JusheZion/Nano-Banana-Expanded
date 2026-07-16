@@ -424,13 +424,16 @@ async function loadIssueRow(supabase: SupabaseAdmin, issueId: string): Promise<I
     .from('writer_issues')
     .select('id, series_id, issue_number, title, status, synopsis, notes')
     .eq('id', issueId)
+    .is('deleted_at', null)
     .single();
   if (issueErr || !issue) return null;
   const { data: series } = await supabase
     .from('writer_series')
     .select('id, title, logline, genre, tone, target_demographic, notes')
     .eq('id', issue.series_id)
+    .is('deleted_at', null)
     .maybeSingle();
+  if (!series) return null;
   return {
     ...(issue as Omit<IssueRow, 'writer_series' | 'notes'>),
     notes: asJsonObject((issue as { notes?: unknown }).notes),

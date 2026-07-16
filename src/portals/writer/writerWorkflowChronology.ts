@@ -40,6 +40,7 @@ export type WriterWorkflowContext = {
   pagesWithDialogue: number;
   hasShotPlan: boolean;
   hasAudit: boolean;
+  hasComparison: boolean;
 };
 
 export const WRITER_WORKFLOW_STEP_ORDER: WriterWorkflowStepDefinition[] = [
@@ -139,8 +140,8 @@ export function buildWriterWorkflowSteps(ctx: WriterWorkflowContext): WriterWork
       case 'cockpit':
         return {
           ...step,
-          done: false,
-          detail: 'Compare saved outputs',
+          done: ctx.hasComparison,
+          detail: ctx.hasComparison ? 'Comparison reviewed' : 'Compare saved outputs',
         };
       case 'export':
         return {

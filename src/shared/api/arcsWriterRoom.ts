@@ -12,6 +12,7 @@ export type WriterSeriesRow = {
   target_demographic: string | null;
   notes: Record<string, unknown>;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type WriterIssueRow = {
@@ -24,6 +25,7 @@ export type WriterIssueRow = {
   /** Merged JSON; `writer_tool_cache` holds pacing_review / canon_check tool results from Edge. */
   notes: Record<string, unknown>;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type WriterVideoShotPlanRow = {
@@ -73,7 +75,8 @@ export async function listWriterSeries(): Promise<WriterSeriesRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase
     .from('writer_series')
-    .select('id, title, logline, genre, tone, target_demographic, notes, created_at')
+    .select('id, title, logline, genre, tone, target_demographic, notes, created_at, deleted_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (error) {
     console.warn('[arcsWriterRoom] listWriterSeries', error.message);
@@ -94,7 +97,7 @@ export async function createWriterSeries(input?: { title?: string }): Promise<Wr
   const { data, error } = await supabase
     .from('writer_series')
     .insert({ title: input?.title?.trim() || 'Untitled series', notes: {} })
-    .select('id, title, logline, genre, tone, target_demographic, notes, created_at')
+    .select('id, title, logline, genre, tone, target_demographic, notes, created_at, deleted_at')
     .single();
   if (error) {
     console.warn('[arcsWriterRoom] createWriterSeries', error.message);
@@ -125,7 +128,7 @@ export async function createWriterIssue(input: {
       title: input.title ?? null,
       notes: {},
     })
-    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at')
+    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at, deleted_at')
     .single();
   if (error) {
     console.warn('[arcsWriterRoom] createWriterIssue', error.message);
@@ -171,12 +174,31 @@ export async function updateWriterIssue(
   return true;
 }
 
-/** Delete a Writer issue and its dependent pages/outlines through database cascades. */
-export async function deleteWriterIssue(issueId: string): Promise<boolean> {
+/** Move a Writer issue to Recoverable Trash without deleting dependent work. */
+export async function trashWriterIssue(issueId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from('writer_issues').delete().eq('id', issueId);
+  const { error } = await supabase
+    .from('writer_issues')
+    .update({ deleted_at: nowUtcIso(), updated_at: nowUtcIso() })
+    .eq('id', issueId)
+    .is('deleted_at', null);
   if (error) {
-    console.warn('[arcsWriterRoom] deleteWriterIssue', error.message);
+    console.warn('[arcsWriterRoom] trashWriterIssue', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Restore a Writer issue from Recoverable Trash. */
+export async function restoreWriterIssue(issueId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_issues')
+    .update({ deleted_at: null, updated_at: nowUtcIso() })
+    .eq('id', issueId)
+    .not('deleted_at', 'is', null);
+  if (error) {
+    console.warn('[arcsWriterRoom] restoreWriterIssue', error.message);
     return false;
   }
   return true;
@@ -250,12 +272,31 @@ export async function updateWriterSeries(
   return true;
 }
 
-/** Delete a Writer series and its dependent issues/pages through database cascades. */
-export async function deleteWriterSeries(seriesId: string): Promise<boolean> {
+/** Move a Writer series to Recoverable Trash without deleting dependent work. */
+export async function trashWriterSeries(seriesId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from('writer_series').delete().eq('id', seriesId);
+  const { error } = await supabase
+    .from('writer_series')
+    .update({ deleted_at: nowUtcIso(), updated_at: nowUtcIso() })
+    .eq('id', seriesId)
+    .is('deleted_at', null);
   if (error) {
-    console.warn('[arcsWriterRoom] deleteWriterSeries', error.message);
+    console.warn('[arcsWriterRoom] trashWriterSeries', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Restore a Writer series from Recoverable Trash. */
+export async function restoreWriterSeries(seriesId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from('writer_series')
+    .update({ deleted_at: null, updated_at: nowUtcIso() })
+    .eq('id', seriesId)
+    .not('deleted_at', 'is', null);
+  if (error) {
+    console.warn('[arcsWriterRoom] restoreWriterSeries', error.message);
     return false;
   }
   return true;
@@ -265,8 +306,9 @@ export async function listWriterIssues(seriesId: string): Promise<WriterIssueRow
   if (!isSupabaseConfigured() || !supabase) return [];
   const { data, error } = await supabase
     .from('writer_issues')
-    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at')
+    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at, deleted_at')
     .eq('series_id', seriesId)
+    .is('deleted_at', null)
     .order('issue_number', { ascending: true });
   if (error) {
     console.warn('[arcsWriterRoom] listWriterIssues', error.message);
@@ -279,6 +321,64 @@ export async function listWriterIssues(seriesId: string): Promise<WriterIssueRow
       ? (r.notes as Record<string, unknown>)
       : {}) as Record<string, unknown>,
   })) as WriterIssueRow[];
+}
+
+/** List series that the signed-in owner has moved to Recoverable Trash. */
+export async function listTrashedWriterSeries(): Promise<WriterSeriesRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from('writer_series')
+    .select('id, title, logline, genre, tone, target_demographic, notes, created_at, deleted_at')
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
+  if (error) {
+    console.warn('[arcsWriterRoom] listTrashedWriterSeries', error.message);
+    return [];
+  }
+  return ((data ?? []) as Array<Omit<WriterSeriesRow, 'notes'> & { notes?: unknown }>).map((r) => ({
+    ...r,
+    notes:
+      r.notes && typeof r.notes === 'object' && !Array.isArray(r.notes)
+        ? (r.notes as Record<string, unknown>)
+        : {},
+  }));
+}
+
+/** List individually trashed issues. Issues inside a trashed series remain attached to that series. */
+export async function listTrashedWriterIssues(): Promise<WriterIssueRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from('writer_issues')
+    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at, deleted_at')
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
+  if (error) {
+    console.warn('[arcsWriterRoom] listTrashedWriterIssues', error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    ...r,
+    notes: r.notes && typeof r.notes === 'object' && !Array.isArray(r.notes)
+      ? (r.notes as Record<string, unknown>)
+      : {},
+  })) as WriterIssueRow[];
+}
+
+/** Return the next never-used issue number, including rows currently in Trash. */
+export async function getNextWriterIssueNumber(seriesId: string): Promise<number> {
+  if (!isSupabaseConfigured() || !supabase) return 1;
+  const { data, error } = await supabase
+    .from('writer_issues')
+    .select('issue_number')
+    .eq('series_id', seriesId)
+    .order('issue_number', { ascending: false })
+    .limit(1);
+  if (error) {
+    console.warn('[arcsWriterRoom] getNextWriterIssueNumber', error.message);
+    return 1;
+  }
+  const issueNumber = Number(data?.[0]?.issue_number);
+  return Number.isFinite(issueNumber) && issueNumber > 0 ? issueNumber + 1 : 1;
 }
 
 export async function listWriterPages(issueId: string): Promise<WriterPageRow[]> {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,7 +12,6 @@ import {
   Loader2,
   Lock,
   ShieldCheck,
-  Trash2,
   Unlock,
 } from 'lucide-react';
 import {
@@ -23,17 +22,22 @@ import {
   createWriterLoreCard,
   createWriterSeries,
   deleteLatestWriterOutline,
-  deleteWriterIssue,
   deleteWriterLoreCard,
   deleteWriterPages,
-  deleteWriterSeries,
   ensureWriterPagesToCount,
+  getNextWriterIssueNumber,
   listWriterIssues,
   listWriterOutlinesForIssue,
   listWriterPages,
   listWriterLoreCards,
   listWriterSeries,
   listWriterShotPlansForIssue,
+  listTrashedWriterIssues,
+  listTrashedWriterSeries,
+  restoreWriterIssue,
+  restoreWriterSeries,
+  trashWriterIssue,
+  trashWriterSeries,
   updateWriterIssue,
   updateWriterIssueOutlineJson,
   updateWriterPageBeatsJson,
@@ -56,6 +60,14 @@ import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import { shotPlanJsonToCsv } from '@/portals/writer/shotPlanCsv';
 import { WriterShotStoryboardStrip } from '@/portals/writer/WriterShotStoryboardStrip';
 import { WriterContextMenu } from '@/portals/writer/WriterContextMenu';
+import {
+  WriterRecordActionsMenu,
+  WriterRenameDialog,
+  WriterTrashConfirmDialog,
+  WriterTrashPanel,
+  type WriterRecordKind,
+  type WriterTrashRecord,
+} from '@/portals/writer/WriterRecordManagement';
 import { WriterHighlightedText } from '@/portals/writer/WriterHighlightedText';
 import { WriterHelpModal } from '@/portals/writer/WriterHelpModal';
 import {
@@ -523,6 +535,7 @@ type PacingRegenerationPreviewPage = {
 };
 
 const WRITER_LAST_WORKSPACE_KEY = 'writerPortalLastWorkspace';
+const WRITER_REVIEWED_COMPARISONS_KEY = 'writerPortalReviewedComparisons';
 
 type WriterLastWorkspace = {
   seriesId: string | null;
@@ -570,7 +583,17 @@ function readWriterLastWorkspace(): WriterLastWorkspace {
   }
 }
 
-function WriterSearchableMenu({
+function readWriterReviewedComparisons(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(WRITER_REVIEWED_COMPARISONS_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function WriterSearchableMenu({
   label,
   value,
   onChange,
@@ -592,6 +615,7 @@ function WriterSearchableMenu({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listboxId = useId();
 
   useEffect(() => {
     setQuery(selected?.label ?? '');
@@ -624,13 +648,20 @@ function WriterSearchableMenu({
   );
 
   return (
-    <label className="relative flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/48">
+    <label className="relative flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
       {label}
       <input
         type="text"
         role="combobox"
         aria-label={ariaLabel}
         aria-expanded={open && !disabled}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={
+          open && activeIndex >= 0 && activeIndex < filteredOptions.length
+            ? `${listboxId}-option-${activeIndex}`
+            : undefined
+        }
         disabled={disabled}
         value={query}
         onChange={(event) => {
@@ -688,7 +719,7 @@ function WriterSearchableMenu({
           {value ? (
             <button
               type="button"
-              className="flex w-full px-2.5 py-1.5 text-left text-[11px] font-bold normal-case tracking-normal text-black/55 hover:bg-black/5"
+              className="flex min-h-11 w-full px-2.5 py-2 text-left text-[11px] font-bold normal-case tracking-normal text-black/65 hover:bg-black/5 sm:min-h-9"
               onMouseDown={(event) => {
                 event.preventDefault();
                 pick(null);
@@ -697,17 +728,20 @@ function WriterSearchableMenu({
               Clear selection
             </button>
           ) : null}
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, index) => (
+          <div id={listboxId} role="listbox" aria-label={`${label} options`}>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option, index) => (
               <button
                 key={option.id}
+                id={`${listboxId}-option-${index}`}
                 type="button"
                 role="option"
                 aria-label={option.meta ? `${option.label}: ${option.meta}` : option.label}
                 aria-selected={option.id === value}
-                className={`flex w-full flex-col px-2.5 py-1.5 text-left normal-case tracking-normal hover:bg-amber-50 ${
+                className={`flex min-h-11 w-full flex-col justify-center px-2.5 py-1.5 text-left normal-case tracking-normal hover:bg-amber-50 sm:min-h-9 ${
                   index === activeIndex ? 'bg-amber-100' : ''
                 }`}
+                onMouseEnter={() => setActiveIndex(index)}
                 onMouseDown={(event) => {
                   event.preventDefault();
                   pick(option);
@@ -715,15 +749,16 @@ function WriterSearchableMenu({
               >
                 <span className="truncate text-xs font-black text-black">{option.label}</span>
                 {option.meta ? (
-                  <span className="truncate text-[10px] font-semibold text-black/45">{option.meta}</span>
+                  <span className="truncate text-[10px] font-semibold text-black/60">{option.meta}</span>
                 ) : null}
               </button>
-            ))
-          ) : (
-            <p className="px-2.5 py-2 text-[11px] font-semibold normal-case tracking-normal text-black/45">
-              No matches.
-            </p>
-          )}
+              ))
+            ) : (
+              <p role="status" className="px-2.5 py-2 text-[11px] font-semibold normal-case tracking-normal text-black/65">
+                No matches.
+              </p>
+            )}
+          </div>
         </div>
       ) : null}
     </label>
@@ -862,6 +897,29 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [deleteSeriesBusy, setDeleteSeriesBusy] = useState(false);
   const [createIssueBusy, setCreateIssueBusy] = useState(false);
   const [deleteIssueBusy, setDeleteIssueBusy] = useState(false);
+  const [nextIssueNumber, setNextIssueNumber] = useState(1);
+  const [writerTrashOpen, setWriterTrashOpen] = useState(false);
+  const [writerTrashLoading, setWriterTrashLoading] = useState(false);
+  const [writerTrashError, setWriterTrashError] = useState<string | null>(null);
+  const [trashedSeries, setTrashedSeries] = useState<WriterSeriesRow[]>([]);
+  const [trashedIssues, setTrashedIssues] = useState<WriterIssueRow[]>([]);
+  const [restoreRecordBusyId, setRestoreRecordBusyId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{
+    kind: WriterRecordKind;
+    id: string;
+    label: string;
+  } | null>(null);
+  const [renameRecordBusy, setRenameRecordBusy] = useState(false);
+  const [renameRecordError, setRenameRecordError] = useState<string | null>(null);
+  const [trashConfirmTarget, setTrashConfirmTarget] = useState<
+    | { kind: 'series'; label: string; series: WriterSeriesRow }
+    | { kind: 'issue'; label: string; issue: WriterIssueRow }
+    | null
+  >(null);
+  const [writerRecordStatus, setWriterRecordStatus] = useState<{
+    message: string;
+    undo?: WriterTrashRecord & { seriesId?: string };
+  } | null>(null);
   const [createPageBusy, setCreatePageBusy] = useState(false);
   const [createPageError, setCreatePageError] = useState<string | null>(null);
   const [issueTitleDraft, setIssueTitleDraft] = useState('');
@@ -900,6 +958,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   });
   const [productionDefaultsBusy, setProductionDefaultsBusy] = useState(false);
   const [productionDefaultsError, setProductionDefaultsError] = useState<string | null>(null);
+  const [reviewedComparisonIssueIds, setReviewedComparisonIssueIds] = useState<string[]>(
+    readWriterReviewedComparisons,
+  );
+  useEffect(() => {
+    window.localStorage.setItem(
+      WRITER_REVIEWED_COMPARISONS_KEY,
+      JSON.stringify(reviewedComparisonIssueIds),
+    );
+  }, [reviewedComparisonIssueIds]);
   type ScriptsEditorTab = 'synopsis' | 'outline' | 'beats' | 'dialogue' | 'video';
   const [scriptsEditorTab, setScriptsEditorTab] = useState<ScriptsEditorTab>('synopsis');
   const [outlineEditDraft, setOutlineEditDraft] = useState('');
@@ -939,9 +1006,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [loreAssistLoading, setLoreAssistLoading] = useState(false);
   const [loreAssistError, setLoreAssistError] = useState<string | null>(null);
   const [loreAssistOutput, setLoreAssistOutput] = useState('');
+  const [writerActionStatus, setWriterActionStatus] = useState<{
+    message: string;
+    tone: 'success' | 'error' | 'info';
+  } | null>(null);
 
-  const pushHistory = useCallback((line: string) => {
+  const pushHistory = useCallback((line: string, options?: { announce?: boolean }) => {
     setAiHistory((h) => [`${new Date().toLocaleTimeString()} — ${line}`, ...h].slice(0, 24));
+    if (options?.announce === false) return;
+    const normalized = line.toLowerCase();
+    const isError = /^(error:|failed:)|could not|not found/.test(normalized);
+    const isInfo = /cancelled|canceled/.test(normalized);
+    const message = isError ? line.replace(/^error:\s*/i, '') : line;
+    setWriterActionStatus({
+      message: `${isError ? 'Action failed' : isInfo ? 'Action cancelled' : 'Completed'}: ${message}`,
+      tone: isError ? 'error' : isInfo ? 'info' : 'success',
+    });
   }, []);
 
   const refreshPagesForIssue = useCallback(async () => {
@@ -1031,20 +1111,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
   }, [pushHistory]);
 
-  const handleDeleteWriterSeries = useCallback(
+  const handleTrashWriterSeries = useCallback(
     async (series: WriterSeriesRow) => {
-      const confirmed = window.confirm(
-        `Delete Writer series "${series.title || 'Untitled series'}"? This also removes its issues, saved pages, beats, dialogue, outlines, lore cards, locations, style bibles, and shot plans.`,
-      );
-      if (!confirmed) return;
-
       setBootstrapError(null);
       setDeleteSeriesBusy(true);
       try {
-        const ok = await deleteWriterSeries(series.id);
+        const ok = await trashWriterSeries(series.id);
         if (!ok) {
-          setBootstrapError('Could not delete the Writer series. Confirm you are signed in and own this series.');
-          pushHistory(`error: delete series “${series.title || 'Untitled'}”`);
+          setBootstrapError('Could not move the Writer series to Trash. Confirm you are signed in and own this series.');
+          pushHistory(`error: trash series “${series.title || 'Untitled'}”`);
           return;
         }
 
@@ -1059,10 +1134,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           setPages([]);
           setSelectedPageId(null);
         }
-        pushHistory(`deleted series “${series.title || 'Untitled'}”`);
+        const label = series.title || 'Untitled series';
+        setWriterRecordStatus({
+          message: `Moved series “${label}” to Recoverable Trash.`,
+          undo: { id: series.id, kind: 'series', label },
+        });
+        pushHistory(`moved series “${label}” to Trash`, { announce: false });
       } catch {
-        setBootstrapError('Could not delete the Writer series. Confirm you are signed in and own this series.');
-        pushHistory(`error: delete series “${series.title || 'Untitled'}”`);
+        setBootstrapError('Could not move the Writer series to Trash. Confirm you are signed in and own this series.');
+        pushHistory(`error: trash series “${series.title || 'Untitled'}”`);
       } finally {
         setDeleteSeriesBusy(false);
       }
@@ -1209,19 +1289,29 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     };
   }, []);
 
-  const nextIssueNumber = useMemo(() => {
-    if (issues.length === 0) return 1;
-    return Math.max(...issues.map((i) => i.issue_number)) + 1;
-  }, [issues]);
+  useEffect(() => {
+    if (!selectedSeriesId) {
+      setNextIssueNumber(1);
+      return;
+    }
+    let cancelled = false;
+    void getNextWriterIssueNumber(selectedSeriesId).then((value) => {
+      if (!cancelled) setNextIssueNumber(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [issues, selectedSeriesId]);
 
   const handleAddWriterIssue = useCallback(async () => {
     if (!selectedSeriesId) return;
     setBootstrapError(null);
     setCreateIssueBusy(true);
     try {
+      const issueNumber = await getNextWriterIssueNumber(selectedSeriesId);
       const row = await createWriterIssue({
         series_id: selectedSeriesId,
-        issue_number: nextIssueNumber,
+        issue_number: issueNumber,
       });
       if (!row) {
         setBootstrapError(
@@ -1241,23 +1331,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     } finally {
       setCreateIssueBusy(false);
     }
-  }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries, pushHistory]);
+  }, [selectedSeriesId, refreshIssuesForSeries, pushHistory]);
 
-  const handleDeleteWriterIssue = useCallback(
+  const handleTrashWriterIssue = useCallback(
     async (issue: WriterIssueRow) => {
       if (!selectedSeriesId) return;
-      const confirmed = window.confirm(
-        `Delete Writer issue #${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}? This also removes its saved pages, beats, dialogue, outlines, and shot plans.`,
-      );
-      if (!confirmed) return;
-
       setBootstrapError(null);
       setDeleteIssueBusy(true);
       try {
-        const ok = await deleteWriterIssue(issue.id);
+        const ok = await trashWriterIssue(issue.id);
         if (!ok) {
-          setBootstrapError('Could not delete the Writer issue. Confirm you are signed in and own this series.');
-          pushHistory(`error: delete issue #${issue.issue_number}`);
+          setBootstrapError('Could not move the Writer issue to Trash. Confirm you are signed in and own this series.');
+          pushHistory(`error: trash issue #${issue.issue_number}`);
           return;
         }
 
@@ -1270,15 +1355,113 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           setPages([]);
           setSelectedPageId(null);
         }
-        pushHistory(`deleted issue #${issue.issue_number}`);
+        const label = `Issue #${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}`;
+        setWriterRecordStatus({
+          message: `Moved ${label} to Recoverable Trash.`,
+          undo: { id: issue.id, kind: 'issue', label, seriesId: issue.series_id },
+        });
+        pushHistory(`moved issue #${issue.issue_number} to Trash`, { announce: false });
       } catch {
-        setBootstrapError('Could not delete the Writer issue. Confirm you are signed in and own this series.');
-        pushHistory(`error: delete issue #${issue.issue_number}`);
+        setBootstrapError('Could not move the Writer issue to Trash. Confirm you are signed in and own this series.');
+        pushHistory(`error: trash issue #${issue.issue_number}`);
       } finally {
         setDeleteIssueBusy(false);
       }
     },
     [pushHistory, selectedIssueId, selectedSeriesId],
+  );
+
+  const reloadWriterTrash = useCallback(async () => {
+    setWriterTrashLoading(true);
+    setWriterTrashError(null);
+    try {
+      const [seriesRows, issueRows] = await Promise.all([
+        listTrashedWriterSeries(),
+        listTrashedWriterIssues(),
+      ]);
+      setTrashedSeries(seriesRows);
+      setTrashedIssues(issueRows);
+    } catch {
+      setWriterTrashError('Could not load Recoverable Trash. Check your connection and try again.');
+    } finally {
+      setWriterTrashLoading(false);
+    }
+  }, []);
+
+  const openWriterTrash = useCallback(() => {
+    setWriterTrashOpen(true);
+    void reloadWriterTrash();
+  }, [reloadWriterTrash]);
+
+  const restoreWriterRecord = useCallback(
+    async (record: WriterTrashRecord & { seriesId?: string }) => {
+      setRestoreRecordBusyId(record.id);
+      setWriterTrashError(null);
+      try {
+        const trashedIssue =
+          record.kind === 'issue' ? trashedIssues.find((issue) => issue.id === record.id) : null;
+        const seriesId = record.seriesId ?? trashedIssue?.series_id;
+        const ok =
+          record.kind === 'series'
+            ? await restoreWriterSeries(record.id)
+            : await restoreWriterIssue(record.id);
+        if (!ok) {
+          setWriterTrashError(`Could not restore ${record.label}. Confirm you still own this story.`);
+          return;
+        }
+
+        const seriesRows = await listWriterSeries();
+        setSeriesList(seriesRows);
+        if (record.kind === 'series') {
+          setSelectedSeriesId(record.id);
+          setSelectedIssueId(null);
+        } else if (seriesId && seriesRows.some((series) => series.id === seriesId)) {
+          const issueRows = await listWriterIssues(seriesId);
+          setSelectedSeriesId(seriesId);
+          setIssues(issueRows);
+          setSelectedIssueId(record.id);
+        }
+        setWriterRecordStatus({ message: `Restored ${record.label}.` });
+        pushHistory(`restored ${record.label}`, { announce: false });
+        await reloadWriterTrash();
+      } catch {
+        setWriterTrashError(`Could not restore ${record.label}. Check your connection and try again.`);
+      } finally {
+        setRestoreRecordBusyId(null);
+      }
+    },
+    [pushHistory, reloadWriterTrash, trashedIssues],
+  );
+
+  const saveWriterRecordRename = useCallback(
+    async (value: string) => {
+      if (!renameTarget) return;
+      setRenameRecordBusy(true);
+      setRenameRecordError(null);
+      try {
+        const ok =
+          renameTarget.kind === 'series'
+            ? await updateWriterSeries(renameTarget.id, { title: value })
+            : await updateWriterIssue(renameTarget.id, { title: value });
+        if (!ok) {
+          setRenameRecordError(`Could not rename this ${renameTarget.kind}. Check your connection and try again.`);
+          return;
+        }
+        if (renameTarget.kind === 'series') {
+          setSeriesList(await listWriterSeries());
+        } else if (selectedSeriesId) {
+          setIssues(await listWriterIssues(selectedSeriesId));
+        }
+        setRenameTarget(null);
+        setWriterRecordStatus({ message: `Renamed ${renameTarget.kind} to “${value}”.` });
+        pushHistory(`renamed ${renameTarget.kind} to “${value}”`, { announce: false });
+      } catch {
+        setRenameRecordError(`Could not rename this ${renameTarget.kind}. Check your connection and try again.`);
+      } finally {
+        setRenameRecordBusy(false);
+      }
+    },
+    [pushHistory, renameTarget, selectedSeriesId],
   );
 
   useEffect(() => {
@@ -1288,7 +1471,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
     setIssues([]);
-    setSelectedIssueId(null);
     let cancelled = false;
     void (async () => {
       const rows = await listWriterIssues(selectedSeriesId);
@@ -3760,6 +3942,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [issuePackObject, pushHistory]);
 
   const preferredWriterExport = useMemo(() => buildPreferredWriterExport(issuePackObject), [issuePackObject]);
+  const preferredWriterExportUnavailableReason = !selectedIssueId
+    ? 'Choose an issue.'
+    : productionDefaultsDraft.outputFormat === 'guided_comic_handoff' && sortedPages.length === 0
+      ? 'Create at least one page first.'
+      : productionDefaultsDraft.outputFormat === 'fountain_screenplay' && pagesWithScriptCount === 0
+        ? 'Draft dialogue on at least one page first.'
+        : productionDefaultsDraft.outputFormat === 'prose_manuscript' && !latestOutline
+          ? 'Save an outline first.'
+          : productionDefaultsDraft.outputFormat === 'lore_wiki' && loreCards.length === 0
+            ? 'Add at least one Story Canon card first.'
+            : null;
 
   const downloadPreferredWriterExport = useCallback(() => {
     if (preferredWriterExport.kind === 'json') {
@@ -4292,6 +4485,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           {seriesList.map((s) => (
             <div
               key={s.id}
+              id={`writer-series-row-${s.id}`}
               className={`flex items-center gap-1 rounded-lg ${
                 selectedSeriesId === s.id ? 'bg-black/15 ring-1 ring-black/20' : 'hover:bg-black/10'
               }`}
@@ -4311,17 +4505,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   {s.title || 'Untitled series'}
                 </button>
               </Tooltip>
-              <Tooltip content={`Delete series ${s.title || 'Untitled series'}`} side="left">
-                <button
-                  type="button"
-                  disabled={deleteSeriesBusy}
-                  onClick={() => void handleDeleteWriterSeries(s)}
-                  className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-800/70 transition hover:bg-red-500/15 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={`Delete series ${s.title || 'Untitled series'}`}
-                >
-                  <Trash2 size={12} aria-hidden />
-                </button>
-              </Tooltip>
+              <WriterRecordActionsMenu
+                kind="series"
+                label={s.title || 'Untitled series'}
+                contextTargetId={`writer-series-row-${s.id}`}
+                disabled={deleteSeriesBusy || renameRecordBusy}
+                onRename={() => {
+                  setRenameRecordError(null);
+                  setRenameTarget({ kind: 'series', id: s.id, label: s.title || 'Untitled series' });
+                }}
+                onTrash={() => setTrashConfirmTarget({
+                  kind: 'series',
+                  label: s.title || 'Untitled series',
+                  series: s,
+                })}
+              />
             </div>
           ))}
         </div>
@@ -4363,6 +4561,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           {issues.map((i) => (
             <div
               key={i.id}
+              id={`writer-issue-row-${i.id}`}
               className={`flex items-center gap-1 rounded-lg ${
                 selectedIssueId === i.id ? 'bg-black/15 ring-1 ring-black/20' : 'hover:bg-black/10'
               }`}
@@ -4379,17 +4578,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   {i.title ? ` — ${i.title}` : ''}
                 </button>
               </Tooltip>
-              <Tooltip content={`Delete issue #${i.issue_number}`} side="left">
-                <button
-                  type="button"
-                  disabled={deleteIssueBusy}
-                  onClick={() => void handleDeleteWriterIssue(i)}
-                  className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-800/70 transition hover:bg-red-500/15 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-label={`Delete issue #${i.issue_number}`}
-                >
-                  <Trash2 size={12} aria-hidden />
-                </button>
-              </Tooltip>
+              <WriterRecordActionsMenu
+                kind="issue"
+                label={`#${i.issue_number}${i.title ? `: ${i.title}` : ''}`}
+                contextTargetId={`writer-issue-row-${i.id}`}
+                disabled={deleteIssueBusy || renameRecordBusy}
+                onRename={() => {
+                  setRenameRecordError(null);
+                  setRenameTarget({
+                    kind: 'issue',
+                    id: i.id,
+                    label: i.title || `Issue ${i.issue_number}`,
+                  });
+                }}
+                onTrash={() => setTrashConfirmTarget({
+                  kind: 'issue',
+                  label: `Issue #${i.issue_number}${i.title ? `: ${i.title}` : ''}`,
+                  issue: i,
+                })}
+              />
             </div>
           ))}
         </div>
@@ -4639,6 +4846,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const focusedLibraryPanel = (
     <div className="flex min-h-0 flex-col gap-3 p-2 text-black">
+      <button
+        type="button"
+        onClick={openWriterTrash}
+        className="min-h-11 w-full rounded-md border border-black/15 bg-white/55 px-3 text-left text-[10px] font-black uppercase tracking-wide text-black/65 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 sm:min-h-10"
+      >
+        Open Recoverable Trash
+      </button>
       {seriesList.length === 0 ? (
         <div className="space-y-3 px-2 py-3">
           <p className="text-xs font-semibold text-black/45">No series active</p>
@@ -4649,28 +4863,68 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           const activeSeries = selectedSeriesId === series.id;
           return (
             <div key={series.id} className="space-y-2">
-              <button
-                type="button"
-                aria-pressed={activeSeries}
-                onClick={() => {
-                  if (!activeSeries) {
-                    setSelectedSeriesId(series.id);
-                    setSelectedIssueId(null);
-                  }
-                }}
-                className={`w-full rounded-lg border px-3 py-3 text-left ${activeSeries ? 'border-amber-600 bg-white/70' : 'border-transparent hover:bg-white/35'}`}
-              >
-                <span className="block truncate text-xs font-black">{series.title || 'Untitled series'}</span>
-                {activeSeries ? <span className="mt-1 block text-[10px] font-semibold text-black/48">{issues.length ? `${issues.length} issue${issues.length === 1 ? '' : 's'}` : 'No issues yet'}</span> : null}
-              </button>
+              <div className={`flex items-center gap-1 rounded-lg border p-1 ${activeSeries ? 'border-amber-600 bg-white/70' : 'border-transparent hover:bg-white/35'}`}>
+                <button
+                  type="button"
+                  aria-pressed={activeSeries}
+                  onClick={() => {
+                    if (!activeSeries) {
+                      setSelectedSeriesId(series.id);
+                      setSelectedIssueId(null);
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                >
+                  <span className="block truncate text-xs font-black">{series.title || 'Untitled series'}</span>
+                  {activeSeries ? <span className="mt-1 block text-[10px] font-semibold text-black/60">{issues.length ? `${issues.length} issue${issues.length === 1 ? '' : 's'}` : 'No issues yet'}</span> : null}
+                </button>
+                <WriterRecordActionsMenu
+                  kind="series"
+                  label={series.title || 'Untitled series'}
+                  disabled={deleteSeriesBusy || renameRecordBusy}
+                  onRename={() => {
+                    setRenameRecordError(null);
+                    setRenameTarget({
+                      kind: 'series',
+                      id: series.id,
+                      label: series.title || 'Untitled series',
+                    });
+                  }}
+                  onTrash={() => setTrashConfirmTarget({
+                    kind: 'series',
+                    label: series.title || 'Untitled series',
+                    series,
+                  })}
+                />
+              </div>
               {activeSeries ? (
                 <div className="space-y-1 pl-3">
                   {issues.map((issue) => (
-                    <button key={issue.id} type="button" aria-pressed={selectedIssueId === issue.id} onClick={() => setSelectedIssueId(issue.id)} className={`w-full rounded-md px-3 py-2 text-left text-xs font-semibold ${selectedIssueId === issue.id ? 'bg-black/10 text-black' : 'text-black/60 hover:bg-white/35'}`}>
-                      #{issue.issue_number}{issue.title ? ` — ${issue.title}` : ''}
-                    </button>
+                    <div key={issue.id} className={`flex items-center gap-1 rounded-md ${selectedIssueId === issue.id ? 'bg-black/10 text-black' : 'text-black/65 hover:bg-white/35'}`}>
+                      <button type="button" aria-pressed={selectedIssueId === issue.id} onClick={() => setSelectedIssueId(issue.id)} className="min-w-0 flex-1 rounded-md px-3 py-2 text-left text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25">
+                        #{issue.issue_number}{issue.title ? ` — ${issue.title}` : ''}
+                      </button>
+                      <WriterRecordActionsMenu
+                        kind="issue"
+                        label={`#${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}`}
+                        disabled={deleteIssueBusy || renameRecordBusy}
+                        onRename={() => {
+                          setRenameRecordError(null);
+                          setRenameTarget({
+                            kind: 'issue',
+                            id: issue.id,
+                            label: issue.title || `Issue ${issue.issue_number}`,
+                          });
+                        }}
+                        onTrash={() => setTrashConfirmTarget({
+                          kind: 'issue',
+                          label: `Issue #${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}`,
+                          issue,
+                        })}
+                      />
+                    </div>
                   ))}
-                  {issues.length === 0 ? <p className="px-3 py-2 text-xs font-semibold text-black/42">No issues yet</p> : null}
+                  {issues.length === 0 ? <p className="px-3 py-2 text-xs font-semibold text-black/60">No issues yet</p> : null}
                   <button type="button" disabled={!supabaseOk || createIssueBusy} onClick={() => void handleAddWriterIssue()} className="px-3 py-2 text-[10px] font-black uppercase tracking-wide text-amber-800 disabled:opacity-45">+ Add issue</button>
                 </div>
               ) : null}
@@ -4771,7 +5025,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const cockpitColumnPreview = (view: WriterCockpitPanelView) =>
     buildWriterCockpitViewDigest({ ...cockpitDigestBase, view });
 
-  const reviewReady = Boolean(pacingSaved?.result ?? canonSaved?.result);
+  const reviewReady = Boolean(pacingSaved?.result && canonSaved?.result);
+  const foundationReady = Boolean(selectedIssueId && productionDefaultsDraft.updatedAt);
   const derivedWorkflowStepId: WriterWorkflowStepId =
     activeTab === 'dashboard'
       ? 'dashboard'
@@ -4780,11 +5035,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         : activeTab === 'outline'
       ? !selectedSeriesId || !selectedIssueId
         ? 'library'
-        : !latestOutline
+        : !foundationReady
           ? 'foundation'
-          : sortedPages.length < targetPageCount
-            ? 'pages'
-            : 'outline'
+          : !latestOutline
+            ? 'outline'
+            : sortedPages.length < targetPageCount
+              ? 'pages'
+              : 'outline'
       : activeTab === 'export'
           ? 'export'
         : activeTab === 'lore'
@@ -4813,7 +5070,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const productionStages: WriterProductionStage[] = buildWriterWorkflowSteps({
     hasSeries: Boolean(selectedSeriesId),
     hasIssue: Boolean(selectedIssueId),
-    hasFoundation: Boolean(selectedSeriesId),
+    hasFoundation: foundationReady,
     hasVisualCanon: writerVisualReferences.length > 0,
     hasCanon: loreCards.length > 0,
     hasOutline: Boolean(latestOutline),
@@ -4823,6 +5080,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pagesWithDialogue: pagesWithScriptCount,
     hasShotPlan: Boolean(latestShotPlan),
     hasAudit: reviewReady,
+    hasComparison: Boolean(selectedIssueId && reviewedComparisonIssueIds.includes(selectedIssueId)),
   }).map((stage) => ({
     ...stage,
     current: stage.id === activeWorkflowStepId,
@@ -5118,7 +5376,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const focusedWorkflowGroups: Array<{ label?: string; stages: WriterProductionStage[] }> = [
     { stages: focusedWorkflowStages.filter((stage) => stage.id === 'dashboard') },
-    { label: 'Write', stages: focusedWorkflowStages.filter((stage) => ['foundation', 'canon', 'outline'].includes(stage.id)) },
+    { label: 'Write', stages: focusedWorkflowStages.filter((stage) => ['foundation', 'visual_canon', 'canon', 'outline'].includes(stage.id)) },
     { label: 'Build', stages: focusedWorkflowStages.filter((stage) => ['beats', 'dialogue'].includes(stage.id)) },
     { label: 'Produce', stages: focusedWorkflowStages.filter((stage) => ['visual', 'audit', 'cockpit', 'export'].includes(stage.id)) },
   ];
@@ -5199,12 +5457,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               ariaLabel="Select Writer series"
             />
           </div>
+          {selectedSeries ? (
+            <WriterRecordActionsMenu
+              kind="series"
+              label={selectedSeries.title || 'Untitled series'}
+              disabled={deleteSeriesBusy || renameRecordBusy}
+              onRename={() => {
+                setRenameRecordError(null);
+                setRenameTarget({
+                  kind: 'series',
+                  id: selectedSeries.id,
+                  label: selectedSeries.title || 'Untitled series',
+                });
+              }}
+              onTrash={() => setTrashConfirmTarget({
+                kind: 'series',
+                label: selectedSeries.title || 'Untitled series',
+                series: selectedSeries,
+              })}
+            />
+          ) : null}
             <Tooltip content="Add a new series" side="bottom">
               <button
                 type="button"
                 disabled={!supabaseOk || createSeriesBusy}
                 onClick={() => void handleCreateSeries()}
-                className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45"
+                className="min-h-11 min-w-11 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45 sm:min-h-9 sm:min-w-9"
                 aria-label="Add series"
               >
                 +
@@ -5226,12 +5504,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               ariaLabel="Select Writer issue"
             />
           </div>
+          {selectedIssue ? (
+            <WriterRecordActionsMenu
+              kind="issue"
+              label={`#${selectedIssue.issue_number}${selectedIssue.title ? `: ${selectedIssue.title}` : ''}`}
+              disabled={deleteIssueBusy || renameRecordBusy}
+              onRename={() => {
+                setRenameRecordError(null);
+                setRenameTarget({
+                  kind: 'issue',
+                  id: selectedIssue.id,
+                  label: selectedIssue.title || `Issue ${selectedIssue.issue_number}`,
+                });
+              }}
+              onTrash={() => setTrashConfirmTarget({
+                kind: 'issue',
+                label: `Issue #${selectedIssue.issue_number}${selectedIssue.title ? `: ${selectedIssue.title}` : ''}`,
+                issue: selectedIssue,
+              })}
+            />
+          ) : null}
             <Tooltip content="Add an issue to the selected series" side="bottom">
               <button
                 type="button"
                 disabled={!supabaseOk || !selectedSeriesId || createIssueBusy}
                 onClick={() => void handleAddWriterIssue()}
-                className="rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45"
+                className="min-h-11 min-w-11 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-black text-black disabled:opacity-45 sm:min-h-9 sm:min-w-9"
                 aria-label="Add issue"
               >
                 +
@@ -5248,6 +5546,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           ariaLabel="Select Writer page"
         />
         <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+          <button
+            type="button"
+            onClick={openWriterTrash}
+            className="min-h-11 rounded-md border border-black/15 bg-white/80 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-black/65 hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 sm:min-h-9"
+          >
+            Trash
+          </button>
             <button
               type="button"
               disabled={quickGenerateDisabled}
@@ -5510,8 +5815,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             {writerVisualReferencesLoading
               ? 'Loading vault images...'
               : writerVisualReferenceSource === 'character_vault'
-                ? 'No character images match this profile.'
-                : 'No asset images match this collection.'}
+                ? 'No character images are available. Create or save an image in Character Studio, then return here and choose Refresh vault.'
+                : 'No asset images are available. Create or save an image in Asset Studio, then return here and choose Refresh vault.'}
           </p>
         )}
       </div>
@@ -5548,10 +5853,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <button
           type="button"
           disabled={!selectedIssueId}
-          onClick={() => setActiveTab('beats')}
+          onClick={() => {
+            setActiveWorkflowOverride('canon');
+            setActiveTab('lore');
+          }}
           className="rounded-lg border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-45"
         >
-          Continue to beats
+          Continue to Story Canon
         </button>
       </div>
 
@@ -5948,14 +6256,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Outline', value: latestOutline ? 'Ready' : 'Not started', detail: latestOutline ? 'Story structure is ready.' : 'Build the issue structure.', tab: 'outline' as WriterWorkspaceTabId },
-          { label: 'Pages', value: `${sortedPages.length}/${targetPageCount}`, detail: 'Pages created for this issue.', tab: 'beats' as WriterWorkspaceTabId },
+          { label: 'Pages', value: `${sortedPages.length}/${targetPageCount}`, detail: 'Pages created for this issue.', tab: 'outline' as WriterWorkspaceTabId, override: 'pages' as WriterWorkflowStepId },
           { label: 'Beats', value: `${pagesWithBeatsCount}/${Math.max(sortedPages.length, targetPageCount)}`, detail: 'Pages with scene beats.', tab: 'beats' as WriterWorkspaceTabId },
           { label: 'Dialogue', value: `${pagesWithScriptCount}/${Math.max(pagesWithBeatsCount, sortedPages.length, 1)}`, detail: 'Pages with finished dialogue.', tab: 'dialogue' as WriterWorkspaceTabId },
         ].map((item) => (
           <button
             key={item.label}
             type="button"
-            onClick={() => setActiveTab(item.tab)}
+            onClick={() => {
+              if ('override' in item && item.override) setActiveWorkflowOverride(item.override);
+              setActiveTab(item.tab);
+            }}
             className={`${WRITER_GLASS_CARD} min-h-[96px] p-4 text-left transition hover:-translate-y-0.5 hover:bg-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30`}
           >
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">{item.label}</p>
@@ -6061,6 +6372,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               </button>
             </div>
           </div>
+          {!selectedIssueId ? (
+            <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
+              Choose an issue in Story Library before generating or saving an outline.
+            </p>
+          ) : null}
         </section>
         <button type="button" onClick={() => setActiveWorkflowOverride('pages')} className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-white/75 px-5 py-4 text-left text-xs font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25">
           Edit Current Page Review <ArrowRight size={18} aria-hidden />
@@ -6091,7 +6407,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const focusedPagesAndBeats = (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className={`${WRITER_GLASS_CARD} flex h-[720px] flex-col overflow-hidden`} aria-label="Issue pages">
+      <aside className={`${WRITER_GLASS_CARD} flex h-[min(720px,calc(100dvh-8rem))] min-h-[360px] flex-col overflow-hidden`} aria-label="Issue pages">
         <div className="flex items-center justify-between border-b border-black/10 p-5">
           <h3 className="font-serif text-xl font-semibold text-slate-950">Target Pages: {targetPageCount}</h3>
           <button type="button" disabled={!supabaseOk || !selectedIssueId || syncPagesBusy} onClick={() => void runSyncPagesToTarget()} className="rounded-md px-3 py-1.5 text-[10px] font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Sync</button>
@@ -6126,11 +6442,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <div className="mt-4 rounded-lg border border-dashed border-black/15 bg-white/30 px-5 py-12 text-center text-sm font-semibold text-black/45">No beats yet for this page.</div>
           )}
         </div>
+        {!selectedIssueId ? (
+          <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
+            Choose an issue in Story Library before creating pages or beats.
+          </p>
+        ) : sortedPages.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
+            Create missing pages, then select one to generate or edit its beats.
+          </p>
+        ) : !selectedPageId ? (
+          <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
+            Select a page from the list before generating or editing beats.
+          </p>
+        ) : null}
         <label className="mt-6 block text-[10px] font-black uppercase tracking-wider text-black/50">Director Notes (Optional)
           <textarea value={beatsDirectorNotesDraft} onChange={(e) => setBeatsDirectorNotesDraft(e.target.value)} onBlur={() => void persistWriterDrafts({ beats_director_notes: beatsDirectorNotesDraft })} className="mt-2 min-h-[50px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-3 text-sm font-medium normal-case tracking-normal text-black" placeholder="Add visual cues or atmospheric direction..." />
         </label>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border border-black/10 bg-white/10 p-4">
           <div className="flex gap-4 text-xs font-bold text-black/55">
+            <button type="button" disabled={!selectedPageId} onClick={() => openSavedOutputEditor('beats')}>Edit beats</button>
             <button type="button" disabled={!selectedPage?.beats_json} onClick={() => selectedPage?.beats_json && downloadJsonFile(`writer-beats-page-${selectedPage.page_number}.json`, selectedPage.beats_json)}>Download beats</button>
             <button type="button" disabled={!selectedPage?.beats_json} onClick={() => void clearBeatsForSelectedPage()} className="text-red-600">Clear beats</button>
           </div>
@@ -6155,7 +6485,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <div className="mt-6 min-h-[420px] rounded-lg bg-white/90 p-6 text-sm leading-relaxed text-black shadow-inner">
           {selectedPage?.script_text?.trim() ? <pre className="whitespace-pre-wrap font-sans">{selectedPage.script_text}</pre> : <p className="pt-28 text-center font-semibold text-black/40">No dialogue has been drafted for this page.</p>}
         </div>
+        {!selectedPageId ? (
+          <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
+            Select a page in Story Library before drafting or editing dialogue.
+          </p>
+        ) : null}
         <div className="mt-5 flex gap-5 text-xs font-bold text-black/55">
+          <button type="button" disabled={!selectedPageId} onClick={() => openSavedOutputEditor('dialogue')}>Edit dialogue</button>
           <button type="button" disabled={!selectedPage?.script_text?.trim()} onClick={() => selectedPage?.script_text && downloadTextFile(`writer-dialogue-page-${selectedPage.page_number}.txt`, selectedPage.script_text, 'text/plain;charset=utf-8')}>Download dialogue (this page)</button>
           <button type="button" disabled={!selectedPage?.script_text?.trim()} onClick={() => void clearDialogueForSelectedPage()} className="text-red-600">Clear dialogue</button>
         </div>
@@ -6164,12 +6500,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     </div>
   );
 
+  const imageshopPreferredSource = latestShotPlan
+    ? 'shot-plan'
+    : selectedPage?.beats_json
+      ? 'page'
+      : latestOutline
+        ? 'outline'
+        : null;
+
   const focusedImageshopPrep = (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
       <div className="space-y-4">
         <div className="flex items-center justify-between"><h3 className="font-serif text-3xl font-semibold text-slate-950">Production Branches</h3><span className="rounded bg-white/25 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-black/55">Branch-ready</span></div>
         {[
-          { title: 'Imageshop Prep', detail: selectedPage?.beats_json ? `Page ${selectedPage.page_number} is ready for visual planning` : 'Generate page beats before Imageshop Prep', action: 'Open Imageshop', click: () => void openImageWorkshopFromWriter(latestShotPlan ? 'shot-plan' : 'page') },
+          { title: 'Imageshop Prep', detail: imageshopPreferredSource ? 'A saved production source is ready for visual planning' : 'Save an outline, page beats, or a shot plan before Imageshop Prep', action: imageshopPreferredSource ? 'Open Imageshop' : 'Prepare source', click: () => imageshopPreferredSource ? void openImageWorkshopFromWriter(imageshopPreferredSource) : setActiveTab('beats') },
           { title: 'Dialogue', detail: selectedPage?.script_text?.trim() ? 'Dialogue is ready' : 'Create pages before dialogue production', action: 'Open Dialogue', click: () => setActiveTab('dialogue') },
           { title: 'Exports', detail: 'Download the current production package', action: 'Open Exports', click: () => setActiveTab('export') },
         ].map((branch) => <section key={branch.title} className={`${WRITER_GLASS_CARD} flex items-center justify-between gap-4 p-6`}><div><h4 className="font-serif text-xl font-semibold text-slate-950">{branch.title}</h4><p className="mt-1 text-sm font-medium text-black/55">{branch.detail}</p></div><button type="button" onClick={branch.click} className="shrink-0 text-xs font-black text-amber-800 underline underline-offset-2">{branch.action}</button></section>)}
@@ -6183,6 +6527,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ['Send Outline', Boolean(latestOutline), () => void openImageWorkshopFromWriter('outline')],
           ].map(([label, enabled, click], index) => <button key={String(label)} type="button" disabled={!enabled || imageWorkshopBusy} onClick={click as () => void} className={`w-full rounded-lg px-4 py-3 text-left text-xs font-black text-black disabled:opacity-40 ${index === 0 ? '' : 'border border-black/10 bg-white/15'}`} style={index === 0 ? { background: ACCENT_GOLD_GRADIENT } : undefined}>{String(label)}</button>)}
         </div>
+        {!selectedIssueId ? (
+          <p className="mt-3 text-xs font-semibold text-amber-950">Choose an issue before preparing an Imageshop handoff.</p>
+        ) : !imageshopPreferredSource ? (
+          <p className="mt-3 text-xs font-semibold text-amber-950">Save an outline, page beats, or a shot plan to enable a handoff.</p>
+        ) : null}
         <label className="mt-6 block text-[10px] font-black uppercase tracking-wider text-black/50">Creative Brief (Optional)<textarea value={shotsBrief} onChange={(e) => setShotsBrief(e.target.value)} onBlur={() => void persistWriterDrafts({ visual_creative_brief: shotsBrief })} className="mt-2 min-h-[160px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-4 text-sm font-medium normal-case tracking-normal text-black" placeholder="Include instructions for the illustrator..." /></label>
         <button type="button" disabled={!supabaseOk || !selectedIssueId || shotsLoading} onClick={() => void quickGenerate()} className="mt-5 rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{shotsLoading ? 'Planning…' : 'Generate Shot Plan'}</button>
       </section>
@@ -6247,7 +6596,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <h3 className="font-serif text-2xl font-semibold text-slate-950">Readiness Summary</h3>
         <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
           {[
-            ['Foundation', Boolean(selectedSeries)],
+            ['Foundation', foundationReady],
             ['Outline', Boolean(latestOutline)],
             ['Dialogue', pagesWithScriptCount > 0],
             ['Canon', Boolean(canonSaved?.result)],
@@ -6264,24 +6613,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <h3 className="font-serif text-xl font-semibold text-slate-950">Preferred Export: {preferredWriterExport.label}</h3>
           <p className="mt-1 text-sm font-medium text-black/55">Change this anytime in Story Settings</p>
         </div>
-        <button type="button" disabled={!selectedIssueId} onClick={() => downloadPreferredWriterExport()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
+        <button type="button" disabled={Boolean(preferredWriterExportUnavailableReason)} aria-describedby={preferredWriterExportUnavailableReason ? 'writer-preferred-export-reason' : undefined} onClick={() => downloadPreferredWriterExport()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
+        {preferredWriterExportUnavailableReason ? <p id="writer-preferred-export-reason" className="w-full text-xs font-semibold text-amber-950">Unavailable: {preferredWriterExportUnavailableReason}</p> : null}
       </section>
 
       <section>
         <h3 className="font-serif text-3xl font-semibold text-slate-950">Export Options</h3>
         <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:max-w-3xl">
           {[
-            { title: 'Full Project Data', ext: '.json', detail: 'Complete backup including metadata, lore, and history.', enabled: Boolean(selectedIssueId), action: () => downloadJsonFile('writer-issue-pack.json', issuePackObject) },
-            { title: 'Outline', ext: '.txt', detail: 'A plain text version of your latest story outline.', enabled: Boolean(latestOutline), action: () => latestOutline && downloadTextFile(`writer-outline-v${latestOutline.version}.txt`, formatOutlineAsText(latestOutline.outline_json), 'text/plain;charset=utf-8') },
-            { title: 'Script', ext: '.md', detail: 'Formatted markdown script for dialogue and panels.', enabled: Boolean(selectedIssueId), action: () => downloadIssuePackMarkdown() },
-            { title: 'Shot Plan', ext: '.csv', detail: 'Spreadsheet for production handoff to illustrators.', enabled: Boolean(latestShotPlan), action: () => latestShotPlan && downloadTextFile(`writer-shot-plan-v${latestShotPlan.version}.csv`, shotPlanJsonToCsv(latestShotPlan.shot_plan_json), 'text/csv;charset=utf-8') },
-            { title: 'Guided Comics Package', ext: '.json', detail: 'Structured handoff ready for the Comic Creator portal.', enabled: sortedPages.length > 0, action: () => downloadGuidedComicsHandoff() },
-          ].map((option) => (
+            { title: 'Full Project Data', ext: '.json', detail: 'Complete backup including metadata, lore, and history.', enabled: Boolean(selectedIssueId), reason: 'Choose an issue.', action: () => downloadJsonFile('writer-issue-pack.json', issuePackObject) },
+            { title: 'Outline', ext: '.txt', detail: 'A plain text version of your latest story outline.', enabled: Boolean(latestOutline), reason: 'Save an outline first.', action: () => latestOutline && downloadTextFile(`writer-outline-v${latestOutline.version}.txt`, formatOutlineAsText(latestOutline.outline_json), 'text/plain;charset=utf-8') },
+            { title: 'Script', ext: '.md', detail: 'Formatted markdown script for dialogue and panels.', enabled: Boolean(selectedIssueId), reason: 'Choose an issue.', action: () => downloadIssuePackMarkdown() },
+            { title: 'Shot Plan', ext: '.csv', detail: 'Spreadsheet for production handoff to illustrators.', enabled: Boolean(latestShotPlan), reason: 'Generate a shot plan first.', action: () => latestShotPlan && downloadTextFile(`writer-shot-plan-v${latestShotPlan.version}.csv`, shotPlanJsonToCsv(latestShotPlan.shot_plan_json), 'text/csv;charset=utf-8') },
+            { title: 'Guided Comics Package', ext: '.json', detail: 'Structured handoff ready for the Comic Creator portal.', enabled: sortedPages.length > 0, reason: 'Create at least one page first.', action: () => downloadGuidedComicsHandoff() },
+          ].map((option, index) => (
             <article key={option.title} className={`${WRITER_GLASS_CARD} flex min-h-[220px] flex-col p-6`}>
               <h4 className="font-serif text-xl font-semibold text-slate-950">{option.title}</h4>
               <p className="mt-1 text-xs font-black text-amber-700">{option.ext}</p>
               <p className="mt-5 text-sm font-medium leading-relaxed text-black/60">{option.detail}</p>
-              <button type="button" disabled={!option.enabled} onClick={option.action} className="mt-auto self-start rounded-lg border-2 border-amber-700/65 bg-white/20 px-5 py-2 text-xs font-black text-amber-900 disabled:opacity-40">Download</button>
+              {!option.enabled ? <p id={`writer-export-reason-${index}`} className="mt-3 text-xs font-semibold text-amber-950">Unavailable: {option.reason}</p> : null}
+              <button type="button" disabled={!option.enabled} aria-describedby={!option.enabled ? `writer-export-reason-${index}` : undefined} onClick={option.action} className="mt-auto self-start rounded-lg border-2 border-amber-700/65 bg-white/20 px-5 py-2 text-xs font-black text-amber-900 disabled:opacity-40">Download</button>
             </article>
           ))}
         </div>
@@ -6295,6 +6646,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       </section>
     </div>
   );
+
+  const writerTrashSeriesById = new Map(
+    [...seriesList, ...trashedSeries].map((series) => [series.id, series] as const),
+  );
+  const writerTrashRecords: Array<WriterTrashRecord & { seriesId?: string }> = [
+    ...trashedSeries.map((series) => ({
+      id: series.id,
+      kind: 'series' as const,
+      label: series.title || 'Untitled series',
+      detail: 'Series and all of its saved work',
+    })),
+    ...trashedIssues.map((issue) => ({
+      id: issue.id,
+      kind: 'issue' as const,
+      label: `Issue #${issue.issue_number}${issue.title ? `: ${issue.title}` : ''}`,
+      detail: `From ${writerTrashSeriesById.get(issue.series_id)?.title || 'its original series'}`,
+      seriesId: issue.series_id,
+    })),
+  ];
 
   return (
     <div
@@ -6320,7 +6690,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <div className="grid grid-cols-4 gap-3">
             {[
               { label: 'Done',   value: `${completedStageCount}/${productionStages.length}`, title: 'Completed workflow stages' },
-              { label: 'Pages',  value: sortedPages.length || targetPageCount, title: 'Total pages' },
+              { label: 'Pages',  value: selectedIssueId ? sortedPages.length : '—', title: 'Pages in selected issue' },
               { label: productionDefaultsDraft.mediumType === 'comic' ? 'Panels' : beatsTabLabel, value: pagesWithBeatsCount, title: 'Pages with beats generated' },
               { label: 'Lore',   value: loreCards.length, title: 'Lore cards in story canon' },
             ].map((item) => (
@@ -6329,7 +6699,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 title={item.title}
                 className="min-w-[58px] px-2 py-1 text-black/75 cursor-default"
               >
-                <p className="truncate text-[8px] font-black uppercase tracking-wider text-black/42">{item.label}</p>
+                <p className="truncate text-[9px] font-black uppercase tracking-wider text-black/60">{item.label}</p>
                 <p className="truncate text-[12px] font-black leading-tight text-black">{item.value}</p>
               </div>
             ))}
@@ -6403,10 +6773,65 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         </div>
       ) : null}
 
-      {!writerFocusedMode ? writerSelectionStrip : null}
+      {writerRecordStatus ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex flex-shrink-0 items-center gap-3 border-b border-emerald-700/25 bg-emerald-50/95 px-4 py-2 text-xs font-semibold text-emerald-950"
+        >
+          <p className="min-w-0 flex-1">{writerRecordStatus.message}</p>
+          {writerRecordStatus.undo ? (
+            <button
+              type="button"
+              disabled={Boolean(restoreRecordBusyId)}
+              onClick={() => void restoreWriterRecord(writerRecordStatus.undo!)}
+              className="min-h-11 rounded-md border border-emerald-900/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-40 sm:min-h-9"
+            >
+              {restoreRecordBusyId ? 'Restoring…' : 'Undo'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setWriterRecordStatus(null)}
+            aria-label="Dismiss story management status"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-emerald-950/70 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 sm:min-h-9 sm:min-w-9"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
+      {writerActionStatus ? (
+        <div
+          role={writerActionStatus.tone === 'error' ? 'alert' : 'status'}
+          aria-live={writerActionStatus.tone === 'error' ? 'assertive' : 'polite'}
+          className={`flex flex-shrink-0 items-center gap-3 border-b px-4 py-2 text-xs font-semibold ${
+            writerActionStatus.tone === 'error'
+              ? 'border-red-800/25 bg-red-50/95 text-red-950'
+              : writerActionStatus.tone === 'info'
+                ? 'border-amber-800/25 bg-amber-50/95 text-amber-950'
+                : 'border-sky-800/25 bg-sky-50/95 text-sky-950'
+          }`}
+        >
+          <p className="min-w-0 flex-1">{writerActionStatus.message}</p>
+          <button
+            type="button"
+            onClick={() => setWriterActionStatus(null)}
+            aria-label="Dismiss Writer action status"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current sm:min-h-9 sm:min-w-9"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       {!writerFocusedMode ? (
-        <WriterRibbon
+        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">{writerSelectionStrip}</div>
+      ) : null}
+
+      {!writerFocusedMode ? (
+        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">
+          <WriterRibbon
           activeMenu={activeRibbonMenu}
           onActiveMenu={setActiveRibbonMenu}
           workspaceTab={activeTab}
@@ -6446,16 +6871,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           onOpenHelpCategory={(id) => setHelpCategory(id)}
           quickGenerateNextHint={quickGenerateNextHint}
           tabLabelOverrides={{ beats: beatsTabLabel }}
-        />
+          />
+        </div>
       ) : null}
 
-      {!writerFocusedMode ? editProtectionBar : null}
+      {!writerFocusedMode ? (
+        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">{editProtectionBar}</div>
+      ) : null}
 
       {writerFocusedMode && !isPhone ? focusedWorkflowRail : null}
 
-      {isPhone ? (
-        <div
-          className="flex-shrink-0 overflow-x-auto border-b border-white/20 bg-teal-950/15 px-2 py-2 [-webkit-overflow-scrolling:touch]"
+      <div
+          className="hidden flex-shrink-0 overflow-x-auto border-b border-white/20 bg-teal-950/15 px-2 py-2 [-webkit-overflow-scrolling:touch] max-sm:block [@media(max-height:420px)]:block"
           aria-label="Narrative production stages"
         >
           <div className="flex min-w-max gap-1">
@@ -6478,7 +6905,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             ))}
           </div>
         </div>
-      ) : null}
 
       <WriterHelpModal
         open={Boolean(helpCategory)}
@@ -6497,6 +6923,48 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           />
         ) : null}
       </WriterHelpModal>
+
+      <WriterRenameDialog
+        open={Boolean(renameTarget)}
+        kind={renameTarget?.kind ?? 'series'}
+        initialValue={renameTarget?.label ?? ''}
+        busy={renameRecordBusy}
+        error={renameRecordError}
+        onClose={() => {
+          if (renameRecordBusy) return;
+          setRenameTarget(null);
+          setRenameRecordError(null);
+        }}
+        onSave={(value) => void saveWriterRecordRename(value)}
+      />
+
+      <WriterTrashConfirmDialog
+        open={Boolean(trashConfirmTarget)}
+        kind={trashConfirmTarget?.kind ?? 'series'}
+        label={trashConfirmTarget?.label ?? 'this story'}
+        busy={deleteSeriesBusy || deleteIssueBusy}
+        onClose={() => {
+          if (!deleteSeriesBusy && !deleteIssueBusy) setTrashConfirmTarget(null);
+        }}
+        onConfirm={() => {
+          if (!trashConfirmTarget) return;
+          if (trashConfirmTarget.kind === 'series') {
+            void handleTrashWriterSeries(trashConfirmTarget.series).finally(() => setTrashConfirmTarget(null));
+          } else {
+            void handleTrashWriterIssue(trashConfirmTarget.issue).finally(() => setTrashConfirmTarget(null));
+          }
+        }}
+      />
+
+      <WriterTrashPanel
+        open={writerTrashOpen}
+        records={writerTrashRecords}
+        loading={writerTrashLoading}
+        busyId={restoreRecordBusyId}
+        error={writerTrashError}
+        onClose={() => setWriterTrashOpen(false)}
+        onRestore={(record) => void restoreWriterRecord(record)}
+      />
 
       <div
         className={`flex-1 min-h-0 flex min-w-0 ${isPhone ? 'flex-col' : 'flex-row'}`}
@@ -7021,10 +7489,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </div>
                         <button
                           type="button"
-                          onClick={() => setActiveTab('beats')}
+                          onClick={() => {
+                            setActiveWorkflowOverride('canon');
+                            setActiveTab('lore');
+                          }}
                           className="rounded-md border border-black/15 bg-white/80 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white"
                         >
-                          Continue to beats
+                          Continue to Story Canon
                         </button>
                       </div>
                     </div>
@@ -7071,7 +7542,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </p>
                           )}
                         </div>
-                        <WriterSectionTip tipKey="cockpitTab" label="About Compare & Review" />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={!selectedIssueId}
+                            aria-pressed={Boolean(selectedIssueId && reviewedComparisonIssueIds.includes(selectedIssueId))}
+                            onClick={() => {
+                              if (!selectedIssueId) return;
+                              setReviewedComparisonIssueIds((current) =>
+                                current.includes(selectedIssueId)
+                                  ? current.filter((id) => id !== selectedIssueId)
+                                  : [...current, selectedIssueId],
+                              );
+                            }}
+                            className="min-h-10 rounded-lg border border-amber-900/25 bg-white/70 px-3 text-[10px] font-black uppercase tracking-wide text-black hover:bg-white disabled:opacity-45"
+                          >
+                            {selectedIssueId && reviewedComparisonIssueIds.includes(selectedIssueId)
+                              ? 'Review complete'
+                              : 'Mark review complete'}
+                          </button>
+                          <WriterSectionTip tipKey="cockpitTab" label="About Compare & Review" />
+                        </div>
                       </div>
                     </div>
 
@@ -8000,11 +8491,210 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         </div>
                         <div className="rounded-xl border border-white/35 bg-white/25 p-6">
                           <p className="font-serif text-2xl font-semibold text-black">Synchronized Defaults</p>
-                          <p className="mt-5 text-sm leading-relaxed text-black/55">
+                          <p className="mt-2 text-sm leading-relaxed text-black/65">
                             These settings keep generated outlines, beats, dialogue, and production handoffs anchored to the selected story canon and production defaults.
                           </p>
+                          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
+                              Medium type
+                              <select
+                                value={productionDefaultsDraft.mediumType}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  mediumType: event.target.value as WriterProductionDefaults['mediumType'],
+                                }))}
+                                disabled={!selectedSeriesId}
+                                className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+                              >
+                                <option value="comic">Comic</option>
+                                <option value="book">Book</option>
+                                <option value="screenplay">Screenplay</option>
+                                <option value="video">Video</option>
+                                <option value="wiki">Lore wiki</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
+                              Narrative scope
+                              <select
+                                value={productionDefaultsDraft.narrativeScope}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  narrativeScope: event.target.value as WriterProductionDefaults['narrativeScope'],
+                                }))}
+                                disabled={!selectedSeriesId}
+                                className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+                              >
+                                <option value="single_issue">Single issue</option>
+                                <option value="multi_issue_arc">Multi-issue arc</option>
+                                <option value="book">Book</option>
+                                <option value="episode">Episode</option>
+                                <option value="shared_universe">Shared universe</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
+                              Panel density
+                              <select
+                                value={productionDefaultsDraft.comicPanelDensity}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  comicPanelDensity: event.target.value as WriterProductionDefaults['comicPanelDensity'],
+                                }))}
+                                disabled={!selectedSeriesId}
+                                className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+                              >
+                                <option value="sparse">Sparse (3–4)</option>
+                                <option value="standard">Standard (5–6)</option>
+                                <option value="dense">Dense (7–9)</option>
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
+                              Preferred export
+                              <select
+                                value={productionDefaultsDraft.outputFormat}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  outputFormat: event.target.value as WriterProductionDefaults['outputFormat'],
+                                }))}
+                                disabled={!selectedSeriesId}
+                                className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+                              >
+                                <option value="issue_pack_json">Full project data file</option>
+                                <option value="comic_script_markdown">Readable comic script</option>
+                                <option value="guided_comic_handoff">Guided Comics handoff</option>
+                                <option value="fountain_screenplay">Fountain screenplay</option>
+                                <option value="prose_manuscript">Prose manuscript</option>
+                                <option value="lore_wiki">Lore wiki</option>
+                              </select>
+                            </label>
+                          </div>
+                          <label className="mt-3 flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
+                            Art style
+                            <input
+                              value={productionDefaultsDraft.artStyle}
+                              onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                ...current,
+                                artStyle: event.target.value,
+                              }))}
+                              disabled={!selectedSeriesId}
+                              placeholder="e.g. consistent comic-book line art"
+                              className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
+                            />
+                          </label>
+                          <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-black/70">
+                            <label className="inline-flex min-h-11 items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={productionDefaultsDraft.strictCanon}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  strictCanon: event.target.checked,
+                                }))}
+                                disabled={!selectedSeriesId}
+                              />
+                              Strict canon
+                            </label>
+                            <label className="inline-flex min-h-11 items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={productionDefaultsDraft.noVideoAssumptions}
+                                onChange={(event) => setProductionDefaultsDraft((current) => ({
+                                  ...current,
+                                  noVideoAssumptions: event.target.checked,
+                                }))}
+                                disabled={!selectedSeriesId}
+                              />
+                              No video assumptions
+                            </label>
+                          </div>
+                          {productionDefaultsError ? (
+                            <p role="alert" className="mt-3 rounded-md bg-red-100 px-3 py-2 text-xs font-semibold text-red-900">
+                              {productionDefaultsError}
+                            </p>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={!supabaseOk || !selectedSeriesId || productionDefaultsBusy}
+                            onClick={() => void saveProductionDefaultsToNotes()}
+                            className="mt-4 min-h-11 rounded-lg border border-amber-900/25 px-4 text-xs font-black text-black shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:opacity-45"
+                            style={{ background: ACCENT_GOLD_GRADIENT }}
+                          >
+                            {productionDefaultsBusy
+                              ? 'Saving…'
+                              : selectedIssueId
+                                ? 'Save issue defaults'
+                                : 'Save series defaults'}
+                          </button>
                         </div>
                         </div>
+                        {writerFocusedMode ? (
+                          <section className="rounded-xl border border-white/35 bg-white/35 p-5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-black/60">Story Canon</p>
+                                <h3 className="mt-1 font-serif text-2xl font-semibold text-black">Saved cards ({loreCards.length})</h3>
+                              </div>
+                              {loreBusy ? <span role="status" className="text-xs font-semibold text-black/60">Updating…</span> : null}
+                            </div>
+                            {loreCards.length === 0 ? (
+                              <p className="mt-4 border-l-2 border-amber-700 bg-amber-50/70 px-4 py-3 text-sm font-semibold text-black/65">
+                                No Story Canon cards yet. Use New card above to add the first fact the AI should remember.
+                              </p>
+                            ) : (
+                              <ul className="mt-4 grid gap-3 md:grid-cols-2">
+                                {loreCards.map((card) => (
+                                  <li key={card.id} className="border-l-2 border-black/25 bg-white/65 px-4 py-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-black text-black">{card.title || 'Untitled'}</p>
+                                        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-black/55">
+                                          {card.category}{card.include_in_prompt ? ' · Included in AI' : ' · Excluded from AI'}
+                                        </p>
+                                      </div>
+                                      <div className="flex shrink-0 gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setLoreEditingId(card.id);
+                                            setLoreDraftTitle(card.title);
+                                            setLoreDraftCategory(card.category);
+                                            setLoreDraftBody(card.body);
+                                            setLoreDraftInclude(card.include_in_prompt);
+                                            setLoreDraftSort(card.sort_order);
+                                          }}
+                                          className="min-h-11 rounded-md border border-black/20 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 sm:min-h-9"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={loreBusy}
+                                          onClick={async () => {
+                                            if (!window.confirm(`Delete Story Canon card “${card.title || 'Untitled'}”? This cannot be undone.`)) return;
+                                            setLoreBusy(true);
+                                            const ok = await deleteWriterLoreCard(card.id);
+                                            setLoreBusy(false);
+                                            if (!ok) {
+                                              pushHistory('error: delete lore card');
+                                              return;
+                                            }
+                                            pushHistory('deleted lore card');
+                                            await reloadLoreCards();
+                                          }}
+                                          className="min-h-11 rounded-md border border-red-800/25 bg-red-50 px-3 text-[10px] font-black uppercase tracking-wide text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40 sm:min-h-9"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-xs font-semibold leading-relaxed text-black/65">
+                                      {stripLoreImportMetadataFromBody(card.body) || '(empty body)'}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </section>
+                        ) : null}
                         {!writerFocusedMode ? (
                           <>
                         <div className="rounded-xl border border-black/10 bg-white/40 p-3 space-y-3 max-w-3xl">
@@ -9853,51 +10543,61 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                      </span>
 	                    </div>
 	                    <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
-	                      <button
-	                        type="button"
-	                        disabled={!selectedIssueId}
-	                        onClick={() => downloadPreferredWriterExport()}
-	                        className="rounded-md px-3 py-2 text-left text-xs font-black text-black shadow-sm disabled:opacity-45"
-	                        style={{ background: ACCENT_GOLD_GRADIENT }}
-	                      >
-	                        Preferred export
-	                        <span className="mt-1 block text-[10px] font-bold normal-case text-black/62">
-	                          {preferredWriterExport.filename}
-	                        </span>
-	                      </button>
-	                      <button
-	                        type="button"
-	                        disabled={!selectedIssueId}
-	                        onClick={() => downloadJsonFile('writer-issue-pack.json', issuePackObject)}
-	                        className="rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
-	                      >
-		                        Full project data
-	                        <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">
-	                          Full structured bundle
-	                        </span>
-	                      </button>
-	                      <button
-	                        type="button"
-	                        disabled={!selectedIssueId}
-	                        onClick={() => downloadIssuePackMarkdown()}
-	                        className="rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
-	                      >
-	                        Markdown script
-	                        <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">
-	                          Readable creator handoff
-	                        </span>
-	                      </button>
-	                      <button
-	                        type="button"
-	                        disabled={sortedPages.length === 0}
-	                        onClick={() => downloadGuidedComicsHandoff()}
-	                        className="rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
-	                      >
-	                        Guided Comics handoff
-	                        <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">
-	                          Sendable production payload
-	                        </span>
-	                      </button>
+	                      <div className="space-y-1">
+	                        <button
+	                          type="button"
+	                          disabled={Boolean(preferredWriterExportUnavailableReason)}
+	                          aria-describedby={preferredWriterExportUnavailableReason ? 'writer-advanced-preferred-export-reason' : undefined}
+	                          onClick={() => downloadPreferredWriterExport()}
+	                          className="w-full rounded-md px-3 py-2 text-left text-xs font-black text-black shadow-sm disabled:opacity-45"
+	                          style={{ background: ACCENT_GOLD_GRADIENT }}
+	                        >
+	                          Preferred export
+	                          <span className="mt-1 block text-[10px] font-bold normal-case text-black/62">{preferredWriterExport.filename}</span>
+	                        </button>
+	                        {preferredWriterExportUnavailableReason ? (
+	                          <p id="writer-advanced-preferred-export-reason" className="text-xs font-semibold text-amber-950">Unavailable: {preferredWriterExportUnavailableReason}</p>
+	                        ) : null}
+	                      </div>
+	                      <div className="space-y-1">
+	                        <button
+	                          type="button"
+	                          disabled={!selectedIssueId}
+	                          aria-describedby={!selectedIssueId ? 'writer-advanced-project-export-reason' : undefined}
+	                          onClick={() => downloadJsonFile('writer-issue-pack.json', issuePackObject)}
+	                          className="w-full rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
+	                        >
+	                          Full project data
+	                          <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">Full structured bundle</span>
+	                        </button>
+	                        {!selectedIssueId ? <p id="writer-advanced-project-export-reason" className="text-xs font-semibold text-amber-950">Unavailable: Choose an issue first.</p> : null}
+	                      </div>
+	                      <div className="space-y-1">
+	                        <button
+	                          type="button"
+	                          disabled={!selectedIssueId}
+	                          aria-describedby={!selectedIssueId ? 'writer-advanced-markdown-export-reason' : undefined}
+	                          onClick={() => downloadIssuePackMarkdown()}
+	                          className="w-full rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
+	                        >
+	                          Markdown script
+	                          <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">Readable creator handoff</span>
+	                        </button>
+	                        {!selectedIssueId ? <p id="writer-advanced-markdown-export-reason" className="text-xs font-semibold text-amber-950">Unavailable: Choose an issue first.</p> : null}
+	                      </div>
+	                      <div className="space-y-1">
+	                        <button
+	                          type="button"
+	                          disabled={sortedPages.length === 0}
+	                          aria-describedby={sortedPages.length === 0 ? 'writer-advanced-guided-export-reason' : undefined}
+	                          onClick={() => downloadGuidedComicsHandoff()}
+	                          className="w-full rounded-md border border-black/15 bg-white/85 px-3 py-2 text-left text-xs font-black text-black hover:bg-white disabled:opacity-45"
+	                        >
+	                          Guided Comics handoff
+	                          <span className="mt-1 block text-[10px] font-bold normal-case text-black/55">Sendable production payload</span>
+	                        </button>
+	                        {sortedPages.length === 0 ? <p id="writer-advanced-guided-export-reason" className="text-xs font-semibold text-amber-950">Unavailable: Create at least one page first.</p> : null}
+	                      </div>
 	                    </div>
 	                    <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
 	                      <div className="border-l-2 border-emerald-700 bg-emerald-50/70 px-3 py-3">
@@ -9976,9 +10676,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                )}
 	                {activeTab === 'scripts' && (
                   <div className={`${WRITER_GLASS_CARD} p-4 space-y-3`}>
-                        <details className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
-                          <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
-	                            Advanced saved-output editor
+	                      <details open={writerFocusedMode ? true : undefined} className="rounded-xl border border-black/10 bg-black/[0.03] p-4">
+	                        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-black/50">
+	                            {writerFocusedMode ? 'Saved output editor' : 'Advanced saved-output editor'}
                           </summary>
                           <div className="mt-3 space-y-3">
                           <div className="flex flex-wrap gap-1.5">
