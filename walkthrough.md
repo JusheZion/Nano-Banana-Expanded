@@ -11352,3 +11352,20 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Deploy the validated build and run a signed-in production smoke check.
+
+## Writers' Workshop interaction QA deployment - 2026-07-16
+
+### What changed
+- Deployed commit `3c82e17` to the configured Cloudflare Worker.
+
+### Verification
+- `npm run deploy`: passed, including a fresh production build and asset upload.
+- Production URL: `https://asset-reference-comics-studio.onyxzion.workers.dev/`
+- Cloudflare version: `2d67d242-ca0b-4b2b-aa39-15912bbd46ce`.
+- Signed-in production smoke check confirmed Writers' Workshop loads, Advanced Tools opens, the new ribbon tabpanel semantics are present, the original series remains, and the disposable QA series is absent.
+
+### Outstanding issues
+- None blocking release.
+
+### Next steps
+- None.
