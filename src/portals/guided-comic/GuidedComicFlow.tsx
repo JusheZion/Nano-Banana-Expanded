@@ -4100,11 +4100,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     () => pageLocations.filter((location) => (locationReferences[location] ?? []).length > 0).length,
     [locationReferences, pageLocations],
   );
-  const npcReferenceNames = useMemo(() => Object.keys(npcReferences), [npcReferences]);
-  const readyNpcCount = useMemo(
-    () => npcReferenceNames.filter((npc) => (npcReferences[npc] ?? []).length > 0).length,
-    [npcReferenceNames, npcReferences],
-  );
+  const npcReferenceNames = Object.keys(npcReferences);
+  const readyNpcCount = npcReferenceNames.filter((npc) => (npcReferences[npc] ?? []).length > 0).length;
   const totalVisualReferences = pageCharacters.length + pageLocations.length + npcReferenceNames.length;
   const readyVisualReferences = readyCharacterCount + readyLocationCount + readyNpcCount;
   const missingVisualReferences = Math.max(0, totalVisualReferences - readyVisualReferences);
@@ -4150,26 +4147,22 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     propPrep,
     requestGuidedComicHandoff,
   ]);
-  const panelArtQueue = useMemo<PanelArtQueueItem[]>(
-    () =>
-      pageCards.flatMap((page) =>
-        getGuidedComicExistingPanelBeats(page).map((beatText, panelIndex) => {
-          const panelNumber = panelIndex + 1;
-          return {
-            id: panelArtQueueId(page.pageNumber, panelNumber),
-            pageNumber: page.pageNumber,
-            panelNumber,
-            beatText,
-            characters: splitListText(page.keyCharacters),
-            location: page.keyLocation.trim(),
-          };
-        }),
-      ),
-    [pageCards],
+  const panelArtQueue: PanelArtQueueItem[] = pageCards.flatMap((page) =>
+    getGuidedComicExistingPanelBeats(page).map((beatText, panelIndex) => {
+      const panelNumber = panelIndex + 1;
+      return {
+        id: panelArtQueueId(page.pageNumber, panelNumber),
+        pageNumber: page.pageNumber,
+        panelNumber,
+        beatText,
+        characters: splitListText(page.keyCharacters),
+        location: page.keyLocation.trim(),
+      };
+    }),
   );
   const selectedPanel =
     panelArtQueue.find((panel) => panel.id === selectedPanelId) ?? panelArtQueue[0] ?? null;
-  const selectedPanelVisualMetadata = useMemo(() => {
+  const selectedPanelVisualMetadata = (() => {
     if (!selectedPanel) return null;
     const page = pageCards.find((candidate) => candidate.pageNumber === selectedPanel.pageNumber);
     if (!page) return null;
@@ -4184,17 +4177,17 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     return (
       visualStoryMetadata.panels.find((panel) => panel.panelNumber === selectedPanel.panelNumber) ?? null
     );
-  }, [editableDialogueSeeds, npcReferenceNames, pageCards, pageLayoutTemplates, selectedPanel, writerDialogueSeeds]);
-  const selectedPanelDialogueSeeds = useMemo(() => {
+  })();
+  const selectedPanelDialogueSeeds = (() => {
     if (!selectedPanel) return [];
     return (editableDialogueSeeds[selectedPanel.pageNumber] ?? [])
       .filter((seed) => seed.panelNumber === selectedPanel.panelNumber)
       .sort((a, b) => a.order - b.order);
-  }, [editableDialogueSeeds, selectedPanel]);
-  const selectedPageDialogueDensity = useMemo(() => {
+  })();
+  const selectedPageDialogueDensity = (() => {
     if (!selectedPanel) return null;
     return analyzeGuidedDialogueSeedDensity(editableDialogueSeeds[selectedPanel.pageNumber] ?? []);
-  }, [editableDialogueSeeds, selectedPanel]);
+  })();
   const selectedPanelDialogueDensity =
     selectedPanel && selectedPageDialogueDensity
       ? selectedPageDialogueDensity.panelSummaries.find((summary) => summary.panelNumber === selectedPanel.panelNumber) ?? null
@@ -4351,7 +4344,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
   const selectedProductionPanelMetadata =
     selectedProductionVisualMetadata?.panels.find((panel) => panel.panelNumber === selectedProductionPanel?.panelNumber) ??
     null;
-  const saveSelectedPanelPromptToLibrary = useCallback(() => {
+  const saveSelectedPanelPromptToLibrary = () => {
     const metadata = selectedProductionPanelMetadata ?? selectedPanelVisualMetadata;
     const panel =
       selectedProductionPage && selectedProductionPanel
@@ -4399,15 +4392,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       },
     });
     setPrimaryActionMessage(`Saved page ${panel.pageNumber}, panel ${panel.panelNumber} prompt to Prompt Library.`);
-  }, [
-    panelArtStatuses,
-    requestPromptLibrarySave,
-    selectedPanel,
-    selectedPanelVisualMetadata,
-    selectedProductionPage,
-    selectedProductionPanel,
-    selectedProductionPanelMetadata,
-  ]);
+  };
   const selectedProductionMissingReferences = selectedProductionPage
     ? getGuidedProductionMissingReferences(selectedProductionPage, {
         characterReferences,
@@ -4735,7 +4720,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
     });
   };
   const openImageshopWithSelectedPanel = () => openImageshopWithPanel();
-  const layoutChecklistItems = useMemo(() => {
+  const layoutChecklistItems = (() => {
     const allPagesPlanned =
       pageCards.length > 0 && pageCards.every((page) => page.summary.trim() && Number.parseInt(page.panelCount, 10) > 0);
     const panelArtReviewed =
@@ -4748,8 +4733,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       { label: 'Layout templates selected', complete: layoutTemplatesSelected },
       { label: 'Ready for export', complete: allPagesPlanned && panelArtReviewed && layoutTemplatesSelected },
     ];
-  }, [pageCards, pageLayoutTemplates, panelArtQueue, panelArtStatuses]);
-  const exportSummary = useMemo(() => {
+  })();
+  const exportSummary = (() => {
     const approvedArtCount = panelArtQueue.filter((panel) => panelArtStatuses[panel.id] === 'approved').length;
     const pagesWithLayoutTemplates = pageCards.filter((page) => Boolean(pageLayoutTemplates[page.pageNumber])).length;
     return {
@@ -4758,8 +4743,8 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       approvedArtCount,
       pagesWithLayoutTemplates,
     };
-  }, [pageCards, pageLayoutTemplates, panelArtQueue, panelArtStatuses]);
-  const exportChecklistItems = useMemo(() => {
+  })();
+  const exportChecklistItems = (() => {
     const storyFoundationComplete = Boolean(
       (setupForm.seriesTitle.trim() || setupForm.issueTitle.trim()) &&
         setupForm.premise.trim() &&
@@ -4784,21 +4769,7 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
       { label: 'Panel art reviewed', complete: panelArtReviewed },
       { label: 'Layout templates selected', complete: layoutTemplatesSelected },
     ];
-  }, [
-    missingVisualReferences,
-    outlineBeats,
-    pageCards,
-    pageLayoutTemplates,
-    panelArtQueue,
-    panelArtStatuses,
-    setupForm.issueTitle,
-    setupForm.premise,
-    setupForm.seriesTitle,
-    storyForm.conflict,
-    storyForm.mainCharacters,
-    storyForm.premise,
-    totalVisualReferences,
-  ]);
+  })();
   const workingLogline = useMemo(() => {
     const characterLead = storyCharacters[0] || 'A lead character';
     const conflict = storyForm.conflict.trim() || 'faces a defining conflict';

@@ -1,4 +1,4 @@
-import React, { type RefObject } from 'react';
+import React, { useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -129,6 +129,24 @@ export const WriterRibbon: React.FC<Props> = ({
 }) => {
   const workspaceTabs = buildWorkspaceTabs(tabLabelOverrides);
   const { isPhone } = useResponsiveLayout();
+  const menuTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const onMenuKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ) => {
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % MENUS.length;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + MENUS.length) % MENUS.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = MENUS.length - 1;
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextMenu = MENUS[nextIndex]!;
+    onActiveMenu(nextMenu.id);
+    menuTabRefs.current[nextIndex]?.focus();
+  };
 
   return (
     <div className="flex-shrink-0 flex flex-col border-b border-white/25 bg-white/20 backdrop-blur-md">
@@ -138,13 +156,20 @@ export const WriterRibbon: React.FC<Props> = ({
         role="tablist"
         aria-label="Ribbon menus"
       >
-        {MENUS.map((m) => (
+        {MENUS.map((m, index) => (
           <button
             key={m.id}
+            ref={(node) => {
+              menuTabRefs.current[index] = node;
+            }}
             type="button"
             role="tab"
+            id={`writer-ribbon-tab-${m.id}`}
+            aria-controls="writer-ribbon-panel"
             aria-selected={activeMenu === m.id}
+            tabIndex={activeMenu === m.id ? 0 : -1}
             onClick={() => onActiveMenu(m.id)}
+            onKeyDown={(event) => onMenuKeyDown(event, index)}
             className={`shrink-0 px-2 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wide rounded-t-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
               activeMenu === m.id
                 ? 'bg-[#ebe8dc] text-black shadow-sm'
@@ -164,6 +189,9 @@ export const WriterRibbon: React.FC<Props> = ({
       </div>
 
       <div
+        id="writer-ribbon-panel"
+        role="tabpanel"
+        aria-labelledby={`writer-ribbon-tab-${activeMenu}`}
         className={`flex px-2 py-2 min-h-[3.25rem] ${
           isPhone ? 'flex-col items-stretch gap-2' : 'flex-wrap items-center gap-1'
         }`}
@@ -431,6 +459,7 @@ export const WriterRibbon: React.FC<Props> = ({
           <Search size={14} className="text-black/45 shrink-0" aria-hidden />
           <input
             ref={findInputRef}
+            data-writer-find-input="true"
             type="search"
             placeholder="Find in view…"
             value={findQuery}

@@ -400,7 +400,7 @@ export const CharacterStudio: React.FC = () => {
           ? store.vaultPromptOverride
           : store.refinementPromptOverride;
 
-  const saveCurrentPromptToLibrary = useCallback(() => {
+  const saveCurrentPromptToLibrary = () => {
     const promptText = copyPromptText.trim() || displayPrompt.trim();
     if (!promptText) return;
     requestPromptLibrarySave({
@@ -424,18 +424,7 @@ export const CharacterStudio: React.FC = () => {
         refinement: store.refinementPromptOverride,
       },
     });
-  }, [
-    aiReferencePrompt,
-    copyPromptText,
-    displayPrompt,
-    promptPanelTab,
-    requestPromptLibrarySave,
-    selectedPoseNameForPrompt,
-    store.aspectRatio,
-    store.currentLiveImageUrl,
-    store.refinementPromptOverride,
-    store.vaultPromptOverride,
-  ]);
+  };
 
   const activeReferenceForCompare =
     store.referenceImageUrls.find((u) => Boolean(u)) ?? store.currentLiveImageUrl ?? null;

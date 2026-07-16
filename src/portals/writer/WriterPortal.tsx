@@ -69,6 +69,7 @@ import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRi
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
+import { consumeWriterFileInputSelection } from '@/portals/writer/writerFileInput';
 import {
   formatBeatsBundleAsMarkdown,
   formatBeatsBundleAsText,
@@ -1013,20 +1014,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const handleCreateSeries = useCallback(async () => {
     setBootstrapError(null);
     setCreateSeriesBusy(true);
-    const row = await createWriterSeries();
-    setCreateSeriesBusy(false);
-    if (!row) {
+    try {
+      const row = await createWriterSeries();
+      if (!row) {
+        setBootstrapError(
+          'Could not create a series. Confirm writer_series exists, RLS allows insert, and see the browser console.',
+        );
+        return;
+      }
+      const rows = await listWriterSeries();
+      setSeriesList(rows);
+      setSelectedSeriesId(row.id);
+      setSelectedIssueId(null);
+      setDockTab('library');
+      pushHistory(`created series “${row.title || 'Untitled'}”`);
+    } catch {
       setBootstrapError(
         'Could not create a series. Confirm writer_series exists, RLS allows insert, and see the browser console.',
       );
-      return;
+    } finally {
+      setCreateSeriesBusy(false);
     }
-    const rows = await listWriterSeries();
-    setSeriesList(rows);
-    setSelectedSeriesId(row.id);
-    setSelectedIssueId(null);
-    setDockTab('library');
-    pushHistory(`created series “${row.title || 'Untitled'}”`);
   }, [pushHistory]);
 
   const handleDeleteWriterSeries = useCallback(
@@ -1038,26 +1046,32 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
       setBootstrapError(null);
       setDeleteSeriesBusy(true);
-      const ok = await deleteWriterSeries(series.id);
-      setDeleteSeriesBusy(false);
-      if (!ok) {
+      try {
+        const ok = await deleteWriterSeries(series.id);
+        if (!ok) {
+          setBootstrapError('Could not delete the Writer series. Confirm you are signed in and own this series.');
+          pushHistory(`error: delete series “${series.title || 'Untitled'}”`);
+          return;
+        }
+
+        const rows = await listWriterSeries();
+        setSeriesList(rows);
+        setSelectedSeriesId((current) =>
+          current && current !== series.id && rows.some((row) => row.id === current) ? current : null,
+        );
+        if (selectedSeriesId === series.id) {
+          setIssues([]);
+          setSelectedIssueId(null);
+          setPages([]);
+          setSelectedPageId(null);
+        }
+        pushHistory(`deleted series “${series.title || 'Untitled'}”`);
+      } catch {
         setBootstrapError('Could not delete the Writer series. Confirm you are signed in and own this series.');
         pushHistory(`error: delete series “${series.title || 'Untitled'}”`);
-        return;
+      } finally {
+        setDeleteSeriesBusy(false);
       }
-
-      const rows = await listWriterSeries();
-      setSeriesList(rows);
-      setSelectedSeriesId((current) =>
-        current && current !== series.id && rows.some((row) => row.id === current) ? current : null,
-      );
-      if (selectedSeriesId === series.id) {
-        setIssues([]);
-        setSelectedIssueId(null);
-        setPages([]);
-        setSelectedPageId(null);
-      }
-      pushHistory(`deleted series “${series.title || 'Untitled'}”`);
     },
     [pushHistory, selectedSeriesId],
   );
@@ -1210,22 +1224,29 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!selectedSeriesId) return;
     setBootstrapError(null);
     setCreateIssueBusy(true);
-    const row = await createWriterIssue({
-      series_id: selectedSeriesId,
-      issue_number: nextIssueNumber,
-    });
-    setCreateIssueBusy(false);
-    if (!row) {
+    try {
+      const row = await createWriterIssue({
+        series_id: selectedSeriesId,
+        issue_number: nextIssueNumber,
+      });
+      if (!row) {
+        setBootstrapError(
+          'Could not create an issue. Confirm writer_issues exists and issue_number is unique.',
+        );
+        return;
+      }
+      await refreshIssuesForSeries();
+      setSelectedIssueId(row.id);
+      setDockTab('library');
+      setDockCollapsed(false);
+      pushHistory(`created issue #${row.issue_number}`);
+    } catch {
       setBootstrapError(
         'Could not create an issue. Confirm writer_issues exists and issue_number is unique.',
       );
-      return;
+    } finally {
+      setCreateIssueBusy(false);
     }
-    await refreshIssuesForSeries();
-    setSelectedIssueId(row.id);
-    setDockTab('library');
-    setDockCollapsed(false);
-    pushHistory(`created issue #${row.issue_number}`);
   }, [selectedSeriesId, nextIssueNumber, refreshIssuesForSeries, pushHistory]);
 
   const handleDeleteWriterIssue = useCallback(
@@ -1238,24 +1259,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
       setBootstrapError(null);
       setDeleteIssueBusy(true);
-      const ok = await deleteWriterIssue(issue.id);
-      setDeleteIssueBusy(false);
-      if (!ok) {
+      try {
+        const ok = await deleteWriterIssue(issue.id);
+        if (!ok) {
+          setBootstrapError('Could not delete the Writer issue. Confirm you are signed in and own this series.');
+          pushHistory(`error: delete issue #${issue.issue_number}`);
+          return;
+        }
+
+        const rows = await listWriterIssues(selectedSeriesId);
+        setIssues(rows);
+        setSelectedIssueId((current) =>
+          current && current !== issue.id && rows.some((row) => row.id === current) ? current : null,
+        );
+        if (selectedIssueId === issue.id) {
+          setPages([]);
+          setSelectedPageId(null);
+        }
+        pushHistory(`deleted issue #${issue.issue_number}`);
+      } catch {
         setBootstrapError('Could not delete the Writer issue. Confirm you are signed in and own this series.');
         pushHistory(`error: delete issue #${issue.issue_number}`);
-        return;
+      } finally {
+        setDeleteIssueBusy(false);
       }
-
-      const rows = await listWriterIssues(selectedSeriesId);
-      setIssues(rows);
-      setSelectedIssueId((current) =>
-        current && current !== issue.id && rows.some((row) => row.id === current) ? current : null,
-      );
-      if (selectedIssueId === issue.id) {
-        setPages([]);
-        setSelectedPageId(null);
-      }
-      pushHistory(`deleted issue #${issue.issue_number}`);
     },
     [pushHistory, selectedIssueId, selectedSeriesId],
   );
@@ -1428,8 +1455,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   }, [loreCards, loreImportJsonDraft, reloadLoreCards, selectedSeriesId, pushHistory]);
 
   const handleLoreObsidianFiles = useCallback(
-    async (fileList: FileList | null) => {
-      const files = Array.from(fileList ?? []);
+    async (selection: readonly File[]) => {
+      const files = Array.from(selection);
       setLoreObsidianError(null);
       setLoreObsidianResult(null);
       if (files.length === 0) return;
@@ -8079,7 +8106,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             multiple
                             accept=".md,.markdown,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
                             className="hidden"
-                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                            onChange={(e) =>
+                              void handleLoreObsidianFiles(consumeWriterFileInputSelection(e.currentTarget))
+                            }
                           />
                           <input
                             ref={loreObsidianFolderInputRef}
@@ -8087,7 +8116,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             multiple
                             className="hidden"
                             {...{ webkitdirectory: '', directory: '' }}
-                            onChange={(e) => void handleLoreObsidianFiles(e.currentTarget.files)}
+                            onChange={(e) =>
+                              void handleLoreObsidianFiles(consumeWriterFileInputSelection(e.currentTarget))
+                            }
                           />
                           <div className="flex flex-wrap gap-2">
                             <button

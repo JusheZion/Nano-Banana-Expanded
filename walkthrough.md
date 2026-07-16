@@ -11300,3 +11300,55 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+## Writers' Workshop exhaustive interaction QA and reliability closeout - 2026-07-16
+
+### What changed
+- Completed a signed-in, destructive interaction pass with the dedicated demo account against an isolated disposable Writer series.
+- Added reliable busy-state cleanup and error handling for Writer series/issue create and delete operations.
+- Reset Obsidian file and folder inputs after each selection so the same source can be selected again after an error or retry.
+- Added keyboard-complete Writer help modal, context menu, ribbon tab, and global shortcut behavior.
+- Cleared the repository-wide React Compiler lint blockers in Character Studio and Guided Comic without changing their user-facing behavior.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerFileInput.ts`
+- `src/portals/writer/WriterHelpModal.tsx`
+- `src/portals/writer/WriterContextMenu.tsx`
+- `src/portals/writer/WriterRibbon.tsx`
+- `src/portals/writer/useWriterHotkeys.ts`
+- `src/portals/writer/__tests__/writerFileInput.test.ts`
+- `src/portals/writer/__tests__/writerOverlaysAccessibility.test.tsx`
+- `src/portals/writer/__tests__/WriterRibbon.test.tsx`
+- `src/portals/writer/__tests__/useWriterHotkeys.test.tsx`
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+
+### Implementation notes
+- Help dialogs now move focus inside, trap Tab/Shift+Tab, close on Escape, and restore the opener.
+- Writer context menus now focus the first enabled action, skip disabled actions, support Arrow/Home/End navigation, close on Escape, and restore focus.
+- Ribbon menus now use roving tab focus with Arrow/Home/End navigation and explicit tab/tabpanel relationships.
+- Writer shortcuts no longer intercept normal typing in inputs, textareas, selects, or editable content; the dedicated find field retains its intended find and Escape behavior.
+- The demo credential remains in the private Codex memory note only; no credential was copied into repository files.
+
+### Verification
+- Signed-in local browser QA created a disposable series, two issues, and three pages; saved story context and production defaults; generated and protected an outline; synchronized page rows; generated and directly edited beats and dialogue; ran pacing and canon reviews; staged and applied the pacing-driven outline regeneration; exercised batch selection, destructive confirmations, and all four export variants.
+- Verified cancel and confirm paths for issue and series deletion.
+- Deleted the complete disposable series and confirmed the pre-existing `Untitled series` remained.
+- `npm run test -- --run`: 87 files, 453 tests passed.
+- `npm run build`: passed.
+- `npm run lint`: passed with 0 errors and 69 existing warnings.
+- Scoped Writer accessibility and reliability tests: 5 files, 19 tests passed.
+- Guided Comic regression tests: 10 files, 102 tests passed.
+- Character Studio related tests: 2 files, 13 tests passed.
+
+### Outstanding issues
+- Repository lint still reports 69 non-blocking warnings in existing code; there are no lint errors.
+
+### Risks or caveats
+- In-app browser file upload is not supported by the active browser bridge, so Obsidian same-selection retry behavior is covered by deterministic tests rather than a native picker automation pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Deploy the validated build and run a signed-in production smoke check.

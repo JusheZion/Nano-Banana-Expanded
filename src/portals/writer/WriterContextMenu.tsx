@@ -18,6 +18,7 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearLongPress = useCallback(() => {
@@ -28,9 +29,10 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
   }, []);
 
   const openAt = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, opener?: HTMLElement | null) => {
       const usable = items.some((i) => !i.disabled);
       if (!usable) return;
+      openerRef.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       setPos({ x, y });
       setOpen(true);
     },
@@ -42,7 +44,7 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
       const usable = items.some((i) => !i.disabled);
       if (!usable) return;
       e.preventDefault();
-      openAt(e.clientX, e.clientY);
+      openAt(e.clientX, e.clientY, e.target instanceof HTMLElement ? e.target : null);
     },
     [items, openAt],
   );
@@ -81,14 +83,39 @@ export const WriterContextMenu: React.FC<Props> = ({ children, items }) => {
 
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (restoreFocus = false) => {
+      setOpen(false);
+      if (restoreFocus) openerRef.current?.focus();
     };
-    window.addEventListener('click', close);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(true);
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+      const available = Array.from(
+        menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [],
+      );
+      if (available.length === 0) return;
+      e.preventDefault();
+      const current = available.indexOf(document.activeElement as HTMLButtonElement);
+      let next = 0;
+      if (e.key === 'End') next = available.length - 1;
+      else if (e.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % available.length;
+      else if (e.key === 'ArrowUp') next = current < 0 ? available.length - 1 : (current - 1 + available.length) % available.length;
+      available[next]?.focus();
+    };
+    const onWindowClick = () => close();
+    window.addEventListener('click', onWindowClick);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('click', close);
+      window.removeEventListener('click', onWindowClick);
       window.removeEventListener('keydown', onKey);
     };
   }, [open]);
