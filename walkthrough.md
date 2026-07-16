@@ -11186,3 +11186,39 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit the accepted redesign source, deploy it to the Cloudflare Worker, then verify the live signed-in workflow and production bundle.
+
+## Writers' Workshop ten-frame production release - 2026-07-16
+
+### What changed
+- Committed the accepted redesign as `4039146` (`feat: implement Writers Workshop Figma layouts`).
+- Deployed Cloudflare Worker version `8307b12a-fefd-4c06-8a4b-3b5076ff34ae` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Completed a signed-in live smoke of the grouped workflow, persistent Story Library, Dashboard, Pages & Beats, Story Review, and Export.
+
+### Files touched
+- `walkthrough.md`
+- Deployment artifact: generated `dist/` files uploaded by Wrangler.
+
+### Implementation notes
+- The deploy was performed from the committed redesign source. The unrelated user-owned `AGENTS.md` modification remains unstaged and was not included in the redesign commit.
+- Wrangler uploaded 41 new or modified assets and reused 74 unchanged assets.
+
+### Verification
+- `npm run deploy` - passed, including a fresh TypeScript/Vite production build and successful Wrangler upload.
+- Production entrypoint - passed; live HTML references `assets/index-DI7xMF8_.js` and `assets/index-Dtj9T6U0.css`.
+- Production Writer bundle - passed; live and local `WriterPortal-XS_3D6PP.js` share SHA-256 `696c9303090986f7afc4e6c5bf6b6ee9c70f491e20dc9d00e5809e89ed0c94ad`.
+- Signed-in live browser - passed; the grouped workflow and Story Library are present with no document-level horizontal overflow.
+- Live Story Review - passed; Batch ARC Tools, Pacing Review, Canon Check, and Readiness Summary are present.
+- Live Export - passed; Preferred Export, Export Options, and Export History are present.
+
+### Outstanding issues
+- None for the requested ten-frame redesign release.
+
+### Risks or caveats
+- Vite's existing large-chunk advisory remains non-blocking.
+- Touched-file ESLint retains two pre-existing warnings and zero errors.
+
+### Operator follow-up
+- None required.
+
+### Next steps
+- None.
