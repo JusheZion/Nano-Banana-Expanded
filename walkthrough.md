@@ -6652,6 +6652,50 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None.
 
+## Writers' Workshop exhaustive interaction QA and repair - 2026-07-16
+
+### What changed
+- Repaired stale cross-series issue and lore state by clearing the prior series data before each replacement load.
+- Restored the Advanced Tools mode control in the redesigned focused header.
+- Corrected the series-selected dashboard copy so an existing issue is described as selectable instead of claiming that no issues exist.
+- Corrected `Open Foundation settings` to open the Foundation workflow state rather than Story Canon.
+- Added the missing local `Run Idea assist` action to the focused Compare & Review layout.
+- Removed the duplicate mobile workflow rail and added current/selected semantics for workflow, series, and issue controls.
+- Added an accessible name to the focused outline editor and live alert roles to focused workflow errors.
+- Created a disposable signed-in QA series, exercised its full lifecycle, downloaded every export type, verified persistence, and cascade-deleted the series and its generated records. The preexisting Untitled series was preserved.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- Signed-in browser QA covered Dashboard empty/series/issue states, Foundation, Story Canon, Outline, Pages & Beats, Dialogue, Imageshop Prep, Story Review, Compare & Review, Export, Advanced Tools, mobile layout, persistence, and destructive cleanup.
+- Authorized AI checks produced and saved an outline, beats for three pages, one page of dialogue, a shot plan, a pacing review, a canon review, and an idea-assist result.
+- The Imageshop handoff opened the selected Writer page with its four-panel production queue.
+- Full project data, outline text, Markdown script, shot-plan CSV, Guided Comics JSON, preferred export, beats, and dialogue downloads were triggered successfully.
+- The user-owned `AGENTS.md` modification was preserved and not edited.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__ src/portals/guided-comic/__tests__/writersWorkshopBridge.test.ts src/portals/storyline/__tests__/imageshopWriterImport.test.ts src/stores/__tests__/writerWorkshopBridge.test.ts src/shared/api/__tests__/writerTools.test.ts src/shared/writer/__tests__/schemas.test.ts src/content/wiki/writerWikiAnchors.test.ts` - passed: 23 files, 118 tests.
+- `npm run test -- --run` - passed: 83 files, 444 tests.
+- `npm run build` - passed.
+- `npx eslint src/portals/writer/WriterPortal.tsx` - passed with zero errors and two pre-existing warnings.
+- `npm run lint` - repository-wide baseline still reports 19 errors in unchanged Character Studio and Guided Comic files; the changed Writer file has no lint errors.
+- Signed-in local browser QA - passed for save/reload, AI generation, navigation, handoff, downloads, mobile responsiveness, and cascade deletion.
+
+### Outstanding issues
+- Repository-wide lint remains red because of pre-existing React Compiler memoization errors outside the Writers' Workshop change set.
+
+### Risks or caveats
+- AI generation latency ranged from roughly 20 to 45 seconds during QA but completed successfully.
+- Browser download actions were verified by successful download events/actions; downloaded files are local browser artifacts and are not retained by ARCS.
+
+### Operator follow-up
+- None for the Writers' Workshop interaction scope.
+
+### Next steps
+- Deploy the verified Writer bundle, then run a signed-in live production smoke against the deployed Worker.
+
 ## Kitana Dossier Visual Fidelity Refinement - 2026-06-24
 
 ### What changed

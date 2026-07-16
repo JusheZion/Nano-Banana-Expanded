@@ -1266,6 +1266,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setSelectedIssueId(null);
       return;
     }
+    setIssues([]);
+    setSelectedIssueId(null);
     let cancelled = false;
     void (async () => {
       const rows = await listWriterIssues(selectedSeriesId);
@@ -1329,6 +1331,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setLoreCards([]);
       return;
     }
+    setLoreCards([]);
     setLoreBusy(true);
     const rows = await listWriterLoreCards(selectedSeriesId);
     setLoreCards(rows);
@@ -4627,6 +4630,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <div key={series.id} className="space-y-2">
               <button
                 type="button"
+                aria-pressed={activeSeries}
                 onClick={() => {
                   if (!activeSeries) {
                     setSelectedSeriesId(series.id);
@@ -4641,7 +4645,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               {activeSeries ? (
                 <div className="space-y-1 pl-3">
                   {issues.map((issue) => (
-                    <button key={issue.id} type="button" onClick={() => setSelectedIssueId(issue.id)} className={`w-full rounded-md px-3 py-2 text-left text-xs font-semibold ${selectedIssueId === issue.id ? 'bg-black/10 text-black' : 'text-black/60 hover:bg-white/35'}`}>
+                    <button key={issue.id} type="button" aria-pressed={selectedIssueId === issue.id} onClick={() => setSelectedIssueId(issue.id)} className={`w-full rounded-md px-3 py-2 text-left text-xs font-semibold ${selectedIssueId === issue.id ? 'bg-black/10 text-black' : 'text-black/60 hover:bg-white/35'}`}>
                       #{issue.issue_number}{issue.title ? ` — ${issue.title}` : ''}
                     </button>
                   ))}
@@ -5112,6 +5116,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           >
             <button
               type="button"
+              aria-current={stage.current ? 'page' : undefined}
               onClick={() => openWriterWorkflowStage(stage)}
               className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-3 py-1 text-[10px] font-black uppercase tracking-wide transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${
                 stage.current
@@ -5881,7 +5886,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <section className={`${WRITER_GLASS_CARD} min-h-[210px] p-6`}>
         <h3 className="font-serif text-2xl font-semibold text-slate-950">Issue Manager</h3>
         <div className="flex min-h-[130px] flex-col items-center justify-center gap-4 text-center">
-          <p className="text-sm font-semibold text-black/52">No issues yet — create your first issue to start scripting</p>
+          <p className="text-sm font-semibold text-black/52">
+            {issues.length > 0
+              ? 'Select an issue from the Story Library, or create the next issue.'
+              : 'No issues yet — create your first issue to start scripting'}
+          </p>
           <button
             type="button"
             disabled={!supabaseOk || createIssueBusy}
@@ -5899,7 +5908,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         <p className="mt-3 text-xs font-semibold leading-relaxed text-black/55">
           Open Foundation to configure the defaults shared by outlines, beats, dialogue, Imageshop Prep, and exports.
         </p>
-        <button type="button" onClick={() => setActiveTab('lore')} className="mt-3 text-xs font-black text-amber-800 underline underline-offset-2">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveWorkflowOverride('foundation');
+            setActiveTab('lore');
+          }}
+          className="mt-3 text-xs font-black text-amber-800 underline underline-offset-2"
+        >
           Open Foundation settings
         </button>
       </details>
@@ -5994,6 +6010,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <div className="space-y-4">
         <section className={`${WRITER_GLASS_CARD} flex min-h-[606px] flex-col p-6`}>
           <textarea
+            aria-label="Outline source"
             value={authorOutlineText}
             onChange={(e) => setAuthorOutlineText(e.target.value)}
             className="min-h-[500px] w-full flex-1 resize-none rounded-lg border border-white/50 bg-white/25 p-5 text-base leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
@@ -6303,7 +6320,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               <p className="max-w-[280px] text-[11px] font-semibold text-black/65 leading-snug line-clamp-2">{quickGenerateNextHint}</p>
             </div>
             <div className="inline-flex rounded-md border border-black/15 bg-white/35 p-0.5">
-              {(['Simple Workflow', 'Advanced Tools'] as const).filter((mode) => !writerFocusedMode || mode === 'Simple Workflow').map((mode) => {
+              {(['Simple Workflow', 'Advanced Tools'] as const).map((mode) => {
                 const active = writerFocusedMode ? mode === 'Simple Workflow' : mode === 'Advanced Tools';
                 return (
                   <button
@@ -6413,7 +6430,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
       {!writerFocusedMode ? editProtectionBar : null}
 
-      {writerFocusedMode ? focusedWorkflowRail : null}
+      {writerFocusedMode && !isPhone ? focusedWorkflowRail : null}
 
       {isPhone ? (
         <div
@@ -6425,6 +6442,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               <button
                 key={stage.id}
                 type="button"
+                aria-current={stage.current ? 'page' : undefined}
                 onClick={() => openWriterWorkflowStage(stage)}
                 className={`shrink-0 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
                   stage.current
@@ -6511,7 +6529,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   </div>
                 </div>
                 {imageWorkshopError ? (
-                  <p className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">
+                  <p role="alert" className="mb-3 rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">
                     {imageWorkshopError}
                   </p>
                 ) : null}
@@ -7133,6 +7151,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
+                              disabled={!supabaseOk || !selectedIssueId || !cockpitIdeaPromptDraft.trim() || cockpitIdeaLoading}
+                              onClick={() => void runCockpitIdeaAssist()}
+                              className="rounded-lg border border-amber-900/25 px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-40"
+                              style={{ background: ACCENT_GOLD_GRADIENT }}
+                            >
+                              {cockpitIdeaLoading ? 'Running idea assist…' : 'Run Idea assist'}
+                            </button>
+                            <button
+                              type="button"
                               disabled={!cockpitIdeaOutput.trim()}
                               onClick={() => void navigator.clipboard.writeText(cockpitIdeaOutput)}
                               className="rounded-lg border border-black/15 bg-white/70 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-white disabled:opacity-40"
@@ -7166,7 +7193,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </div>
 
                           {cockpitIdeaError ? (
-                            <p className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{cockpitIdeaError}</p>
+                            <p role="alert" className="rounded-lg bg-red-100/90 px-3 py-2 text-xs text-red-800">{cockpitIdeaError}</p>
                           ) : null}
                         </div>
                       ) : (
