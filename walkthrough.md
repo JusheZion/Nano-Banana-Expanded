@@ -11369,3 +11369,30 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+## Writers' Workshop lore-context request limit repair - 2026-07-16
+
+### What changed
+- Fixed Writer lore and idea-assist context truncation so the complete value, including its truncation marker, never exceeds the writer-tools 16,000-character field limit.
+- Added boundary tests for oversized, already-fitting, and very small context caps.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPromptText.ts`
+- `src/portals/writer/__tests__/writerPromptText.test.ts`
+
+### Implementation notes
+- The previous helper sliced oversized text to 16,000 characters and then appended `…(truncated)`, which made each context field invalid at the API boundary.
+- Live inspection of the demo account found one Writer series, `Untitled series`, with zero rows in its Writer lore-card view. The separate Kitana Lore Dossier portal is a static dossier experience and does not automatically populate Writer series lore cards.
+
+### Verification
+- Focused Writer/schema tests: 2 files, 36 tests passed.
+- Full regression suite: 88 files, 456 tests passed.
+- `npm run build`: passed.
+- `npm run lint`: passed with 0 errors and 69 existing warnings.
+- Live signed-in inspection: `Untitled series` displays `Cards (0)` and `No lore cards yet. Add one above.`
+
+### Outstanding issues
+- No lore cards currently exist for the demo account's only Writer series; this is stored-data state, not a rendering failure.
+
+### Next steps
+- Deploy the request-limit fix and rerun the live lore suggestion action after a Writer lore card is added or imported.

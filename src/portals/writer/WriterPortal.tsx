@@ -165,6 +165,7 @@ import {
   type ObsidianLoreExistingEntry,
   type ObsidianLoreImage,
 } from '@/portals/writer/obsidianLoreImport';
+import { truncateWriterPromptText } from '@/portals/writer/writerPromptText';
 import { buildImageWorkshopDraftFromWriterSelection } from '@/portals/storyline/imageWorkshopPlanning';
 import { mergeImageshopImageMapIntoWriterBeats } from '@/portals/writer/writerImageshopReturn';
 import { getCharacterAlbums, type VaultCharacterAlbum, type VaultCharacterItem } from '@/shared/api/arcsVault';
@@ -229,13 +230,6 @@ type LoreObsidianImportResult = {
   storedImages: number;
   warnings: string[];
 };
-
-function truncateWriterPromptText(raw: string, cap: number): string {
-  const t = raw.trim();
-  if (!t) return '';
-  if (t.length <= cap) return t;
-  return `${t.slice(0, cap)}\n\n…(truncated)`;
-}
 
 type WriterCockpitDigestContext = {
   view: WriterCockpitPanelView;
