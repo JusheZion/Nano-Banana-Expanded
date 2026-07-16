@@ -6696,6 +6696,40 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Deploy the verified Writer bundle, then run a signed-in live production smoke against the deployed Worker.
 
+## Writers' Workshop interaction QA production deployment - 2026-07-16
+
+### What changed
+- Deployed the verified interaction repairs from commit `46afa92` to the production Cloudflare Worker.
+- Published Worker version `098f811a-d435-4924-acf9-a4552186d5e1` at `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Completed a fresh signed-in production smoke with the dedicated demo account.
+
+### Files touched
+- `walkthrough.md`
+- Deployment artifact: generated `dist/` files uploaded by Wrangler.
+
+### Implementation notes
+- Wrangler uploaded 40 new or modified assets and reused 75 existing assets.
+- The production Writer bundle is `WriterPortal-CS1ukO88.js`.
+
+### Verification
+- `npm run deploy` - passed, including a fresh TypeScript/Vite production build and Wrangler upload.
+- Signed-in live home - passed; demo account authentication succeeded.
+- Signed-in live Writers' Workshop - passed; Simple Workflow and Advanced Tools are both available.
+- Live series-selected Dashboard - passed; the preexisting Untitled series remains available and the redesigned empty-issue state renders correctly.
+- Live Foundation route - passed; `Open Foundation settings` resolves to the `Story Foundation` workspace.
+
+### Outstanding issues
+- Repository-wide lint remains red from the pre-existing non-Writer errors documented in the preceding QA entry.
+
+### Risks or caveats
+- Vite's existing large-chunk advisory remains non-blocking.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- None.
+
 ## Kitana Dossier Visual Fidelity Refinement - 2026-06-24
 
 ### What changed
