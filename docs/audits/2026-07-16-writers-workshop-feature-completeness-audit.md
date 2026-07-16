@@ -224,4 +224,16 @@ Passed after repair for local release readiness.
 - Rename or simplify the static `Export History` information panel unless real session history is added.
 - Re-run Visual Canon attachment browser QA after the demo account has a disposable Character or Asset Vault image.
 
-Deployment and signed-in live smoke remain the final Pass 9 gate.
+## Pass 9 result
+
+Passed. Commit `6d3fd6f` was pushed to `main`. Migration `20260716000000_writer_recoverable_trash.sql` and the updated `writer-tools` Edge Function are active in linked Supabase project `vxclogwiytxjolisnakd`. Cloudflare deployed production version `99f28c50-dab7-47a7-b14f-8d0cf6d112b0` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+
+Signed-in live smoke confirmed:
+
+- the demo account remained authenticated;
+- Writers' Workshop loaded with the new 13-stage Simple Workflow, including Visual Canon and Recoverable Trash;
+- the live Trash panel listed all three disposable QA series with Restore actions;
+- switching from persisted Advanced Tools to Simple Workflow worked;
+- no live console errors or warnings were recorded.
+
+The plan is complete. The only remaining items are the explicitly deferred, nonblocking follow-ups above.

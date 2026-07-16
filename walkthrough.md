@@ -11401,3 +11401,61 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Deployed commit `1dbf65b` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
 - Cloudflare version: `eefcbf2a-2e68-4581-b47a-bf9fdf822ccb`.
 - Confirmed the live entry asset changed to `index-Be3y9DqS.js`.
+
+## Writers' Workshop User-Facing Feature Completeness - 2026-07-16
+
+### What changed
+- Completed the 13-stage Writers' Workshop Simple Workflow while preserving the established visual palette, gradients, and aesthetic.
+- Added discoverable series/issue Rename and Recoverable Trash actions, in-app confirmation, immediate Undo, persistent Restore, and equivalent contextual/keyboard access.
+- Added `deleted_at` persistence for Writer series/issues, active/trash API filters, restore behavior, issue-number preservation, Guided Comics Trash parity, and Writer Tools guards against trashed records.
+- Corrected selected-scope metrics and stage completion rules: Foundation requires saved defaults, Story Review requires pacing plus canon, and Compare & Review requires an explicit persisted completion action.
+- Added actionable prerequisites, direct empty-page Beats/Dialogue editing, visible mutation feedback, Simple Workflow Foundation controls, Story Canon saved-card controls, Visual Canon empty-state recovery, and format-specific export requirements.
+- Completed accessibility and responsive behavior for search/listbox semantics, menus, context access, focus containment/restoration, touch targets, reduced motion, and compact Advanced Tools chrome.
+- Updated the focused UX guide, acceptance audit, and task tracker.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterRecordManagement.tsx`
+- `src/portals/writer/writerWorkflowChronology.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/migrations/20260716000000_writer_recoverable_trash.sql`
+- Writer, Guided Comics, and API tests under `src/**/__tests__`
+- `docs/writers-workshop-focused-ux-guide.md`
+- `docs/audits/2026-07-16-writers-workshop-feature-completeness-audit.md`
+- `tasks.md`
+
+### Implementation notes
+- Permanent series/issue deletion is intentionally absent; records remain recoverable for later manual operator cleanup.
+- The final UI audit required two repairs before release: disabled Advanced Export formats now explain their prerequisites, and compact/short viewports hide dense Advanced chrome while exposing the horizontal stage rail.
+- Story Canon card deletion remains separately confirmed but permanent; recoverable lore-card deletion is recorded as a nonblocking future safety improvement.
+
+### Verification
+- Full automated regression: 91 files / 474 tests passed.
+- Scoped post-audit Writer regression: 4 files / 23 tests passed.
+- `npm run lint` passed with 0 errors and 69 existing warnings.
+- `npm run build` passed; the existing large-chunk warning remains nonblocking.
+- `git diff --check` passed.
+- Signed-in QA carried one disposable issue through Foundation, Story Canon, Outline v1, 22 synchronized pages, beats on all 22 pages, first-page dialogue, shot plan, Imageshop handoff, pacing, canon review, Compare completion, and five export formats.
+- Export artifacts were saved under `/private/tmp/arcs-writers-workshop-qa-20260716` and validated as non-empty; both JSON packages parsed with 22 pages.
+- Responsive checks covered phone, short landscape, tablet, and desktop. The final compact recheck at an effective `537x358` found no document overflow, hid the dense ribbon, exposed the stage rail, and kept the active workspace visible.
+- All three disposable QA series were moved to Recoverable Trash and confirmed with live Restore actions.
+- Signed-in production smoke found no console errors or warnings.
+
+### Outstanding issues
+- The demo account had no Character Vault or Asset Vault image, so Visual Canon attachment could not be exercised end to end in browser QA. The actionable empty/Refresh state and automated visual-reference coverage passed.
+- The in-app bridge did not emit its download event even though the browser created all five files; validation pivoted to the actual Downloads folder and confirmed file contents.
+- A sixth screenshot was not created because repeated in-app screenshot calls timed out. Five existing audit screenshots and DOM/responsive evidence remain in the audit package.
+
+### Risks or caveats
+- Existing lint warnings and large output chunks predate this release and remain nonblocking.
+- The user's separate `AGENTS.md` modification was preserved and intentionally excluded from both implementation commits.
+
+### Deployment
+- Git commit `6d3fd6f` pushed to `main`.
+- Supabase migration applied and `writer-tools` deployed to project `vxclogwiytxjolisnakd`.
+- Cloudflare production version `99f28c50-dab7-47a7-b14f-8d0cf6d112b0` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+
+### Next steps
+- Optional follow-ups: recoverable lore-card deletion, stronger small metadata typography, a clearer downloads-information panel, and a Visual Canon attachment smoke after adding a disposable vault image to the demo account.

@@ -113,7 +113,7 @@ User guide: [`docs/writers-workshop-focused-ux-guide.md`](docs/writers-workshop-
 - [x] QoL follow-up: persist last Writer series/issue/page/workspace, replace top Writer selectors with type-to-search menus, split Visual Canon selection by profile/collection, add multi-select attachment, and add Imageshop `Upload original` for one-click vault import without model processing.
 - [ ] Explore issue-alignment metadata in Character/Asset Vaults so the same image can be tagged to multiple Writer issues/books and surfaced automatically in Visual Canon.
 
-## Writers' Workshop — User-Facing Feature Completeness (2026-07-16) — IN PROGRESS
+## Writers' Workshop — User-Facing Feature Completeness (2026-07-16) — COMPLETE
 
 Audit and acceptance matrix: [`docs/audits/2026-07-16-writers-workshop-feature-completeness-audit.md`](docs/audits/2026-07-16-writers-workshop-feature-completeness-audit.md)
 
@@ -127,7 +127,7 @@ Audit and acceptance matrix: [`docs/audits/2026-07-16-writers-workshop-feature-c
 - [x] Midpoint audit: Verify Passes 4-6 with code, component, responsive, and signed-in browser evidence; repair status classification, duplicate announcements, empty-page editing, menu keyboard/context behavior, and touch targets found by the audit.
 - [x] Pass 7: Exercise every primary interaction across all 13 Writer stages with a signed-in disposable 22-page issue; validate five export files and move all three disposable series to Recoverable Trash after QA.
 - [x] Pass 8: Add regression tests, help content, user guidance, and durable operations documentation.
-- [ ] Pass 9: Run full regression and final ReAct, QA, and UI/UX audits; deploy and verify the signed-in live site.
+- [x] Pass 9: Run full regression and final ReAct, QA, and UI/UX audits; deploy and verify the signed-in live site.
 
 ## Illustrator’s Imageshop — import, process, save to vault (2026-04-21) — COMPLETE
 
