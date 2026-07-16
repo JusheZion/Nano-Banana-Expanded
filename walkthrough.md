@@ -11396,3 +11396,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Deploy the request-limit fix and rerun the live lore suggestion action after a Writer lore card is added or imported.
+
+### Deployment
+- Deployed commit `1dbf65b` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Cloudflare version: `eefcbf2a-2e68-4581-b47a-bf9fdf822ccb`.
+- Confirmed the live entry asset changed to `index-Be3y9DqS.js`.
