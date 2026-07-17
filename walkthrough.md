@@ -11507,7 +11507,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - The disposable `Untitled series` and its two motion-QA canon cards were moved to Recoverable Trash; the UI confirmed immediate Undo and no active-library record remained.
 
 ### Deployment
-- Pending the verified scoped commit and Cloudflare release.
+- Implementation commit `3816f24` was pushed to `main`.
+- Cloudflare production version `58c93fa8-82d0-4e5b-b0fd-18988afaaa3f` was deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Live verification confirmed the new `index-ColfLC4J.css` motion asset, cinematic first entry, editorial reload/revisit, responsive phone dock, no horizontal overflow, and no new console warnings/errors after a clean reload comparison.
 
 ### Next steps
-- Commit the scoped diff, deploy to Cloudflare, and verify the signed-in live site.
+- None.

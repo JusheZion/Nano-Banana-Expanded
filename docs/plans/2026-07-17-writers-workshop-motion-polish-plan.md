@@ -136,14 +136,16 @@ Result: passed. The final UI critic required replay, Advanced-cue, dock-size, pu
 
 Objective: deploy only the verified diff.
 
-- [ ] Commit and push scoped changes, excluding unrelated `AGENTS.md` edits.
-- [ ] Deploy to Cloudflare.
-- [ ] Verify the signed-in live site, normal/reduced motion, responsiveness, and console health.
-- [ ] Record commit and Cloudflare version in the walkthrough.
+- [x] Commit and push scoped changes, excluding unrelated `AGENTS.md` edits.
+- [x] Deploy to Cloudflare.
+- [x] Verify the signed-in live site, normal/reduced motion policy, responsiveness, and console health.
+- [x] Record commit and Cloudflare version in the walkthrough.
 
 Acceptance: live behavior matches the verified local release candidate.
 
 Smoke: signed-in live Writers' Workshop entrance, major-workspace, pulse, disclosure, and responsive checks.
+
+Result: passed. Commit `3816f24` was pushed to `main`; Cloudflare version `58c93fa8-82d0-4e5b-b0fd-18988afaaa3f` serves the new motion assets. Signed-in live first entry/revisit, desktop/phone overflow, and post-reload console checks passed.
 
 ## Subagent operating model
 
