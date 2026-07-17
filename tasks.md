@@ -551,3 +551,16 @@ Audit and acceptance matrix: [`docs/audits/2026-07-16-writers-workshop-feature-c
 - [x] Pushed **`origin/main`**; **`walkthrough.md`** documents sync + deploy expectations.
 - [x] **Operator — Cloudflare:** **`npm run deploy`** (2026-04-15) — Worker **`asset-reference-comics-studio`** updated; live URL in **`walkthrough.md`**.
 - [x] **Supabase:** no **`supabase db push`** / **`supabase functions deploy`** required for this alignment (no migration or Edge diffs in those commits).
+## Writers' Workshop — Timeline Motion Polish (2026-07-17) — IN PROGRESS
+
+Implementation plan: [`docs/plans/2026-07-17-writers-workshop-motion-polish-plan.md`](docs/plans/2026-07-17-writers-workshop-motion-polish-plan.md)
+
+- [x] Pass 1: Inventory motion surfaces and finalize the cinematic-first/editorial-revisit contract.
+- [x] Pass 2: Add shared Writer motion primitives, timing tokens, attention cues, disclosures, and reduced-motion fallbacks.
+- [x] Pass 3: Apply entrance choreography and major-workspace transitions.
+- [x] Audit 1 / midpoint QA: Verify accessibility, state integrity, responsive behavior, and motion cancellation.
+- [x] Pass 4: Animate targeted disclosures and dock transitions.
+- [x] Pass 5: Add mode-aware Simple and Advanced attention behavior.
+- [x] Pass 6: Complete signed-in functional, responsive, and reduced-motion QA.
+- [x] Pass 7: Run regression and final ReAct, QA, accessibility/performance, and UI/UX audits.
+- [ ] Pass 8: Commit, push, deploy, and verify the signed-in live site.

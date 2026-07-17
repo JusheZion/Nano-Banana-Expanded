@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { BookOpen, History, Keyboard } from 'lucide-react';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ACCENT_GOLD_GRADIENT, WRITERS_GOLD_SLANT } from '@/shared/theme/Phase12DesignTokens';
@@ -44,17 +44,32 @@ export const WriterStudioDock: React.FC<Props> = ({
   storyLibraryOnly = false,
   onAddStory,
 }) => {
+  const showPanelsButtonRef = useRef<HTMLButtonElement>(null);
+  const hidePanelsButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreKeyboardFocusRef = useRef(false);
   const content =
     activeTabId === 'library' ? library : activeTabId === 'activity' ? activity : help;
+
+  useLayoutEffect(() => {
+    if (!restoreKeyboardFocusRef.current) return;
+    restoreKeyboardFocusRef.current = false;
+    (collapsed ? showPanelsButtonRef : hidePanelsButtonRef).current?.focus();
+  }, [collapsed]);
+
+  const handleToggleCollapse = (event: React.MouseEvent<HTMLButtonElement>) => {
+    restoreKeyboardFocusRef.current = event.detail === 0;
+    onToggleCollapse();
+  };
 
   if (collapsed) {
     if (phoneLayout) {
       return (
-        <div className="flex-shrink-0 flex flex-row items-stretch justify-center border-t border-white/25 bg-white/15 backdrop-blur-md pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]">
+        <div className="writer-motion-dock writer-motion-dock--collapsed writer-motion-dock--phone flex-shrink-0 flex flex-row items-stretch justify-center border-t border-white/25 bg-white/15 backdrop-blur-md pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]">
           <Tooltip content="Show Library / Activity panels" side="top">
             <button
+              ref={showPanelsButtonRef}
               type="button"
-              onClick={onToggleCollapse}
+              onClick={handleToggleCollapse}
               className="flex-1 max-w-sm py-2.5 px-4 border-black/10 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30"
               aria-label="Show workshop panels"
             >
@@ -65,11 +80,12 @@ export const WriterStudioDock: React.FC<Props> = ({
       );
     }
     return (
-      <div className="flex-shrink-0 flex flex-col border-l border-white/25 bg-white/15 backdrop-blur-md w-10">
+      <div className="writer-motion-dock writer-motion-dock--collapsed flex-shrink-0 flex flex-col border-l border-white/25 bg-white/15 backdrop-blur-md w-10">
         <Tooltip content="Show panels" side="left">
           <button
+            ref={showPanelsButtonRef}
             type="button"
-            onClick={onToggleCollapse}
+            onClick={handleToggleCollapse}
             className="p-2 border-b border-black/10 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30"
             aria-label="Show workshop panels"
           >
@@ -83,7 +99,7 @@ export const WriterStudioDock: React.FC<Props> = ({
   if (phoneLayout) {
     return (
       <div
-        className="flex-shrink-0 flex flex-col border-t border-white/30 bg-white/15 backdrop-blur-md w-full min-w-0 min-h-0 max-h-[min(42vh,420px)] shadow-lg shadow-teal-900/10 pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
+        className="writer-motion-dock writer-motion-dock--open writer-motion-dock--phone flex-shrink-0 flex flex-col border-t border-white/30 bg-white/15 backdrop-blur-md w-full min-w-0 min-h-0 max-h-[min(42vh,420px)] shadow-lg shadow-teal-900/10 pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
         role="region"
         aria-label="Workshop panels"
       >
@@ -109,8 +125,9 @@ export const WriterStudioDock: React.FC<Props> = ({
           ))}
           <Tooltip content="Hide panels" side="top">
             <button
+              ref={hidePanelsButtonRef}
               type="button"
-              onClick={onToggleCollapse}
+              onClick={handleToggleCollapse}
               className="px-2.5 border-l border-black/10 text-black/60 active:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/25 shrink-0"
               aria-label="Hide workshop panels"
             >
@@ -125,7 +142,7 @@ export const WriterStudioDock: React.FC<Props> = ({
 
   return (
     <div
-      className={`flex-shrink-0 flex flex-col border-l border-white/30 bg-white/20 backdrop-blur-md min-h-0 shadow-lg shadow-teal-900/10 ${
+      className={`writer-motion-dock writer-motion-dock--open flex-shrink-0 flex flex-col border-l border-white/30 bg-white/20 backdrop-blur-md min-h-0 shadow-lg shadow-teal-900/10 ${
         storyLibraryOnly ? 'w-[280px]' : 'w-[min(100%,min(92vw,280px))] min-w-[260px] max-w-[320px]'
       }`}
       role="region"
@@ -159,8 +176,9 @@ export const WriterStudioDock: React.FC<Props> = ({
         ))}
         <Tooltip content="Hide panels (⌘⇧H)" side="bottom">
           <button
+            ref={hidePanelsButtonRef}
             type="button"
-            onClick={onToggleCollapse}
+            onClick={handleToggleCollapse}
             className="px-2 border-l border-black/10 text-black/60 hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black/25"
             aria-label="Hide workshop panels"
           >

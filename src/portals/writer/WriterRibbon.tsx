@@ -345,7 +345,7 @@ export const WriterRibbon: React.FC<Props> = ({
                 type="button"
                 disabled={!canRunReview || pacingLoading}
                 onClick={onRunPacing}
-                className="rounded-md px-3 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                className="writer-attention-advanced rounded-md px-3 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
                 {pacingLoading ? '…' : 'Pacing review'}
@@ -356,7 +356,7 @@ export const WriterRibbon: React.FC<Props> = ({
                 type="button"
                 disabled={!canRunReview || canonLoading}
                 onClick={onRunCanon}
-                className="rounded-md px-3 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                className="writer-attention-advanced rounded-md px-3 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
                 {canonLoading ? '…' : 'Canon check'}
@@ -409,7 +409,7 @@ export const WriterRibbon: React.FC<Props> = ({
                 type="button"
                 disabled={quickGenerateDisabled || quickGenerateLoading}
                 onClick={onQuickGenerate}
-                className="rounded-md px-4 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+                className="writer-attention-advanced rounded-md px-4 py-1.5 text-[11px] font-bold text-black shadow-sm disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                 style={{ background: ACCENT_GOLD_GRADIENT }}
               >
                 {quickGenerateLoading ? 'Working…' : quickGenerateLabel}

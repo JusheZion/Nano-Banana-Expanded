@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -81,6 +81,7 @@ import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRi
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
+import { useWriterMotionVisit } from '@/portals/writer/writerMotion';
 import { consumeWriterFileInputSelection } from '@/portals/writer/writerFileInput';
 import {
   formatBeatsBundleAsMarkdown,
@@ -775,6 +776,7 @@ function getWriterAssetReferenceLabel(item: VaultAssetItem, album: VaultAssetAlb
 
 export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki }) => {
   const { isPhone } = useResponsiveLayout();
+  const portalMotionVisit = useWriterMotionVisit('portal');
   const initialWriterWorkspaceRef = useRef<WriterLastWorkspace>(readWriterLastWorkspace());
   const [seriesList, setSeriesList] = useState<WriterSeriesRow[]>([]);
   const [issues, setIssues] = useState<WriterIssueRow[]>([]);
@@ -5086,6 +5088,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     current: stage.id === activeWorkflowStepId,
   }));
   const activeStage = productionStages.find((stage) => stage.current) ?? productionStages.find((stage) => stage.tab === activeTab);
+  const motionWorkspaceKey = activeWorkflowStepId;
+  const workspaceMotionVisit = useWriterMotionVisit(
+    `workspace:${writerFocusedMode ? 'simple' : 'advanced'}:${motionWorkspaceKey}`,
+  );
+  const [workspaceMotionActive, setWorkspaceMotionActive] = useState(false);
+  useLayoutEffect(() => {
+    setWorkspaceMotionActive(false);
+    const animationFrame = window.requestAnimationFrame(() => setWorkspaceMotionActive(true));
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [workspaceMotionVisit.instance]);
+  const attentionScopeKey = `${writerFocusedMode ? 'simple' : 'advanced'}:${activeWorkflowStepId}`;
+  const [dismissedAttentionScopes, setDismissedAttentionScopes] = useState<Set<string>>(() => new Set());
   const completedStageCount = productionStages.filter((stage) => stage.done).length;
   const selectedPageLabel = selectedPage ? `Page ${selectedPage.page_number}` : 'No page selected';
   const activeWorkspaceLabel = WRITER_WORKSPACE_TAB_LABELS[activeTab];
@@ -5841,7 +5855,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           type="button"
           disabled={!selectedIssueId || writerVisualReferenceIds.length === 0 || writerVisualReferencesBusy}
           onClick={() => void attachWriterVisualReference()}
-          className="rounded-lg border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-200 disabled:opacity-45"
+          className="writer-attention-simple rounded-lg border border-amber-800/35 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm hover:bg-amber-200 disabled:opacity-45"
         >
           {writerVisualReferencesBusy
             ? 'Saving...'
@@ -6286,7 +6300,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           type="button"
           disabled={quickGenerateDisabled}
           onClick={() => void quickGenerate()}
-          className="inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-amber-900/30 px-5 py-2 text-xs font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
+          className="writer-attention-simple inline-flex min-h-[42px] items-center gap-2 rounded-lg border border-amber-900/30 px-5 py-2 text-xs font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
           style={{ background: ACCENT_GOLD_GRADIENT }}
         >
           {quickGenerateLoading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
@@ -6364,7 +6378,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               </button>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={!supabaseOk || !selectedIssueId || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
+              <button type="button" disabled={!supabaseOk || !selectedIssueId || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
                 {outlineGenLoading ? 'Generating…' : 'Generate Outline'}
               </button>
               <button type="button" onClick={() => setAuthorOutlineMode('preserve')} className="rounded-lg border-2 border-amber-700/55 bg-white/20 px-5 py-2.5 text-sm font-black text-black">
@@ -6431,7 +6445,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <section className={`${WRITER_GLASS_CARD} p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <h3 className="font-serif text-2xl font-semibold text-slate-950">{selectedPage ? `Page ${selectedPage.page_number} — Beats` : 'Select a page'}</h3>
-          <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
+          <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
         </div>
         <label className="mt-6 inline-flex items-center gap-3 text-sm font-semibold text-black/72"><input type="checkbox" checked={beatsSkipExisting} onChange={(e) => setBeatsSkipExisting(e.target.checked)} /> Skip existing beats</label>
         <div className="mt-7">
@@ -6480,7 +6494,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               <select value={dialogueStyle} onChange={(e) => setDialogueStyle(e.target.value as 'comic_script' | 'screenplay_light')} className="bg-transparent font-black text-black focus-visible:outline-none"><option value="comic_script">Comic Script</option><option value="screenplay_light">Screenplay (light)</option></select>
             </label>
           </div>
-          <button type="button" disabled={!supabaseOk || !selectedPageId || dialogueLoading || libraryPagesBusy} onClick={() => void runSelectedPageDialogueGeneration()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{dialogueLoading ? 'Drafting…' : 'Draft Dialogue ✨'}</button>
+          <button type="button" disabled={!supabaseOk || !selectedPageId || dialogueLoading || libraryPagesBusy} onClick={() => void runSelectedPageDialogueGeneration()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{dialogueLoading ? 'Drafting…' : 'Draft Dialogue ✨'}</button>
         </div>
         <div className="mt-6 min-h-[420px] rounded-lg bg-white/90 p-6 text-sm leading-relaxed text-black shadow-inner">
           {selectedPage?.script_text?.trim() ? <pre className="whitespace-pre-wrap font-sans">{selectedPage.script_text}</pre> : <p className="pt-28 text-center font-semibold text-black/40">No dialogue has been drafted for this page.</p>}
@@ -6533,7 +6547,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <p className="mt-3 text-xs font-semibold text-amber-950">Save an outline, page beats, or a shot plan to enable a handoff.</p>
         ) : null}
         <label className="mt-6 block text-[10px] font-black uppercase tracking-wider text-black/50">Creative Brief (Optional)<textarea value={shotsBrief} onChange={(e) => setShotsBrief(e.target.value)} onBlur={() => void persistWriterDrafts({ visual_creative_brief: shotsBrief })} className="mt-2 min-h-[160px] w-full resize-y rounded-lg border border-black/10 bg-white/20 p-4 text-sm font-medium normal-case tracking-normal text-black" placeholder="Include instructions for the illustrator..." /></label>
-        <button type="button" disabled={!supabaseOk || !selectedIssueId || shotsLoading} onClick={() => void quickGenerate()} className="mt-5 rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{shotsLoading ? 'Planning…' : 'Generate Shot Plan'}</button>
+        <button type="button" disabled={!supabaseOk || !selectedIssueId || shotsLoading} onClick={() => void quickGenerate()} className="writer-attention-simple mt-5 rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{shotsLoading ? 'Planning…' : 'Generate Shot Plan'}</button>
       </section>
     </div>
   );
@@ -6586,7 +6600,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <section key={review.title} className={`${WRITER_GLASS_CARD} p-6`}>
             <h3 className="font-serif text-2xl font-semibold text-slate-950">{review.title}</h3>
             <div className="mt-5 min-h-[150px] rounded-lg bg-white/90 p-5 text-sm text-black">
-              {review.saved?.result ? <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">{JSON.stringify(review.saved.result, null, 2)}</pre> : <div className="flex min-h-[110px] flex-col items-center justify-center gap-4 text-center"><p className="font-semibold text-black/42">No {review.title.toLowerCase()} results available.</p><button type="button" disabled={!selectedIssueId || review.loading} onClick={() => void review.action()} className="rounded-lg px-5 py-2.5 text-xs font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{review.loading ? 'Running…' : review.button}</button></div>}
+              {review.saved?.result ? <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">{JSON.stringify(review.saved.result, null, 2)}</pre> : <div className="flex min-h-[110px] flex-col items-center justify-center gap-4 text-center"><p className="font-semibold text-black/42">No {review.title.toLowerCase()} results available.</p><button type="button" disabled={!selectedIssueId || review.loading} onClick={() => void review.action()} className={`${review.title === 'Pacing Review' ? (!pacingSaved ? 'writer-attention-simple' : '') : (pacingSaved && !canonSaved ? 'writer-attention-simple' : '')} rounded-lg px-5 py-2.5 text-xs font-black text-black disabled:opacity-45`} style={{ background: ACCENT_GOLD_GRADIENT }}>{review.loading ? 'Running…' : review.button}</button></div>}
             </div>
           </section>
         ))}
@@ -6613,7 +6627,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <h3 className="font-serif text-xl font-semibold text-slate-950">Preferred Export: {preferredWriterExport.label}</h3>
           <p className="mt-1 text-sm font-medium text-black/55">Change this anytime in Story Settings</p>
         </div>
-        <button type="button" disabled={Boolean(preferredWriterExportUnavailableReason)} aria-describedby={preferredWriterExportUnavailableReason ? 'writer-preferred-export-reason' : undefined} onClick={() => downloadPreferredWriterExport()} className="rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
+        <button type="button" disabled={Boolean(preferredWriterExportUnavailableReason)} aria-describedby={preferredWriterExportUnavailableReason ? 'writer-preferred-export-reason' : undefined} onClick={() => downloadPreferredWriterExport()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>Download Preferred ↓</button>
         {preferredWriterExportUnavailableReason ? <p id="writer-preferred-export-reason" className="w-full text-xs font-semibold text-amber-950">Unavailable: {preferredWriterExportUnavailableReason}</p> : null}
       </section>
 
@@ -6668,11 +6682,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   return (
     <div
-      className="flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
+      className="writer-motion-root flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
+      data-writer-portal-motion={portalMotionVisit.mode}
+      data-writer-mode={writerFocusedMode ? 'simple' : 'advanced'}
+      data-writer-attention={dismissedAttentionScopes.has(attentionScopeKey) ? 'dismissed' : 'active'}
+      onClickCapture={(event) => {
+        if ((event.target as Element).closest('.writer-attention-simple, .writer-attention-advanced')) {
+          setDismissedAttentionScopes((current) => {
+            if (current.has(attentionScopeKey)) return current;
+            const next = new Set(current);
+            next.add(attentionScopeKey);
+            return next;
+          });
+        }
+      }}
       style={{ background: WRITERS_WORKSHOP_BG }}
     >
       <header
-        className="flex-shrink-0 border-b border-black/10"
+        className="writer-motion-header flex-shrink-0 border-b border-black/10"
         style={{ background: WRITERS_GOLD_SLANT }}
       >
         <div className="grid gap-3 px-5 py-3 lg:grid-cols-[minmax(260px,1fr)_minmax(320px,auto)_auto] lg:items-center xl:px-8">
@@ -6826,11 +6853,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ) : null}
 
       {!writerFocusedMode ? (
-        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">{writerSelectionStrip}</div>
+        <div className="writer-motion-navigation max-sm:hidden [@media(max-height:420px)]:hidden">{writerSelectionStrip}</div>
       ) : null}
 
       {!writerFocusedMode ? (
-        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">
+        <div className="writer-motion-navigation max-sm:hidden [@media(max-height:420px)]:hidden">
           <WriterRibbon
           activeMenu={activeRibbonMenu}
           onActiveMenu={setActiveRibbonMenu}
@@ -6876,13 +6903,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ) : null}
 
       {!writerFocusedMode ? (
-        <div className="max-sm:hidden [@media(max-height:420px)]:hidden">{editProtectionBar}</div>
+        <div className="writer-motion-navigation max-sm:hidden [@media(max-height:420px)]:hidden">{editProtectionBar}</div>
       ) : null}
 
-      {writerFocusedMode && !isPhone ? focusedWorkflowRail : null}
+      {writerFocusedMode && !isPhone ? <div className="writer-motion-navigation">{focusedWorkflowRail}</div> : null}
 
       <div
-          className="hidden flex-shrink-0 overflow-x-auto border-b border-white/20 bg-teal-950/15 px-2 py-2 [-webkit-overflow-scrolling:touch] max-sm:block [@media(max-height:420px)]:block"
+          className="writer-motion-navigation hidden flex-shrink-0 overflow-x-auto border-b border-white/20 bg-teal-950/15 px-2 py-2 [-webkit-overflow-scrolling:touch] max-sm:block [@media(max-height:420px)]:block"
           aria-label="Narrative production stages"
         >
           <div className="flex min-w-max gap-1">
@@ -6990,7 +7017,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 isPhone ? 'p-3 pb-28' : writerFocusedMode ? 'p-6 pb-10 xl:p-10' : 'p-6 pb-10 xl:p-8'
               }`}
             >
-              <div className="w-full min-w-0 space-y-4 text-slate-900/90">
+              <div className={`writer-motion-workspace writer-motion-workspace--${workspaceMotionVisit.mode} ${workspaceMotionActive ? 'writer-motion-workspace--motion-active' : ''} w-full min-w-0 space-y-4 text-slate-900/90`}>
                 <div className={writerFocusedMode ? '' : 'border-b border-black/10 pb-3'}>
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div className="min-w-0">
@@ -7044,7 +7071,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           type="button"
                           disabled={quickGenerateDisabled}
                           onClick={() => void quickGenerate()}
-                          className="rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
+                          className="writer-attention-advanced rounded-md border border-amber-900/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-black shadow-sm disabled:opacity-45"
                           style={{ background: ACCENT_GOLD_GRADIENT }}
                         >
                           {quickGenerateLabel}
@@ -8466,7 +8493,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 setLoreDraftSort(0);
                                 await reloadLoreCards();
                               }}
-                              className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45"
+                              className={`${activeWorkflowStepId === 'canon' ? 'writer-attention-simple' : ''} rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45`}
                               style={{ background: ACCENT_GOLD_GRADIENT }}
                             >
                               {loreEditingId ? 'Save changes' : 'Add card'}
@@ -8615,7 +8642,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             type="button"
                             disabled={!supabaseOk || !selectedSeriesId || productionDefaultsBusy}
                             onClick={() => void saveProductionDefaultsToNotes()}
-                            className="mt-4 min-h-11 rounded-lg border border-amber-900/25 px-4 text-xs font-black text-black shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:opacity-45"
+                            className={`${activeWorkflowStepId === 'foundation' ? 'writer-attention-simple' : ''} mt-4 min-h-11 rounded-lg border border-amber-900/25 px-4 text-xs font-black text-black shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:opacity-45`}
                             style={{ background: ACCENT_GOLD_GRADIENT }}
                           >
                             {productionDefaultsBusy
@@ -9812,7 +9839,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                   type="button"
                                   disabled={!supabaseOk || !selectedIssueId || pacingApplyBusy || outlineGenLoading}
                                   onClick={() => void runApplyPacingRecommendation()}
-                                  className="rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                              className="writer-attention-simple rounded-md border border-black/20 bg-white/85 px-3 py-1.5 text-[11px] font-bold text-black shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
                                 >
                                   {pacingApplyBusy ? 'Applying…' : 'Stage plan'}
                                 </button>

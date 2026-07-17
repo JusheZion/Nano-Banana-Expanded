@@ -170,6 +170,230 @@ body.theme-wiki {
   animation: fadeIn 0.5s ease-out;
 }
 
+/* Writers' Workshop motion choreography */
+@keyframes writerCinematicEnter {
+  0% {
+    opacity: 0.35;
+    transform: translate3d(0, var(--writer-motion-cinematic-travel, 28px), 0) scale(0.985);
+    filter: blur(3px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes writerEditorialEnter {
+  from {
+    opacity: 0.7;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes writerAttentionPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(180, 118, 18, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    box-shadow: 0 0 0 6px rgba(180, 118, 18, 0.16), 0 8px 18px rgba(88, 56, 10, 0.15);
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes writerDockReveal {
+  from {
+    opacity: 0.55;
+    transform: translate3d(18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes writerDockRevealPhone {
+  from {
+    opacity: 0.55;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.writer-motion-root {
+  --writer-motion-cinematic-duration: 820ms;
+  --writer-motion-editorial-duration: 260ms;
+  --writer-motion-cinematic-ease: cubic-bezier(0.2, 0.72, 0.18, 1);
+  --writer-motion-editorial-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.writer-motion-root[data-writer-portal-motion='cinematic'] .writer-motion-header,
+.writer-motion-root[data-writer-portal-motion='cinematic'] .writer-motion-navigation {
+  animation: writerCinematicEnter var(--writer-motion-cinematic-duration) var(--writer-motion-cinematic-ease) both;
+}
+
+.writer-motion-root[data-writer-portal-motion='cinematic'] .writer-motion-navigation {
+  animation-delay: 180ms;
+}
+
+.writer-motion-root[data-writer-portal-motion='editorial'] .writer-motion-header,
+.writer-motion-root[data-writer-portal-motion='editorial'] .writer-motion-navigation {
+  animation: writerEditorialEnter var(--writer-motion-editorial-duration) var(--writer-motion-editorial-ease) both;
+}
+
+.writer-motion-workspace > * {
+  animation-fill-mode: both;
+  animation-timing-function: var(--writer-motion-editorial-ease);
+}
+
+.writer-motion-workspace--motion-active.writer-motion-workspace--cinematic > * {
+  animation-name: writerCinematicEnter;
+  animation-duration: var(--writer-motion-cinematic-duration);
+  animation-timing-function: var(--writer-motion-cinematic-ease);
+}
+
+.writer-motion-workspace--motion-active.writer-motion-workspace--editorial > * {
+  animation-name: writerEditorialEnter;
+  animation-duration: var(--writer-motion-editorial-duration);
+}
+
+.writer-motion-workspace > :nth-child(1) { animation-delay: 40ms; }
+.writer-motion-workspace > :nth-child(2) { animation-delay: 95ms; }
+.writer-motion-workspace > :nth-child(3) { animation-delay: 150ms; }
+.writer-motion-workspace > :nth-child(4) { animation-delay: 205ms; }
+.writer-motion-workspace > :nth-child(5) { animation-delay: 260ms; }
+.writer-motion-workspace > :nth-child(6) { animation-delay: 315ms; }
+.writer-motion-workspace > :nth-child(n + 7) { animation-delay: 370ms; }
+
+.writer-motion-workspace--editorial > :nth-child(n) {
+  animation-delay: 0ms;
+}
+
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='simple'] .writer-attention-simple:not(:disabled),
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='advanced'] .writer-attention-advanced:not(:disabled) {
+  animation: writerAttentionPulse 1.1s ease-in-out 2;
+}
+
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='simple'] .writer-attention-simple:not(:disabled):hover,
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='simple'] .writer-attention-simple:not(:disabled):focus-visible,
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='advanced'] .writer-attention-advanced:not(:disabled):hover,
+.writer-motion-root[data-writer-attention='active'][data-writer-mode='advanced'] .writer-attention-advanced:not(:disabled):focus-visible {
+  animation: none;
+  transform: none;
+}
+
+.writer-motion-root details::details-content {
+  block-size: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translate3d(0, -6px, 0);
+  transition:
+    block-size 320ms var(--writer-motion-editorial-ease),
+    content-visibility 320ms allow-discrete,
+    opacity 220ms ease,
+    transform 260ms var(--writer-motion-editorial-ease);
+}
+
+.writer-motion-root details[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.writer-motion-dock {
+  animation: writerDockReveal 280ms var(--writer-motion-editorial-ease) both;
+  transition:
+    inline-size 280ms var(--writer-motion-editorial-ease),
+    min-inline-size 280ms var(--writer-motion-editorial-ease),
+    max-inline-size 280ms var(--writer-motion-editorial-ease),
+    max-block-size 300ms var(--writer-motion-editorial-ease);
+  overflow: hidden;
+}
+
+.writer-motion-dock--phone {
+  animation-name: writerDockRevealPhone;
+}
+
+.writer-motion-dock--collapsed:not(.writer-motion-dock--phone) {
+  inline-size: 2.5rem;
+  min-inline-size: 2.5rem;
+  max-inline-size: 2.5rem;
+}
+
+.writer-motion-dock--collapsed.writer-motion-dock--phone {
+  max-block-size: 3.25rem;
+}
+
+.writer-motion-dock--open.writer-motion-dock--phone {
+  max-block-size: min(42vh, 420px);
+}
+
+.writer-motion-workspace > [role='alert'],
+.writer-motion-workspace > [role='status'] {
+  animation: none;
+}
+
+@supports (interpolate-size: allow-keywords) {
+  .writer-motion-root {
+    interpolate-size: allow-keywords;
+  }
+}
+
+@media (max-width: 700px) {
+  .writer-motion-root {
+    --writer-motion-cinematic-duration: 700ms;
+    --writer-motion-cinematic-travel: 18px;
+  }
+
+  .writer-motion-workspace > :nth-child(4) { animation-delay: 175ms; }
+  .writer-motion-workspace > :nth-child(5) { animation-delay: 210ms; }
+  .writer-motion-workspace > :nth-child(n + 6) { animation-delay: 240ms; }
+
+  .writer-motion-workspace--cinematic > * {
+    filter: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .writer-motion-root,
+  .writer-motion-root *,
+  .writer-motion-root *::before,
+  .writer-motion-root *::after,
+  .writer-motion-root *::details-content {
+    scroll-behavior: auto !important;
+  }
+
+  .writer-motion-root .writer-motion-header,
+  .writer-motion-root .writer-motion-navigation,
+  .writer-motion-root .writer-motion-workspace > *,
+  .writer-motion-root .writer-attention-simple,
+  .writer-motion-root .writer-attention-advanced,
+  .writer-motion-root .writer-motion-dock,
+  .writer-motion-root .animate-spin {
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  .writer-motion-root details::details-content,
+  .writer-motion-root details[open]::details-content {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
 @keyframes guidedProgressFill {
   0% {
     transform: translateX(-105%);

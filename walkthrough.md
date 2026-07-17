@@ -11459,3 +11459,55 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Optional follow-ups: recoverable lore-card deletion, stronger small metadata typography, a clearer downloads-information panel, and a Visual Canon attachment smoke after adding a disposable vault image to the demo account.
+
+## Writers' Workshop Timeline Motion Polish - 2026-07-17
+
+### What changed
+- Added cinematic first-entry choreography for Writers' Workshop and each major workflow workspace, with restrained editorial motion on revisits.
+- Added Writer-scoped header, navigation, section, workspace, disclosure, and dock animation primitives without remounting stateful editors.
+- Added mode-aware attention cues: Simple Workflow exposes only its single recommended enabled action, while Advanced Tools highlights a small contextual set of important actions.
+- Added bounded cue dismissal that survives workspace round-trips, compact-screen timing/travel reductions, and comprehensive `prefers-reduced-motion` fallbacks.
+- Added smooth dock footprint transitions and keyboard focus restoration across collapse/reopen.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterRibbon.tsx`
+- `src/portals/writer/WriterStudioDock.tsx`
+- `src/portals/writer/writerMotion.ts`
+- `src/portals/writer/__tests__/writerMotion.test.ts`
+- `src/portals/writer/__tests__/WriterStudioDock.test.tsx`
+- `src/styles/theme.css`
+- `docs/plans/2026-07-17-writers-workshop-motion-polish-plan.md`
+- `tasks.md`
+
+### Implementation notes
+- First-visit state is session-scoped; storage failure safely falls back to restrained editorial motion.
+- Workspace animations restart by removing and restoring the animation class across frames, not by applying a React `key`, so editor/input state is preserved.
+- Attention motion runs for two 1.1-second cycles, stops after interaction, settles on hover/focus, excludes disabled controls, and is removed under reduced motion.
+- The DOX closeout found no durable ownership, structure, or workflow-contract change requiring an `AGENTS.md` update. The user's unrelated `AGENTS.md` edit remains untouched.
+
+### Verification
+- Writer regression: 26 files / 82 tests passed.
+- Focus regression: dock keyboard focus transfers to the reciprocal toggle after collapse/reopen.
+- `npm run lint`: passed.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- `git diff --check`: passed.
+- Signed-in local browser QA confirmed cinematic/editorial visit policy, single Simple cue, contextual Advanced cues, remembered cue dismissal, desktop/phone layouts, no horizontal overflow, and recoverable cleanup.
+- Independent accessibility audit findings were repaired and reverified.
+- Final strict UI-critic re-audit approved deployment after replay, cue targeting, dock interpolation, pulse-duration, and compact-motion repairs.
+
+### Outstanding issues
+- None blocking release.
+
+### Risks or caveats
+- Reduced-motion behavior is covered by scoped CSS and automated policy checks; the in-app browser bridge does not expose a media-preference emulator for a manual toggle.
+- Advanced Tools intentionally shows one principal cue on the default dashboard and multiple cues only in contexts such as Review, avoiding unrelated simultaneous pulses.
+
+### QA cleanup
+- The disposable `Untitled series` and its two motion-QA canon cards were moved to Recoverable Trash; the UI confirmed immediate Undo and no active-library record remained.
+
+### Deployment
+- Pending the verified scoped commit and Cloudflare release.
+
+### Next steps
+- Commit the scoped diff, deploy to Cloudflare, and verify the signed-in live site.
