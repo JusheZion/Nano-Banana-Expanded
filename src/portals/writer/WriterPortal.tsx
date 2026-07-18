@@ -10769,7 +10769,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               ) : (
                                 <>
                                   <p className="text-[10px] text-black/50">
-	                                    Editing outline v{latestOutline.version}. Invalid data format will not save.
+	                                    Editing outline v{latestOutline.version}. Accepts the displayed format or numbered lines such as “1 [tab] Scene: Description.”
                                   </p>
                                   <textarea
                                     value={outlineEditDraft}

@@ -134,6 +134,11 @@ export function parseOutlineText(text: string): OutlineJsonLike {
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
     if (!line) continue;
+    const numberedBeat = line.match(/^(\d+)(?:\t+|[.)]\s+)(.+)$/);
+    if (numberedBeat) {
+      beats.push(parseOutlineBeatLine(`Page ${numberedBeat[1]} — ${numberedBeat[2]}`));
+      continue;
+    }
     const upper = line.toUpperCase();
     if (upper.startsWith('TITLE:')) {
       result.title = line.slice(line.indexOf(':') + 1).trim();
@@ -311,4 +316,3 @@ export function formatDialogueBundleAsFountain(
   }
   return `${lines.join('\n').trim()}\n`;
 }
-

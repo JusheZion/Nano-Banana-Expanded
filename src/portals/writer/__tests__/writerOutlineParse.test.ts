@@ -31,4 +31,31 @@ describe('parseOutlineText round-trip', () => {
     // text is stable through a second pass
     expect(formatOutlineAsText(merged)).toBe(text);
   });
+
+  it('accepts a pasted numbered outline with tab-separated scene descriptions', () => {
+    const parsed = parseOutlineText([
+      '1\tCampfire under starry sky: Children gather around a crackling campfire.',
+      '2\tMontage of historical figures / cosmic essence: The elder narrates a timeless history. (turn: Intrigue)',
+      '4. Return to campfire: The children look up at the stars.',
+    ].join('\n'));
+
+    expect(parsed.page_beats).toEqual([
+      {
+        page_target: 1,
+        scene: 'Campfire under starry sky',
+        summary: 'Children gather around a crackling campfire.',
+      },
+      {
+        page_target: 2,
+        scene: 'Montage of historical figures / cosmic essence',
+        summary: 'The elder narrates a timeless history.',
+        emotional_turn: 'Intrigue',
+      },
+      {
+        page_target: 4,
+        scene: 'Return to campfire',
+        summary: 'The children look up at the stars.',
+      },
+    ]);
+  });
 });

@@ -11513,3 +11513,40 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+
+## Writers Workshop numbered-outline paste compatibility - 2026-07-18
+
+### What changed
+- Updated the readable outline parser to accept numbered page lines pasted as either tab-separated text (`1 [tab] Scene: Description`) or common numbered-list text (`1. Scene: Description`).
+- Preserved scene names, page numbers, summaries, and trailing `(turn: ...)` emotional turns when converting pasted lines into saved page beats.
+- Replaced the advanced editor's generic invalid-format warning with concise guidance describing the accepted pasted format.
+- Added regression coverage for tab-separated and numbered-list outline lines.
+
+### Files touched
+- `src/portals/writer/writerExportFormats.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerOutlineParse.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Existing `TITLE:`, `PREMISE:`, `ACTS:`, and `PAGE BEATS:` round-trip behavior remains unchanged.
+- The parser continues to merge recognized readable fields into the existing outline JSON so unrelated top-level data is preserved.
+- The DOX closeout found no durable ownership, structure, or workflow-contract change requiring an `AGENTS.md` update.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerOutlineParse.test.ts`: 1 file / 2 tests passed.
+- Targeted ESLint completed with 0 errors; three existing warnings remain in the checked files.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- None.
+
+### Risks or caveats
+- Numbered paste lines must include either a tab after the number or a conventional numbered-list delimiter such as `1.` or `1)`.
+
+### Operator follow-up
+- Paste the 71-line source into the outline editor in Plain text mode and save again.
+
+### Next steps
+- None.
