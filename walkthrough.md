@@ -11548,5 +11548,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Operator follow-up
 - Paste the 71-line source into the outline editor in Plain text mode and save again.
 
+### Deployment
+- Commit `25e8f50` was pushed to `main`.
+- Cloudflare production version `bb3f1b9a-2aad-4141-aae9-d6d1089189b8` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Live asset verification confirmed the deployed Writers Workshop bundle contains the numbered-outline format guidance.
+
 ### Next steps
 - None.
