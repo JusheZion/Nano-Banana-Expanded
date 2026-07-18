@@ -3,6 +3,7 @@ import {
   EMPTY_WRITER_PRODUCTION_DEFAULTS,
   buildProductionDefaultsPromptBlock,
   mergeProductionDefaultsIntoNotes,
+  productionDefaultsToPayload,
   readProductionDefaultsFromNotes,
   resolveProductionDefaults,
 } from '../writerProductionDefaults';
@@ -82,5 +83,14 @@ describe('writerProductionDefaults', () => {
     expect(block).toContain('Strict canon: yes');
     expect(block).toContain('No video assumptions: yes');
     expect(block).toContain('Do not translate the story into video');
+  });
+
+  it('normalizes legacy oversized art-style briefs to the request contract', () => {
+    const payload = productionDefaultsToPayload({
+      ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
+      artStyle: 'a'.repeat(4500),
+    });
+
+    expect(payload.art_style).toHaveLength(4000);
   });
 });

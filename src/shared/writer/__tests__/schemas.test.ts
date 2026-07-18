@@ -80,6 +80,20 @@ describe('writerToolsRequestSchema', () => {
     ).toThrow();
   });
 
+  it('accepts detailed art-style briefs up to 4000 characters', () => {
+    const parsed = writerToolsOutlineIssueRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      production_defaults: { art_style: 'a'.repeat(4000) },
+    });
+    expect(parsed.production_defaults?.art_style).toHaveLength(4000);
+    expect(() => writerToolsOutlineIssueRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      production_defaults: { art_style: 'a'.repeat(4001) },
+    })).toThrow();
+  });
+
   it('parses page_beats', () => {
     const id = '550e8400-e29b-41d4-a716-446655440000';
     const r = writerToolsRequestSchema.parse({ mode: 'page_beats', page_id: id });

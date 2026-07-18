@@ -23,7 +23,7 @@ export const writerProductionDefaultsPayloadSchema = z
       .enum(['single_issue', 'multi_issue_arc', 'book', 'episode', 'shared_universe'])
       .optional(),
     comic_panel_density: z.enum(['sparse', 'standard', 'dense']).optional(),
-    art_style: z.string().max(500).optional(),
+    art_style: z.string().max(4000).optional(),
     character_consistency: z.enum(['standard', 'strict']).optional(),
     output_format: z
       .enum([

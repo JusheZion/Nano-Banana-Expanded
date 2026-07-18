@@ -11597,5 +11597,51 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Operator follow-up
 - None.
 
+### Deployment
+- Implementation commit `79003c0` was deployed to Cloudflare production version `8e3618a9-6eaa-4d28-b5fd-e5917f4ab761` at `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Live asset verification confirmed the production Writers Workshop bundle contains `Official Issue Outline`, `How should AI use my outline?`, `Organize and polish`, and `Update official outline with AI`.
+
 ### Next steps
-- Optional signed-in smoke with an existing issue after deployment to confirm source-save status and official-version refresh against live data.
+- Optional signed-in smoke with an existing issue to confirm source-save status and official-version refresh against live data.
+
+## Writers Workshop AI outline request fix and workflow visual polish - 2026-07-18
+
+### What changed
+- Fixed the `production_defaults.art_style` validation failure that blocked `Update official outline with AI` when an existing art-style description exceeded the former 500-character request limit.
+- Raised the shared client and Supabase Writer schema limit to 4,000 characters and normalized legacy oversized values before submission so older saved data cannot break outline generation.
+- Added matching 4,000-character limits and visible counters to both Writer art-style editing surfaces.
+- Rebuilt the plain outline-workflow note as a glass-and-gold three-step path that matches the Writers Workshop cards, typography, shadows, and accent language.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerProductionDefaults.ts`
+- `src/portals/writer/__tests__/writerProductionDefaults.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The request payload now truncates only values beyond the documented 4,000-character boundary; values up to that limit pass unchanged.
+- Client and Edge Function validation remain synchronized.
+- The visual workflow retains the same three instructions but presents them as a connected numbered path with a separate canon note.
+- The DOX closeout found no durable ownership, structure, or workflow-contract change requiring an `AGENTS.md` update.
+
+### Verification
+- Full Writer regression: 26 files / 84 tests passed.
+- Focused production-default and schema regression: 2 files / 38 tests passed after the final field-placement correction.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- Local browser QA confirmed the redesigned workflow path renders in the Outline workspace, the page has no horizontal overflow, and the console contains no warnings or errors.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- Live signed-in outline generation still requires deployment of both the updated `writer-tools` Supabase Edge Function and the Cloudflare application bundle.
+
+### Risks or caveats
+- The local browser account has no selected series or issue, so the live-data generation action was not exercised locally.
+
+### Operator follow-up
+- Deploy the `writer-tools` Edge Function and the Cloudflare application before retesting the button on production.
+
+### Next steps
+- Commit, push, deploy both surfaces, then run a signed-in production smoke with the affected issue.

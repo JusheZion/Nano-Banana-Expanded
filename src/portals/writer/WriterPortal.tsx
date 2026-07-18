@@ -135,6 +135,7 @@ import {
 } from '@/portals/writer/writerVisualReferences';
 import {
   EMPTY_WRITER_PRODUCTION_DEFAULTS,
+  WRITER_ART_STYLE_MAX,
   mergeProductionDefaultsIntoNotes,
   productionDefaultsToPayload,
   readProductionDefaultsFromNotes,
@@ -6459,14 +6460,35 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           {!selectedIssueId ? <p className="mt-3 text-xs font-semibold text-amber-950">Choose an issue in Story Library first.</p> : null}
         </section>
 
-        <section className="border-l-2 border-emerald-800/55 bg-white/35 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Outline workflow</p>
-          <ol className="mt-2 space-y-1.5 text-[11px] font-semibold leading-snug text-black/62">
-            <li><strong>1.</strong> Paste and save your source.</li>
-            <li><strong>2.</strong> Choose how much AI may change.</li>
-            <li><strong>3.</strong> Generate, review, and edit the official outline.</li>
+        <section className={`${WRITER_GLASS_CARD} relative overflow-hidden border-t-2 border-amber-700/45 p-5`}>
+          <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-amber-200/35 blur-2xl" aria-hidden />
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-950/55">Your path</p>
+              <h3 className="mt-1 font-serif text-xl font-semibold text-slate-950">From source to official</h3>
+            </div>
+            <span className="rounded-full border border-amber-800/20 bg-amber-100/65 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-amber-950/70">3 steps</span>
+          </div>
+          <ol className="relative mt-4 space-y-3">
+            {[
+              ['1', 'Source', 'Paste and save the story you want AI to respect.'],
+              ['2', 'AI treatment', 'Choose how much structure or expansion AI may add.'],
+              ['3', 'Official outline', 'Generate, review, and edit the version production uses.'],
+            ].map(([number, label, description], index) => (
+              <li key={number} className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+                {index < 2 ? <span className="absolute left-[0.95rem] top-8 h-[calc(100%+0.25rem)] w-px bg-amber-800/20" aria-hidden /> : null}
+                <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border border-amber-800/30 text-[11px] font-black text-amber-950 shadow-sm" style={{ background: ACCENT_GOLD_GRADIENT }}>{number}</span>
+                <span className="pt-0.5">
+                  <strong className="block text-[11px] font-black uppercase tracking-wide text-black/72">{label}</strong>
+                  <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-black/52">{description}</span>
+                </span>
+              </li>
+            ))}
           </ol>
-          <p className="mt-2 text-[10px] font-semibold text-black/45">Canon is included automatically when available; run Story Review later for a formal canon check.</p>
+          <div className="relative mt-4 flex items-start gap-2 border-t border-black/10 pt-3 text-[10px] font-semibold leading-snug text-black/48">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-900/55" aria-hidden />
+            <p>Available canon joins automatically. Story Review provides the formal canon check after generation.</p>
+          </div>
         </section>
       </div>
     </div>
@@ -7500,6 +7522,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               Art style
                               <input
                                 type="text"
+                                maxLength={WRITER_ART_STYLE_MAX}
                                 value={productionDefaultsDraft.artStyle}
                                 onChange={(e) =>
                                   setProductionDefaultsDraft((p) => ({ ...p, artStyle: e.target.value }))
@@ -7508,6 +7531,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                                 className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm text-black disabled:opacity-50"
                                 placeholder="e.g. consistent comic-book line art"
                               />
+                              <span className="self-end text-[9px] font-semibold text-black/40">
+                                {Math.min(productionDefaultsDraft.artStyle.length, WRITER_ART_STYLE_MAX)}/{WRITER_ART_STYLE_MAX}
+                              </span>
                             </label>
                             <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-semibold text-black/70">
                               <label className="inline-flex items-center gap-2">
@@ -8650,6 +8676,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           <label className="mt-3 flex flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
                             Art style
                             <input
+                              maxLength={WRITER_ART_STYLE_MAX}
                               value={productionDefaultsDraft.artStyle}
                               onChange={(event) => setProductionDefaultsDraft((current) => ({
                                 ...current,
@@ -8659,6 +8686,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               placeholder="e.g. consistent comic-book line art"
                               className="min-h-11 rounded-lg border border-black/15 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-black disabled:opacity-45"
                             />
+                            <span className="self-end text-[9px] font-semibold normal-case tracking-normal text-black/40">
+                              {Math.min(productionDefaultsDraft.artStyle.length, WRITER_ART_STYLE_MAX)}/{WRITER_ART_STYLE_MAX}
+                            </span>
                           </label>
                           <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-black/70">
                             <label className="inline-flex min-h-11 items-center gap-2">

@@ -15,6 +15,8 @@ export type WriterOutputFormat =
   | 'prose_manuscript'
   | 'lore_wiki';
 
+export const WRITER_ART_STYLE_MAX = 4000;
+
 export type WriterProductionDefaults = {
   mediumType: WriterProductionMedium;
   narrativeScope: WriterNarrativeScope;
@@ -127,7 +129,7 @@ export function productionDefaultsToPayload(
     medium_type: defaults.mediumType,
     narrative_scope: defaults.narrativeScope,
     comic_panel_density: defaults.comicPanelDensity,
-    art_style: defaults.artStyle,
+    art_style: defaults.artStyle.slice(0, WRITER_ART_STYLE_MAX),
     character_consistency: defaults.characterConsistency,
     output_format: defaults.outputFormat,
     strict_canon: defaults.strictCanon,
