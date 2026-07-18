@@ -434,6 +434,8 @@ Default section order:
 
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
+- When browser automation or a requested feature fails, proactively troubleshoot it before treating it as a coverage gap. In the final report, surface the blocker in a distinct, highly visible paragraph using bold all-caps text; state what was attempted, what prevented completion, and the next useful recovery action.
+
 ## Child DOX Index
 
 - No nested `AGENTS.md` files currently exist; this root file owns the active contract for the whole repository.

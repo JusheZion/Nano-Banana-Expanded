@@ -11555,3 +11555,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None.
+
+## Writers Workshop outline workflow clarification - 2026-07-18
+
+### What changed
+- Reframed the focused Outline workspace as a visible three-step workflow: save the user's source, choose how AI may treat it, then generate and review the official issue outline.
+- Replaced the misleading `Source first`, `Canon checked`, and `AI structures` pseudo-toggles with three mutually exclusive, fully described AI treatments: `Keep my order`, `Organize and polish`, and `Expand creatively`.
+- Made outline generation automatically persist the current source text and selected treatment before the AI call, preventing stale saved source from being used accidentally.
+- Swapped the desktop columns so the official issue outline is the larger left workspace and the user's source editor is on the right, matching the supplied annotated screenshot.
+- Expanded the official outline preview into a tall, keyboard-focusable scrolling region with saved-version status, edit/download actions, and a clear explanation of what downstream work it controls.
+- Added source saved/unsaved state, explicit empty and loading states, a clearer official-outline action label, and a guarded Continue to Pages & Beats action.
+- Preserved a natural Step 1 to Step 3 visual order on compact screens with no horizontal overflow.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- `My Outline` is the user's durable source. Saving it alone does not replace the official outline.
+- `Create/Update official outline with AI` saves the current source automatically, applies the selected treatment, and creates a new official outline version.
+- The official issue outline remains the downstream source for page count, beats, dialogue, review, and export.
+- Canon cards are included automatically when available; the later Story Review canon check remains a separate formal audit.
+- Included the root `AGENTS.md` behavior rule requiring proactive troubleshooting and a highly visible blocker report when browser automation or a requested feature cannot be completed.
+
+### Verification
+- Full Writer regression: 26 files / 83 tests passed.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- Targeted ESLint completed with 0 errors and three existing warnings in the checked files.
+- `git diff --check`: passed.
+- Local desktop browser QA confirmed the requested official-left/source-right hierarchy, explicit three-choice AI treatment, official-outline empty state, and clarified labels.
+- Local compact browser QA confirmed source and AI treatment appear before the official outline, all three radio choices are exposed semantically, and document width matches viewport width with no horizontal overflow.
+- Strict UI critique repaired misleading empty-state copy and reversed compact step order before approval.
+
+### Outstanding issues
+- Signed-in end-to-end generation was not run because the local QA account had no selected series or issue; automated source persistence coverage and existing Writer generation regressions passed.
+
+### Risks or caveats
+- The local browser viewport bridge reported a 582 CSS-pixel compact viewport when asked for 390 pixels; the compact breakpoint and overflow behavior were still exercised successfully.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Optional signed-in smoke with an existing issue after deployment to confirm source-save status and official-version refresh against live data.

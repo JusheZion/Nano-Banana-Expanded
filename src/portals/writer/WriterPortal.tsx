@@ -2184,6 +2184,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     async (
       drafts: Partial<Record<WriterDraftKey, string>>,
       snapshot?: { key: string; label: string; value: unknown },
+      outlineSource?: AuthorOutlineSource,
     ) => {
       if (!selectedIssue) return true;
       let nextNotes = selectedIssue.notes;
@@ -2193,6 +2194,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       if (snapshot) nextNotes = mergeWriterStorySnapshotIntoNotes(nextNotes, snapshot);
       nextNotes = mergeWriterDraftsIntoNotes(nextNotes, draftsToSave);
+      if (outlineSource && !isWriterItemLocked(selectedIssue.notes, 'issue.author_outline')) {
+        nextNotes = mergeAuthorOutlineIntoNotes(nextNotes, outlineSource);
+      }
       const ok = await updateSelectedIssueNotes(nextNotes);
       if (!ok) {
         setWriterSafetyMessage('Could not save current drafts before the AI call. Nothing was generated.');
@@ -2245,6 +2249,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }),
     [authorOutlineText, authorOutlineMode],
   );
+  const savedAuthorOutlineSource = useMemo(
+    () => readAuthorOutlineFromNotes(selectedIssue?.notes),
+    [selectedIssue?.notes],
+  );
+  const authorOutlineSourceSaved =
+    authorOutlineText.trim() === savedAuthorOutlineSource.text.trim() &&
+    authorOutlineMode === savedAuthorOutlineSource.mode;
+  const hasSavedAuthorOutlineSource = Boolean(savedAuthorOutlineSource.text.trim());
   const productionDefaultsPayload = useMemo(
     () => productionDefaultsToPayload(productionDefaultsDraft),
     [productionDefaultsDraft],
@@ -2840,6 +2852,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     async (opts?: { coverageBoost?: boolean }) => {
       if (!selectedIssueId) return;
       if (!guardWriterLock('outline.latest', 'Latest outline')) return;
+      if (!authorOutlineSourceSaved && !guardWriterLock('issue.author_outline', 'Author outline')) return;
       const draftSaved = await persistWriterPreAiNotes(
         {
           outline_instructions: outlineSupplementDraft,
@@ -2852,6 +2865,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               value: latestOutline.outline_json,
             }
           : undefined,
+        authorOutlineSource,
       );
       if (!draftSaved) return;
       setOutlineGenError(null);
@@ -2886,6 +2900,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       outlineSupplementDraft,
       shotsBrief,
       latestOutline,
+      authorOutlineSource,
+      authorOutlineSourceSaved,
       productionDefaultsPayload,
       guardWriterLock,
       persistWriterPreAiNotes,
@@ -6352,68 +6368,105 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ) : null;
 
   const focusedOutline = (
-    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
-      <div className="space-y-4">
-        <section className={`${WRITER_GLASS_CARD} flex min-h-[606px] flex-col p-6`}>
-          <textarea
-            aria-label="Outline source"
-            value={authorOutlineText}
-            onChange={(e) => setAuthorOutlineText(e.target.value)}
-            className="min-h-[500px] w-full flex-1 resize-none rounded-lg border border-white/50 bg-white/25 p-5 text-base leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
-            placeholder="Paste your outline in any format — a list, summary, or rough notes..."
-          />
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-4 text-[11px] font-semibold text-black/60" aria-label="Outline generation preferences">
-              <button type="button" aria-pressed={authorOutlineMode === 'preserve'} onClick={() => setAuthorOutlineMode('preserve')} className="inline-flex items-center gap-2">
-                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${authorOutlineMode === 'preserve' ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${authorOutlineMode === 'preserve' ? 'ml-auto' : ''}`} /></span>
-                Source first
-              </button>
-              <span className="inline-flex items-center gap-2" title={canonSaved?.result ? 'A saved canon check is available' : 'Run Story Review to create a canon check'}>
-                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${canonSaved?.result ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${canonSaved?.result ? 'ml-auto' : ''}`} /></span>
-                Canon checked
-              </span>
-              <button type="button" aria-pressed={authorOutlineMode === 'structure'} onClick={() => setAuthorOutlineMode('structure')} className="inline-flex items-center gap-2">
-                <span className={`h-5 w-9 rounded-full border border-black/15 p-0.5 ${authorOutlineMode === 'structure' ? 'bg-amber-400/80' : 'bg-black/25'}`}><span className={`block h-4 w-4 rounded-full bg-white shadow ${authorOutlineMode === 'structure' ? 'ml-auto' : ''}`} /></span>
-                AI structures
-              </button>
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.28fr)_minmax(380px,0.72fr)]">
+      <div className="order-2 space-y-4 xl:order-1">
+        <section className={`${WRITER_GLASS_CARD} flex min-h-[680px] flex-col overflow-hidden p-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-black/10 pb-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Step 3 · Official structure</p>
+              <h3 className="mt-1 font-serif text-3xl font-semibold text-slate-950">Official Issue Outline</h3>
+              <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-black/55">
+                This saved version drives page count, page beats, dialogue, review, and export.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={!supabaseOk || !selectedIssueId || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
-                {outlineGenLoading ? 'Generating…' : 'Generate Outline'}
-              </button>
-              <button type="button" onClick={() => setAuthorOutlineMode('preserve')} className="rounded-lg border-2 border-amber-700/55 bg-white/20 px-5 py-2.5 text-sm font-black text-black">
-                Keep my order
-              </button>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-black/60">
+              {latestOutline ? <CheckCircle2 size={13} aria-hidden /> : <Circle size={13} aria-hidden />}
+              {latestOutline ? `Saved · v${latestOutline.version}` : 'Not generated'}
+            </span>
+          </div>
+          <div className="mt-5 min-h-0 flex-1">
+            {latestOutline ? (
+              <pre className="h-[min(570px,62vh)] min-h-[430px] overflow-y-auto whitespace-pre-wrap rounded-lg border border-white/55 bg-white/30 p-5 font-sans text-sm font-semibold leading-relaxed text-black/72 shadow-inner" tabIndex={0} aria-label={`Official issue outline version ${latestOutline.version}`}>
+                {formatOutlineAsText(latestOutline.outline_json)}
+              </pre>
+            ) : (
+              <div className="flex h-full min-h-[430px] flex-col items-center justify-center border-y border-black/10 text-center">
+                <Circle size={28} className="text-black/25" aria-hidden />
+                <p className="mt-3 font-serif text-xl font-semibold text-slate-950">No official outline yet</p>
+                <p className="mt-1 max-w-sm text-sm font-semibold leading-relaxed text-black/50">Add your source outline, choose how AI should treat it, then generate the official version.</p>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold text-black/48">Generating again creates a new version; the current version is snapshotted first.</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" title="Open the official outline editor" disabled={!latestOutline} onClick={() => openSavedOutputEditor('outline')} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Edit official outline</button>
+              <button type="button" title="Download the official outline as JSON" disabled={!latestOutline} onClick={() => latestOutline && downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json)} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Download</button>
             </div>
           </div>
-          {!selectedIssueId ? (
-            <p className="mt-4 rounded-lg border border-amber-300/70 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
-              Choose an issue in Story Library before generating or saving an outline.
-            </p>
-          ) : null}
         </section>
-        <button type="button" onClick={() => setActiveWorkflowOverride('pages')} className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-white/75 px-5 py-4 text-left text-xs font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25">
-          Edit Current Page Review <ArrowRight size={18} aria-hidden />
+        <button type="button" disabled={!latestOutline} onClick={() => setActiveWorkflowOverride('pages')} className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-white/75 px-5 py-4 text-left text-xs font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45">
+          Continue to Pages &amp; Beats <ArrowRight size={18} aria-hidden />
         </button>
       </div>
-      <div className="space-y-6">
-        <section className={`${WRITER_GLASS_CARD} min-h-[230px] p-6`}>
-          <h3 className="font-serif text-2xl font-semibold text-slate-950">Latest Saved Outline</h3>
-          <div className="mt-10 text-center text-sm font-semibold text-black/45">
-            {latestOutline ? <pre className="max-h-32 overflow-hidden whitespace-pre-wrap text-left font-sans">{formatOutlineAsText(latestOutline.outline_json)}</pre> : <p>No outlines for this issue yet.</p>}
+
+      <div className="order-1 space-y-4 xl:order-2">
+        <section className={`${WRITER_GLASS_CARD} flex min-h-[520px] flex-col p-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Step 1 · Your source</p>
+              <h3 className="mt-1 font-serif text-2xl font-semibold text-slate-950">My Outline</h3>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide ${authorOutlineSourceSaved ? 'text-emerald-900/70' : 'text-amber-950/70'}`}>
+              {authorOutlineSourceSaved && hasSavedAuthorOutlineSource ? <CheckCircle2 size={13} aria-hidden /> : <Circle size={13} aria-hidden />}
+              {authorOutlineSourceSaved ? (hasSavedAuthorOutlineSource ? 'Source saved' : 'No source saved') : 'Unsaved changes'}
+            </span>
           </div>
-          <div className="mt-5 flex justify-center gap-4 text-xs font-bold text-black/50">
-            <button type="button" disabled={!latestOutline} onClick={() => openSavedOutputEditor('outline')} className="disabled:opacity-35">Edit outline</button>
-            <button type="button" disabled={!latestOutline} onClick={() => latestOutline && downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json)} className="disabled:opacity-35">Download outline</button>
-          </div>
+          <p className="mt-2 text-xs font-semibold leading-relaxed text-black/58">Paste or revise your outline here. Saving stores the source; it does not replace the official outline until you generate.</p>
+          <textarea
+            aria-label="Source outline"
+            value={authorOutlineText}
+            onChange={(e) => setAuthorOutlineText(e.target.value)}
+            className="mt-4 min-h-[300px] w-full flex-1 resize-y rounded-lg border border-white/50 bg-white/30 p-4 text-sm leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
+            placeholder="Paste your outline in any format — a numbered list, summary, or rough notes..."
+          />
+          <button type="button" disabled={!supabaseOk || !selectedIssueId || scriptsBusy || authorOutlineSourceSaved} onClick={() => void saveAuthorOutlineToNotes()} className="mt-3 self-start rounded-md border border-black/20 bg-white/75 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-40">
+            {scriptsBusy ? 'Saving…' : authorOutlineSourceSaved ? (hasSavedAuthorOutlineSource ? 'Source saved' : 'Nothing to save') : 'Save source outline'}
+          </button>
         </section>
-        <section className={`${WRITER_GLASS_CARD} p-6`}>
-          <h3 className="font-serif text-2xl font-semibold text-slate-950">What This Affects</h3>
-          <div className="mt-5 space-y-4 text-sm font-medium text-black/72">
-            <p>Determines final pacing and target page count</p>
-            <p>Directly structures beat generation</p>
-            <p>Maintains pacing tension across visual breaks</p>
+
+        <section className={`${WRITER_GLASS_CARD} p-5`}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Step 2 · AI treatment</p>
+          <h3 className="mt-1 font-serif text-xl font-semibold text-slate-950">How should AI use my outline?</h3>
+          <div className="mt-4 grid gap-2" role="radiogroup" aria-label="How AI should use the source outline">
+            {(
+              [
+                ['preserve', 'Keep my order', 'Polish wording while preserving your sequence and named events.'],
+                ['structure', 'Organize and polish', 'Keep your story, but improve structure, pacing, and page distribution.'],
+                ['expand', 'Expand creatively', 'Keep your spine and let AI add connective scenes where needed.'],
+              ] as const
+            ).map(([id, label, description]) => (
+              <button key={id} type="button" role="radio" aria-checked={authorOutlineMode === id} title={description} onClick={() => setAuthorOutlineMode(id)} className={`rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${authorOutlineMode === id ? 'border-black/65 bg-black text-white shadow-sm' : 'border-black/12 bg-white/55 text-black hover:bg-white/80'}`}>
+                <span className="block text-xs font-black">{label}</span>
+                <span className={`mt-0.5 block text-[11px] font-semibold leading-snug ${authorOutlineMode === id ? 'text-white/70' : 'text-black/52'}`}>{description}</span>
+              </button>
+            ))}
           </div>
+          <button type="button" title="Save the source and create a new official outline version" disabled={!supabaseOk || !selectedIssueId || !authorOutlineText.trim() || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="writer-attention-simple mt-4 w-full rounded-lg px-5 py-3 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
+            {outlineGenLoading ? 'Creating official outline…' : latestOutline ? 'Update official outline with AI' : 'Create official outline with AI'}
+          </button>
+          <p className="mt-2 text-[10px] font-semibold leading-relaxed text-black/48">This action saves your current source and selected treatment automatically, then creates a new official version.</p>
+          {!selectedIssueId ? <p className="mt-3 text-xs font-semibold text-amber-950">Choose an issue in Story Library first.</p> : null}
+        </section>
+
+        <section className="border-l-2 border-emerald-800/55 bg-white/35 px-4 py-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-black/45">Outline workflow</p>
+          <ol className="mt-2 space-y-1.5 text-[11px] font-semibold leading-snug text-black/62">
+            <li><strong>1.</strong> Paste and save your source.</li>
+            <li><strong>2.</strong> Choose how much AI may change.</li>
+            <li><strong>3.</strong> Generate, review, and edit the official outline.</li>
+          </ol>
+          <p className="mt-2 text-[10px] font-semibold text-black/45">Canon is included automatically when available; run Story Review later for a formal canon check.</p>
         </section>
       </div>
     </div>
