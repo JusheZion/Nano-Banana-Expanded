@@ -11,6 +11,7 @@ import {
   Image,
   Loader2,
   Lock,
+  RotateCcw,
   ShieldCheck,
   Unlock,
 } from 'lucide-react';
@@ -35,6 +36,7 @@ import {
   listTrashedWriterIssues,
   listTrashedWriterSeries,
   restoreWriterIssue,
+  restoreWriterOutlineAsLatest,
   restoreWriterSeries,
   trashWriterIssue,
   trashWriterSeries,
@@ -90,6 +92,7 @@ import {
   formatDialogueBundleAsText,
   formatOutlineAsMarkdown,
   formatOutlineAsText,
+  inferOutlineTargetPageCount,
   parseOutlineText,
 } from '@/portals/writer/writerExportFormats';
 import {
@@ -834,6 +837,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [outlineGenLoading, setOutlineGenLoading] = useState(false);
   const [outlineGenError, setOutlineGenError] = useState<string | null>(null);
   const [outlineDeleteBusy, setOutlineDeleteBusy] = useState(false);
+  const [outlineRestoreBusy, setOutlineRestoreBusy] = useState(false);
   const [beatsLoading, setBeatsLoading] = useState(false);
   const [beatsError, setBeatsError] = useState<string | null>(null);
   const [beatsSkipExisting, setBeatsSkipExisting] = useState(true);
@@ -2258,6 +2262,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     authorOutlineText.trim() === savedAuthorOutlineSource.text.trim() &&
     authorOutlineMode === savedAuthorOutlineSource.mode;
   const hasSavedAuthorOutlineSource = Boolean(savedAuthorOutlineSource.text.trim());
+  const detectedSourcePageCount = useMemo(
+    () => inferOutlineTargetPageCount(authorOutlineText),
+    [authorOutlineText],
+  );
+  const effectiveOutlineTargetPageCount = writerFocusedMode && detectedSourcePageCount
+    ? detectedSourcePageCount
+    : targetPageCount;
+  useEffect(() => {
+    if (writerFocusedMode && detectedSourcePageCount && detectedSourcePageCount !== targetPageCount) {
+      setTargetPageCount(detectedSourcePageCount);
+    }
+  }, [detectedSourcePageCount, targetPageCount, writerFocusedMode]);
   const productionDefaultsPayload = useMemo(
     () => productionDefaultsToPayload(productionDefaultsDraft),
     [productionDefaultsDraft],
@@ -2877,7 +2893,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const res = await invokeWriterTools({
         mode: 'outline_issue',
         issue_id: selectedIssueId,
-        target_page_count: targetPageCount,
+        target_page_count: effectiveOutlineTargetPageCount,
         production_defaults: productionDefaultsPayload,
         ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
       });
@@ -2897,6 +2913,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     },
     [
       selectedIssueId,
+      effectiveOutlineTargetPageCount,
       targetPageCount,
       outlineSupplementDraft,
       shotsBrief,
@@ -2909,6 +2926,35 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pushHistory,
     ],
   );
+
+  const restorePreviousOutline = useCallback(async () => {
+    if (!selectedIssueId || !latestOutline || outlines.length < 2) return;
+    if (!guardWriterLock('outline.latest', 'Latest outline')) return;
+    const previousOutline = outlines[1];
+    if (!previousOutline) return;
+    const confirmed = window.confirm(
+      `Restore outline v${previousOutline.version} as a new official version? ` +
+      `Your current v${latestOutline.version} will remain safely in version history.`,
+    );
+    if (!confirmed) return;
+    setOutlineGenError(null);
+    setOutlineRestoreBusy(true);
+    const result = await restoreWriterOutlineAsLatest({
+      issueId: selectedIssueId,
+      outlineJson: previousOutline.outline_json,
+      restoredFromVersion: previousOutline.version,
+      nextVersion: latestOutline.version + 1,
+    });
+    setOutlineRestoreBusy(false);
+    if (!result.ok) {
+      setOutlineGenError(result.error ?? 'Could not restore the previous outline version.');
+      pushHistory('error: restore previous outline');
+      return;
+    }
+    const rows = await listWriterOutlinesForIssue(selectedIssueId);
+    setOutlines(rows);
+    pushHistory(`restored outline v${previousOutline.version} as v${latestOutline.version + 1}`);
+  }, [guardWriterLock, latestOutline, outlines, pushHistory, selectedIssueId]);
 
   const runOutlineGenerateCoverageBoost = useCallback(async () => {
     await runOutlineGenerate({ coverageBoost: true });
@@ -4230,22 +4276,55 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       parsed = raw as Record<string, unknown>;
     }
-    await persistWriterSnapshot({
-      key: 'outline.latest',
-      label: `Outline v${latestOutline.version} before manual edit`,
-      value: latestOutline.outline_json,
-    });
     setScriptsBusy(true);
     const ok = await updateWriterIssueOutlineJson(latestOutline.id, parsed);
-    setScriptsBusy(false);
     if (!ok) {
+      setScriptsBusy(false);
       setScriptsError('Could not save outline. Check Supabase / permissions.');
       return;
     }
+    const canonicalSourceText = formatOutlineAsText(parsed);
+    let sourceSynced = true;
+    let sourceSyncBlockedByLock = false;
+    if (selectedIssue) {
+      sourceSyncBlockedByLock = isWriterItemLocked(selectedIssue.notes, 'issue.author_outline');
+      const notesWithSnapshot = mergeWriterStorySnapshotIntoNotes(selectedIssue.notes, {
+        key: 'outline.latest',
+        label: `Outline v${latestOutline.version} before manual edit`,
+        value: latestOutline.outline_json,
+      });
+      if (sourceSyncBlockedByLock) {
+        await updateSelectedIssueNotes(notesWithSnapshot);
+        sourceSynced = false;
+      } else {
+        sourceSynced = await updateSelectedIssueNotes(mergeAuthorOutlineIntoNotes(notesWithSnapshot, {
+          text: canonicalSourceText,
+          mode: authorOutlineMode,
+        }));
+        if (sourceSynced) setAuthorOutlineText(canonicalSourceText);
+      }
+    }
+    setScriptsBusy(false);
     const rows = await listWriterOutlinesForIssue(latestOutline.issue_id);
     setOutlines(rows);
-    pushHistory(`saved edited outline v${latestOutline.version}`);
-  }, [latestOutline, outlineEditDraft, outlineEditorMode, guardWriterLock, persistWriterSnapshot, pushHistory]);
+    if (!sourceSynced) {
+      setScriptsError(sourceSyncBlockedByLock
+        ? 'The official outline was saved, but My Outline is locked. Unlock it and save again before asking AI to rewrite the outline.'
+        : 'The official outline was saved, but My Outline could not be updated. Save again before asking AI to rewrite it.');
+      pushHistory(`saved edited outline v${latestOutline.version}; source sync failed`);
+      return;
+    }
+    pushHistory(`saved edited outline v${latestOutline.version} and updated AI source`);
+  }, [
+    latestOutline,
+    outlineEditDraft,
+    outlineEditorMode,
+    selectedIssue,
+    authorOutlineMode,
+    guardWriterLock,
+    updateSelectedIssueNotes,
+    pushHistory,
+  ]);
 
   const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === outlineEditorMode) return;
@@ -6399,8 +6478,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             )}
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[11px] font-semibold text-black/48">Generating again creates a new version; the current version is snapshotted first.</p>
+            <div>
+              <p className="text-[11px] font-semibold text-black/48">Every AI update creates a new version. Earlier versions stay available.</p>
+              {latestOutline ? <p className="mt-1 text-[10px] font-black uppercase tracking-wide text-black/38">{outlines.length} version{outlines.length === 1 ? '' : 's'} saved</p> : null}
+            </div>
             <div className="flex flex-wrap gap-2">
+              <button type="button" title={outlines.length > 1 ? `Restore outline v${outlines[1]?.version} without deleting the current version` : 'A previous version will appear here after the next AI update'} disabled={outlines.length < 2 || outlineRestoreBusy || outlineGenLoading} onClick={() => void restorePreviousOutline()} className="inline-flex items-center gap-1.5 rounded-md border border-amber-800/30 bg-amber-50/75 px-3 py-2 text-[11px] font-black text-amber-950 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-800/30 disabled:opacity-35">
+                <RotateCcw size={13} aria-hidden />
+                {outlineRestoreBusy ? 'Restoring…' : 'Undo last AI update'}
+              </button>
               <button type="button" title="Open the official outline editor" disabled={!latestOutline} onClick={() => openSavedOutputEditor('outline')} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Edit official outline</button>
               <button type="button" title="Download the official outline as JSON" disabled={!latestOutline} onClick={() => latestOutline && downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json)} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Download</button>
             </div>
@@ -6431,6 +6517,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             className="mt-4 min-h-[300px] w-full flex-1 resize-y rounded-lg border border-white/50 bg-white/30 p-4 text-sm leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
             placeholder="Paste your outline in any format — a numbered list, summary, or rough notes..."
           />
+          <div className={`mt-2 flex items-start gap-2 rounded-md px-3 py-2 text-[10px] font-semibold leading-snug ${detectedSourcePageCount ? 'bg-emerald-50/60 text-emerald-950/70' : 'bg-amber-50/55 text-amber-950/65'}`} role="status" aria-live="polite">
+            {detectedSourcePageCount ? <CheckCircle2 size={13} className="mt-0.5 shrink-0" aria-hidden /> : <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden />}
+            <p>{detectedSourcePageCount
+              ? `Detected ${detectedSourcePageCount} pages from your page labels. The AI target is automatically set to ${detectedSourcePageCount}.`
+              : `No page labels detected. The AI target remains ${targetPageCount}; use labels such as “Page 1” or “1.” to set it automatically.`}</p>
+          </div>
           <button type="button" disabled={!supabaseOk || !selectedIssueId || scriptsBusy || authorOutlineSourceSaved} onClick={() => void saveAuthorOutlineToNotes()} className="mt-3 self-start rounded-md border border-black/20 bg-white/75 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-40">
             {scriptsBusy ? 'Saving…' : authorOutlineSourceSaved ? (hasSavedAuthorOutlineSource ? 'Source saved' : 'Nothing to save') : 'Save source outline'}
           </button>
@@ -6456,7 +6548,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <button type="button" title="Save the source and create a new official outline version" disabled={!supabaseOk || !selectedIssueId || !authorOutlineText.trim() || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="writer-attention-simple mt-4 w-full rounded-lg px-5 py-3 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
             {outlineGenLoading ? 'Creating official outline…' : latestOutline ? 'Update official outline with AI' : 'Create official outline with AI'}
           </button>
-          <p className="mt-2 text-[10px] font-semibold leading-relaxed text-black/48">This action saves your current source and selected treatment automatically, then creates a new official version.</p>
+          <p className="mt-2 text-[10px] font-semibold leading-relaxed text-black/48">This action saves your source, uses a {effectiveOutlineTargetPageCount}-page target, and creates a new official version you can undo.</p>
+          {outlineGenError ? <p className="mt-3 rounded-md bg-red-50/80 px-3 py-2 text-xs font-semibold text-red-950" role="alert">{outlineGenError}</p> : null}
           {!selectedIssueId ? <p className="mt-3 text-xs font-semibold text-amber-950">Choose an issue in Story Library first.</p> : null}
         </section>
 
@@ -8317,15 +8410,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 	                              className={`w-full resize-y rounded-lg border border-black/15 bg-white px-2 py-1.5 ${outlineEditorMode === 'json' ? 'font-mono' : 'font-sans'} text-xs text-black disabled:opacity-50`}
 	                              disabled={!latestOutline}
 	                            />
+	                            {outlineEditorMode === 'text' ? (
+	                              <p className="mt-1.5 text-[10px] font-semibold leading-snug text-black/48">
+	                                Acts are optional. Use <code>ACTS:</code> with <code>Act I:</code>, <code>Act 2 —</code>, or bullet entries to replace them; leave <code>ACTS:</code> empty to remove them. Saving also updates My Outline so the next AI rewrite uses these edits.
+	                              </p>
+	                            ) : null}
 	                            <div className="mt-2 flex flex-wrap gap-2">
 	                              <button
 	                                type="button"
 	                                disabled={!supabaseOk || scriptsBusy || !latestOutline}
 	                                onClick={() => void saveOutlineEdit()}
+	                                title="Save the official outline and make this edit the source for the next AI rewrite"
 	                                className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm disabled:opacity-45"
 	                                style={{ background: ACCENT_GOLD_GRADIENT }}
 	                              >
-	                                {scriptsBusy ? 'Saving…' : 'Save outline edit'}
+	                                {scriptsBusy ? 'Saving…' : 'Save outline + AI source'}
 	                              </button>
 	                              <button
 	                                type="button"

@@ -11635,13 +11635,104 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `git diff --check`: passed.
 
 ### Outstanding issues
-- Live signed-in outline generation still requires deployment of both the updated `writer-tools` Supabase Edge Function and the Cloudflare application bundle.
+- A signed-in production generation was not triggered because it would create a new official outline version in the user's selected issue.
 
 ### Risks or caveats
 - The local browser account has no selected series or issue, so the live-data generation action was not exercised locally.
 
 ### Operator follow-up
-- Deploy the `writer-tools` Edge Function and the Cloudflare application before retesting the button on production.
+- Retest `Update official outline with AI` on the intended issue; the production client and Edge Function now share the 4,000-character art-style contract.
+
+### Deployment
+- Commit `680dd5d` was pushed to `main`.
+- Supabase `writer-tools` version 55 is active on project `vxclogwiytxjolisnakd`.
+- Cloudflare production version `fccaa851-72af-4a77-b32e-c2999c635554` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Live browser smoke confirmed the application loads, the redesigned `From source to official` workflow is present, the official-outline AI action is present, and the console contains no warnings or errors.
 
 ### Next steps
-- Commit, push, deploy both surfaces, then run a signed-in production smoke with the affected issue.
+- Run the official-outline AI action on the intended production issue and confirm the new official version appears.
+
+## Simple outline auto-targeting and non-destructive rollback - 2026-07-18
+
+### What changed
+- Simple Workflow now detects the highest explicit page label in the user's source outline and automatically uses it as the AI target instead of silently retaining the 22-page default.
+- Added immediate source feedback showing the detected page count and the exact page target the AI action will use; unlabeled outlines receive clear guidance instead of a false detection.
+- Added `Undo last AI update` beside the official-outline actions. Restoring copies the prior outline into a new latest version, so the current version and all earlier versions remain in history.
+- Added visible version counts plus loading, confirmation, disabled, and error states for recovery.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerExportFormats.ts`
+- `src/portals/writer/__tests__/writerOutlineParse.test.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/__tests__/arcsWriterRoomOutlineRestore.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Page detection recognizes `Page 71`, `71.`, `71)`, and tab-separated numbered lines, ignores prose numbers and values above the 200-page Writer limit, and uses the highest valid marker.
+- Advanced Tools retains its manual target-page control. Automatic targeting applies only while Simple Workflow is active.
+- Rollback writes a new `writer_issue_outlines` row with `source_mode: rollback:vN`; it does not delete or overwrite any saved version.
+- The DOX closeout found no ownership, structure, or durable operating-contract change requiring an `AGENTS.md` update.
+
+### Verification
+- Focused page-target and rollback tests: 2 files / 6 tests passed.
+- Full Writer regression plus rollback API coverage: 27 files / 88 tests passed.
+- `npm run build`: passed after a transient `dist/assets` directory contention was investigated; no competing Vite, Wrangler, or npm process remained, and the clean rerun succeeded.
+- Local desktop browser QA confirmed a source containing pages 1, 35, and 71 reports `Detected 71 pages` and the AI action reports a 71-page target.
+- Local compact browser QA confirmed the 71-page feedback remains visible, the recovery action is exposed, no horizontal overflow occurs, and the console contains no warnings or errors.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- Local QA did not perform a real rollback because the local account has no selected issue or outline history; the version-copy database contract is covered by a mocked API test.
+
+### Risks or caveats
+- Outlines without explicit page labels cannot be inferred safely and retain the current target while showing labeling guidance.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit, push, deploy, and perform a signed-in production smoke on a disposable or intentionally versioned issue before using rollback on important work.
+
+## Optional Acts replacement and AI-source synchronization - 2026-07-19
+
+### What changed
+- Fixed the plain-text outline editor silently retaining the old `acts` array when revised Acts were pasted in a common heading or multiline format.
+- Added support for `Act I`, numbered/worded Act headings, colon or dash summaries, Markdown headings, multiline summaries, and the existing `ACTS:` bullet format.
+- Made an empty `ACTS:` section explicitly remove Acts, which remain optional in the official outline schema.
+- Saving an official outline edit now also updates `My Outline`, ensuring the next AI rewrite uses the revised names and Act summaries instead of an older saved source.
+- Preserved the pre-edit official outline snapshot during source synchronization and added a specific warning when the source is locked or cannot be synchronized.
+- Renamed the primary editor action to `Save outline + AI source` and added inline format/removal guidance so the future-AI effect is visible before saving.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerExportFormats.ts`
+- `src/portals/writer/__tests__/writerOutlineParse.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The root cause was the combination of narrow Act parsing and merge-preservation: when parsing returned no `acts` field, the old JSON field survived the save unchanged.
+- The next outline-generation request reads `notes.author_outline`; synchronizing the saved official edit into that field prevents manual changes from being lost on regeneration.
+- If `My Outline` is deliberately locked, the official edit still saves and the prior outline snapshot is retained, but the user is told to unlock and resave before using AI.
+- The DOX closeout found no ownership, structure, or durable workflow-contract change requiring an `AGENTS.md` update.
+
+### Verification
+- Focused outline parsing: 1 file / 6 tests passed, including multiline Act replacement and explicit Act removal.
+- Full Writer regression plus rollback API coverage: 27 files / 90 tests passed.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- Scoped ESLint completed with 0 errors and three existing warnings in the checked files.
+- Local browser QA confirmed the Writer workspace loads without console warnings or errors.
+- Strict UI critique made the AI-source synchronization explicit in both the primary save label and adjacent guidance.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- The local account had no selected issue, so a real signed-in save/source-sync interaction was not performed in browser QA.
+
+### Risks or caveats
+- A locked `My Outline` intentionally prevents automatic source synchronization; the official edit remains saved and a visible recovery message explains the required unlock/resave step.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit, push, deploy, then retest the affected issue by saving revised Acts and confirming the next AI update retains the new character names.

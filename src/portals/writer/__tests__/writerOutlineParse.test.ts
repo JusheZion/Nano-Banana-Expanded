@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatOutlineAsText, parseOutlineText } from '../writerExportFormats';
+import { formatOutlineAsText, inferOutlineTargetPageCount, parseOutlineText } from '../writerExportFormats';
 
 describe('parseOutlineText round-trip', () => {
   const outline = {
@@ -57,5 +57,41 @@ describe('parseOutlineText round-trip', () => {
         summary: 'The children look up at the stars.',
       },
     ]);
+  });
+
+  it('infers the simple-workflow target from explicit page markers', () => {
+    expect(inferOutlineTargetPageCount([
+      '- Page 1 — Opening image',
+      '- Page 35 — Midpoint reversal',
+      '- Page 71 — Closing campfire',
+    ].join('\n'))).toBe(71);
+    expect(inferOutlineTargetPageCount('1\tOpening\n22. Turning point\n71) Closing')).toBe(71);
+  });
+
+  it('does not mistake prose numbers or out-of-range markers for page targets', () => {
+    expect(inferOutlineTargetPageCount('In 2056, the story begins.\nThere are two heroes.')).toBeNull();
+    expect(inferOutlineTargetPageCount('Page 999 — Appendix')).toBeNull();
+  });
+
+  it('replaces Acts pasted as headings with multiline summaries', () => {
+    const parsed = parseOutlineText([
+      'ACTS:',
+      'Act I — The renamed heroes meet.',
+      'Onyx rejects the old prophecy and chooses a new path.',
+      'Act II: The Conjunction',
+      'Pony and Onyx cross the threshold together.',
+      'Act III',
+      'They return to the campfire changed.',
+    ].join('\n'));
+
+    expect(parsed.acts).toEqual([
+      { name: 'Act I', summary: 'The renamed heroes meet. Onyx rejects the old prophecy and chooses a new path.' },
+      { name: 'Act II', summary: 'The Conjunction Pony and Onyx cross the threshold together.' },
+      { name: 'Act III', summary: 'They return to the campfire changed.' },
+    ]);
+  });
+
+  it('treats an empty ACTS section as an explicit request to remove stale Acts', () => {
+    expect(parseOutlineText('TITLE: Twove\n\nACTS:\n\nPAGE BEATS:\n').acts).toEqual([]);
   });
 });

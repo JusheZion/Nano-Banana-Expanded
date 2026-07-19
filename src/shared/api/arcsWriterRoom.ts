@@ -545,6 +545,28 @@ export async function deleteLatestWriterOutline(issueId: string): Promise<{ ok: 
   return { ok: true };
 }
 
+/** Copies an older outline into a new latest version, preserving the full history. */
+export async function restoreWriterOutlineAsLatest(input: {
+  issueId: string;
+  outlineJson: Record<string, unknown>;
+  restoredFromVersion: number;
+  nextVersion: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const { error } = await supabase.from('writer_issue_outlines').insert({
+    issue_id: input.issueId,
+    version: input.nextVersion,
+    outline_json: input.outlineJson,
+    created_by: 'user_restore',
+    source_mode: `rollback:v${input.restoredFromVersion}`,
+  });
+  if (error) {
+    console.warn('[arcsWriterRoom] restoreWriterOutlineAsLatest', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 export async function clearWriterPageBeats(pageId: string): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   const now = new Date().toISOString();

@@ -21,6 +21,24 @@ function safeText(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
+/**
+ * Returns the highest explicit page marker in a pasted outline. Supports both
+ * `Page 12` headings and conventional numbered-list lines such as `12.` or
+ * tab-separated `12\tScene`. Values above the Writer page limit are ignored.
+ */
+export function inferOutlineTargetPageCount(text: string, maxPages = 200): number | null {
+  const pageNumbers: number[] = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const explicitPage = line.match(/\bPage\s+(\d{1,3})\b/i);
+    const numberedLine = line.match(/^(\d{1,3})(?:\t+|[.)]\s+)/);
+    const value = Number(explicitPage?.[1] ?? numberedLine?.[1] ?? 0);
+    if (value >= 1 && value <= maxPages) pageNumbers.push(value);
+  }
+  return pageNumbers.length ? Math.max(...pageNumbers) : null;
+}
+
 export function formatOutlineAsText(outlineJson: unknown): string {
   const o = asOutlineJsonLike(outlineJson);
   if (!o) return 'Outline: (missing)\n';
@@ -130,15 +148,13 @@ export function parseOutlineText(text: string): OutlineJsonLike {
   const acts: NonNullable<OutlineJsonLike['acts']> = [];
   const beats: OutlineBeat[] = [];
   let section: 'none' | 'acts' | 'beats' = 'none';
+  let sawActsSection = false;
+  let sawBeatsSection = false;
+  let currentAct: NonNullable<OutlineJsonLike['acts']>[number] | null = null;
 
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
     if (!line) continue;
-    const numberedBeat = line.match(/^(\d+)(?:\t+|[.)]\s+)(.+)$/);
-    if (numberedBeat) {
-      beats.push(parseOutlineBeatLine(`Page ${numberedBeat[1]} — ${numberedBeat[2]}`));
-      continue;
-    }
     const upper = line.toUpperCase();
     if (upper.startsWith('TITLE:')) {
       result.title = line.slice(line.indexOf(':') + 1).trim();
@@ -152,21 +168,50 @@ export function parseOutlineText(text: string): OutlineJsonLike {
     }
     if (upper === 'ACTS:') {
       section = 'acts';
+      sawActsSection = true;
+      currentAct = null;
       continue;
     }
     if (upper === 'PAGE BEATS:') {
       section = 'beats';
+      sawBeatsSection = true;
+      currentAct = null;
+      continue;
+    }
+    const actHeading = line
+      .replace(/^#{1,6}\s+/, '')
+      .match(/^Act\s+(\d+|[IVXLCDM]+|one|two|three|four|five|six|seven|eight|nine|ten)\b(?:\s*[-—:]\s*(.*))?$/i);
+    if (actHeading) {
+      section = 'acts';
+      sawActsSection = true;
+      currentAct = {
+        name: `Act ${actHeading[1]}`,
+        ...(actHeading[2]?.trim() ? { summary: actHeading[2].trim() } : {}),
+      };
+      acts.push(currentAct);
       continue;
     }
     if (/^[-*]\s+/.test(line)) {
       const body = line.replace(/^[-*]\s+/, '');
-      if (section === 'acts') acts.push(parseOutlineActLine(body));
+      if (section === 'acts') {
+        currentAct = parseOutlineActLine(body);
+        acts.push(currentAct);
+      }
       else if (section === 'beats') beats.push(parseOutlineBeatLine(body));
+      continue;
+    }
+    const numberedBeat = line.match(/^(\d+)(?:\t+|[.)]\s+)(.+)$/);
+    if (numberedBeat && section !== 'acts') {
+      beats.push(parseOutlineBeatLine(`Page ${numberedBeat[1]} — ${numberedBeat[2]}`));
+      continue;
+    }
+    if (section === 'acts' && currentAct) {
+      currentAct.summary = [currentAct.summary, line].filter(Boolean).join(' ');
     }
   }
 
-  if (acts.length) result.acts = acts;
-  if (beats.length) result.page_beats = beats;
+  if (sawActsSection) result.acts = acts;
+  if (sawBeatsSection || beats.length) result.page_beats = beats;
   return result;
 }
 
