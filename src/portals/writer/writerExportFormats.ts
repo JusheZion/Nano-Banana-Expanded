@@ -106,6 +106,22 @@ function parseOutlineActLine(body: string): { name?: string; goal?: string; summ
   return act;
 }
 
+function parseOutlineActHeading(line: string): { name?: string; summary?: string } | null {
+  const normalized = line
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^(?:\*\*|__)/, '')
+    .replace(/(?:\*\*|__)$/, '')
+    .trim();
+  const match = normalized.match(
+    /^Act\s+(\d+|[IVXLCDM]+|one|two|three|four|five|six|seven|eight|nine|ten)\b(?:\s*(?:[-‐‑‒–—:.])\s*(.*))?$/i,
+  );
+  if (!match) return null;
+  return {
+    name: `Act ${match[1]}`,
+    ...(match[2]?.trim() ? { summary: match[2].trim() } : {}),
+  };
+}
+
 function parseOutlineBeatLine(body: string): OutlineBeat {
   let s = body.trim();
   let turn = '';
@@ -178,15 +194,12 @@ export function parseOutlineText(text: string): OutlineJsonLike {
       currentAct = null;
       continue;
     }
-    const actHeading = line
-      .replace(/^#{1,6}\s+/, '')
-      .match(/^Act\s+(\d+|[IVXLCDM]+|one|two|three|four|five|six|seven|eight|nine|ten)\b(?:\s*[-—:]\s*(.*))?$/i);
+    const actHeading = parseOutlineActHeading(line);
     if (actHeading) {
       section = 'acts';
       sawActsSection = true;
       currentAct = {
-        name: `Act ${actHeading[1]}`,
-        ...(actHeading[2]?.trim() ? { summary: actHeading[2].trim() } : {}),
+        ...actHeading,
       };
       acts.push(currentAct);
       continue;
@@ -194,7 +207,9 @@ export function parseOutlineText(text: string): OutlineJsonLike {
     if (/^[-*]\s+/.test(line)) {
       const body = line.replace(/^[-*]\s+/, '');
       if (section === 'acts') {
-        currentAct = parseOutlineActLine(body);
+        currentAct = body.includes(' — ')
+          ? parseOutlineActLine(body)
+          : (parseOutlineActHeading(body) ?? parseOutlineActLine(body));
         acts.push(currentAct);
       }
       else if (section === 'beats') beats.push(parseOutlineBeatLine(body));

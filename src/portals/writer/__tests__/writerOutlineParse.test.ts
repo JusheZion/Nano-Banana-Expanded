@@ -94,4 +94,18 @@ describe('parseOutlineText round-trip', () => {
   it('treats an empty ACTS section as an explicit request to remove stale Acts', () => {
     expect(parseOutlineText('TITLE: Twove\n\nACTS:\n\nPAGE BEATS:\n').acts).toEqual([]);
   });
+
+  it('accepts Roman-numeral Act headings with copied hyphen variants', () => {
+    expect(parseOutlineText([
+      'ACTS:',
+      'Act I - Opening',
+      'Act II – Conjunction',
+      '**Act III -**',
+      'The renamed characters complete the final movement.',
+    ].join('\n')).acts).toEqual([
+      { name: 'Act I', summary: 'Opening' },
+      { name: 'Act II', summary: 'Conjunction' },
+      { name: 'Act III', summary: 'The renamed characters complete the final movement.' },
+    ]);
+  });
 });

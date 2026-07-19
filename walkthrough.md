@@ -11741,3 +11741,32 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Commit `0cb0b86` was pushed to `main`.
 - Cloudflare production version `66972bd6-6bad-4636-aec3-643e58291d8e` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
 - Live bundle verification confirmed `Undo last AI update`, detected-page feedback, optional-Acts guidance, and `Save outline + AI source` are present in production.
+
+## Roman-numeral Act separator compatibility - 2026-07-19
+
+### What changed
+- Expanded Act-heading parsing so Roman-numeral headings accept ASCII hyphens, copied Unicode hyphens, en dashes, em dashes, colons, periods, Markdown bold, and trailing separators such as `Act III -`.
+- Preserved the existing formatted bullet contract where `- Act 1 — goal: summary` retains separate goal and summary fields.
+
+### Files touched
+- `src/portals/writer/writerExportFormats.ts`
+- `src/portals/writer/__tests__/writerOutlineParse.test.ts`
+- `walkthrough.md`
+
+### Verification
+- Focused outline parser: 1 file / 7 tests passed.
+- `npm run build`: passed; the existing large-chunk warning remains nonblocking.
+- The new regression covers `Act I - Opening`, `Act II – Conjunction`, and `**Act III -**` followed by a multiline summary.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- None.
+
+### Risks or caveats
+- The compatibility fix is local until committed and deployed.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit, push, and deploy before retesting the affected outline on production.
