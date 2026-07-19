@@ -11769,4 +11769,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Commit, push, and deploy before retesting the affected outline on production.
+- Retest the affected outline on production with its original `Act III -` text.
+
+### Deployment
+- Commit `1e8d2c8` was pushed to `main`.
+- Cloudflare production version `3e4a2712-ec94-4149-80c0-7838ca4f28c8` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
