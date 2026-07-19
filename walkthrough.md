@@ -11735,4 +11735,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Commit, push, deploy, then retest the affected issue by saving revised Acts and confirming the next AI update retains the new character names.
+- Retest the affected issue by saving revised Acts and confirming the next AI update retains the new character names.
+
+### Deployment
+- Commit `0cb0b86` was pushed to `main`.
+- Cloudflare production version `66972bd6-6bad-4636-aec3-643e58291d8e` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Live bundle verification confirmed `Undo last AI update`, detected-page feedback, optional-Acts guidance, and `Save outline + AI source` are present in production.
