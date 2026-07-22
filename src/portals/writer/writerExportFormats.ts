@@ -1,4 +1,4 @@
-type OutlineBeat = {
+export type OutlineBeat = {
   page_target?: number;
   scene?: string;
   summary?: string;
@@ -84,7 +84,7 @@ function splitOnFirst(s: string, sep: string): [string, string] {
   return [s.slice(0, i), s.slice(i + sep.length)];
 }
 
-function parseOutlineActLine(body: string): { name?: string; goal?: string; summary?: string } {
+export function parseOutlineActLine(body: string): { name?: string; goal?: string; summary?: string } {
   let name = body.trim();
   let goal = '';
   let summary = '';
@@ -106,7 +106,7 @@ function parseOutlineActLine(body: string): { name?: string; goal?: string; summ
   return act;
 }
 
-function parseOutlineActHeading(line: string): { name?: string; summary?: string } | null {
+export function parseOutlineActHeading(line: string): { name?: string; summary?: string } | null {
   const normalized = line
     .replace(/^#{1,6}\s+/, '')
     .replace(/^(?:\*\*|__)/, '')
@@ -122,7 +122,7 @@ function parseOutlineActHeading(line: string): { name?: string; summary?: string
   };
 }
 
-function parseOutlineBeatLine(body: string): OutlineBeat {
+export function parseOutlineBeatLine(body: string): OutlineBeat {
   let s = body.trim();
   let turn = '';
   const turnMatch = s.match(/\s*\(turn:\s*([^)]*)\)\s*$/i);
@@ -151,6 +151,13 @@ function parseOutlineBeatLine(body: string): OutlineBeat {
   if (summary) beat.summary = summary;
   if (turn) beat.emotional_turn = turn;
   return beat;
+}
+
+export function parseOutlineNumberedBeatLine(line: string): OutlineBeat | null {
+  const numberedBeat = line.match(/^(\d+)(?:\t+|[.)]\s+)(.+)$/);
+  return numberedBeat
+    ? parseOutlineBeatLine(`Page ${numberedBeat[1]} — ${numberedBeat[2]}`)
+    : null;
 }
 
 /**
@@ -215,9 +222,9 @@ export function parseOutlineText(text: string): OutlineJsonLike {
       else if (section === 'beats') beats.push(parseOutlineBeatLine(body));
       continue;
     }
-    const numberedBeat = line.match(/^(\d+)(?:\t+|[.)]\s+)(.+)$/);
+    const numberedBeat = parseOutlineNumberedBeatLine(line);
     if (numberedBeat && section !== 'acts') {
-      beats.push(parseOutlineBeatLine(`Page ${numberedBeat[1]} — ${numberedBeat[2]}`));
+      beats.push(numberedBeat);
       continue;
     }
     if (section === 'acts' && currentAct) {
