@@ -153,7 +153,10 @@ function appendSummary(existing: string | undefined, next: string): string {
   return [existing, next.trim()].filter(Boolean).join(' ');
 }
 
-function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, unknown> {
+function buildProposedOutline(
+  passages: OutlinePastePassage[],
+  recognizedActListItemIds: ReadonlySet<string>,
+): Record<string, unknown> {
   const proposed: Record<string, unknown> = {};
   const acts: Array<{ name?: string; goal?: string; summary?: string }> = [];
   const pageBeats: OutlineBeat[] = [];
@@ -185,9 +188,11 @@ function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, u
 
       const isListItem = /^[-*]\s+/.test(line);
       const body = line.replace(/^[-*]\s+/, '');
-      const parsedAct = isListItem
+      const heading = parseOutlineActHeading(body);
+      const isRecognizedActListItem = isListItem && recognizedActListItemIds.has(passage.id);
+      const parsedAct = isRecognizedActListItem
         ? parseOutlineActListItem(body)
-        : parseOutlineActHeading(body);
+        : heading;
       if (parsedAct) {
         acts.push(passage.actName
           ? { ...parsedAct, name: passage.actName }
@@ -198,9 +203,9 @@ function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, u
       if (passage.actName) {
         const previous = acts.at(-1);
         if (previous?.name === passage.actName) {
-          previous.summary = appendSummary(previous.summary, line);
+          previous.summary = appendSummary(previous.summary, body);
         } else {
-          acts.push({ name: passage.actName, summary: line });
+          acts.push({ name: passage.actName, summary: body });
         }
         continue;
       }
@@ -292,12 +297,19 @@ function inferredPageCount(passages: OutlinePastePassage[], originalText: string
   return inferOutlineTargetPageCount(originalText);
 }
 
-function createDiagnostic(originalText: string, passages: OutlinePastePassage[]): OutlinePasteDiagnostic {
+function createDiagnostic(
+  originalText: string,
+  passages: OutlinePastePassage[],
+  sourcePassages = classifyPassages(originalText),
+): OutlinePasteDiagnostic {
   const warnings = buildWarnings(passages);
+  const recognizedActListItemIds = new Set(sourcePassages
+    .filter((passage) => passage.assignment === 'act' && /^[-*]\s+/.test(passage.text.trim()))
+    .map((passage) => passage.id));
   return {
     originalText,
     passages,
-    proposedOutline: buildProposedOutline(passages),
+    proposedOutline: buildProposedOutline(passages, recognizedActListItemIds),
     warnings,
     inferredPageCount: inferredPageCount(passages, originalText),
     requiresReview: warnings.length > 0,
@@ -305,7 +317,8 @@ function createDiagnostic(originalText: string, passages: OutlinePastePassage[])
 }
 
 export function analyzeOutlinePaste(text: string): OutlinePasteDiagnostic {
-  return createDiagnostic(text, classifyPassages(text));
+  const passages = classifyPassages(text);
+  return createDiagnostic(text, passages, passages);
 }
 
 export function assignOutlinePassages(

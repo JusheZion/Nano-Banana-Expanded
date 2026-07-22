@@ -244,6 +244,31 @@ describe('assignOutlinePassages', () => {
     }]);
   });
 
+  it('preserves canonical Act goal and summary fields under a manual name override', () => {
+    const diagnostic = analyzeOutlinePaste('ACTS:\n- Act 1 — Goal: Summary');
+    const actPassage = diagnostic.passages[1];
+
+    const assigned = assignOutlinePassages(diagnostic, [actPassage.id], 'act', { actName: 'Act II' });
+
+    expect(assigned.proposedOutline.acts).toEqual([{
+      name: 'Act II',
+      goal: 'Goal',
+      summary: 'Summary',
+    }]);
+  });
+
+  it('preserves generic bullet wording when manually assigning it to an Act', () => {
+    const diagnostic = analyzeOutlinePaste('- Major reversal: Hero flees.');
+    const passage = diagnostic.passages[0];
+
+    const assigned = assignOutlinePassages(diagnostic, [passage.id], 'act', { actName: 'Act II' });
+
+    expect(assigned.proposedOutline.acts).toEqual([{
+      name: 'Act II',
+      summary: 'Major reversal: Hero flees.',
+    }]);
+  });
+
   it.each([
     { label: 'missing', metadata: undefined },
     { label: 'NaN', metadata: { firstPageTarget: Number.NaN } },
