@@ -6,6 +6,7 @@ type RestoreResult = { ok: true } | { ok: false; error?: string };
 export type ReviewedOutlineInsert = {
   insertedRow: WriterIssueOutlineRow;
   previousOutline: WriterIssueOutlineRow | null;
+  hadPreviousOutline: boolean;
   origin: 'source' | 'official_editor';
 };
 
@@ -21,12 +22,20 @@ export type ReviewedOutlineRecoveryDeps = {
 
 export async function restoreReviewedOutlineInsert(
   insert: ReviewedOutlineInsert,
+  selectedIssueId: string | null,
   deps: ReviewedOutlineRecoveryDeps,
 ): Promise<
   | { ok: true; rows?: WriterIssueOutlineRow[]; restoredVersion: number; refreshError?: string }
-  | { ok: false; phase: 'missing_previous' | 'reload' | 'conflict' | 'restore'; error: string }
+  | { ok: false; phase: 'wrong_issue' | 'missing_previous' | 'reload' | 'conflict' | 'restore'; error: string }
 > {
-  if (!insert.previousOutline) {
+  if (selectedIssueId !== insert.insertedRow.issue_id) {
+    return {
+      ok: false,
+      phase: 'wrong_issue',
+      error: 'Return to the owning issue before undoing this reviewed outline update.',
+    };
+  }
+  if (!insert.hadPreviousOutline || !insert.previousOutline) {
     return {
       ok: false,
       phase: 'missing_previous',
@@ -90,6 +99,41 @@ export async function restoreReviewedOutlineInsert(
         restoredVersion: nextVersion,
         refreshError: `The preceding outline was restored as v${nextVersion}, but the version list could not refresh: ${refreshed.error}`,
       };
+}
+
+export function getReviewedOutlineUndoAvailability(
+  insert: ReviewedOutlineInsert,
+  selectedIssueId: string | null,
+): {
+  available: boolean;
+  reason: 'no_previous' | 'wrong_issue' | null;
+  guidance: string;
+} {
+  if (!insert.hadPreviousOutline || !insert.previousOutline) {
+    return {
+      available: false,
+      reason: 'no_previous',
+      guidance: 'This is the first official outline version, so there is no preceding version to Undo.',
+    };
+  }
+  if (selectedIssueId !== insert.insertedRow.issue_id) {
+    return {
+      available: false,
+      reason: 'wrong_issue',
+      guidance: 'Return to the owning issue to Undo this reviewed update.',
+    };
+  }
+  return {
+    available: true,
+    reason: null,
+    guidance: 'Undo is available for this reviewed update.',
+  };
+}
+
+export function reviewedOutlineRecoveryGuidance(insert: ReviewedOutlineInsert): string {
+  return insert.hadPreviousOutline && insert.previousOutline
+    ? 'Undo remains available.'
+    : 'Recovery and version reload remain available. This is the first official outline version, so there is no preceding version to Undo.';
 }
 
 export function clearReviewedOutlineRecoveryErrors(actions: {

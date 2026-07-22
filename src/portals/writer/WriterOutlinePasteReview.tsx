@@ -25,6 +25,7 @@ export type WriterOutlinePasteReviewProps = {
   recovery?: {
     savedVersion: number;
     undoAvailable: boolean;
+    undoUnavailableReason?: string;
     undoBusy?: boolean;
     onUndo(): void;
   };
@@ -110,6 +111,7 @@ export function WriterOutlinePasteReview({
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const recoveryOnly = Boolean(recovery);
+  const recoveryBusy = busy || Boolean(recovery?.undoBusy);
   const interactionDisabled = busy || recoveryOnly;
 
   useEffect(() => {
@@ -136,7 +138,7 @@ export function WriterOutlinePasteReview({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (busy) return;
+        if (recoveryOnly ? recoveryBusy : busy) return;
         event.preventDefault();
         onCancel();
         return;
@@ -167,7 +169,7 @@ export function WriterOutlinePasteReview({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [busy, onCancel]);
+  }, [busy, onCancel, recoveryBusy, recoveryOnly]);
 
   const selectedCount = selectedPassageIds.size;
   const allSelected = workingDiagnostic.passages.length > 0
@@ -291,12 +293,16 @@ export function WriterOutlinePasteReview({
     setFeedback('Original recognition restored.');
   };
 
-  const actionDisabled = busy;
-  const applyDisabled = busy || (!recoveryOnly && applyBlocked);
+  const actionDisabled = recoveryOnly ? recoveryBusy : busy;
+  const applyDisabled = recoveryBusy || (!recoveryOnly && applyBlocked);
   const visibleStatus = recoveryOnly
-    ? busy
-      ? `Retrying source synchronization for saved outline v${recovery?.savedVersion}.`
-      : `Official outline v${recovery?.savedVersion} is saved. Review edits are frozen; retry source sync, Undo the saved version, or close recovery.`
+    ? recovery?.undoBusy
+      ? `Undoing saved outline v${recovery.savedVersion}. Recovery actions are paused.`
+      : busy
+        ? `Retrying source synchronization for saved outline v${recovery?.savedVersion}.`
+        : `Official outline v${recovery?.savedVersion} is saved. Review edits are frozen; retry source sync or close recovery. ${
+            recovery?.undoAvailable ? 'Undo is available.' : recovery?.undoUnavailableReason ?? 'No preceding version is available to Undo.'
+          }`
     : busy ? 'Applying reviewed paste.' : feedback;
 
   return (
@@ -313,7 +319,7 @@ export function WriterOutlinePasteReview({
       role="dialog"
       tabIndex={-1}
       aria-modal="true"
-      aria-busy={busy || recovery?.undoBusy}
+      aria-busy={recoveryBusy}
       aria-labelledby="writer-outline-paste-review-title"
       className="my-auto w-full max-w-6xl min-w-0 rounded-2xl border border-white/40 bg-white/90 p-4 text-slate-950 shadow-2xl shadow-teal-950/25 backdrop-blur-xl sm:p-6"
     >
@@ -733,7 +739,7 @@ export function WriterOutlinePasteReview({
             type="button"
             disabled={actionDisabled}
             onClick={() => {
-              if (busy) return;
+              if (actionDisabled) return;
               onCancel();
             }}
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-900/5 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -754,9 +760,9 @@ export function WriterOutlinePasteReview({
           {recoveryOnly ? (
             <button
               type="button"
-              disabled={busy || recovery?.undoBusy || !recovery?.undoAvailable}
+              disabled={recoveryBusy || !recovery?.undoAvailable}
               onClick={() => {
-                if (busy || recovery?.undoBusy || !recovery?.undoAvailable) return;
+                if (recoveryBusy || !recovery?.undoAvailable) return;
                 recovery.onUndo();
               }}
               className="rounded-lg border border-rose-700/40 bg-rose-50 px-4 py-2 text-sm font-extrabold text-rose-900 transition hover:bg-rose-100 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

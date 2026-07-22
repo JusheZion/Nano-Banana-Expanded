@@ -120,8 +120,49 @@ describe('WriterOutlinePasteReview', () => {
     expect(onKeepUnstructured).not.toHaveBeenCalled();
     expect(onPreferencesChange).not.toHaveBeenCalled();
     expect((screen.getByRole('button', { name: 'Undo saved outline version' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toMatch(/no preceding version is available to Undo/i);
     fireEvent.click(screen.getByRole('button', { name: 'Retry source sync' }));
     expect(onApply).toHaveBeenCalledOnce();
+  });
+
+  it('blocks every recovery action, synthetic clicks, and Escape while Undo is busy', () => {
+    const onApply = vi.fn();
+    const onUndo = vi.fn();
+    const onCancel = vi.fn();
+    const onKeepUnstructured = vi.fn();
+    renderReview({
+      onApply,
+      onCancel,
+      onKeepUnstructured,
+      recovery: {
+        savedVersion: 4,
+        undoAvailable: true,
+        undoBusy: true,
+        onUndo,
+      },
+    });
+
+    const retry = screen.getByRole('button', { name: 'Retry source sync' }) as HTMLButtonElement;
+    const close = screen.getByRole('button', { name: 'Close recovery — saved version remains' }) as HTMLButtonElement;
+    const undo = screen.getByRole('button', { name: 'Undoing…' }) as HTMLButtonElement;
+    const keep = screen.getByRole('button', { name: 'Keep as unstructured source' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(true);
+    expect(close.disabled).toBe(true);
+    expect(undo.disabled).toBe(true);
+    expect(keep.disabled).toBe(true);
+
+    forceClick(retry);
+    forceClick(close);
+    forceClick(undo);
+    forceClick(keep);
+    forceClick(screen.getByRole('button', { name: 'Restore original recognition' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onUndo).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onKeepUnstructured).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toMatch(/undoing saved outline/i);
   });
 
   it('names the dialog and moves focus to its heading', async () => {

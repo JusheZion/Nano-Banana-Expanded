@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WriterIssueOutlineRow } from '@/shared/api/arcsWriterRoom';
 import {
   clearReviewedOutlineRecoveryErrors,
+  getReviewedOutlineUndoAvailability,
+  reviewedOutlineRecoveryGuidance,
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
   type ReviewedOutlineRecoveryDeps,
@@ -33,7 +35,7 @@ const restored: WriterIssueOutlineRow = {
 };
 
 function reviewedInsert(origin: ReviewedOutlineInsert['origin']): ReviewedOutlineInsert {
-  return { insertedRow: inserted, previousOutline: previous, origin };
+  return { insertedRow: inserted, previousOutline: previous, hadPreviousOutline: true, origin };
 }
 
 function createDeps(): ReviewedOutlineRecoveryDeps {
@@ -55,7 +57,7 @@ describe('reviewed outline recovery', () => {
     async (origin) => {
       const deps = createDeps();
 
-      const result = await restoreReviewedOutlineInsert(reviewedInsert(origin), deps);
+      const result = await restoreReviewedOutlineInsert(reviewedInsert(origin), 'issue-1', deps);
 
       expect(result).toMatchObject({ ok: true, rows: [restored, inserted, previous] });
       expect(deps.reloadOutlines).toHaveBeenCalledTimes(2);
@@ -72,7 +74,7 @@ describe('reviewed outline recovery', () => {
     const deps = createDeps();
     vi.mocked(deps.reloadOutlines).mockResolvedValueOnce({ ok: false, error: 'refresh offline' });
 
-    const result = await restoreReviewedOutlineInsert(reviewedInsert('source'), deps);
+    const result = await restoreReviewedOutlineInsert(reviewedInsert('source'), 'issue-1', deps);
 
     expect(result).toMatchObject({ ok: false, phase: 'reload', error: expect.stringMatching(/refresh offline/i) });
     expect(deps.restoreOutline).not.toHaveBeenCalled();
@@ -82,13 +84,55 @@ describe('reviewed outline recovery', () => {
     const deps = createDeps();
     vi.mocked(deps.reloadOutlines).mockResolvedValueOnce({ ok: true, rows: [restored, inserted, previous] });
 
-    const result = await restoreReviewedOutlineInsert(reviewedInsert('official_editor'), deps);
+    const result = await restoreReviewedOutlineInsert(reviewedInsert('official_editor'), 'issue-1', deps);
 
     expect(result).toMatchObject({ ok: false, phase: 'conflict' });
     expect(deps.restoreOutline).not.toHaveBeenCalled();
   });
 
-  it('clears both modal and scripts errors after a successful source-sync retry', () => {
+  it('does not reload or restore when the owning issue is not selected', async () => {
+    const deps = createDeps();
+
+    const result = await restoreReviewedOutlineInsert(reviewedInsert('source'), 'issue-2', deps);
+
+    expect(result).toMatchObject({ ok: false, phase: 'wrong_issue', error: expect.stringMatching(/return to the owning issue/i) });
+    expect(deps.reloadOutlines).not.toHaveBeenCalled();
+    expect(deps.restoreOutline).not.toHaveBeenCalled();
+  });
+
+  it('exposes Undo only on the owning issue when a preceding version exists', () => {
+    const insert = reviewedInsert('official_editor');
+
+    expect(getReviewedOutlineUndoAvailability(insert, 'issue-1')).toEqual({
+      available: true,
+      reason: null,
+      guidance: 'Undo is available for this reviewed update.',
+    });
+    expect(getReviewedOutlineUndoAvailability(insert, 'issue-2')).toEqual({
+      available: false,
+      reason: 'wrong_issue',
+      guidance: 'Return to the owning issue to Undo this reviewed update.',
+    });
+    expect(reviewedOutlineRecoveryGuidance(insert)).toBe('Undo remains available.');
+  });
+
+  it('does not promise Undo for the first official outline version', () => {
+    const insert: ReviewedOutlineInsert = {
+      ...reviewedInsert('source'),
+      previousOutline: null,
+      hadPreviousOutline: false,
+    };
+
+    expect(getReviewedOutlineUndoAvailability(insert, 'issue-1')).toEqual({
+      available: false,
+      reason: 'no_previous',
+      guidance: 'This is the first official outline version, so there is no preceding version to Undo.',
+    });
+    expect(reviewedOutlineRecoveryGuidance(insert)).toMatch(/recovery and version reload remain available/i);
+    expect(reviewedOutlineRecoveryGuidance(insert)).not.toMatch(/^Undo remains available/i);
+  });
+
+  it('clears both modal and scripts errors after a successful source-sync retry or Undo', () => {
     const setReviewError = vi.fn();
     const setScriptsError = vi.fn();
 
