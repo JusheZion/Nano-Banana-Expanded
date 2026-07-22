@@ -136,6 +136,34 @@ describe('analyzeOutlinePaste', () => {
     }]);
   });
 
+  it('keeps explicit Act continuations assigned across blank lines', () => {
+    const text = 'ACTS:\nAct I — Opening\n\nContinuation after a blank.';
+    const result = analyzeOutlinePaste(text);
+
+    expect(result.passages.map((passage) => ({
+      text: passage.text,
+      startLine: passage.startLine,
+      endLine: passage.endLine,
+      assignment: passage.assignment,
+      actName: passage.actName,
+    }))).toEqual([
+      { text: 'ACTS:', startLine: 1, endLine: 1, assignment: 'act', actName: undefined },
+      { text: 'Act I — Opening', startLine: 2, endLine: 2, assignment: 'act', actName: 'Act I' },
+      {
+        text: 'Continuation after a blank.',
+        startLine: 4,
+        endLine: 4,
+        assignment: 'act',
+        actName: 'Act I',
+      },
+    ]);
+    expect(result.proposedOutline).toEqual(parseOutlineText(text));
+    expect(result.proposedOutline.acts).toEqual([{
+      name: 'Act I',
+      summary: 'Opening Continuation after a blank.',
+    }]);
+  });
+
   it('accounts for every non-empty source line exactly once without changing its text', () => {
     const text = [
       '  TITLE: Twove  ',
@@ -197,5 +225,53 @@ describe('assignOutlinePassages', () => {
     });
     expect(assigned.inferredPageCount).toBe(8);
     expect(assigned.requiresReview).toBe(false);
+  });
+
+  it('uses manual Act metadata over a recognized heading name', () => {
+    const diagnostic = analyzeOutlinePaste('ACTS:\nAct I — Opening');
+    const actPassage = diagnostic.passages[1];
+
+    const assigned = assignOutlinePassages(diagnostic, [actPassage.id], 'act', { actName: 'Act II' });
+
+    expect(assigned.passages[1]).toMatchObject({
+      assignment: 'act',
+      provenance: 'user',
+      actName: 'Act II',
+    });
+    expect(assigned.proposedOutline.acts).toEqual([{
+      name: 'Act II',
+      summary: 'Opening',
+    }]);
+  });
+
+  it.each([
+    { label: 'missing', metadata: undefined },
+    { label: 'NaN', metadata: { firstPageTarget: Number.NaN } },
+    { label: 'infinite', metadata: { firstPageTarget: Number.POSITIVE_INFINITY } },
+    { label: 'non-integer', metadata: { firstPageTarget: 1.5 } },
+    { label: 'below range', metadata: { firstPageTarget: 0 } },
+    { label: 'above range', metadata: { firstPageTarget: 201 } },
+  ])('leaves Page Beat assignment unresolved when the first page is $label', ({ metadata }) => {
+    const diagnostic = analyzeOutlinePaste('Opening beat.');
+    const passage = diagnostic.passages[0];
+
+    const assigned = assignOutlinePassages(diagnostic, [passage.id], 'page_beat', metadata);
+
+    expect(assigned).toBe(diagnostic);
+    expect(assigned.passages[0]).toMatchObject({ assignment: 'unassigned' });
+    expect(assigned.passages[0].pageTarget).toBeUndefined();
+    expect(assigned.requiresReview).toBe(true);
+    expect(assigned.proposedOutline.page_beats).toBeUndefined();
+  });
+
+  it('rejects a sequential Page Beat assignment atomically when it would exceed page 200', () => {
+    const diagnostic = analyzeOutlinePaste('Penultimate beat.\nFinal beat.');
+    const passageIds = diagnostic.passages.map((passage) => passage.id);
+
+    const assigned = assignOutlinePassages(diagnostic, passageIds, 'page_beat', { firstPageTarget: 200 });
+
+    expect(assigned).toBe(diagnostic);
+    expect(assigned.passages.every((passage) => passage.assignment === 'unassigned')).toBe(true);
+    expect(assigned.proposedOutline.page_beats).toBeUndefined();
   });
 });

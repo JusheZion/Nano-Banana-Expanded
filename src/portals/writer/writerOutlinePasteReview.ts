@@ -76,10 +76,7 @@ function classifyPassages(text: string): OutlinePastePassage[] {
   text.split('\n').forEach((rawLine, index) => {
     const lineNumber = index + 1;
     const line = rawLine.trim();
-    if (!line) {
-      canContinueAct = false;
-      return;
-    }
+    if (!line) return;
 
     const passage: OutlinePastePassage = {
       id: stablePassageId(rawLine, lineNumber),
@@ -188,13 +185,13 @@ function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, u
 
       const isListItem = /^[-*]\s+/.test(line);
       const body = line.replace(/^[-*]\s+/, '');
-      if (passage.provenance === 'deterministic' && isListItem) {
-        acts.push(parseOutlineActListItem(body));
-        continue;
-      }
-      const heading = parseOutlineActHeading(body);
-      if (heading) {
-        acts.push({ ...heading });
+      const parsedAct = isListItem
+        ? parseOutlineActListItem(body)
+        : parseOutlineActHeading(body);
+      if (parsedAct) {
+        acts.push(passage.actName
+          ? { ...parsedAct, name: passage.actName }
+          : parsedAct);
         continue;
       }
 
@@ -208,8 +205,8 @@ function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, u
         continue;
       }
 
-      const parsedAct = parseOutlineActLine(body);
-      acts.push(parsedAct);
+      const fallbackAct = parseOutlineActLine(body);
+      acts.push(fallbackAct);
       continue;
     }
     if (passage.assignment === 'page_beat') {
@@ -320,8 +317,16 @@ export function assignOutlinePassages(
   const selectedIds = new Set(passageIds);
   const selectedInSourceOrder = diagnostic.passages.filter((passage) => selectedIds.has(passage.id));
   const pageNumberById = new Map<string, number>();
-  if (assignment === 'page_beat' && typeof metadata.firstPageTarget === 'number') {
-    const firstPage = Math.max(1, Math.trunc(metadata.firstPageTarget));
+  if (assignment === 'page_beat') {
+    const firstPage = metadata.firstPageTarget;
+    const selectionIsComplete = selectedInSourceOrder.length > 0
+      && selectedInSourceOrder.length === selectedIds.size;
+    const sequenceIsValid = typeof firstPage === 'number'
+      && Number.isFinite(firstPage)
+      && Number.isInteger(firstPage)
+      && firstPage >= 1
+      && firstPage + selectedInSourceOrder.length - 1 <= 200;
+    if (!selectionIsComplete || !sequenceIsValid) return diagnostic;
     selectedInSourceOrder.forEach((passage, index) => pageNumberById.set(passage.id, firstPage + index));
   }
 
