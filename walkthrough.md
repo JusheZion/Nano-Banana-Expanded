@@ -11839,3 +11839,39 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Self-review and commit the implementation plan, then begin the selected execution workflow.
+
+## Writer outline paste review — Pass 1 lossless diagnostics - 2026-07-22
+
+### What changed
+- Added a pure diagnostic parser that preserves every non-empty source passage with stable IDs, exact line provenance, deterministic/user/AI provenance, proposed outline data, inferred page count, and explicit Unassigned/duplicate/gap warnings.
+- Added immutable manual assignment for Notes, Acts, and sequential Page Beats with atomic page-range validation.
+- Shared canonical Act parsing with the existing plain-text parser so goal/summary fields and Roman-numeral/dash variants remain compatible.
+- Hardened multiline Act continuation across blank lines and preserved full generic-bullet wording during manual Act assignment.
+
+### Files touched
+- `src/portals/writer/writerOutlinePasteReview.ts`
+- `src/portals/writer/writerExportFormats.ts`
+- `src/portals/writer/__tests__/writerOutlinePasteReview.test.ts`
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Baseline before implementation: 94 files / 488 tests passed.
+- Pass 1 focused suites: 2 files / 29 tests passed.
+- Scoped ESLint: passed.
+- TypeScript app compilation: passed.
+- `git diff --check`: passed.
+- Independent specification review: approved.
+- Independent code-quality review: approved after adversarial fixes.
+
+### Outstanding issues
+- UI integration intentionally begins in later passes.
+
+### Risks or caveats
+- The diagnostic API is not yet active in the Writer interface.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Implement Pass 2 preferences, templates, and help copy.

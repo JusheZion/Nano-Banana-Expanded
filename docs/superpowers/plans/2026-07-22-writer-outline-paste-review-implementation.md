@@ -53,7 +53,7 @@
 - Create: `src/portals/writer/__tests__/writerOutlinePasteReview.test.ts`
 - Modify: `src/portals/writer/writerExportFormats.ts`
 
-- [ ] **Step 1: Write failing diagnostic tests** covering a mixed paste, prose-only paste, Roman numeral Acts, duplicates, gaps, and text-accounting.
+- [x] **Step 1: Write failing diagnostic tests** covering a mixed paste, prose-only paste, Roman numeral Acts, duplicates, gaps, and text-accounting.
 
 ```ts
 const result = analyzeOutlinePaste('TITLE: Twove\nAct III - Return\nClosing reflection without a label');
@@ -66,13 +66,13 @@ expect(result.passages.at(-1)).toMatchObject({ assignment: 'unassigned', provena
 expect(result.requiresReview).toBe(true);
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED.**
+- [x] **Step 2: Run the focused test and verify RED.**
 
 Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteReview.test.ts`
 
 Expected: FAIL because `analyzeOutlinePaste` does not exist.
 
-- [ ] **Step 3: Add the shared diagnostic types and pure analyzer.**
+- [x] **Step 3: Add the shared diagnostic types and pure analyzer.**
 
 ```ts
 export type OutlinePassageAssignment = 'title' | 'premise' | 'act' | 'page_beat' | 'notes' | 'unassigned';
@@ -104,15 +104,15 @@ export function assignOutlinePassages(
 ): OutlinePasteDiagnostic;
 ```
 
-- [ ] **Step 4: Reuse existing Act/beat parsing helpers instead of duplicating regex contracts.** Export or relocate the smallest pure helpers necessary, while keeping `parseOutlineText(text)` backward compatible.
+- [x] **Step 4: Reuse existing Act/beat parsing helpers instead of duplicating regex contracts.** Export or relocate the smallest pure helpers necessary, while keeping `parseOutlineText(text)` backward compatible.
 
-- [ ] **Step 5: Run focused parser suites and verify GREEN.**
+- [x] **Step 5: Run focused parser suites and verify GREEN.**
 
 Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteReview.test.ts src/portals/writer/__tests__/writerOutlineParse.test.ts`
 
 Expected: both files pass; every non-empty source passage is represented once.
 
-- [ ] **Step 6: Commit the pass.**
+- [x] **Step 6: Commit the pass.**
 
 ```bash
 git add src/portals/writer/writerOutlinePasteReview.ts src/portals/writer/writerExportFormats.ts src/portals/writer/__tests__/writerOutlinePasteReview.test.ts
@@ -121,7 +121,7 @@ git commit -m "feat: add lossless outline paste diagnostics"
 
 **Smoke test:** Run the two focused suites above.
 
-**Result summary:** Record counts and confirm no source text was dropped. Do not continue until green.
+**Result summary:** PASS — TDD RED confirmed; 2 focused files / 29 tests passed. Scoped ESLint, TypeScript app compilation, and `git diff --check` passed. Specification and code-quality reviewers approved after regressions were added for canonical Act goal/summary parity, blank-line Act continuations, manual Act naming, atomic page-range validation, and generic bullet wording preservation. No source text is silently dropped.
 
 **Rollback:** Revert this isolated commit; legacy `parseOutlineText` remains the active UI path until Pass 4.
 
