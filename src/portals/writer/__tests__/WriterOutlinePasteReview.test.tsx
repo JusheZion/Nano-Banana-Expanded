@@ -92,6 +92,23 @@ describe('WriterOutlinePasteReview', () => {
     }
   });
 
+  it('treats the initially focused non-tabbable heading as both Tab boundaries', async () => {
+    renderReview();
+    const heading = screen.getByRole('heading', { name: 'Review what the outline recognized' });
+    const first = screen.getByRole('checkbox', { name: "Don't show these tips again" });
+    const last = screen.getByRole('button', { name: 'Apply reviewed paste' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+
+    // This repository does not install @testing-library/user-event; use its established
+    // window keydown path to exercise the same browser-level trap listener.
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+
+    heading.focus();
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+  });
+
   it('contains focus on the dialog itself when busy disables every interactive control', () => {
     renderReview({ busy: true });
     const dialog = screen.getByRole('dialog');

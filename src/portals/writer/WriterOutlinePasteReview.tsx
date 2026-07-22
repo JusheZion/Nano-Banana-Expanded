@@ -137,10 +137,11 @@ export function WriterOutlinePasteReview({
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
-      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+      const activeIndex = focusable.indexOf(active as HTMLElement);
+      if (event.shiftKey && (active === first || activeIndex === -1)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+      } else if (!event.shiftKey && (active === last || activeIndex === -1)) {
         event.preventDefault();
         first.focus();
       }
