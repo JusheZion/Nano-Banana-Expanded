@@ -11774,3 +11774,37 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Deployment
 - Commit `1e8d2c8` was pushed to `main`.
 - Cloudflare production version `3e4a2712-ec94-4149-80c0-7838ca4f28c8` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+
+## Writer outline paste-review design - 2026-07-22
+
+### What changed
+- Documented an approved safe-paste design that preserves clipboard/file input, runs deterministic recognition first, exposes every uncertain passage as Unassigned Text, and always permits manual assignment without AI.
+- Split the experience between a lightweight Simple Workflow Paste Review and a full Advanced Tools import-and-mapping wizard.
+- Defined optional, visibly attributed AI assignment suggestions and a separate editable AI Treatment comparison before any generated outline can become official.
+- Added local and global paste preferences, `.txt`/`.md` templates, contextual format help, tooltips, dismissible first-use guidance, undo/version recovery, accessibility, responsive behavior, and comprehensive verification expectations.
+
+### Files touched
+- `docs/superpowers/specs/2026-07-22-writer-outline-paste-review-design.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This prompt completed brainstorming and design only; no production code changed.
+- The deterministic parser is the first-pass recognition engine. AI remains optional and cannot block manual assignment, discard text, or make changes official without review.
+- The DOX closeout found no repository ownership, structure, or durable agent-workflow contract change requiring an `AGENTS.md` update.
+
+### Verification
+- Design checked against the approved Simple/Advanced split and the User-Facing Feature Completeness Standard.
+- Specification includes acceptance criteria and planned parser, component, accessibility, responsive, signed-in, rollback, and live-smoke coverage.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- The written specification requires user review before implementation planning begins.
+
+### Risks or caveats
+- The interaction mockup is conceptual and does not modify the production interface.
+
+### Operator follow-up
+- Review and approve or revise the design specification.
+
+### Next steps
+- After specification approval, invoke the writing-plans workflow and prepare test-driven implementation passes.
