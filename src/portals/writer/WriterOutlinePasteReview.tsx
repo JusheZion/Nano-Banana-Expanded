@@ -193,6 +193,28 @@ export function WriterOutlinePasteReview({
     workingDiagnostic.warnings.flatMap((warning) => warning.passageIds),
   ), [workingDiagnostic.warnings]);
   const applyBlocked = validationMessage !== null || blockingWarnings.length > 0;
+  const assignmentLabel = ASSIGNMENT_OPTIONS.find((option) => option.value === assignment)?.label ?? assignment;
+  const firstPage = Number(firstPageNumber);
+  const lastSelectedPage = firstPage + selectedCount - 1;
+  const assignmentDisabledReason = selectedCount === 0
+    ? 'Select passages to enable assignment.'
+    : (assignment === 'title' || assignment === 'premise') && selectedCount !== 1
+      ? `Choose exactly one passage for ${assignmentLabel}.`
+      : assignment === 'act' && !actName.trim()
+        ? 'Enter an Act name or number to enable assignment.'
+        : assignment === 'page_beat' && (
+          !firstPageNumber.trim()
+          || !Number.isInteger(firstPage)
+          || firstPage < 1
+          || lastSelectedPage > 200
+        )
+          ? 'Enter a whole first page number from 1 to 200 to enable assignment.'
+          : null;
+  const assignmentSummary = assignment === 'act' && actName.trim()
+    ? `${assignmentLabel} · ${actName.trim()}`
+    : assignment === 'page_beat' && !assignmentDisabledReason
+      ? `${assignmentLabel} · ${selectedCount === 1 ? `Page ${firstPage}` : `Pages ${firstPage}–${lastSelectedPage}`}`
+      : assignmentLabel;
 
   const updateSelectionFeedback = (next: Set<string>) => {
     setSelectedPassageIds(next);
@@ -217,8 +239,8 @@ export function WriterOutlinePasteReview({
 
   const applyAssignment = () => {
     if (busy) return;
-    if (selectedCount === 0) {
-      setValidationMessage('Select at least one passage before assigning.');
+    if (assignmentDisabledReason) {
+      setValidationMessage(assignmentDisabledReason);
       return;
     }
     if (assignment === 'title' || assignment === 'premise') {
@@ -236,23 +258,6 @@ export function WriterOutlinePasteReview({
         return;
       }
     }
-    if (assignment === 'act' && !actName.trim()) {
-      setValidationMessage('Enter an Act name or number before assigning.');
-      return;
-    }
-
-    const firstPage = Number(firstPageNumber);
-    if (assignment === 'page_beat') {
-      const lastPage = firstPage + selectedCount - 1;
-      if (!firstPageNumber.trim()
-        || !Number.isInteger(firstPage)
-        || firstPage < 1
-        || lastPage > 200) {
-        setValidationMessage('Enter a whole first page number from 1 to 200.');
-        return;
-      }
-    }
-
     const next = assignOutlinePassages(
       workingDiagnostic,
       [...selectedPassageIds],
@@ -266,8 +271,7 @@ export function WriterOutlinePasteReview({
     setWorkingDiagnostic(next);
     setSelectedPassageIds(new Set());
     setValidationMessage(null);
-    const label = ASSIGNMENT_OPTIONS.find((option) => option.value === assignment)?.label ?? assignment;
-    setFeedback(`Assigned ${pluralizePassage(selectedCount)} to ${label}.`);
+    setFeedback(`Assigned ${pluralizePassage(selectedCount)} to ${assignmentLabel}.`);
   };
 
   const restoreOriginal = () => {
@@ -301,7 +305,7 @@ export function WriterOutlinePasteReview({
       className="my-auto w-full max-w-6xl min-w-0 rounded-2xl border border-white/40 bg-white/90 p-4 text-slate-950 shadow-2xl shadow-teal-950/25 backdrop-blur-xl sm:p-6"
     >
       <header className="border-b border-slate-900/10 pb-4">
-        <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-amber-800">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-800">
           Simple workflow · Paste review
         </p>
         <h2
@@ -422,12 +426,13 @@ export function WriterOutlinePasteReview({
           ) : null}
 
           <div className="flex min-w-[13rem] flex-col items-stretch gap-2">
-            <span data-testid="selected-passage-count" className="text-center text-xs font-bold text-slate-600">
-              {selectedCount} selected
+            <span data-testid="assignment-guidance" className="text-center text-xs font-bold text-slate-600">
+              {assignmentDisabledReason ?? `${selectedCount} selected · Ready for ${assignmentSummary}`}
             </span>
+            <span data-testid="selected-passage-count" className="sr-only">{selectedCount} selected</span>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || assignmentDisabledReason !== null}
               onClick={applyAssignment}
               className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -459,7 +464,7 @@ export function WriterOutlinePasteReview({
         <section aria-labelledby="paste-review-passages-title" className="min-w-0">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-500">Working copy</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Working copy</p>
               <h3 id="paste-review-passages-title" className="text-base font-extrabold text-slate-950">
                 Recognized passages
               </h3>
@@ -480,11 +485,13 @@ export function WriterOutlinePasteReview({
           <div className="mt-3 divide-y divide-slate-900/10 border-y border-slate-900/15">
             {workingDiagnostic.passages.map((passage) => {
               const detail = assignmentDetails(passage);
+              const checkboxId = `paste-review-checkbox-${passage.id}`;
+              const passageTextId = `paste-review-text-${passage.id}`;
               const metadataId = `paste-review-metadata-${passage.id}`;
               const selected = selectedPassageIds.has(passage.id);
               const warningAffected = warningPassageIds.has(passage.id);
               return (
-                <label
+                <div
                   key={passage.id}
                   id={`paste-review-${passage.id}`}
                   data-selected={selected ? 'true' : 'false'}
@@ -498,7 +505,9 @@ export function WriterOutlinePasteReview({
                   }`}
                 >
                   <input
+                    id={checkboxId}
                     type="checkbox"
+                    aria-labelledby={passageTextId}
                     aria-describedby={metadataId}
                     checked={selected}
                     disabled={busy}
@@ -506,14 +515,16 @@ export function WriterOutlinePasteReview({
                     className="mt-1 h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                   />
                   <span className="min-w-0">
-                    <span className="block whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-900">
-                      <span className="sr-only">Select passage: </span>
-                      {' '}
+                    <label
+                      id={passageTextId}
+                      htmlFor={checkboxId}
+                      className="block cursor-pointer whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-900"
+                    >
                       {passageDisplayText(passage)}
-                    </span>
+                    </label>
                     <span
                       id={metadataId}
-                      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.68rem] font-semibold text-slate-600"
+                      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-slate-600"
                     >
                       <span>
                         Current assignment: {ASSIGNMENT_OPTIONS.find((option) => option.value === passage.assignment)?.label}
@@ -526,7 +537,7 @@ export function WriterOutlinePasteReview({
                       ) : null}
                     </span>
                   </span>
-                </label>
+                </div>
               );
             })}
           </div>
@@ -537,7 +548,7 @@ export function WriterOutlinePasteReview({
           className="min-w-0 border-t border-slate-900/15 pt-4 lg:sticky lg:top-28 lg:self-start lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
         >
           <section aria-labelledby="paste-review-summary-title">
-            <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-500">Recognition</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Recognition</p>
             <h3 id="paste-review-summary-title" className="text-base font-extrabold text-slate-950">Outline summary</h3>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-2">
               {STAT_ITEMS.map((item) => (
@@ -574,9 +585,10 @@ export function WriterOutlinePasteReview({
                     <a
                       href={busy ? undefined : `#paste-review-${passage.id}`}
                       aria-disabled={busy || undefined}
+                      aria-describedby={`paste-review-text-${passage.id}`}
                       className="font-semibold underline decoration-rose-700/35 underline-offset-2 hover:decoration-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                     >
-                      {passageLineLabel(passage)} — {passageDisplayText(passage)}
+                      {passageLineLabel(passage)}
                     </a>
                   </li>
                 ))}
@@ -611,13 +623,15 @@ export function WriterOutlinePasteReview({
                               key={passageId}
                               href={busy ? undefined : `#paste-review-${passageId}`}
                               aria-disabled={busy || undefined}
+                              aria-describedby={`paste-review-text-${passageId}`}
                               className={`block break-words font-bold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 ${
                                 warning.severity === 'blocking'
                                   ? 'text-rose-800 decoration-rose-700/40 hover:decoration-rose-700 focus-visible:ring-rose-600'
                                   : 'text-amber-900 decoration-amber-700/40 hover:decoration-amber-700 focus-visible:ring-amber-600'
                               }`}
                             >
-                              {passageLineLabel(passage)} — {passageDisplayText(passage)}
+                              {assignmentDetails(passage) ? `${assignmentDetails(passage)} · ` : ''}
+                              {passageLineLabel(passage)}
                             </a>
                           );
                         })}
@@ -631,6 +645,39 @@ export function WriterOutlinePasteReview({
 
         </aside>
       </div>
+
+      {selectedCount > 0 ? (
+        <aside
+          data-testid="mobile-assignment-bar"
+          aria-label="Selected passage actions"
+          className="fixed inset-x-3 bottom-3 z-20 border border-amber-700/30 bg-amber-50/95 px-3 py-2 shadow-xl backdrop-blur md:hidden"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 text-xs text-slate-800">
+              <p className="font-extrabold">{selectedCount} selected</p>
+              <p className="truncate font-semibold">Destination: {assignmentSummary}</p>
+              {assignmentDisabledReason ? <p className="text-rose-800">{assignmentDisabledReason}</p> : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <a
+                href="#paste-review-assign-title"
+                className="rounded-md px-2 py-2 text-xs font-bold text-amber-950 underline decoration-amber-700/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+              >
+                Edit assignment options
+              </a>
+              <button
+                type="button"
+                aria-label="Assign selected passages from mobile action bar"
+                disabled={busy || assignmentDisabledReason !== null}
+                onClick={applyAssignment}
+                className="rounded-md bg-slate-900 px-3 py-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </aside>
+      ) : null}
 
       <div
         data-testid="paste-review-footer"

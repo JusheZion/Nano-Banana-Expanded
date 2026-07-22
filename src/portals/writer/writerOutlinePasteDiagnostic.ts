@@ -114,6 +114,10 @@ function parseExplicitPageBeat(line: string): OutlineBeat | null {
   return parseOutlineBeatLine(body);
 }
 
+function normalizePageBeatSceneSeparator(line: string): string {
+  return line.replace(/^(Page\s+\d+)\s*[-‐‑‒–—]\s*/i, '$1 — ');
+}
+
 function classifyPassages(text: string): OutlinePastePassage[] {
   const passages: OutlinePastePassage[] = [];
   let section: DiagnosticSection = 'none';
@@ -299,7 +303,9 @@ function buildProposedOutline(
       const structuralBody = range
         ? body.replace(/^Pages\s+\d+\s*[-–—]\s*\d+\b/i, `Page ${range.startPage}`)
         : body;
-      const beat = parseOutlineNumberedBeatLine(structuralBody) ?? parseOutlineBeatLine(structuralBody);
+      const normalizedStructuralBody = normalizePageBeatSceneSeparator(structuralBody);
+      const beat = parseOutlineNumberedBeatLine(normalizedStructuralBody)
+        ?? parseOutlineBeatLine(normalizedStructuralBody);
       if (range?.valid) {
         for (let page = range.startPage; page <= range.endPage; page += 1) {
           pageBeats.push({ ...beat, page_target: page });

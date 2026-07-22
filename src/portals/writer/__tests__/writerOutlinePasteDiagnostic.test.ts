@@ -438,4 +438,33 @@ describe('assignOutlinePassages', () => {
       summary: expected,
     }]);
   });
+
+  it.each(['-', '‐', '‑', '‒', '–', '—'])(
+    'preserves individual Page Beat scene and summary with the %s separator',
+    (separator) => {
+      const source = `Page 7 ${separator} Harbor Arrival: Mara finds the signal.`;
+      const result = analyzeOutlinePaste(source);
+
+      expect(result.passages[0].text).toBe(source);
+      expect(result.proposedOutline.page_beats).toEqual([{
+        page_target: 7,
+        scene: 'Harbor Arrival',
+        summary: 'Mara finds the signal.',
+      }]);
+    },
+  );
+
+  it.each(['-', '‐', '‑', '‒', '–', '—'])(
+    'preserves ranged Page Beat scene and summary with the %s separator',
+    (separator) => {
+      const source = `Pages 7–8 ${separator} Harbor Arrival: Mara finds the signal.`;
+      const result = analyzeOutlinePaste(source);
+
+      expect(result.passages[0].text).toBe(source);
+      expect(result.proposedOutline.page_beats).toEqual([
+        { page_target: 7, scene: 'Harbor Arrival', summary: 'Mara finds the signal.' },
+        { page_target: 8, scene: 'Harbor Arrival', summary: 'Mara finds the signal.' },
+      ]);
+    },
+  );
 });

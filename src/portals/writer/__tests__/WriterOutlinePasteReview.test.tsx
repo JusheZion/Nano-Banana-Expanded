@@ -40,15 +40,11 @@ function renderReview(overrides: Partial<ComponentProps<typeof WriterOutlinePast
 }
 
 function selectPassage(text: string): void {
-  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^Select passage:\\s*${escaped}`) }));
+  fireEvent.click(screen.getByRole('checkbox', { name: text }));
 }
 
 function passageCheckbox(text: string): HTMLInputElement {
-  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return screen.getByRole('checkbox', {
-    name: new RegExp(`^Select passage:\\s*${escaped}`),
-  }) as HTMLInputElement;
+  return screen.getByRole('checkbox', { name: text }) as HTMLInputElement;
 }
 
 function chooseAssignment(label: string): void {
@@ -221,11 +217,16 @@ describe('WriterOutlinePasteReview', () => {
       expect(document.getElementById(`paste-review-${passage.id}`)?.getAttribute('data-warning-affected')).toBe('true');
     });
     expect((screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement).disabled).toBe(true);
+    affectedLinks.forEach((link) => {
+      expect(link.textContent).toMatch(/^Line [12]$/);
+      expect(link.getAttribute('aria-describedby')).toBeTruthy();
+      expect(link.textContent).not.toMatch(/First|Second/);
+    });
   });
 
   it('selects one or all passages with native checkboxes', () => {
     renderReview();
-    const passageCheckboxes = screen.getAllByRole('checkbox', { name: /^Select passage:/ });
+    const passageCheckboxes = createDiagnostic().passages.map((passage) => passageCheckbox(passage.text.trim()));
 
     fireEvent.click(passageCheckboxes[0]);
     expect((passageCheckboxes[0] as HTMLInputElement).checked).toBe(true);
@@ -240,7 +241,7 @@ describe('WriterOutlinePasteReview', () => {
     const checkbox = passageCheckbox('Remember the lighthouse motif.');
     fireEvent.click(checkbox);
 
-    const row = checkbox.closest('label');
+    const row = checkbox.closest('[data-selected]');
     expect(row?.getAttribute('data-selected')).toBe('true');
     expect(row?.className).toMatch(/bg-amber|ring-amber/);
     expect(screen.getByTestId('selected-passage-count').textContent).toContain('1 selected');
@@ -249,6 +250,31 @@ describe('WriterOutlinePasteReview', () => {
     expect(description).toContain('Current assignment: Unassigned Text');
     expect(description).toContain('Provenance: Recognized by rules');
     expect(description).toContain('Line 5');
+    expect(checkbox.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(checkbox.getAttribute('aria-label')).toBeNull();
+    expect(checkbox.getAttribute('aria-labelledby')).not.toBe(checkbox.getAttribute('aria-describedby'));
+    expect(screen.getByRole('checkbox', { name: 'Remember the lighthouse motif.' })).toBe(checkbox);
+  });
+
+  it('disables Assign until selection and required destination metadata are valid', () => {
+    renderReview();
+    const assign = screen.getByRole('button', { name: 'Assign selected passages' }) as HTMLButtonElement;
+
+    expect(assign.disabled).toBe(true);
+    expect(screen.getByTestId('assignment-guidance').textContent).toMatch(/select passages/i);
+    selectPassage('Remember the lighthouse motif.');
+    expect(assign.disabled).toBe(false);
+
+    chooseAssignment('act');
+    expect(assign.disabled).toBe(true);
+    expect(screen.getByTestId('assignment-guidance').textContent).toMatch(/enter an Act name/i);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Act name or number' }), { target: { value: 'Act II' } });
+    expect(assign.disabled).toBe(false);
+
+    chooseAssignment('page_beat');
+    expect(assign.disabled).toBe(true);
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^First page number/ }), { target: { value: '7' } });
+    expect(assign.disabled).toBe(false);
   });
 
   it('assigns selected text to Notes locally and only emits the proposal on Apply', () => {
@@ -338,8 +364,8 @@ describe('WriterOutlinePasteReview', () => {
     selectPassage('A second loose observation.');
     chooseAssignment(value);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
-    expect(screen.getByText(`Choose exactly one passage for ${label}.`)).not.toBeNull();
+    expect((screen.getByRole('button', { name: 'Assign selected passages' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('assignment-guidance').textContent).toBe(`Choose exactly one passage for ${label}.`);
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
     expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
   });
@@ -379,8 +405,8 @@ describe('WriterOutlinePasteReview', () => {
     selectPassage('Remember the lighthouse motif.');
     chooseAssignment('act');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
-    expect(screen.getByText('Enter an Act name or number before assigning.')).not.toBeNull();
+    expect((screen.getByRole('button', { name: 'Assign selected passages' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('assignment-guidance').textContent).toMatch(/Enter an Act name or number/i);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Act name or number' }), {
       target: { value: 'Act II' },
@@ -424,8 +450,8 @@ describe('WriterOutlinePasteReview', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: /^First page number/ }), {
       target: { value: '0' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
-    expect(screen.getByText('Enter a whole first page number from 1 to 200.')).not.toBeNull();
+    expect((screen.getByRole('button', { name: 'Assign selected passages' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('assignment-guidance').textContent).toMatch(/whole first page number from 1 to 200/i);
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
     expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
@@ -672,6 +698,7 @@ describe('WriterOutlinePasteReview', () => {
 
   it('uses native tab order without positive tab indexes', () => {
     renderReview();
+    selectPassage('Remember the lighthouse motif.');
     const dialog = screen.getByRole('dialog');
     const positiveTabIndexes = dialog.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])');
     const nativeControls = [...dialog.querySelectorAll<HTMLElement>('input:not([disabled]), select:not([disabled]), button:not([disabled])')];
@@ -758,7 +785,37 @@ describe('WriterOutlinePasteReview', () => {
     expect(sidebar.className).toMatch(/lg:sticky/);
     expect(footer.className).toMatch(/sticky/);
     expect(screen.getByRole('dialog').className).not.toMatch(/overflow-x-auto|h-screen|max-h-\[/);
-    expect(screen.getAllByRole('checkbox', { name: /Select passage:/ })).toHaveLength(32);
+    expect(screen.getAllByRole('checkbox').filter((checkbox) => checkbox.getAttribute('aria-labelledby'))).toHaveLength(32);
+  });
+
+  it('shows a keyboard-accessible compact mobile action bar while long-list selections are active', () => {
+    const diagnostic = analyzeOutlinePaste(Array.from(
+      { length: 32 },
+      (_, index) => `Loose passage ${index + 1}.`,
+    ).join('\n'));
+    renderReview({ diagnostic });
+    selectPassage('Loose passage 24.');
+
+    const mobileBar = screen.getByTestId('mobile-assignment-bar');
+    expect(mobileBar.className).toMatch(/fixed/);
+    expect(mobileBar.className).toMatch(/z-20/);
+    expect(mobileBar.className).toMatch(/md:hidden/);
+    expect(within(mobileBar).getByText(/1 selected/)).not.toBeNull();
+    expect(within(mobileBar).getByText(/Destination: Notes/)).not.toBeNull();
+    expect(within(mobileBar).getByRole('link', { name: 'Edit assignment options' }).getAttribute('href')).toBe('#paste-review-assign-title');
+    expect((within(mobileBar).getByRole('button', { name: 'Assign selected passages from mobile action bar' }) as HTMLButtonElement).disabled).toBe(false);
+    const footer = screen.getByTestId('paste-review-footer');
+    expect(footer.className).toMatch(/z-30/);
+    expect(mobileBar.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('uses at least text-xs for functional labels and metadata', () => {
+    renderReview();
+    const dialog = screen.getByRole('dialog');
+    const undersized = [...dialog.querySelectorAll<HTMLElement>('[class]')].filter((element) => (
+      element.className.includes('text-[0.68rem]')
+    ));
+    expect(undersized).toHaveLength(0);
   });
 
   it('keeps narrow-screen visual action order aligned with DOM and tab order', () => {
