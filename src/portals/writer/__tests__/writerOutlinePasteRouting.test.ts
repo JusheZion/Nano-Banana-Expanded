@@ -61,6 +61,23 @@ describe('writer outline paste routing', () => {
     });
   });
 
+  it('replaces the opened-review message with an accurate cancellation status', () => {
+    const summary = summarizeOutlineRecognition(blocking, 'canceled');
+
+    expect(summary.state).toBe('canceled');
+    expect(summary.message).toMatch(/paste review canceled/i);
+    expect(summary.message).toMatch(/current source was not changed/i);
+    expect(summary.message).not.toMatch(/paste review opened/i);
+  });
+
+  it('warns that a saved version remains when recovery is closed', () => {
+    const summary = summarizeOutlineRecognition(blocking, 'recovery_closed');
+
+    expect(summary.state).toBe('recovery_closed');
+    expect(summary.message).toMatch(/official outline remains saved/i);
+    expect(summary.message).toMatch(/source synchronization still needs attention/i);
+  });
+
   it('blocks an ambiguous official plain-text save before parsing or persistence', () => {
     expect(prepareOfficialOutlineTextSave('Loose prose.', { keep: true })).toMatchObject({
       kind: 'review',

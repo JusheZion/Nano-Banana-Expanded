@@ -176,6 +176,11 @@ import {
 import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/portals/writer/writerRegenerationScope';
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePasteApply';
+import {
+  clearReviewedOutlineRecoveryErrors,
+  restoreReviewedOutlineInsert,
+  type ReviewedOutlineInsert,
+} from '@/portals/writer/writerOutlinePasteRecovery';
 import type { OutlinePasteDiagnostic } from '@/portals/writer/writerOutlinePasteDiagnostic';
 import {
   DEFAULT_OUTLINE_PASTE_PREFERENCES,
@@ -989,11 +994,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   } | null>(null);
   const [outlinePasteReviewBusy, setOutlinePasteReviewBusy] = useState(false);
   const [outlinePasteReviewError, setOutlinePasteReviewError] = useState<string | null>(null);
-  const [outlinePastePartialVersion, setOutlinePastePartialVersion] = useState<{
+  const [lastReviewedInsert, setLastReviewedInsert] = useState<(ReviewedOutlineInsert & {
     diagnostic: OutlinePasteDiagnostic;
-    row: WriterIssueOutlineRow;
     canonicalSourceText: string;
-  } | null>(null);
+    sourceSyncPending: boolean;
+  }) | null>(null);
+  const [lastReviewedUndoBusy, setLastReviewedUndoBusy] = useState(false);
+  const [lastReviewedUndoError, setLastReviewedUndoError] = useState<string | null>(null);
   const [outlinePasteRecognition, setOutlinePasteRecognition] = useState<OutlineRecognitionSummary | null>(null);
   const updateOutlinePastePreferences = useCallback((next: OutlinePastePreferences) => {
     setOutlinePastePreferences(next);
@@ -4230,10 +4237,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     diagnostic: OutlinePasteDiagnostic,
     origin: 'source' | 'official_editor',
   ) => {
+    if (lastReviewedInsert?.sourceSyncPending) {
+      if (lastReviewedInsert.insertedRow.issue_id !== selectedIssueId) {
+        setScriptsError(
+          `Official outline v${lastReviewedInsert.insertedRow.version} still needs source recovery in its original issue. Return to that issue to resume or use Undo.`,
+        );
+        return;
+      }
+      setOutlinePasteReview({
+        diagnostic: lastReviewedInsert.diagnostic,
+        origin: lastReviewedInsert.origin,
+      });
+      setOutlinePasteReviewError(
+        `Official outline v${lastReviewedInsert.insertedRow.version} is already saved. Finish its source synchronization or use Undo before starting another reviewed paste.`,
+      );
+      return;
+    }
     setOutlinePasteReview({ diagnostic, origin });
     setOutlinePasteReviewError(null);
-    setOutlinePastePartialVersion(null);
-  }, []);
+  }, [lastReviewedInsert, selectedIssueId]);
 
   const saveAuthorOutlineToNotes = useCallback(async () => {
     if (!selectedIssueId || !selectedIssue) return;
@@ -4385,43 +4407,48 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const applyOutlinePasteReview = useCallback(async (diagnostic: OutlinePasteDiagnostic) => {
     if (!selectedIssueId || !selectedIssue || !outlinePasteReview) return;
-    if (outlinePastePartialVersion) {
+    if (lastReviewedInsert?.sourceSyncPending) {
+      if (lastReviewedInsert.insertedRow.issue_id !== selectedIssueId) {
+        setOutlinePasteReviewError('Return to the issue that owns the saved outline version before retrying source sync.');
+        return;
+      }
       if (isWriterItemLocked(selectedIssue.notes, 'issue.author_outline')) {
         setOutlinePasteReviewError(
-          `Official outline v${outlinePastePartialVersion.row.version} is saved, but My Outline is locked. Unlock My Outline, then Apply again to finish source sync without creating another version. Undo last update remains available.`,
+          `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline is locked. Unlock My Outline, then retry source sync without creating another version. Undo remains available.`,
         );
         return;
       }
       setOutlinePasteReviewBusy(true);
       try {
         const sourceSynced = await updateSelectedIssueNotes(mergeAuthorOutlineIntoNotes(selectedIssue.notes, {
-          text: outlinePastePartialVersion.canonicalSourceText,
+          text: lastReviewedInsert.canonicalSourceText,
           mode: authorOutlineMode,
         }));
         if (!sourceSynced) {
           setOutlinePasteReviewError(
-            `Official outline v${outlinePastePartialVersion.row.version} is saved, but My Outline still could not be synchronized. Apply again to retry, or Cancel and use Undo last update.`,
+            `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline still could not be synchronized. Retry source sync, or close recovery and use Undo.`,
           );
           return;
         }
         const refreshed = await listWriterOutlinesForIssueResult(selectedIssueId);
         if (!refreshed.ok) {
           setOutlinePasteReviewError(
-            `Official outline v${outlinePastePartialVersion.row.version} and My Outline are saved, but versions could not be refreshed: ${refreshed.error}. Apply again to retry recovery, or Cancel and use Undo last update.`,
+            `Official outline v${lastReviewedInsert.insertedRow.version} and My Outline are saved, but versions could not be refreshed: ${refreshed.error}. Retry source sync to refresh recovery, or close recovery and use Undo.`,
           );
           return;
         }
         setOutlines(refreshed.rows);
-        setAuthorOutlineText(outlinePastePartialVersion.canonicalSourceText);
-        setOutlinePasteRecognition(summarizeOutlineRecognition(outlinePastePartialVersion.diagnostic, 'applied'));
+        setAuthorOutlineText(lastReviewedInsert.canonicalSourceText);
+        setOutlinePasteRecognition(summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'applied'));
         setOutlinePasteReview(null);
-        setOutlinePasteReviewError(null);
-        setOutlinePastePartialVersion(null);
-        pushHistory(`finished source sync for reviewed outline v${outlinePastePartialVersion.row.version}`);
+        clearReviewedOutlineRecoveryErrors({ setReviewError: setOutlinePasteReviewError, setScriptsError });
+        setLastReviewedInsert({ ...lastReviewedInsert, sourceSyncPending: false });
+        setLastReviewedUndoError(null);
+        pushHistory(`finished source sync for reviewed outline v${lastReviewedInsert.insertedRow.version}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unexpected source recovery error';
         setOutlinePasteReviewError(
-          `Official outline v${outlinePastePartialVersion.row.version} is saved, but recovery stopped: ${message}. Apply again to retry, or Cancel and use Undo last update.`,
+          `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but recovery stopped: ${message}. Retry source sync, or close recovery and use Undo.`,
         );
       } finally {
         setOutlinePasteReviewBusy(false);
@@ -4491,11 +4518,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       if (result.partial) {
         setOutlinePasteRecognition(summarizeOutlineRecognition(diagnostic, 'partial'));
         if (result.row) {
-          setOutlinePastePartialVersion({
+          setLastReviewedInsert({
             diagnostic,
-            row: result.row,
+            insertedRow: result.row,
+            previousOutline: latestOutline ?? null,
+            origin: outlinePasteReview.origin,
             canonicalSourceText,
+            sourceSyncPending: true,
           });
+          setLastReviewedUndoError(null);
         }
         pushHistory(`saved outline v${result.row?.version ?? '?'}; source sync needs attention`);
       } else {
@@ -4509,7 +4540,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setOutlinePasteRecognition(summarizeOutlineRecognition(diagnostic, 'applied'));
     setOutlinePasteReview(null);
     setOutlinePasteReviewError(null);
-    setOutlinePastePartialVersion(null);
+    setScriptsError(null);
+    setLastReviewedInsert({
+      diagnostic,
+      insertedRow: result.row,
+      previousOutline: latestOutline ?? null,
+      origin: outlinePasteReview.origin,
+      canonicalSourceText,
+      sourceSyncPending: false,
+    });
+    setLastReviewedUndoError(null);
     pushHistory(
       `applied reviewed paste as outline v${result.row.version}${result.undoAvailable ? '; Undo last update is available' : ''}`,
     );
@@ -4517,7 +4557,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     authorOutlineMode,
     guardWriterLock,
     latestOutline,
-    outlinePastePartialVersion,
+    lastReviewedInsert,
     outlinePasteReview,
     pushHistory,
     selectedIssue,
@@ -4527,9 +4567,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const keepOutlinePasteUnstructured = useCallback((originalText: string) => {
     if (!outlinePasteReview) return;
-    if (outlinePastePartialVersion) {
+    if (lastReviewedInsert?.sourceSyncPending) {
       setOutlinePasteReviewError(
-        `Official outline v${outlinePastePartialVersion.row.version} is already saved. Apply again to finish source sync, or Cancel and use Undo last update before keeping this text unstructured.`,
+        `Official outline v${lastReviewedInsert.insertedRow.version} is already saved. Retry source sync, or close recovery and use Undo before keeping text unstructured.`,
       );
       return;
     }
@@ -4538,18 +4578,67 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setOutlinePasteReview(null);
     setOutlinePasteReviewError(null);
     pushHistory('kept pasted outline unstructured; official outline unchanged');
-  }, [outlinePastePartialVersion, outlinePasteReview, pushHistory]);
+  }, [lastReviewedInsert, outlinePasteReview, pushHistory]);
 
   const cancelOutlinePasteReview = useCallback(() => {
     setOutlinePasteReview(null);
     setOutlinePasteReviewError(null);
-    if (outlinePastePartialVersion) {
-      pushHistory(`closed paste review after outline v${outlinePastePartialVersion.row.version}; Undo last update is available`);
+    if (lastReviewedInsert?.sourceSyncPending) {
+      setOutlinePasteRecognition(summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'recovery_closed'));
+      pushHistory(`closed paste recovery after outline v${lastReviewedInsert.insertedRow.version}; retry and Undo remain available`);
     } else {
+      if (outlinePasteReview) {
+        setOutlinePasteRecognition(summarizeOutlineRecognition(outlinePasteReview.diagnostic, 'canceled'));
+      }
       pushHistory('cancelled outline paste review');
     }
-    setOutlinePastePartialVersion(null);
-  }, [outlinePastePartialVersion, pushHistory]);
+  }, [lastReviewedInsert, outlinePasteReview, pushHistory]);
+
+  const undoLastReviewedInsert = useCallback(async () => {
+    if (!lastReviewedInsert || lastReviewedUndoBusy) return;
+    if (selectedIssueId === lastReviewedInsert.insertedRow.issue_id
+      && !guardWriterLock('outline.latest', 'Latest outline')) return;
+    if (!lastReviewedInsert.previousOutline) {
+      setLastReviewedUndoError('This was the first official outline version, so there is no preceding version to restore.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Undo reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${lastReviewedInsert.previousOutline.version} as a new official version?`,
+    );
+    if (!confirmed) return;
+
+    setLastReviewedUndoBusy(true);
+    setLastReviewedUndoError(null);
+    const result = await restoreReviewedOutlineInsert(lastReviewedInsert, {
+      reloadOutlines: () => listWriterOutlinesForIssueResult(lastReviewedInsert.insertedRow.issue_id),
+      restoreOutline: (input) => restoreWriterOutlineAsLatest(input),
+    });
+    setLastReviewedUndoBusy(false);
+    if (!result.ok) {
+      setLastReviewedUndoError(result.error);
+      setOutlinePasteReviewError(result.error);
+      pushHistory(`error: could not undo reviewed outline v${lastReviewedInsert.insertedRow.version}`);
+      return;
+    }
+    if (result.rows && selectedIssueId === lastReviewedInsert.insertedRow.issue_id) setOutlines(result.rows);
+    setOutlinePasteReview(null);
+    setOutlinePasteReviewError(null);
+    setLastReviewedInsert(null);
+    if (selectedIssueId === lastReviewedInsert.insertedRow.issue_id) {
+      setOutlinePasteRecognition({
+        ...summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'canceled'),
+        message: `Reviewed outline v${lastReviewedInsert.insertedRow.version} was undone. The preceding official outline was restored as v${result.restoredVersion}.`,
+      });
+    }
+    setWriterActionStatus({
+      tone: result.refreshError ? 'info' : 'success',
+      message: result.refreshError ?? `Reviewed outline update undone; the preceding outline is now official v${result.restoredVersion}.`,
+    });
+    pushHistory(
+      `undid reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${result.restoredVersion}`,
+      { announce: false },
+    );
+  }, [guardWriterLock, lastReviewedInsert, lastReviewedUndoBusy, pushHistory, selectedIssueId]);
 
   const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === outlineEditorMode) return;
@@ -7240,6 +7329,63 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           >
             ×
           </button>
+        </div>
+      ) : null}
+
+      {lastReviewedInsert ? (
+        <div
+          role={lastReviewedUndoError ? 'alert' : 'status'}
+          aria-live={lastReviewedUndoError ? 'assertive' : 'polite'}
+          className={`flex flex-shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2 text-xs font-semibold ${
+            lastReviewedInsert.sourceSyncPending
+              ? 'border-amber-800/25 bg-amber-50/95 text-amber-950'
+              : 'border-emerald-800/25 bg-emerald-50/95 text-emerald-950'
+          }`}
+        >
+          <p className="min-w-0 flex-1">
+            {lastReviewedUndoError
+              ?? (lastReviewedInsert.sourceSyncPending
+                ? `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline source sync still needs attention.`
+                : `Reviewed paste saved as official outline v${lastReviewedInsert.insertedRow.version} from ${lastReviewedInsert.origin === 'source' ? 'My Outline' : 'the official editor'}.`)}
+          </p>
+          {lastReviewedInsert.sourceSyncPending && selectedIssueId === lastReviewedInsert.insertedRow.issue_id ? (
+            <button
+              type="button"
+              disabled={lastReviewedUndoBusy}
+              onClick={() => {
+                setOutlinePasteReview({
+                  diagnostic: lastReviewedInsert.diagnostic,
+                  origin: lastReviewedInsert.origin,
+                });
+                setOutlinePasteReviewError(null);
+              }}
+              className="min-h-11 rounded-md border border-amber-900/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 disabled:opacity-40 sm:min-h-9"
+            >
+              Resume source sync
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={lastReviewedUndoBusy || !lastReviewedInsert.previousOutline}
+            onClick={() => void undoLastReviewedInsert()}
+            title={lastReviewedInsert.previousOutline ? 'Reload versions and restore the preceding official outline' : 'No preceding official version is available'}
+            className="min-h-11 rounded-md border border-current/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-40 sm:min-h-9"
+          >
+            {lastReviewedUndoBusy ? 'Undoing…' : 'Undo reviewed update'}
+          </button>
+          {!lastReviewedInsert.sourceSyncPending ? (
+            <button
+              type="button"
+              onClick={() => {
+                setLastReviewedInsert(null);
+                setLastReviewedUndoError(null);
+              }}
+              aria-label="Dismiss reviewed outline status"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current sm:min-h-9 sm:min-w-9"
+            >
+              ×
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -11363,6 +11509,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             preferences={outlinePastePreferences}
             busy={outlinePasteReviewBusy}
             error={outlinePasteReviewError}
+            recovery={lastReviewedInsert?.sourceSyncPending ? {
+              savedVersion: lastReviewedInsert.insertedRow.version,
+              undoAvailable: Boolean(lastReviewedInsert.previousOutline),
+              undoBusy: lastReviewedUndoBusy,
+              onUndo: () => void undoLastReviewedInsert(),
+            } : undefined}
             onApply={(diagnostic) => void applyOutlinePasteReview(diagnostic)}
             onKeepUnstructured={keepOutlinePasteUnstructured}
             onCancel={cancelOutlinePasteReview}

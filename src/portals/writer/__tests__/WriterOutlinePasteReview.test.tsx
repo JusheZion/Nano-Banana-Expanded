@@ -64,6 +64,66 @@ function forceChange(element: HTMLElement, value: string): void {
 }
 
 describe('WriterOutlinePasteReview', () => {
+  it('becomes recovery-only after an official version is saved', () => {
+    const onApply = vi.fn();
+    const onUndo = vi.fn();
+    const onCancel = vi.fn();
+    renderReview({
+      onApply,
+      onCancel,
+      recovery: {
+        savedVersion: 4,
+        undoAvailable: true,
+        onUndo,
+      },
+    });
+
+    expect(screen.getByRole('dialog', { name: 'Finish saving reviewed outline' })).not.toBeNull();
+    expect(screen.getAllByText(/official outline v4 is already saved/i)).toHaveLength(2);
+    expect((screen.getByRole('checkbox', { name: 'Select all passages' }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Assign selected passages' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Restore original recognition' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Keep as unstructured source' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry source sync' }));
+    expect(onApply).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo saved outline version' }));
+    expect(onUndo).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Close recovery — saved version remains' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('keeps recovery-only controls inert during forced synthetic events', () => {
+    const onApply = vi.fn();
+    const onKeepUnstructured = vi.fn();
+    const onPreferencesChange = vi.fn();
+    renderReview({
+      onApply,
+      onKeepUnstructured,
+      onPreferencesChange,
+      recovery: {
+        savedVersion: 4,
+        undoAvailable: false,
+        onUndo: vi.fn(),
+      },
+    });
+
+    forceClick(passageCheckbox('Remember the lighthouse motif.'));
+    forceChange(screen.getByRole('combobox', { name: 'Assign selected to' }), 'act');
+    forceClick(screen.getByRole('button', { name: 'Assign selected passages' }));
+    forceClick(screen.getByRole('button', { name: 'Restore original recognition' }));
+    forceClick(screen.getByRole('button', { name: 'Keep as unstructured source' }));
+
+    expect(passageCheckbox('Remember the lighthouse motif.').checked).toBe(false);
+    expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).value).toBe('notes');
+    expect(onKeepUnstructured).not.toHaveBeenCalled();
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+    expect((screen.getByRole('button', { name: 'Undo saved outline version' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry source sync' }));
+    expect(onApply).toHaveBeenCalledOnce();
+  });
+
   it('names the dialog and moves focus to its heading', async () => {
     renderReview();
 

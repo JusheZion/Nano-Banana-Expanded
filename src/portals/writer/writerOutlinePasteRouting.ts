@@ -8,7 +8,7 @@ import type { OutlinePastePreferences } from './writerOutlinePastePreferences';
 export type OutlinePasteRoute = 'review' | 'structured' | 'unstructured';
 
 export type OutlineRecognitionSummary = {
-  state: OutlinePasteRoute | 'applied' | 'partial';
+  state: OutlinePasteRoute | 'applied' | 'partial' | 'canceled' | 'recovery_closed';
   counts: {
     title: number;
     premise: number;
@@ -82,6 +82,10 @@ export function summarizeOutlineRecognition(
         ? `Reviewed paste applied as a new official outline version.${pageTarget}`
         : state === 'partial'
           ? `The reviewed outline was saved, but source synchronization needs attention.${pageTarget}`
+          : state === 'canceled'
+            ? `Paste review canceled. The current source was not changed.${pageTarget}`
+            : state === 'recovery_closed'
+              ? `Recovery closed. The official outline remains saved, and source synchronization still needs attention.${pageTarget}`
           : `Recognized ${recognized || 'plain text'}.${pageTarget}`;
   return { state, counts, inferredPageCount: diagnostic.inferredPageCount, message };
 }

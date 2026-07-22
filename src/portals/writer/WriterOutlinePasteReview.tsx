@@ -22,6 +22,12 @@ export type WriterOutlinePasteReviewProps = {
   preferences: OutlinePastePreferences;
   busy?: boolean;
   error?: string | null;
+  recovery?: {
+    savedVersion: number;
+    undoAvailable: boolean;
+    undoBusy?: boolean;
+    onUndo(): void;
+  };
   onApply(diagnostic: OutlinePasteDiagnostic): void;
   onKeepUnstructured(originalText: string): void;
   onCancel(): void;
@@ -85,6 +91,7 @@ export function WriterOutlinePasteReview({
   preferences,
   busy = false,
   error = null,
+  recovery,
   onApply,
   onKeepUnstructured,
   onCancel,
@@ -102,6 +109,8 @@ export function WriterOutlinePasteReview({
   const dialogRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const recoveryOnly = Boolean(recovery);
+  const interactionDisabled = busy || recoveryOnly;
 
   useEffect(() => {
     setWorkingDiagnostic(diagnostic);
@@ -223,7 +232,7 @@ export function WriterOutlinePasteReview({
   };
 
   const togglePassage = (passageId: string) => {
-    if (busy) return;
+    if (interactionDisabled) return;
     const next = new Set(selectedPassageIds);
     if (next.has(passageId)) next.delete(passageId);
     else next.add(passageId);
@@ -231,14 +240,14 @@ export function WriterOutlinePasteReview({
   };
 
   const toggleAll = () => {
-    if (busy) return;
+    if (interactionDisabled) return;
     updateSelectionFeedback(allSelected
       ? new Set()
       : new Set(workingDiagnostic.passages.map((passage) => passage.id)));
   };
 
   const applyAssignment = () => {
-    if (busy) return;
+    if (interactionDisabled) return;
     if (assignmentDisabledReason) {
       setValidationMessage(assignmentDisabledReason);
       return;
@@ -275,7 +284,7 @@ export function WriterOutlinePasteReview({
   };
 
   const restoreOriginal = () => {
-    if (busy) return;
+    if (interactionDisabled) return;
     setWorkingDiagnostic(diagnostic);
     setSelectedPassageIds(new Set());
     setValidationMessage(null);
@@ -283,8 +292,12 @@ export function WriterOutlinePasteReview({
   };
 
   const actionDisabled = busy;
-  const applyDisabled = busy || applyBlocked;
-  const visibleStatus = busy ? 'Applying reviewed paste.' : feedback;
+  const applyDisabled = busy || (!recoveryOnly && applyBlocked);
+  const visibleStatus = recoveryOnly
+    ? busy
+      ? `Retrying source synchronization for saved outline v${recovery?.savedVersion}.`
+      : `Official outline v${recovery?.savedVersion} is saved. Review edits are frozen; retry source sync, Undo the saved version, or close recovery.`
+    : busy ? 'Applying reviewed paste.' : feedback;
 
   return (
     <div
@@ -300,7 +313,7 @@ export function WriterOutlinePasteReview({
       role="dialog"
       tabIndex={-1}
       aria-modal="true"
-      aria-busy={busy}
+      aria-busy={busy || recovery?.undoBusy}
       aria-labelledby="writer-outline-paste-review-title"
       className="my-auto w-full max-w-6xl min-w-0 rounded-2xl border border-white/40 bg-white/90 p-4 text-slate-950 shadow-2xl shadow-teal-950/25 backdrop-blur-xl sm:p-6"
     >
@@ -314,14 +327,16 @@ export function WriterOutlinePasteReview({
           tabIndex={-1}
           className="mt-1 text-xl font-black tracking-tight text-slate-950 outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 sm:text-2xl"
         >
-          Review what the outline recognized
+          {recoveryOnly ? 'Finish saving reviewed outline' : 'Review what the outline recognized'}
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-700">
-          Your original paste is preserved, nothing has been discarded, and your official outline has not changed.
+          {recoveryOnly
+            ? `Official outline v${recovery?.savedVersion} is already saved. Assignment and metadata controls are frozen while My Outline source synchronization is recovered.`
+            : 'Your original paste is preserved, nothing has been discarded, and your official outline has not changed.'}
         </p>
       </header>
 
-      {preferences.showFirstUseGuidance && showGuidanceThisSession ? (
+      {!recoveryOnly && preferences.showFirstUseGuidance && showGuidanceThisSession ? (
         <aside className="mt-4 border-l-4 border-amber-500 bg-amber-50/90 px-4 py-3">
           <h3 className="text-sm font-extrabold text-amber-950">Why this review opened</h3>
           <p className="mt-1 text-sm leading-relaxed text-amber-950/80">
@@ -332,10 +347,10 @@ export function WriterOutlinePasteReview({
             <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-amber-950">
               <input
                 type="checkbox"
-                disabled={busy}
+                disabled={interactionDisabled}
                 className="h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 onChange={(event) => {
-                  if (busy || !event.currentTarget.checked) return;
+                  if (interactionDisabled || !event.currentTarget.checked) return;
                   onPreferencesChange({ ...preferences, showFirstUseGuidance: false });
                 }}
               />
@@ -343,9 +358,9 @@ export function WriterOutlinePasteReview({
             </label>
             <button
               type="button"
-              disabled={busy}
+              disabled={interactionDisabled}
               onClick={() => {
-                if (busy) return;
+                if (interactionDisabled) return;
                 setShowGuidanceThisSession(false);
               }}
               className="text-xs font-bold text-amber-950 underline decoration-amber-700/50 underline-offset-2 hover:decoration-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -365,15 +380,17 @@ export function WriterOutlinePasteReview({
           <div className="min-w-[12rem] flex-1">
             <h3 id="paste-review-assign-title" className="text-sm font-extrabold text-slate-950">Manual assignment</h3>
             <p className="mt-0.5 text-xs text-slate-600">
-              Review selected passages here. Nothing changes until you choose Apply reviewed paste.
+              {recoveryOnly
+                ? 'Assignments and metadata are locked because this official version is already saved.'
+                : 'Review selected passages here. Nothing changes until you choose Apply reviewed paste.'}
             </p>
             <label className="mt-1 block text-xs font-bold text-slate-700">
               Assign selected to
               <select
                 value={assignment}
-                disabled={busy}
+                disabled={interactionDisabled}
                 onChange={(event) => {
-                  if (busy) return;
+                  if (interactionDisabled) return;
                   setAssignment(event.currentTarget.value as OutlinePassageAssignment);
                   setValidationMessage(null);
                 }}
@@ -392,9 +409,9 @@ export function WriterOutlinePasteReview({
               <input
                 type="text"
                 value={actName}
-                disabled={busy}
+                disabled={interactionDisabled}
                 onChange={(event) => {
-                  if (busy) return;
+                  if (interactionDisabled) return;
                   setActName(event.currentTarget.value);
                   setValidationMessage(null);
                 }}
@@ -413,9 +430,9 @@ export function WriterOutlinePasteReview({
                 max={200}
                 step={1}
                 value={firstPageNumber}
-                disabled={busy}
+                disabled={interactionDisabled}
                 onChange={(event) => {
-                  if (busy) return;
+                  if (interactionDisabled) return;
                   setFirstPageNumber(event.currentTarget.value);
                   setValidationMessage(null);
                 }}
@@ -432,7 +449,7 @@ export function WriterOutlinePasteReview({
             <span data-testid="selected-passage-count" className="sr-only">{selectedCount} selected</span>
             <button
               type="button"
-              disabled={busy || assignmentDisabledReason !== null}
+              disabled={interactionDisabled || assignmentDisabledReason !== null}
               onClick={applyAssignment}
               className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -441,7 +458,7 @@ export function WriterOutlinePasteReview({
             <Tooltip content="Discard local review edits and return to the parser's first recognition." side="top">
               <button
                 type="button"
-                disabled={busy}
+                disabled={interactionDisabled}
                 onClick={restoreOriginal}
                 className="w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-amber-600 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -474,7 +491,7 @@ export function WriterOutlinePasteReview({
                 ref={selectAllRef}
                 type="checkbox"
                 checked={allSelected}
-                disabled={busy || workingDiagnostic.passages.length === 0}
+                disabled={interactionDisabled || workingDiagnostic.passages.length === 0}
                 onChange={toggleAll}
                 className="h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
               />
@@ -510,7 +527,7 @@ export function WriterOutlinePasteReview({
                     aria-labelledby={passageTextId}
                     aria-describedby={metadataId}
                     checked={selected}
-                    disabled={busy}
+                    disabled={interactionDisabled}
                     onChange={() => togglePassage(passage.id)}
                     className="mt-1 h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                   />
@@ -583,8 +600,8 @@ export function WriterOutlinePasteReview({
                 {unassignedPassages.map((passage) => (
                   <li key={passage.id} className="break-words">
                     <a
-                      href={busy ? undefined : `#paste-review-${passage.id}`}
-                      aria-disabled={busy || undefined}
+                      href={interactionDisabled ? undefined : `#paste-review-${passage.id}`}
+                      aria-disabled={interactionDisabled || undefined}
                       aria-describedby={`paste-review-text-${passage.id}`}
                       className="font-semibold underline decoration-rose-700/35 underline-offset-2 hover:decoration-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                     >
@@ -621,8 +638,8 @@ export function WriterOutlinePasteReview({
                           return (
                             <a
                               key={passageId}
-                              href={busy ? undefined : `#paste-review-${passageId}`}
-                              aria-disabled={busy || undefined}
+                              href={interactionDisabled ? undefined : `#paste-review-${passageId}`}
+                              aria-disabled={interactionDisabled || undefined}
                               aria-describedby={`paste-review-text-${passageId}`}
                               className={`block break-words font-bold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 ${
                                 warning.severity === 'blocking'
@@ -661,10 +678,14 @@ export function WriterOutlinePasteReview({
         <p
           data-testid="apply-readiness"
           className={`mb-3 border-l-2 pl-2 text-xs font-semibold ${
-            applyBlocked ? 'border-rose-600 text-rose-800' : 'border-emerald-600 text-emerald-800'
+            recoveryOnly
+              ? 'border-amber-600 text-amber-900'
+              : applyBlocked ? 'border-rose-600 text-rose-800' : 'border-emerald-600 text-emerald-800'
           }`}
         >
-          {validationMessage
+          {recoveryOnly
+            ? `Official outline v${recovery?.savedVersion} is already saved. Retry only synchronizes the preserved canonical source; it does not create another version.`
+            : validationMessage
             ? `${validationMessage} Correct the assignment controls before Apply.`
             : blockingWarnings.length
               ? `${blockingWarnings.length} blocking ${blockingWarnings.length === 1 ? 'issue' : 'issues'} remaining. Select the affected passages, then use Manual assignment to resolve them before Apply.`
@@ -672,7 +693,7 @@ export function WriterOutlinePasteReview({
                 ? `Ready to apply with ${advisoryWarnings.length} advisory ${advisoryWarnings.length === 1 ? 'warning' : 'warnings'}.`
                 : 'Ready to apply.'}
         </p>
-        {selectedCount > 0 ? (
+        {!recoveryOnly && selectedCount > 0 ? (
           <aside
             data-testid="mobile-assignment-bar"
             aria-label="Selected passage actions"
@@ -694,7 +715,7 @@ export function WriterOutlinePasteReview({
                 <button
                   type="button"
                   aria-label="Assign selected passages from mobile action bar"
-                  disabled={busy || assignmentDisabledReason !== null}
+                  disabled={interactionDisabled || assignmentDisabledReason !== null}
                   onClick={applyAssignment}
                   className="rounded-md bg-slate-900 px-3 py-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -717,22 +738,36 @@ export function WriterOutlinePasteReview({
             }}
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-900/5 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Cancel — keep current outline
+            {recoveryOnly ? 'Close recovery — saved version remains' : 'Cancel — keep current outline'}
           </button>
           <button
             type="button"
-            disabled={actionDisabled}
+            disabled={actionDisabled || recoveryOnly}
             onClick={() => {
-              if (busy) return;
+              if (interactionDisabled) return;
               onKeepUnstructured(workingDiagnostic.originalText);
             }}
             className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:border-amber-600 hover:bg-amber-50 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Keep as unstructured source
           </button>
+          {recoveryOnly ? (
+            <button
+              type="button"
+              disabled={busy || recovery?.undoBusy || !recovery?.undoAvailable}
+              onClick={() => {
+                if (busy || recovery?.undoBusy || !recovery?.undoAvailable) return;
+                recovery.onUndo();
+              }}
+              className="rounded-lg border border-rose-700/40 bg-rose-50 px-4 py-2 text-sm font-extrabold text-rose-900 transition hover:bg-rose-100 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              title={recovery?.undoAvailable ? 'Reload versions and restore the preceding official outline' : 'No preceding official version is available'}
+            >
+              {recovery?.undoBusy ? 'Undoing…' : 'Undo saved outline version'}
+            </button>
+          ) : null}
           <button
             type="button"
-            aria-label={busy ? 'Applying reviewed paste' : undefined}
+            aria-label={busy ? (recoveryOnly ? 'Retrying source sync' : 'Applying reviewed paste') : undefined}
             disabled={applyDisabled}
             onClick={() => {
               if (applyDisabled) return;
@@ -740,7 +775,7 @@ export function WriterOutlinePasteReview({
             }}
             className="rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-5 py-2 text-sm font-black text-slate-950 shadow-md shadow-amber-950/20 transition hover:brightness-105 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? 'Applying…' : 'Apply reviewed paste'}
+            {busy ? (recoveryOnly ? 'Retrying…' : 'Applying…') : recoveryOnly ? 'Retry source sync' : 'Apply reviewed paste'}
           </button>
         </div>
       </div>
