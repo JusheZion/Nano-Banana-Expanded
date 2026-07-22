@@ -56,6 +56,8 @@ export type WriterIssueOutlineRow = {
   source_mode: string | null;
 };
 
+export type WriterOutlineSourceMode = 'paste_review' | 'outline_import' | 'ai_treatment';
+
 /** Series lore / worldbuilding cards (injected into writer-tools prompts when include_in_prompt is true). */
 export type WriterLoreCardRow = {
   id: string;
@@ -508,18 +510,74 @@ export async function updateWriterVideoShotPlanJson(
   return true;
 }
 
-export async function listWriterOutlinesForIssue(issueId: string): Promise<WriterIssueOutlineRow[]> {
-  if (!isSupabaseConfigured() || !supabase) return [];
-  const { data, error } = await supabase
-    .from('writer_issue_outlines')
-    .select('id, issue_id, version, outline_json, created_at, created_by, source_mode')
-    .eq('issue_id', issueId)
-    .order('version', { ascending: false });
-  if (error) {
-    console.warn('[arcsWriterRoom] listWriterOutlinesForIssue', error.message);
-    return [];
+export async function listWriterOutlinesForIssueResult(
+  issueId: string,
+): Promise<{ ok: true; rows: WriterIssueOutlineRow[] } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  try {
+    const { data, error } = await supabase
+      .from('writer_issue_outlines')
+      .select('id, issue_id, version, outline_json, created_at, created_by, source_mode')
+      .eq('issue_id', issueId)
+      .order('version', { ascending: false });
+    if (error) {
+      console.warn('[arcsWriterRoom] listWriterOutlinesForIssue', error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, rows: (data ?? []) as WriterIssueOutlineRow[] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected outline list error';
+    console.warn('[arcsWriterRoom] listWriterOutlinesForIssue', message);
+    return { ok: false, error: message };
   }
-  return (data ?? []) as WriterIssueOutlineRow[];
+}
+
+export async function listWriterOutlinesForIssue(issueId: string): Promise<WriterIssueOutlineRow[]> {
+  const result = await listWriterOutlinesForIssueResult(issueId);
+  return result.ok ? result.rows : [];
+}
+
+/** Inserts a new immutable outline version after reading the current latest version. */
+export async function createWriterOutlineVersion(input: {
+  issueId: string;
+  outlineJson: Record<string, unknown>;
+  sourceMode: WriterOutlineSourceMode;
+}): Promise<{ ok: true; row: WriterIssueOutlineRow } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  try {
+    const { data: latestData, error: latestError } = await supabase
+      .from('writer_issue_outlines')
+      .select('version')
+      .eq('issue_id', input.issueId)
+      .order('version', { ascending: false })
+      .limit(1);
+    if (latestError) {
+      console.warn('[arcsWriterRoom] createWriterOutlineVersion (latest)', latestError.message);
+      return { ok: false, error: latestError.message };
+    }
+    const latestRows = (latestData ?? []) as Array<{ version: number }>;
+    const nextVersion = (latestRows[0]?.version ?? 0) + 1;
+    const { data, error } = await supabase
+      .from('writer_issue_outlines')
+      .insert({
+        issue_id: input.issueId,
+        version: nextVersion,
+        outline_json: input.outlineJson,
+        source_mode: input.sourceMode,
+      })
+      .select('id, issue_id, version, outline_json, created_at, created_by, source_mode')
+      .single();
+    if (error || !data) {
+      const message = error?.message ?? 'Outline version was not returned after insert';
+      console.warn('[arcsWriterRoom] createWriterOutlineVersion', message);
+      return { ok: false, error: message };
+    }
+    return { ok: true, row: data as WriterIssueOutlineRow };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected outline version error';
+    console.warn('[arcsWriterRoom] createWriterOutlineVersion', message);
+    return { ok: false, error: message };
+  }
 }
 
 /** Removes the highest-version outline row for this issue (others unchanged). */

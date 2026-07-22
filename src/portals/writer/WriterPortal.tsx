@@ -18,6 +18,7 @@ import {
 import {
   clearWriterPagesBeatsJson,
   clearWriterPagesScriptText,
+  createWriterOutlineVersion,
   createWriterIssue,
   createWriterPage,
   createWriterLoreCard,
@@ -29,6 +30,7 @@ import {
   getNextWriterIssueNumber,
   listWriterIssues,
   listWriterOutlinesForIssue,
+  listWriterOutlinesForIssueResult,
   listWriterPages,
   listWriterLoreCards,
   listWriterSeries,
@@ -81,6 +83,9 @@ import {
 } from '@/portals/writer/writerHelpRegistry';
 import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRibbon';
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
+import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
+import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
+import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import { useWriterMotionVisit } from '@/portals/writer/writerMotion';
@@ -170,6 +175,19 @@ import {
 } from '@/portals/writer/writerDraftPersistence';
 import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/portals/writer/writerRegenerationScope';
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
+import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePasteApply';
+import type { OutlinePasteDiagnostic } from '@/portals/writer/writerOutlinePasteDiagnostic';
+import {
+  DEFAULT_OUTLINE_PASTE_PREFERENCES,
+  loadOutlinePastePreferences,
+  saveOutlinePastePreferences,
+  type OutlinePastePreferences,
+} from '@/portals/writer/writerOutlinePastePreferences';
+import {
+  routeOfficialOutlineTextSave,
+  summarizeOutlineRecognition,
+  type OutlineRecognitionSummary,
+} from '@/portals/writer/writerOutlinePasteRouting';
 import {
   OBSIDIAN_LORE_TYPE_OPTIONS,
   buildLoreBodyFromObsidianEntry,
@@ -960,6 +978,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   >({});
   const [authorOutlineText, setAuthorOutlineText] = useState('');
   const [authorOutlineMode, setAuthorOutlineMode] = useState<AuthorOutlineMode>('structure');
+  const [outlinePastePreferences, setOutlinePastePreferences] = useState<OutlinePastePreferences>(() => (
+    typeof window === 'undefined'
+      ? { ...DEFAULT_OUTLINE_PASTE_PREFERENCES }
+      : loadOutlinePastePreferences(window.localStorage)
+  ));
+  const [outlinePasteReview, setOutlinePasteReview] = useState<{
+    diagnostic: OutlinePasteDiagnostic;
+    origin: 'source' | 'official_editor';
+  } | null>(null);
+  const [outlinePasteReviewBusy, setOutlinePasteReviewBusy] = useState(false);
+  const [outlinePasteReviewError, setOutlinePasteReviewError] = useState<string | null>(null);
+  const [outlinePastePartialVersion, setOutlinePastePartialVersion] = useState<{
+    diagnostic: OutlinePasteDiagnostic;
+    row: WriterIssueOutlineRow;
+    canonicalSourceText: string;
+  } | null>(null);
+  const [outlinePasteRecognition, setOutlinePasteRecognition] = useState<OutlineRecognitionSummary | null>(null);
+  const updateOutlinePastePreferences = useCallback((next: OutlinePastePreferences) => {
+    setOutlinePastePreferences(next);
+    if (typeof window !== 'undefined') saveOutlinePastePreferences(window.localStorage, next);
+  }, []);
   const [productionDefaultsDraft, setProductionDefaultsDraft] = useState<WriterProductionDefaults>({
     ...EMPTY_WRITER_PRODUCTION_DEFAULTS,
   });
@@ -4187,6 +4226,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     void navigator.clipboard.writeText(JSON.stringify(issuePackObject, null, 2));
   }, [issuePackObject]);
 
+  const openOutlinePasteReview = useCallback((
+    diagnostic: OutlinePasteDiagnostic,
+    origin: 'source' | 'official_editor',
+  ) => {
+    setOutlinePasteReview({ diagnostic, origin });
+    setOutlinePasteReviewError(null);
+    setOutlinePastePartialVersion(null);
+  }, []);
+
   const saveAuthorOutlineToNotes = useCallback(async () => {
     if (!selectedIssueId || !selectedIssue) return;
     if (!guardWriterLock('issue.author_outline', 'Author outline')) return;
@@ -4258,10 +4306,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setScriptsError(null);
     let parsed: Record<string, unknown>;
     if (outlineEditorMode === 'text') {
-      // Merge the parsed plain-text fields into the existing JSON so any data the
-      // readable view does not surface (extra top-level fields) is preserved.
       const existing = (latestOutline.outline_json ?? {}) as Record<string, unknown>;
-      parsed = { ...existing, ...parseOutlineText(outlineEditDraft) };
+      let prepared: Record<string, unknown> | null = null;
+      const route = await routeOfficialOutlineTextSave({
+        draft: outlineEditDraft,
+        existingOutline: existing,
+        onReview: (diagnostic) => openOutlinePasteReview(diagnostic, 'official_editor'),
+        onSave: (outlineJson) => {
+          prepared = outlineJson;
+        },
+      });
+      if (route === 'review') return;
+      parsed = prepared ?? existing;
     } else {
       let raw: unknown;
       try {
@@ -4321,10 +4377,179 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     outlineEditorMode,
     selectedIssue,
     authorOutlineMode,
+    openOutlinePasteReview,
     guardWriterLock,
     updateSelectedIssueNotes,
     pushHistory,
   ]);
+
+  const applyOutlinePasteReview = useCallback(async (diagnostic: OutlinePasteDiagnostic) => {
+    if (!selectedIssueId || !selectedIssue || !outlinePasteReview) return;
+    if (outlinePastePartialVersion) {
+      if (isWriterItemLocked(selectedIssue.notes, 'issue.author_outline')) {
+        setOutlinePasteReviewError(
+          `Official outline v${outlinePastePartialVersion.row.version} is saved, but My Outline is locked. Unlock My Outline, then Apply again to finish source sync without creating another version. Undo last update remains available.`,
+        );
+        return;
+      }
+      setOutlinePasteReviewBusy(true);
+      try {
+        const sourceSynced = await updateSelectedIssueNotes(mergeAuthorOutlineIntoNotes(selectedIssue.notes, {
+          text: outlinePastePartialVersion.canonicalSourceText,
+          mode: authorOutlineMode,
+        }));
+        if (!sourceSynced) {
+          setOutlinePasteReviewError(
+            `Official outline v${outlinePastePartialVersion.row.version} is saved, but My Outline still could not be synchronized. Apply again to retry, or Cancel and use Undo last update.`,
+          );
+          return;
+        }
+        const refreshed = await listWriterOutlinesForIssueResult(selectedIssueId);
+        if (!refreshed.ok) {
+          setOutlinePasteReviewError(
+            `Official outline v${outlinePastePartialVersion.row.version} and My Outline are saved, but versions could not be refreshed: ${refreshed.error}. Apply again to retry recovery, or Cancel and use Undo last update.`,
+          );
+          return;
+        }
+        setOutlines(refreshed.rows);
+        setAuthorOutlineText(outlinePastePartialVersion.canonicalSourceText);
+        setOutlinePasteRecognition(summarizeOutlineRecognition(outlinePastePartialVersion.diagnostic, 'applied'));
+        setOutlinePasteReview(null);
+        setOutlinePasteReviewError(null);
+        setOutlinePastePartialVersion(null);
+        pushHistory(`finished source sync for reviewed outline v${outlinePastePartialVersion.row.version}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unexpected source recovery error';
+        setOutlinePasteReviewError(
+          `Official outline v${outlinePastePartialVersion.row.version} is saved, but recovery stopped: ${message}. Apply again to retry, or Cancel and use Undo last update.`,
+        );
+      } finally {
+        setOutlinePasteReviewBusy(false);
+      }
+      return;
+    }
+    if (latestOutline && !guardWriterLock('outline.latest', 'Latest outline')) {
+      setOutlinePasteReviewError('Latest outline is locked. Unlock it before applying this reviewed paste.');
+      return;
+    }
+    if (!guardWriterLock('issue.author_outline', 'My Outline')) {
+      setOutlinePasteReviewError(
+        'My Outline is locked, so nothing was saved. Cancel, unlock My Outline, then reopen the review to apply safely.',
+      );
+      return;
+    }
+
+    const approvedOutline = outlinePasteReview.origin === 'official_editor' && latestOutline
+      ? { ...latestOutline.outline_json, ...diagnostic.proposedOutline }
+      : diagnostic.proposedOutline;
+    const canonicalSourceText = formatOutlineAsText(approvedOutline);
+    let notesAfterSnapshot = selectedIssue.notes;
+
+    setOutlinePasteReviewBusy(true);
+    setOutlinePasteReviewError(null);
+    setScriptsError(null);
+    const result = await persistReviewedOutlineVersion({
+      previousOutline: latestOutline ?? null,
+      approvedOutline,
+      canonicalSourceText,
+      sourceLocked: false,
+    }, {
+      snapshotPrevious: async (previous) => {
+        notesAfterSnapshot = mergeWriterStorySnapshotIntoNotes(selectedIssue.notes, {
+          key: 'outline.latest',
+          label: `Outline v${previous.version} before paste review`,
+          value: previous.outline_json,
+        });
+        const ok = await updateSelectedIssueNotes(notesAfterSnapshot);
+        return ok
+          ? { ok: true }
+          : { ok: false, error: 'Issue notes could not be updated.' };
+      },
+      createVersion: (outlineJson) => createWriterOutlineVersion({
+        issueId: selectedIssueId,
+        outlineJson,
+        sourceMode: 'paste_review',
+      }),
+      syncSource: async (sourceText) => {
+        const nextNotes = mergeAuthorOutlineIntoNotes(notesAfterSnapshot, {
+          text: sourceText,
+          mode: authorOutlineMode,
+        });
+        const ok = await updateSelectedIssueNotes(nextNotes);
+        return ok
+          ? { ok: true }
+          : { ok: false, error: 'My Outline could not be synchronized.' };
+      },
+      refreshOutlines: () => listWriterOutlinesForIssueResult(selectedIssueId),
+    });
+    setOutlinePasteReviewBusy(false);
+
+    if (result.rows) setOutlines(result.rows);
+    if (!result.ok) {
+      setOutlinePasteReviewError(result.error);
+      setScriptsError(result.error);
+      if (result.partial) {
+        setOutlinePasteRecognition(summarizeOutlineRecognition(diagnostic, 'partial'));
+        if (result.row) {
+          setOutlinePastePartialVersion({
+            diagnostic,
+            row: result.row,
+            canonicalSourceText,
+          });
+        }
+        pushHistory(`saved outline v${result.row?.version ?? '?'}; source sync needs attention`);
+      } else {
+        pushHistory(`error: ${result.error}`);
+      }
+      return;
+    }
+
+    setAuthorOutlineText(canonicalSourceText);
+    if (diagnostic.inferredPageCount) setTargetPageCount(diagnostic.inferredPageCount);
+    setOutlinePasteRecognition(summarizeOutlineRecognition(diagnostic, 'applied'));
+    setOutlinePasteReview(null);
+    setOutlinePasteReviewError(null);
+    setOutlinePastePartialVersion(null);
+    pushHistory(
+      `applied reviewed paste as outline v${result.row.version}${result.undoAvailable ? '; Undo last update is available' : ''}`,
+    );
+  }, [
+    authorOutlineMode,
+    guardWriterLock,
+    latestOutline,
+    outlinePastePartialVersion,
+    outlinePasteReview,
+    pushHistory,
+    selectedIssue,
+    selectedIssueId,
+    updateSelectedIssueNotes,
+  ]);
+
+  const keepOutlinePasteUnstructured = useCallback((originalText: string) => {
+    if (!outlinePasteReview) return;
+    if (outlinePastePartialVersion) {
+      setOutlinePasteReviewError(
+        `Official outline v${outlinePastePartialVersion.row.version} is already saved. Apply again to finish source sync, or Cancel and use Undo last update before keeping this text unstructured.`,
+      );
+      return;
+    }
+    setAuthorOutlineText(originalText);
+    setOutlinePasteRecognition(summarizeOutlineRecognition(outlinePasteReview.diagnostic, 'unstructured'));
+    setOutlinePasteReview(null);
+    setOutlinePasteReviewError(null);
+    pushHistory('kept pasted outline unstructured; official outline unchanged');
+  }, [outlinePastePartialVersion, outlinePasteReview, pushHistory]);
+
+  const cancelOutlinePasteReview = useCallback(() => {
+    setOutlinePasteReview(null);
+    setOutlinePasteReviewError(null);
+    if (outlinePastePartialVersion) {
+      pushHistory(`closed paste review after outline v${outlinePastePartialVersion.row.version}; Undo last update is available`);
+    } else {
+      pushHistory('cancelled outline paste review');
+    }
+    setOutlinePastePartialVersion(null);
+  }, [outlinePastePartialVersion, pushHistory]);
 
   const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === outlineEditorMode) return;
@@ -6357,6 +6582,22 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         >
           Open Foundation settings
         </button>
+        <section className="mt-5 border-t border-black/10 pt-4" aria-labelledby="writer-story-paste-settings-title">
+          <h4 id="writer-story-paste-settings-title" className="text-[11px] font-black uppercase tracking-[0.16em] text-black/58">
+            Outline paste review
+          </h4>
+          <p className="mt-1 text-[11px] font-semibold leading-relaxed text-black/52">
+            These are the same preferences available beside My Outline.
+          </p>
+          <div className="mt-3">
+            <WriterOutlinePasteSettings
+              surface="story"
+              idPrefix="writer-story-outline-paste"
+              value={outlinePastePreferences}
+              onChange={updateOutlinePastePreferences}
+            />
+          </div>
+        </section>
       </details>
     </div>
   ) : null;
@@ -6485,7 +6726,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <div className="flex flex-wrap gap-2">
               <button type="button" title={outlines.length > 1 ? `Restore outline v${outlines[1]?.version} without deleting the current version` : 'A previous version will appear here after the next AI update'} disabled={outlines.length < 2 || outlineRestoreBusy || outlineGenLoading} onClick={() => void restorePreviousOutline()} className="inline-flex items-center gap-1.5 rounded-md border border-amber-800/30 bg-amber-50/75 px-3 py-2 text-[11px] font-black text-amber-950 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-800/30 disabled:opacity-35">
                 <RotateCcw size={13} aria-hidden />
-                {outlineRestoreBusy ? 'Restoring…' : 'Undo last AI update'}
+                {outlineRestoreBusy ? 'Restoring…' : 'Undo last outline update'}
               </button>
               <button type="button" title="Open the official outline editor" disabled={!latestOutline} onClick={() => openSavedOutputEditor('outline')} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Edit official outline</button>
               <button type="button" title="Download the official outline as JSON" disabled={!latestOutline} onClick={() => latestOutline && downloadJsonFile(`writer-outline-v${latestOutline.version}.json`, latestOutline.outline_json)} className="rounded-md border border-black/15 bg-white/70 px-3 py-2 text-[11px] font-black text-black transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-35">Download</button>
@@ -6510,10 +6751,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </span>
           </div>
           <p className="mt-2 text-xs font-semibold leading-relaxed text-black/58">Paste or revise your outline here. Saving stores the source; it does not replace the official outline until you generate.</p>
-          <textarea
-            aria-label="Source outline"
+          <WriterOutlineSourceEditor
+            id="writer-focused-outline-source"
             value={authorOutlineText}
-            onChange={(e) => setAuthorOutlineText(e.target.value)}
+            onChange={setAuthorOutlineText}
+            preferences={outlinePastePreferences}
+            onPreferencesChange={updateOutlinePastePreferences}
+            onReview={(diagnostic) => openOutlinePasteReview(diagnostic, 'source')}
+            recognition={outlinePasteRecognition}
+            onRecognitionChange={setOutlinePasteRecognition}
+            rows={12}
             className="mt-4 min-h-[300px] w-full flex-1 resize-y rounded-lg border border-white/50 bg-white/30 p-4 text-sm leading-relaxed text-black shadow-inner placeholder:text-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
             placeholder="Paste your outline in any format — a numbered list, summary, or rough notes..."
           />
@@ -8049,9 +8296,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             </button>
                           ))}
                         </div>
-                        <textarea
+                        <WriterOutlineSourceEditor
+                          id="writer-advanced-outline-source"
                           value={authorOutlineText}
-                          onChange={(e) => setAuthorOutlineText(e.target.value)}
+                          onChange={setAuthorOutlineText}
+                          preferences={outlinePastePreferences}
+                          onPreferencesChange={updateOutlinePastePreferences}
+                          onReview={(diagnostic) => openOutlinePasteReview(diagnostic, 'source')}
+                          recognition={outlinePasteRecognition}
+                          onRecognitionChange={setOutlinePasteRecognition}
                           rows={8}
                           className="w-full min-h-[180px] rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black shadow-inner resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25"
                           placeholder={'Paste or draft your issue/book outline here…\n\nExample:\nPage 1: Opening classroom misfire.\nPage 2: Vision escalates.\nPage 3: Mentor interrupts.'}
@@ -11103,6 +11356,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             </div>
           </section>
         </WriterContextMenu>
+
+        {outlinePasteReview ? (
+          <WriterOutlinePasteReview
+            diagnostic={outlinePasteReview.diagnostic}
+            preferences={outlinePastePreferences}
+            busy={outlinePasteReviewBusy}
+            error={outlinePasteReviewError}
+            onApply={(diagnostic) => void applyOutlinePasteReview(diagnostic)}
+            onKeepUnstructured={keepOutlinePasteUnstructured}
+            onCancel={cancelOutlinePasteReview}
+            onPreferencesChange={updateOutlinePastePreferences}
+          />
+        ) : null}
 
         <WriterStudioDock
           activeTabId={dockTab}
