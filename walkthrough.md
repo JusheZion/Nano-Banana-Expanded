@@ -11875,3 +11875,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Implement Pass 2 preferences, templates, and help copy.
+
+## Writer outline paste review — Pass 2 preferences and templates - 2026-07-22
+
+### What changed
+- Added persisted outline-paste preferences with conservative defaults: review only when needed, AI classification off, and first-use guidance on.
+- Added safe field-by-field recovery for missing, partial, malformed, wrong-type, and storage-denied preference data.
+- Added matching TXT and Markdown outline templates with optional Title/Premise/Acts, Act separator variants, page beats/ranges, Notes, and ordinary unassigned prose guidance.
+- Added concise help-registry entries for review frequency, AI provenance, Unassigned Text, restoration, unstructured source, templates, Paste settings, and first-use guidance.
+
+### Files touched
+- `src/portals/writer/writerOutlinePastePreferences.ts`
+- `src/portals/writer/writerOutlineTemplates.ts`
+- `src/portals/writer/writerHelpRegistry.tsx`
+- `src/portals/writer/__tests__/writerOutlinePastePreferences.test.ts`
+- `src/portals/writer/__tests__/writerOutlineTemplates.test.ts`
+- `public/templates/writer-outline-template.txt`
+- `public/templates/writer-outline-template.md`
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- New preference/template suites: 2 files / 22 tests passed.
+- Final scoped verification with help anchor: 3 files / 24 tests passed.
+- Scoped ESLint and TypeScript compilation: passed.
+- Exact public/export template parity and `git diff --check`: passed.
+- Independent specification and code-quality reviews: approved.
+
+### Outstanding issues
+- Preferences and downloads remain intentionally unwired until integration passes.
+
+### Risks or caveats
+- None within this dormant module/template pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Implement Pass 3 Simple Workflow review component and complete Audit 1.

@@ -140,7 +140,7 @@ git commit -m "feat: add lossless outline paste diagnostics"
 - Create: `public/templates/writer-outline-template.md`
 - Modify: `src/portals/writer/writerHelpRegistry.tsx`
 
-- [ ] **Step 1: Write failing preference/template tests.**
+- [x] **Step 1: Write failing preference/template tests.**
 
 ```ts
 expect(loadOutlinePastePreferences(storage)).toEqual({
@@ -152,11 +152,11 @@ expect(WRITER_OUTLINE_TEXT_TEMPLATE).toContain('Act III —');
 expect(WRITER_OUTLINE_MARKDOWN_TEMPLATE).toContain('Acts are optional');
 ```
 
-- [ ] **Step 2: Run tests and verify RED.**
+- [x] **Step 2: Run tests and verify RED.**
 
 Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePastePreferences.test.ts src/portals/writer/__tests__/writerOutlineTemplates.test.ts`
 
-- [ ] **Step 3: Implement validated persistence and template exports.**
+- [x] **Step 3: Implement validated persistence and template exports.**
 
 ```ts
 export type OutlinePastePreferences = {
@@ -173,11 +173,11 @@ export function loadOutlinePastePreferences(storage: Pick<Storage, 'getItem'>): 
 export function saveOutlinePastePreferences(storage: Pick<Storage, 'setItem'>, value: OutlinePastePreferences): void;
 ```
 
-- [ ] **Step 4: Add tooltip strings** for review frequency, AI provenance, Unassigned Text, Restore original, Keep unstructured, templates, and first-use guidance. Essential instructions must also exist as visible text.
+- [x] **Step 4: Add tooltip strings** for review frequency, AI provenance, Unassigned Text, Restore original, Keep unstructured, templates, and first-use guidance. Essential instructions must also exist as visible text.
 
-- [ ] **Step 5: Run focused tests and verify GREEN.**
+- [x] **Step 5: Run focused tests and verify GREEN.**
 
-- [ ] **Step 6: Commit the pass.**
+- [x] **Step 6: Commit the pass.**
 
 ```bash
 git add src/portals/writer/writerOutlinePastePreferences.ts src/portals/writer/writerOutlineTemplates.ts src/portals/writer/writerHelpRegistry.tsx src/portals/writer/__tests__/writerOutlinePastePreferences.test.ts src/portals/writer/__tests__/writerOutlineTemplates.test.ts public/templates/writer-outline-template.txt public/templates/writer-outline-template.md
@@ -186,7 +186,7 @@ git commit -m "feat: add outline paste preferences and templates"
 
 **Smoke test:** Focused preference/template tests plus `git diff --check`.
 
-**Result summary:** Record default/fallback/template assertions.
+**Result summary:** PASS — TDD RED confirmed. New preference/template suites passed 22 tests; final scoped verification including the existing help anchor passed 3 suites / 24 tests. Scoped ESLint, TypeScript compilation, exact public/export template parity, and `git diff --check` passed. Independent specification and code-quality reviews approved the exact defaults, resilient field-level storage recovery, immutable content, UTF-8/LF parity, required examples, help topics, and no-UI scope.
 
 **Rollback:** Revert the pass; no active UI depends on these files yet.
 
