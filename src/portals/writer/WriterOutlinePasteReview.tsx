@@ -646,39 +646,6 @@ export function WriterOutlinePasteReview({
         </aside>
       </div>
 
-      {selectedCount > 0 ? (
-        <aside
-          data-testid="mobile-assignment-bar"
-          aria-label="Selected passage actions"
-          className="fixed inset-x-3 bottom-3 z-20 border border-amber-700/30 bg-amber-50/95 px-3 py-2 shadow-xl backdrop-blur md:hidden"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 text-xs text-slate-800">
-              <p className="font-extrabold">{selectedCount} selected</p>
-              <p className="truncate font-semibold">Destination: {assignmentSummary}</p>
-              {assignmentDisabledReason ? <p className="text-rose-800">{assignmentDisabledReason}</p> : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <a
-                href="#paste-review-assign-title"
-                className="rounded-md px-2 py-2 text-xs font-bold text-amber-950 underline decoration-amber-700/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
-              >
-                Edit assignment options
-              </a>
-              <button
-                type="button"
-                aria-label="Assign selected passages from mobile action bar"
-                disabled={busy || assignmentDisabledReason !== null}
-                onClick={applyAssignment}
-                className="rounded-md bg-slate-900 px-3 py-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Assign
-              </button>
-            </div>
-          </div>
-        </aside>
-      ) : null}
-
       <div
         data-testid="paste-review-footer"
         className="sticky bottom-0 z-30 mt-5 border-t border-slate-900/15 bg-white/95 px-1 pb-1 pt-4 shadow-[0_-10px_18px_-18px_rgba(15,23,42,0.7)] backdrop-blur"
@@ -705,6 +672,38 @@ export function WriterOutlinePasteReview({
                 ? `Ready to apply with ${advisoryWarnings.length} advisory ${advisoryWarnings.length === 1 ? 'warning' : 'warnings'}.`
                 : 'Ready to apply.'}
         </p>
+        {selectedCount > 0 ? (
+          <aside
+            data-testid="mobile-assignment-bar"
+            aria-label="Selected passage actions"
+            className="mb-3 border-y border-amber-700/30 bg-amber-50/95 px-3 py-2 md:hidden"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 text-xs text-slate-800">
+                <p className="font-extrabold">{selectedCount} selected</p>
+                <p className="truncate font-semibold">Destination: {assignmentSummary}</p>
+                {assignmentDisabledReason ? <p className="text-rose-800">{assignmentDisabledReason}</p> : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href="#paste-review-assign-title"
+                  className="rounded-md px-2 py-2 text-xs font-bold text-amber-950 underline decoration-amber-700/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                >
+                  Edit assignment options
+                </a>
+                <button
+                  type="button"
+                  aria-label="Assign selected passages from mobile action bar"
+                  disabled={busy || assignmentDisabledReason !== null}
+                  onClick={applyAssignment}
+                  className="rounded-md bg-slate-900 px-3 py-2 text-xs font-extrabold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          </aside>
+        ) : null}
         <div
           data-testid="paste-review-actions"
           className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"

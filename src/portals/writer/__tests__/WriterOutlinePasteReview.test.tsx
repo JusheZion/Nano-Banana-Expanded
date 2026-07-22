@@ -788,7 +788,7 @@ describe('WriterOutlinePasteReview', () => {
     expect(screen.getAllByRole('checkbox').filter((checkbox) => checkbox.getAttribute('aria-labelledby'))).toHaveLength(32);
   });
 
-  it('shows a keyboard-accessible compact mobile action bar while long-list selections are active', () => {
+  it('integrates mobile selection actions into the single sticky footer without competing bottom layers', () => {
     const diagnostic = analyzeOutlinePaste(Array.from(
       { length: 32 },
       (_, index) => `Loose passage ${index + 1}.`,
@@ -797,16 +797,23 @@ describe('WriterOutlinePasteReview', () => {
     selectPassage('Loose passage 24.');
 
     const mobileBar = screen.getByTestId('mobile-assignment-bar');
-    expect(mobileBar.className).toMatch(/fixed/);
-    expect(mobileBar.className).toMatch(/z-20/);
     expect(mobileBar.className).toMatch(/md:hidden/);
     expect(within(mobileBar).getByText(/1 selected/)).not.toBeNull();
     expect(within(mobileBar).getByText(/Destination: Notes/)).not.toBeNull();
     expect(within(mobileBar).getByRole('link', { name: 'Edit assignment options' }).getAttribute('href')).toBe('#paste-review-assign-title');
     expect((within(mobileBar).getByRole('button', { name: 'Assign selected passages from mobile action bar' }) as HTMLButtonElement).disabled).toBe(false);
     const footer = screen.getByTestId('paste-review-footer');
+    const primaryActions = screen.getByTestId('paste-review-actions');
+    const bottomOwners = [...screen.getByRole('dialog').querySelectorAll<HTMLElement>('[class]')].filter((element) => (
+      /(?:^|\s)(?:fixed|sticky)(?:\s|$)/.test(element.className) && /(?:^|\s)bottom-/.test(element.className)
+    ));
+    expect(footer.contains(mobileBar)).toBe(true);
     expect(footer.className).toMatch(/z-30/);
-    expect(mobileBar.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bottomOwners).toEqual([footer]);
+    expect(mobileBar.compareDocumentPosition(primaryActions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mobileBar.querySelector('[id]')).toBeNull();
+    expect(within(mobileBar).getByRole('link', { name: 'Edit assignment options' }).tabIndex).toBe(0);
+    expect(within(mobileBar).getByRole('button', { name: 'Assign selected passages from mobile action bar' }).tabIndex).toBe(0);
   });
 
   it('uses at least text-xs for functional labels and metadata', () => {
