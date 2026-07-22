@@ -84,6 +84,7 @@ describe('analyzeOutlinePaste', () => {
 
     expect(result.warnings).toContainEqual({
       code: 'duplicate_page',
+      severity: 'blocking',
       message: 'Page 1 is assigned more than once.',
       passageIds: pagePassages.map((passage) => passage.id),
     });
@@ -95,6 +96,7 @@ describe('analyzeOutlinePaste', () => {
 
     expect(result.warnings).toContainEqual({
       code: 'page_gap',
+      severity: 'advisory',
       message: 'Missing page targets: 2.',
       passageIds: result.passages.map((passage) => passage.id),
     });
@@ -103,6 +105,123 @@ describe('analyzeOutlinePaste', () => {
   it('reports the highest valid explicit page as the inferred page count', () => {
     expect(analyzeOutlinePaste('1. Opening\n12) Closing').inferredPageCount).toBe(12);
     expect(analyzeOutlinePaste('A story with no page markers.').inferredPageCount).toBeNull();
+  });
+
+  it('records a backward-compatible clipboard source type and explicit TXT/Markdown sources', () => {
+    expect(analyzeOutlinePaste('TITLE: Clipboard').sourceType).toBe('clipboard');
+    expect(analyzeOutlinePaste('TITLE: Text', 'txt').sourceType).toBe('txt');
+    expect(analyzeOutlinePaste('# **TITLE:** Markdown', 'md').sourceType).toBe('md');
+  });
+
+  it('normalizes Markdown wrappers for recognition while preserving raw passage text', () => {
+    const text = [
+      '# **TITLE:** The Raw Markdown',
+      '**PREMISE:** A wrapped premise.',
+      '## Acts',
+      '**ACTS:**',
+      '- **Act I — Opening:** Keep every source marker.',
+    ].join('\n');
+    const result = analyzeOutlinePaste(text, 'md');
+
+    expect(result.passages.map((passage) => passage.text)).toEqual(text.split('\n'));
+    expect(result.passages).toMatchObject([
+      { assignment: 'title' },
+      { assignment: 'premise' },
+      { assignment: 'act' },
+      { assignment: 'act' },
+      { assignment: 'act', actName: 'Act I' },
+    ]);
+    expect(result.proposedOutline).toMatchObject({
+      title: 'The Raw Markdown',
+      premise: 'A wrapped premise.',
+    });
+  });
+
+  it('recognizes TXT and Markdown Notes sections without dropping source lines', () => {
+    const txt = analyzeOutlinePaste('NOTES:\nNotes: Keep this line.\nSecond note line.', 'txt');
+    const md = analyzeOutlinePaste('## Notes\n**NOTES:** Keep the wrapper in the source.', 'md');
+
+    expect(txt.passages).toMatchObject([
+      { assignment: 'notes', text: 'NOTES:' },
+      { assignment: 'notes', text: 'Notes: Keep this line.' },
+      { assignment: 'notes', text: 'Second note line.' },
+    ]);
+    expect(txt.proposedOutline.notes).toEqual(['Notes: Keep this line.', 'Second note line.']);
+    expect(md.passages).toMatchObject([
+      { assignment: 'notes', text: '## Notes' },
+      { assignment: 'notes', text: '**NOTES:** Keep the wrapper in the source.' },
+    ]);
+    expect(md.proposedOutline.notes).toEqual(['**NOTES:** Keep the wrapper in the source.']);
+  });
+
+  it('expands valid Pages ranges into proposed beats and records the detected range', () => {
+    const result = analyzeOutlinePaste('PAGE BEATS:\nPages 4-6 — Crossing: The journey continues.', 'txt');
+    const rangePassage = result.passages[1];
+
+    expect(rangePassage).toMatchObject({
+      assignment: 'page_beat',
+      pageRange: { startPage: 4, endPage: 6, valid: true },
+    });
+    expect(result.detectedPageRanges).toEqual([{
+      passageId: rangePassage.id,
+      startPage: 4,
+      endPage: 6,
+      valid: true,
+    }]);
+    expect(result.proposedOutline.page_beats).toEqual([
+      { page_target: 4, scene: 'Crossing', summary: 'The journey continues.' },
+      { page_target: 5, scene: 'Crossing', summary: 'The journey continues.' },
+      { page_target: 6, scene: 'Crossing', summary: 'The journey continues.' },
+    ]);
+    expect(result.inferredPageCount).toBe(6);
+  });
+
+  it.each([
+    'Pages 0-2 — Invalid start',
+    'Pages 8-4 — Reversed range',
+    'Pages 199-201 — Invalid end',
+  ])('detects but does not propose invalid range %s', (line) => {
+    const result = analyzeOutlinePaste(line, 'txt');
+
+    expect(result.passages[0]).toMatchObject({
+      text: line,
+      assignment: 'unassigned',
+      pageRange: expect.objectContaining({ valid: false }),
+    });
+    expect(result.proposedOutline.page_beats).toBeUndefined();
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'invalid_page_range',
+      severity: 'blocking',
+      passageIds: [result.passages[0].id],
+    }));
+  });
+
+  it('warns when a page range overlaps another range or individual page', () => {
+    const result = analyzeOutlinePaste([
+      'Pages 2-4 — First sequence',
+      'Pages 4-5 — Overlapping sequence',
+      'Page 3 — Individual overlap',
+    ].join('\n'));
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'overlapping_page_range',
+      severity: 'blocking',
+      passageIds: result.passages.map((passage) => passage.id),
+    }));
+  });
+
+  it.each([
+    { label: 'Title', code: 'duplicate_title', text: 'TITLE: First\n**TITLE:** Second' },
+    { label: 'Premise', code: 'duplicate_premise', text: 'PREMISE: First\n## PREMISE: Second' },
+  ])('blocks conflicting $label passages without silently overwriting the first', ({ code, text }) => {
+    const result = analyzeOutlinePaste(text, 'md');
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code,
+      severity: 'blocking',
+      passageIds: result.passages.map((passage) => passage.id),
+    }));
+    expect(Object.values(result.proposedOutline)[0]).toBe('First');
   });
 
   it('preserves known parser output for fully recognized text', () => {
@@ -298,5 +417,25 @@ describe('assignOutlinePassages', () => {
     expect(assigned).toBe(diagnostic);
     expect(assigned.passages.every((passage) => passage.assignment === 'unassigned')).toBe(true);
     expect(assigned.proposedOutline.page_beats).toBeUndefined();
+  });
+
+  it.each([
+    { source: 'Major reversal: Hero flees.', expected: 'Major reversal: Hero flees.' },
+    { source: 'Threshold — Hero leaves home.', expected: 'Threshold — Hero leaves home.' },
+    { source: '- Bullet marker: Preserve the whole idea.', expected: 'Bullet marker: Preserve the whole idea.' },
+    { source: '  *  Spaced bullet — keep  internal   spacing.  ', expected: 'Spaced bullet — keep  internal   spacing.' },
+  ])('keeps complete marker-stripped manual Page Beat wording for $source', ({ source, expected }) => {
+    const diagnostic = analyzeOutlinePaste(source);
+    const passage = diagnostic.passages[0];
+
+    const assigned = assignOutlinePassages(diagnostic, [passage.id], 'page_beat', {
+      firstPageTarget: 9,
+    });
+
+    expect(assigned.passages[0].text).toBe(source);
+    expect(assigned.proposedOutline.page_beats).toEqual([{
+      page_target: 9,
+      summary: expected,
+    }]);
   });
 });

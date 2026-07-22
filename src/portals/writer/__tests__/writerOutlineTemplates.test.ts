@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WRITER_UI_TIPS } from '../writerHelpRegistry';
+import { analyzeOutlinePaste } from '../writerOutlinePasteDiagnostic';
 import {
   WRITER_OUTLINE_MARKDOWN_TEMPLATE,
   WRITER_OUTLINE_TEMPLATE_FILES,
@@ -22,6 +23,7 @@ describe('writer outline templates', () => {
     expect(template).toMatch(/Pages 4-5\s+[—-]/);
     expect(template).toContain('Notes');
     expect(template).toContain('intentionally unassigned prose');
+    expect(template).toContain('one proposed beat per page');
   });
 
   it('exports download metadata without a DOCX option', () => {
@@ -48,6 +50,29 @@ describe('writer outline templates', () => {
       expect(readFileSync(join(process.cwd(), 'public', 'templates', filename), 'utf8')).toBe(content);
     },
   );
+
+  it.each([
+    ['TXT', WRITER_OUTLINE_TEXT_TEMPLATE, 'txt' as const],
+    ['Markdown', WRITER_OUTLINE_MARKDOWN_TEMPLATE, 'md' as const],
+  ])('parses every demonstrated %s structure and keeps intentional prose unassigned', (_label, template, sourceType) => {
+    const result = analyzeOutlinePaste(template, sourceType);
+    const assignmentFor = (text: string) => result.passages.find((passage) => passage.text.includes(text))?.assignment;
+
+    expect(assignmentFor('TITLE:')).toBe('title');
+    expect(assignmentFor('PREMISE:')).toBe('premise');
+    expect(assignmentFor('Act I - Opening')).toBe('act');
+    expect(assignmentFor('Act II – Confrontation')).toBe('act');
+    expect(assignmentFor('Act III — Return')).toBe('act');
+    expect(assignmentFor('Page 1 — Opening image')).toBe('page_beat');
+    expect(assignmentFor('Page 2 - Inciting turn')).toBe('page_beat');
+    expect(assignmentFor('Pages 4-5 — Sequence')).toBe('page_beat');
+    expect(assignmentFor('NOTES:')).toBe('notes');
+    expect(assignmentFor('This intentionally unassigned prose')).toBe('unassigned');
+    expect(result.proposedOutline.page_beats).toEqual(expect.arrayContaining([
+      expect.objectContaining({ page_target: 4 }),
+      expect.objectContaining({ page_target: 5 }),
+    ]));
+  });
 
   it('registers concise help for every planned outline paste affordance', () => {
     expect(WRITER_UI_TIPS.outlinePasteReviewFrequency).toContain('review');

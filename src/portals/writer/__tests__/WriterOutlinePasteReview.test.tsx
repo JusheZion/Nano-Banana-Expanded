@@ -40,7 +40,15 @@ function renderReview(overrides: Partial<ComponentProps<typeof WriterOutlinePast
 }
 
 function selectPassage(text: string): void {
-  fireEvent.click(screen.getByRole('checkbox', { name: `Select passage: ${text}` }));
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^Select passage:\\s*${escaped}`) }));
+}
+
+function passageCheckbox(text: string): HTMLInputElement {
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return screen.getByRole('checkbox', {
+    name: new RegExp(`^Select passage:\\s*${escaped}`),
+  }) as HTMLInputElement;
 }
 
 function chooseAssignment(label: string): void {
@@ -69,7 +77,7 @@ describe('WriterOutlinePasteReview', () => {
   });
 
   it('traps focus at both boundaries and recovers focus moved outside the modal', () => {
-    renderReview();
+    renderReview({ diagnostic: analyzeOutlinePaste('1. Opening\n3. Closing') });
     const first = screen.getByRole('checkbox', { name: "Don't show these tips again" });
     const last = screen.getByRole('button', { name: 'Apply reviewed paste' });
     const outside = document.createElement('button');
@@ -93,7 +101,7 @@ describe('WriterOutlinePasteReview', () => {
   });
 
   it('treats the initially focused non-tabbable heading as both Tab boundaries', async () => {
-    renderReview();
+    renderReview({ diagnostic: analyzeOutlinePaste('1. Opening\n3. Closing') });
     const heading = screen.getByRole('heading', { name: 'Review what the outline recognized' });
     const first = screen.getByRole('checkbox', { name: "Don't show these tips again" });
     const last = screen.getByRole('button', { name: 'Apply reviewed paste' });
@@ -168,6 +176,51 @@ describe('WriterOutlinePasteReview', () => {
     expect(screen.getByTestId('unassigned-count').textContent).toContain('2');
     expect(screen.getAllByText('Remember the lighthouse motif.').length).toBeGreaterThan(0);
     expect(screen.getByText('2 passages require assignment.')).not.toBeNull();
+    expect(screen.getByTestId('inferred-page-count').textContent).toBe('1');
+  });
+
+  it('renders an explicit no-page-count state', () => {
+    renderReview({ diagnostic: analyzeOutlinePaste('Loose prose only.') });
+    expect(screen.getByTestId('inferred-page-count').textContent).toBe('No page count detected');
+  });
+
+  it('blocks Apply until blocking Unassigned Text is resolved', () => {
+    const diagnostic = analyzeOutlinePaste('Place this note.');
+    const { props } = renderReview({ diagnostic });
+    const apply = screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement;
+
+    expect(apply.disabled).toBe(true);
+    expect(screen.getByTestId('apply-readiness').textContent).toMatch(/1 blocking issue/i);
+    expect(screen.getByTestId('apply-readiness').textContent).toMatch(/select the affected passage/i);
+
+    selectPassage('Place this note.');
+    chooseAssignment('notes');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+    expect(apply.disabled).toBe(false);
+    fireEvent.click(apply);
+    expect(vi.mocked(props.onApply)).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Apply enabled for advisory page gaps and labels the advisory state', () => {
+    renderReview({ diagnostic: analyzeOutlinePaste('1. Opening\n3. Closing') });
+    const apply = screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement;
+
+    expect(apply.disabled).toBe(false);
+    expect(screen.getByTestId('apply-readiness').textContent).toMatch(/advisory/i);
+  });
+
+  it('links warning passage IDs to clearly labeled affected rows', () => {
+    const diagnostic = analyzeOutlinePaste('TITLE: First\nTITLE: Second');
+    renderReview({ diagnostic });
+
+    const affectedLinks = screen.getAllByRole('link', { name: /Line [12]/ });
+    expect(affectedLinks.map((link) => link.getAttribute('href'))).toEqual(
+      diagnostic.passages.map((passage) => `#paste-review-${passage.id}`),
+    );
+    diagnostic.passages.forEach((passage) => {
+      expect(document.getElementById(`paste-review-${passage.id}`)?.getAttribute('data-warning-affected')).toBe('true');
+    });
+    expect((screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('selects one or all passages with native checkboxes', () => {
@@ -180,6 +233,22 @@ describe('WriterOutlinePasteReview', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select all passages' }));
     passageCheckboxes.forEach((checkbox) => expect((checkbox as HTMLInputElement).checked).toBe(true));
+  });
+
+  it('gives checked rows persistent treatment, adjacent count, and complete accessible metadata', () => {
+    renderReview();
+    const checkbox = passageCheckbox('Remember the lighthouse motif.');
+    fireEvent.click(checkbox);
+
+    const row = checkbox.closest('label');
+    expect(row?.getAttribute('data-selected')).toBe('true');
+    expect(row?.className).toMatch(/bg-amber|ring-amber/);
+    expect(screen.getByTestId('selected-passage-count').textContent).toContain('1 selected');
+    const descriptionId = checkbox.getAttribute('aria-describedby');
+    const description = descriptionId ? document.getElementById(descriptionId)?.textContent : '';
+    expect(description).toContain('Current assignment: Unassigned Text');
+    expect(description).toContain('Provenance: Recognized by rules');
+    expect(description).toContain('Line 5');
   });
 
   it('assigns selected text to Notes locally and only emits the proposal on Apply', () => {
@@ -207,6 +276,8 @@ describe('WriterOutlinePasteReview', () => {
     expect(onApply).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toContain('Assigned 1 passage to Notes');
 
+    selectPassage('A second loose observation.');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
     expect(onApply).toHaveBeenCalledOnce();
     const applied = onApply.mock.calls[0][0] as OutlinePasteDiagnostic;
@@ -218,7 +289,6 @@ describe('WriterOutlinePasteReview', () => {
   it.each([
     { value: 'title', label: 'Title' },
     { value: 'premise', label: 'Premise' },
-    { value: 'unassigned', label: 'Unassigned Text' },
   ] as const)('assigns selected text to $label through the shared assignment path', ({ value }) => {
     const { props } = renderReview();
     if (value === 'title') {
@@ -233,12 +303,29 @@ describe('WriterOutlinePasteReview', () => {
     selectPassage('Remember the lighthouse motif.');
     chooseAssignment(value);
     fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+    selectPassage('A second loose observation.');
+    chooseAssignment('notes');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
 
     const applied = vi.mocked(props.onApply).mock.calls[0][0] as OutlinePasteDiagnostic;
     expect(applied.passages.find((passage) => (
       passage.text === 'Remember the lighthouse motif.'
     ))).toMatchObject({ assignment: value, provenance: 'user' });
+  });
+
+  it('keeps a manual Unassigned Text destination visibly blocking', () => {
+    const { props } = renderReview();
+    selectPassage('Remember the lighthouse motif.');
+    chooseAssignment('unassigned');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+
+    const checkbox = passageCheckbox('Remember the lighthouse motif.');
+    const description = document.getElementById(checkbox.getAttribute('aria-describedby') ?? '')?.textContent;
+    expect(description).toContain('Current assignment: Unassigned Text');
+    expect(description).toContain('Provenance: Manually assigned');
+    expect((screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -254,7 +341,7 @@ describe('WriterOutlinePasteReview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     expect(screen.getByText(`Choose exactly one passage for ${label}.`)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
-    expect(vi.mocked(props.onApply)).toHaveBeenCalledWith(diagnostic);
+    expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -269,7 +356,7 @@ describe('WriterOutlinePasteReview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     expect(screen.getByText(`${label} already has a passage. Move it to another destination first.`)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
-    expect(vi.mocked(props.onApply)).toHaveBeenCalledWith(diagnostic);
+    expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
   });
 
   it('offers exactly the six supported manual assignment destinations', () => {
@@ -298,6 +385,9 @@ describe('WriterOutlinePasteReview', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Act name or number' }), {
       target: { value: 'Act II' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+    selectPassage('A second loose observation.');
+    chooseAssignment('notes');
     fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
 
@@ -338,7 +428,7 @@ describe('WriterOutlinePasteReview', () => {
     expect(screen.getByText('Enter a whole first page number from 1 to 200.')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
-    expect(vi.mocked(props.onApply)).toHaveBeenCalledWith(diagnostic);
+    expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
   });
 
   it('restores the original diagnostic after local review changes', () => {
@@ -351,7 +441,8 @@ describe('WriterOutlinePasteReview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restore original recognition' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
 
-    expect(vi.mocked(props.onApply)).toHaveBeenCalledWith(diagnostic);
+    expect(vi.mocked(props.onApply)).not.toHaveBeenCalled();
+    expect((screen.getByRole('button', { name: 'Apply reviewed paste' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('Original recognition restored');
   });
 
@@ -368,9 +459,7 @@ describe('WriterOutlinePasteReview', () => {
     rerender(<WriterOutlinePasteReview {...props} diagnostic={diagnostic} error="Stable rerender" />);
     expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).value).toBe('act');
     expect((screen.getByRole('textbox', { name: 'Act name or number' }) as HTMLInputElement).value).toBe('Act II');
-    expect((screen.getByRole('checkbox', {
-      name: 'Select passage: Remember the lighthouse motif.',
-    }) as HTMLInputElement).checked).toBe(true);
+    expect(passageCheckbox('Remember the lighthouse motif.').checked).toBe(true);
 
     rerender(<WriterOutlinePasteReview {...props} diagnostic={nextDiagnostic} error={null} />);
     expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).value).toBe('notes');
@@ -460,7 +549,7 @@ describe('WriterOutlinePasteReview', () => {
       />,
     );
 
-    forceClick(screen.getByRole('checkbox', { name: 'Select passage: A second loose observation.' }));
+    forceClick(passageCheckbox('A second loose observation.'));
     forceClick(screen.getByRole('checkbox', { name: 'Select all passages' }));
     forceChange(screen.getByRole('combobox', { name: 'Assign selected to' }), 'act');
     forceClick(screen.getByRole('button', { name: 'Assign selected passages' }));
@@ -486,12 +575,11 @@ describe('WriterOutlinePasteReview', () => {
         onPreferencesChange={onPreferencesChange}
       />,
     );
-    expect((screen.getByRole('checkbox', {
-      name: 'Select passage: A second loose observation.',
-    }) as HTMLInputElement).checked).toBe(true);
+    expect(passageCheckbox('A second loose observation.').checked).toBe(true);
     expect((screen.getByRole('checkbox', { name: 'Select all passages' }) as HTMLInputElement).checked).toBe(false);
     expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).value).toBe('notes');
     expect(screen.queryByText('Enter an Act name or number before assigning.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
     const applied = onApply.mock.calls[0][0] as OutlinePasteDiagnostic;
     expect(applied.passages.find((passage) => (
@@ -534,7 +622,7 @@ describe('WriterOutlinePasteReview', () => {
     const { rerender } = renderReview({ onPreferencesChange });
 
     expect(screen.getByRole('heading', { name: 'Why this review opened' })).not.toBeNull();
-    expect(screen.getByText(/Unassigned Text needs your decision/i)).not.toBeNull();
+    expect(screen.getByText(/Review Unassigned Text/i)).not.toBeNull();
     expect(screen.getAllByText(/Nothing changes until you choose Apply reviewed paste/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('checkbox', { name: "Don't show these tips again" }));
     expect(onPreferencesChange).toHaveBeenCalledWith(expect.objectContaining({
@@ -556,6 +644,15 @@ describe('WriterOutlinePasteReview', () => {
       />,
     );
     expect(screen.queryByRole('heading', { name: 'Why this review opened' })).toBeNull();
+  });
+
+  it('dismisses onboarding for the current session without changing persistent preferences', () => {
+    const onPreferencesChange = vi.fn();
+    renderReview({ onPreferencesChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss tips for this session' }));
+    expect(screen.queryByRole('heading', { name: 'Why this review opened' })).toBeNull();
+    expect(onPreferencesChange).not.toHaveBeenCalled();
   });
 
   it('keeps essential preservation and apply guidance visible without opening the supplementary tooltip', () => {
@@ -583,13 +680,13 @@ describe('WriterOutlinePasteReview', () => {
     expect(nativeControls.length).toBeGreaterThan(8);
     expect(nativeControls.every((control) => control.tabIndex === 0)).toBe(true);
     expect(nativeControls[0]).toBe(screen.getByRole('checkbox', { name: "Don't show these tips again" }));
-    expect(nativeControls.indexOf(screen.getByRole('checkbox', { name: 'Select all passages' }))).toBeLessThan(
-      nativeControls.indexOf(screen.getByRole('combobox', { name: 'Assign selected to' })),
-    );
     expect(nativeControls.indexOf(screen.getByRole('combobox', { name: 'Assign selected to' }))).toBeLessThan(
       nativeControls.indexOf(screen.getByRole('button', { name: 'Assign selected passages' })),
     );
-    nativeControls.slice(0, 5).forEach((control) => {
+    expect(nativeControls.indexOf(screen.getByRole('button', { name: 'Assign selected passages' }))).toBeLessThan(
+      nativeControls.indexOf(screen.getByRole('checkbox', { name: 'Select all passages' })),
+    );
+    nativeControls.slice(0, 4).forEach((control) => {
       control.focus();
       expect(document.activeElement).toBe(control);
     });
@@ -643,6 +740,25 @@ describe('WriterOutlinePasteReview', () => {
     expect(layout.className).toContain('grid-cols-1');
     expect(layout.className).toMatch(/lg:grid-cols-/);
     expect(dialog.className).not.toMatch(/h-screen|h-\[|max-h-\[|overflow-x-auto/);
+  });
+
+  it('places a sticky assignment toolbar before a long passage list with sticky summary and footer actions', () => {
+    const diagnostic = analyzeOutlinePaste(Array.from(
+      { length: 32 },
+      (_, index) => `Loose passage ${index + 1}.`,
+    ).join('\n'));
+    renderReview({ diagnostic });
+    const toolbar = screen.getByTestId('assignment-toolbar');
+    const passages = screen.getByRole('region', { name: 'Recognized passages' });
+    const sidebar = screen.getByTestId('paste-review-sidebar');
+    const footer = screen.getByTestId('paste-review-footer');
+
+    expect(toolbar.compareDocumentPosition(passages) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(toolbar.className).toMatch(/lg:sticky/);
+    expect(sidebar.className).toMatch(/lg:sticky/);
+    expect(footer.className).toMatch(/sticky/);
+    expect(screen.getByRole('dialog').className).not.toMatch(/overflow-x-auto|h-screen|max-h-\[/);
+    expect(screen.getAllByRole('checkbox', { name: /Select passage:/ })).toHaveLength(32);
   });
 
   it('keeps narrow-screen visual action order aligned with DOM and tab order', () => {

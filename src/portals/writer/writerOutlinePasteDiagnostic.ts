@@ -17,6 +17,13 @@ export type OutlinePassageAssignment =
   | 'unassigned';
 
 export type OutlineAssignmentProvenance = 'deterministic' | 'user' | 'ai';
+export type OutlinePasteSourceType = 'clipboard' | 'txt' | 'md';
+
+export type OutlineDetectedPageRange = {
+  startPage: number;
+  endPage: number;
+  valid: boolean;
+};
 
 export type OutlinePastePassage = {
   id: string;
@@ -27,22 +34,41 @@ export type OutlinePastePassage = {
   provenance: OutlineAssignmentProvenance;
   actName?: string;
   pageTarget?: number;
+  pageRange?: OutlineDetectedPageRange;
 };
 
 export type OutlinePasteDiagnostic = {
   originalText: string;
+  sourceType: OutlinePasteSourceType;
   passages: OutlinePastePassage[];
   proposedOutline: Record<string, unknown>;
   warnings: Array<{
-    code: 'duplicate_page' | 'page_gap' | 'unassigned';
+    code:
+      | 'duplicate_page'
+      | 'page_gap'
+      | 'unassigned'
+      | 'duplicate_title'
+      | 'duplicate_premise'
+      | 'overlapping_page_range'
+      | 'invalid_page_range';
+    severity: 'blocking' | 'advisory';
     message: string;
     passageIds: string[];
   }>;
+  detectedPageRanges: Array<OutlineDetectedPageRange & { passageId: string }>;
   inferredPageCount: number | null;
   requiresReview: boolean;
 };
 
-type DiagnosticSection = 'none' | 'acts' | 'beats';
+type DiagnosticSection = 'none' | 'acts' | 'beats' | 'notes';
+
+function normalizeRecognitionLine(rawLine: string): { line: string; markdownHeading: boolean } {
+  let line = rawLine.trim();
+  const markdownHeading = /^#{1,6}\s+/.test(line);
+  line = line.replace(/^#{1,6}\s+/, '');
+  line = line.replace(/\*\*|__/g, '');
+  return { line: line.trim(), markdownHeading };
+}
 
 function stablePassageId(text: string, lineNumber: number): string {
   let hash = 0x811c9dc5;
@@ -54,11 +80,32 @@ function stablePassageId(text: string, lineNumber: number): string {
 }
 
 function isActsHeader(line: string): boolean {
-  return line.toUpperCase() === 'ACTS:';
+  return /^ACTS:?$/i.test(line);
 }
 
 function isPageBeatsHeader(line: string): boolean {
-  return line.toUpperCase() === 'PAGE BEATS:';
+  return /^PAGE BEATS:?$/i.test(line);
+}
+
+function isNotesHeader(line: string): boolean {
+  return /^NOTES:?$/i.test(line);
+}
+
+function parsePageRange(line: string): OutlineDetectedPageRange | null {
+  const body = line.replace(/^[-*]\s+/, '');
+  const match = body.match(/^Pages\s+(\d+)\s*[-–—]\s*(\d+)\b/i);
+  if (!match) return null;
+  const startPage = Number(match[1]);
+  const endPage = Number(match[2]);
+  return {
+    startPage,
+    endPage,
+    valid: startPage >= 1 && startPage <= endPage && endPage <= 200,
+  };
+}
+
+function isUnrecognizedSectionHeading(line: string, markdownHeading: boolean): boolean {
+  return markdownHeading || /^[A-Z][A-Z\s]+:?$/.test(line);
 }
 
 function parseExplicitPageBeat(line: string): OutlineBeat | null {
@@ -75,7 +122,7 @@ function classifyPassages(text: string): OutlinePastePassage[] {
 
   text.split('\n').forEach((rawLine, index) => {
     const lineNumber = index + 1;
-    const line = rawLine.trim();
+    const { line, markdownHeading } = normalizeRecognitionLine(rawLine);
     if (!line) return;
 
     const passage: OutlinePastePassage = {
@@ -87,6 +134,7 @@ function classifyPassages(text: string): OutlinePastePassage[] {
       provenance: 'deterministic',
     };
     const upper = line.toUpperCase();
+    const pageRange = parsePageRange(line);
 
     if (upper.startsWith('TITLE:')) {
       passage.assignment = 'title';
@@ -108,12 +156,27 @@ function classifyPassages(text: string): OutlinePastePassage[] {
       section = 'beats';
       currentActName = undefined;
       canContinueAct = false;
+    } else if (isNotesHeader(line) || upper.startsWith('NOTES:')) {
+      passage.assignment = 'notes';
+      section = 'notes';
+      currentActName = undefined;
+      canContinueAct = false;
+    } else if (pageRange) {
+      passage.pageRange = pageRange;
+      if (pageRange.valid) passage.assignment = 'page_beat';
+      section = 'beats';
+      currentActName = undefined;
+      canContinueAct = false;
     } else {
       const actHeading = parseOutlineActHeading(line);
       const numberedBeat = section === 'acts' ? null : parseOutlineNumberedBeatLine(line);
       const explicitPageBeat = section === 'acts' ? null : parseExplicitPageBeat(line);
 
-      if (actHeading) {
+      if (isUnrecognizedSectionHeading(line, markdownHeading)) {
+        section = 'none';
+        currentActName = undefined;
+        canContinueAct = false;
+      } else if (actHeading) {
         passage.assignment = 'act';
         passage.actName = actHeading.name;
         currentActName = actHeading.name;
@@ -140,6 +203,8 @@ function classifyPassages(text: string): OutlinePastePassage[] {
       } else if (section === 'acts' && currentActName && canContinueAct) {
         passage.assignment = 'act';
         passage.actName = currentActName;
+      } else if (section === 'notes') {
+        passage.assignment = 'notes';
       }
     }
 
@@ -165,21 +230,25 @@ function buildProposedOutline(
   let sawPageBeats = false;
 
   for (const passage of passages) {
-    const line = passage.text.trim();
+    const line = normalizeRecognitionLine(passage.text).line;
     if (passage.assignment === 'title') {
-      proposed.title = line.toUpperCase().startsWith('TITLE:')
-        ? line.slice(line.indexOf(':') + 1).trim()
-        : line;
+      if (proposed.title === undefined) {
+        proposed.title = line.toUpperCase().startsWith('TITLE:')
+          ? line.slice(line.indexOf(':') + 1).trim()
+          : line;
+      }
       continue;
     }
     if (passage.assignment === 'premise') {
-      proposed.premise = line.toUpperCase().startsWith('PREMISE:')
-        ? line.slice(line.indexOf(':') + 1).trim()
-        : line;
+      if (proposed.premise === undefined) {
+        proposed.premise = line.toUpperCase().startsWith('PREMISE:')
+          ? line.slice(line.indexOf(':') + 1).trim()
+          : line;
+      }
       continue;
     }
     if (passage.assignment === 'notes') {
-      notes.push(passage.text);
+      if (!isNotesHeader(line)) notes.push(passage.text);
       continue;
     }
     if (passage.assignment === 'act') {
@@ -219,14 +288,25 @@ function buildProposedOutline(
       if (isPageBeatsHeader(line)) continue;
 
       const body = line.replace(/^[-*]\s+/, '');
-      const beat = parseOutlineNumberedBeatLine(body) ?? parseOutlineBeatLine(body);
-      if (typeof passage.pageTarget === 'number') beat.page_target = passage.pageTarget;
-      if (passage.provenance !== 'deterministic'
-        && !beat.scene
-        && !beat.summary
-        && !beat.emotional_turn) {
-        beat.summary = line;
+      if (passage.provenance !== 'deterministic') {
+        const beat: OutlineBeat = { summary: passage.text.trim().replace(/^[-*]\s+/, '') };
+        if (typeof passage.pageTarget === 'number') beat.page_target = passage.pageTarget;
+        pageBeats.push(beat);
+        continue;
       }
+
+      const range = passage.pageRange;
+      const structuralBody = range
+        ? body.replace(/^Pages\s+\d+\s*[-–—]\s*\d+\b/i, `Page ${range.startPage}`)
+        : body;
+      const beat = parseOutlineNumberedBeatLine(structuralBody) ?? parseOutlineBeatLine(structuralBody);
+      if (range?.valid) {
+        for (let page = range.startPage; page <= range.endPage; page += 1) {
+          pageBeats.push({ ...beat, page_target: page });
+        }
+        continue;
+      }
+      if (typeof passage.pageTarget === 'number') beat.page_target = passage.pageTarget;
       pageBeats.push(beat);
     }
   }
@@ -239,25 +319,72 @@ function buildProposedOutline(
 
 function buildWarnings(passages: OutlinePastePassage[]): OutlinePasteDiagnostic['warnings'] {
   const warnings: OutlinePasteDiagnostic['warnings'] = [];
-  const pagePassages = passages.filter((passage) => (
-    passage.assignment === 'page_beat'
-    && typeof passage.pageTarget === 'number'
-    && passage.pageTarget >= 1
-    && passage.pageTarget <= 200
-  ));
-  const byPage = new Map<number, OutlinePastePassage[]>();
-  for (const passage of pagePassages) {
-    const matches = byPage.get(passage.pageTarget!) ?? [];
-    matches.push(passage);
-    byPage.set(passage.pageTarget!, matches);
+  const titlePassages = passages.filter((passage) => passage.assignment === 'title');
+  const premisePassages = passages.filter((passage) => passage.assignment === 'premise');
+  if (titlePassages.length > 1) {
+    warnings.push({
+      code: 'duplicate_title',
+      severity: 'blocking',
+      message: 'More than one passage is assigned as Title. Move extras to another destination.',
+      passageIds: titlePassages.map((passage) => passage.id),
+    });
+  }
+  if (premisePassages.length > 1) {
+    warnings.push({
+      code: 'duplicate_premise',
+      severity: 'blocking',
+      message: 'More than one passage is assigned as Premise. Move extras to another destination.',
+      passageIds: premisePassages.map((passage) => passage.id),
+    });
   }
 
+  const invalidRanges = passages.filter((passage) => passage.pageRange && !passage.pageRange.valid);
+  invalidRanges.forEach((passage) => warnings.push({
+    code: 'invalid_page_range',
+    severity: 'blocking',
+    message: 'Page ranges must run from 1 to 200 with the first page before the last.',
+    passageIds: [passage.id],
+  }));
+
+  const pageEntries = passages.flatMap((passage) => {
+    if (passage.assignment !== 'page_beat') return [];
+    if (passage.pageRange?.valid) {
+      const pages: number[] = [];
+      for (let page = passage.pageRange.startPage; page <= passage.pageRange.endPage; page += 1) pages.push(page);
+      return [{ passage, pages, isRange: true }];
+    }
+    if (typeof passage.pageTarget === 'number' && passage.pageTarget >= 1 && passage.pageTarget <= 200) {
+      return [{ passage, pages: [passage.pageTarget], isRange: false }];
+    }
+    return [];
+  });
+  const byPage = new Map<number, typeof pageEntries>();
+  pageEntries.forEach((entry) => {
+    entry.pages.forEach((page) => byPage.set(page, [...(byPage.get(page) ?? []), entry]));
+  });
+
+  const overlapPages: number[] = [];
+  const overlapIds = new Set<string>();
   for (const [page, matches] of [...byPage.entries()].sort(([a], [b]) => a - b)) {
     if (matches.length < 2) continue;
+    if (matches.some((match) => match.isRange)) {
+      overlapPages.push(page);
+      matches.forEach((match) => overlapIds.add(match.passage.id));
+      continue;
+    }
     warnings.push({
       code: 'duplicate_page',
+      severity: 'blocking',
       message: `Page ${page} is assigned more than once.`,
-      passageIds: matches.map((passage) => passage.id),
+      passageIds: matches.map((match) => match.passage.id),
+    });
+  }
+  if (overlapPages.length) {
+    warnings.push({
+      code: 'overlapping_page_range',
+      severity: 'blocking',
+      message: `Overlapping page assignments detected at pages: ${overlapPages.join(', ')}.`,
+      passageIds: passages.filter((passage) => overlapIds.has(passage.id)).map((passage) => passage.id),
     });
   }
 
@@ -270,8 +397,9 @@ function buildWarnings(passages: OutlinePastePassage[]): OutlinePasteDiagnostic[
     if (missingPages.length) {
       warnings.push({
         code: 'page_gap',
+        severity: 'advisory',
         message: `Missing page targets: ${missingPages.join(', ')}.`,
-        passageIds: pagePassages.map((passage) => passage.id),
+        passageIds: pageEntries.map(({ passage }) => passage.id),
       });
     }
   }
@@ -280,6 +408,7 @@ function buildWarnings(passages: OutlinePastePassage[]): OutlinePasteDiagnostic[
   if (unassigned.length) {
     warnings.push({
       code: 'unassigned',
+      severity: 'blocking',
       message: `${unassigned.length} ${unassigned.length === 1 ? 'passage requires' : 'passages require'} assignment.`,
       passageIds: unassigned.map((passage) => passage.id),
     });
@@ -293,6 +422,9 @@ function inferredPageCount(passages: OutlinePastePassage[], originalText: string
     .filter((passage) => passage.assignment === 'page_beat')
     .map((passage) => passage.pageTarget)
     .filter((page): page is number => typeof page === 'number' && page >= 1 && page <= 200);
+  passages.forEach((passage) => {
+    if (passage.pageRange?.valid) assignedTargets.push(passage.pageRange.endPage);
+  });
   if (assignedTargets.length) return Math.max(...assignedTargets);
   return inferOutlineTargetPageCount(originalText);
 }
@@ -300,25 +432,36 @@ function inferredPageCount(passages: OutlinePastePassage[], originalText: string
 function createDiagnostic(
   originalText: string,
   passages: OutlinePastePassage[],
+  sourceType: OutlinePasteSourceType,
   sourcePassages = classifyPassages(originalText),
 ): OutlinePasteDiagnostic {
   const warnings = buildWarnings(passages);
   const recognizedActListItemIds = new Set(sourcePassages
-    .filter((passage) => passage.assignment === 'act' && /^[-*]\s+/.test(passage.text.trim()))
+    .filter((passage) => (
+      passage.assignment === 'act'
+      && /^[-*]\s+/.test(normalizeRecognitionLine(passage.text).line)
+    ))
     .map((passage) => passage.id));
   return {
     originalText,
+    sourceType,
     passages,
     proposedOutline: buildProposedOutline(passages, recognizedActListItemIds),
     warnings,
+    detectedPageRanges: passages.flatMap((passage) => (
+      passage.pageRange ? [{ passageId: passage.id, ...passage.pageRange }] : []
+    )),
     inferredPageCount: inferredPageCount(passages, originalText),
     requiresReview: warnings.length > 0,
   };
 }
 
-export function analyzeOutlinePaste(text: string): OutlinePasteDiagnostic {
+export function analyzeOutlinePaste(
+  text: string,
+  sourceType: OutlinePasteSourceType = 'clipboard',
+): OutlinePasteDiagnostic {
   const passages = classifyPassages(text);
-  return createDiagnostic(text, passages, passages);
+  return createDiagnostic(text, passages, sourceType, passages);
 }
 
 export function assignOutlinePassages(
@@ -352,6 +495,7 @@ export function assignOutlinePassages(
     };
     delete updated.actName;
     delete updated.pageTarget;
+    delete updated.pageRange;
     if (assignment === 'act' && metadata.actName?.trim()) updated.actName = metadata.actName.trim();
     if (assignment === 'page_beat') {
       updated.pageTarget = pageNumberById.get(passage.id) ?? passage.pageTarget;
@@ -359,5 +503,5 @@ export function assignOutlinePassages(
     return updated;
   });
 
-  return createDiagnostic(diagnostic.originalText, passages);
+  return createDiagnostic(diagnostic.originalText, passages, diagnostic.sourceType);
 }

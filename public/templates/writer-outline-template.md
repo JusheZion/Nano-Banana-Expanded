@@ -6,7 +6,7 @@
 - Acts are optional.
 - Paste a structured outline or ordinary prose; ordinary prose is accepted and reviewable.
 - Separators may use an ASCII hyphen (-), en dash (–), or em dash (—).
-- Page beats may target an individual page or a page range.
+- Page beats may target an individual page; Pages X-Y ranges expand to one proposed beat per page.
 
 ## Optional Title and Premise
 

@@ -67,8 +67,17 @@ function passageDisplayText(passage: OutlinePastePassage): string {
 
 function assignmentDetails(passage: OutlinePastePassage): string | null {
   if (passage.assignment === 'act' && passage.actName) return passage.actName;
+  if (passage.assignment === 'page_beat' && passage.pageRange?.valid) {
+    return `Pages ${passage.pageRange.startPage}–${passage.pageRange.endPage}`;
+  }
   if (passage.assignment === 'page_beat' && passage.pageTarget) return `Page ${passage.pageTarget}`;
   return null;
+}
+
+function passageLineLabel(passage: OutlinePastePassage): string {
+  return passage.startLine === passage.endLine
+    ? `Line ${passage.startLine}`
+    : `Lines ${passage.startLine}–${passage.endLine}`;
 }
 
 export function WriterOutlinePasteReview({
@@ -88,6 +97,7 @@ export function WriterOutlinePasteReview({
   const [firstPageNumber, setFirstPageNumber] = useState('');
   const [feedback, setFeedback] = useState('No passages selected.');
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [showGuidanceThisSession, setShowGuidanceThisSession] = useState(true);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -177,6 +187,12 @@ export function WriterOutlinePasteReview({
   const unassignedPassages = workingDiagnostic.passages.filter((passage) => (
     passage.assignment === 'unassigned'
   ));
+  const blockingWarnings = workingDiagnostic.warnings.filter((warning) => warning.severity === 'blocking');
+  const advisoryWarnings = workingDiagnostic.warnings.filter((warning) => warning.severity === 'advisory');
+  const warningPassageIds = useMemo(() => new Set(
+    workingDiagnostic.warnings.flatMap((warning) => warning.passageIds),
+  ), [workingDiagnostic.warnings]);
+  const applyBlocked = validationMessage !== null || blockingWarnings.length > 0;
 
   const updateSelectionFeedback = (next: Set<string>) => {
     setSelectedPassageIds(next);
@@ -263,6 +279,7 @@ export function WriterOutlinePasteReview({
   };
 
   const actionDisabled = busy;
+  const applyDisabled = busy || applyBlocked;
   const visibleStatus = busy ? 'Applying reviewed paste.' : feedback;
 
   return (
@@ -300,28 +317,140 @@ export function WriterOutlinePasteReview({
         </p>
       </header>
 
-      {preferences.showFirstUseGuidance ? (
+      {preferences.showFirstUseGuidance && showGuidanceThisSession ? (
         <aside className="mt-4 border-l-4 border-amber-500 bg-amber-50/90 px-4 py-3">
           <h3 className="text-sm font-extrabold text-amber-950">Why this review opened</h3>
           <p className="mt-1 text-sm leading-relaxed text-amber-950/80">
-            The paste included text the outline could not place confidently. Your original is preserved;
-            Unassigned Text needs your decision, and you can select passages to assign them manually.
-            Nothing changes until you choose Apply reviewed paste.
+            Some pasted passages need a destination. Your original remains preserved. Review Unassigned Text,
+            make manual assignments, then Apply when blocking issues are cleared.
           </p>
-          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-amber-950">
-            <input
-              type="checkbox"
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-amber-950">
+              <input
+                type="checkbox"
+                disabled={busy}
+                className="h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                onChange={(event) => {
+                  if (busy || !event.currentTarget.checked) return;
+                  onPreferencesChange({ ...preferences, showFirstUseGuidance: false });
+                }}
+              />
+              Don&apos;t show these tips again
+            </label>
+            <button
+              type="button"
               disabled={busy}
-              className="h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              onChange={(event) => {
-                if (busy || !event.currentTarget.checked) return;
-                onPreferencesChange({ ...preferences, showFirstUseGuidance: false });
+              onClick={() => {
+                if (busy) return;
+                setShowGuidanceThisSession(false);
               }}
-            />
-            Don&apos;t show these tips again
-          </label>
+              className="text-xs font-bold text-amber-950 underline decoration-amber-700/50 underline-offset-2 hover:decoration-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Dismiss tips for this session
+            </button>
+          </div>
         </aside>
       ) : null}
+
+      <section
+        data-testid="assignment-toolbar"
+        aria-labelledby="paste-review-assign-title"
+        className="mt-5 rounded-xl border border-slate-900/15 bg-white/95 p-3 shadow-sm lg:sticky lg:top-3 lg:z-20"
+      >
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[12rem] flex-1">
+            <h3 id="paste-review-assign-title" className="text-sm font-extrabold text-slate-950">Manual assignment</h3>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Review selected passages here. Nothing changes until you choose Apply reviewed paste.
+            </p>
+            <label className="mt-1 block text-xs font-bold text-slate-700">
+              Assign selected to
+              <select
+                value={assignment}
+                disabled={busy}
+                onChange={(event) => {
+                  if (busy) return;
+                  setAssignment(event.currentTarget.value as OutlinePassageAssignment);
+                  setValidationMessage(null);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm font-semibold text-slate-950 outline-none transition focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {ASSIGNMENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {assignment === 'act' ? (
+            <label className="min-w-[12rem] flex-1 text-xs font-bold text-slate-700">
+              Act name or number
+              <input
+                type="text"
+                value={actName}
+                disabled={busy}
+                onChange={(event) => {
+                  if (busy) return;
+                  setActName(event.currentTarget.value);
+                  setValidationMessage(null);
+                }}
+                placeholder="Act II"
+                className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </label>
+          ) : null}
+
+          {assignment === 'page_beat' ? (
+            <label className="min-w-[12rem] flex-1 text-xs font-bold text-slate-700">
+              First page number
+              <input
+                type="number"
+                min={1}
+                max={200}
+                step={1}
+                value={firstPageNumber}
+                disabled={busy}
+                onChange={(event) => {
+                  if (busy) return;
+                  setFirstPageNumber(event.currentTarget.value);
+                  setValidationMessage(null);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <span className="mt-1 block font-normal text-slate-500">Selections continue sequentially.</span>
+            </label>
+          ) : null}
+
+          <div className="flex min-w-[13rem] flex-col items-stretch gap-2">
+            <span data-testid="selected-passage-count" className="text-center text-xs font-bold text-slate-600">
+              {selectedCount} selected
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={applyAssignment}
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Assign selected passages
+            </button>
+            <Tooltip content="Discard local review edits and return to the parser's first recognition." side="top">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={restoreOriginal}
+                className="w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-amber-600 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Restore original recognition
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        {validationMessage ? (
+          <p role="alert" className="mt-3 border-l-2 border-rose-600 pl-2 text-xs font-semibold text-rose-800">
+            {validationMessage}
+          </p>
+        ) : null}
+      </section>
 
       <div
         data-testid="paste-review-layout"
@@ -351,28 +480,50 @@ export function WriterOutlinePasteReview({
           <div className="mt-3 divide-y divide-slate-900/10 border-y border-slate-900/15">
             {workingDiagnostic.passages.map((passage) => {
               const detail = assignmentDetails(passage);
+              const metadataId = `paste-review-metadata-${passage.id}`;
+              const selected = selectedPassageIds.has(passage.id);
+              const warningAffected = warningPassageIds.has(passage.id);
               return (
                 <label
                   key={passage.id}
-                  className="group grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-3 transition-colors hover:bg-amber-50/70 has-[:focus-visible]:bg-amber-50/70"
+                  id={`paste-review-${passage.id}`}
+                  data-selected={selected ? 'true' : 'false'}
+                  data-warning-affected={warningAffected ? 'true' : 'false'}
+                  className={`group grid min-w-0 scroll-mt-32 cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 border-l-4 px-2 py-3 transition-colors hover:bg-amber-50/70 has-[:focus-visible]:bg-amber-50/70 ${
+                    selected
+                      ? 'border-amber-600 bg-amber-100/80 ring-1 ring-inset ring-amber-600/30'
+                      : warningAffected
+                        ? 'border-rose-500 bg-rose-50/45'
+                        : 'border-transparent'
+                  }`}
                 >
                   <input
                     type="checkbox"
-                    aria-label={`Select passage: ${passageDisplayText(passage)}`}
-                    checked={selectedPassageIds.has(passage.id)}
+                    aria-describedby={metadataId}
+                    checked={selected}
                     disabled={busy}
                     onChange={() => togglePassage(passage.id)}
                     className="mt-1 h-4 w-4 accent-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                   />
                   <span className="min-w-0">
                     <span className="block whitespace-pre-wrap break-words text-sm font-medium leading-relaxed text-slate-900">
+                      <span className="sr-only">Select passage: </span>
+                      {' '}
                       {passageDisplayText(passage)}
                     </span>
-                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.68rem] font-semibold text-slate-600">
-                      <span>{ASSIGNMENT_OPTIONS.find((option) => option.value === passage.assignment)?.label}</span>
+                    <span
+                      id={metadataId}
+                      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.68rem] font-semibold text-slate-600"
+                    >
+                      <span>
+                        Current assignment: {ASSIGNMENT_OPTIONS.find((option) => option.value === passage.assignment)?.label}
+                      </span>
                       {detail ? <span>· {detail}</span> : null}
-                      <span>· {PROVENANCE_LABELS[passage.provenance]}</span>
-                      <span>· Line {passage.startLine}</span>
+                      <span>· Provenance: {PROVENANCE_LABELS[passage.provenance]}</span>
+                      <span>· {passageLineLabel(passage)}</span>
+                      {warningAffected ? (
+                        <span className="font-extrabold uppercase tracking-wide text-rose-700">· Needs review</span>
+                      ) : null}
                     </span>
                   </span>
                 </label>
@@ -381,7 +532,10 @@ export function WriterOutlinePasteReview({
           </div>
         </section>
 
-        <aside className="min-w-0 border-t border-slate-900/15 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <aside
+          data-testid="paste-review-sidebar"
+          className="min-w-0 border-t border-slate-900/15 pt-4 lg:sticky lg:top-28 lg:self-start lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
+        >
           <section aria-labelledby="paste-review-summary-title">
             <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-slate-500">Recognition</p>
             <h3 id="paste-review-summary-title" className="text-base font-extrabold text-slate-950">Outline summary</h3>
@@ -397,6 +551,12 @@ export function WriterOutlinePasteReview({
                   </dd>
                 </div>
               ))}
+              <div className="col-span-full flex items-baseline justify-between border-b border-slate-900/10 pb-1">
+                <dt className="text-xs font-semibold text-slate-600">Detected pages</dt>
+                <dd data-testid="inferred-page-count" className="text-sm font-black tabular-nums text-slate-950">
+                  {workingDiagnostic.inferredPageCount ?? 'No page count detected'}
+                </dd>
+              </div>
             </dl>
           </section>
 
@@ -410,7 +570,15 @@ export function WriterOutlinePasteReview({
             {unassignedPassages.length ? (
               <ul className="mt-2 space-y-1 text-xs leading-relaxed text-rose-950/80">
                 {unassignedPassages.map((passage) => (
-                  <li key={passage.id} className="break-words">• {passageDisplayText(passage)}</li>
+                  <li key={passage.id} className="break-words">
+                    <a
+                      href={busy ? undefined : `#paste-review-${passage.id}`}
+                      aria-disabled={busy || undefined}
+                      className="font-semibold underline decoration-rose-700/35 underline-offset-2 hover:decoration-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+                    >
+                      {passageLineLabel(passage)} — {passageDisplayText(passage)}
+                    </a>
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -425,109 +593,49 @@ export function WriterOutlinePasteReview({
               </h3>
               <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-700">
                 {workingDiagnostic.warnings.map((warning, index) => (
-                  <li key={`${warning.code}-${index}`} className="border-l-2 border-amber-500 pl-2">
+                  <li
+                    key={`${warning.code}-${index}`}
+                    className={`border-l-2 pl-2 ${warning.severity === 'blocking' ? 'border-rose-600' : 'border-amber-500'}`}
+                  >
+                    <span className="font-extrabold text-slate-900">
+                      {warning.severity === 'blocking' ? 'Blocking' : 'Advisory'}:
+                    </span>{' '}
                     {warning.message}
+                    {warning.passageIds.length ? (
+                      <span className="mt-1 block space-y-0.5">
+                        {warning.passageIds.map((passageId) => {
+                          const passage = workingDiagnostic.passages.find((candidate) => candidate.id === passageId);
+                          if (!passage) return null;
+                          return (
+                            <a
+                              key={passageId}
+                              href={busy ? undefined : `#paste-review-${passageId}`}
+                              aria-disabled={busy || undefined}
+                              className={`block break-words font-bold underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 ${
+                                warning.severity === 'blocking'
+                                  ? 'text-rose-800 decoration-rose-700/40 hover:decoration-rose-700 focus-visible:ring-rose-600'
+                                  : 'text-amber-900 decoration-amber-700/40 hover:decoration-amber-700 focus-visible:ring-amber-600'
+                              }`}
+                            >
+                              {passageLineLabel(passage)} — {passageDisplayText(passage)}
+                            </a>
+                          );
+                        })}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </section>
           ) : null}
 
-          <section aria-labelledby="paste-review-assign-title" className="mt-5 border-t border-slate-900/15 pt-4">
-            <h3 id="paste-review-assign-title" className="text-sm font-extrabold text-slate-950">Manual assignment</h3>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600">
-              Select one or more passages, choose their destination, then assign them to this working copy.
-              Nothing changes until you choose Apply reviewed paste.
-            </p>
-            <label className="mt-3 block text-xs font-bold text-slate-700">
-              Assign selected to
-              <select
-                value={assignment}
-                disabled={busy}
-                onChange={(event) => {
-                  if (busy) return;
-                  setAssignment(event.currentTarget.value as OutlinePassageAssignment);
-                  setValidationMessage(null);
-                }}
-                className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm font-semibold text-slate-950 outline-none transition focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {ASSIGNMENT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-
-            {assignment === 'act' ? (
-              <label className="mt-3 block text-xs font-bold text-slate-700">
-                Act name or number
-                <input
-                  type="text"
-                  value={actName}
-                  disabled={busy}
-                  onChange={(event) => {
-                    if (busy) return;
-                    setActName(event.currentTarget.value);
-                    setValidationMessage(null);
-                  }}
-                  placeholder="Act II"
-                  className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-              </label>
-            ) : null}
-
-            {assignment === 'page_beat' ? (
-              <label className="mt-3 block text-xs font-bold text-slate-700">
-                First page number
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  step={1}
-                  value={firstPageNumber}
-                  disabled={busy}
-                  onChange={(event) => {
-                    if (busy) return;
-                    setFirstPageNumber(event.currentTarget.value);
-                    setValidationMessage(null);
-                  }}
-                  className="mt-1 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus-visible:border-amber-700 focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                <span className="mt-1 block font-normal text-slate-500">
-                  Multiple selections continue sequentially from this page.
-                </span>
-              </label>
-            ) : null}
-
-            {validationMessage ? (
-              <p role="alert" className="mt-3 border-l-2 border-rose-600 pl-2 text-xs font-semibold text-rose-800">
-                {validationMessage}
-              </p>
-            ) : null}
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={applyAssignment}
-              className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-extrabold text-white transition hover:bg-slate-800 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Assign selected passages
-            </button>
-
-            <Tooltip content="Discard local review edits and return to the parser's first recognition." side="top">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={restoreOriginal}
-                className="mt-2 w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-amber-600 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Restore original recognition
-              </button>
-            </Tooltip>
-          </section>
         </aside>
       </div>
 
-      <div className="mt-5 border-t border-slate-900/15 pt-4">
+      <div
+        data-testid="paste-review-footer"
+        className="sticky bottom-0 z-30 mt-5 border-t border-slate-900/15 bg-white/95 px-1 pb-1 pt-4 shadow-[0_-10px_18px_-18px_rgba(15,23,42,0.7)] backdrop-blur"
+      >
         {error ? (
           <p role="alert" className="mb-3 border-l-4 border-rose-600 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900">
             {error}
@@ -535,6 +643,20 @@ export function WriterOutlinePasteReview({
         ) : null}
         <p role="status" aria-live="polite" aria-atomic="true" className="mb-3 min-h-5 text-xs font-semibold text-slate-600">
           {visibleStatus}
+        </p>
+        <p
+          data-testid="apply-readiness"
+          className={`mb-3 border-l-2 pl-2 text-xs font-semibold ${
+            applyBlocked ? 'border-rose-600 text-rose-800' : 'border-emerald-600 text-emerald-800'
+          }`}
+        >
+          {validationMessage
+            ? `${validationMessage} Correct the assignment controls before Apply.`
+            : blockingWarnings.length
+              ? `${blockingWarnings.length} blocking ${blockingWarnings.length === 1 ? 'issue' : 'issues'} remaining. Select the affected passages, then use Manual assignment to resolve them before Apply.`
+              : advisoryWarnings.length
+                ? `Ready to apply with ${advisoryWarnings.length} advisory ${advisoryWarnings.length === 1 ? 'warning' : 'warnings'}.`
+                : 'Ready to apply.'}
         </p>
         <div
           data-testid="paste-review-actions"
@@ -565,9 +687,9 @@ export function WriterOutlinePasteReview({
           <button
             type="button"
             aria-label={busy ? 'Applying reviewed paste' : undefined}
-            disabled={actionDisabled}
+            disabled={applyDisabled}
             onClick={() => {
-              if (busy) return;
+              if (applyDisabled) return;
               onApply(workingDiagnostic);
             }}
             className="rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-5 py-2 text-sm font-black text-slate-950 shadow-md shadow-amber-950/20 transition hover:brightness-105 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
