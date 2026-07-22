@@ -1,7 +1,14 @@
 import type { WriterIssueOutlineRow } from '@/shared/api/arcsWriterRoom';
 
 type StepResult = { ok: true } | { ok: false; error: string };
-type CreateResult = { ok: true; row: WriterIssueOutlineRow } | { ok: false; error: string };
+type CreateResult =
+  | { ok: true; row: WriterIssueOutlineRow; predecessor: WriterIssueOutlineRow | null }
+  | {
+      ok: false;
+      error: string;
+      conflict?: boolean;
+      predecessor?: WriterIssueOutlineRow | null;
+    };
 type RefreshResult = { ok: true; rows: WriterIssueOutlineRow[] } | { ok: false; error: string };
 
 export type ReviewedOutlinePersistenceDeps = {
@@ -23,6 +30,7 @@ export async function persistReviewedOutlineVersion(
   | {
       ok: true;
       row: WriterIssueOutlineRow;
+      predecessor: WriterIssueOutlineRow | null;
       rows: WriterIssueOutlineRow[];
       undoAvailable: boolean;
       shouldClearReview: true;
@@ -35,6 +43,8 @@ export async function persistReviewedOutlineVersion(
       row?: WriterIssueOutlineRow;
       rows?: WriterIssueOutlineRow[];
       undoAvailable: boolean;
+      conflict?: boolean;
+      predecessor?: WriterIssueOutlineRow | null;
       shouldClearReview: false;
     }
 > {
@@ -70,6 +80,8 @@ export async function persistReviewedOutlineVersion(
       error: created.error,
       partial: false,
       undoAvailable: false,
+      conflict: created.conflict,
+      predecessor: created.predecessor,
       shouldClearReview: false,
     };
   }
@@ -90,7 +102,7 @@ export async function persistReviewedOutlineVersion(
   } catch (error) {
     refresh = { ok: false, error: error instanceof Error ? error.message : 'Unexpected outline refresh error' };
   }
-  const undoAvailable = input.previousOutline !== null;
+  const undoAvailable = true;
 
   if (!refresh.ok) {
     return {
@@ -101,6 +113,7 @@ export async function persistReviewedOutlineVersion(
       }. The version list could not be refreshed: ${refresh.error}. Apply again to retry recovery without creating another version${undoAvailable ? ', or use Undo last update' : ''}.`,
       partial: true,
       row: created.row,
+      predecessor: created.predecessor,
       undoAvailable,
       shouldClearReview: false,
     };
@@ -119,6 +132,7 @@ export async function persistReviewedOutlineVersion(
       }`,
       partial: true,
       row: created.row,
+      predecessor: created.predecessor,
       rows,
       undoAvailable: refreshedUndoAvailable,
       shouldClearReview: false,
@@ -128,6 +142,7 @@ export async function persistReviewedOutlineVersion(
   return {
     ok: true,
     row: created.row,
+    predecessor: created.predecessor,
     rows,
     undoAvailable: refreshedUndoAvailable,
     shouldClearReview: true,

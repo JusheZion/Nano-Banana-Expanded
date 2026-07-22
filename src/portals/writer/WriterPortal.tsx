@@ -23,6 +23,7 @@ import {
   createWriterPage,
   createWriterLoreCard,
   createWriterSeries,
+  deleteWriterOutlineById,
   deleteLatestWriterOutline,
   deleteWriterLoreCard,
   deleteWriterPages,
@@ -177,9 +178,11 @@ import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/po
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePasteApply';
 import {
+  captureReviewedOutlinePriorSource,
   clearReviewedOutlineRecoveryErrors,
   getReviewedOutlineUndoAvailability,
   reviewedOutlineRecoveryGuidance,
+  retryReviewedOutlineSourceSync,
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
 } from '@/portals/writer/writerOutlinePasteRecovery';
@@ -1000,6 +1003,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     diagnostic: OutlinePasteDiagnostic;
     canonicalSourceText: string;
     sourceSyncPending: boolean;
+    priorIssueNotes: Record<string, unknown>;
+    priorAuthorSource: AuthorOutlineSource;
   }) | null>(null);
   const [lastReviewedUndoBusy, setLastReviewedUndoBusy] = useState(false);
   const [lastReviewedUndoError, setLastReviewedUndoError] = useState<string | null>(null);
@@ -4255,7 +4260,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (lastReviewedInsert?.sourceSyncPending) {
       if (lastReviewedInsert.insertedRow.issue_id !== selectedIssueId) {
         setScriptsError(
-          `Official outline v${lastReviewedInsert.insertedRow.version} still needs source recovery in its original issue. Return to that issue to resume recovery${lastReviewedInsert.hadPreviousOutline ? ' or use Undo' : ''}.`,
+          `Official outline v${lastReviewedInsert.insertedRow.version} still needs source recovery in its original issue. Return to that issue to resume recovery or use Undo.`,
         );
         return;
       }
@@ -4427,32 +4432,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         setOutlinePasteReviewError('Return to the issue that owns the saved outline version before retrying source sync.');
         return;
       }
-      if (isWriterItemLocked(selectedIssue.notes, 'issue.author_outline')) {
-        setOutlinePasteReviewError(
-          `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline is locked. Unlock My Outline, then retry source sync without creating another version. ${reviewedOutlineRecoveryGuidance(lastReviewedInsert)}`,
-        );
-        return;
-      }
       setOutlinePasteReviewBusy(true);
       try {
-        const sourceSynced = await updateSelectedIssueNotes(mergeAuthorOutlineIntoNotes(selectedIssue.notes, {
-          text: lastReviewedInsert.canonicalSourceText,
-          mode: authorOutlineMode,
-        }));
-        if (!sourceSynced) {
+        const recovery = await retryReviewedOutlineSourceSync(lastReviewedInsert, {
+          reloadOutlines: () => listWriterOutlinesForIssueResult(selectedIssueId),
+          syncSource: async () => {
+            if (isWriterItemLocked(selectedIssue.notes, 'issue.author_outline')) {
+              return { ok: false, error: 'My Outline is locked. Unlock it before retrying source sync.' };
+            }
+            const sourceSynced = await updateSelectedIssueNotes(mergeAuthorOutlineIntoNotes(selectedIssue.notes, {
+              text: lastReviewedInsert.canonicalSourceText,
+              mode: authorOutlineMode,
+            }));
+            return sourceSynced
+              ? { ok: true }
+              : { ok: false, error: 'My Outline could not be synchronized.' };
+          },
+        });
+        if (!recovery.ok) {
           setOutlinePasteReviewError(
-            `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline still could not be synchronized. Retry source sync or close recovery. ${reviewedOutlineRecoveryGuidance(lastReviewedInsert)}`,
+            `${recovery.error} ${reviewedOutlineRecoveryGuidance(lastReviewedInsert)}`,
           );
+          setScriptsError(recovery.error);
           return;
         }
-        const refreshed = await listWriterOutlinesForIssueResult(selectedIssueId);
-        if (!refreshed.ok) {
-          setOutlinePasteReviewError(
-            `Official outline v${lastReviewedInsert.insertedRow.version} and My Outline are saved, but versions could not be refreshed: ${refreshed.error}. Retry source sync to refresh recovery or close recovery. ${reviewedOutlineRecoveryGuidance(lastReviewedInsert)}`,
-          );
-          return;
-        }
-        setOutlines(refreshed.rows);
+        setOutlines(recovery.rows);
         setAuthorOutlineText(lastReviewedInsert.canonicalSourceText);
         setOutlinePasteRecognition(summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'applied'));
         setOutlinePasteReview(null);
@@ -4485,6 +4489,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ? { ...latestOutline.outline_json, ...diagnostic.proposedOutline }
       : diagnostic.proposedOutline;
     const canonicalSourceText = formatOutlineAsText(approvedOutline);
+    const { priorIssueNotes, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);
     let notesAfterSnapshot = selectedIssue.notes;
 
     setOutlinePasteReviewBusy(true);
@@ -4511,6 +4516,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         issueId: selectedIssueId,
         outlineJson,
         sourceMode: 'paste_review',
+        expectedPreviousId: latestOutline?.id ?? null,
       }),
       syncSource: async (sourceText) => {
         const nextNotes = mergeAuthorOutlineIntoNotes(notesAfterSnapshot, {
@@ -4530,17 +4536,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!result.ok) {
       setOutlinePasteReviewError(result.error);
       setScriptsError(result.error);
+      if (result.conflict) {
+        const refreshed = await listWriterOutlinesForIssueResult(selectedIssueId);
+        if (refreshed.ok) setOutlines(refreshed.rows);
+      }
       if (result.partial) {
         setOutlinePasteRecognition(summarizeOutlineRecognition(diagnostic, 'partial'));
         if (result.row) {
           setLastReviewedInsert({
             diagnostic,
             insertedRow: result.row,
-            previousOutline: latestOutline ?? null,
-            hadPreviousOutline: Boolean(latestOutline),
+            previousOutline: result.predecessor ?? null,
+            hadPreviousOutline: Boolean(result.predecessor),
             origin: outlinePasteReview.origin,
             canonicalSourceText,
             sourceSyncPending: true,
+            priorIssueNotes,
+            priorAuthorSource,
           });
           setLastReviewedUndoError(null);
         }
@@ -4560,11 +4572,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setLastReviewedInsert({
       diagnostic,
       insertedRow: result.row,
-      previousOutline: latestOutline ?? null,
-      hadPreviousOutline: Boolean(latestOutline),
+      previousOutline: result.predecessor,
+      hadPreviousOutline: Boolean(result.predecessor),
       origin: outlinePasteReview.origin,
       canonicalSourceText,
       sourceSyncPending: false,
+      priorIssueNotes,
+      priorAuthorSource,
     });
     setLastReviewedUndoError(null);
     pushHistory(
@@ -4604,7 +4618,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (lastReviewedInsert?.sourceSyncPending) {
       setOutlinePasteRecognition(summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'recovery_closed'));
       pushHistory(
-        `closed paste recovery after outline v${lastReviewedInsert.insertedRow.version}; retry remains available${lastReviewedInsert.hadPreviousOutline ? ' and Undo is available' : ''}`,
+        `closed paste recovery after outline v${lastReviewedInsert.insertedRow.version}; retry and Undo remain available`,
       );
     } else {
       if (outlinePasteReview) {
@@ -4618,30 +4632,55 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (!lastReviewedInsert || lastReviewedUndoBusy) return;
     const availability = getReviewedOutlineUndoAvailability(lastReviewedInsert, selectedIssueId);
     const previousOutline = lastReviewedInsert.previousOutline;
-    if (!availability.available || !previousOutline) {
+    if (!availability.available) {
       setLastReviewedUndoError(availability.guidance);
       return;
     }
     if (!guardWriterLock('outline.latest', 'Latest outline')) return;
-    const confirmed = window.confirm(
-      `Undo reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${previousOutline.version} as a new official version?`,
-    );
-    if (!confirmed) return;
+    if ((!previousOutline || lastReviewedInsert.insertedRowDeleted)
+      && !guardWriterLock('issue.author_outline', 'My Outline')) return;
+    if (!lastReviewedInsert.insertedRowDeleted) {
+      const confirmed = window.confirm(previousOutline
+        ? `Undo reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${previousOutline.version} as a new official version?`
+        : `Undo the first official outline version v${lastReviewedInsert.insertedRow.version}? The exact row will be removed and the prior My Outline source restored.`);
+      if (!confirmed) return;
+    }
 
     setLastReviewedUndoBusy(true);
     setLastReviewedUndoError(null);
     const result = await restoreReviewedOutlineInsert(lastReviewedInsert, selectedIssueId, {
       reloadOutlines: () => listWriterOutlinesForIssueResult(lastReviewedInsert.insertedRow.issue_id),
       restoreOutline: (input) => restoreWriterOutlineAsLatest(input),
+      deleteOutline: (input) => deleteWriterOutlineById(input),
+      restorePriorSource: async () => {
+        const restored = await updateSelectedIssueNotes(lastReviewedInsert.priorIssueNotes);
+        return restored
+          ? { ok: true }
+          : { ok: false, error: 'Prior My Outline source notes could not be restored.' };
+      },
     });
     setLastReviewedUndoBusy(false);
     if (!result.ok) {
+      if (result.rows) setOutlines(result.rows);
+      if (result.insertedRowDeleted) {
+        setOutlinePasteReview(null);
+        setLastReviewedInsert({
+          ...lastReviewedInsert,
+          insertedRowDeleted: true,
+          sourceSyncPending: false,
+        });
+      }
       setLastReviewedUndoError(result.error);
       setOutlinePasteReviewError(result.error);
+      setScriptsError(result.error);
       pushHistory(`error: could not undo reviewed outline v${lastReviewedInsert.insertedRow.version}`);
       return;
     }
     if (result.rows && selectedIssueId === lastReviewedInsert.insertedRow.issue_id) setOutlines(result.rows);
+    if (result.undoKind === 'deleted_first') {
+      setAuthorOutlineText(lastReviewedInsert.priorAuthorSource.text);
+      setAuthorOutlineMode(lastReviewedInsert.priorAuthorSource.mode);
+    }
     setOutlinePasteReview(null);
     clearReviewedOutlineRecoveryErrors({ setReviewError: setOutlinePasteReviewError, setScriptsError });
     setLastReviewedUndoError(null);
@@ -4649,18 +4688,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     if (selectedIssueId === lastReviewedInsert.insertedRow.issue_id) {
       setOutlinePasteRecognition({
         ...summarizeOutlineRecognition(lastReviewedInsert.diagnostic, 'canceled'),
-        message: `Reviewed outline v${lastReviewedInsert.insertedRow.version} was undone. The preceding official outline was restored as v${result.restoredVersion}.`,
+        message: result.undoKind === 'deleted_first'
+          ? `First official outline v${lastReviewedInsert.insertedRow.version} was removed, and the prior My Outline source was restored.`
+          : `Reviewed outline v${lastReviewedInsert.insertedRow.version} was undone. The preceding official outline was restored as v${result.restoredVersion}.`,
       });
     }
     setWriterActionStatus({
       tone: result.refreshError ? 'info' : 'success',
-      message: result.refreshError ?? `Reviewed outline update undone; the preceding outline is now official v${result.restoredVersion}.`,
+      message: result.refreshError ?? (result.undoKind === 'deleted_first'
+        ? 'First official outline version removed; prior My Outline source restored.'
+        : `Reviewed outline update undone; the preceding outline is now official v${result.restoredVersion}.`),
     });
     pushHistory(
-      `undid reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${result.restoredVersion}`,
+      result.undoKind === 'deleted_first'
+        ? `removed first reviewed outline v${lastReviewedInsert.insertedRow.version} and restored prior source`
+        : `undid reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${result.restoredVersion}`,
       { announce: false },
     );
-  }, [guardWriterLock, lastReviewedInsert, lastReviewedUndoBusy, pushHistory, selectedIssueId]);
+  }, [guardWriterLock, lastReviewedInsert, lastReviewedUndoBusy, pushHistory, selectedIssueId, updateSelectedIssueNotes]);
 
   const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === outlineEditorMode) return;
@@ -7359,22 +7404,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           role={lastReviewedUndoError ? 'alert' : 'status'}
           aria-live={lastReviewedUndoError ? 'assertive' : 'polite'}
           className={`flex flex-shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2 text-xs font-semibold ${
-            lastReviewedInsert.sourceSyncPending
+            lastReviewedInsert.sourceSyncPending || lastReviewedInsert.insertedRowDeleted
               ? 'border-amber-800/25 bg-amber-50/95 text-amber-950'
               : 'border-emerald-800/25 bg-emerald-50/95 text-emerald-950'
           }`}
         >
           <p className="min-w-0 flex-1">
             {lastReviewedUndoError
-              ?? (lastReviewedInsert.sourceSyncPending
+              ?? (lastReviewedInsert.insertedRowDeleted
+                ? 'The first official outline version was removed, but restoring the prior My Outline source still needs attention. Finish source restore to complete Undo.'
+                : lastReviewedInsert.sourceSyncPending
                 ? `Official outline v${lastReviewedInsert.insertedRow.version} is saved, but My Outline source sync still needs attention. ${
                     lastReviewedOwnsSelectedIssue
                       ? reviewedOutlineRecoveryGuidance(lastReviewedInsert)
-                      : `Return to the owning issue to resume recovery${lastReviewedInsert.hadPreviousOutline ? ' or use Undo' : ''}.`
+                      : 'Return to the owning issue to resume recovery or use Undo.'
                   }`
                 : `Reviewed paste saved as official outline v${lastReviewedInsert.insertedRow.version} from ${lastReviewedInsert.origin === 'source' ? 'My Outline' : 'the official editor'}. ${lastReviewedUndoAvailability?.guidance ?? ''}`)}
           </p>
-          {lastReviewedInsert.sourceSyncPending && selectedIssueId === lastReviewedInsert.insertedRow.issue_id ? (
+          {lastReviewedInsert.sourceSyncPending
+            && !lastReviewedInsert.insertedRowDeleted
+            && selectedIssueId === lastReviewedInsert.insertedRow.issue_id ? (
             <button
               type="button"
               disabled={lastReviewedUndoBusy}
@@ -7392,7 +7441,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           ) : null}
           {!lastReviewedOwnsSelectedIssue
             && lastReviewedOwningIssue
-            && (lastReviewedInsert.sourceSyncPending || lastReviewedInsert.hadPreviousOutline) ? (
+            && (lastReviewedInsert.sourceSyncPending
+              || lastReviewedInsert.insertedRowDeleted
+              || lastReviewedUndoAvailability?.reason === 'wrong_issue') ? (
             <button
               type="button"
               disabled={lastReviewedUndoBusy}
@@ -7403,8 +7454,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               className="min-h-11 rounded-md border border-current/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-40 sm:min-h-9"
             >
               Return to issue #{lastReviewedOwningIssue.issue_number} to {
-                lastReviewedInsert.sourceSyncPending
-                  ? lastReviewedInsert.hadPreviousOutline ? 'recover or Undo' : 'recover'
+                lastReviewedInsert.insertedRowDeleted
+                  ? 'finish source restore'
+                  : lastReviewedInsert.sourceSyncPending
+                    ? 'recover or Undo'
                   : 'Undo'
               }
             </button>
@@ -7418,9 +7471,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               : lastReviewedUndoAvailability?.guidance}
             className="min-h-11 rounded-md border border-current/25 bg-white px-3 text-[10px] font-black uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-40 sm:min-h-9"
           >
-            {lastReviewedUndoBusy ? 'Undoing…' : 'Undo reviewed update'}
+            {lastReviewedUndoBusy
+              ? 'Undoing…'
+              : lastReviewedInsert.insertedRowDeleted ? 'Finish source restore' : 'Undo reviewed update'}
           </button>
-          {!lastReviewedInsert.sourceSyncPending ? (
+          {!lastReviewedInsert.sourceSyncPending && !lastReviewedInsert.insertedRowDeleted ? (
             <button
               type="button"
               disabled={lastReviewedUndoBusy}

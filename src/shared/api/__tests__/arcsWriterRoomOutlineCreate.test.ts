@@ -10,6 +10,14 @@ const row = {
   source_mode: 'paste_review',
 };
 
+const predecessor = {
+  ...row,
+  id: 'outline-3',
+  version: 3,
+  outline_json: { title: 'Before review' },
+  source_mode: 'ai',
+};
+
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   latestSelect: vi.fn(),
@@ -30,7 +38,8 @@ import { createWriterOutlineVersion } from '@/shared/api/arcsWriterRoom';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.latestLimit.mockResolvedValue({ data: [{ version: 3 }], error: null });
+  mocks.from.mockReset();
+  mocks.latestLimit.mockResolvedValue({ data: [predecessor], error: null });
   mocks.latestOrder.mockReturnValue({ limit: mocks.latestLimit });
   mocks.latestEq.mockReturnValue({ order: mocks.latestOrder });
   mocks.latestSelect.mockReturnValue({ eq: mocks.latestEq });
@@ -48,9 +57,12 @@ describe('createWriterOutlineVersion', () => {
       issueId: 'issue-1',
       outlineJson: row.outline_json,
       sourceMode: 'paste_review',
-    })).resolves.toEqual({ ok: true, row });
+      expectedPreviousId: predecessor.id,
+    })).resolves.toEqual({ ok: true, row, predecessor });
 
-    expect(mocks.latestSelect).toHaveBeenCalledWith('version');
+    expect(mocks.latestSelect).toHaveBeenCalledWith(
+      'id, issue_id, version, outline_json, created_at, created_by, source_mode',
+    );
     expect(mocks.latestEq).toHaveBeenCalledWith('issue_id', 'issue-1');
     expect(mocks.latestOrder).toHaveBeenCalledWith('version', { ascending: false });
     expect(mocks.latestLimit).toHaveBeenCalledWith(1);
@@ -67,7 +79,12 @@ describe('createWriterOutlineVersion', () => {
 
   it('starts at version one and returns a latest-query error', async () => {
     mocks.latestLimit.mockResolvedValueOnce({ data: [], error: null });
-    await createWriterOutlineVersion({ issueId: 'issue-1', outlineJson: {}, sourceMode: 'outline_import' });
+    await expect(createWriterOutlineVersion({
+      issueId: 'issue-1',
+      outlineJson: {},
+      sourceMode: 'outline_import',
+      expectedPreviousId: null,
+    })).resolves.toEqual({ ok: true, row, predecessor: null });
     expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ version: 1 }));
 
     vi.clearAllMocks();
@@ -77,7 +94,7 @@ describe('createWriterOutlineVersion', () => {
       }),
     });
     await expect(createWriterOutlineVersion({
-      issueId: 'issue-1', outlineJson: {}, sourceMode: 'ai_treatment',
+      issueId: 'issue-1', outlineJson: {}, sourceMode: 'ai_treatment', expectedPreviousId: null,
     })).resolves.toEqual({ ok: false, error: 'read denied' });
   });
 
@@ -88,6 +105,7 @@ describe('createWriterOutlineVersion', () => {
       issueId: 'issue-1',
       outlineJson: { title: 'Reviewed' },
       sourceMode: 'paste_review',
+      expectedPreviousId: predecessor.id,
     })).resolves.toEqual({ ok: false, error: 'version conflict' });
   });
 
@@ -98,6 +116,23 @@ describe('createWriterOutlineVersion', () => {
       issueId: 'issue-1',
       outlineJson: {},
       sourceMode: 'paste_review',
+      expectedPreviousId: predecessor.id,
     })).resolves.toEqual({ ok: false, error: 'network offline' });
+  });
+
+  it('returns an explicit render-drift conflict before insert when the expected predecessor changed', async () => {
+    await expect(createWriterOutlineVersion({
+      issueId: 'issue-1',
+      outlineJson: row.outline_json,
+      sourceMode: 'paste_review',
+      expectedPreviousId: 'stale-outline-2',
+    })).resolves.toEqual({
+      ok: false,
+      conflict: true,
+      predecessor,
+      error: 'Official outline changed before the reviewed paste could be saved. Reload versions and review again.',
+    });
+
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 });

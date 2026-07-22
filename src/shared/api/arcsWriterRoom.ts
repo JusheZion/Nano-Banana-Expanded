@@ -542,12 +542,21 @@ export async function createWriterOutlineVersion(input: {
   issueId: string;
   outlineJson: Record<string, unknown>;
   sourceMode: WriterOutlineSourceMode;
-}): Promise<{ ok: true; row: WriterIssueOutlineRow } | { ok: false; error: string }> {
+  expectedPreviousId: string | null;
+}): Promise<
+  | { ok: true; row: WriterIssueOutlineRow; predecessor: WriterIssueOutlineRow | null }
+  | {
+      ok: false;
+      error: string;
+      conflict?: boolean;
+      predecessor?: WriterIssueOutlineRow | null;
+    }
+> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   try {
     const { data: latestData, error: latestError } = await supabase
       .from('writer_issue_outlines')
-      .select('version')
+      .select('id, issue_id, version, outline_json, created_at, created_by, source_mode')
       .eq('issue_id', input.issueId)
       .order('version', { ascending: false })
       .limit(1);
@@ -555,8 +564,17 @@ export async function createWriterOutlineVersion(input: {
       console.warn('[arcsWriterRoom] createWriterOutlineVersion (latest)', latestError.message);
       return { ok: false, error: latestError.message };
     }
-    const latestRows = (latestData ?? []) as Array<{ version: number }>;
-    const nextVersion = (latestRows[0]?.version ?? 0) + 1;
+    const latestRows = (latestData ?? []) as WriterIssueOutlineRow[];
+    const predecessor = latestRows[0] ?? null;
+    if ((predecessor?.id ?? null) !== input.expectedPreviousId) {
+      return {
+        ok: false,
+        conflict: true,
+        predecessor,
+        error: 'Official outline changed before the reviewed paste could be saved. Reload versions and review again.',
+      };
+    }
+    const nextVersion = (predecessor?.version ?? 0) + 1;
     const { data, error } = await supabase
       .from('writer_issue_outlines')
       .insert({
@@ -572,10 +590,34 @@ export async function createWriterOutlineVersion(input: {
       console.warn('[arcsWriterRoom] createWriterOutlineVersion', message);
       return { ok: false, error: message };
     }
-    return { ok: true, row: data as WriterIssueOutlineRow };
+    return { ok: true, row: data as WriterIssueOutlineRow, predecessor };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected outline version error';
     console.warn('[arcsWriterRoom] createWriterOutlineVersion', message);
+    return { ok: false, error: message };
+  }
+}
+
+/** Deletes one exact outline row, guarded by both owning issue and immutable row id. */
+export async function deleteWriterOutlineById(input: {
+  issueId: string;
+  outlineId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  try {
+    const { error } = await supabase
+      .from('writer_issue_outlines')
+      .delete()
+      .eq('issue_id', input.issueId)
+      .eq('id', input.outlineId);
+    if (error) {
+      console.warn('[arcsWriterRoom] deleteWriterOutlineById', error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected outline deletion error';
+    console.warn('[arcsWriterRoom] deleteWriterOutlineById', message);
     return { ok: false, error: message };
   }
 }

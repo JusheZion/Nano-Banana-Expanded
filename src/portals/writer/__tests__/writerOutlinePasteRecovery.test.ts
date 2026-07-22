@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WriterIssueOutlineRow } from '@/shared/api/arcsWriterRoom';
 import {
   clearReviewedOutlineRecoveryErrors,
+  captureReviewedOutlinePriorSource,
   getReviewedOutlineUndoAvailability,
   reviewedOutlineRecoveryGuidance,
+  retryReviewedOutlineSourceSync,
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
   type ReviewedOutlineRecoveryDeps,
@@ -48,6 +50,8 @@ function createDeps(): ReviewedOutlineRecoveryDeps {
         : { ok: true as const, rows: [restored, inserted, previous] };
     }),
     restoreOutline: vi.fn(async () => ({ ok: true as const })),
+    deleteOutline: vi.fn(async () => ({ ok: true as const })),
+    restorePriorSource: vi.fn(async () => ({ ok: true as const })),
   };
 }
 
@@ -116,7 +120,7 @@ describe('reviewed outline recovery', () => {
     expect(reviewedOutlineRecoveryGuidance(insert)).toBe('Undo remains available.');
   });
 
-  it('does not promise Undo for the first official outline version', () => {
+  it('offers guarded deletion Undo for the first official outline version', () => {
     const insert: ReviewedOutlineInsert = {
       ...reviewedInsert('source'),
       previousOutline: null,
@@ -124,12 +128,172 @@ describe('reviewed outline recovery', () => {
     };
 
     expect(getReviewedOutlineUndoAvailability(insert, 'issue-1')).toEqual({
-      available: false,
-      reason: 'no_previous',
-      guidance: 'This is the first official outline version, so there is no preceding version to Undo.',
+      available: true,
+      reason: null,
+      guidance: 'Undo will remove this first official outline version and restore the prior My Outline source.',
     });
-    expect(reviewedOutlineRecoveryGuidance(insert)).toMatch(/recovery and version reload remain available/i);
-    expect(reviewedOutlineRecoveryGuidance(insert)).not.toMatch(/^Undo remains available/i);
+    expect(reviewedOutlineRecoveryGuidance(insert)).toMatch(/remove this first official outline version/i);
+  });
+
+  it('deletes a still-latest first version, restores the prior source, and refreshes', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines)
+      .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [] });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({ ok: true, undoKind: 'deleted_first', rows: [] });
+    expect(deps.deleteOutline).toHaveBeenCalledWith({ issueId: 'issue-1', outlineId: 'outline-1' });
+    expect(deps.restorePriorSource).toHaveBeenCalledOnce();
+    expect(deps.restoreOutline).not.toHaveBeenCalled();
+  });
+
+  it('does not delete a first version when a newer row exists', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines).mockResolvedValueOnce({ ok: true, rows: [inserted, first] });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({ ok: false, phase: 'conflict' });
+    expect(deps.deleteOutline).not.toHaveBeenCalled();
+    expect(deps.restorePriorSource).not.toHaveBeenCalled();
+  });
+
+  it('retains first-version recovery when exact deletion fails', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines).mockResolvedValueOnce({ ok: true, rows: [first] });
+    vi.mocked(deps.deleteOutline).mockResolvedValueOnce({ ok: false, error: 'delete denied' });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({ ok: false, phase: 'delete', partial: false, error: expect.stringMatching(/delete denied/i) });
+    expect(deps.restorePriorSource).not.toHaveBeenCalled();
+  });
+
+  it('reports a recoverable partial state when source restoration fails after first-version deletion', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines)
+      .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [] });
+    vi.mocked(deps.restorePriorSource).mockResolvedValueOnce({ ok: false, error: 'notes offline' });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({
+      ok: false,
+      phase: 'source_restore',
+      partial: true,
+      insertedRowDeleted: true,
+      rows: [],
+      error: expect.stringMatching(/notes offline/i),
+    });
+  });
+
+  it('reports post-delete refresh failure without repeating deletion', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines)
+      .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: false, error: 'refresh offline' });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({
+      ok: true,
+      undoKind: 'deleted_first',
+      refreshError: expect.stringMatching(/refresh offline/i),
+    });
+    expect(deps.deleteOutline).toHaveBeenCalledOnce();
+  });
+
+  it('retries only prior-source restoration after the first version was already deleted', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+      insertedRowDeleted: true,
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines)
+      .mockResolvedValueOnce({ ok: true, rows: [] })
+      .mockResolvedValueOnce({ ok: true, rows: [] });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({ ok: true, undoKind: 'deleted_first', rows: [] });
+    expect(deps.deleteOutline).not.toHaveBeenCalled();
+    expect(deps.restorePriorSource).toHaveBeenCalledOnce();
+  });
+
+  it('does not restore stale source after deletion when a newer official row appears', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+      insertedRowDeleted: true,
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines).mockResolvedValueOnce({ ok: true, rows: [inserted] });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({ ok: false, phase: 'conflict', partial: true, insertedRowDeleted: true });
+    expect(deps.restorePriorSource).not.toHaveBeenCalled();
+  });
+
+  it('preserves empty prior source text, mode, and the complete notes state', () => {
+    const notes = {
+      author_outline: { text: '', mode: 'preserve', updated_at: '2026-07-22T01:00:00.000Z' },
+      unrelated: { keep: true },
+    };
+
+    expect(captureReviewedOutlinePriorSource(notes)).toEqual({
+      priorIssueNotes: notes,
+      priorAuthorSource: {
+        text: '',
+        mode: 'preserve',
+        updatedAt: '2026-07-22T01:00:00.000Z',
+      },
+    });
   });
 
   it('clears both modal and scripts errors after a successful source-sync retry or Undo', () => {
@@ -140,5 +304,37 @@ describe('reviewed outline recovery', () => {
 
     expect(setReviewError).toHaveBeenCalledWith(null);
     expect(setScriptsError).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('reviewed outline source-sync retry', () => {
+  it('reloads first and refuses to sync when a newer official row exists', async () => {
+    const syncSource = vi.fn(async () => ({ ok: true as const }));
+    const reloadOutlines = vi.fn(async () => ({ ok: true as const, rows: [restored, inserted, previous] }));
+
+    const result = await retryReviewedOutlineSourceSync(reviewedInsert('source'), {
+      reloadOutlines,
+      syncSource,
+    });
+
+    expect(result).toMatchObject({ ok: false, phase: 'conflict', error: expect.stringMatching(/newer official outline/i) });
+    expect(reloadOutlines).toHaveBeenCalledOnce();
+    expect(syncSource).not.toHaveBeenCalled();
+  });
+
+  it('reloads, syncs, then refreshes in order when the inserted row is still latest', async () => {
+    const order: string[] = [];
+    const reloadOutlines = vi.fn()
+      .mockImplementationOnce(async () => { order.push('reload-before'); return { ok: true as const, rows: [inserted, previous] }; })
+      .mockImplementationOnce(async () => { order.push('refresh-after'); return { ok: true as const, rows: [inserted, previous] }; });
+    const syncSource = vi.fn(async () => { order.push('sync'); return { ok: true as const }; });
+
+    const result = await retryReviewedOutlineSourceSync(reviewedInsert('official_editor'), {
+      reloadOutlines,
+      syncSource,
+    });
+
+    expect(result).toMatchObject({ ok: true, rows: [inserted, previous] });
+    expect(order).toEqual(['reload-before', 'sync', 'refresh-after']);
   });
 });

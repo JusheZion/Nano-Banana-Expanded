@@ -26,7 +26,10 @@ const created: WriterIssueOutlineRow = {
 function createDeps(order: string[]) {
   return {
     snapshotPrevious: vi.fn<ReviewedOutlinePersistenceDeps['snapshotPrevious']>(async () => { order.push('snapshot'); return { ok: true as const }; }),
-    createVersion: vi.fn<ReviewedOutlinePersistenceDeps['createVersion']>(async () => { order.push('insert'); return { ok: true as const, row: created }; }),
+    createVersion: vi.fn<ReviewedOutlinePersistenceDeps['createVersion']>(async () => {
+      order.push('insert');
+      return { ok: true as const, row: created, predecessor: previous };
+    }),
     syncSource: vi.fn<ReviewedOutlinePersistenceDeps['syncSource']>(async () => { order.push('source'); return { ok: true as const }; }),
     refreshOutlines: vi.fn<ReviewedOutlinePersistenceDeps['refreshOutlines']>(async () => {
       order.push('refresh');
@@ -51,10 +54,35 @@ describe('persistReviewedOutlineVersion', () => {
     expect(result).toMatchObject({
       ok: true,
       row: created,
+      predecessor: previous,
       rows: [created, previous],
       undoAvailable: true,
       shouldClearReview: true,
     });
+  });
+
+  it('uses the authoritative null predecessor and exposes first-version Undo', async () => {
+    const order: string[] = [];
+    const deps = createDeps(order);
+    deps.createVersion.mockImplementation(async () => {
+      order.push('insert');
+      return { ok: true, row: { ...created, id: 'outline-1', version: 1 }, predecessor: null };
+    });
+    deps.refreshOutlines.mockImplementation(async () => {
+      order.push('refresh');
+      return { ok: true, rows: [{ ...created, id: 'outline-1', version: 1 }] };
+    });
+
+    const result = await persistReviewedOutlineVersion({
+      previousOutline: null,
+      approvedOutline: created.outline_json,
+      canonicalSourceText: 'TITLE: First',
+      sourceLocked: false,
+    }, deps);
+
+    expect(result).toMatchObject({ ok: true, predecessor: null, undoAvailable: true });
+    expect(deps.snapshotPrevious).not.toHaveBeenCalled();
+    expect(order).toEqual(['insert', 'source', 'refresh']);
   });
 
   it('retains review and original when insert fails', async () => {
@@ -78,6 +106,31 @@ describe('persistReviewedOutlineVersion', () => {
       shouldClearReview: false,
     });
     expect(order).toEqual(['snapshot', 'insert']);
+  });
+
+  it('propagates an authoritative predecessor conflict without syncing source', async () => {
+    const order: string[] = [];
+    const deps = createDeps(order);
+    deps.createVersion.mockImplementation(async () => {
+      order.push('insert');
+      return {
+        ok: false as const,
+        error: 'Official outline changed before save.',
+        conflict: true,
+        predecessor: { ...previous, id: 'outline-newer', version: 3 },
+      };
+    });
+
+    const result = await persistReviewedOutlineVersion({
+      previousOutline: previous,
+      approvedOutline: created.outline_json,
+      canonicalSourceText: 'TITLE: After',
+      sourceLocked: false,
+    }, deps);
+
+    expect(result).toMatchObject({ ok: false, phase: 'insert', conflict: true });
+    expect(order).toEqual(['snapshot', 'insert']);
+    expect(deps.syncSource).not.toHaveBeenCalled();
   });
 
   it('reports a locked partial source sync precisely while retaining review and making rollback available', async () => {
