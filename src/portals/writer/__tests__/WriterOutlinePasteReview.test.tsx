@@ -49,6 +49,16 @@ function chooseAssignment(label: string): void {
   });
 }
 
+function forceClick(element: HTMLElement): void {
+  element.removeAttribute('disabled');
+  fireEvent.click(element);
+}
+
+function forceChange(element: HTMLElement, value: string): void {
+  element.removeAttribute('disabled');
+  fireEvent.change(element, { target: { value } });
+}
+
 describe('WriterOutlinePasteReview', () => {
   it('names the dialog and moves focus to its heading', async () => {
     renderReview();
@@ -122,6 +132,38 @@ describe('WriterOutlinePasteReview', () => {
     expect(onApply.mock.calls[0][0].passages.find((passage) => (
       passage.text === 'Remember the lighthouse motif.'
     ))).toMatchObject({ assignment: 'notes', provenance: 'user' });
+  });
+
+  it.each([
+    { value: 'title', label: 'Title' },
+    { value: 'premise', label: 'Premise' },
+    { value: 'unassigned', label: 'Unassigned Text' },
+  ] as const)('assigns selected text to $label through the shared assignment path', ({ value }) => {
+    const { props } = renderReview();
+    selectPassage('Remember the lighthouse motif.');
+    chooseAssignment(value);
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
+
+    const applied = vi.mocked(props.onApply).mock.calls[0][0] as OutlinePasteDiagnostic;
+    expect(applied.passages.find((passage) => (
+      passage.text === 'Remember the lighthouse motif.'
+    ))).toMatchObject({ assignment: value, provenance: 'user' });
+  });
+
+  it('offers exactly the six supported manual assignment destinations', () => {
+    renderReview();
+    expect(screen.getAllByRole('option').map((option) => ({
+      label: option.textContent,
+      value: (option as HTMLOptionElement).value,
+    }))).toEqual([
+      { label: 'Title', value: 'title' },
+      { label: 'Premise', value: 'premise' },
+      { label: 'Act', value: 'act' },
+      { label: 'Page Beat', value: 'page_beat' },
+      { label: 'Notes', value: 'notes' },
+      { label: 'Unassigned Text', value: 'unassigned' },
+    ]);
   });
 
   it('requires an Act name or number before assigning an Act', () => {
@@ -240,13 +282,111 @@ describe('WriterOutlinePasteReview', () => {
     expect(screen.getByRole('status').textContent).toContain('Applying reviewed paste');
   });
 
+  it('keeps selection, assignment, restore, preferences, and outward actions inert during busy synthetic events', () => {
+    const diagnostic = createDiagnostic();
+    const onCancel = vi.fn();
+    const onApply = vi.fn();
+    const onKeepUnstructured = vi.fn();
+    const onPreferencesChange = vi.fn();
+    const { rerender } = renderReview({
+      diagnostic,
+      onCancel,
+      onApply,
+      onKeepUnstructured,
+      onPreferencesChange,
+    });
+    selectPassage('Remember the lighthouse motif.');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+    selectPassage('A second loose observation.');
+
+    rerender(
+      <WriterOutlinePasteReview
+        diagnostic={diagnostic}
+        preferences={{ ...DEFAULT_OUTLINE_PASTE_PREFERENCES }}
+        busy
+        onApply={onApply}
+        onKeepUnstructured={onKeepUnstructured}
+        onCancel={onCancel}
+        onPreferencesChange={onPreferencesChange}
+      />,
+    );
+
+    forceClick(screen.getByRole('checkbox', { name: 'Select passage: A second loose observation.' }));
+    forceClick(screen.getByRole('checkbox', { name: 'Select all passages' }));
+    forceChange(screen.getByRole('combobox', { name: 'Assign selected to' }), 'act');
+    forceClick(screen.getByRole('button', { name: 'Assign selected passages' }));
+    forceClick(screen.getByRole('button', { name: 'Restore original recognition' }));
+    forceClick(screen.getByRole('checkbox', { name: "Don't show these tips again" }));
+    forceClick(screen.getByRole('button', { name: 'Applying reviewed paste' }));
+    forceClick(screen.getByRole('button', { name: 'Keep as unstructured source' }));
+    forceClick(screen.getByRole('button', { name: 'Cancel — keep current outline' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onKeepUnstructured).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+
+    rerender(
+      <WriterOutlinePasteReview
+        diagnostic={diagnostic}
+        preferences={{ ...DEFAULT_OUTLINE_PASTE_PREFERENCES }}
+        onApply={onApply}
+        onKeepUnstructured={onKeepUnstructured}
+        onCancel={onCancel}
+        onPreferencesChange={onPreferencesChange}
+      />,
+    );
+    expect((screen.getByRole('checkbox', {
+      name: 'Select passage: A second loose observation.',
+    }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: 'Select all passages' }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole('combobox', { name: 'Assign selected to' }) as HTMLSelectElement).value).toBe('notes');
+    expect(screen.queryByText('Enter an Act name or number before assigning.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed paste' }));
+    const applied = onApply.mock.calls[0][0] as OutlinePasteDiagnostic;
+    expect(applied.passages.find((passage) => (
+      passage.text === 'Remember the lighthouse motif.'
+    ))).toMatchObject({ assignment: 'notes', provenance: 'user' });
+  });
+
+  it('keeps Act metadata unchanged during a forced busy change', () => {
+    const diagnostic = createDiagnostic();
+    const { rerender, props } = renderReview({ diagnostic });
+    chooseAssignment('act');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Act name or number' }), {
+      target: { value: 'Act II' },
+    });
+
+    rerender(<WriterOutlinePasteReview {...props} diagnostic={diagnostic} busy />);
+    forceChange(screen.getByRole('textbox', { name: 'Act name or number' }), 'Act III');
+    rerender(<WriterOutlinePasteReview {...props} diagnostic={diagnostic} />);
+
+    expect((screen.getByRole('textbox', { name: 'Act name or number' }) as HTMLInputElement).value).toBe('Act II');
+  });
+
+  it('keeps Page Beat metadata unchanged during a forced busy change', () => {
+    const diagnostic = createDiagnostic();
+    const { rerender, props } = renderReview({ diagnostic });
+    chooseAssignment('page_beat');
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^First page number/ }), {
+      target: { value: '7' },
+    });
+
+    rerender(<WriterOutlinePasteReview {...props} diagnostic={diagnostic} busy />);
+    forceChange(screen.getByRole('spinbutton', { name: /^First page number/ }), '99');
+    rerender(<WriterOutlinePasteReview {...props} diagnostic={diagnostic} />);
+
+    expect((screen.getByRole('spinbutton', { name: /^First page number/ }) as HTMLInputElement).value).toBe('7');
+  });
+
   it('shows first-use guidance, dismisses it through preferences, and hides it when disabled', () => {
     const onPreferencesChange = vi.fn();
     const { rerender } = renderReview({ onPreferencesChange });
 
     expect(screen.getByRole('heading', { name: 'Why this review opened' })).not.toBeNull();
     expect(screen.getByText(/Unassigned Text needs your decision/i)).not.toBeNull();
-    expect(screen.getByText(/Nothing changes until you choose Apply reviewed paste/i)).not.toBeNull();
+    expect(screen.getAllByText(/Nothing changes until you choose Apply reviewed paste/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('checkbox', { name: "Don't show these tips again" }));
     expect(onPreferencesChange).toHaveBeenCalledWith(expect.objectContaining({
       showFirstUseGuidance: false,
@@ -267,6 +407,74 @@ describe('WriterOutlinePasteReview', () => {
       />,
     );
     expect(screen.queryByRole('heading', { name: 'Why this review opened' })).toBeNull();
+  });
+
+  it('keeps essential preservation and apply guidance visible without opening the supplementary tooltip', () => {
+    renderReview({
+      preferences: {
+        ...DEFAULT_OUTLINE_PASTE_PREFERENCES,
+        showFirstUseGuidance: false,
+      },
+    });
+
+    expect(screen.getByText(/original paste is preserved/i)).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Manual assignment' })).not.toBeNull();
+    expect(screen.getByText(/Nothing changes until you choose Apply reviewed paste/i)).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Apply reviewed paste' })).not.toBeNull();
+    expect(screen.queryByText(/Discard local review edits/)).toBeNull();
+  });
+
+  it('uses native tab order without positive tab indexes', () => {
+    renderReview();
+    const dialog = screen.getByRole('dialog');
+    const positiveTabIndexes = dialog.querySelectorAll('[tabindex]:not([tabindex="0"]):not([tabindex="-1"])');
+    const nativeControls = [...dialog.querySelectorAll<HTMLElement>('input:not([disabled]), select:not([disabled]), button:not([disabled])')];
+
+    expect(positiveTabIndexes.length).toBe(0);
+    expect(nativeControls.length).toBeGreaterThan(8);
+    expect(nativeControls.every((control) => control.tabIndex === 0)).toBe(true);
+    expect(nativeControls[0]).toBe(screen.getByRole('checkbox', { name: "Don't show these tips again" }));
+    expect(nativeControls.indexOf(screen.getByRole('checkbox', { name: 'Select all passages' }))).toBeLessThan(
+      nativeControls.indexOf(screen.getByRole('combobox', { name: 'Assign selected to' })),
+    );
+    expect(nativeControls.indexOf(screen.getByRole('combobox', { name: 'Assign selected to' }))).toBeLessThan(
+      nativeControls.indexOf(screen.getByRole('button', { name: 'Assign selected passages' })),
+    );
+    nativeControls.slice(0, 5).forEach((control) => {
+      control.focus();
+      expect(document.activeElement).toBe(control);
+    });
+  });
+
+  it('does not touch browser storage or APIs and keeps exact original text after local reassignment', () => {
+    const storageGet = vi.spyOn(Storage.prototype, 'getItem');
+    const storageSet = vi.spyOn(Storage.prototype, 'setItem');
+    const storageRemove = vi.spyOn(Storage.prototype, 'removeItem');
+    const storageClear = vi.spyOn(Storage.prototype, 'clear');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const xhrOpen = vi.spyOn(XMLHttpRequest.prototype, 'open');
+    const diagnostic = createDiagnostic();
+    const originalText = `${diagnostic.originalText}\n  trailing source whitespace  `;
+    const exactDiagnostic = { ...diagnostic, originalText };
+    const onKeepUnstructured = vi.fn();
+
+    try {
+      renderReview({ diagnostic: exactDiagnostic, onKeepUnstructured });
+      selectPassage('Remember the lighthouse motif.');
+      chooseAssignment('notes');
+      fireEvent.click(screen.getByRole('button', { name: 'Assign selected passages' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep as unstructured source' }));
+
+      expect(onKeepUnstructured).toHaveBeenCalledWith(originalText);
+      expect(storageGet).not.toHaveBeenCalled();
+      expect(storageSet).not.toHaveBeenCalled();
+      expect(storageRemove).not.toHaveBeenCalled();
+      expect(storageClear).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(xhrOpen).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   it('exposes errors as alerts, updates as polite status, and writes AI provenance in text', () => {

@@ -146,6 +146,7 @@ export function WriterOutlinePasteReview({
   };
 
   const togglePassage = (passageId: string) => {
+    if (busy) return;
     const next = new Set(selectedPassageIds);
     if (next.has(passageId)) next.delete(passageId);
     else next.add(passageId);
@@ -153,12 +154,14 @@ export function WriterOutlinePasteReview({
   };
 
   const toggleAll = () => {
+    if (busy) return;
     updateSelectionFeedback(allSelected
       ? new Set()
       : new Set(workingDiagnostic.passages.map((passage) => passage.id)));
   };
 
   const applyAssignment = () => {
+    if (busy) return;
     if (selectedCount === 0) {
       setValidationMessage('Select at least one passage before assigning.');
       return;
@@ -198,6 +201,7 @@ export function WriterOutlinePasteReview({
   };
 
   const restoreOriginal = () => {
+    if (busy) return;
     setWorkingDiagnostic(diagnostic);
     setSelectedPassageIds(new Set());
     setValidationMessage(null);
@@ -368,6 +372,7 @@ export function WriterOutlinePasteReview({
             <h3 id="paste-review-assign-title" className="text-sm font-extrabold text-slate-950">Manual assignment</h3>
             <p className="mt-1 text-xs leading-relaxed text-slate-600">
               Select one or more passages, choose their destination, then assign them to this working copy.
+              Nothing changes until you choose Apply reviewed paste.
             </p>
             <label className="mt-3 block text-xs font-bold text-slate-700">
               Assign selected to
@@ -375,6 +380,7 @@ export function WriterOutlinePasteReview({
                 value={assignment}
                 disabled={busy}
                 onChange={(event) => {
+                  if (busy) return;
                   setAssignment(event.currentTarget.value as OutlinePassageAssignment);
                   setValidationMessage(null);
                 }}
@@ -394,6 +400,7 @@ export function WriterOutlinePasteReview({
                   value={actName}
                   disabled={busy}
                   onChange={(event) => {
+                    if (busy) return;
                     setActName(event.currentTarget.value);
                     setValidationMessage(null);
                   }}
@@ -414,6 +421,7 @@ export function WriterOutlinePasteReview({
                   value={firstPageNumber}
                   disabled={busy}
                   onChange={(event) => {
+                    if (busy) return;
                     setFirstPageNumber(event.currentTarget.value);
                     setValidationMessage(null);
                   }}
@@ -467,7 +475,10 @@ export function WriterOutlinePasteReview({
           <button
             type="button"
             disabled={actionDisabled}
-            onClick={onCancel}
+            onClick={() => {
+              if (busy) return;
+              onCancel();
+            }}
             className="rounded-lg px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-900/5 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel — keep current outline
@@ -475,7 +486,10 @@ export function WriterOutlinePasteReview({
           <button
             type="button"
             disabled={actionDisabled}
-            onClick={() => onKeepUnstructured(workingDiagnostic.originalText)}
+            onClick={() => {
+              if (busy) return;
+              onKeepUnstructured(workingDiagnostic.originalText);
+            }}
             className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:border-amber-600 hover:bg-amber-50 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Keep as unstructured source
@@ -484,7 +498,10 @@ export function WriterOutlinePasteReview({
             type="button"
             aria-label={busy ? 'Applying reviewed paste' : undefined}
             disabled={actionDisabled}
-            onClick={() => onApply(workingDiagnostic)}
+            onClick={() => {
+              if (busy) return;
+              onApply(workingDiagnostic);
+            }}
             className="rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-5 py-2 text-sm font-black text-slate-950 shadow-md shadow-amber-950/20 transition hover:brightness-105 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? 'Applying…' : 'Apply reviewed paste'}
