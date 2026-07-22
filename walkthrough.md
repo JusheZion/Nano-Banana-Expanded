@@ -11913,3 +11913,33 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Implement Pass 3 Simple Workflow review component and complete Audit 1.
+
+## Writer outline paste review — Pass 3 and Audit 1 - 2026-07-22
+
+### What changed
+- Added the controlled, accessible Simple Workflow Paste Review dialog with lossless manual assignment, selection, metadata, restore/keep/cancel/apply actions, modal focus containment, busy guards, and responsive long-outline controls.
+- Renamed the diagnostic module to `writerOutlinePasteDiagnostic.ts` to eliminate case-insensitive import ambiguity with `WriterOutlinePasteReview.tsx`.
+- Expanded diagnostics for source type, Notes, Markdown, page ranges, invalid/overlapping ranges, singleton conflicts, warning severity, affected passages, and inferred page count.
+- Made TXT/Markdown templates parse truthfully end to end and preserved scene/summary wording across all advertised dash variants.
+- Added blocking Apply gates, advisory warnings, accessible selection metadata, dismissible onboarding, readable functional typography, and a single sticky mobile footer containing selected-item actions.
+
+### Verification
+- Final focused gate: 5 files / 118 tests passed.
+- Component suite: 44 tests passed.
+- TypeScript: passed.
+- Full lint: zero errors; 69 unchanged unrelated warnings.
+- `git diff --check`: passed.
+- Pass 3 specification and code-quality reviews: approved.
+- Audit 1 strict UI/QA re-review: approved after remediation.
+
+### Outstanding issues
+- Browser geometry at 1280px/390px remains deferred until Pass 4 mounts the component in WriterPortal.
+
+### Risks or caveats
+- The component remains persistence-free and is not yet reachable in production.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Integrate safe paste, preferences, downloads, version recovery, and browser QA in Pass 4.

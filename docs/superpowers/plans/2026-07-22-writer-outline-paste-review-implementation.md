@@ -25,7 +25,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `src/portals/writer/writerOutlinePasteReview.ts` | Diagnostic parsing, passage ranges, validation, assignment mutations, and proposed-outline construction. |
+| `src/portals/writer/writerOutlinePasteDiagnostic.ts` | Diagnostic parsing, passage ranges, validation, assignment mutations, and proposed-outline construction. |
 | `src/portals/writer/writerOutlinePastePreferences.ts` | Validated local preference persistence and defaults. |
 | `src/portals/writer/writerOutlineTemplates.ts` | Plain-text/Markdown template contents and filenames. |
 | `src/portals/writer/WriterOutlinePasteReview.tsx` | Simple Workflow review dialog/surface and manual assignment. |
@@ -49,8 +49,8 @@
 **Acceptance criteria:** Known formats retain current behavior; unknown prose is returned verbatim as Unassigned Text; conflicts and inferred page count are explicit; every passage has provenance.
 
 **Files:**
-- Create: `src/portals/writer/writerOutlinePasteReview.ts`
-- Create: `src/portals/writer/__tests__/writerOutlinePasteReview.test.ts`
+- Create: `src/portals/writer/writerOutlinePasteDiagnostic.ts`
+- Create: `src/portals/writer/__tests__/writerOutlinePasteDiagnostic.test.ts`
 - Modify: `src/portals/writer/writerExportFormats.ts`
 
 - [x] **Step 1: Write failing diagnostic tests** covering a mixed paste, prose-only paste, Roman numeral Acts, duplicates, gaps, and text-accounting.
@@ -68,7 +68,7 @@ expect(result.requiresReview).toBe(true);
 
 - [x] **Step 2: Run the focused test and verify RED.**
 
-Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteReview.test.ts`
+Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteDiagnostic.test.ts`
 
 Expected: FAIL because `analyzeOutlinePaste` does not exist.
 
@@ -108,14 +108,14 @@ export function assignOutlinePassages(
 
 - [x] **Step 5: Run focused parser suites and verify GREEN.**
 
-Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteReview.test.ts src/portals/writer/__tests__/writerOutlineParse.test.ts`
+Run: `npm run test -- --run src/portals/writer/__tests__/writerOutlinePasteDiagnostic.test.ts src/portals/writer/__tests__/writerOutlineParse.test.ts`
 
 Expected: both files pass; every non-empty source passage is represented once.
 
 - [x] **Step 6: Commit the pass.**
 
 ```bash
-git add src/portals/writer/writerOutlinePasteReview.ts src/portals/writer/writerExportFormats.ts src/portals/writer/__tests__/writerOutlinePasteReview.test.ts
+git add src/portals/writer/writerOutlinePasteDiagnostic.ts src/portals/writer/writerExportFormats.ts src/portals/writer/__tests__/writerOutlinePasteDiagnostic.test.ts
 git commit -m "feat: add lossless outline paste diagnostics"
 ```
 
@@ -200,7 +200,7 @@ git commit -m "feat: add outline paste preferences and templates"
 - Create: `src/portals/writer/WriterOutlinePasteReview.tsx`
 - Create: `src/portals/writer/__tests__/WriterOutlinePasteReview.test.tsx`
 
-- [ ] **Step 1: Write failing component tests** for focus entry/return, recognition summary, multi-select assignment, sequential page numbering, dismissible guidance, Escape, and all actions.
+- [x] **Step 1: Write failing component tests** for focus entry/return, recognition summary, multi-select assignment, sequential page numbering, dismissible guidance, Escape, and all actions.
 
 ```tsx
 render(<WriterOutlinePasteReview diagnostic={diagnostic} preferences={defaults} onApply={onApply} onKeepUnstructured={onKeep} onCancel={onCancel} onPreferencesChange={onPreferencesChange} />);
@@ -209,9 +209,9 @@ await user.selectOptions(screen.getByLabelText(/assign selected text/i), 'notes'
 expect(screen.getByText(/nothing has been discarded/i)).toBeVisible();
 ```
 
-- [ ] **Step 2: Run the component test and verify RED.**
+- [x] **Step 2: Run the component test and verify RED.**
 
-- [ ] **Step 3: Implement the controlled component** with these exact public props:
+- [x] **Step 3: Implement the controlled component** with these exact public props:
 
 ```ts
 type WriterOutlinePasteReviewProps = {
@@ -226,13 +226,13 @@ type WriterOutlinePasteReviewProps = {
 };
 ```
 
-- [ ] **Step 4: Add native checkbox/select/input controls, `role="dialog"`, labelled status regions, focus management, and responsive stacking.** Tooltips supplement visible labels; they do not contain exclusive information.
+- [x] **Step 4: Add native checkbox/select/input controls, `role="dialog"`, labelled status regions, focus management, and responsive stacking.** Tooltips supplement visible labels; they do not contain exclusive information.
 
-- [ ] **Step 5: Run component and overlay accessibility suites.**
+- [x] **Step 5: Run component and overlay accessibility suites.**
 
 Run: `npm run test -- --run src/portals/writer/__tests__/WriterOutlinePasteReview.test.tsx src/portals/writer/__tests__/writerOverlaysAccessibility.test.tsx`
 
-- [ ] **Step 6: Commit the pass.**
+- [x] **Step 6: Commit the pass.**
 
 ```bash
 git add src/portals/writer/WriterOutlinePasteReview.tsx src/portals/writer/__tests__/WriterOutlinePasteReview.test.tsx
@@ -241,17 +241,17 @@ git commit -m "feat: add accessible outline paste review"
 
 **Smoke test:** Component plus overlay accessibility suites.
 
-**Result summary:** Confirm manual assignment works without AI and all exits preserve or explicitly return the source.
+**Result summary:** PASS — final five-suite gate passed 118/118. Manual assignment works without AI; all exits preserve or explicitly return the source. Review loops added complete busy-event guards, modal focus containment, singleton validation, truthful templates, source/range/conflict diagnostics, blocking/advisory Apply gating, accessible passage metadata, long-outline controls, and lossless separator handling. Scoped/full lint had zero errors (69 unchanged warnings), TypeScript and diff checks passed.
 
 **Rollback:** Revert the component commit; it is not wired into WriterPortal yet.
 
 ## Audit 1: Passes 1–3
 
-- [ ] Map every diagnostic field to a rendered or deliberately internal use.
-- [ ] Confirm each non-empty line is either recognized or Unassigned.
-- [ ] Run scoped lint on new files: `npm run lint -- --quiet src/portals/writer/writerOutlinePasteReview.ts src/portals/writer/WriterOutlinePasteReview.tsx src/portals/writer/writerOutlinePastePreferences.ts src/portals/writer/writerOutlineTemplates.ts`.
-- [ ] Check keyboard-only operation at 1280px and 390px in the local app.
-- [ ] Record audit findings in this plan and resolve failures before Pass 4.
+- [x] Map every diagnostic field to a rendered or deliberately internal use.
+- [x] Confirm each non-empty line is either recognized or Unassigned.
+- [x] Run scoped lint on new files: `npm run lint -- --quiet src/portals/writer/writerOutlinePasteDiagnostic.ts src/portals/writer/WriterOutlinePasteReview.tsx src/portals/writer/writerOutlinePastePreferences.ts src/portals/writer/writerOutlineTemplates.ts`.
+- [x] Check keyboard behavior and responsive structure in component tests; browser geometry at 1280px/390px is explicitly deferred to Pass 4 because the component is not yet mounted.
+- [x] Record audit findings in this plan and resolve failures before Pass 4.
 
 ## Pass 4: Integrate safe paste, settings, downloads, and recovery
 
