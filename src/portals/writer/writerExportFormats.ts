@@ -122,6 +122,12 @@ export function parseOutlineActHeading(line: string): { name?: string; summary?:
   };
 }
 
+export function parseOutlineActListItem(body: string): { name?: string; goal?: string; summary?: string } {
+  return body.includes(' — ')
+    ? parseOutlineActLine(body)
+    : (parseOutlineActHeading(body) ?? parseOutlineActLine(body));
+}
+
 export function parseOutlineBeatLine(body: string): OutlineBeat {
   let s = body.trim();
   let turn = '';
@@ -214,9 +220,7 @@ export function parseOutlineText(text: string): OutlineJsonLike {
     if (/^[-*]\s+/.test(line)) {
       const body = line.replace(/^[-*]\s+/, '');
       if (section === 'acts') {
-        currentAct = body.includes(' — ')
-          ? parseOutlineActLine(body)
-          : (parseOutlineActHeading(body) ?? parseOutlineActLine(body));
+        currentAct = parseOutlineActListItem(body);
         acts.push(currentAct);
       }
       else if (section === 'beats') beats.push(parseOutlineBeatLine(body));

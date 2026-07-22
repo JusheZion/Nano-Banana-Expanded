@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOutlineText } from '../writerExportFormats';
+import { formatOutlineAsText, parseOutlineText } from '../writerExportFormats';
 import {
   analyzeOutlinePaste,
   assignOutlinePassages,
@@ -117,6 +117,23 @@ describe('analyzeOutlinePaste', () => {
     ].join('\n');
 
     expect(analyzeOutlinePaste(text).proposedOutline).toEqual(parseOutlineText(text));
+  });
+
+  it('preserves separate goal and summary fields in canonical Act list items', () => {
+    const text = formatOutlineAsText({
+      acts: [{
+        name: 'Act 1',
+        goal: 'Establish stakes',
+        summary: 'Pony wakes in the Virtualverse.',
+      }],
+    });
+
+    expect(analyzeOutlinePaste(text).proposedOutline).toEqual(parseOutlineText(text));
+    expect(analyzeOutlinePaste(text).proposedOutline.acts).toEqual([{
+      name: 'Act 1',
+      goal: 'Establish stakes',
+      summary: 'Pony wakes in the Virtualverse.',
+    }]);
   });
 
   it('accounts for every non-empty source line exactly once without changing its text', () => {

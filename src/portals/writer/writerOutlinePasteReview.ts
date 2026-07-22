@@ -2,6 +2,7 @@ import {
   inferOutlineTargetPageCount,
   parseOutlineActHeading,
   parseOutlineActLine,
+  parseOutlineActListItem,
   parseOutlineBeatLine,
   parseOutlineNumberedBeatLine,
   type OutlineBeat,
@@ -122,9 +123,7 @@ function classifyPassages(text: string): OutlinePastePassage[] {
         canContinueAct = section === 'acts';
       } else if (/^[-*]\s+/.test(line) && section === 'acts') {
         const body = line.replace(/^[-*]\s+/, '');
-        const parsedAct = body.includes(' — ')
-          ? parseOutlineActLine(body)
-          : (parseOutlineActHeading(body) ?? parseOutlineActLine(body));
+        const parsedAct = parseOutlineActListItem(body);
         passage.assignment = 'act';
         passage.actName = parsedAct.name;
         currentActName = parsedAct.name;
@@ -187,7 +186,12 @@ function buildProposedOutline(passages: OutlinePastePassage[]): Record<string, u
       sawActs = true;
       if (isActsHeader(line)) continue;
 
+      const isListItem = /^[-*]\s+/.test(line);
       const body = line.replace(/^[-*]\s+/, '');
+      if (passage.provenance === 'deterministic' && isListItem) {
+        acts.push(parseOutlineActListItem(body));
+        continue;
+      }
       const heading = parseOutlineActHeading(body);
       if (heading) {
         acts.push({ ...heading });
