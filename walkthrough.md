@@ -11808,3 +11808,34 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - After specification approval, invoke the writing-plans workflow and prepare test-driven implementation passes.
+
+## Writer outline paste-review implementation planning - 2026-07-22
+
+### What changed
+- Converted the approved safe-paste specification into a nine-pass, test-driven implementation plan covering lossless diagnostics, preferences/templates, Simple Workflow review, Advanced Tools import, optional AI mapping, editable AI Treatment promotion, accessibility/polish, regression, audits, and deployment.
+- Added scoped acceptance criteria, smoke tests, rollback notes, two intermediate audits, and final ReAct/QA/UI-UX release gates.
+- Mapped new focused modules so parsing, preferences, review UI, import drafts, AI comparison, and portal orchestration have clear responsibilities.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This prompt produced planning documentation only; production code remains unchanged.
+- The plan preserves backward compatibility until each new surface is integrated and includes coordinated Supabase/Cloudflare rollback paths.
+- The DOX pass found no durable agent contract or ownership change requiring an `AGENTS.md` update.
+
+### Verification
+- Plan self-review passed against the approved specification, placeholder scan, type/signature consistency, and `git diff --check`.
+
+### Outstanding issues
+- Execution approach must be selected before implementation begins.
+
+### Risks or caveats
+- AI Treatment preview requires coordinated client/schema/Edge changes because the current `outline_issue` mode saves immediately.
+
+### Operator follow-up
+- Choose Subagent-Driven or Inline Execution after plan review.
+
+### Next steps
+- Self-review and commit the implementation plan, then begin the selected execution workflow.
