@@ -5,8 +5,17 @@ import {
   type OutlinePassageAssignment,
   type OutlinePasteDiagnostic,
   type OutlinePastePassage,
-} from './writerOutlinePasteReview';
+} from './writerOutlinePasteDiagnostic';
 import type { OutlinePastePreferences } from './writerOutlinePastePreferences';
+
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 export type WriterOutlinePasteReviewProps = {
   diagnostic: OutlinePasteDiagnostic;
@@ -80,12 +89,16 @@ export function WriterOutlinePasteReview({
   const [feedback, setFeedback] = useState('No passages selected.');
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setWorkingDiagnostic(diagnostic);
     setSelectedPassageIds(new Set());
+    setAssignment('notes');
+    setActName('');
+    setFirstPageNumber('');
     setValidationMessage(null);
     setFeedback('No passages selected.');
   }, [diagnostic]);
@@ -103,9 +116,34 @@ export function WriterOutlinePasteReview({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || busy) return;
-      event.preventDefault();
-      onCancel();
+      if (event.key === 'Escape') {
+        if (busy) return;
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        .filter((element) => element.getAttribute('aria-hidden') !== 'true');
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -166,6 +204,21 @@ export function WriterOutlinePasteReview({
       setValidationMessage('Select at least one passage before assigning.');
       return;
     }
+    if (assignment === 'title' || assignment === 'premise') {
+      const label = assignment === 'title' ? 'Title' : 'Premise';
+      if (selectedCount !== 1) {
+        setValidationMessage(`Choose exactly one passage for ${label}.`);
+        return;
+      }
+      const selectedId = [...selectedPassageIds][0];
+      const existingOwner = workingDiagnostic.passages.some((passage) => (
+        passage.assignment === assignment && passage.id !== selectedId
+      ));
+      if (existingOwner) {
+        setValidationMessage(`${label} already has a passage. Move it to another destination first.`);
+        return;
+      }
+    }
     if (assignment === 'act' && !actName.trim()) {
       setValidationMessage('Enter an Act name or number before assigning.');
       return;
@@ -212,11 +265,22 @@ export function WriterOutlinePasteReview({
   const visibleStatus = busy ? 'Applying reviewed paste.' : feedback;
 
   return (
+    <div
+      role="presentation"
+      data-testid="outline-paste-review-backdrop"
+      className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-black/45 p-3 backdrop-blur-sm sm:p-6"
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
     <section
+      ref={dialogRef}
       role="dialog"
+      tabIndex={-1}
       aria-modal="true"
+      aria-busy={busy}
       aria-labelledby="writer-outline-paste-review-title"
-      className="w-full min-w-0 rounded-2xl border border-white/40 bg-white/90 p-4 text-slate-950 shadow-2xl shadow-teal-950/25 backdrop-blur-xl sm:p-6"
+      className="my-auto w-full max-w-6xl min-w-0 rounded-2xl border border-white/40 bg-white/90 p-4 text-slate-950 shadow-2xl shadow-teal-950/25 backdrop-blur-xl sm:p-6"
     >
       <header className="border-b border-slate-900/10 pb-4">
         <p className="text-[0.68rem] font-bold uppercase tracking-[0.2em] text-amber-800">
@@ -471,7 +535,10 @@ export function WriterOutlinePasteReview({
         <p role="status" aria-live="polite" aria-atomic="true" className="mb-3 min-h-5 text-xs font-semibold text-slate-600">
           {visibleStatus}
         </p>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <div
+          data-testid="paste-review-actions"
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"
+        >
           <button
             type="button"
             disabled={actionDisabled}
@@ -509,5 +576,6 @@ export function WriterOutlinePasteReview({
         </div>
       </div>
     </section>
+    </div>
   );
 }

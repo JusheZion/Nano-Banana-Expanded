@@ -3,7 +3,7 @@ import { formatOutlineAsText, parseOutlineText } from '../writerExportFormats';
 import {
   analyzeOutlinePaste,
   assignOutlinePassages,
-} from '../writerOutlinePasteReview';
+} from '../writerOutlinePasteDiagnostic';
 
 describe('analyzeOutlinePaste', () => {
   it('returns unknown prose verbatim as deterministic unassigned text', () => {
