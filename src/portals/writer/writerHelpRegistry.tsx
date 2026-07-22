@@ -97,6 +97,22 @@ export const WRITER_UI_TIPS = {
   dockShortcutsBlurb:
     'Workspace tabs 1–9: use ⌥⌘ plus the number on Mac, or Alt+Ctrl plus the number on Windows/Linux. Tabs after 9 are opened from the workspace tabs. ⌘F: Find. ⌘⇧H: panels. Esc: clear find.',
   reviewOutputFind: 'Combined pacing + canon text. The Find in view search includes this block.',
+  outlinePasteReviewFrequency:
+    'Choose when outline paste pauses for review: always, only when structure needs attention, or never interrupt.',
+  outlinePasteAiClassification:
+    'AI classification is off by default. Optional modes can suggest structure, but you review changes before applying them.',
+  outlinePasteUnassignedText:
+    'Unassigned Text is preserved ordinary prose that Writer could not place confidently. Review it without losing the original wording.',
+  outlinePasteRestoreOriginal:
+    'Restore original replaces the review draft with the exact text you pasted.',
+  outlinePasteKeepUnstructured:
+    'Keep unstructured preserves the selected text as ordinary prose instead of assigning it to an outline section.',
+  outlinePasteTemplateDownloads:
+    'Download a TXT or Markdown example. Both formats show optional structure; DOCX is not required.',
+  outlinePasteSettings:
+    'Paste settings control review frequency, optional AI classification, and first-use guidance.',
+  outlinePasteFirstUseGuidance:
+    'Show a short first-use explanation before your first reviewed paste. You can hide or restore it in Paste settings.',
 } as const;
 
 export type WriterUiTipKey = keyof typeof WRITER_UI_TIPS;
