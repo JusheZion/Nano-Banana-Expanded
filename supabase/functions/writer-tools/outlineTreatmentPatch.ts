@@ -21,6 +21,11 @@ export type OutlineTreatmentOperationNotice = {
   code: string;
   message: string;
   source_beat_ids: string[];
+  proposed?: {
+    scene?: string;
+    summary?: string;
+    emotional_turn?: string;
+  };
 };
 
 type TreatmentChangeType =
@@ -59,6 +64,13 @@ function reject(
     code,
     message,
     source_beat_ids: operation.source_beat_ids,
+    proposed: {
+      ...(operation.scene === undefined ? {} : { scene: operation.scene }),
+      ...(operation.summary === undefined ? {} : { summary: operation.summary }),
+      ...(operation.emotional_turn === undefined
+        ? {}
+        : { emotional_turn: operation.emotional_turn }),
+    },
   });
 }
 

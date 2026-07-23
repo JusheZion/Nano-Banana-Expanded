@@ -103,6 +103,7 @@ export function parseOutlineTreatmentPreview(
             code: notice.code,
             message: notice.message,
             sourceBeatIds: notice.source_beat_ids,
+            ...(notice.proposed ? { proposed: notice.proposed } : {}),
           })),
         }
       : {}),

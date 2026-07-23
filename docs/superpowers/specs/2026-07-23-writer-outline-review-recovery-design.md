@@ -1,7 +1,7 @@
 # Writer Outline Review Recovery Design
 
 **Date:** 2026-07-23  
-**Status:** Approved; awaiting written-spec review
+**Status:** Implemented locally; production verification pending
 
 ## Goal
 
@@ -181,4 +181,3 @@ The work is complete only when:
 - the 70-page preview is canceled safely;
 - every production-corridor stage has a Green, Yellow, or Red evidence-backed status;
 - no Red blocker remains between the official outline and comic page production.
-

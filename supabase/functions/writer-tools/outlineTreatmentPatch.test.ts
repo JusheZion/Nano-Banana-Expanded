@@ -233,6 +233,12 @@ describe('applyOutlineTreatmentPatches', () => {
       operation_id: 'wrong-ending-edit',
       status: 'rejected',
       code: 'source_event_mismatch',
+      proposed: {
+        summary: [
+          'The elder reveals that the tale is timeless and explains that Solfa and Kaleid',
+          'return whenever humanity forgets itself.',
+        ].join(' '),
+      },
     });
   });
 });

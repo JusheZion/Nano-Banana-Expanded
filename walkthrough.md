@@ -12494,6 +12494,62 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Writer Outline treatment review recovery implementation - 2026-07-23
+
+### What changed
+- Replaced the Simple Workflow treatment proposal JSON with a readable, directly editable outline review.
+- Added chronological page-aware cards for accepted, rejected, and optionally unchanged changes.
+- Added original-versus-proposed wording, bounded word-level highlighting, plain-language reasons, and direct **Go to page N** navigation.
+- Preserved rejected-operation proposal wording from the Edge boundary so the UI can identify what was rejected and confirm that the original was retained.
+- Normalized actual and escaped tab markers for presentation without mutating stored outline text.
+- Kept raw JSON and opaque source/result IDs in Advanced Tools, with IDs behind **Technical details**.
+- Rebuilt the review dialog as a fixed-height flex shell with one scrollable body and a separate non-sticky footer so controls do not cover content.
+- Added explicit readable text colors for Cancel and Regenerate controls.
+
+### Files touched
+- `src/portals/writer/WriterOutlineTreatmentReview.tsx`
+- `src/portals/writer/WriterOutlineTreatmentReadableReview.tsx`
+- `src/portals/writer/WriterOutlineTreatmentDiff.tsx`
+- `src/portals/writer/WriterOutlineTreatmentChangeList.tsx`
+- `src/portals/writer/writerOutlineTreatmentReviewModel.ts`
+- `src/portals/writer/writerOutlineTreatmentIntegration.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/shared/writer/schemas.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.ts`
+- Focused treatment-review test files
+- `docs/superpowers/specs/2026-07-23-writer-outline-review-recovery-design.md`
+- `docs/superpowers/plans/2026-07-23-writer-outline-review-recovery-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The deterministic patch engine and treatment permissions are unchanged.
+- The rejected proposal payload is optional and backward compatible.
+- Simple Workflow owns a structured `IssueOutline` draft; Advanced Tools retains the JSON draft and contract validation.
+- Highlighting uses deterministic word comparison and falls back to whole-field highlighting for large values.
+- The existing root DOX rule already describes the implemented Simple/Advanced review contract, so no additional `AGENTS.md` change was required.
+
+### Verification
+- Pass 1 smoke: 3 test files, 22 tests passed.
+- Pass 2 smoke: 5 test files, 20 tests passed.
+- Consolidated release gate: 10 test files, 99 tests passed.
+- Affected post-audit smoke: 1 test file, 9 tests passed.
+- Targeted ESLint: passed with no findings.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Local signed-in QA confirmed the dedicated demo account and reusable Writer issue/source data are available.
+
+### Outstanding issues
+- Supabase and Cloudflare deployment and the signed-in production visual/corridor smoke remain pending.
+
+### Risks or caveats
+- Production remains on the previous review UI until the paired release completes.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit and push the reviewed diff, deploy `writer-tools` and Cloudflare, then complete the production visual and downstream corridor smoke without promoting the QA outline.
+
 ## Outline AI Treatment deterministic patch engine - 2026-07-23
 
 ### What changed

@@ -50,6 +50,11 @@ export type TreatmentOperationNotice = {
   code: string;
   message: string;
   sourceBeatIds: string[];
+  proposed?: {
+    scene?: string;
+    summary?: string;
+    emotional_turn?: string;
+  };
 };
 
 export type TreatmentProposalSession = {

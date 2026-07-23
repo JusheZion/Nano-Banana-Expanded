@@ -159,6 +159,11 @@ export const outlineTreatmentOperationNoticeSchema = z.object({
   code: z.string().min(1).max(160),
   message: z.string().min(1).max(1000),
   source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
+  proposed: z.object({
+    scene: z.string().optional(),
+    summary: z.string().optional(),
+    emotional_turn: z.string().optional(),
+  }).strict().optional(),
 }).strict();
 
 export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({

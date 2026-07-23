@@ -126,12 +126,15 @@ describe('WriterOutlineTreatmentReview', () => {
     );
     expect(screen.getByText('Keep my order')).not.toBeNull();
     expect(screen.getByLabelText('Treatment preservation summary').textContent).toMatch(/1 → 1/);
-    expect(screen.getByText('Review details')).not.toBeNull();
+    expect(screen.getByText('Changes to review')).not.toBeNull();
+    expect(screen.getByText('Edit the proposed outline')).not.toBeNull();
+    expect(screen.queryByText(/source-page-1-1/)).toBeNull();
+    expect(screen.queryByText(/"page_beats"/)).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Review before making official' }));
     expect(screen.queryByText('Review changes')).toBeNull();
   });
 
-  it('shows accepted and rejected AI operation notices without blocking a valid proposal', () => {
+  it('shows rejected AI operation context in Simple review without blocking a valid proposal', () => {
     render(
       <WriterOutlineTreatmentReview
         currentOutline={null}
@@ -162,9 +165,8 @@ describe('WriterOutlineTreatmentReview', () => {
       />,
     );
 
-    expect(screen.getByLabelText('AI operation notices').textContent).toMatch(/1 accepted/i);
-    expect(screen.getByLabelText('AI operation notices').textContent).toMatch(/1 rejected/i);
-    expect(screen.getByText('Keep My Order cannot move beats.')).not.toBeNull();
+    expect(screen.queryByLabelText('AI operation notices')).toBeNull();
+    expect(screen.getAllByText('Keep My Order cannot move beats.').length).toBeGreaterThan(0);
     expect((screen.getByRole('button', { name: 'Make official' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -191,6 +193,7 @@ describe('WriterOutlineTreatmentReview', () => {
         currentOutline={null}
         proposal={session.proposal}
         session={session}
+        workflowMode="advanced"
         onCancel={vi.fn()}
         onRegenerate={vi.fn()}
         onMakeOfficial={onMakeOfficial}

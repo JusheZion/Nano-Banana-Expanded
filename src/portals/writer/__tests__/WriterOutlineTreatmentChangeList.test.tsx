@@ -22,10 +22,14 @@ const entries = [
 ];
 
 describe('WriterOutlineTreatmentChangeList', () => {
-  it('shows source/result mapping and exposes non-color rejection controls', () => {
+  it('leads with page context and keeps source/result mapping in technical details', () => {
     const onReject = vi.fn();
     render(<WriterOutlineTreatmentChangeList entries={entries} onReject={onReject} />);
-    expect(screen.getByText(/source-page-1-1, source-page-2-2/)).not.toBeNull();
+    expect(screen.getByText('Page 1 · from pages 1, 2')).not.toBeNull();
+    const technicalCopy = screen.getByText(/source-page-1-1, source-page-2-2/);
+    expect(technicalCopy.closest('details')?.open).toBe(false);
+    fireEvent.click(screen.getAllByText('Technical details')[0]!);
+    expect(technicalCopy.closest('details')?.open).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Restore source beat' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove added beat' }));
     expect(onReject).toHaveBeenNthCalledWith(1, 'combined-1');

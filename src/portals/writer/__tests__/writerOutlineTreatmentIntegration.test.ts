@@ -114,6 +114,7 @@ describe('operation notices', () => {
           code: 'operation_forbidden',
           message: 'Keep My Order cannot move beats.',
           source_beat_ids: [sourceId2!],
+          proposed: { summary: 'Attempted reordered wording.' },
         },
       ],
     }, built.source);
@@ -132,6 +133,7 @@ describe('operation notices', () => {
         code: 'operation_forbidden',
         message: 'Keep My Order cannot move beats.',
         sourceBeatIds: [sourceId2!],
+        proposed: { summary: 'Attempted reordered wording.' },
       },
     ]);
   });

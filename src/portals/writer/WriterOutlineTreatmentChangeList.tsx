@@ -49,10 +49,17 @@ export function WriterOutlineTreatmentChangeList({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-wide text-teal-900">{entry.changeType.replace('_', ' ')}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-800">{entry.reason}</p>
-                  <p className="mt-1 text-[10px] font-semibold text-slate-600">
-                    Source: {entry.sourceBeatIds.length ? entry.sourceBeatIds.join(', ') : 'New AI beat'} · Result: {entry.resultBeatId}
+                  <p className="mt-1 text-xs font-black text-slate-950">
+                    {entry.proposedPage ? `Page ${entry.proposedPage}` : 'Page not assigned'}
+                    {entry.originalPages.length ? ` · from page${entry.originalPages.length > 1 ? 's' : ''} ${entry.originalPages.join(', ')}` : ''}
                   </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-800">{entry.reason}</p>
+                  <details className="mt-2 text-[10px] font-semibold text-slate-600">
+                    <summary className="cursor-pointer font-black">Technical details</summary>
+                    <p className="mt-1">
+                      Source: {entry.sourceBeatIds.length ? entry.sourceBeatIds.join(', ') : 'New AI beat'} · Result: {entry.resultBeatId}
+                    </p>
+                  </details>
                 </div>
                 {entry.changeType !== 'unchanged' && entry.changeType !== 'language_polished' ? (
                   <button
