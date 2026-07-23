@@ -12476,9 +12476,14 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Consolidated root regression: 117 files and 726 tests passed.
 - `npm run lint -- --quiet`: passed.
 - `npm run build`: passed with the existing large-chunk advisory only.
+- Commit `dc777ee` was pushed to `origin/main`.
+- Supabase `writer-tools` deployed successfully to production project `vxclogwiytxjolisnakd`.
+- Signed-in production preview-only smoke used a 26-page Organize and Polish source: the response completed as a validated proposal, opened Review before making official, exposed Make official, and produced no 422.
+- The proposal was canceled without promotion; the disposable production QA series was moved to Recoverable Trash.
+- Production browser console warnings/errors: 0.
 
 ### Outstanding issues
-- Production Edge deployment and live preview-only smoke remain.
+- None.
 
 ### Risks or caveats
 - A model response that remains inconsistent after the single repair attempt is intentionally rejected; the surfaced details should identify the exact remaining mismatch.
@@ -12487,4 +12492,4 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Commit and push the repair, deploy `writer-tools`, and run a signed-in production Organize and Polish preview without promotion.
+- None for this repair.
