@@ -12568,6 +12568,40 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - The final proposal was canceled. Official outline version 10 remained unchanged.
 - No new application errors appeared during the fresh final production run; earlier dynamic-import errors in the retained browser log were from the stale bundle immediately after the first Cloudflare deployment and were resolved by loading the fresh versioned bundle.
 
+## Outline review recovery and production-corridor design - 2026-07-23
+
+### What changed
+- Documented the approved recovery design for replacing the Simple Workflow's raw JSON treatment review with a chronological, page-aware, directly editable review experience.
+- Defined plain-language rejection details, change highlighting/navigation, hidden unchanged pages, tab-marker normalization, and a non-overlapping action bar with explicit button contrast.
+- Added a bounded production-readiness corridor from Outline through Pages & Beats, Dialogue, Imageshop Prep, and Comic Creator so downstream confidence is based on persistent signed-in evidence rather than isolated unit tests.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/specs/2026-07-23-writer-outline-review-recovery-design.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The scope prioritizes blockers to the user's July 30 comic-production deadline.
+- Technical JSON, manifests, and opaque IDs remain available only in Advanced Tools.
+- Corridor findings use Green, Yellow, and Red readiness statuses; only Red production blockers expand the immediate repair scope.
+- DOX now records the readable Simple review and visual release evidence as durable Writer AI Treatment requirements.
+
+### Verification
+- Specification self-review found no placeholders, contradictory requirements, or unspecified promotion behavior.
+- No runtime code changed during specification.
+
+### Outstanding issues
+- Implementation plan and execution remain pending written-spec approval.
+
+### Risks or caveats
+- Current Simple Workflow treatment review remains technical and visually obstructive until implementation is deployed.
+
+### Operator follow-up
+- Cancel any open AI Treatment proposal rather than promoting it under the current review UI.
+
+### Next steps
+- Review the written specification, then create and execute the pass-based implementation plan.
+
 ## 70-page AI Treatment Edge timeout repair - 2026-07-23
 
 ### What changed
