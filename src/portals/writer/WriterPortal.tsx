@@ -139,6 +139,12 @@ import {
   WRITER_OUTLINE_TREATMENT_MODES,
 } from '@/portals/writer/writerOutlineTreatmentContracts';
 import {
+  buildOutlineTreatmentPreviewRequest,
+  buildPersistedTreatmentOutline,
+  parseOutlineTreatmentPreview,
+} from '@/portals/writer/writerOutlineTreatmentIntegration';
+import type { TreatmentProposalSession } from '@/portals/writer/writerOutlineTreatmentValidation';
+import {
   buildWriterVisualReferenceDigest,
   mergeVisualReferencesIntoSynopsisParts,
   mergeWriterVisualReferenceIntoNotes,
@@ -1015,6 +1021,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [outlinePasteReviewError, setOutlinePasteReviewError] = useState<string | null>(null);
   const [outlineImportOpen, setOutlineImportOpen] = useState(false);
   const [outlineTreatmentProposal, setOutlineTreatmentProposal] = useState<Record<string, unknown> | null>(null);
+  const [outlineTreatmentSession, setOutlineTreatmentSession] = useState<TreatmentProposalSession | null>(null);
   const [outlineTreatmentBusy, setOutlineTreatmentBusy] = useState(false);
   const [outlineTreatmentError, setOutlineTreatmentError] = useState<string | null>(null);
   const [lastReviewedInsert, setLastReviewedInsert] = useState<(ReviewedOutlineInsert & {
@@ -2974,27 +2981,41 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const supplementTrim = opts?.coverageBoost
         ? buildCoverageBoostOutlineSupplement(outlineSupplementDraft, targetPageCount).trim()
         : outlineSupplementDraft.trim();
-      const res = await invokeWriterTools({
-        mode: 'outline_issue',
-        issue_id: selectedIssueId,
-        save: false,
-        target_page_count: effectiveOutlineTargetPageCount,
-        production_defaults: productionDefaultsPayload,
-        ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
-      });
+      let previewInput: ReturnType<typeof buildOutlineTreatmentPreviewRequest>;
+      try {
+        const parsedSource = issueOutlineSchema.safeParse(parseOutlineText(authorOutlineText));
+        if (!parsedSource.success) {
+          throw new Error('Your saved source has page beats that could not be prepared safely. Review the detected outline before AI treatment.');
+        }
+        previewInput = buildOutlineTreatmentPreviewRequest({
+          issueId: selectedIssueId,
+          mode: authorOutlineMode,
+          sourceOutline: parsedSource.data,
+        });
+      } catch (error) {
+        setOutlineGenLoading(false);
+        const msg = error instanceof Error ? error.message : 'The source outline could not be prepared for AI treatment.';
+        setOutlineGenError(msg);
+        pushHistory(`error: ${msg}`);
+        return;
+      }
+      const res = await invokeWriterTools(previewInput.request);
       setOutlineGenLoading(false);
       if (res.success) {
-        const parsedProposal = issueOutlineSchema.safeParse(res.data);
-        if (!parsedProposal.success) {
-          const msg = 'AI returned an outline proposal that could not be reviewed safely.';
+        try {
+          const parsedPreview = parseOutlineTreatmentPreview(res.data, previewInput.source);
+          if (opts?.coverageBoost) setOutlineSupplementDraft(supplementTrim);
+          setOutlineTreatmentSession(parsedPreview.session);
+          setOutlineTreatmentProposal(parsedPreview.session.proposal);
+          setOutlineTreatmentError(null);
+          pushHistory('Validated AI outline proposal ready for review');
+        } catch (error) {
+          const msg = error instanceof Error
+            ? error.message
+            : 'AI returned an outline proposal that could not be reviewed safely.';
           setOutlineGenError(msg);
           pushHistory(`error: ${msg}`);
-          return;
         }
-        if (opts?.coverageBoost) setOutlineSupplementDraft(supplementTrim);
-        setOutlineTreatmentProposal(parsedProposal.data);
-        setOutlineTreatmentError(null);
-        pushHistory('AI outline proposal ready for review');
       } else {
         const msg = toolErrorMessage(res);
         setOutlineGenError(msg);
@@ -3009,8 +3030,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       shotsBrief,
       latestOutline,
       authorOutlineSource,
+      authorOutlineMode,
+      authorOutlineText,
       authorOutlineSourceSaved,
-      productionDefaultsPayload,
       guardWriterLock,
       persistWriterPreAiNotes,
       pushHistory,
@@ -3032,12 +3054,26 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     return mergeOutlineClassificationSuggestions(diagnostic, suggestions);
   }, []);
 
-  const promoteOutlineTreatment = useCallback(async (proposal: Record<string, unknown>) => {
-    if (!selectedIssueId || !selectedIssue || outlineTreatmentBusy) return;
+  const promoteOutlineTreatment = useCallback(async (
+    proposal: Record<string, unknown>,
+    reviewedSession?: TreatmentProposalSession,
+  ) => {
+    const activeSession = reviewedSession ?? outlineTreatmentSession;
+    if (!selectedIssueId || !selectedIssue || !activeSession || outlineTreatmentBusy) return;
     if (latestOutline && !guardWriterLock('outline.latest', 'Latest outline')) return;
     if (!guardWriterLock('issue.author_outline', 'My Outline')) return;
 
-    const canonicalSourceText = formatOutlineAsText(proposal);
+    let approvedOutline: Record<string, unknown>;
+    try {
+      approvedOutline = buildPersistedTreatmentOutline({
+        ...activeSession,
+        proposal,
+      });
+    } catch (error) {
+      setOutlineTreatmentError(error instanceof Error ? error.message : 'This proposal cannot be promoted safely.');
+      return;
+    }
+    const canonicalSourceText = formatOutlineAsText(approvedOutline);
     const diagnostic = analyzeOutlinePaste(canonicalSourceText, 'clipboard');
     const { priorAuthorOutline, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);
     let notesAfterSnapshot = selectedIssue.notes;
@@ -3045,7 +3081,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setOutlineTreatmentError(null);
     const result = await persistReviewedOutlineVersion({
       previousOutline: latestOutline ?? null,
-      approvedOutline: proposal,
+      approvedOutline,
       canonicalSourceText,
       sourceLocked: false,
     }, {
@@ -3095,6 +3131,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
     setAuthorOutlineText(canonicalSourceText);
     setOutlineTreatmentProposal(null);
+    setOutlineTreatmentSession(null);
     setOutlineTreatmentError(null);
     setLastReviewedInsert({
       diagnostic,
@@ -3114,6 +3151,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     guardWriterLock,
     latestOutline,
     outlineTreatmentBusy,
+    outlineTreatmentSession,
     pushHistory,
     selectedIssue,
     selectedIssueId,
@@ -11788,25 +11826,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <WriterOutlineTreatmentReview
             currentOutline={latestOutline?.outline_json ?? null}
             proposal={outlineTreatmentProposal}
+            session={outlineTreatmentSession ?? undefined}
+            workflowMode={writerFocusedMode ? 'simple' : 'advanced'}
             busy={outlineTreatmentBusy}
             error={outlineTreatmentError}
             onCancel={() => {
               if (outlineTreatmentBusy) return;
               setOutlineTreatmentProposal(null);
+              setOutlineTreatmentSession(null);
               setOutlineTreatmentError(null);
               pushHistory('AI outline proposal canceled; official outline unchanged');
             }}
             onRegenerate={() => {
               if (outlineTreatmentBusy) return;
               setOutlineTreatmentProposal(null);
+              setOutlineTreatmentSession(null);
               void runOutlineGenerate();
             }}
-            onKeepAlternate={(proposal) => {
-              if (!selectedIssue) return;
+            onKeepAlternate={(proposal, session) => {
+              if (!selectedIssue || !session) return;
               const nextNotes = mergeOutlineAlternateIntoNotes(selectedIssue.notes, {
                 at: new Date().toISOString(),
                 treatmentMode: authorOutlineMode,
                 proposal,
+                manifest: session.manifest,
               });
               setOutlineTreatmentBusy(true);
               setOutlineTreatmentError(null);
@@ -11817,10 +11860,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                   return;
                 }
                 setOutlineTreatmentProposal(null);
+                setOutlineTreatmentSession(null);
                 pushHistory('AI outline proposal kept as an alternate; official outline unchanged');
               });
             }}
-            onMakeOfficial={(proposal) => void promoteOutlineTreatment(proposal)}
+            onMakeOfficial={(proposal, session) => void promoteOutlineTreatment(proposal, session)}
           />
         ) : null}
 

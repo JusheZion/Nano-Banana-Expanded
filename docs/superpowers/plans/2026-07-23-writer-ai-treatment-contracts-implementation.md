@@ -428,7 +428,7 @@ zero-persistence guards passed together: 5 files, 60 tests.
 - Modify: `src/portals/writer/writerOutlineAlternates.ts`
 - Create: `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
 
-- [ ] **Step 1: Write failing orchestration tests**
+- [x] **Step 1: Write failing orchestration tests**
 
 Cover:
 
@@ -440,13 +440,13 @@ Cover:
 - source synchronization occurs only after promotion;
 - Undo restores the exact prior outline and source after reload.
 
-- [ ] **Step 2: Run integration tests and verify RED**
+- [x] **Step 2: Run integration tests and verify RED**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts
 ```
 
-- [ ] **Step 3: Replace `outline_issue` preview generation**
+- [x] **Step 3: Replace `outline_issue` preview generation**
 
 `runOutlineGenerate` calls `outline_treatment_preview` with:
 
@@ -464,7 +464,7 @@ npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentIntegra
 
 Parse the response, validate it, and store a review session containing source, proposal, manifest, validation, and workflow mode.
 
-- [ ] **Step 4: Gate promotion**
+- [x] **Step 4: Gate promotion**
 
 Disable promotion unless `validation.valid`. Revalidate after JSON edits and Advanced decisions. Persist:
 
@@ -477,11 +477,11 @@ Disable promotion unless `validation.valid`. Revalidate after JSON edits and Adv
 
 Do not replace `authorOutlineText` until promotion succeeds.
 
-- [ ] **Step 5: Update alternate retention**
+- [x] **Step 5: Update alternate retention**
 
 Extend `WriterOutlineAlternate` with `manifest` and validate legacy alternates without manifests as read-only historical records.
 
-- [ ] **Step 6: Run orchestration tests**
+- [x] **Step 6: Run orchestration tests**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts src/portals/writer/__tests__/writerOutlineAlternates.test.ts src/portals/writer/__tests__/writerOutlinePasteRecovery.test.ts
@@ -495,29 +495,29 @@ npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentIntegra
 - Modify: `src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx`
 - Create: `src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx`
 
-- [ ] **Step 1: Write failing Simple review tests**
+- [x] **Step 1: Write failing Simple review tests**
 
 Assert selected contract copy, source/proposed page totals, preserved/combined/enhanced/added counts, blocking validation alert, disabled Make official, Review details, Regenerate, Cancel, and keyboard focus behavior.
 
-- [ ] **Step 2: Write failing Advanced review tests**
+- [x] **Step 2: Write failing Advanced review tests**
 
 Assert filters for Reordered, Combined, Enhanced, Added, and Needs attention; source/result mapping; approve/reject controls; Restore source beat; revalidation status; and no color-only meaning.
 
-- [ ] **Step 3: Run component tests and verify RED**
+- [x] **Step 3: Run component tests and verify RED**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx
 ```
 
-- [ ] **Step 4: Implement shared summary plus workflow-specific detail**
+- [x] **Step 4: Implement shared summary plus workflow-specific detail**
 
 Simple renders summary first and keeps detailed mapping behind **Review details**. Advanced renders `WriterOutlineTreatmentChangeList` expanded and exposes per-entry decisions.
 
-- [ ] **Step 5: Implement loading, invalid, empty, error, and locked states**
+- [x] **Step 5: Implement loading, invalid, empty, error, and locked states**
 
 All state messages use `role="status"` or `role="alert"`. Cancel remains available during non-saving failures. Busy promotion prevents duplicate actions and Escape.
 
-- [ ] **Step 6: Run Pass 3 smoke test**
+- [x] **Step 6: Run Pass 3 smoke test**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts
@@ -525,7 +525,7 @@ npx tsc -b --pretty false
 npm run lint -- --quiet
 ```
 
-- [ ] **Step 7: Commit Pass 3**
+- [x] **Step 7: Commit Pass 3**
 
 ```bash
 git add src/portals/writer/WriterPortal.tsx src/portals/writer/WriterOutlineTreatmentReview.tsx src/portals/writer/WriterOutlineTreatmentChangeList.tsx src/portals/writer/writerOutlineAlternates.ts src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts src/portals/writer/__tests__/writerOutlineAlternates.test.ts
@@ -533,6 +533,15 @@ git commit -m "feat: enforce outline treatment review"
 ```
 
 **Pass 3 smoke test:** Generate all three modes from the same populated fixture. Simple must summarize only contract-valid changes. Advanced must reject one combination and one addition, restore source material, revalidate, and leave the official version unchanged until Make official.
+
+**Pass 3 result (2026-07-23):** PASS. WriterPortal now requests the
+preview-only treatment mode from the parsed saved source, blocks invalid
+responses, and synchronizes My Outline only after explicit successful
+promotion. Promotion and alternates retain the validated manifest. Simple
+review shows contract/page/preservation summary with optional details; Advanced
+shows source-result mappings, explicit filters, and restore/remove actions.
+Focused smoke: 5 files, 34 tests passed; the expanded review suite passed 8
+tests. TypeScript and quiet lint passed.
 
 **Rollback:** Restore the previous client generation path and keep the new Edge mode dormant; no schema migration is involved.
 

@@ -12279,3 +12279,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Connect the validated preview to the two Writer workflows without allowing preview-time persistence.
+
+## Writer AI Treatment review and promotion - 2026-07-23
+
+### What changed
+- Replaced the Writer outline button's generic outline generation call with the validated, preview-only treatment request built from detected source beats and pages.
+- Added deterministic client revalidation before review and again before promotion.
+- Embedded the treatment manifest only in promoted official outlines and retained manifests with new alternates while preserving legacy alternates as historical records.
+- Added a Simple review summary with optional identity details and an Advanced change list with explicit Reordered, Combined, Enhanced, Added, and Needs attention filters plus restore/remove actions.
+- Added keyboard focus and Escape handling, visible contract errors, and disabled promotion for invalid edits.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterOutlineTreatmentReview.tsx`
+- `src/portals/writer/WriterOutlineTreatmentChangeList.tsx`
+- `src/portals/writer/writerOutlineTreatmentIntegration.ts`
+- `src/portals/writer/writerOutlineAlternates.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
+- `src/portals/writer/__tests__/writerOutlineAlternates.test.ts`
+- `src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx`
+- `src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Preview and cancel leave the official outline and My Outline source unchanged.
+- Successful promotion uses the existing snapshot/version/source-sync path, so prior Undo and recovery behavior remains authoritative.
+- Advanced rejection restores immutable source beats for mapped changes and removes unmapped additions before revalidation.
+
+### Verification
+- TDD red check confirmed the client integration module was absent before implementation.
+- `npm run test -- --run src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts src/portals/writer/__tests__/writerOutlineAlternates.test.ts src/portals/writer/__tests__/writerOutlinePasteRecovery.test.ts`: passed, 5 files and 34 tests.
+- Expanded review suite: 8 tests passed, including contract-blocked promotion and Escape/busy behavior.
+- `npx tsc -b --pretty false`: passed.
+- `npm run lint -- --quiet`: passed.
+
+### Outstanding issues
+- The shared 26-page mutation fixture, full regression/build, browser mutation/reload/Undo QA, final audits, deploys, and live verification remain for Pass 4.
+
+### Risks or caveats
+- A real model response may still violate the contract; the proposal is deliberately blocked and asks the user to regenerate rather than silently accepting it.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Run the consolidated mutation and release gate, then deploy Edge before Cloudflare and verify live.

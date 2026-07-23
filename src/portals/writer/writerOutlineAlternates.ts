@@ -1,7 +1,10 @@
+import type { TreatmentManifest } from './writerOutlineTreatmentValidation';
+
 export type WriterOutlineAlternate = {
   at: string;
   treatmentMode: 'preserve' | 'structure' | 'expand';
   proposal: Record<string, unknown>;
+  manifest?: TreatmentManifest;
 };
 
 export function readOutlineAlternates(notes: unknown): WriterOutlineAlternate[] {
@@ -17,6 +20,10 @@ export function readOutlineAlternates(notes: unknown): WriterOutlineAlternate[] 
     && Boolean((item as WriterOutlineAlternate).proposal)
     && typeof (item as WriterOutlineAlternate).proposal === 'object'
     && !Array.isArray((item as WriterOutlineAlternate).proposal)
+    && ((item as WriterOutlineAlternate).manifest === undefined
+      || (Boolean((item as WriterOutlineAlternate).manifest)
+        && typeof (item as WriterOutlineAlternate).manifest === 'object'
+        && !Array.isArray((item as WriterOutlineAlternate).manifest)))
   )).slice(-10);
 }
 
