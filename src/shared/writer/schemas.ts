@@ -89,8 +89,20 @@ export const outlineClassificationPreviewResultSchema = z.object({
 }).strict();
 
 const writerOutlineTreatmentModeSchema = z.enum(['preserve', 'structure', 'expand']);
+const treatmentChangeTypeAliases: Record<string, string> = {
+  original: 'unchanged',
+  preserved: 'unchanged',
+  polished: 'language_polished',
+  rewritten: 'language_polished',
+  reordered: 'moved',
+  merged: 'combined',
+  expanded: 'enhanced',
+  new: 'added',
+};
 const treatmentChangeTypeSchema = z.preprocess(
-  (value) => value === 'original' ? 'unchanged' : value,
+  (value) => typeof value === 'string'
+    ? treatmentChangeTypeAliases[value.trim().toLowerCase()] ?? value
+    : value,
   z.enum([
     'unchanged',
     'language_polished',

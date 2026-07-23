@@ -131,6 +131,18 @@ describe('writerToolsRequestSchema', () => {
     });
     expect(normalizedAlias.manifest.entries[0].change_type).toBe('unchanged');
 
+    const normalizedExpansion = outlineTreatmentPreviewResultSchema.parse({
+      ...normalizedAlias,
+      manifest: {
+        ...normalizedAlias.manifest,
+        entries: [{
+          ...normalizedAlias.manifest.entries[0],
+          change_type: 'expanded',
+        }],
+      },
+    });
+    expect(normalizedExpansion.manifest.entries[0].change_type).toBe('enhanced');
+
     expect(() => outlineTreatmentPreviewResultSchema.parse({
       proposal: { page_beats: [{ summary: 'Beat.' }] },
       manifest: {
