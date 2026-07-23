@@ -157,6 +157,28 @@ describe('writerToolsRequestSchema', () => {
       expect(normalizedNoChange.manifest.entries[0].change_type).toBe('unchanged');
     }
 
+    for (const [modelAlias, canonical] of [
+      ['retained', 'unchanged'],
+      ['untouched', 'unchanged'],
+      ['copyedited', 'language_polished'],
+      ['repositioned', 'moved'],
+      ['condensed', 'combined'],
+      ['elaborated', 'enhanced'],
+      ['inserted', 'added'],
+    ] as const) {
+      const normalizedSemanticAlias = outlineTreatmentPreviewResultSchema.parse({
+        ...normalizedAlias,
+        manifest: {
+          ...normalizedAlias.manifest,
+          entries: [{
+            ...normalizedAlias.manifest.entries[0],
+            change_type: modelAlias,
+          }],
+        },
+      });
+      expect(normalizedSemanticAlias.manifest.entries[0].change_type).toBe(canonical);
+    }
+
     expect(() => outlineTreatmentPreviewResultSchema.parse({
       proposal: { page_beats: [{ summary: 'Beat.' }] },
       manifest: {
