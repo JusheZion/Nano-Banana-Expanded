@@ -10,6 +10,15 @@
 
 ---
 
+## Execution status
+
+- Pass 1 complete: deterministic patch engine and the eight-operation/70-beat chronology regression pass.
+- Pass 2 complete: Edge prompt and handler consume patch operations; legacy replacement-outline salvage paths are removed.
+- Pass 3 complete: client parses operation notices and review exposes accepted, rejected, and warning outcomes without blocking a valid deterministic proposal.
+- Pass 4 in progress: consolidated local release checks pass; paired deployment and signed-in preview/cancel verification remain.
+
+---
+
 ## Risk and dependency check
 
 - Supabase CLI authentication and Edge deployment access must be confirmed before release.
@@ -467,4 +476,3 @@ git commit -m "fix: apply outline treatments as patches"
 ### Pass 4 result summary
 
 - [ ] Record final commit, push, Supabase version, Cloudflare version, focused test-file/test counts, build result, live duration, proposal counts, and confirmation that official data did not change.
-

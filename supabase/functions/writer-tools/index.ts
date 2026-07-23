@@ -6,7 +6,7 @@ import {
   ideaAssistResultSchema,
   issueOutlineSchema,
   outlineClassificationPreviewResultSchema,
-  outlineTreatmentCompactResultSchema,
+  outlineTreatmentPatchResultSchema,
   outlineTreatmentPreviewResultSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
@@ -17,12 +17,9 @@ import {
 } from '../_shared/writerSchemas.ts';
 import {
   buildOutlineTreatmentPrompt,
-  buildOutlineTreatmentRepairPrompt,
   getOutlineTreatmentConsistencyErrors,
-  hydrateOutlineTreatmentResult,
-  normalizeCompactTreatmentResult,
-  restorePreserveStructure,
 } from './outlineTreatmentPrompt.ts';
+import { applyOutlineTreatmentPatches } from './outlineTreatmentPatch.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1426,78 +1423,27 @@ Deno.serve(async (req) => {
         return llmFailureResponse(e instanceof Error ? e.message : String(e));
       }
 
-      const initial = outlineTreatmentCompactResultSchema.safeParse(treatmentJson);
+      const initial = outlineTreatmentPatchResultSchema.safeParse(treatmentJson);
       if (!initial.success) {
         return Response.json(
           { success: false, error: 'Outline treatment preview failed validation', details: initial.error.message },
           { status: 422, headers: corsHeaders },
         );
       }
-      const normalizedInitial = normalizeCompactTreatmentResult(initial.data, promptInput);
-      const restored = restorePreserveStructure(
-        hydrateOutlineTreatmentResult(normalizedInitial, promptInput),
-        promptInput,
-      );
-      let result = outlineTreatmentPreviewResultSchema.safeParse(restored);
+      const applied = applyOutlineTreatmentPatches(initial.data, promptInput);
+      const result = outlineTreatmentPreviewResultSchema.safeParse(applied);
       if (!result.success) {
         return Response.json(
           { success: false, error: 'Outline treatment preview failed validation', details: result.error.message },
           { status: 422, headers: corsHeaders },
         );
       }
-      let consistencyErrors = getOutlineTreatmentConsistencyErrors(result.data, promptInput);
-      if (consistencyErrors.length) {
-        let repairedJson: unknown;
-        try {
-          repairedJson = await callGeminiJson({
-            system: [
-              'You repair comics outline JSON that failed deterministic consistency validation.',
-              'Return the complete corrected JSON only and preserve every source beat.',
-            ].join(' '),
-            user: buildOutlineTreatmentRepairPrompt(promptInput, normalizedInitial, consistencyErrors),
-            preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL,
-            apiKey: geminiKey,
-            temperature: 0.1,
-            thinkingBudget: 0,
-          });
-        } catch (e) {
-          return llmFailureResponse(e instanceof Error ? e.message : String(e));
-        }
-        const repairedInitial = outlineTreatmentCompactResultSchema.safeParse(repairedJson);
-        if (!repairedInitial.success) {
-          return Response.json(
-            {
-              success: false,
-              error: 'Outline treatment repair failed validation',
-              details: repairedInitial.error.message,
-            },
-            { status: 422, headers: corsHeaders },
-          );
-        }
-        const normalizedRepair = normalizeCompactTreatmentResult(repairedInitial.data, promptInput);
-        result = outlineTreatmentPreviewResultSchema.safeParse(
-          restorePreserveStructure(
-            hydrateOutlineTreatmentResult(normalizedRepair, promptInput),
-            promptInput,
-          ),
-        );
-        if (!result.success) {
-          return Response.json(
-            {
-              success: false,
-              error: 'Outline treatment repair failed validation',
-              details: result.error.message,
-            },
-            { status: 422, headers: corsHeaders },
-          );
-        }
-        consistencyErrors = getOutlineTreatmentConsistencyErrors(result.data, promptInput);
-      }
+      const consistencyErrors = getOutlineTreatmentConsistencyErrors(result.data, promptInput);
       if (consistencyErrors.length) {
         return Response.json(
           {
             success: false,
-            error: 'Outline treatment preview returned an inconsistent manifest after repair',
+            error: 'Outline treatment preview returned an inconsistent deterministic result',
             details: consistencyErrors,
           },
           { status: 422, headers: corsHeaders },

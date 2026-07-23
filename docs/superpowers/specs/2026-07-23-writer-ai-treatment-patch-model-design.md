@@ -1,7 +1,7 @@
 # Writer AI Treatment Patch Model Design
 
 **Date:** 2026-07-23  
-**Status:** Approved in principle; awaiting written-spec review
+**Status:** Implemented locally; production verification pending
 
 ## Problem
 

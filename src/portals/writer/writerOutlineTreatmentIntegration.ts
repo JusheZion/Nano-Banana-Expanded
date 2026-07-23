@@ -95,6 +95,17 @@ export function parseOutlineTreatmentPreview(
     source,
     proposal,
     manifest: toManifest(parsed.manifest),
+    ...(parsed.operation_notices
+      ? {
+          operationNotices: parsed.operation_notices.map((notice) => ({
+            operationId: notice.operation_id,
+            status: notice.status,
+            code: notice.code,
+            message: notice.message,
+            sourceBeatIds: notice.source_beat_ids,
+          })),
+        }
+      : {}),
   };
   const validation = validateTreatmentProposal(session);
   if (!validation.valid) {

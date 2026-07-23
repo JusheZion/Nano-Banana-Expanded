@@ -12494,6 +12494,62 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Outline AI Treatment deterministic patch engine - 2026-07-23
+
+### What changed
+- Replaced AI-authored full-outline replacement with explicit `edit`, `move`, `combine`, and `add` operations applied to a complete immutable source outline.
+- Preserved every unmentioned source beat in its original relative position, preventing partial model output from rotating late-story beats to the opening or appending the source as a recap.
+- Added per-operation acceptance, rejection, and warning notices to the review screen so invalid operations fail individually while a valid deterministic proposal remains reviewable.
+- Removed the legacy compact-outline normalization, hydration, repair-prompt, and omitted-beat restoration runtime paths.
+- Made operation explanations optional at the model boundary and supplied deterministic user-facing explanations when Gemini omits them.
+- Updated the durable Writer AI Treatment contract in `AGENTS.md`.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/specs/2026-07-23-writer-ai-treatment-patch-model-design.md`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-patch-model-implementation.md`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.test.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/portals/writer/writerOutlineTreatmentIntegration.ts`
+- `src/portals/writer/WriterOutlineTreatmentReview.tsx`
+- `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
+- `src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- The deterministic engine starts with one working node per source beat and applies only validated operations in response order.
+- Invalid sources, anchors, conflicts, mode-forbidden changes, and page-range violations produce rejected notices without modifying the source base.
+- Proposal page numbers and the traceability manifest are derived locally after patch application.
+- Existing version history, Make Official, cancel, and Undo behavior remain unchanged.
+
+### Verification
+- Pass 1 smoke: 2 files and 20 tests passed.
+- Pass 2 smoke: 3 files and 55 tests passed.
+- Pass 3 smoke: 3 files and 31 tests passed.
+- Consolidated focused regression: 8 files and 93 tests passed.
+- Post-audit schema/engine regression: 3 files and 56 tests passed.
+- Targeted lint passed with 0 errors and 2 pre-existing `any` warnings in `supabase/functions/writer-tools/index.ts`.
+- `npm run build` passed with the existing large-chunk advisory only.
+- `git diff --check` passed.
+
+### Outstanding issues
+- Paired Supabase and Cloudflare deployment and signed-in production preview/cancel smoke remain pending.
+
+### Risks or caveats
+- Existing proposals created before deployment remain based on the former contract and should be canceled.
+
+### Operator follow-up
+- Do not promote the previously malformed proposal.
+
+### Next steps
+- Deploy `writer-tools` and the Cloudflare Worker, then verify a representative long-outline Organize and Polish preview preserves opening chronology and the ending before canceling it.
+
 ## 70-page AI Treatment Edge timeout repair - 2026-07-23
 
 ### What changed

@@ -88,6 +88,53 @@ describe('preserveTreatmentSourceMetadata', () => {
   });
 });
 
+describe('operation notices', () => {
+  it('maps accepted and rejected patch operations into the review session', () => {
+    const built = buildOutlineTreatmentPreviewRequest({
+      issueId: '550e8400-e29b-41d4-a716-446655440000',
+      mode: 'preserve',
+      sourceOutline,
+      protectedTerms: [],
+    });
+    const parsed = parseOutlineTreatmentPreview({
+      ...response,
+      operation_notices: [
+        {
+          operation_id: 'edit-1',
+          status: 'accepted',
+          code: 'operation_applied',
+          message: 'Language polished.',
+          source_beat_ids: ['source-page-1-1'],
+        },
+        {
+          operation_id: 'move-invalid',
+          status: 'rejected',
+          code: 'operation_forbidden',
+          message: 'Keep My Order cannot move beats.',
+          source_beat_ids: ['source-page-2-2'],
+        },
+      ],
+    }, built.source);
+
+    expect(parsed.session.operationNotices).toEqual([
+      {
+        operationId: 'edit-1',
+        status: 'accepted',
+        code: 'operation_applied',
+        message: 'Language polished.',
+        sourceBeatIds: ['source-page-1-1'],
+      },
+      {
+        operationId: 'move-invalid',
+        status: 'rejected',
+        code: 'operation_forbidden',
+        message: 'Keep My Order cannot move beats.',
+        sourceBeatIds: ['source-page-2-2'],
+      },
+    ]);
+  });
+});
+
 describe('writer outline treatment integration', () => {
   it('builds preview input from detected source pages rather than a UI target', () => {
     const built = buildOutlineTreatmentPreviewRequest({

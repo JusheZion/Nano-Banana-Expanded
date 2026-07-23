@@ -131,6 +131,43 @@ describe('WriterOutlineTreatmentReview', () => {
     expect(screen.queryByText('Review changes')).toBeNull();
   });
 
+  it('shows accepted and rejected AI operation notices without blocking a valid proposal', () => {
+    render(
+      <WriterOutlineTreatmentReview
+        currentOutline={null}
+        proposal={session.proposal}
+        session={{
+          ...session,
+          operationNotices: [
+            {
+              operationId: 'edit-1',
+              status: 'accepted',
+              code: 'operation_applied',
+              message: 'Language polished.',
+              sourceBeatIds: ['source-page-1-1'],
+            },
+            {
+              operationId: 'move-invalid',
+              status: 'rejected',
+              code: 'operation_forbidden',
+              message: 'Keep My Order cannot move beats.',
+              sourceBeatIds: ['source-page-1-1'],
+            },
+          ],
+        }}
+        workflowMode="simple"
+        onCancel={vi.fn()}
+        onRegenerate={vi.fn()}
+        onMakeOfficial={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('AI operation notices').textContent).toMatch(/1 accepted/i);
+    expect(screen.getByLabelText('AI operation notices').textContent).toMatch(/1 rejected/i);
+    expect(screen.getByText('Keep My Order cannot move beats.')).not.toBeNull();
+    expect((screen.getByRole('button', { name: 'Make official' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('shows per-change review in Advanced mode', () => {
     render(
       <WriterOutlineTreatmentReview

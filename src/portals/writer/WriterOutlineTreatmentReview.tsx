@@ -82,6 +82,10 @@ export function WriterOutlineTreatmentReview({
   };
   const contract = reviewSession ? TREATMENT_CONTRACTS[reviewSession.mode] : null;
   const validation = parsedDraft.validation;
+  const operationNotices = reviewSession?.operationNotices ?? [];
+  const acceptedOperationCount = operationNotices.filter((notice) => notice.status === 'accepted').length;
+  const rejectedOperationCount = operationNotices.filter((notice) => notice.status === 'rejected').length;
+  const warningOperationCount = operationNotices.filter((notice) => notice.status === 'warning').length;
 
   return (
     <div
@@ -117,6 +121,35 @@ export function WriterOutlineTreatmentReview({
               ))}
             </div>
           </div>
+        ) : null}
+        {operationNotices.length ? (
+          <section
+            aria-label="AI operation notices"
+            className="mt-4 rounded-xl border border-teal-900/15 bg-white/55 p-4"
+          >
+            <p className="text-[10px] font-black uppercase tracking-wider text-teal-900/60">
+              AI change processing
+            </p>
+            <p className="mt-1 text-sm font-black text-slate-950">
+              {acceptedOperationCount} accepted · {rejectedOperationCount} rejected · {warningOperationCount} warnings
+            </p>
+            {operationNotices.some((notice) => notice.status !== 'accepted') ? (
+              <ul className="mt-3 space-y-2">
+                {operationNotices
+                  .filter((notice) => notice.status !== 'accepted')
+                  .map((notice) => (
+                    <li
+                      key={notice.operationId}
+                      className={notice.status === 'rejected'
+                        ? 'rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950'
+                        : 'rounded-lg bg-sky-50 px-3 py-2 text-xs font-bold text-sky-950'}
+                    >
+                      {notice.message}
+                    </li>
+                  ))}
+              </ul>
+            ) : null}
+          </section>
         ) : null}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">

@@ -154,6 +154,30 @@ const treatmentManifestEntrySchema = z.object({
   reason: z.string().min(1).max(1000),
 }).strict();
 
+export const outlineTreatmentPatchOperationSchema = z.object({
+  operation_id: z.string().min(1).max(160),
+  operation: z.enum(['edit', 'move', 'combine', 'add']),
+  source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
+  anchor_source_beat_id: z.string().min(1).max(160).optional(),
+  placement: z.enum(['before', 'after']).optional(),
+  reason: z.string().max(1000).optional(),
+  scene: z.string().optional(),
+  summary: z.string().optional(),
+  emotional_turn: z.string().optional(),
+}).strict();
+
+export const outlineTreatmentPatchResultSchema = z.object({
+  operations: z.array(outlineTreatmentPatchOperationSchema).max(250),
+}).strict();
+
+export const outlineTreatmentOperationNoticeSchema = z.object({
+  operation_id: z.string().min(1).max(160),
+  status: z.enum(['accepted', 'rejected', 'warning']),
+  code: z.string().min(1).max(160),
+  message: z.string().min(1).max(1000),
+  source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
+}).strict();
+
 export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
   mode: z.literal('outline_treatment_preview'),
   issue_id: z.string().uuid(),
@@ -178,19 +202,7 @@ export const outlineTreatmentPreviewResultSchema = z.object({
     proposed_page_count: z.number().int().min(1).max(200),
     entries: z.array(treatmentManifestEntrySchema).max(250),
   }).strict(),
-}).strict();
-
-export const outlineTreatmentCompactResultSchema = z.object({
-  page_beats: z.array(z.object({
-    treatment_beat_id: z.string().min(1).max(160),
-    source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
-    change_type: treatmentChangeTypeSchema,
-    reason: z.string().max(1000).optional(),
-    page_target: z.number().int().min(1).max(200).optional(),
-    scene: z.string().optional(),
-    summary: z.string(),
-    emotional_turn: z.string().optional(),
-  }).strict()).min(1).max(200),
+  operation_notices: z.array(outlineTreatmentOperationNoticeSchema).max(250).optional(),
 }).strict();
 
 const pageBeatPanelSchema = z.object({

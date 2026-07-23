@@ -44,11 +44,20 @@ export type TreatmentManifest = {
   entries: TreatmentManifestEntry[];
 };
 
+export type TreatmentOperationNotice = {
+  operationId: string;
+  status: 'accepted' | 'rejected' | 'warning';
+  code: string;
+  message: string;
+  sourceBeatIds: string[];
+};
+
 export type TreatmentProposalSession = {
   mode: WriterOutlineTreatmentMode;
   source: NormalizedTreatmentSource;
   proposal: Record<string, unknown>;
   manifest: TreatmentManifest;
+  operationNotices?: TreatmentOperationNotice[];
 };
 
 export type TreatmentValidationError = {
