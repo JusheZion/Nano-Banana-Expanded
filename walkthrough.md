@@ -12096,4 +12096,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Re-paste the intended replacement outline after the repaired deployment is live.
 
 ### Next steps
-- Commit, push, deploy Cloudflare, and confirm the repaired bundle is live.
+- None.
+
+### Deployment
+- Committed and pushed the repair to `main` as `6bc6423`.
+- Deployed Cloudflare Worker version `2f5de6cd-be4d-4095-a175-5dbc833e9245` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
