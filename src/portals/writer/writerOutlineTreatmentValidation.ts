@@ -94,7 +94,7 @@ export function normalizeTreatmentSource(
   const explicitPages = beats.flatMap((beat) => beat.pageTarget ?? []);
   return {
     beats,
-    pageCount: explicitPages.length ? Math.max(...explicitPages) : Math.max(1, beats.length),
+    pageCount: Math.max(1, beats.length, ...(explicitPages.length ? explicitPages : [0])),
     protectedTerms: [...new Set(protectedTerms.map((term) => term.trim()).filter(Boolean))],
   };
 }

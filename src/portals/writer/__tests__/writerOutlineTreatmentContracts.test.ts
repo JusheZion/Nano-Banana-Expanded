@@ -4,6 +4,8 @@ import {
   getTreatmentContract,
   getTreatmentPageRange,
 } from '../writerOutlineTreatmentContracts';
+import { normalizeTreatmentSource } from '../writerOutlineTreatmentValidation';
+import { OUTLINE_TREATMENT_SOURCE_26 } from './fixtures/outlineTreatmentSource';
 
 describe('writer outline treatment contracts', () => {
   it('keeps source structure and pages immutable in preserve mode', () => {
@@ -34,5 +36,12 @@ describe('writer outline treatment contracts', () => {
     expect(TREATMENT_CONTRACTS.preserve.description).toMatch(/without changing beats/i);
     expect(TREATMENT_CONTRACTS.structure.description).toMatch(/every source beat/i);
     expect(TREATMENT_CONTRACTS.expand.description).toMatch(/add material/i);
+  });
+
+  it('retains a sequential 26-page target when the final page label is missing', () => {
+    const source = normalizeTreatmentSource(OUTLINE_TREATMENT_SOURCE_26);
+    expect(source.pageCount).toBe(26);
+    expect(getTreatmentPageRange('structure', source.pageCount)).toEqual({ min: 23, max: 29 });
+    expect(getTreatmentPageRange('expand', source.pageCount)).toEqual({ min: 20, max: 32 });
   });
 });

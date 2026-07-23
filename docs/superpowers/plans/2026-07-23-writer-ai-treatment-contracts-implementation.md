@@ -561,19 +561,19 @@ tests. TypeScript and quiet lint passed.
 - Modify: `src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx`
 - Modify: `src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx`
 
-- [ ] **Step 1: Define one shared 26-page fixture**
+- [x] **Step 1: Define one shared 26-page fixture**
 
 Include named characters, causal dependencies, a missing Page 26 label with sequential beats intact, sparse/dense pages, combinable beats, and a protected final outcome.
 
-- [ ] **Step 2: Run all three modes against the same fixture**
+- [x] **Step 2: Run all three modes against the same fixture**
 
 Assert materially different allowed results and complete source coverage.
 
-- [ ] **Step 3: Add persistence/reload/Undo regression**
+- [x] **Step 3: Add persistence/reload/Undo regression**
 
 Start with an existing official version, promote a validated treatment, reload stored rows, assert manifest and outline, Undo, reload, and assert exact prior restoration.
 
-- [ ] **Step 4: Run focused mutation regression**
+- [x] **Step 4: Run focused mutation regression**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts src/portals/writer/__tests__/WriterOutlineTreatmentReview.test.tsx src/portals/writer/__tests__/WriterOutlineTreatmentChangeList.test.tsx

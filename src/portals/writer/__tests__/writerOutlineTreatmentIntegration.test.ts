@@ -4,6 +4,10 @@ import {
   buildPersistedTreatmentOutline,
   parseOutlineTreatmentPreview,
 } from '../writerOutlineTreatmentIntegration';
+import {
+  OUTLINE_TREATMENT_PROTECTED_TERMS,
+  OUTLINE_TREATMENT_SOURCE_26,
+} from './fixtures/outlineTreatmentSource';
 
 const sourceOutline = {
   title: 'Harbor',
@@ -92,5 +96,42 @@ describe('writer outline treatment integration', () => {
         source_page_count: 2,
       },
     });
+  });
+
+  it.each([
+    ['preserve', { min: 26, max: 26 }],
+    ['structure', { min: 23, max: 29 }],
+    ['expand', { min: 20, max: 32 }],
+  ] as const)('builds the %s contract from the same 26-beat source', (mode, expectedRange) => {
+    const built = buildOutlineTreatmentPreviewRequest({
+      issueId: '550e8400-e29b-41d4-a716-446655440000',
+      mode,
+      sourceOutline: OUTLINE_TREATMENT_SOURCE_26,
+      protectedTerms: OUTLINE_TREATMENT_PROTECTED_TERMS,
+    });
+    expect(built.request.source_beats).toHaveLength(26);
+    expect(built.request.source_page_count).toBe(26);
+    expect(built.request.allowed_page_range).toEqual(expectedRange);
+    expect(new Set(built.request.source_beats.map((beat) => beat.id)).size).toBe(26);
+  });
+
+  it('round-trips a promoted manifest and exact prior outline for reload-safe Undo', () => {
+    const built = buildOutlineTreatmentPreviewRequest({
+      issueId: '550e8400-e29b-41d4-a716-446655440000',
+      mode: 'preserve',
+      sourceOutline,
+      protectedTerms: [],
+    });
+    const session = parseOutlineTreatmentPreview(response, built.source).session;
+    const prior = structuredClone(sourceOutline);
+    const promoted = buildPersistedTreatmentOutline(session);
+    const reloadedPromoted = JSON.parse(JSON.stringify(promoted));
+    const reloadedPrior = JSON.parse(JSON.stringify(prior));
+    expect(reloadedPromoted.treatment_manifest).toMatchObject({
+      treatment_mode: 'preserve',
+      source_page_count: 2,
+    });
+    expect(reloadedPrior).toEqual(prior);
+    expect(reloadedPrior).not.toHaveProperty('treatment_manifest');
   });
 });

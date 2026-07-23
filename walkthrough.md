@@ -12325,3 +12325,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Run the consolidated mutation and release gate, then deploy Edge before Cloudflare and verify live.
+
+## Writer AI Treatment mutation fixture and pre-release audit - 2026-07-23
+
+### What changed
+- Added one shared 26-beat treatment fixture with protected names, causal dependencies, sparse/dense pacing, combinable beats, and a protected final outcome.
+- Covered the real missing-label case: Page 26 has no explicit label, but the complete sequential beat set still produces a 26-page source target.
+- Expanded the durable treatment contract in `AGENTS.md` with preview, tolerance, manifest, and recovery requirements.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/__tests__/fixtures/outlineTreatmentSource.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Detected source pages now use the greater of sequential beat count and highest explicit page label, preventing one missing label from shrinking an otherwise complete outline.
+- The same fixture proves exact pages for Keep My Order, 23-29 for Organize and Polish, and 20-32 for Expand Creatively.
+
+### Verification
+- Focused mutation regression: 5 files and 30 tests passed.
+- Consolidated regression before the fixture delta: 117 files and 724 tests passed.
+- Quiet lint and production build passed; build emitted the existing large-chunk advisory only.
+- Browser smoke confirmed the signed-in local Simple workflow displays the three distinct contracts, detected-page guidance, templates, explicit preview action, version/Undo guidance, and accessible radio state.
+
+### Outstanding issues
+- Supabase Edge deployment, authenticated treatment mutation/reload/Undo proof, Cloudflare deployment, and final live smoke remain.
+
+### Risks or caveats
+- UI critique identified the inherited JSON proposal editor as the largest remaining usability compromise. Simple review now leads with plain-language contract and preservation summaries while raw identity detail stays secondary; a structured proposal editor is separate future work.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit the mutation guard, deploy `writer-tools`, perform authenticated mutation/Undo QA, then deploy and smoke-test Cloudflare.
