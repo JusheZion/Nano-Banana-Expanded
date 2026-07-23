@@ -12250,3 +12250,32 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Perform the midpoint trace audit, then integrate Simple and Advanced review and promotion.
+
+## Writer AI Treatment midpoint trace audit - 2026-07-23
+
+### What changed
+- Added a cross-layer regression test that traces a populated 12-beat outline through source normalization, request validation, server prompt construction, response validation, and deterministic promotion validation.
+- Confirmed the treatment range derives from the detected 12 source pages rather than the unrelated 22-page UI default.
+
+### Files touched
+- `src/portals/writer/__tests__/writerOutlineTreatmentPipeline.test.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The audit combines the cross-layer trace with existing mode, source-identity, addition-identity, immutable-preserve, and zero-persistence guards.
+
+### Verification
+- `npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts src/portals/writer/__tests__/writerOutlineTreatmentPipeline.test.ts src/shared/writer/__tests__/schemas.test.ts supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`: passed, 5 files and 60 tests.
+
+### Outstanding issues
+- Simple and Advanced review/promotion integration remains for Pass 3.
+
+### Risks or caveats
+- This midpoint audit is local; authenticated live mutation proof remains a Pass 4 release requirement.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Connect the validated preview to the two Writer workflows without allowing preview-time persistence.

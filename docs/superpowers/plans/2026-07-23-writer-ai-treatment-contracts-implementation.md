@@ -400,13 +400,20 @@ any outline insert/update or `writer_issue_outlines` reference. Focused smoke:
 
 ## Midpoint QA audit
 
-- [ ] Trace one populated fixture from normalized source through request schema, prompt, response schema, and deterministic validation.
-- [ ] Confirm the three modes have distinct permitted transformations, not only different labels.
-- [ ] Confirm every source ID is accounted for and additions cannot impersonate source beats.
-- [ ] Confirm page tolerances use detected source pages rather than the UI default target.
-- [ ] Confirm Keep My Order structure is reconstructed from immutable source data.
-- [ ] Confirm preview success and failure create zero official versions.
-- [ ] Record audit evidence and resolve failures before Pass 3.
+- [x] Trace one populated fixture from normalized source through request schema, prompt, response schema, and deterministic validation.
+- [x] Confirm the three modes have distinct permitted transformations, not only different labels.
+- [x] Confirm every source ID is accounted for and additions cannot impersonate source beats.
+- [x] Confirm page tolerances use detected source pages rather than the UI default target.
+- [x] Confirm Keep My Order structure is reconstructed from immutable source data.
+- [x] Confirm preview success and failure create zero official versions.
+- [x] Record audit evidence and resolve failures before Pass 3.
+
+**Midpoint audit result (2026-07-23):** PASS. A 12-beat populated
+fixture retained its detected 12-page source count instead of the 22-page UI
+default and passed normalization, request schema, mode prompt, response schema,
+and deterministic validation with all 12 identities preserved. Contract,
+validator, schema, prompt, pipeline, immutable-preserve reconstruction, and
+zero-persistence guards passed together: 5 files, 60 tests.
 
 ## Pass 3: Simple and Advanced treatment review
 
