@@ -200,11 +200,36 @@ describe('applyOutlineTreatmentPatches', () => {
         operation_id: 'edit-without-reason',
         operation: 'edit',
         source_beat_ids: [input.sourceBeats[0]!.id],
-        summary: 'Polished opening.',
+        summary: 'Polished source event 1.',
       }],
     }, input);
 
     expect(result.manifest.entries[0]?.reason).toBe('Language and formatting updated.');
     expect(result.operation_notices[0]?.message).toBe('AI change applied.');
+  });
+
+  it('rejects an edit that rewrites a valid source id with a different event', () => {
+    const input = makeInput(2);
+    input.sourceBeats[1]!.text = [
+      'Concluding campfire scene: The fire crackles, the stars shimmer,',
+      'and the elder says the tale may begin again.',
+    ].join(' ');
+
+    const result = applyOutlineTreatmentPatches({
+      operations: [{
+        operation_id: 'wrong-ending-edit',
+        operation: 'edit',
+        source_beat_ids: [input.sourceBeats[1]!.id],
+        reason: 'Polish the ending.',
+        summary: 'Solfa and Kaleid accept their shadows and continue the eternal cycle.',
+      }],
+    }, input);
+
+    expect(result.proposal.page_beats?.at(-1)?.summary).toBe(input.sourceBeats[1]!.text);
+    expect(result.operation_notices.at(-1)).toMatchObject({
+      operation_id: 'wrong-ending-edit',
+      status: 'rejected',
+      code: 'source_event_mismatch',
+    });
   });
 });

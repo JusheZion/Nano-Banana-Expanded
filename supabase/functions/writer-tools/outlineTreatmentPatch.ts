@@ -87,6 +87,31 @@ function hasProposedText(operation: OutlineTreatmentPatchOperation): boolean {
   );
 }
 
+const CONTINUITY_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'in', 'into',
+  'is', 'it', 'of', 'on', 'or', 'that', 'the', 'their', 'they', 'this', 'to',
+  'was', 'with',
+]);
+
+function significantTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}']+/gu)
+      ?.filter((token) => token.length > 2 && !CONTINUITY_STOP_WORDS.has(token))
+      ?? [],
+  );
+}
+
+function preservesSourceEvent(source: string, proposal: string): boolean {
+  const sourceTokens = significantTokens(source);
+  if (sourceTokens.size === 0) return true;
+  const proposalTokens = significantTokens(proposal);
+  const sharedCount = [...sourceTokens].filter((token) => proposalTokens.has(token)).length;
+  const minimumShared = sourceTokens.size >= 8 ? 2 : 1;
+  return sharedCount >= minimumShared;
+}
+
 export function applyOutlineTreatmentPatches(
   patchResult: { operations: OutlineTreatmentPatchOperation[] },
   input: OutlineTreatmentPromptInput,
@@ -153,6 +178,19 @@ export function applyOutlineTreatmentPatches(
       const index = findWorkingIndex(working, sourceId);
       if (index < 0) {
         reject(notices, operation, 'source_unavailable', 'The source beat is no longer available for editing.');
+        continue;
+      }
+      const source = sourceById.get(sourceId)!;
+      if (
+        operation.summary?.trim()
+        && !preservesSourceEvent(source.text, operation.summary)
+      ) {
+        reject(
+          notices,
+          operation,
+          'source_event_mismatch',
+          'The proposed wording does not appear to describe the selected source beat, so the original beat was retained.',
+        );
         continue;
       }
       const current = working[index]!;

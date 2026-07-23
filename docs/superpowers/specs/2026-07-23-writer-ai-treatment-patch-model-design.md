@@ -19,7 +19,7 @@ Make AI Treatment additive and patch-based. The application owns the complete so
 2. Gemini returns a compact ordered list of operations, not a replacement `page_beats` array.
 3. Unmentioned source beats remain unchanged and in their original relative positions.
 4. Every operation must reference valid source beat IDs and include an explanation.
-5. Invalid operations are rejected without affecting valid operations or untouched source beats.
+5. Invalid operations are rejected without affecting valid operations or untouched source beats. An edit whose proposed wording has no recognizable continuity with the selected source event is invalid even when its source ID exists.
 6. The deterministic engine applies accepted operations, assigns sequential page numbers, derives the manifest, and validates the final proposal.
 7. Preview remains non-mutating until the user explicitly selects **Make official**.
 
