@@ -12546,17 +12546,27 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `git diff --check` passed.
 
 ### Outstanding issues
-- The source-event continuity follow-up must be committed, redeployed to Supabase, and verified with a second signed-in production preview/cancel smoke.
+- None.
 
 ### Risks or caveats
 - The first signed-in production preview preserved all 70 pages and the opening chronology, but exposed one valid-ID/wrong-event edit at the ending. That proposal was canceled and official version 10 remained unchanged.
-- Existing proposals created before the final deployment remain based on an earlier contract and should be canceled.
+- The next two preview passes safely exposed and rejected page-label-derived IDs, leading to the opaque-ID repair. Those proposals were also canceled.
+- Existing proposals created before the final deployment remain based on an earlier contract and should be canceled or regenerated.
 
 ### Operator follow-up
-- Do not promote the previously malformed proposal.
+- Cancel or regenerate any treatment proposal that was left open before this deployment.
 
 ### Next steps
-- Deploy the continuity guard to `writer-tools`, then verify a representative long-outline Organize and Polish preview preserves opening chronology and the concluding campfire beat before canceling it.
+- None for this repair.
+
+### Production closeout
+- Commits `e5645f7`, `e34475f`, `4cfece1`, and `bd025d0` were pushed to `origin/main`.
+- Supabase `writer-tools` version 86 is active in production project `vxclogwiytxjolisnakd`.
+- Cloudflare Worker version `431725ce-00fc-4f4f-8acd-b57b2c4094f2` is live at `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Final signed-in Organize and Polish preview used the real 70-beat official outline and returned 70 sequential, uniquely identified pages with 9 accepted operations, 0 rejected operations, and 0 warnings.
+- Page 1 remained the campfire opening. The final three beats remained in correct order: return to campfire, elder's timeless wisdom, and the concluding campfire scene ending with “Or perhaps it begins again.”
+- The final proposal was canceled. Official outline version 10 remained unchanged.
+- No new application errors appeared during the fresh final production run; earlier dynamic-import errors in the retained browser log were from the stale bundle immediately after the first Cloudflare deployment and were resolved by loading the fresh versioned bundle.
 
 ## 70-page AI Treatment Edge timeout repair - 2026-07-23
 

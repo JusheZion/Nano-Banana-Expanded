@@ -15,7 +15,7 @@
 - Pass 1 complete: deterministic patch engine and the eight-operation/70-beat chronology regression pass.
 - Pass 2 complete: Edge prompt and handler consume patch operations; legacy replacement-outline salvage paths are removed.
 - Pass 3 complete: client parses operation notices and review exposes accepted, rejected, and warning outcomes without blocking a valid deterministic proposal.
-- Pass 4 in progress: consolidated local release checks pass; paired deployment and signed-in preview/cancel verification remain.
+- Pass 4 complete: consolidated local release checks, paired deployment, and signed-in 70-beat preview/cancel verification passed.
 
 ---
 
