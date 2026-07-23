@@ -12544,6 +12544,40 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Outline AI Treatment patch-model redesign specification - 2026-07-23
+
+### What changed
+- Compared the supplied original and AI-proposed 70-beat outlines and confirmed that the proposal rotated late-story material to pages 1–8, restarted the story at page 9, duplicated mutual-shadow material, and omitted the final concluding beat semantically.
+- Traced the failure to the full-outline response architecture: Gemini returned a partial late-story treatment and deterministic normalization appended omitted source beats after it, allowing structural coverage checks to pass despite broken chronology.
+- Defined a patch-based replacement contract in which the application retains the complete source outline and Gemini returns only explicit edit, move, combine, and add operations.
+
+### Files touched
+- `docs/superpowers/specs/2026-07-23-writer-ai-treatment-patch-model-design.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Unmentioned source beats remain in their original relative positions; they are never appended as recovery.
+- Invalid or conflicting operations are rejected without damaging untouched source material.
+- The approved treatment permissions, page ranges, preview-first review, metadata preservation, and Undo contracts remain in force.
+
+### Verification
+- Structural comparison used the two user-supplied outline attachments.
+- Confirmed both outlines contain 70 target pages and matching title, premise, and four Acts.
+- Confirmed the proposal's first eight beats correspond to late-story material while its remaining beats restart from the source opening.
+- No production mutation or code change was made during diagnosis/specification.
+
+### Outstanding issues
+- Written-spec review and implementation plan remain pending.
+
+### Risks or caveats
+- The current production full-outline treatment remains unsafe for long outlines until the patch model is implemented and deployed.
+
+### Operator follow-up
+- Do not make the attached proposal official.
+
+### Next steps
+- Review the written design, then create and execute the pass-based implementation plan.
+
 ## Organize and Polish duplicate-summary rejection - 2026-07-23
 
 ### What changed
