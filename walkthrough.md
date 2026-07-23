@@ -12528,16 +12528,22 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Consolidated root regression: 117 files and 731 tests passed.
 - `npm run lint -- --quiet`: passed.
 - `npm run build`: passed with the existing large-chunk advisory only.
+- Implementation commits `20b50ea`, `691d171`, and `5ec087c` were pushed to `origin/main`.
+- Supabase `writer-tools` deployed successfully to production project `vxclogwiytxjolisnakd`.
+- Cloudflare Worker version `6ed10ad3-890f-4dd5-9a91-f5f604d8abeb` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Final signed-in production preview used a 26-page Organize and Polish source and returned 24 actual mapped page beats, 26 preserved source beats, 2 combined results, 0 enhanced, and 0 added.
+- Review opened without a 422; the proposal contained sequential mapped output rather than a retained outline plus recap appendix.
+- The proposal was canceled without promotion, the disposable QA series was moved to Recoverable Trash, and production console warnings/errors were 0.
 
 ### Outstanding issues
-- Final production redeployment and repeated signed-in live preview verification remain.
+- None.
 
 ### Risks or caveats
 - Existing proposals already open in a browser were generated under the old contract and must be canceled or regenerated.
 - Production smoke correctly blocked proposals before review when Gemini used semantically valid but non-canonical `no_change` and `retained` labels; complete semantic-family normalization was added before repeating the release gate.
 
 ### Operator follow-up
-- Do not promote the shown 70-to-77-page proposal; cancel it and regenerate after deployment.
+- Cancel the previously shown 70-to-77-page proposal if it remains open, then generate a fresh Organize and Polish preview under the deployed contract.
 
 ### Next steps
-- Commit and push, deploy both `writer-tools` and the Cloudflare client, then run production preview-only QA.
+- None for this repair.
