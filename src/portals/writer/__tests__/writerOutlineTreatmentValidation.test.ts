@@ -119,10 +119,98 @@ describe('writer outline treatment validation', () => {
       manifest: manifest([
         { resultBeatId: 'result-1', sourceBeatIds: ['source-page-1-1'], changeType: 'language_polished', originalPages: [1], proposedPage: 1, reason: 'Copyedit.' },
         { resultBeatId: 'result-2-3', sourceBeatIds: ['source-page-2-2', 'source-page-3-3'], changeType: 'combined', originalPages: [2, 3], proposedPage: 2, reason: 'Combine related departure beats.' },
-      ], 3),
+      ], 2),
     });
     expect(result.valid).toBe(true);
-    expect(result.summary).toMatchObject({ preserved: 3, combined: 1, sourcePages: 3, proposedPages: 3 });
+    expect(result.summary).toMatchObject({ preserved: 3, combined: 1, sourcePages: 3, proposedPages: 2 });
+  });
+
+  it('rejects retained beats followed by an untracked whole-outline summary', () => {
+    const result = validateTreatmentProposal({
+      mode: 'structure',
+      source,
+      proposal: { page_beats: [
+        { page_target: 1, summary: 'Pony hears the warning.' },
+        { page_target: 2, summary: 'Onyx refuses the prophecy.' },
+        {
+          page_target: 3,
+          summary: 'Pony hears the warning, Onyx refuses, and they leave together.',
+          treatment_beat_id: 'summary-all',
+        },
+      ] },
+      manifest: manifest([
+        {
+          resultBeatId: 'summary-all',
+          sourceBeatIds: source.beats.map((beat) => beat.id),
+          changeType: 'combined',
+          originalPages: [1, 2, 3],
+          proposedPage: 3,
+          reason: 'Summarize the whole outline.',
+        },
+      ]),
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'unmapped_result_beat' }));
+  });
+
+  it('rejects source beats represented by more than one result', () => {
+    const result = validateTreatmentProposal({
+      mode: 'structure',
+      source,
+      proposal: { page_beats: [
+        { page_target: 1, summary: 'Pony hears the warning.', treatment_beat_id: 'result-1' },
+        {
+          page_target: 2,
+          summary: 'Pony hears the warning, Onyx refuses, and they leave together.',
+          treatment_beat_id: 'result-all',
+        },
+      ] },
+      manifest: manifest([
+        {
+          resultBeatId: 'result-1',
+          sourceBeatIds: ['source-page-1-1'],
+          changeType: 'unchanged',
+          originalPages: [1],
+          proposedPage: 1,
+          reason: 'Retained.',
+        },
+        {
+          resultBeatId: 'result-all',
+          sourceBeatIds: source.beats.map((beat) => beat.id),
+          changeType: 'combined',
+          originalPages: [1, 2, 3],
+          proposedPage: 2,
+          reason: 'Summarize the whole outline.',
+        },
+      ]),
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'duplicate_source_beat' }));
+  });
+
+  it('rejects a declared page count that is not backed by proposal beats', () => {
+    const result = validateTreatmentProposal({
+      mode: 'structure',
+      source,
+      proposal: { page_beats: [{
+        page_target: 3,
+        summary: 'Pony hears the warning, Onyx refuses, and they leave together.',
+        treatment_beat_id: 'summary-all',
+      }] },
+      manifest: manifest([{
+        resultBeatId: 'summary-all',
+        sourceBeatIds: source.beats.map((beat) => beat.id),
+        changeType: 'combined',
+        originalPages: [1, 2, 3],
+        proposedPage: 3,
+        reason: 'Compress the full outline.',
+      }], 3),
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'proposal_page_count_mismatch' }));
   });
 
   it('accepts a mapped creative addition and rejects unknown source ids', () => {

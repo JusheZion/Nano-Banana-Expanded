@@ -133,6 +133,9 @@ export function validateTreatmentProposal(
   const coveredIds = manifest.entries.flatMap((entry) => entry.sourceBeatIds);
   const coveredSet = new Set(coveredIds);
   const resultIds = manifest.entries.map((entry) => entry.resultBeatId);
+  const proposedBeats = proposalBeats(proposal);
+  const coveredCounts = new Map<string, number>();
+  coveredIds.forEach((id) => coveredCounts.set(id, (coveredCounts.get(id) ?? 0) + 1));
 
   for (const id of sourceIds) {
     if (!coveredSet.has(id)) {
@@ -142,6 +145,11 @@ export function validateTreatmentProposal(
   for (const id of coveredIds) {
     if (!sourceIdSet.has(id)) {
       addError(errors, 'unknown_source_beat', `Manifest references unknown source beat ${id}.`, [id]);
+    }
+  }
+  for (const id of sourceIds) {
+    if ((coveredCounts.get(id) ?? 0) > 1) {
+      addError(errors, 'duplicate_source_beat', `Source beat ${id} is represented by more than one result.`, [id]);
     }
   }
   if (new Set(resultIds).size !== resultIds.length) {
@@ -204,12 +212,29 @@ export function validateTreatmentProposal(
   if (manifest.sourcePageCount !== source.pageCount) {
     addError(errors, 'source_page_count_mismatch', 'Manifest source page count does not match the approved source.');
   }
+  if (proposedBeats.length !== manifest.proposedPageCount) {
+    addError(
+      errors,
+      'proposal_page_count_mismatch',
+      `Proposal contains ${proposedBeats.length} page beats but declares ${manifest.proposedPageCount} pages.`,
+    );
+  }
 
-  const resultBeatIdSet = new Set(
-    proposalBeats(proposal)
-      .map((beat) => beat.treatment_beat_id)
-      .filter((id): id is string => typeof id === 'string'),
-  );
+  const proposalResultIds = proposedBeats
+    .map((beat) => beat.treatment_beat_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  const resultBeatIdSet = new Set(proposalResultIds);
+  proposedBeats.forEach((beat, index) => {
+    const resultBeatId = beat.treatment_beat_id;
+    if (typeof resultBeatId !== 'string' || resultBeatId.length === 0) {
+      addError(errors, 'unmapped_result_beat', `Proposal beat ${index + 1} has no manifest identity.`);
+    } else if (!resultIds.includes(resultBeatId)) {
+      addError(errors, 'unmapped_result_beat', `Proposal beat ${resultBeatId} has no manifest entry.`);
+    }
+  });
+  if (resultBeatIdSet.size !== proposalResultIds.length) {
+    addError(errors, 'duplicate_proposal_beat', 'Proposal beat identifiers must be unique.');
+  }
   manifest.entries.forEach((entry) => {
     if (!resultBeatIdSet.has(entry.resultBeatId)) {
       addError(errors, 'manifest_result_missing', `Proposal does not contain result beat ${entry.resultBeatId}.`, entry.sourceBeatIds);

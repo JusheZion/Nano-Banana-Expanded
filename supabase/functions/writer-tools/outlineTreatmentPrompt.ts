@@ -59,8 +59,12 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
     `Source page count: ${input.sourcePageCount}`,
     `Allowed page range: ${input.allowedPageRange.min}-${input.allowedPageRange.max}`,
     'Never delete or omit a source beat.',
-    'Every source beat id must appear in the manifest source_beat_ids union.',
+    'Every source beat id must appear exactly once across all manifest source_beat_ids arrays.',
     'Create one manifest entry for every result beat.',
+    'Every proposal beat must have a unique treatment_beat_id matching exactly one manifest result_beat_id.',
+    'The number of proposal page_beats must equal manifest proposed_page_count.',
+    'Do not retain a source beat separately when a combined result already consumes it.',
+    'Do not append recap or whole-outline summary beats that repeat material already represented.',
     MODE_INSTRUCTIONS[input.treatmentMode],
     input.protectedTerms.length
       ? `Preserve these terms exactly: ${JSON.stringify(input.protectedTerms)}`
@@ -86,7 +90,8 @@ export function getOutlineTreatmentConsistencyErrors(
   const sourceIds = new Set(input.sourceBeats.map((beat) => beat.id));
   const coveredSourceIds = result.manifest.entries.flatMap((entry) => entry.source_beat_ids);
   const coveredSourceIdSet = new Set(coveredSourceIds);
-  const proposalIds = (result.proposal.page_beats ?? [])
+  const proposalBeats = result.proposal.page_beats ?? [];
+  const proposalIds = proposalBeats
     .map((beat) => beat.treatment_beat_id)
     .filter((id): id is string => typeof id === 'string');
   const manifestResultIds = result.manifest.entries.map((entry) => entry.result_beat_id);
@@ -105,6 +110,9 @@ export function getOutlineTreatmentConsistencyErrors(
       `manifest proposed_page_count must be within ${input.allowedPageRange.min}-${input.allowedPageRange.max}`,
     );
   }
+  if (proposalBeats.length !== result.manifest.proposed_page_count) {
+    errors.push('proposal beat count must match manifest proposed_page_count');
+  }
   if (
     coveredSourceIdSet.size !== sourceIds.size
     || coveredSourceIds.some((id) => !sourceIds.has(id))
@@ -115,12 +123,28 @@ export function getOutlineTreatmentConsistencyErrors(
       `manifest source coverage is incomplete or unknown (missing: ${missing.join(', ') || 'none'}; unknown: ${unknown.join(', ') || 'none'})`,
     );
   }
+  if (
+    coveredSourceIds.length !== sourceIds.size
+    || [...sourceIds].some((id) => coveredSourceIds.filter((coveredId) => coveredId === id).length !== 1)
+  ) {
+    errors.push('source beat IDs must be represented exactly once');
+  }
   if (new Set(manifestResultIds).size !== manifestResultIds.length) {
     errors.push('manifest result beat IDs must be unique');
   }
+  if (proposalBeats.some((beat) => (
+    typeof beat.treatment_beat_id !== 'string' || beat.treatment_beat_id.length === 0
+  ))) {
+    errors.push('every proposal beat must have a treatment_beat_id');
+  }
+  if (new Set(proposalIds).size !== proposalIds.length) {
+    errors.push('proposal result beat IDs must be unique');
+  }
   if (
-    proposalIds.length !== manifestResultIds.length
+    proposalBeats.length !== manifestResultIds.length
+    || proposalIds.length !== manifestResultIds.length
     || proposalIds.some((id) => !manifestResultIds.includes(id))
+    || manifestResultIds.some((id) => !proposalIds.includes(id))
   ) {
     errors.push('proposal result beat IDs do not match manifest result beat IDs');
   }
@@ -139,6 +163,9 @@ export function buildOutlineTreatmentRepairPrompt(
     `Correct every issue: ${JSON.stringify(consistencyErrors)}`,
     'Return the complete corrected proposal and manifest, not a patch or explanation.',
     'Use each proposal treatment_beat_id as exactly one manifest result_beat_id.',
+    'The number of proposal page_beats must equal manifest proposed_page_count.',
+    'Every source beat id must appear exactly once across the manifest; combinations replace their source beats.',
+    'Remove any retained, recap, or summary proposal beat that duplicates material consumed by another result.',
     'Use only these change_type values: unchanged, language_polished, moved, combined, enhanced, added.',
     'Previous response:',
     JSON.stringify(previousResult),

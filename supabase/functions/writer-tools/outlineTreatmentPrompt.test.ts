@@ -145,6 +145,88 @@ describe('buildOutlineTreatmentPrompt', () => {
     expect(repairPrompt).toContain('manifest-1');
   });
 
+  it('rejects unmapped proposal beats and duplicate source consumption', () => {
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 2,
+      allowedPageRange: { min: 1, max: 3 },
+      sourceBeats,
+      protectedTerms: [],
+    };
+    const inconsistent = {
+      proposal: {
+        page_beats: [
+          { page_target: 1, summary: 'The elder begins.' },
+          { treatment_beat_id: 'result-2', page_target: 2, summary: 'The complete story summarized.' },
+        ],
+      },
+      manifest: {
+        treatment_mode: 'structure',
+        source_page_count: 2,
+        proposed_page_count: 2,
+        entries: [
+          {
+            result_beat_id: 'result-1',
+            source_beat_ids: ['source-page-1-1'],
+            change_type: 'unchanged',
+            original_pages: [1],
+            proposed_page: 1,
+            reason: 'Retained.',
+          },
+          {
+            result_beat_id: 'result-2',
+            source_beat_ids: ['source-page-1-1', 'source-page-2-2'],
+            change_type: 'combined',
+            original_pages: [1, 2],
+            proposed_page: 2,
+            reason: 'Summarized.',
+          },
+        ],
+      },
+    };
+
+    expect(getOutlineTreatmentConsistencyErrors(inconsistent, input)).toEqual(expect.arrayContaining([
+      'every proposal beat must have a treatment_beat_id',
+      'source beat IDs must be represented exactly once',
+    ]));
+  });
+
+  it('rejects a declared page count unsupported by the proposal beat count', () => {
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 2,
+      allowedPageRange: { min: 1, max: 3 },
+      sourceBeats,
+      protectedTerms: [],
+    };
+    const inconsistent = {
+      proposal: {
+        page_beats: [{
+          treatment_beat_id: 'summary-all',
+          page_target: 2,
+          summary: 'The full outline summarized.',
+        }],
+      },
+      manifest: {
+        treatment_mode: 'structure',
+        source_page_count: 2,
+        proposed_page_count: 2,
+        entries: [{
+          result_beat_id: 'summary-all',
+          source_beat_ids: sourceBeats.map((beat) => beat.id),
+          change_type: 'combined',
+          original_pages: [1, 2],
+          proposed_page: 2,
+          reason: 'Compress the full outline.',
+        }],
+      },
+    };
+
+    expect(getOutlineTreatmentConsistencyErrors(inconsistent, input)).toContain(
+      'proposal beat count must match manifest proposed_page_count',
+    );
+  });
+
   it('keeps the Edge preview branch free of outline persistence calls', () => {
     const indexSource = readFileSync(
       join(process.cwd(), 'supabase/functions/writer-tools/index.ts'),

@@ -12493,3 +12493,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this repair.
+
+## Organize and Polish duplicate-summary rejection - 2026-07-23
+
+### What changed
+- Reproduced the invalid 70-to-77-page pattern from the supplied review screenshots: retained proposal beats without manifest identities coexisted with 15 mapped combination beats that summarized all 70 source pages.
+- Enforced bidirectional proposal/manifest identity: every proposal beat must have one unique manifest result ID and every manifest result must have one proposal beat.
+- Enforced exact-once source consumption so a source beat cannot appear in both a retained result and a later combined summary.
+- Enforced actual page-count integrity: the number of proposal page beats must equal the manifest's declared proposed page count.
+- Strengthened initial and repair prompts to prohibit recap/whole-outline summary appendices and require combinations to replace their source beats.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The previous validation checked that each manifest result existed in the proposal but did not check that every proposal beat existed in the manifest.
+- The previous page tolerance trusted `proposed_page_count`; a short summary appendix could therefore claim a much larger page count using high page labels.
+- Organize and Polish still permits legitimate combinations within its 10% page range, but the resulting page count must be backed by the actual output structure.
+- DOX was updated because exact-once traceability and page-count integrity are durable treatment contracts.
+
+### Verification
+- TDD reproduced all three gaps before implementation: unmapped retained beats, duplicate source consumption, and an unsupported declared page count.
+- Focused treatment regression: 4 files and 38 tests passed.
+- Consolidated root regression: 117 files and 731 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed with the existing large-chunk advisory only.
+
+### Outstanding issues
+- Production deployments and signed-in live preview verification remain.
+
+### Risks or caveats
+- Existing proposals already open in a browser were generated under the old contract and must be canceled or regenerated.
+
+### Operator follow-up
+- Do not promote the shown 70-to-77-page proposal; cancel it and regenerate after deployment.
+
+### Next steps
+- Commit and push, deploy both `writer-tools` and the Cloudflare client, then run production preview-only QA.
