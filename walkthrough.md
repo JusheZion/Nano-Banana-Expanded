@@ -12602,6 +12602,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Review the written specification, then create and execute the pass-based implementation plan.
 
+## Outline review recovery implementation plan - 2026-07-23
+
+### What changed
+- Converted the approved review-recovery design into a three-pass implementation plan covering page-aware rejection context, a readable Simple Workflow editor, non-overlapping controls, consolidated release QA, and the persistent production corridor.
+- Limited broad verification to one final focused gate and production build, with per-pass smokes and evidence-driven repair only for Red downstream blockers.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-23-writer-outline-review-recovery-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Pass 1 builds the presentation model and rejected-operation context.
+- Pass 2 implements the readable editor, highlights, navigation, Advanced disclosure, and dialog/footer layout.
+- Pass 3 runs the consolidated gate, paired deployment, full visual smoke, and Outline-to-Comic-Creator readiness corridor.
+- The plan contains three passes so its required midpoint/final audit occurs once at the release gate rather than generating redundant broad passes.
+
+### Verification
+- Plan self-review covers every approved requirement, contains no implementation placeholders, and keeps Edge/client notice types aligned.
+- No runtime code changed during planning.
+
+### Outstanding issues
+- Execution remains pending selection of inline or subagent-driven execution.
+
+### Risks or caveats
+- The current production review remains unchanged until Pass 3 deployment.
+
+### Operator follow-up
+- Continue using the existing official outline to access Pages & Beats; cancel open AI Treatment proposals.
+
+### Next steps
+- Execute the approved plan using the selected execution method.
+
 ## 70-page AI Treatment Edge timeout repair - 2026-07-23
 
 ### What changed
