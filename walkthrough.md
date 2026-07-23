@@ -12543,7 +12543,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Focused alias-normalization regression: 1 test file, 9 tests passed.
 - Targeted Edge lint passed with 0 errors and 2 pre-existing `no-explicit-any` warnings in `writer-tools/index.ts`.
 - Commits `f60c4c8` and `d0a48f9` were pushed to `origin/main`.
-- Supabase `writer-tools` version 88 deployed successfully to project `vxclogwiytxjolisnakd`.
+- Supabase `writer-tools` version 90 is active on project `vxclogwiytxjolisnakd`.
 - Cloudflare Worker version `e3bc79a5-9512-4030-8855-cdc07e59c8fe` deployed from the final rebuilt source state to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
 - The fresh signed-in production preview used the persistent `AP` QA account and a 70-page source. It returned 71 proposed pages with all 70 source beats preserved and no HTTP error.
 - Direct production inspection confirmed no raw JSON, opaque IDs, or visible tab markers in Simple Workflow; 7 changed page editors and 9 page-navigation controls were present.
