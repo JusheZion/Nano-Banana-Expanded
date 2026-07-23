@@ -93,6 +93,7 @@ const writerOutlineTreatmentModeSchema = z.enum(['preserve', 'structure', 'expan
 const treatmentChangeTypeAliases: Record<string, string> = {
   original: 'unchanged',
   preserved: 'unchanged',
+  no_change: 'unchanged',
   polished: 'language_polished',
   rewritten: 'language_polished',
   reordered: 'moved',
@@ -102,7 +103,7 @@ const treatmentChangeTypeAliases: Record<string, string> = {
 };
 const treatmentChangeTypeSchema = z.preprocess(
   (value) => typeof value === 'string'
-    ? treatmentChangeTypeAliases[value.trim().toLowerCase()] ?? value
+    ? treatmentChangeTypeAliases[value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')] ?? value
     : value,
   z.enum([
     'unchanged',

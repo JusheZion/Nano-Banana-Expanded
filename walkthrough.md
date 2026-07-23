@@ -12502,11 +12502,15 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Enforced exact-once source consumption so a source beat cannot appear in both a retained result and a later combined summary.
 - Enforced actual page-count integrity: the number of proposal page beats must equal the manifest's declared proposed page count.
 - Strengthened initial and repair prompts to prohibit recap/whole-outline summary appendices and require combinations to replace their source beats.
+- Hardened model change-type canonicalization so separator and case variants such as `no_change`, `no-change`, `no change`, and `NO CHANGE` resolve to the approved `unchanged` value while unknown meanings remain rejected.
 
 ### Files touched
 - `AGENTS.md`
 - `src/portals/writer/writerOutlineTreatmentValidation.ts`
 - `src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
 - `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
 - `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
 - `walkthrough.md`
@@ -12520,15 +12524,17 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Verification
 - TDD reproduced all three gaps before implementation: unmapped retained beats, duplicate source consumption, and an unsupported declared page count.
 - Focused treatment regression: 4 files and 38 tests passed.
+- Focused schema/treatment regression after live QA found the `no_change` model variant: 7 files and 152 tests passed.
 - Consolidated root regression: 117 files and 731 tests passed.
 - `npm run lint -- --quiet`: passed.
 - `npm run build`: passed with the existing large-chunk advisory only.
 
 ### Outstanding issues
-- Production deployments and signed-in live preview verification remain.
+- Final production redeployment and repeated signed-in live preview verification remain.
 
 ### Risks or caveats
 - Existing proposals already open in a browser were generated under the old contract and must be canceled or regenerated.
+- The first production smoke correctly blocked the proposal before review because Gemini used the semantically valid but non-canonical `no_change` label; canonical normalization was added before repeating the release gate.
 
 ### Operator follow-up
 - Do not promote the shown 70-to-77-page proposal; cancel it and regenerate after deployment.

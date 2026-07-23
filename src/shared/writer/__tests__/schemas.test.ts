@@ -143,6 +143,20 @@ describe('writerToolsRequestSchema', () => {
     });
     expect(normalizedExpansion.manifest.entries[0].change_type).toBe('enhanced');
 
+    for (const modelAlias of ['no_change', 'no-change', 'no change', 'NO CHANGE']) {
+      const normalizedNoChange = outlineTreatmentPreviewResultSchema.parse({
+        ...normalizedAlias,
+        manifest: {
+          ...normalizedAlias.manifest,
+          entries: [{
+            ...normalizedAlias.manifest.entries[0],
+            change_type: modelAlias,
+          }],
+        },
+      });
+      expect(normalizedNoChange.manifest.entries[0].change_type).toBe('unchanged');
+    }
+
     expect(() => outlineTreatmentPreviewResultSchema.parse({
       proposal: { page_beats: [{ summary: 'Beat.' }] },
       manifest: {
