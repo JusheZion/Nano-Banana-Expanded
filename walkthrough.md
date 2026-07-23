@@ -12101,3 +12101,37 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Deployment
 - Committed and pushed the repair to `main` as `6bc6423`.
 - Deployed Cloudflare Worker version `2f5de6cd-be4d-4095-a175-5dbc833e9245` to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+
+## Writer AI Treatment contract design - 2026-07-23
+
+### What changed
+- Defined enforceable and materially distinct contracts for Keep My Order, Organize and Polish, and Expand Creatively.
+- Approved traceable source-beat preservation, deterministic promotion validation, and two-pronged Simple/Advanced review behavior.
+- Made page count exact for Keep My Order, flexible by ±10% for Organize and Polish, and flexible by ±20% for Expand Creatively.
+- Defined populated-data mutation, reload, and Undo evidence as required release proof.
+- Deferred application-wide Writer preferences to a separate future Settings design while keeping treatment defaults centralizable.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/specs/2026-07-23-writer-ai-treatment-contracts-design.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This prompt produced design documentation only; no application behavior changed.
+- The design replaces prompt-only treatment distinctions with a deterministic manifest and validation contract.
+
+### Verification
+- Self-review confirmed no placeholders, contradictory mode rules, or uncovered acceptance criteria.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- The implementation plan has not yet been written; brainstorming requires user review of the committed specification first.
+
+### Risks or caveats
+- Stable beat identity and manifest persistence must be designed against the existing outline JSON/version storage during implementation planning.
+
+### Operator follow-up
+- Review and approve the written specification.
+
+### Next steps
+- After specification approval, create the detailed pass-based implementation plan.

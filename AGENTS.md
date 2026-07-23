@@ -435,6 +435,7 @@ Default section order:
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
 - When browser automation or a requested feature fails, proactively troubleshoot it before treating it as a coverage gap. In the final report, surface the blocker in a distinct, highly visible paragraph using bold all-caps text; state what was attempted, what prevented completion, and the next useful recovery action.
+- Writer AI Treatment modes must preserve source-story traceability and obey the approved deterministic contracts in `docs/superpowers/specs/2026-07-23-writer-ai-treatment-contracts-design.md`; prompt wording alone is not sufficient enforcement.
 
 ## Child DOX Index
 
