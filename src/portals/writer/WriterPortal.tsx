@@ -203,6 +203,7 @@ import {
   type OutlinePastePreferences,
 } from '@/portals/writer/writerOutlinePastePreferences';
 import {
+  replaceOfficialOutlineStructure,
   routeOfficialOutlineTextSave,
   summarizeOutlineRecognition,
   type OutlineRecognitionSummary,
@@ -4612,7 +4613,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     }
 
     const approvedOutline = reviewOrigin === 'official_editor' && latestOutline
-      ? { ...latestOutline.outline_json, ...diagnostic.proposedOutline }
+      ? replaceOfficialOutlineStructure(latestOutline.outline_json, diagnostic.proposedOutline)
       : diagnostic.proposedOutline;
     const canonicalSourceText = formatOutlineAsText(approvedOutline);
     const { priorAuthorOutline, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);

@@ -174,7 +174,7 @@ function classifyPassages(text: string): OutlinePastePassage[] {
     } else {
       const actHeading = parseOutlineActHeading(line);
       const numberedBeat = section === 'acts' ? null : parseOutlineNumberedBeatLine(line);
-      const explicitPageBeat = section === 'acts' ? null : parseExplicitPageBeat(line);
+      const explicitPageBeat = parseExplicitPageBeat(line);
 
       if (isUnrecognizedSectionHeading(line, markdownHeading)) {
         section = 'none';
@@ -185,13 +185,6 @@ function classifyPassages(text: string): OutlinePastePassage[] {
         passage.actName = actHeading.name;
         currentActName = actHeading.name;
         canContinueAct = section === 'acts';
-      } else if (/^[-*]\s+/.test(line) && section === 'acts') {
-        const body = line.replace(/^[-*]\s+/, '');
-        const parsedAct = parseOutlineActListItem(body);
-        passage.assignment = 'act';
-        passage.actName = parsedAct.name;
-        currentActName = parsedAct.name;
-        canContinueAct = true;
       } else if (numberedBeat || explicitPageBeat) {
         const beat = numberedBeat ?? explicitPageBeat;
         passage.assignment = 'page_beat';
@@ -199,6 +192,13 @@ function classifyPassages(text: string): OutlinePastePassage[] {
         section = 'beats';
         currentActName = undefined;
         canContinueAct = false;
+      } else if (/^[-*]\s+/.test(line) && section === 'acts') {
+        const body = line.replace(/^[-*]\s+/, '');
+        const parsedAct = parseOutlineActListItem(body);
+        passage.assignment = 'act';
+        passage.actName = parsedAct.name;
+        currentActName = parsedAct.name;
+        canContinueAct = true;
       } else if (/^[-*]\s+/.test(line) && section === 'beats') {
         const beat = parseOutlineBeatLine(line.replace(/^[-*]\s+/, ''));
         passage.assignment = 'page_beat';

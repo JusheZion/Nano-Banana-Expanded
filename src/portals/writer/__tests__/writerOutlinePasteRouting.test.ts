@@ -95,6 +95,34 @@ describe('writer outline paste routing', () => {
     });
   });
 
+  it('replaces stale outline fields and keeps page beats separate from the final act', () => {
+    const prepared = prepareOfficialOutlineTextSave([
+      'ACTS:',
+      'Act IV - The return',
+      'Page 1 - Campfire opening.',
+      'Page 2 - The warning arrives.',
+    ].join('\n'), {
+      keep: true,
+      title: 'Deleted title',
+      premise: 'Deleted premise',
+      acts: [{ name: 'Old Act' }],
+      page_beats: [{ page_target: 71, summary: 'Deleted old beat' }],
+      notes: ['Deleted note'],
+    });
+
+    expect(prepared).toEqual({
+      kind: 'save',
+      outlineJson: {
+        keep: true,
+        acts: [{ name: 'Act IV', summary: 'The return' }],
+        page_beats: [
+          { page_target: 1, scene: 'Campfire opening.' },
+          { page_target: 2, scene: 'The warning arrives.' },
+        ],
+      },
+    });
+  });
+
   it('opens review for an ambiguous official draft before calling the save API', async () => {
     const onReview = vi.fn();
     const onSave = vi.fn();

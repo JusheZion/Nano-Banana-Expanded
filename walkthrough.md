@@ -12059,3 +12059,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Deployed Supabase Edge Function `writer-tools` to project `vxclogwiytxjolisnakd` after confirming the authenticated target; prior deployed version was 55.
 - Deployed Cloudflare Worker `asset-reference-comics-studio` as version `1700be78-e66e-4c6a-ba17-ce1c74807299`; prior recorded rollback version was `4b7d10f2-f563-40b6-acf0-9b0ee5a3e7fd`.
 - Live smoke at `https://asset-reference-comics-studio.onyxzion.workers.dev/` passed: authenticated app shell, Writer Workshop, review preferences, AI classification choices, and TXT/Markdown template links rendered.
+
+## Writer outline authoritative replacement repair - 2026-07-22
+
+### What changed
+- Reproduced the live failure in which explicit Page lines following Act IV were appended to the Act summary and previously deleted page beats returned.
+- Changed deterministic recognition so explicit `Page N` lines always end Act-summary continuation, even when an `ACTS:` section precedes them.
+- Changed official text/review saves to use the reviewed diagnostic structure and replace known outline fields (`title`, `premise`, `acts`, `page_beats`, and `notes`) instead of merging stale values back in.
+- Preserved unrelated top-level outline metadata during replacement.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerOutlinePasteDiagnostic.ts`
+- `src/portals/writer/writerOutlinePasteRouting.ts`
+- `src/portals/writer/__tests__/writerOutlinePasteRouting.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Root cause was a split save path: the review analyzer recognized the paste, but confident saves reparsed with the legacy text parser and shallow-merged over the existing official JSON.
+- The DOX pass found no new durable contract or ownership change; `AGENTS.md` remains unchanged.
+
+### Verification
+- Regression test failed with the reported stale beat and Act IV run-on behavior before the fix, then passed afterward.
+- Focused Writer routing/diagnostic suite: 2 files / 59 tests passed.
+- Full suite excluding the nested historical worktree: 111 files / 685 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed; existing large-chunk advisory remains non-blocking.
+
+### Outstanding issues
+- None in the repaired replacement path.
+
+### Risks or caveats
+- This repair prevents future stale-field resurrection; it does not reconstruct edits already overwritten by the prior live behavior.
+
+### Operator follow-up
+- Re-paste the intended replacement outline after the repaired deployment is live.
+
+### Next steps
+- Commit, push, deploy Cloudflare, and confirm the repaired bundle is live.

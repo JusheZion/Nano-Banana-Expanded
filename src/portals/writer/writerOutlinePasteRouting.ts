@@ -1,4 +1,3 @@
-import { parseOutlineText } from './writerExportFormats';
 import {
   analyzeOutlinePaste,
   type OutlinePasteDiagnostic,
@@ -24,6 +23,18 @@ export type OutlineRecognitionSummary = {
 function needsReview(diagnostic: OutlinePasteDiagnostic): boolean {
   return diagnostic.requiresReview
     || diagnostic.warnings.some((warning) => warning.severity === 'blocking');
+}
+
+const REPLACEABLE_OUTLINE_FIELDS = new Set(['title', 'premise', 'acts', 'page_beats', 'notes']);
+
+export function replaceOfficialOutlineStructure(
+  existingOutline: Record<string, unknown>,
+  replacement: Record<string, unknown>,
+): Record<string, unknown> {
+  const preserved = Object.fromEntries(
+    Object.entries(existingOutline).filter(([key]) => !REPLACEABLE_OUTLINE_FIELDS.has(key)),
+  );
+  return { ...preserved, ...replacement };
 }
 
 export function routeOutlinePaste(
@@ -100,7 +111,7 @@ export function prepareOfficialOutlineTextSave(
   if (needsReview(diagnostic)) return { kind: 'review', diagnostic };
   return {
     kind: 'save',
-    outlineJson: { ...existingOutline, ...parseOutlineText(draft) },
+    outlineJson: replaceOfficialOutlineStructure(existingOutline, diagnostic.proposedOutline),
   };
 }
 
