@@ -12542,18 +12542,27 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - First production smoke correctly detected 70 source pages and preserved official v1, but reproduced HTTP 422 because Gemini returned `proposed_text`.
 - Focused alias-normalization regression: 1 test file, 9 tests passed.
 - Targeted Edge lint passed with 0 errors and 2 pre-existing `no-explicit-any` warnings in `writer-tools/index.ts`.
+- Commits `f60c4c8` and `d0a48f9` were pushed to `origin/main`.
+- Supabase `writer-tools` version 88 deployed successfully to project `vxclogwiytxjolisnakd`.
+- Cloudflare Worker version `e3bc79a5-9512-4030-8855-cdc07e59c8fe` deployed from the final rebuilt source state to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- The fresh signed-in production preview used the persistent `AP` QA account and a 70-page source. It returned 71 proposed pages with all 70 source beats preserved and no HTTP error.
+- Direct production inspection confirmed no raw JSON, opaque IDs, or visible tab markers in Simple Workflow; 7 changed page editors and 9 page-navigation controls were present.
+- Page 71 navigation focused its editor above the footer with 55 pixels of clearance. The body was the only scroll container, the footer position was static, and all four action controls had readable foreground/background colors.
+- A temporary proposal-only edit was accepted by the editor and restored. Escape canceled the proposal, and the QA official outline remained at v1.
+- Production corridor: Outline **Green**; Dialogue **Green** with correct no-pages guard; Imageshop Prep **Green** with page/shot sends disabled until selection; Comic Creator **Green** with the QA series and Issue 1 identity; Pages & Beats **Yellow** because the staged 70-page source target is visible before official promotion.
 
 ### Outstanding issues
-- The repaired Supabase function and signed-in production visual/corridor smoke remain pending.
+- No Red production blocker remains.
 
 ### Risks or caveats
-- Production remains on the previous review UI until the paired release completes.
+- The Browser Use bridge did not expose viewport resizing, so narrow-layout coverage is automated/responsive-code evidence rather than a separate live mobile screenshot.
+- Pages & Beats exposes the staged source target before official promotion. This follows the existing Simple Workflow auto-target behavior but could be explained more clearly in a future UX pass.
 
 ### Operator follow-up
 - None.
 
 ### Next steps
-- Commit and push the reviewed diff, deploy `writer-tools` and Cloudflare, then complete the production visual and downstream corridor smoke without promoting the QA outline.
+- Consider clarifying staged-versus-official page targets in Pages & Beats; no release-blocking follow-up is required.
 
 ## Outline AI Treatment deterministic patch engine - 2026-07-23
 
