@@ -43,6 +43,30 @@ describe('applyOutlineTreatmentPatches', () => {
     expect((parsed as { operations: unknown[] }).operations[0]).not.toHaveProperty('proposed_text');
   });
 
+  it('omits null optional operation fields before strict validation', () => {
+    const parsed = normalizeOutlineTreatmentPatchResult({
+      operations: [{
+        operation_id: 'edit-1',
+        operation: 'edit',
+        source_beat_ids: ['source-page-1-1'],
+        reason: 'Polish the wording.',
+        summary: 'The elder opens the gathering.',
+        scene: null,
+        emotional_turn: null,
+        anchor_source_beat_id: null,
+        placement: null,
+      }],
+    }) as { operations: Array<Record<string, unknown>> };
+
+    expect(parsed.operations[0]).toMatchObject({
+      summary: 'The elder opens the gathering.',
+    });
+    expect(parsed.operations[0]).not.toHaveProperty('scene');
+    expect(parsed.operations[0]).not.toHaveProperty('emotional_turn');
+    expect(parsed.operations[0]).not.toHaveProperty('anchor_source_beat_id');
+    expect(parsed.operations[0]).not.toHaveProperty('placement');
+  });
+
   it('keeps untouched beats in place when AI returns only eight late-story edits', () => {
     const input = makeInput(70);
     const result = applyOutlineTreatmentPatches({

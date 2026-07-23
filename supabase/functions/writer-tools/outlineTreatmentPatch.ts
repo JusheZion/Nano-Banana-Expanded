@@ -13,8 +13,21 @@ export function normalizeOutlineTreatmentPatchResult(value: unknown): unknown {
       if (!operation || typeof operation !== 'object') return operation;
       const record = operation as Record<string, unknown>;
       const { proposed_text: proposedText, ...rest } = record;
-      if (typeof proposedText !== 'string' || typeof record.summary === 'string') return rest;
-      return { ...rest, summary: proposedText };
+      const normalized: Record<string, unknown> = { ...rest };
+      if (typeof proposedText === 'string' && typeof normalized.summary !== 'string') {
+        normalized.summary = proposedText;
+      }
+      for (const key of [
+        'anchor_source_beat_id',
+        'placement',
+        'reason',
+        'scene',
+        'summary',
+        'emotional_turn',
+      ]) {
+        if (normalized[key] === null) delete normalized[key];
+      }
+      return normalized;
     }),
   };
 }

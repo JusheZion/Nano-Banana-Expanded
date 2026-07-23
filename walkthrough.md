@@ -12494,6 +12494,39 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Outline treatment optional-null compatibility repair - 2026-07-23
+
+### What changed
+- Reproduced the production HTTP 422 caused by Gemini returning `null` for optional operation text fields.
+- Extended the existing model-boundary normalization to omit `null` values for optional anchor, placement, reason, scene, summary, and emotional-turn fields before strict schema validation.
+- Kept required operation identity, operation type, and source-beat fields strict so genuinely malformed operations still fail validation.
+
+### Files touched
+- `supabase/functions/writer-tools/outlineTreatmentPatch.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- This is a compatibility normalization only; it does not change treatment permissions or patch semantics.
+- A string `proposed_text` alias still maps to `summary`, including when the model also emits `summary: null`.
+
+### Verification
+- TDD reproduced the exact optional-null failure before implementation.
+- Focused Edge regression: 1 test file, 10 tests passed.
+- Targeted ESLint: passed with no findings.
+
+### Outstanding issues
+- Production deployment and live retry remain pending.
+
+### Risks or caveats
+- None identified.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit, push, deploy `writer-tools`, and rerun the production treatment preview.
+
 ## Writer Outline treatment review recovery implementation - 2026-07-23
 
 ### What changed
