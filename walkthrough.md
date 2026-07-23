@@ -12405,3 +12405,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit and push the reload-safe recovery repair, deploy Cloudflare, then run the production read/interaction smoke.
+
+## Writer AI Treatment production release and live mutation QA - 2026-07-23
+
+### What changed
+- Completed and released the three enforceable Writer AI Treatment contracts with preview-first promotion, traceability manifests, version history, and reload-safe Undo.
+- Added model-boundary normalization for predictable manifest synonyms, including `original` to `unchanged` and `expanded` to `enhanced`, while retaining the deterministic preservation validator as the enforcement layer.
+- Closed every release step in the approved four-pass implementation plan.
+
+### Files touched
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Production smoke initially rejected valid Gemini intent because the model used out-of-vocabulary change labels. The shared client and Edge schemas now normalize a bounded synonym set before strict enum validation.
+- The preservation, source coverage, page-range, and promotion validators were not weakened.
+- DOX closeout found no additional ownership or durable-contract change beyond the already committed Writer treatment contract in root `AGENTS.md`; no further AGENTS update was needed.
+
+### Verification
+- Focused schema regression: 3 files and 114 tests passed.
+- Consolidated root regression, explicitly excluding nested worktree copies: 117 files and 725 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Supabase Edge deployment: `writer-tools` deployed successfully to project `vxclogwiytxjolisnakd`.
+- Cloudflare deployment: Worker version `b4a9b583-9a35-432a-abf0-e690d7938198` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in production mutation: Organize and Polish returned a valid review proposal after synonym normalization; Make official succeeded; reload preserved the official version and enabled Undo; Undo restored the prior source; a second reload retained the restored source.
+- Production console warnings/errors: 0.
+- The disposable production QA series was moved to Recoverable Trash after verification.
+
+### Outstanding issues
+- The earlier pre-repair QA v1 named `QA Treatment Check` remains on the pre-existing `Untitled series` Issue 2 because deleting or overwriting that pre-existing issue could remove user-owned data.
+
+### Risks or caveats
+- The production build retains the pre-existing chunk-size advisory.
+- Simple review still exposes the inherited JSON proposal editor beneath the plain-language summary; a structured editor remains separate future work.
+
+### Operator follow-up
+- Remove the two-page `QA Treatment Check` outline from `Untitled series` Issue 2 if it is not wanted.
+- Recoverable Trash contains the intentionally discarded disposable production QA series.
+
+### Next steps
+- None for this release.

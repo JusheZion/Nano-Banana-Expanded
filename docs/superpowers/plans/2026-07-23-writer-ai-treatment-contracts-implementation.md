@@ -635,7 +635,7 @@ Update the closest owning documentation only if contracts or file ownership chan
 
 ### Task 9: Deploy and verify production
 
-- [ ] **Step 1: Commit and push the verified implementation**
+- [x] **Step 1: Commit and push the verified implementation**
 
 ```bash
 git add AGENTS.md \
@@ -661,14 +661,14 @@ git push origin main
 
 Omit any listed path that remained unchanged.
 
-- [ ] **Step 2: Record current deployment versions**
+- [x] **Step 2: Record current deployment versions**
 
 ```bash
 supabase functions list
 npx wrangler deployments list
 ```
 
-- [ ] **Step 3: Deploy Edge first**
+- [x] **Step 3: Deploy Edge first**
 
 ```bash
 supabase functions deploy writer-tools
@@ -676,23 +676,34 @@ supabase functions deploy writer-tools
 
 Confirm the linked project ID and active version.
 
-- [ ] **Step 4: Run authenticated Edge preview smoke**
+- [x] **Step 4: Run authenticated Edge preview smoke**
 
 Generate each treatment against disposable populated data. Confirm valid response schemas and zero official-version creation before promotion.
 
-- [ ] **Step 5: Deploy Cloudflare**
+- [x] **Step 5: Deploy Cloudflare**
 
 ```bash
 npm run deploy
 ```
 
-- [ ] **Step 6: Run production mutation smoke**
+- [x] **Step 6: Run production mutation smoke**
 
 Repeat one populated Organize and Polish flow: preview, mapping check, promotion, reload verification, Undo, reload verification, and cleanup. Confirm console/network health.
 
-- [ ] **Step 7: Record final release result**
+- [x] **Step 7: Record final release result**
 
 Update this plan and `walkthrough.md` with commit SHA, Supabase function version, Cloudflare version, live URL, test counts, browser evidence, cleanup result, and any blocked layer.
+
+**Production release result (2026-07-23): PASS.** Main was pushed through
+`45c0e85`; Supabase project `vxclogwiytxjolisnakd` accepted the updated
+`writer-tools` deployment; Cloudflare Worker version
+`b4a9b583-9a35-432a-abf0-e690d7938198` is live at
+`https://asset-reference-comics-studio.onyxzion.workers.dev/`. Production QA
+found and repaired model aliases `original` and `expanded` at the schema
+boundary, then passed Organize and Polish preview, explicit promotion, reload,
+enabled Undo, exact source restoration, second reload, console health, and
+recoverable-trash cleanup. Final automated gate: 117 files and 725 tests;
+quiet lint and production build passed.
 
 **Pass 4 smoke test:** Production promotion and Undo must both survive reload with exact source-beat coverage. A rendered page or HTTP 200 alone is not completion evidence.
 
