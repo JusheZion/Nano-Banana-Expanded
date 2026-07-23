@@ -12015,3 +12015,42 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Run Pass 4 responsive/accessibility browser QA, fix reproducible findings, then complete the single release gate and deployments.
+
+## Writer outline paste review — Pass 4 local QA and release gate - 2026-07-22
+
+### What changed
+- Confirmed the paste-review action footer clears the fixed mobile navigation and retained the responsive safe-area offset.
+- Exercised Simple Workflow paste recognition and manual reassignment with AI off, including Roman-numeral act recognition, unassigned-text blocking, and automatic three-page inference.
+- Exercised the Advanced Tools importer with pasted outline text and confirmed it opens the same lossless, manually correctable review surface.
+- Updated the settings regression test to reflect that AI classification is now available and optional rather than upcoming.
+- Marked the original nine-pass plan as superseded by the approved consolidated closeout plan.
+
+### Files touched
+- `src/portals/writer/__tests__/WriterOutlinePasteSettings.test.tsx`
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-implementation.md`
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-consolidated-closeout-plan.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Mobile browser geometry measured the review footer ending below the content but above the 64 px fixed primary navigation, with additional clearance preserved by the safe-area offset.
+- The DOX pass found no new durable repository contract or ownership boundary; `AGENTS.md` remains unchanged.
+
+### Verification
+- Signed-in local browser QA: Simple review, manual assignment, Advanced import, page-count inference, desktop layout, and mobile fixed-navigation clearance passed.
+- `npm run test -- --run`: 111 files / 684 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed; 2,602 modules transformed. Existing large-chunk advisory remains non-blocking.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- Live AI preview/promotion and Undo verification require the changed `writer-tools` Edge Function deployment.
+- Cloudflare deployment and live smoke verification remain.
+
+### Risks or caveats
+- The local QA account's disposable series remained visible after the recoverable-trash action; live product data was not modified.
+
+### Operator follow-up
+- None; deployment approval is already granted.
+
+### Next steps
+- Commit and push the release diff, deploy `writer-tools`, deploy Cloudflare, and smoke-test the live Writer Outline workflow.

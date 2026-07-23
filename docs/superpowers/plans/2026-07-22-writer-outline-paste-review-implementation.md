@@ -1,5 +1,7 @@
 # Writer Outline Paste Review Implementation Plan
 
+> **Superseded for closeout:** The approved two-pass consolidation in `2026-07-22-writer-outline-paste-review-consolidated-closeout-plan.md` replaces this original nine-pass execution sequence. Retain this file as design and implementation history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make clipboard/file outline intake lossless and reviewable in Simple Workflow, provide a complete mapping wizard in Advanced Tools, and require editable review before AI output becomes official.

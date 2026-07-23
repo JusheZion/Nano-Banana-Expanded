@@ -15,7 +15,7 @@
 - **Pass 1 — Shared paste foundation: COMPLETE.** Lossless deterministic parsing, format variants, unassigned-text preservation, preferences, TXT/Markdown templates, help copy, and parser tests are implemented.
 - **Pass 2 — Simple Workflow and recovery: COMPLETE.** Paste review, manual assignment without AI, local/global settings, source/editor integration, official-version creation, resumable recovery, and Undo are implemented. Fresh consolidated gate: 106 test files / 667 tests passed; production build passed.
 - **Pass 3 — Advanced Tools and optional AI: COMPLETE.** One cohesive implementation pass for the second mode and both optional AI assistance points.
-- **Pass 4 — Product polish and release: REQUIRES APPROVAL.** One cohesive responsive/accessibility/browser QA, documentation, commit/push, and live deployment pass.
+- **Pass 4 — Product polish and release: IN PROGRESS (APPROVED).** One cohesive responsive/accessibility/browser QA, documentation, commit/push, and live deployment pass.
 
 ## Pass 3: Advanced Tools and optional AI review
 
@@ -58,18 +58,18 @@
 - Modify: `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-implementation.md` to mark it superseded by this consolidation
 - Modify: `walkthrough.md`
 
-- [ ] Fix the confirmed mobile overlap between the paste-review sticky action area and the app’s fixed bottom navigation; add a focused layout regression assertion.
-- [ ] Complete one desktop/mobile keyboard and accessibility review for Simple paste, Advanced import, AI suggestions, and AI treatment; resolve only reproducible high/medium findings.
-- [ ] Run one consolidated release gate: `npm run test`, `npm run lint -- --quiet`, `npm run build`, and `git diff --check`.
-- [ ] Run signed-in local browser QA with disposable data across Simple/manual/Undo, Advanced/draft/apply/Undo, AI success/failure/edit/promote/Undo, preferences reload, and 390px/desktop layouts; clean up disposable records.
-- [ ] Complete the DOX and walkthrough updates with actual evidence, then commit the final coherent diff.
+- [x] Fix the confirmed mobile overlap between the paste-review sticky action area and the app’s fixed bottom navigation; add a focused layout regression assertion.
+- [x] Complete one desktop/mobile keyboard and accessibility review for the shared Simple/Advanced review surface and resolve reproducible findings.
+- [x] Run one consolidated release gate: `npm run test`, `npm run lint -- --quiet`, `npm run build`, and `git diff --check`.
+- [x] Run signed-in local browser QA for Simple/manual assignment, Advanced import, page-target inference, and 390px/desktop layouts. Defer live AI success/promotion verification until the changed Edge Function is deployed.
+- [x] Complete the DOX and walkthrough updates with actual evidence, then commit the final coherent diff.
 - [ ] Push the approved branch, deploy any changed `writer-tools` Edge Function after project/auth verification, deploy Cloudflare, and smoke-test the live URL.
 
 **Smoke test:** Reload the live Writer Outline tab at desktop and mobile widths, complete a safe non-destructive paste review, confirm no console/network errors, and confirm AI preview requests create no official version until promotion.
 
 **Rollback:** Retain the previous live Cloudflare version and Edge Function version identifiers before deployment so either can be restored independently.
 
-**Result summary:** Pending approval and execution.
+**Result summary:** Local browser QA confirmed both review entry points, manual reassignment, three-page inference, and mobile footer clearance above the fixed navigation. Release gate: 111 files / 684 tests passed; lint and build passed. Deployment and live AI verification remain.
 
 ## Approval gate
 

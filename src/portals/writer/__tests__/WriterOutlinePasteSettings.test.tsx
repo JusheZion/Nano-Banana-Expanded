@@ -50,7 +50,7 @@ describe('WriterOutlinePasteSettings', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('labels AI modes as optional and upcoming and can reset first-use guidance', () => {
+  it('labels AI modes as optional and can reset first-use guidance', () => {
     const onChange = vi.fn();
     render(
       <WriterOutlinePasteSettings
@@ -61,7 +61,7 @@ describe('WriterOutlinePasteSettings', () => {
       />,
     );
 
-    expect(screen.getByText(/optional.*upcoming/i)).not.toBeNull();
+    expect(screen.getByText(/AI is optional.*never rewrite source text/i)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Reset first-use guidance' }));
     expect(onChange).toHaveBeenCalledWith({
       ...DEFAULT_OUTLINE_PASTE_PREFERENCES,
