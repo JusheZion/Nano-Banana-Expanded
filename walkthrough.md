@@ -12135,3 +12135,35 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - After specification approval, create the detailed pass-based implementation plan.
+
+## Writer AI Treatment implementation plan - 2026-07-23
+
+### What changed
+- Converted the approved treatment-contract specification into a four-pass TDD implementation plan.
+- Defined isolated domain, Edge preview, review integration, and mutation/release passes.
+- Added a midpoint audit and a final release gate that separately proves validation, promotion, reload persistence, and reload-safe Undo.
+- Kept the future application Settings page outside this implementation scope.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The plan stores treatment manifests inside existing outline JSONB, avoiding a database migration.
+- The plan retains current mode values for backward compatibility and deploys Edge before the client.
+
+### Verification
+- Plan self-review covers specification requirements, placeholders, type consistency, pass smoke tests, audits, rollback, and closeout.
+- `git diff --check`: passed.
+
+### Outstanding issues
+- Implementation has not started.
+
+### Risks or caveats
+- Deterministic validation proves structural traceability and protected identifiers; nuanced semantic equivalence remains visible for human review rather than being falsely claimed as mechanically provable.
+
+### Operator follow-up
+- Choose inline or subagent-driven execution.
+
+### Next steps
+- Execute Pass 1 only after the user selects an execution approach.
