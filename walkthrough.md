@@ -12578,6 +12578,37 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Review the written design, then create and execute the pass-based implementation plan.
 
+## Outline AI Treatment patch-model implementation plan - 2026-07-23
+
+### What changed
+- Converted the approved patch-model design into a four-pass, test-driven implementation plan covering the deterministic applicator, Edge migration, client review notices, and consolidated live release gate.
+- Kept the plan scoped to the Outline AI Treatment workflow and required the supplied partial-ending failure pattern as a permanent 70-beat regression.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-patch-model-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Execution will be inline because no subagent execution was requested.
+- Each pass has explicit acceptance criteria, a focused smoke test, a result summary, and rollback guidance.
+- The broad full-project test suite is intentionally excluded; the final gate uses one consolidated focused treatment suite, targeted lint, production build, and representative live preview.
+
+### Verification
+- Plan self-review covers design requirements, placeholder avoidance, type consistency, mode permissions, metadata, recovery, and release evidence.
+- No runtime code changed during plan creation.
+
+### Outstanding issues
+- Plan execution remains pending.
+
+### Risks or caveats
+- Production Organize and Polish remains unsafe for long outlines until all four passes complete and the paired deployments pass live verification.
+
+### Operator follow-up
+- Do not promote the currently attached AI proposal.
+
+### Next steps
+- Execute Pass 1 inline and stop only if its focused smoke fails.
+
 ## Organize and Polish duplicate-summary rejection - 2026-07-23
 
 ### What changed
