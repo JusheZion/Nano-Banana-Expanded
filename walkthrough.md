@@ -12207,3 +12207,46 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Implement the preview-only Edge contract and prove that preview generation performs no outline persistence.
+
+## Writer AI Treatment preview boundary - 2026-07-23
+
+### What changed
+- Added mirrored client and Supabase Edge schemas for bounded outline-treatment preview requests and proposal manifests.
+- Added distinct, tested server prompts for Keep My Order, Organize and Polish, and Expand Creatively.
+- Added an authenticated, issue-scoped preview handler that validates model output and returns it without creating or updating an official outline.
+- Reconstructs Keep My Order proposal order and page targets from immutable source-beat identity before returning the preview.
+
+### Files touched
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Requests are limited to 200 unique source beats and 60,000 total source characters.
+- Responses are limited to 250 manifest entries and reject unknown treatment/change values or inconsistent source/result identities.
+- Organize and Expand prompts permit only traceable changes; no mode permits deletion or omission of a source beat.
+- The preview branch may read the issue for authorization but contains no outline version query, insert, or update.
+
+### Verification
+- TDD red checks proved the treatment request/result schemas and prompt module were absent before implementation.
+- `npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts src/shared/writer/__tests__/schemas.test.ts`: passed, 2 files and 47 tests.
+- The prompt suite includes a source-level regression guard that fails if the preview branch gains `.insert()`, `.update()`, or a `writer_issue_outlines` reference.
+- `npx tsc -b --pretty false`: passed.
+
+### Outstanding issues
+- The client does not call the preview endpoint or display/persist review decisions yet; that is Pass 3.
+
+### Risks or caveats
+- Edge deployment and a real authenticated model call remain release-gate work; this pass proves the local contract and read-only code path.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Perform the midpoint trace audit, then integrate Simple and Advanced review and promotion.

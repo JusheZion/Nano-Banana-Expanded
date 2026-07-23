@@ -4,6 +4,7 @@ import {
   ideaAssistResultSchema,
   issueOutlineSchema,
   outlineClassificationPreviewResultSchema,
+  outlineTreatmentPreviewResultSchema,
   pageBeatsJsonSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
@@ -11,6 +12,7 @@ import {
   writerToolsGuidedComicAssistRequestSchema,
   writerToolsDraftDialogueRequestSchema,
   writerToolsOutlineIssueRequestSchema,
+  writerToolsOutlineTreatmentPreviewRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsRequestSchema,
@@ -36,6 +38,110 @@ describe('issueOutlineSchema', () => {
 });
 
 describe('writerToolsRequestSchema', () => {
+  const treatmentRequest = {
+    mode: 'outline_treatment_preview' as const,
+    issue_id: '550e8400-e29b-41d4-a716-446655440000',
+    treatment_mode: 'structure' as const,
+    source_page_count: 52,
+    allowed_page_range: { min: 46, max: 58 },
+    source_beats: [
+      {
+        id: 'source-page-1-1',
+        ordinal: 1,
+        page_target: 1,
+        text: 'The elder begins.',
+      },
+    ],
+  };
+
+  it('parses bounded outline treatment preview requests', () => {
+    expect(writerToolsRequestSchema.parse(treatmentRequest)).toMatchObject({
+      mode: 'outline_treatment_preview',
+      treatment_mode: 'structure',
+    });
+    expect(writerToolsOutlineTreatmentPreviewRequestSchema.parse(treatmentRequest).source_beats).toHaveLength(1);
+  });
+
+  it('rejects malformed outline treatment preview requests', () => {
+    expect(() => writerToolsOutlineTreatmentPreviewRequestSchema.parse({
+      ...treatmentRequest,
+      source_beats: Array.from({ length: 201 }, (_, index) => ({
+        id: `source-${index}`,
+        ordinal: index + 1,
+        text: 'Beat.',
+      })),
+    })).toThrow();
+    expect(() => writerToolsOutlineTreatmentPreviewRequestSchema.parse({
+      ...treatmentRequest,
+      source_beats: [treatmentRequest.source_beats[0], treatmentRequest.source_beats[0]],
+    })).toThrow();
+    expect(() => writerToolsOutlineTreatmentPreviewRequestSchema.parse({
+      ...treatmentRequest,
+      source_beats: [{ ...treatmentRequest.source_beats[0], text: 'x'.repeat(60_001) }],
+    })).toThrow();
+    expect(() => writerToolsOutlineTreatmentPreviewRequestSchema.parse({
+      ...treatmentRequest,
+      allowed_page_range: { min: 59, max: 58 },
+    })).toThrow();
+    expect(() => writerToolsOutlineTreatmentPreviewRequestSchema.parse({
+      ...treatmentRequest,
+      treatment_mode: 'rewrite',
+    })).toThrow();
+  });
+
+  it('validates outline treatment proposals and manifests', () => {
+    const result = outlineTreatmentPreviewResultSchema.parse({
+      proposal: {
+        title: 'Issue 1',
+        page_beats: [{ page_target: 1, summary: 'The elder begins.', treatment_beat_id: 'result-1' }],
+      },
+      manifest: {
+        treatment_mode: 'preserve',
+        source_page_count: 1,
+        proposed_page_count: 1,
+        entries: [{
+          result_beat_id: 'result-1',
+          source_beat_ids: ['source-page-1-1'],
+          change_type: 'language_polished',
+          original_pages: [1],
+          proposed_page: 1,
+          reason: 'Grammar only.',
+        }],
+      },
+    });
+    expect(result.manifest.entries[0].change_type).toBe('language_polished');
+    expect(() => outlineTreatmentPreviewResultSchema.parse({
+      proposal: { page_beats: [{ summary: 'Beat.' }] },
+      manifest: {
+        treatment_mode: 'expand',
+        source_page_count: 1,
+        proposed_page_count: 1,
+        entries: Array.from({ length: 251 }, (_, index) => ({
+          result_beat_id: `result-${index}`,
+          source_beat_ids: [],
+          change_type: 'added',
+          original_pages: [],
+          reason: 'Addition.',
+        })),
+      },
+    })).toThrow();
+    expect(() => outlineTreatmentPreviewResultSchema.parse({
+      proposal: { page_beats: [{ summary: 'Beat.' }] },
+      manifest: {
+        treatment_mode: 'expand',
+        source_page_count: 1,
+        proposed_page_count: 1,
+        entries: [{
+          result_beat_id: 'result-1',
+          source_beat_ids: [],
+          change_type: 'deleted',
+          original_pages: [],
+          reason: 'Invalid.',
+        }],
+      },
+    })).toThrow();
+  });
+
   it('parses outline_issue', () => {
     const r = writerToolsRequestSchema.parse({
       mode: 'outline_issue',

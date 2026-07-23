@@ -266,7 +266,7 @@ floor/ceil rule, producing `46..58` for a 52-page structure treatment and
 - Modify: `supabase/functions/_shared/writerSchemas.ts`
 - Modify: `src/shared/writer/__tests__/schemas.test.ts`
 
-- [ ] **Step 1: Write failing schema tests**
+- [x] **Step 1: Write failing schema tests**
 
 ```ts
 expect(writerToolsOutlineTreatmentPreviewRequestSchema.parse({
@@ -281,13 +281,13 @@ expect(writerToolsOutlineTreatmentPreviewRequestSchema.parse({
 
 Reject more than 200 source beats, duplicate source IDs, text totals above 60,000 characters, invalid page ranges, unknown treatment modes, more than 250 manifest entries, and unknown change types.
 
-- [ ] **Step 2: Run schema tests and verify RED**
+- [x] **Step 2: Run schema tests and verify RED**
 
 ```bash
 npm run test -- --run src/shared/writer/__tests__/schemas.test.ts
 ```
 
-- [ ] **Step 3: Implement mirrored schemas**
+- [x] **Step 3: Implement mirrored schemas**
 
 Add `writerToolsOutlineTreatmentPreviewRequestSchema` and `outlineTreatmentPreviewResultSchema` to both schema files. The result shape is:
 
@@ -303,11 +303,11 @@ Add `writerToolsOutlineTreatmentPreviewRequestSchema` and `outlineTreatmentPrevi
 }
 ```
 
-- [ ] **Step 4: Add the new payload to `WriterToolsRequest`**
+- [x] **Step 4: Add the new payload to `WriterToolsRequest`**
 
 Update the shared discriminated union and `WriterToolsOutlineTreatmentPreviewPayload`.
 
-- [ ] **Step 5: Run mirrored-schema verification**
+- [x] **Step 5: Run mirrored-schema verification**
 
 ```bash
 npm run test -- --run src/shared/writer/__tests__/schemas.test.ts
@@ -321,7 +321,7 @@ npx tsc -b --pretty false
 - Create: `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
 - Create: `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
 
-- [ ] **Step 1: Write failing prompt tests**
+- [x] **Step 1: Write failing prompt tests**
 
 Assert:
 
@@ -331,13 +331,13 @@ Assert:
 - Every prompt requires a manifest entry for every result beat.
 - No prompt permits source-beat deletion.
 
-- [ ] **Step 2: Run prompt tests and verify RED**
+- [x] **Step 2: Run prompt tests and verify RED**
 
 ```bash
 npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts
 ```
 
-- [ ] **Step 3: Implement a pure prompt builder**
+- [x] **Step 3: Implement a pure prompt builder**
 
 ```ts
 export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput): string {
@@ -354,7 +354,7 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
 
 Keep mode-specific permissions in one record and test them directly.
 
-- [ ] **Step 4: Add the Edge handler**
+- [x] **Step 4: Add the Edge handler**
 
 After authentication and issue ownership checks:
 
@@ -367,11 +367,11 @@ After authentication and issue ownership checks:
 7. Return `{ success: true, mode: 'outline_treatment_preview', data }`.
 8. Do not query outline versions and do not insert/update `writer_issue_outlines`.
 
-- [ ] **Step 5: Add zero-persistence Edge tests**
+- [x] **Step 5: Add zero-persistence Edge tests**
 
 Spy on the Supabase query path and assert no `.insert()` or `.update()` occurs for success, schema failure, or AI failure.
 
-- [ ] **Step 6: Run Pass 2 smoke test**
+- [x] **Step 6: Run Pass 2 smoke test**
 
 ```bash
 npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts src/shared/writer/__tests__/schemas.test.ts
@@ -380,7 +380,7 @@ npx tsc -b --pretty false
 
 Expected: prompt/schema suites and TypeScript pass.
 
-- [ ] **Step 7: Commit Pass 2**
+- [x] **Step 7: Commit Pass 2**
 
 ```bash
 git add src/shared/writer/schemas.ts src/shared/writer/types.ts src/shared/writer/__tests__/schemas.test.ts supabase/functions/_shared/writerSchemas.ts supabase/functions/writer-tools/index.ts supabase/functions/writer-tools/outlineTreatmentPrompt.ts supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts
@@ -388,6 +388,13 @@ git commit -m "feat: add validated outline treatment preview"
 ```
 
 **Pass 2 smoke test:** Submit the same 12-beat fixture to all three prompt builders, validate three bounded responses, and prove zero database writes.
+
+**Pass 2 result (2026-07-23):** PASS. Client and Edge now share bounded
+request/response schemas, mode-specific prompts are tested directly, malformed
+manifests fail at the boundary, Keep My Order is reconstructed in immutable
+source order/pages, and the preview branch has a regression guard that rejects
+any outline insert/update or `writer_issue_outlines` reference. Focused smoke:
+2 files, 47 tests passed. TypeScript: `npx tsc -b --pretty false` passed.
 
 **Rollback:** Do not connect the client. Revert the Edge/schema commit or redeploy the previous `writer-tools` version.
 

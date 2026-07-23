@@ -13,6 +13,7 @@ export type IssueOutlinePageBeat = {
   scene?: string;
   summary: string;
   emotional_turn?: string;
+  treatment_beat_id?: string;
 };
 
 /** Stored in writer_issue_outlines.outline_json */
@@ -36,6 +37,40 @@ export type WriterToolsOutlineIssuePayload = {
 export type WriterToolsOutlineClassificationPreviewPayload = {
   mode: 'outline_classification_preview';
   passages: Array<{ id: string; text: string }>;
+};
+
+export type WriterOutlineTreatmentMode = 'preserve' | 'structure' | 'expand';
+
+export type WriterToolsOutlineTreatmentPreviewPayload = {
+  mode: 'outline_treatment_preview';
+  issue_id: string;
+  treatment_mode: WriterOutlineTreatmentMode;
+  source_page_count: number;
+  allowed_page_range: { min: number; max: number };
+  source_beats: Array<{
+    id: string;
+    ordinal: number;
+    page_target?: number;
+    text: string;
+  }>;
+  protected_terms?: string[];
+};
+
+export type OutlineTreatmentPreviewResult = {
+  proposal: IssueOutline;
+  manifest: {
+    treatment_mode: WriterOutlineTreatmentMode;
+    source_page_count: number;
+    proposed_page_count: number;
+    entries: Array<{
+      result_beat_id: string;
+      source_beat_ids: string[];
+      change_type: 'unchanged' | 'language_polished' | 'moved' | 'combined' | 'enhanced' | 'added';
+      original_pages: number[];
+      proposed_page?: number;
+      reason: string;
+    }>;
+  };
 };
 
 export type WriterProductionDefaultsPayload = {
@@ -204,6 +239,7 @@ export type GuidedComicAssistResult = {
 export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsOutlineClassificationPreviewPayload
+  | WriterToolsOutlineTreatmentPreviewPayload
   | WriterToolsPageBeatsPayload
   | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload

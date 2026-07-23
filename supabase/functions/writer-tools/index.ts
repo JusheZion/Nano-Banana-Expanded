@@ -6,6 +6,7 @@ import {
   ideaAssistResultSchema,
   issueOutlineSchema,
   outlineClassificationPreviewResultSchema,
+  outlineTreatmentPreviewResultSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
@@ -13,6 +14,10 @@ import {
   WRITER_PAGE_BEATS_ISSUE_MAX,
   writerToolsRequestSchema,
 } from '../_shared/writerSchemas.ts';
+import {
+  buildOutlineTreatmentPrompt,
+  restorePreserveStructure,
+} from './outlineTreatmentPrompt.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1367,6 +1372,91 @@ Deno.serve(async (req) => {
       return Response.json(
         { success: false, error: 'Invalid JWT', details: authErr.message },
         { status: 401, headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'outline_treatment_preview') {
+      const {
+        issue_id,
+        treatment_mode,
+        source_page_count,
+        allowed_page_range,
+        source_beats,
+        protected_terms = [],
+      } = parsedReq.data;
+      const issue = await loadIssueRow(supabase, issue_id);
+      if (!issue) {
+        return Response.json(
+          { success: false, error: 'Issue not found' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+
+      const promptInput = {
+        treatmentMode: treatment_mode,
+        sourcePageCount: source_page_count,
+        allowedPageRange: allowed_page_range,
+        sourceBeats: source_beats,
+        protectedTerms: protected_terms,
+      };
+      let treatmentJson: unknown;
+      try {
+        treatmentJson = await callGeminiJson({
+          system: [
+            'You are a careful comics outline editor.',
+            'Obey the requested treatment contract exactly and return valid JSON only.',
+          ].join(' '),
+          user: buildOutlineTreatmentPrompt(promptInput),
+          preferredModel: geminiModel,
+          apiKey: geminiKey,
+          temperature: treatment_mode === 'preserve' ? 0.2 : treatment_mode === 'structure' ? 0.45 : 0.65,
+        });
+      } catch (e) {
+        return llmFailureResponse(e instanceof Error ? e.message : String(e));
+      }
+
+      const initial = outlineTreatmentPreviewResultSchema.safeParse(treatmentJson);
+      if (!initial.success) {
+        return Response.json(
+          { success: false, error: 'Outline treatment preview failed validation', details: initial.error.message },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const restored = restorePreserveStructure(initial.data, promptInput);
+      const result = outlineTreatmentPreviewResultSchema.safeParse(restored);
+      if (!result.success) {
+        return Response.json(
+          { success: false, error: 'Outline treatment preview failed validation', details: result.error.message },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const sourceIds = new Set(source_beats.map((beat) => beat.id));
+      const coveredSourceIds = result.data.manifest.entries.flatMap((entry) => entry.source_beat_ids);
+      const proposalIds = (result.data.proposal.page_beats ?? [])
+        .map((beat) => beat.treatment_beat_id)
+        .filter((id): id is string => typeof id === 'string');
+      const manifestResultIds = result.data.manifest.entries.map((entry) => entry.result_beat_id);
+      const manifestIsConsistent = (
+        result.data.manifest.treatment_mode === treatment_mode
+        && result.data.manifest.source_page_count === source_page_count
+        && result.data.manifest.proposed_page_count >= allowed_page_range.min
+        && result.data.manifest.proposed_page_count <= allowed_page_range.max
+        && sourceIds.size === new Set(coveredSourceIds).size
+        && coveredSourceIds.every((id) => sourceIds.has(id))
+        && new Set(manifestResultIds).size === manifestResultIds.length
+        && proposalIds.length === manifestResultIds.length
+        && proposalIds.every((id) => manifestResultIds.includes(id))
+      );
+      if (!manifestIsConsistent) {
+        return Response.json(
+          { success: false, error: 'Outline treatment preview returned an inconsistent manifest' },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+
+      return Response.json(
+        { success: true, mode: 'outline_treatment_preview', data: result.data },
+        { headers: corsHeaders },
       );
     }
 

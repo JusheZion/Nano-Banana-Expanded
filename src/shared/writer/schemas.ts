@@ -14,6 +14,7 @@ const issueOutlinePageBeatSchema = z.object({
   scene: z.string().optional(),
   summary: z.string(),
   emotional_turn: z.string().optional(),
+  treatment_beat_id: z.string().min(1).max(160).optional(),
 });
 
 export const writerProductionDefaultsPayloadSchema = z
@@ -85,6 +86,62 @@ export const outlineClassificationPreviewResultSchema = z.object({
     page_target: z.number().int().min(1).max(200).optional(),
     reason: z.string().max(240),
   }).strict()).max(250),
+}).strict();
+
+const writerOutlineTreatmentModeSchema = z.enum(['preserve', 'structure', 'expand']);
+const treatmentChangeTypeSchema = z.enum([
+  'unchanged',
+  'language_polished',
+  'moved',
+  'combined',
+  'enhanced',
+  'added',
+]);
+const treatmentSourceBeatSchema = z.object({
+  id: z.string().min(1).max(160),
+  ordinal: z.number().int().min(1).max(200),
+  page_target: z.number().int().min(1).max(200).optional(),
+  text: z.string().min(1).max(60_000),
+}).strict();
+const treatmentPageRangeSchema = z.object({
+  min: z.number().int().min(1).max(200),
+  max: z.number().int().min(1).max(200),
+}).strict().refine((range) => range.min <= range.max, {
+  message: 'allowed page range minimum must not exceed maximum',
+});
+const treatmentManifestEntrySchema = z.object({
+  result_beat_id: z.string().min(1).max(160),
+  source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
+  change_type: treatmentChangeTypeSchema,
+  original_pages: z.array(z.number().int().min(1).max(200)).max(200),
+  proposed_page: z.number().int().min(1).max(200).optional(),
+  reason: z.string().min(1).max(1000),
+}).strict();
+
+export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
+  mode: z.literal('outline_treatment_preview'),
+  issue_id: z.string().uuid(),
+  treatment_mode: writerOutlineTreatmentModeSchema,
+  source_page_count: z.number().int().min(1).max(200),
+  allowed_page_range: treatmentPageRangeSchema,
+  source_beats: z.array(treatmentSourceBeatSchema).min(1).max(200)
+    .refine((beats) => new Set(beats.map((beat) => beat.id)).size === beats.length, {
+      message: 'source beat ids must not contain duplicates',
+    })
+    .refine((beats) => beats.reduce((total, beat) => total + beat.text.length, 0) <= 60_000, {
+      message: 'source beat text must contain at most 60000 characters',
+    }),
+  protected_terms: z.array(z.string().min(1).max(200)).max(250).optional(),
+}).strict();
+
+export const outlineTreatmentPreviewResultSchema = z.object({
+  proposal: issueOutlineSchema,
+  manifest: z.object({
+    treatment_mode: writerOutlineTreatmentModeSchema,
+    source_page_count: z.number().int().min(1).max(200),
+    proposed_page_count: z.number().int().min(1).max(200),
+    entries: z.array(treatmentManifestEntrySchema).max(250),
+  }).strict(),
 }).strict();
 
 const pageBeatPanelSchema = z.object({
@@ -458,6 +515,7 @@ export const guidedComicAssistResultSchema = z
 export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
   writerToolsOutlineClassificationPreviewRequestSchema,
+  writerToolsOutlineTreatmentPreviewRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,
