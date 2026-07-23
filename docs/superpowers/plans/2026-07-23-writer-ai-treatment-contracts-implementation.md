@@ -51,7 +51,7 @@
 - Modify: `src/portals/writer/writerSynopsisHelper.ts`
 - Modify: `src/portals/writer/WriterPortal.tsx`
 
-- [ ] **Step 1: Write failing contract-definition tests**
+- [x] **Step 1: Write failing contract-definition tests**
 
 ```ts
 expect(getTreatmentContract('preserve')).toMatchObject({
@@ -65,7 +65,7 @@ expect(getTreatmentContract('expand').pageTolerance).toBe(0.20);
 expect(getTreatmentPageRange('structure', 52)).toEqual({ min: 47, max: 57 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -75,7 +75,7 @@ npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContrac
 
 Expected: FAIL because the contract module does not exist.
 
-- [ ] **Step 3: Implement the central contract**
+- [x] **Step 3: Implement the central contract**
 
 ```ts
 export const WRITER_OUTLINE_TREATMENT_MODES = ['preserve', 'structure', 'expand'] as const;
@@ -114,11 +114,11 @@ export const TREATMENT_CONTRACTS = {
 
 Use `Math.floor(sourcePages * (1 - tolerance))` and `Math.ceil(sourcePages * (1 + tolerance))`, clamped to `1..200`.
 
-- [ ] **Step 4: Replace duplicated labels in both Writer modes**
+- [x] **Step 4: Replace duplicated labels in both Writer modes**
 
 Render Simple and Advanced controls from `TREATMENT_CONTRACTS`. Preserve stored values `preserve`, `structure`, and `expand` for backward compatibility.
 
-- [ ] **Step 5: Run focused tests and commit**
+- [x] **Step 5: Run focused tests and commit**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts src/portals/writer/__tests__/writerSynopsisHelper.test.ts
@@ -132,7 +132,7 @@ git commit -m "feat: centralize outline treatment contracts"
 - Create: `src/portals/writer/writerOutlineTreatmentValidation.ts`
 - Create: `src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts`
 
-- [ ] **Step 1: Write failing source-normalization tests**
+- [x] **Step 1: Write failing source-normalization tests**
 
 ```ts
 const source = normalizeTreatmentSource({
@@ -148,7 +148,7 @@ expect(source.pageCount).toBe(2);
 
 IDs use page target plus source ordinal, never rewritten text alone. Missing page targets use `source-unpaged-{ordinal}`.
 
-- [ ] **Step 2: Write failing mode-validation tests**
+- [x] **Step 2: Write failing mode-validation tests**
 
 Cover:
 
@@ -166,7 +166,7 @@ expect(validateTreatmentProposal(expandInputWithMappedSourcesAndAddition).valid)
 
 Also cover unknown IDs, duplicate result IDs, forbidden additions, Keep My Order page changes, protected character-name removal, malformed change types, and empty proposals.
 
-- [ ] **Step 3: Run the test and verify RED**
+- [x] **Step 3: Run the test and verify RED**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts
@@ -174,7 +174,7 @@ npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentValidat
 
 Expected: FAIL because normalization and validation are absent.
 
-- [ ] **Step 4: Implement exact manifest types and validation**
+- [x] **Step 4: Implement exact manifest types and validation**
 
 ```ts
 export type TreatmentChangeType =
@@ -212,7 +212,7 @@ export type TreatmentValidationResult = {
 
 For Keep My Order, rebuild result ordering and page targets from source records before validation. For all modes, require the set union of manifest `sourceBeatIds` to equal the source ID set.
 
-- [ ] **Step 5: Add Advanced decision application tests**
+- [x] **Step 5: Add Advanced decision application tests**
 
 ```ts
 const restored = rejectTreatmentChange(session, 'result-combined-3');
@@ -225,7 +225,7 @@ expect(validateTreatmentProposal(restored).valid).toBe(true);
 
 Rejecting `added` removes the result. Rejecting `combined`, `moved`, or `enhanced` restores immutable source beats.
 
-- [ ] **Step 6: Run Pass 1 smoke test**
+- [x] **Step 6: Run Pass 1 smoke test**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts
@@ -234,9 +234,19 @@ npx tsc -b --pretty false
 
 Expected: all focused tests and TypeScript pass.
 
-- [ ] **Step 7: Record Pass 1 result**
+- [x] **Step 7: Record Pass 1 result**
 
 Append exact counts and any resolved edge cases to this plan and `walkthrough.md`.
+
+**Pass 1 result (2026-07-23):** PASS. Contract definitions and deterministic
+proposal validation are centralized. Source beats receive stable page/ordinal
+identity; every proposal must account for the complete source set; duplicate,
+unknown, missing, and mode-forbidden manifest changes are rejected; protected
+terms are checked; and Advanced rejection restores immutable source beats or
+removes additions. The bounded page ranges intentionally use the plan's
+floor/ceil rule, producing `46..58` for a 52-page structure treatment and
+`41..63` for expand. Focused smoke: 2 files, 12 tests passed. TypeScript:
+`npx tsc -b --pretty false` passed.
 
 **Pass 1 smoke test:** A fixture with 12 beats must reject one removed source ID under every mode, reject a moved beat under Keep My Order, accept traceable combination within Organize and Polish, and accept a mapped addition within Expand Creatively.
 

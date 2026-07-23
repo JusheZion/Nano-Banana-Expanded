@@ -12167,3 +12167,43 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Execute Pass 1 only after the user selects an execution approach.
+
+## Writer AI Treatment contracts and validation - 2026-07-23
+
+### What changed
+- Centralized the three Writer outline treatment contracts so Simple and Advanced modes display the same permissions and page flexibility.
+- Added deterministic source-beat normalization, treatment-manifest validation, and Advanced change rejection/restoration.
+- Enforced complete source coverage, stable beat identity, mode-specific structural permissions, bounded page counts, protected terms, and malformed-proposal rejection before promotion.
+
+### Files touched
+- `src/portals/writer/writerOutlineTreatmentContracts.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/portals/writer/writerSynopsisHelper.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Keep My Order permits language and formatting changes only and requires exact beat order and pages.
+- Organize and Polish permits traceable movement, combination, enhancement, and additions within a floor/ceil bounded 10% page range.
+- Expand Creatively uses the same traceability contract with a 20% page range.
+- Rejecting an Advanced added beat removes it; rejecting a combined, moved, or enhanced result restores the immutable source beats.
+
+### Verification
+- TDD red checks confirmed both new modules were absent before implementation.
+- `npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContracts.test.ts src/portals/writer/__tests__/writerOutlineTreatmentValidation.test.ts`: passed, 2 files and 12 tests.
+- `npx tsc -b --pretty false`: passed.
+
+### Outstanding issues
+- The AI preview request/response schemas, server prompt enforcement, review UI, promotion persistence, and live mutation proof remain for Passes 2-4.
+
+### Risks or caveats
+- Protected-term validation currently proves literal presence, not nuanced semantic equivalence; human review remains necessary for meaning.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Implement the preview-only Edge contract and prove that preview generation performs no outline persistence.
