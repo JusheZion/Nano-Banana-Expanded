@@ -85,6 +85,8 @@ import {
 import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRibbon';
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
 import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
+import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
+import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
@@ -177,6 +179,7 @@ import {
 import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/portals/writer/writerRegenerationScope';
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePasteApply';
+import { mergeOutlineAlternateIntoNotes } from '@/portals/writer/writerOutlineAlternates';
 import {
   captureReviewedOutlinePriorSource,
   clearReviewedOutlineRecoveryErrors,
@@ -187,7 +190,12 @@ import {
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
 } from '@/portals/writer/writerOutlinePasteRecovery';
-import type { OutlinePasteDiagnostic } from '@/portals/writer/writerOutlinePasteDiagnostic';
+import { analyzeOutlinePaste, type OutlinePasteDiagnostic } from '@/portals/writer/writerOutlinePasteDiagnostic';
+import {
+  mergeOutlineClassificationSuggestions,
+  parseOutlineClassificationSuggestions,
+} from '@/portals/writer/writerOutlineAiClassification';
+import { issueOutlineSchema } from '@/shared/writer/schemas';
 import {
   DEFAULT_OUTLINE_PASTE_PREFERENCES,
   loadOutlinePastePreferences,
@@ -1000,6 +1008,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   } | null>(null);
   const [outlinePasteReviewBusy, setOutlinePasteReviewBusy] = useState(false);
   const [outlinePasteReviewError, setOutlinePasteReviewError] = useState<string | null>(null);
+  const [outlineImportOpen, setOutlineImportOpen] = useState(false);
+  const [outlineTreatmentProposal, setOutlineTreatmentProposal] = useState<Record<string, unknown> | null>(null);
+  const [outlineTreatmentBusy, setOutlineTreatmentBusy] = useState(false);
+  const [outlineTreatmentError, setOutlineTreatmentError] = useState<string | null>(null);
   const [lastReviewedInsert, setLastReviewedInsert] = useState<(ReviewedOutlineInsert & {
     diagnostic: OutlinePasteDiagnostic;
     canonicalSourceText: string;
@@ -2960,18 +2972,24 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       const res = await invokeWriterTools({
         mode: 'outline_issue',
         issue_id: selectedIssueId,
+        save: false,
         target_page_count: effectiveOutlineTargetPageCount,
         production_defaults: productionDefaultsPayload,
         ...(supplementTrim ? { outline_supplement: supplementTrim } : {}),
       });
       setOutlineGenLoading(false);
       if (res.success) {
-        if (opts?.coverageBoost) {
-          setOutlineSupplementDraft(supplementTrim);
+        const parsedProposal = issueOutlineSchema.safeParse(res.data);
+        if (!parsedProposal.success) {
+          const msg = 'AI returned an outline proposal that could not be reviewed safely.';
+          setOutlineGenError(msg);
+          pushHistory(`error: ${msg}`);
+          return;
         }
-        pushHistory(`outline v${res.version ?? '?'} saved`);
-        const rows = await listWriterOutlinesForIssue(selectedIssueId);
-        setOutlines(rows);
+        if (opts?.coverageBoost) setOutlineSupplementDraft(supplementTrim);
+        setOutlineTreatmentProposal(parsedProposal.data);
+        setOutlineTreatmentError(null);
+        pushHistory('AI outline proposal ready for review');
       } else {
         const msg = toolErrorMessage(res);
         setOutlineGenError(msg);
@@ -2993,6 +3011,109 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pushHistory,
     ],
   );
+
+  const suggestOutlineAssignments = useCallback(async (diagnostic: OutlinePasteDiagnostic) => {
+    const candidates = diagnostic.passages.filter((passage) => passage.assignment === 'unassigned');
+    if (!candidates.length) return diagnostic;
+    const res = await invokeWriterTools({
+      mode: 'outline_classification_preview',
+      passages: candidates.map((passage) => ({ id: passage.id, text: passage.text })),
+    });
+    if (!res.success) throw new Error(toolErrorMessage(res));
+    const suggestions = parseOutlineClassificationSuggestions(
+      res.data,
+      new Set(diagnostic.passages.map((passage) => passage.id)),
+    );
+    return mergeOutlineClassificationSuggestions(diagnostic, suggestions);
+  }, []);
+
+  const promoteOutlineTreatment = useCallback(async (proposal: Record<string, unknown>) => {
+    if (!selectedIssueId || !selectedIssue || outlineTreatmentBusy) return;
+    if (latestOutline && !guardWriterLock('outline.latest', 'Latest outline')) return;
+    if (!guardWriterLock('issue.author_outline', 'My Outline')) return;
+
+    const canonicalSourceText = formatOutlineAsText(proposal);
+    const diagnostic = analyzeOutlinePaste(canonicalSourceText, 'clipboard');
+    const { priorAuthorOutline, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);
+    let notesAfterSnapshot = selectedIssue.notes;
+    setOutlineTreatmentBusy(true);
+    setOutlineTreatmentError(null);
+    const result = await persistReviewedOutlineVersion({
+      previousOutline: latestOutline ?? null,
+      approvedOutline: proposal,
+      canonicalSourceText,
+      sourceLocked: false,
+    }, {
+      snapshotPrevious: async (previous) => {
+        notesAfterSnapshot = mergeWriterStorySnapshotIntoNotes(selectedIssue.notes, {
+          key: 'outline.latest',
+          label: `Outline v${previous.version} before AI treatment`,
+          value: previous.outline_json,
+        });
+        return await updateSelectedIssueNotes(notesAfterSnapshot)
+          ? { ok: true }
+          : { ok: false, error: 'Issue notes could not be updated.' };
+      },
+      createVersion: (outlineJson) => createWriterOutlineVersion({
+        issueId: selectedIssueId,
+        outlineJson,
+        sourceMode: 'ai_treatment',
+        expectedPreviousId: latestOutline?.id ?? null,
+      }),
+      syncSource: async (sourceText) => {
+        const nextNotes = mergeAuthorOutlineIntoNotes(notesAfterSnapshot, { text: sourceText, mode: authorOutlineMode });
+        return await updateSelectedIssueNotes(nextNotes)
+          ? { ok: true }
+          : { ok: false, error: 'My Outline could not be synchronized.' };
+      },
+      refreshOutlines: () => listWriterOutlinesForIssueResult(selectedIssueId),
+    });
+    setOutlineTreatmentBusy(false);
+    if (result.rows) setOutlines(result.rows);
+    if (!result.ok) {
+      setOutlineTreatmentError(result.error);
+      if (result.partial && result.row) {
+        setLastReviewedInsert({
+          diagnostic,
+          insertedRow: result.row,
+          previousOutline: result.predecessor ?? null,
+          hadPreviousOutline: Boolean(result.predecessor),
+          origin: 'official_editor',
+          canonicalSourceText,
+          sourceSyncPending: true,
+          priorAuthorOutline,
+          priorAuthorSource,
+        });
+      }
+      pushHistory(`error: ${result.error}`);
+      return;
+    }
+    setAuthorOutlineText(canonicalSourceText);
+    setOutlineTreatmentProposal(null);
+    setOutlineTreatmentError(null);
+    setLastReviewedInsert({
+      diagnostic,
+      insertedRow: result.row,
+      previousOutline: result.predecessor,
+      hadPreviousOutline: Boolean(result.predecessor),
+      origin: 'official_editor',
+      canonicalSourceText,
+      sourceSyncPending: false,
+      priorAuthorOutline,
+      priorAuthorSource,
+    });
+    setLastReviewedUndoError(null);
+    pushHistory(`AI treatment promoted as outline v${result.row.version}`);
+  }, [
+    authorOutlineMode,
+    guardWriterLock,
+    latestOutline,
+    outlineTreatmentBusy,
+    pushHistory,
+    selectedIssue,
+    selectedIssueId,
+    updateSelectedIssueNotes,
+  ]);
 
   const restorePreviousOutline = useCallback(async () => {
     if (!selectedIssueId || !latestOutline || outlines.length < 2) return;
@@ -4426,8 +4547,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pushHistory,
   ]);
 
-  const applyOutlinePasteReview = useCallback(async (diagnostic: OutlinePasteDiagnostic) => {
-    if (!selectedIssueId || !selectedIssue || !outlinePasteReview || lastReviewedUndoBusy) return;
+  const applyOutlinePasteReview = useCallback(async (
+    diagnostic: OutlinePasteDiagnostic,
+    originOverride?: 'source' | 'official_editor',
+  ) => {
+    const reviewOrigin = originOverride ?? outlinePasteReview?.origin;
+    if (!selectedIssueId || !selectedIssue || !reviewOrigin || lastReviewedUndoBusy) return;
     if (lastReviewedInsert?.sourceSyncPending) {
       if (lastReviewedInsert.insertedRow.issue_id !== selectedIssueId) {
         setOutlinePasteReviewError('Return to the issue that owns the saved outline version before retrying source sync.');
@@ -4486,7 +4611,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       return;
     }
 
-    const approvedOutline = outlinePasteReview.origin === 'official_editor' && latestOutline
+    const approvedOutline = reviewOrigin === 'official_editor' && latestOutline
       ? { ...latestOutline.outline_json, ...diagnostic.proposedOutline }
       : diagnostic.proposedOutline;
     const canonicalSourceText = formatOutlineAsText(approvedOutline);
@@ -4549,7 +4674,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             insertedRow: result.row,
             previousOutline: result.predecessor ?? null,
             hadPreviousOutline: Boolean(result.predecessor),
-            origin: outlinePasteReview.origin,
+            origin: reviewOrigin,
             canonicalSourceText,
             sourceSyncPending: true,
             priorAuthorOutline,
@@ -4575,7 +4700,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       insertedRow: result.row,
       previousOutline: result.predecessor,
       hadPreviousOutline: Boolean(result.predecessor),
-      origin: outlinePasteReview.origin,
+      origin: reviewOrigin,
       canonicalSourceText,
       sourceSyncPending: false,
       priorAuthorOutline,
@@ -8568,6 +8693,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
+                            disabled={!selectedIssueId}
+                            onClick={() => setOutlineImportOpen(true)}
+                            className="writer-attention-advanced rounded-md border border-black/25 bg-black px-3 py-1.5 text-[11px] font-black text-white shadow-sm hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
+                            title="Import TXT, Markdown, or pasted text through a lossless review before making it official"
+                          >
+                            Import outline
+                          </button>
+                          <button
+                            type="button"
                             disabled={!supabaseOk || scriptsBusy}
                             onClick={() => void saveAuthorOutlineToNotes()}
                             className="rounded-md px-3 py-1.5 text-[11px] font-black text-black shadow-sm hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 disabled:opacity-45"
@@ -11630,6 +11764,64 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             onKeepUnstructured={keepOutlinePasteUnstructured}
             onCancel={cancelOutlinePasteReview}
             onPreferencesChange={updateOutlinePastePreferences}
+            onSuggest={outlinePastePreferences.aiClassification === 'off' ? undefined : suggestOutlineAssignments}
+          />
+        ) : null}
+
+        {outlineImportOpen && selectedIssueId ? (
+          <WriterOutlineImportWizard
+            issueId={selectedIssueId}
+            initialText={authorOutlineText}
+            preferences={outlinePastePreferences}
+            onPreferencesChange={updateOutlinePastePreferences}
+            onSuggest={outlinePastePreferences.aiClassification === 'off' ? undefined : suggestOutlineAssignments}
+            onClose={() => setOutlineImportOpen(false)}
+            onApply={(diagnostic) => {
+              setOutlineImportOpen(false);
+              setOutlinePasteReview({ diagnostic, origin: 'source' });
+              setOutlinePasteReviewError(null);
+              void applyOutlinePasteReview(diagnostic, 'source');
+            }}
+          />
+        ) : null}
+
+        {outlineTreatmentProposal ? (
+          <WriterOutlineTreatmentReview
+            currentOutline={latestOutline?.outline_json ?? null}
+            proposal={outlineTreatmentProposal}
+            busy={outlineTreatmentBusy}
+            error={outlineTreatmentError}
+            onCancel={() => {
+              if (outlineTreatmentBusy) return;
+              setOutlineTreatmentProposal(null);
+              setOutlineTreatmentError(null);
+              pushHistory('AI outline proposal canceled; official outline unchanged');
+            }}
+            onRegenerate={() => {
+              if (outlineTreatmentBusy) return;
+              setOutlineTreatmentProposal(null);
+              void runOutlineGenerate();
+            }}
+            onKeepAlternate={(proposal) => {
+              if (!selectedIssue) return;
+              const nextNotes = mergeOutlineAlternateIntoNotes(selectedIssue.notes, {
+                at: new Date().toISOString(),
+                treatmentMode: authorOutlineMode,
+                proposal,
+              });
+              setOutlineTreatmentBusy(true);
+              setOutlineTreatmentError(null);
+              void updateSelectedIssueNotes(nextNotes).then((ok) => {
+                setOutlineTreatmentBusy(false);
+                if (!ok) {
+                  setOutlineTreatmentError('The alternate could not be saved. Your editable proposal is still here.');
+                  return;
+                }
+                setOutlineTreatmentProposal(null);
+                pushHistory('AI outline proposal kept as an alternate; official outline unchanged');
+              });
+            }}
+            onMakeOfficial={(proposal) => void promoteOutlineTreatment(proposal)}
           />
         ) : null}
 

@@ -462,6 +462,13 @@ function createDiagnostic(
   };
 }
 
+export function rebuildOutlinePasteDiagnostic(
+  diagnostic: Pick<OutlinePasteDiagnostic, 'originalText' | 'sourceType'>,
+  passages: OutlinePastePassage[],
+): OutlinePasteDiagnostic {
+  return createDiagnostic(diagnostic.originalText, passages, diagnostic.sourceType);
+}
+
 export function analyzeOutlinePaste(
   text: string,
   sourceType: OutlinePasteSourceType = 'clipboard',

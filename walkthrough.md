@@ -11943,3 +11943,75 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Integrate safe paste, preferences, downloads, version recovery, and browser QA in Pass 4.
+
+## Writer outline paste review — consolidated verification and rescope - 2026-07-22
+
+### What changed
+- Ran a fresh consolidated regression/build gate against commit `e25160b` after stopping further implementation.
+- Reconciled the stale nine-pass tracker with the committed product state: the shared paste foundation and Simple Workflow/recovery are complete; Advanced import, optional AI review/treatment, responsive closeout, and release remain.
+- Added a four-pass consolidated closeout plan in which Passes 1–2 are already complete and Passes 3–4 require explicit user approval.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-22-writer-outline-paste-review-consolidated-closeout-plan.md`
+- `walkthrough.md`
+
+### Verification
+- `npm run test`: 106 test files / 667 tests passed.
+- `npm run build`: passed; 2,597 modules transformed. Existing large-chunk advisory remains non-blocking.
+- Worktree was clean before this documentation-only update.
+
+### Outstanding issues
+- Mobile browser QA found the paste-review sticky action area overlapping the fixed app bottom navigation by approximately 52 px.
+- Advanced Tools import, optional AI mapping suggestions, editable AI Treatment preview/promotion, signed-in end-to-end QA, and live deployment are not implemented or completed in this branch.
+
+### Risks or caveats
+- Official outline version allocation still has a documented cross-client race because the database lacks a verified `(issue_id, version)` uniqueness constraint or atomic RPC.
+- No push, Supabase deployment, or Cloudflare deployment occurred in this work block.
+
+### Operator follow-up
+- Approve, revise, or reject consolidated Passes 3–4 before implementation resumes.
+
+### Next steps
+- If approved, execute Pass 3 inline, stop on its focused smoke-test result, then execute Pass 4 and the single final release gate.
+
+## Writer outline paste review — consolidated Pass 3 - 2026-07-22
+
+### What changed
+- Added the Advanced Tools outline importer for pasted text and TXT/Markdown files, backed by the same lossless diagnostic model as Simple Workflow.
+- Added issue-scoped resumable drafts, dirty-close confirmation, explicit draft discard, manual assignment with AI off, and preference-controlled AI suggestion behavior.
+- Added preview-only outline classification with passage/character limits, stable-ID validation, duplicate/unknown-ID rejection, and source-text preservation.
+- Changed AI outline generation to return a preview by default in WriterPortal; added an editable current-vs-proposal treatment review with cancel, regenerate, keep-as-alternate, and explicit Make official actions.
+- Added bounded alternate retention in issue notes and reused the established version snapshot/sync/recovery/Undo path for promotion.
+
+### Files touched
+- `src/portals/writer/WriterOutlineImportWizard.tsx`
+- `src/portals/writer/WriterOutlineTreatmentReview.tsx`
+- `src/portals/writer/WriterOutlinePasteReview.tsx`
+- `src/portals/writer/WriterOutlinePasteSettings.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerOutlineImportDraft.ts`
+- `src/portals/writer/writerOutlineAiClassification.ts`
+- `src/portals/writer/writerOutlineAlternates.ts`
+- `src/portals/writer/writerOutlinePasteDiagnostic.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- Focused tests under `src/portals/writer/__tests__/` and `src/shared/writer/__tests__/schemas.test.ts`
+
+### Verification
+- Focused Pass 3 gate: 10 test files / 137 tests passed.
+- TypeScript project compilation: passed.
+- Scoped ESLint with zero-error mode: passed.
+
+### Outstanding issues
+- Signed-in browser smoke, full regression/build, Cloudflare deployment, and the changed `writer-tools` Edge Function deployment remain in Pass 4.
+
+### Risks or caveats
+- Live AI preview behavior depends on deploying the changed Supabase Edge Function before live Cloudflare verification.
+
+### Operator follow-up
+- None before Pass 4; implementation approval already granted.
+
+### Next steps
+- Run Pass 4 responsive/accessibility browser QA, fix reproducible findings, then complete the single release gate and deployments.

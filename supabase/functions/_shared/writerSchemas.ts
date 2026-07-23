@@ -56,10 +56,37 @@ export const issueOutlineSchema = z
 export const writerToolsOutlineIssueRequestSchema = z.object({
   mode: z.literal('outline_issue'),
   issue_id: z.string().uuid(),
+  save: z.boolean().optional(),
   target_page_count: z.number().int().positive().max(200).optional(),
   outline_supplement: z.string().max(8000).optional(),
   production_defaults: writerProductionDefaultsPayloadSchema.optional(),
 });
+
+const outlineClassificationPassageSchema = z.object({
+  id: z.string().min(1).max(160),
+  text: z.string().min(1).max(4000),
+}).strict();
+
+export const writerToolsOutlineClassificationPreviewRequestSchema = z.object({
+  mode: z.literal('outline_classification_preview'),
+  passages: z.array(outlineClassificationPassageSchema).min(1).max(250)
+    .refine((items) => new Set(items.map((item) => item.id)).size === items.length, {
+      message: 'passage ids must not contain duplicates',
+    })
+    .refine((items) => items.reduce((total, item) => total + item.text.length, 0) <= 60_000, {
+      message: 'passage text must contain at most 60000 characters',
+    }),
+});
+
+export const outlineClassificationPreviewResultSchema = z.object({
+  suggestions: z.array(z.object({
+    id: z.string().min(1).max(160),
+    assignment: z.enum(['title', 'premise', 'act', 'page_beat', 'notes', 'unassigned']),
+    act_name: z.string().max(200).optional(),
+    page_target: z.number().int().min(1).max(200).optional(),
+    reason: z.string().max(240),
+  }).strict()).max(250),
+}).strict();
 
 const pageBeatPanelSchema = z.object({
   index: z.number().int().positive().max(99).optional(),
@@ -424,6 +451,7 @@ export const guidedComicAssistResultSchema = z
 
 export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
+  writerToolsOutlineClassificationPreviewRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,

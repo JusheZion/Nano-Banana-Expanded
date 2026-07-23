@@ -27,9 +27,15 @@ export type IssueOutline = {
 export type WriterToolsOutlineIssuePayload = {
   mode: 'outline_issue';
   issue_id: string;
+  save?: boolean;
   target_page_count?: number;
   outline_supplement?: string;
   production_defaults?: WriterProductionDefaultsPayload;
+};
+
+export type WriterToolsOutlineClassificationPreviewPayload = {
+  mode: 'outline_classification_preview';
+  passages: Array<{ id: string; text: string }>;
 };
 
 export type WriterProductionDefaultsPayload = {
@@ -197,6 +203,7 @@ export type GuidedComicAssistResult = {
 
 export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
+  | WriterToolsOutlineClassificationPreviewPayload
   | WriterToolsPageBeatsPayload
   | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload

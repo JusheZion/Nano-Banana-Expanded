@@ -49,14 +49,14 @@ export function WriterOutlinePasteSettings({
             className="mt-1.5 block w-full rounded-md border border-black/15 bg-white px-2.5 py-2 text-xs font-semibold text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40"
           >
             <option value="off">Off</option>
-            <option value="suggest">Suggest destinations (upcoming)</option>
-            <option value="classify_with_review">Classify with review (upcoming)</option>
+            <option value="suggest">Suggest destinations when requested</option>
+            <option value="classify_with_review">Offer suggestions in review</option>
           </select>
         </label>
       </div>
 
       <p className="text-[10px] font-semibold leading-snug text-black/52">
-        AI classification is optional and upcoming. These modes are saved now but stay inactive until the assisted review pass ships.
+        AI is optional. Suggestions never rewrite source text and remain editable until you apply the review.
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/10 pt-3">

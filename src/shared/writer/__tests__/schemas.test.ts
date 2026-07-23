@@ -3,6 +3,7 @@ import {
   guidedComicAssistResultSchema,
   ideaAssistResultSchema,
   issueOutlineSchema,
+  outlineClassificationPreviewResultSchema,
   pageBeatsJsonSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
@@ -69,6 +70,25 @@ describe('writerToolsRequestSchema', () => {
         no_video_assumptions: true,
       },
     });
+  });
+
+  it('parses preview-only outline_issue requests', () => {
+    const parsed = writerToolsOutlineIssueRequestSchema.parse({
+      mode: 'outline_issue',
+      issue_id: '550e8400-e29b-41d4-a716-446655440000',
+      save: false,
+    });
+    expect(parsed.save).toBe(false);
+  });
+
+  it('validates outline classification preview results', () => {
+    const parsed = outlineClassificationPreviewResultSchema.parse({
+      suggestions: [{ id: 'p1', assignment: 'notes', reason: 'Reflective note' }],
+    });
+    expect(parsed.suggestions[0].assignment).toBe('notes');
+    expect(() => outlineClassificationPreviewResultSchema.parse({
+      suggestions: [{ id: 'p1', assignment: 'notes', reason: 'x'.repeat(241) }],
+    })).toThrow();
   });
 
   it('outline_issue rejects invalid uuid', () => {

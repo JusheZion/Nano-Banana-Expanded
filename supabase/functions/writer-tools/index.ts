@@ -5,6 +5,7 @@ import {
   guidedComicAssistResultSchema,
   ideaAssistResultSchema,
   issueOutlineSchema,
+  outlineClassificationPreviewResultSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
@@ -1413,7 +1414,7 @@ Deno.serve(async (req) => {
     }
 
     if (parsedReq.data.mode === 'outline_issue') {
-      const { issue_id, target_page_count, outline_supplement, production_defaults } = parsedReq.data;
+      const { issue_id, target_page_count, outline_supplement, production_defaults, save = true } = parsedReq.data;
 
       const row = await loadIssueRow(supabase, issue_id);
       if (!row) {
@@ -1471,6 +1472,13 @@ Deno.serve(async (req) => {
         );
       }
 
+      if (!save) {
+        return Response.json(
+          { success: true, mode: 'outline_issue', data: outlineParsed.data },
+          { headers: corsHeaders },
+        );
+      }
+
       const { data: maxRow } = await supabase
         .from('writer_issue_outlines')
         .select('version')
@@ -1507,6 +1515,52 @@ Deno.serve(async (req) => {
           outline_id: inserted.id,
           version: inserted.version,
         },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'outline_classification_preview') {
+      const system = [
+        'You classify passages from a comic outline. Output only valid JSON.',
+        'Never rewrite, summarize, merge, or omit passage text. Return suggestions keyed only by the supplied id.',
+      ].join(' ');
+      const userPrompt = [
+        'Assign each passage to title, premise, act, page_beat, notes, or unassigned.',
+        'Use unassigned when uncertain. reason must be 240 characters or fewer.',
+        JSON.stringify({ passages: parsedReq.data.passages }),
+        'Return: {"suggestions":[{"id":string,"assignment":string,"act_name"?:string,"page_target"?:number,"reason":string}]}',
+      ].join('\n');
+
+      let classificationJson: unknown;
+      try {
+        classificationJson = await callGeminiJson({
+          system,
+          user: userPrompt,
+          preferredModel: geminiModel,
+          apiKey: geminiKey,
+          temperature: 0.15,
+        });
+      } catch (e) {
+        return llmFailureResponse(e instanceof Error ? e.message : String(e));
+      }
+
+      const result = outlineClassificationPreviewResultSchema.safeParse(classificationJson);
+      if (!result.success) {
+        return Response.json(
+          { success: false, error: 'Outline classification failed validation', details: result.error.message },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const requestIds = new Set(parsedReq.data.passages.map((passage) => passage.id));
+      const responseIds = result.data.suggestions.map((suggestion) => suggestion.id);
+      if (new Set(responseIds).size !== responseIds.length || responseIds.some((id) => !requestIds.has(id))) {
+        return Response.json(
+          { success: false, error: 'Outline classification returned invalid passage ids' },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      return Response.json(
+        { success: true, mode: 'outline_classification_preview', data: result.data },
         { headers: corsHeaders },
       );
     }

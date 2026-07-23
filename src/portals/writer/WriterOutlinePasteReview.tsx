@@ -33,6 +33,7 @@ export type WriterOutlinePasteReviewProps = {
   onKeepUnstructured(originalText: string): void;
   onCancel(): void;
   onPreferencesChange(next: OutlinePastePreferences): void;
+  onSuggest?(diagnostic: OutlinePasteDiagnostic): void;
 };
 
 const ASSIGNMENT_OPTIONS: ReadonlyArray<{
@@ -97,6 +98,7 @@ export function WriterOutlinePasteReview({
   onKeepUnstructured,
   onCancel,
   onPreferencesChange,
+  onSuggest,
 }: WriterOutlinePasteReviewProps) {
   const [workingDiagnostic, setWorkingDiagnostic] = useState(diagnostic);
   const [selectedPassageIds, setSelectedPassageIds] = useState<Set<string>>(() => new Set());
@@ -309,7 +311,7 @@ export function WriterOutlinePasteReview({
     <div
       role="presentation"
       data-testid="outline-paste-review-backdrop"
-      className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-black/45 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[220] flex items-start justify-center overflow-y-auto bg-black/45 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-6 md:pb-6"
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -671,7 +673,7 @@ export function WriterOutlinePasteReview({
 
       <div
         data-testid="paste-review-footer"
-        className="sticky bottom-0 z-30 mt-5 border-t border-slate-900/15 bg-white/95 px-1 pb-1 pt-4 shadow-[0_-10px_18px_-18px_rgba(15,23,42,0.7)] backdrop-blur"
+        className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 mt-5 border-t border-slate-900/15 bg-white/95 px-1 pb-1 pt-4 shadow-[0_-10px_18px_-18px_rgba(15,23,42,0.7)] backdrop-blur md:bottom-0"
       >
         {error ? (
           <p role="alert" className="mb-3 border-l-4 border-rose-600 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900">
@@ -757,6 +759,19 @@ export function WriterOutlinePasteReview({
           >
             Keep as unstructured source
           </button>
+          {!recoveryOnly && onSuggest ? (
+            <button
+              type="button"
+              disabled={actionDisabled}
+              onClick={() => {
+                if (actionDisabled) return;
+                onSuggest(workingDiagnostic);
+              }}
+              className="rounded-lg border border-sky-700/30 bg-sky-50 px-4 py-2 text-sm font-extrabold text-sky-950 transition hover:bg-sky-100 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Suggest assignments with AI
+            </button>
+          ) : null}
           {recoveryOnly ? (
             <button
               type="button"
