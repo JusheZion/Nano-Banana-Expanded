@@ -182,6 +182,7 @@ import {
   clearReviewedOutlineRecoveryErrors,
   getReviewedOutlineUndoAvailability,
   reviewedOutlineRecoveryGuidance,
+  restoreReviewedOutlinePriorSource,
   retryReviewedOutlineSourceSync,
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
@@ -1003,7 +1004,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     diagnostic: OutlinePasteDiagnostic;
     canonicalSourceText: string;
     sourceSyncPending: boolean;
-    priorIssueNotes: Record<string, unknown>;
+    priorAuthorOutline: ReturnType<typeof captureReviewedOutlinePriorSource>['priorAuthorOutline'];
     priorAuthorSource: AuthorOutlineSource;
   }) | null>(null);
   const [lastReviewedUndoBusy, setLastReviewedUndoBusy] = useState(false);
@@ -4489,7 +4490,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       ? { ...latestOutline.outline_json, ...diagnostic.proposedOutline }
       : diagnostic.proposedOutline;
     const canonicalSourceText = formatOutlineAsText(approvedOutline);
-    const { priorIssueNotes, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);
+    const { priorAuthorOutline, priorAuthorSource } = captureReviewedOutlinePriorSource(selectedIssue.notes);
     let notesAfterSnapshot = selectedIssue.notes;
 
     setOutlinePasteReviewBusy(true);
@@ -4551,7 +4552,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             origin: outlinePasteReview.origin,
             canonicalSourceText,
             sourceSyncPending: true,
-            priorIssueNotes,
+            priorAuthorOutline,
             priorAuthorSource,
           });
           setLastReviewedUndoError(null);
@@ -4577,7 +4578,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       origin: outlinePasteReview.origin,
       canonicalSourceText,
       sourceSyncPending: false,
-      priorIssueNotes,
+      priorAuthorOutline,
       priorAuthorSource,
     });
     setLastReviewedUndoError(null);
@@ -4653,7 +4654,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       restoreOutline: (input) => restoreWriterOutlineAsLatest(input),
       deleteOutline: (input) => deleteWriterOutlineById(input),
       restorePriorSource: async () => {
-        const restored = await updateSelectedIssueNotes(lastReviewedInsert.priorIssueNotes);
+        if (!selectedIssue || selectedIssue.id !== lastReviewedInsert.insertedRow.issue_id) {
+          return { ok: false, error: 'The owning issue is no longer selected.' };
+        }
+        const restored = await updateSelectedIssueNotes(restoreReviewedOutlinePriorSource(
+          selectedIssue.notes,
+          lastReviewedInsert.priorAuthorOutline,
+        ));
         return restored
           ? { ok: true }
           : { ok: false, error: 'Prior My Outline source notes could not be restored.' };
@@ -4705,7 +4712,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         : `undid reviewed outline v${lastReviewedInsert.insertedRow.version} by restoring v${result.restoredVersion}`,
       { announce: false },
     );
-  }, [guardWriterLock, lastReviewedInsert, lastReviewedUndoBusy, pushHistory, selectedIssueId, updateSelectedIssueNotes]);
+  }, [guardWriterLock, lastReviewedInsert, lastReviewedUndoBusy, pushHistory, selectedIssue, selectedIssueId, updateSelectedIssueNotes]);
 
   const switchOutlineEditorMode = useCallback((next: 'text' | 'json') => {
     if (next === outlineEditorMode) return;

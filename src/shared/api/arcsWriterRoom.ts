@@ -605,14 +605,21 @@ export async function deleteWriterOutlineById(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('writer_issue_outlines')
       .delete()
       .eq('issue_id', input.issueId)
-      .eq('id', input.outlineId);
+      .eq('id', input.outlineId)
+      .select('id');
     if (error) {
       console.warn('[arcsWriterRoom] deleteWriterOutlineById', error.message);
       return { ok: false, error: error.message };
+    }
+    const deletedRows = (data ?? []) as Array<{ id: string }>;
+    if (deletedRows.length !== 1 || deletedRows[0]?.id !== input.outlineId) {
+      const message = 'Exact outline row was not returned after deletion';
+      console.warn('[arcsWriterRoom] deleteWriterOutlineById', message);
+      return { ok: false, error: message };
     }
     return { ok: true };
   } catch (error) {

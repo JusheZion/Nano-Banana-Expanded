@@ -33,14 +33,32 @@ export type ReviewedOutlineSourceSyncDeps = {
   syncSource(): Promise<StepResult>;
 };
 
+export type ReviewedOutlinePriorSource = {
+  present: boolean;
+  value?: unknown;
+};
+
 export function captureReviewedOutlinePriorSource(notes: Record<string, unknown>): {
-  priorIssueNotes: Record<string, unknown>;
+  priorAuthorOutline: ReviewedOutlinePriorSource;
   priorAuthorSource: AuthorOutlineSource;
 } {
+  const present = Object.prototype.hasOwnProperty.call(notes, 'author_outline');
   return {
-    priorIssueNotes: notes,
+    priorAuthorOutline: present
+      ? { present: true, value: notes.author_outline }
+      : { present: false },
     priorAuthorSource: readAuthorOutlineFromNotes(notes),
   };
+}
+
+export function restoreReviewedOutlinePriorSource(
+  currentNotes: Record<string, unknown>,
+  prior: ReviewedOutlinePriorSource,
+): Record<string, unknown> {
+  const nextNotes = { ...currentNotes };
+  if (prior.present) nextNotes.author_outline = prior.value;
+  else delete nextNotes.author_outline;
+  return nextNotes;
 }
 
 async function reloadSafely(
@@ -192,6 +210,26 @@ export async function restoreReviewedOutlineInsert(
         phase: 'delete',
         error: `Could not remove the first official outline version: ${deleted.error}`,
         partial: false,
+      };
+    }
+    const afterDelete = await reloadSafely(deps.reloadOutlines, 'Unexpected outline reload error');
+    if (!afterDelete.ok) {
+      return {
+        ok: false,
+        phase: 'reload',
+        error: `The first official outline version was removed, but versions could not reload before restoring source: ${afterDelete.error}`,
+        partial: true,
+        insertedRowDeleted: true,
+      };
+    }
+    if (afterDelete.rows.length > 0) {
+      return {
+        ok: false,
+        phase: 'conflict',
+        error: 'Source restore stopped because a newer official outline appeared after deletion. Review that version before changing My Outline source.',
+        partial: true,
+        insertedRowDeleted: true,
+        rows: afterDelete.rows,
       };
     }
     const sourceRestore = await stepSafely(deps.restorePriorSource, 'Unexpected prior-source restore error');

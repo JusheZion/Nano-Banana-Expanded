@@ -5,6 +5,7 @@ import {
   captureReviewedOutlinePriorSource,
   getReviewedOutlineUndoAvailability,
   reviewedOutlineRecoveryGuidance,
+  restoreReviewedOutlinePriorSource,
   retryReviewedOutlineSourceSync,
   restoreReviewedOutlineInsert,
   type ReviewedOutlineInsert,
@@ -146,6 +147,7 @@ describe('reviewed outline recovery', () => {
     const deps = createDeps();
     vi.mocked(deps.reloadOutlines)
       .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [] })
       .mockResolvedValueOnce({ ok: true, rows: [] });
 
     const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
@@ -203,6 +205,7 @@ describe('reviewed outline recovery', () => {
     const deps = createDeps();
     vi.mocked(deps.reloadOutlines)
       .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [] })
       .mockResolvedValueOnce({ ok: true, rows: [] });
     vi.mocked(deps.restorePriorSource).mockResolvedValueOnce({ ok: false, error: 'notes offline' });
 
@@ -218,6 +221,33 @@ describe('reviewed outline recovery', () => {
     });
   });
 
+  it('does not restore source when a concurrent outline appears after first-version deletion', async () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const concurrent = { ...inserted, id: 'outline-2', version: 2 };
+    const insert: ReviewedOutlineInsert = {
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      origin: 'source',
+    };
+    const deps = createDeps();
+    vi.mocked(deps.reloadOutlines)
+      .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [concurrent] });
+
+    const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
+
+    expect(result).toMatchObject({
+      ok: false,
+      phase: 'conflict',
+      partial: true,
+      insertedRowDeleted: true,
+      rows: [concurrent],
+    });
+    expect(deps.deleteOutline).toHaveBeenCalledOnce();
+    expect(deps.restorePriorSource).not.toHaveBeenCalled();
+  });
+
   it('reports post-delete refresh failure without repeating deletion', async () => {
     const first = { ...inserted, id: 'outline-1', version: 1 };
     const insert: ReviewedOutlineInsert = {
@@ -229,6 +259,7 @@ describe('reviewed outline recovery', () => {
     const deps = createDeps();
     vi.mocked(deps.reloadOutlines)
       .mockResolvedValueOnce({ ok: true, rows: [first] })
+      .mockResolvedValueOnce({ ok: true, rows: [] })
       .mockResolvedValueOnce({ ok: false, error: 'refresh offline' });
 
     const result = await restoreReviewedOutlineInsert(insert, 'issue-1', deps);
@@ -280,19 +311,56 @@ describe('reviewed outline recovery', () => {
     expect(deps.restorePriorSource).not.toHaveBeenCalled();
   });
 
-  it('preserves empty prior source text, mode, and the complete notes state', () => {
+  it('captures empty prior source text/mode and only the exact author_outline field state', () => {
     const notes = {
       author_outline: { text: '', mode: 'preserve', updated_at: '2026-07-22T01:00:00.000Z' },
       unrelated: { keep: true },
     };
 
     expect(captureReviewedOutlinePriorSource(notes)).toEqual({
-      priorIssueNotes: notes,
+      priorAuthorOutline: {
+        present: true,
+        value: notes.author_outline,
+      },
       priorAuthorSource: {
         text: '',
         mode: 'preserve',
         updatedAt: '2026-07-22T01:00:00.000Z',
       },
+    });
+  });
+
+  it('records an absent author_outline distinctly and restores only that field on current notes', () => {
+    const captured = captureReviewedOutlinePriorSource({ unrelated: { before: true } });
+    const currentNotes = {
+      unrelated: { changedAfterApply: true },
+      lock_state: { author_outline: false },
+      author_outline: { text: 'reviewed source', mode: 'replace' },
+    };
+
+    expect(captured).toMatchObject({
+      priorAuthorOutline: { present: false },
+      priorAuthorSource: { text: '', mode: 'structure' },
+    });
+    expect(restoreReviewedOutlinePriorSource(currentNotes, captured.priorAuthorOutline)).toEqual({
+      unrelated: { changedAfterApply: true },
+      lock_state: { author_outline: false },
+    });
+  });
+
+  it('restores the exact prior author_outline value while preserving unrelated current notes', () => {
+    const priorValue = { text: '', mode: 'preserve', custom: { exact: true } };
+    const captured = captureReviewedOutlinePriorSource({ author_outline: priorValue, cache: 'old' });
+    const currentNotes = {
+      author_outline: { text: 'reviewed source', mode: 'replace' },
+      cache: 'new',
+      unrelated: { changedAfterApply: true },
+    };
+
+    expect(restoreReviewedOutlinePriorSource(currentNotes, captured.priorAuthorOutline)).toEqual({
+      author_outline: priorValue,
+      cache: 'new',
+      unrelated: { changedAfterApply: true },
     });
   });
 
