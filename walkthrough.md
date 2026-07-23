@@ -12499,11 +12499,13 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### What changed
 - Confirmed from production invocation logs that the reported HTTP 546 request ran from 07:43:59 to 07:46:29 and was terminated at the Free-plan 150-second Edge worker limit.
 - Replaced the duplicated Gemini response contract with one compact treated-beat list. The Edge Function now derives proposed page count, original-page references, and all manifest entries locally.
-- Retained exact-once source coverage, unique result IDs, page-range validation, and the bounded repair attempt.
-- Preserved the source outline's title, premise, Acts, and notes on the client while replacing only the treated page beats.
+- Routed outline treatment to `gemini-2.5-flash-lite` with thinking disabled to keep the deterministic transformation below the hosted execution limit.
+- Added deterministic bookkeeping normalization before validation: unknown and duplicate source IDs are removed, omitted source beats are restored, excess additions are dropped, page-range overflow is combined safely, and all results receive unique sequential IDs/pages.
+- Preserved the saved source outline's title, premise, Acts, and notes on the client while replacing only the treated page beats. If the saved source contains page beats only, missing metadata now inherits from the current official outline and any stale treatment manifest is removed.
 
 ### Files touched
 - `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
 - `src/portals/writer/writerOutlineTreatmentIntegration.ts`
 - `src/portals/writer/writerOutlineTreatmentValidation.ts`
 - `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
@@ -12515,23 +12517,23 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Implementation notes
 - The former contract required Gemini to generate the treated outline and then repeat the same identity, source, page, and reason data in a separate manifest. A failed consistency check could resend both full copies in the same Edge execution.
-- The compact response still undergoes strict Zod and deterministic consistency validation before reaching review.
+- The compact response undergoes deterministic normalization, strict Zod parsing, and cross-field consistency validation before reaching review.
 - Gemini structured-response schema enforcement was intentionally omitted after the production model rejected even a simplified schema as having too many serving states; application validation remains authoritative.
 - The official outline is never changed during production smoke testing; previews are canceled after verification.
 
 ### Verification
-- Focused regression with worktrees excluded: 3 files, 21 tests passed.
-- Targeted ESLint: 0 errors; 2 pre-existing `any` warnings in `writer-tools/index.ts`.
+- Focused regression with worktrees excluded: 3 files, 25 tests passed.
+- Targeted ESLint: 0 errors; 5 pre-existing warnings in `WriterPortal.tsx` and `writer-tools/index.ts`.
 - `npm run build`: passed with the existing large-chunk advisory only.
-- Supabase `writer-tools` deployed successfully to project `vxclogwiytxjolisnakd`.
-- Exact signed-in 70-page production preview completed in under 50 seconds and opened review with 70 preserved source beats, 68 proposed pages, 2 combined results, 0 enhanced, and 0 added.
-- The preview was canceled and the original official title remained present.
+- Supabase `writer-tools` version 77 deployed successfully to project `vxclogwiytxjolisnakd`.
+- Exact signed-in 70-page production preview completed in about 40 seconds and opened review with 70 proposed pages, 70 preserved source beats, 0 combined, 0 enhanced, and 0 added.
+- The preview was canceled without promotion. Live QA then exposed the page-beats-only metadata fallback gap; the frontend safeguard was added and verified by focused regression and production build before Cloudflare release.
 
 ### Outstanding issues
-- Cloudflare must be deployed with the matching client preservation change before the compact Edge response is safe to promote.
+- Final Cloudflare deployment and post-deploy metadata-preservation preview remain before closeout.
 
 ### Risks or caveats
-- A long model request can still vary in duration, but the successful representative run completed well below the 150-second hosted limit.
+- Model duration can still vary, but the supported low-latency route and representative run leave substantial headroom below the 150-second hosted limit.
 
 ### Operator follow-up
 - Deploy the matching Cloudflare frontend, repeat the 70-page preview, verify title/premise/Acts preservation, and cancel without promotion.

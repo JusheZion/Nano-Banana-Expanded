@@ -3,6 +3,7 @@ import {
   buildOutlineTreatmentPreviewRequest,
   buildPersistedTreatmentOutline,
   parseOutlineTreatmentPreview,
+  preserveTreatmentSourceMetadata,
 } from '../writerOutlineTreatmentIntegration';
 import {
   OUTLINE_TREATMENT_PROTECTED_TERMS,
@@ -49,6 +50,43 @@ const response = {
     ],
   },
 };
+
+describe('preserveTreatmentSourceMetadata', () => {
+  it('inherits official metadata when a saved source contains page beats only', () => {
+    expect(preserveTreatmentSourceMetadata(
+      { page_beats: [{ page_target: 1, summary: 'Replacement beat.' }] },
+      {
+        title: 'Official title',
+        premise: 'Official premise',
+        acts: [{ name: 'Act IV', summary: 'Official act summary.' }],
+        page_beats: [{ page_target: 1, summary: 'Old beat.' }],
+        treatment_manifest: { stale: true },
+      },
+    )).toEqual({
+      title: 'Official title',
+      premise: 'Official premise',
+      acts: [{ name: 'Act IV', summary: 'Official act summary.' }],
+      page_beats: [{ page_target: 1, summary: 'Replacement beat.' }],
+    });
+  });
+
+  it('keeps metadata explicitly supplied by the saved source', () => {
+    expect(preserveTreatmentSourceMetadata(
+      {
+        title: 'Source title',
+        acts: [{ name: 'Act III', summary: 'Source act summary.' }],
+        page_beats: [{ page_target: 1, summary: 'Source beat.' }],
+      },
+      {
+        title: 'Official title',
+        acts: [{ name: 'Act II', summary: 'Official act summary.' }],
+      },
+    )).toMatchObject({
+      title: 'Source title',
+      acts: [{ name: 'Act III', summary: 'Source act summary.' }],
+    });
+  });
+});
 
 describe('writer outline treatment integration', () => {
   it('builds preview input from detected source pages rather than a UI target', () => {

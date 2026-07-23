@@ -6,6 +6,7 @@ import {
   buildOutlineTreatmentRepairPrompt,
   getOutlineTreatmentConsistencyErrors,
   hydrateOutlineTreatmentResult,
+  normalizeCompactTreatmentResult,
   restorePreserveStructure,
 } from './outlineTreatmentPrompt';
 
@@ -185,6 +186,76 @@ describe('buildOutlineTreatmentPrompt', () => {
     expect(getOutlineTreatmentConsistencyErrors(hydrated, input)).toEqual([]);
   });
 
+  it('derives manifest reasons when Gemini omits or blanks explanatory text', () => {
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 2,
+      allowedPageRange: { min: 1, max: 3 },
+      sourceBeats,
+      protectedTerms: [],
+    };
+    const hydrated = hydrateOutlineTreatmentResult({
+      page_beats: [
+        {
+          treatment_beat_id: 'result-1',
+          source_beat_ids: ['source-page-1-1'],
+          change_type: 'language_polished',
+          reason: '',
+          page_target: 1,
+          summary: 'The elder begins.',
+        },
+        {
+          treatment_beat_id: 'result-2',
+          source_beat_ids: ['source-page-2-2'],
+          change_type: 'moved',
+          page_target: 2,
+          summary: 'The warning arrives.',
+        },
+      ],
+    }, input);
+
+    expect(hydrated.manifest.entries.map((entry) => entry.reason)).toEqual([
+      'Language and formatting polished.',
+      'Source beat repositioned for pacing.',
+    ]);
+  });
+
+  it('repairs duplicate, unknown, and missing source bookkeeping deterministically', () => {
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 2,
+      allowedPageRange: { min: 1, max: 3 },
+      sourceBeats,
+      protectedTerms: [],
+    };
+    const normalized = normalizeCompactTreatmentResult({
+      page_beats: [
+        {
+          treatment_beat_id: 'duplicate',
+          source_beat_ids: ['source-page-1-1', 'unknown'],
+          change_type: 'language_polished',
+          summary: 'The elder begins clearly.',
+        },
+        {
+          treatment_beat_id: 'duplicate',
+          source_beat_ids: ['source-page-1-1'],
+          change_type: 'combined',
+          summary: 'Duplicate recap.',
+        },
+      ],
+    }, input);
+    const hydrated = hydrateOutlineTreatmentResult(normalized, input);
+
+    expect(normalized.page_beats).toHaveLength(2);
+    expect(normalized.page_beats.map((beat) => beat.treatment_beat_id)).toEqual(['beat-1', 'beat-2']);
+    expect(normalized.page_beats.flatMap((beat) => beat.source_beat_ids)).toEqual([
+      'source-page-1-1',
+      'source-page-2-2',
+    ]);
+    expect(hydrated.proposal.page_beats?.map((beat) => beat.page_target)).toEqual([1, 2]);
+    expect(getOutlineTreatmentConsistencyErrors(hydrated, input)).toEqual([]);
+  });
+
   it('rejects unmapped proposal beats and duplicate source consumption', () => {
     const input = {
       treatmentMode: 'structure' as const,
@@ -280,5 +351,7 @@ describe('buildOutlineTreatmentPrompt', () => {
     expect(previewBranch).not.toMatch(/\.insert\s*\(/);
     expect(previewBranch).not.toMatch(/\.update\s*\(/);
     expect(previewBranch).not.toContain('writer_issue_outlines');
+    expect(previewBranch).toContain('preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL');
+    expect(previewBranch).toContain('thinkingBudget: 0');
   });
 });

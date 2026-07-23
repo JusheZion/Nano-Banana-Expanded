@@ -39,7 +39,7 @@ export type CompactTreatmentPreviewResult = {
     treatment_beat_id: string;
     source_beat_ids: string[];
     change_type: string;
-    reason: string;
+    reason?: string;
     page_target?: number;
     scene?: string;
     summary: string;
@@ -87,7 +87,7 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
       'Return shape:',
       '{"page_beats":[{"treatment_beat_id":string,"source_beat_ids":string[],',
       '"change_type":"unchanged"|"language_polished"|"moved"|"combined"|"enhanced"|"added",',
-      '"reason":string,"page_target"?:number,"scene"?:string,"summary":string,"emotional_turn"?:string}]}',
+      '"reason"?:string,"page_target"?:number,"scene"?:string,"summary":string,"emotional_turn"?:string}]}',
     ].join(''),
   ].join('\n\n');
 }
@@ -97,6 +97,14 @@ export function hydrateOutlineTreatmentResult(
   input: OutlineTreatmentPromptInput,
 ): CompleteTreatmentPreviewResult {
   const sourceById = new Map(input.sourceBeats.map((beat) => [beat.id, beat]));
+  const defaultReason = (changeType: string): string => ({
+    unchanged: 'Source beat retained.',
+    language_polished: 'Language and formatting polished.',
+    moved: 'Source beat repositioned for pacing.',
+    combined: 'Source beats combined for pacing.',
+    enhanced: 'Source beat enhanced while preserving its event.',
+    added: 'New connective beat added.',
+  }[changeType] ?? 'Treatment change recorded.');
   return {
     proposal: {
       page_beats: compact.page_beats.map((beat) => ({
@@ -120,9 +128,96 @@ export function hydrateOutlineTreatmentResult(
           return source ? [source.page_target ?? source.ordinal] : [];
         }),
         ...(beat.page_target === undefined ? {} : { proposed_page: beat.page_target }),
-        reason: beat.reason,
+        reason: beat.reason?.trim() || defaultReason(beat.change_type),
       })),
     },
+  };
+}
+
+export function normalizeCompactTreatmentResult(
+  compact: CompactTreatmentPreviewResult,
+  input: OutlineTreatmentPromptInput,
+): CompactTreatmentPreviewResult {
+  const sourceById = new Map(input.sourceBeats.map((beat) => [beat.id, beat]));
+  const seenSourceIds = new Set<string>();
+  const beats = compact.page_beats.flatMap((beat) => {
+    const sourceBeatIds = beat.change_type === 'added'
+      ? []
+      : [...new Set(beat.source_beat_ids)].filter((id) => {
+          if (!sourceById.has(id) || seenSourceIds.has(id)) return false;
+          seenSourceIds.add(id);
+          return true;
+        });
+    if (beat.change_type !== 'added' && sourceBeatIds.length === 0) return [];
+    return [{ ...beat, source_beat_ids: sourceBeatIds }];
+  });
+
+  for (const source of input.sourceBeats) {
+    if (seenSourceIds.has(source.id)) continue;
+    beats.push({
+      treatment_beat_id: source.id,
+      source_beat_ids: [source.id],
+      change_type: 'unchanged',
+      reason: 'Restored because the AI omitted this source beat.',
+      page_target: source.page_target,
+      summary: source.text,
+    });
+  }
+
+  while (beats.length > input.allowedPageRange.max) {
+    let addedIndex = -1;
+    for (let index = beats.length - 1; index >= 0; index -= 1) {
+      if (beats[index]?.change_type === 'added') {
+        addedIndex = index;
+        break;
+      }
+    }
+    if (addedIndex >= 0) {
+      beats.splice(addedIndex, 1);
+      continue;
+    }
+    const right = beats.pop();
+    const left = beats.pop();
+    if (!left || !right) break;
+    beats.push({
+      treatment_beat_id: left.treatment_beat_id,
+      source_beat_ids: [...left.source_beat_ids, ...right.source_beat_ids],
+      change_type: 'combined',
+      reason: 'Combined deterministically to stay within the approved page range.',
+      summary: `${left.summary.trim()} ${right.summary.trim()}`.trim(),
+      ...(left.scene || right.scene ? { scene: [left.scene, right.scene].filter(Boolean).join(' / ') } : {}),
+      ...(right.emotional_turn || left.emotional_turn
+        ? { emotional_turn: right.emotional_turn ?? left.emotional_turn }
+        : {}),
+    });
+  }
+
+  while (beats.length < input.allowedPageRange.min) {
+    const splitIndex = beats.findIndex((beat) => beat.source_beat_ids.length > 1);
+    if (splitIndex < 0) break;
+    const [combined] = beats.splice(splitIndex, 1);
+    const restored = combined.source_beat_ids.flatMap((id) => {
+      const source = sourceById.get(id);
+      return source
+        ? [{
+            treatment_beat_id: source.id,
+            source_beat_ids: [source.id],
+            change_type: 'unchanged',
+            reason: 'Restored from a combination to meet the approved page range.',
+            page_target: source.page_target,
+            summary: source.text,
+          }]
+        : [];
+    });
+    beats.splice(splitIndex, 0, ...restored);
+  }
+
+  return {
+    page_beats: beats.map((beat, index) => ({
+      ...beat,
+      treatment_beat_id: `beat-${index + 1}`,
+      page_target: index + 1,
+    })),
   };
 }
 

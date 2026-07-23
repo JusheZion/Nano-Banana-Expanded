@@ -185,7 +185,7 @@ export const outlineTreatmentCompactResultSchema = z.object({
     treatment_beat_id: z.string().min(1).max(160),
     source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
     change_type: treatmentChangeTypeSchema,
-    reason: z.string().min(1).max(1000),
+    reason: z.string().max(1000).optional(),
     page_target: z.number().int().min(1).max(200).optional(),
     scene: z.string().optional(),
     summary: z.string(),

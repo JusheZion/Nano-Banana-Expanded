@@ -1,4 +1,5 @@
 import {
+  issueOutlineSchema,
   outlineTreatmentPreviewResultSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,
 } from '@/shared/writer/schemas';
@@ -15,6 +16,19 @@ import {
   type TreatmentProposalSession,
   type TreatmentValidationResult,
 } from './writerOutlineTreatmentValidation';
+
+export function preserveTreatmentSourceMetadata(
+  sourceOutline: IssueOutline,
+  currentOfficialOutline: Record<string, unknown> | null,
+): IssueOutline {
+  const merged: Record<string, unknown> = {
+    ...(currentOfficialOutline ?? {}),
+    ...sourceOutline,
+    page_beats: sourceOutline.page_beats ?? [],
+  };
+  delete merged.treatment_manifest;
+  return issueOutlineSchema.parse(merged);
+}
 
 export function buildOutlineTreatmentPreviewRequest(input: {
   issueId: string;

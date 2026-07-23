@@ -142,6 +142,7 @@ import {
   buildOutlineTreatmentPreviewRequest,
   buildPersistedTreatmentOutline,
   parseOutlineTreatmentPreview,
+  preserveTreatmentSourceMetadata,
 } from '@/portals/writer/writerOutlineTreatmentIntegration';
 import type { TreatmentProposalSession } from '@/portals/writer/writerOutlineTreatmentValidation';
 import {
@@ -3003,7 +3004,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         previewInput = buildOutlineTreatmentPreviewRequest({
           issueId: selectedIssueId,
           mode: authorOutlineMode,
-          sourceOutline: parsedSource.data,
+          sourceOutline: preserveTreatmentSourceMetadata(
+            parsedSource.data,
+            latestOutline?.outline_json ?? null,
+          ),
         });
       } catch (error) {
         setOutlineGenLoading(false);

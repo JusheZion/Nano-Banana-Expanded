@@ -20,6 +20,7 @@ import {
   buildOutlineTreatmentRepairPrompt,
   getOutlineTreatmentConsistencyErrors,
   hydrateOutlineTreatmentResult,
+  normalizeCompactTreatmentResult,
   restorePreserveStructure,
 } from './outlineTreatmentPrompt.ts';
 
@@ -215,6 +216,7 @@ function extractAuthorOutlineForPrompt(notes: Record<string, unknown> | undefine
 
 /** Public API ids that work with AI Studio keys; preview ids last (may 400 "unexpected model name" on some keys). */
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+const OUTLINE_TREATMENT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-3-flash-preview',
@@ -275,16 +277,9 @@ async function callGeminiJson(args: {
   userParts?: GeminiContentPart[];
   /** Lower = stick closer to prompt (default 0.65). */
   temperature?: number;
+  /** Gemini 2.5 thinking tokens; 0 prioritizes deterministic low-latency transforms. */
+  thinkingBudget?: number;
 }): Promise<unknown> {
-  const body = {
-    systemInstruction: { parts: [{ text: args.system }] },
-    contents: [{ role: 'user', parts: [{ text: args.user }, ...(args.userParts ?? [])] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: args.temperature ?? 0.65,
-    },
-  };
-
   const modelsToTry = [
     args.preferredModel,
     ...GEMINI_FALLBACK_MODELS.filter((m) => m !== args.preferredModel),
@@ -292,6 +287,17 @@ async function callGeminiJson(args: {
 
   let lastErr = '';
   for (const model of modelsToTry) {
+    const body = {
+      systemInstruction: { parts: [{ text: args.system }] },
+      contents: [{ role: 'user', parts: [{ text: args.user }, ...(args.userParts ?? [])] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: args.temperature ?? 0.65,
+        ...(args.thinkingBudget !== undefined && model.startsWith('gemini-2.5-')
+          ? { thinkingConfig: { thinkingBudget: args.thinkingBudget } }
+          : {}),
+      },
+    };
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${args.apiKey}`;
     const res = await fetch(url, {
@@ -1411,9 +1417,10 @@ Deno.serve(async (req) => {
             'Obey the requested treatment contract exactly and return valid JSON only.',
           ].join(' '),
           user: buildOutlineTreatmentPrompt(promptInput),
-          preferredModel: geminiModel,
+          preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL,
           apiKey: geminiKey,
           temperature: treatment_mode === 'preserve' ? 0.2 : treatment_mode === 'structure' ? 0.45 : 0.65,
+          thinkingBudget: 0,
         });
       } catch (e) {
         return llmFailureResponse(e instanceof Error ? e.message : String(e));
@@ -1426,8 +1433,9 @@ Deno.serve(async (req) => {
           { status: 422, headers: corsHeaders },
         );
       }
+      const normalizedInitial = normalizeCompactTreatmentResult(initial.data, promptInput);
       const restored = restorePreserveStructure(
-        hydrateOutlineTreatmentResult(initial.data, promptInput),
+        hydrateOutlineTreatmentResult(normalizedInitial, promptInput),
         promptInput,
       );
       let result = outlineTreatmentPreviewResultSchema.safeParse(restored);
@@ -1446,10 +1454,11 @@ Deno.serve(async (req) => {
               'You repair comics outline JSON that failed deterministic consistency validation.',
               'Return the complete corrected JSON only and preserve every source beat.',
             ].join(' '),
-            user: buildOutlineTreatmentRepairPrompt(promptInput, initial.data, consistencyErrors),
-            preferredModel: geminiModel,
+            user: buildOutlineTreatmentRepairPrompt(promptInput, normalizedInitial, consistencyErrors),
+            preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL,
             apiKey: geminiKey,
             temperature: 0.1,
+            thinkingBudget: 0,
           });
         } catch (e) {
           return llmFailureResponse(e instanceof Error ? e.message : String(e));
@@ -1465,9 +1474,10 @@ Deno.serve(async (req) => {
             { status: 422, headers: corsHeaders },
           );
         }
+        const normalizedRepair = normalizeCompactTreatmentResult(repairedInitial.data, promptInput);
         result = outlineTreatmentPreviewResultSchema.safeParse(
           restorePreserveStructure(
-            hydrateOutlineTreatmentResult(repairedInitial.data, promptInput),
+            hydrateOutlineTreatmentResult(normalizedRepair, promptInput),
             promptInput,
           ),
         );
