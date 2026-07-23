@@ -108,7 +108,7 @@ function preservesSourceEvent(source: string, proposal: string): boolean {
   if (sourceTokens.size === 0) return true;
   const proposalTokens = significantTokens(proposal);
   const sharedCount = [...sourceTokens].filter((token) => proposalTokens.has(token)).length;
-  const minimumShared = sourceTokens.size >= 8 ? 2 : 1;
+  const minimumShared = Math.max(1, Math.ceil(sourceTokens.size * 0.3));
   return sharedCount >= minimumShared;
 }
 

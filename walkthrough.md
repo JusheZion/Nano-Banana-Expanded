@@ -12502,7 +12502,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Added per-operation acceptance, rejection, and warning notices to the review screen so invalid operations fail individually while a valid deterministic proposal remains reviewable.
 - Removed the legacy compact-outline normalization, hydration, repair-prompt, and omitted-beat restoration runtime paths.
 - Made operation explanations optional at the model boundary and supplied deterministic user-facing explanations when Gemini omits them.
-- Added a source-event continuity guard after production smoke revealed that Gemini could pair a valid final source ID with wording from the preceding beat; mismatched edits are now rejected and the original source beat remains intact.
+- Added a proportional source-event continuity guard after production smoke revealed that Gemini could pair a valid final source ID with wording from the preceding beat; sharing only generic neighboring words such as “elder” and “tale” is insufficient, so mismatched edits are rejected and the original source beat remains intact.
 - Updated the durable Writer AI Treatment contract in `AGENTS.md`.
 
 ### Files touched
@@ -12536,6 +12536,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Consolidated focused regression: 8 files and 93 tests passed.
 - Post-audit schema/engine regression: 3 files and 56 tests passed.
 - Post-live-smoke continuity regression: 3 files and 57 tests passed.
+- Tightened proportional-continuity regression: 3 files and 57 tests passed.
 - Targeted lint passed with 0 errors and 2 pre-existing `any` warnings in `supabase/functions/writer-tools/index.ts`.
 - `npm run build` passed with the existing large-chunk advisory only.
 - `git diff --check` passed.

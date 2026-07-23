@@ -221,7 +221,10 @@ describe('applyOutlineTreatmentPatches', () => {
         operation: 'edit',
         source_beat_ids: [input.sourceBeats[1]!.id],
         reason: 'Polish the ending.',
-        summary: 'Solfa and Kaleid accept their shadows and continue the eternal cycle.',
+        summary: [
+          'The elder reveals that the tale is timeless and explains that Solfa and Kaleid',
+          'return whenever humanity forgets itself.',
+        ].join(' '),
       }],
     }, input);
 
