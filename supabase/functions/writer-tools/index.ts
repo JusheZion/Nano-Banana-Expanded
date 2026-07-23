@@ -16,6 +16,8 @@ import {
 } from '../_shared/writerSchemas.ts';
 import {
   buildOutlineTreatmentPrompt,
+  buildOutlineTreatmentRepairPrompt,
+  getOutlineTreatmentConsistencyErrors,
   restorePreserveStructure,
 } from './outlineTreatmentPrompt.ts';
 
@@ -1423,33 +1425,63 @@ Deno.serve(async (req) => {
         );
       }
       const restored = restorePreserveStructure(initial.data, promptInput);
-      const result = outlineTreatmentPreviewResultSchema.safeParse(restored);
+      let result = outlineTreatmentPreviewResultSchema.safeParse(restored);
       if (!result.success) {
         return Response.json(
           { success: false, error: 'Outline treatment preview failed validation', details: result.error.message },
           { status: 422, headers: corsHeaders },
         );
       }
-      const sourceIds = new Set(source_beats.map((beat) => beat.id));
-      const coveredSourceIds = result.data.manifest.entries.flatMap((entry) => entry.source_beat_ids);
-      const proposalIds = (result.data.proposal.page_beats ?? [])
-        .map((beat) => beat.treatment_beat_id)
-        .filter((id): id is string => typeof id === 'string');
-      const manifestResultIds = result.data.manifest.entries.map((entry) => entry.result_beat_id);
-      const manifestIsConsistent = (
-        result.data.manifest.treatment_mode === treatment_mode
-        && result.data.manifest.source_page_count === source_page_count
-        && result.data.manifest.proposed_page_count >= allowed_page_range.min
-        && result.data.manifest.proposed_page_count <= allowed_page_range.max
-        && sourceIds.size === new Set(coveredSourceIds).size
-        && coveredSourceIds.every((id) => sourceIds.has(id))
-        && new Set(manifestResultIds).size === manifestResultIds.length
-        && proposalIds.length === manifestResultIds.length
-        && proposalIds.every((id) => manifestResultIds.includes(id))
-      );
-      if (!manifestIsConsistent) {
+      let consistencyErrors = getOutlineTreatmentConsistencyErrors(result.data, promptInput);
+      if (consistencyErrors.length) {
+        let repairedJson: unknown;
+        try {
+          repairedJson = await callGeminiJson({
+            system: [
+              'You repair comics outline JSON that failed deterministic consistency validation.',
+              'Return the complete corrected JSON only and preserve every source beat.',
+            ].join(' '),
+            user: buildOutlineTreatmentRepairPrompt(promptInput, result.data, consistencyErrors),
+            preferredModel: geminiModel,
+            apiKey: geminiKey,
+            temperature: 0.1,
+          });
+        } catch (e) {
+          return llmFailureResponse(e instanceof Error ? e.message : String(e));
+        }
+        const repairedInitial = outlineTreatmentPreviewResultSchema.safeParse(repairedJson);
+        if (!repairedInitial.success) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Outline treatment repair failed validation',
+              details: repairedInitial.error.message,
+            },
+            { status: 422, headers: corsHeaders },
+          );
+        }
+        result = outlineTreatmentPreviewResultSchema.safeParse(
+          restorePreserveStructure(repairedInitial.data, promptInput),
+        );
+        if (!result.success) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Outline treatment repair failed validation',
+              details: result.error.message,
+            },
+            { status: 422, headers: corsHeaders },
+          );
+        }
+        consistencyErrors = getOutlineTreatmentConsistencyErrors(result.data, promptInput);
+      }
+      if (consistencyErrors.length) {
         return Response.json(
-          { success: false, error: 'Outline treatment preview returned an inconsistent manifest' },
+          {
+            success: false,
+            error: 'Outline treatment preview returned an inconsistent manifest after repair',
+            details: consistencyErrors,
+          },
           { status: 422, headers: corsHeaders },
         );
       }

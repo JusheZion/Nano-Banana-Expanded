@@ -26,6 +26,14 @@ type TreatmentPreviewResult = {
   };
 };
 
+type CompleteTreatmentPreviewResult = TreatmentPreviewResult & {
+  manifest: TreatmentPreviewResult['manifest'] & {
+    treatment_mode: string;
+    source_page_count: number;
+    proposed_page_count: number;
+  };
+};
+
 const MODE_INSTRUCTIONS: Record<OutlineTreatmentPromptInput['treatmentMode'], string> = {
   preserve: [
     'Beat IDs, order, events, outcomes, and page targets are immutable.',
@@ -67,6 +75,73 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
       '"entries":[{"result_beat_id":string,"source_beat_ids":string[],"change_type":string,',
       '"original_pages":number[],"proposed_page"?:number,"reason":string}]}}',
     ].join(''),
+  ].join('\n\n');
+}
+
+export function getOutlineTreatmentConsistencyErrors(
+  result: CompleteTreatmentPreviewResult,
+  input: OutlineTreatmentPromptInput,
+): string[] {
+  const errors: string[] = [];
+  const sourceIds = new Set(input.sourceBeats.map((beat) => beat.id));
+  const coveredSourceIds = result.manifest.entries.flatMap((entry) => entry.source_beat_ids);
+  const coveredSourceIdSet = new Set(coveredSourceIds);
+  const proposalIds = (result.proposal.page_beats ?? [])
+    .map((beat) => beat.treatment_beat_id)
+    .filter((id): id is string => typeof id === 'string');
+  const manifestResultIds = result.manifest.entries.map((entry) => entry.result_beat_id);
+
+  if (result.manifest.treatment_mode !== input.treatmentMode) {
+    errors.push(`manifest treatment_mode must be ${input.treatmentMode}`);
+  }
+  if (result.manifest.source_page_count !== input.sourcePageCount) {
+    errors.push(`manifest source_page_count must be ${input.sourcePageCount}`);
+  }
+  if (
+    result.manifest.proposed_page_count < input.allowedPageRange.min
+    || result.manifest.proposed_page_count > input.allowedPageRange.max
+  ) {
+    errors.push(
+      `manifest proposed_page_count must be within ${input.allowedPageRange.min}-${input.allowedPageRange.max}`,
+    );
+  }
+  if (
+    coveredSourceIdSet.size !== sourceIds.size
+    || coveredSourceIds.some((id) => !sourceIds.has(id))
+  ) {
+    const missing = [...sourceIds].filter((id) => !coveredSourceIdSet.has(id));
+    const unknown = [...coveredSourceIdSet].filter((id) => !sourceIds.has(id));
+    errors.push(
+      `manifest source coverage is incomplete or unknown (missing: ${missing.join(', ') || 'none'}; unknown: ${unknown.join(', ') || 'none'})`,
+    );
+  }
+  if (new Set(manifestResultIds).size !== manifestResultIds.length) {
+    errors.push('manifest result beat IDs must be unique');
+  }
+  if (
+    proposalIds.length !== manifestResultIds.length
+    || proposalIds.some((id) => !manifestResultIds.includes(id))
+  ) {
+    errors.push('proposal result beat IDs do not match manifest result beat IDs');
+  }
+
+  return errors;
+}
+
+export function buildOutlineTreatmentRepairPrompt(
+  input: OutlineTreatmentPromptInput,
+  previousResult: CompleteTreatmentPreviewResult,
+  consistencyErrors: string[],
+): string {
+  return [
+    buildOutlineTreatmentPrompt(input),
+    'Your previous response was valid JSON but failed consistency validation.',
+    `Correct every issue: ${JSON.stringify(consistencyErrors)}`,
+    'Return the complete corrected proposal and manifest, not a patch or explanation.',
+    'Use each proposal treatment_beat_id as exactly one manifest result_beat_id.',
+    'Use only these change_type values: unchanged, language_polished, moved, combined, enhanced, added.',
+    'Previous response:',
+    JSON.stringify(previousResult),
   ].join('\n\n');
 }
 

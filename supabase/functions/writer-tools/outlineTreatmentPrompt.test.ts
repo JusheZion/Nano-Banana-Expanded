@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildOutlineTreatmentPrompt, restorePreserveStructure } from './outlineTreatmentPrompt';
+import {
+  buildOutlineTreatmentPrompt,
+  buildOutlineTreatmentRepairPrompt,
+  getOutlineTreatmentConsistencyErrors,
+  restorePreserveStructure,
+} from './outlineTreatmentPrompt';
 
 const sourceBeats = [
   { id: 'source-page-1-1', ordinal: 1, page_target: 1, text: 'The elder begins.' },
@@ -89,6 +94,55 @@ describe('buildOutlineTreatmentPrompt', () => {
       expect.objectContaining({ treatment_beat_id: 'result-1', page_target: 1, summary: 'Polished opening.' }),
       expect.objectContaining({ treatment_beat_id: 'result-2', page_target: 2, summary: 'Polished warning.' }),
     ]);
+  });
+
+  it('diagnoses inconsistent result IDs and requests one complete repaired response', () => {
+    const inconsistent = {
+      proposal: {
+        page_beats: [
+          { treatment_beat_id: 'proposal-1', page_target: 1, summary: 'The elder begins.' },
+          { treatment_beat_id: 'proposal-2', page_target: 2, summary: 'The warning arrives.' },
+        ],
+      },
+      manifest: {
+        treatment_mode: 'structure',
+        source_page_count: 2,
+        proposed_page_count: 2,
+        entries: [
+          {
+            result_beat_id: 'manifest-1',
+            source_beat_ids: ['source-page-1-1'],
+            change_type: 'unchanged',
+            original_pages: [1],
+            proposed_page: 1,
+            reason: 'Preserved.',
+          },
+          {
+            result_beat_id: 'manifest-2',
+            source_beat_ids: ['source-page-2-2'],
+            change_type: 'moved',
+            original_pages: [2],
+            proposed_page: 2,
+            reason: 'Repositioned.',
+          },
+        ],
+      },
+    };
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 2,
+      allowedPageRange: { min: 1, max: 3 },
+      sourceBeats,
+      protectedTerms: [],
+    };
+
+    const errors = getOutlineTreatmentConsistencyErrors(inconsistent, input);
+    expect(errors).toContain('proposal result beat IDs do not match manifest result beat IDs');
+
+    const repairPrompt = buildOutlineTreatmentRepairPrompt(input, inconsistent, errors);
+    expect(repairPrompt).toContain('Return the complete corrected proposal and manifest');
+    expect(repairPrompt).toContain('proposal result beat IDs do not match manifest result beat IDs');
+    expect(repairPrompt).toContain('manifest-1');
   });
 
   it('keeps the Edge preview branch free of outline persistence calls', () => {

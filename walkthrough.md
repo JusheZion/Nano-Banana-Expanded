@@ -12449,3 +12449,42 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this release.
+
+## Organize and Polish manifest repair - 2026-07-23
+
+### What changed
+- Traced the production `Outline treatment preview returned an inconsistent manifest: HTTP 422` failure to the one-shot Edge workflow: schema-valid model output could fail source/result-ID cross-reference checks and was immediately rejected without a correction opportunity or useful details.
+- Added explicit consistency diagnostics for treatment mode, source page count, page tolerance, source-beat coverage, unique manifest result IDs, and proposal-to-manifest result-ID parity.
+- Added one bounded AI repair attempt using the original source, failed response, and exact diagnostics. The repaired response must pass the same schema and consistency checks; validation rules were not relaxed.
+- Failed repairs now return actionable consistency details instead of the previous generic 422.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The repair prompt requests a complete response rather than a partial patch and reiterates the exact result-ID and change-type contracts.
+- Only consistency-valid, preview-only data reaches the client; the Edge branch still performs no outline insert or update.
+- DOX was updated because the bounded repair behavior is now a durable Writer AI Treatment contract.
+
+### Verification
+- TDD red check failed with `getOutlineTreatmentConsistencyErrors is not a function` before implementation.
+- Focused Edge regression: 2 files and 17 tests passed.
+- Consolidated root regression: 117 files and 726 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed with the existing large-chunk advisory only.
+
+### Outstanding issues
+- Production Edge deployment and live preview-only smoke remain.
+
+### Risks or caveats
+- A model response that remains inconsistent after the single repair attempt is intentionally rejected; the surfaced details should identify the exact remaining mismatch.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Commit and push the repair, deploy `writer-tools`, and run a signed-in production Organize and Polish preview without promotion.
