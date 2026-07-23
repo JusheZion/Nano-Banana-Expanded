@@ -15,6 +15,7 @@ const sourceOutline = {
 };
 
 const source = normalizeTreatmentSource(sourceOutline, ['Pony', 'Onyx']);
+const [sourceId1, sourceId2, sourceId3] = source.beats.map((beat) => beat.id);
 
 const manifest = (entries: TreatmentManifest['entries'], proposedPageCount = 3): TreatmentManifest => ({
   treatmentMode: 'structure',
@@ -24,12 +25,18 @@ const manifest = (entries: TreatmentManifest['entries'], proposedPageCount = 3):
 });
 
 describe('writer outline treatment validation', () => {
-  it('normalizes source beats with request-stable structural ids', () => {
-    expect(source.beats.map((beat) => beat.id)).toEqual([
-      'source-page-1-1',
-      'source-page-2-2',
-      'source-page-3-3',
-    ]);
+  it('normalizes source beats with request-stable opaque ids', () => {
+    expect(source.beats.map((beat) => beat.id)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^beat-[a-z0-9]{7}$/),
+        expect.stringMatching(/^beat-[a-z0-9]{7}$/),
+        expect.stringMatching(/^beat-[a-z0-9]{7}$/),
+      ]),
+    );
+    expect(new Set(source.beats.map((beat) => beat.id)).size).toBe(3);
+    expect(normalizeTreatmentSource(sourceOutline).beats.map((beat) => beat.id)).toEqual(
+      source.beats.map((beat) => beat.id),
+    );
     expect(source.pageCount).toBe(3);
     expect(source.protectedTerms).toEqual(['Pony', 'Onyx']);
   });
@@ -50,7 +57,7 @@ describe('writer outline treatment validation', () => {
     const entries: TreatmentManifest['entries'] = [
       {
         resultBeatId: 'result-1',
-        sourceBeatIds: ['source-page-1-1'],
+        sourceBeatIds: [sourceId1!],
         changeType: 'language_polished',
         originalPages: [1],
         proposedPage: 1,
@@ -58,7 +65,7 @@ describe('writer outline treatment validation', () => {
       },
       {
         resultBeatId: 'result-2',
-        sourceBeatIds: ['source-page-2-2'],
+        sourceBeatIds: [sourceId2!],
         changeType: 'moved',
         originalPages: [2],
         proposedPage: 2,
@@ -95,9 +102,9 @@ describe('writer outline treatment validation', () => {
         sourcePageCount: 3,
         proposedPageCount: 3,
         entries: [
-          { resultBeatId: 'result-2', sourceBeatIds: ['source-page-2-2'], changeType: 'moved', originalPages: [2], proposedPage: 2, reason: 'Moved.' },
-          { resultBeatId: 'result-1', sourceBeatIds: ['source-page-1-1'], changeType: 'moved', originalPages: [1], proposedPage: 1, reason: 'Moved.' },
-          { resultBeatId: 'result-3', sourceBeatIds: ['source-page-3-3'], changeType: 'unchanged', originalPages: [3], proposedPage: 3, reason: 'Unchanged.' },
+          { resultBeatId: 'result-2', sourceBeatIds: [sourceId2!], changeType: 'moved', originalPages: [2], proposedPage: 2, reason: 'Moved.' },
+          { resultBeatId: 'result-1', sourceBeatIds: [sourceId1!], changeType: 'moved', originalPages: [1], proposedPage: 1, reason: 'Moved.' },
+          { resultBeatId: 'result-3', sourceBeatIds: [sourceId3!], changeType: 'unchanged', originalPages: [3], proposedPage: 3, reason: 'Unchanged.' },
         ],
       },
     });
@@ -117,8 +124,8 @@ describe('writer outline treatment validation', () => {
         { page_target: 2, summary: 'Onyx refuses the prophecy, then they leave.', treatment_beat_id: 'result-2-3' },
       ] },
       manifest: manifest([
-        { resultBeatId: 'result-1', sourceBeatIds: ['source-page-1-1'], changeType: 'language_polished', originalPages: [1], proposedPage: 1, reason: 'Copyedit.' },
-        { resultBeatId: 'result-2-3', sourceBeatIds: ['source-page-2-2', 'source-page-3-3'], changeType: 'combined', originalPages: [2, 3], proposedPage: 2, reason: 'Combine related departure beats.' },
+        { resultBeatId: 'result-1', sourceBeatIds: [sourceId1!], changeType: 'language_polished', originalPages: [1], proposedPage: 1, reason: 'Copyedit.' },
+        { resultBeatId: 'result-2-3', sourceBeatIds: [sourceId2!, sourceId3!], changeType: 'combined', originalPages: [2, 3], proposedPage: 2, reason: 'Combine related departure beats.' },
       ], 2),
     });
     expect(result.valid).toBe(true);
@@ -169,7 +176,7 @@ describe('writer outline treatment validation', () => {
       manifest: manifest([
         {
           resultBeatId: 'result-1',
-          sourceBeatIds: ['source-page-1-1'],
+          sourceBeatIds: [sourceId1!],
           changeType: 'unchanged',
           originalPages: [1],
           proposedPage: 1,
@@ -215,9 +222,9 @@ describe('writer outline treatment validation', () => {
 
   it('accepts a mapped creative addition and rejects unknown source ids', () => {
     const validEntries: TreatmentManifest['entries'] = [
-      { resultBeatId: 'result-1', sourceBeatIds: ['source-page-1-1'], changeType: 'enhanced', originalPages: [1], proposedPage: 1, reason: 'Heighten warning.' },
-      { resultBeatId: 'result-2', sourceBeatIds: ['source-page-2-2'], changeType: 'enhanced', originalPages: [2], proposedPage: 2, reason: 'Heighten refusal.' },
-      { resultBeatId: 'result-3', sourceBeatIds: ['source-page-3-3'], changeType: 'enhanced', originalPages: [3], proposedPage: 3, reason: 'Heighten departure.' },
+      { resultBeatId: 'result-1', sourceBeatIds: [sourceId1!], changeType: 'enhanced', originalPages: [1], proposedPage: 1, reason: 'Heighten warning.' },
+      { resultBeatId: 'result-2', sourceBeatIds: [sourceId2!], changeType: 'enhanced', originalPages: [2], proposedPage: 2, reason: 'Heighten refusal.' },
+      { resultBeatId: 'result-3', sourceBeatIds: [sourceId3!], changeType: 'enhanced', originalPages: [3], proposedPage: 3, reason: 'Heighten departure.' },
       { resultBeatId: 'added-1', sourceBeatIds: [], changeType: 'added', originalPages: [], proposedPage: 4, reason: 'Add connective aftermath.' },
     ];
     const proposal = { page_beats: [
@@ -277,14 +284,14 @@ describe('writer outline treatment validation', () => {
         { page_target: 2, summary: 'Onyx refuses, then they leave.', treatment_beat_id: 'result-2-3' },
       ] },
       manifest: manifest([
-        { resultBeatId: 'result-1', sourceBeatIds: ['source-page-1-1'], changeType: 'language_polished', originalPages: [1], proposedPage: 1, reason: 'Copyedit.' },
-        { resultBeatId: 'result-2-3', sourceBeatIds: ['source-page-2-2', 'source-page-3-3'], changeType: 'combined', originalPages: [2, 3], proposedPage: 2, reason: 'Combine.' },
+        { resultBeatId: 'result-1', sourceBeatIds: [sourceId1!], changeType: 'language_polished', originalPages: [1], proposedPage: 1, reason: 'Copyedit.' },
+        { resultBeatId: 'result-2-3', sourceBeatIds: [sourceId2!, sourceId3!], changeType: 'combined', originalPages: [2, 3], proposedPage: 2, reason: 'Combine.' },
       ]),
     };
     const restored = rejectTreatmentChange(session, 'result-2-3');
     expect(restored.proposal.page_beats).toEqual(expect.arrayContaining([
-      expect.objectContaining({ page_target: 2, treatment_beat_id: 'restored-source-page-2-2' }),
-      expect.objectContaining({ page_target: 3, treatment_beat_id: 'restored-source-page-3-3' }),
+      expect.objectContaining({ page_target: 2, treatment_beat_id: `restored-${sourceId2}` }),
+      expect.objectContaining({ page_target: 3, treatment_beat_id: `restored-${sourceId3}` }),
     ]));
     expect(validateTreatmentProposal(restored).valid).toBe(true);
   });

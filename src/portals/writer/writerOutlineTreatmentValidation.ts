@@ -85,19 +85,28 @@ function beatText(beat: IssueOutlinePageBeat): string {
   return [beat.scene, beat.summary, beat.emotional_turn].filter(Boolean).join(' ').trim();
 }
 
+function stableOpaqueBeatId(text: string, ordinal: number): string {
+  let hash = 2166136261;
+  const input = `${ordinal}\u0000${text}`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `beat-${(hash >>> 0).toString(36).padStart(7, '0')}`;
+}
+
 export function normalizeTreatmentSource(
   outline: IssueOutline,
   protectedTerms: string[] = [],
 ): NormalizedTreatmentSource {
   const beats = (outline.page_beats ?? []).map((beat, index) => {
     const ordinal = index + 1;
+    const text = beatText(beat);
     return {
-      id: typeof beat.page_target === 'number'
-        ? `source-page-${beat.page_target}-${ordinal}`
-        : `source-unpaged-${ordinal}`,
+      id: stableOpaqueBeatId(text, ordinal),
       ordinal,
       ...(typeof beat.page_target === 'number' ? { pageTarget: beat.page_target } : {}),
-      text: beatText(beat),
+      text,
       original: structuredClone(beat),
     };
   });

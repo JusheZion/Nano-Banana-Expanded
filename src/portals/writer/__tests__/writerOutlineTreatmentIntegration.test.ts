@@ -9,6 +9,7 @@ import {
   OUTLINE_TREATMENT_PROTECTED_TERMS,
   OUTLINE_TREATMENT_SOURCE_26,
 } from './fixtures/outlineTreatmentSource';
+import { normalizeTreatmentSource } from '../writerOutlineTreatmentValidation';
 
 const sourceOutline = {
   title: 'Harbor',
@@ -17,6 +18,7 @@ const sourceOutline = {
     { page_target: 2, summary: 'Onyx answers.' },
   ],
 };
+const [sourceId1, sourceId2] = normalizeTreatmentSource(sourceOutline).beats.map((beat) => beat.id);
 
 const response = {
   proposal: {
@@ -33,7 +35,7 @@ const response = {
     entries: [
       {
         result_beat_id: 'result-1',
-        source_beat_ids: ['source-page-1-1'],
+        source_beat_ids: [sourceId1!],
         change_type: 'language_polished' as const,
         original_pages: [1],
         proposed_page: 1,
@@ -41,7 +43,7 @@ const response = {
       },
       {
         result_beat_id: 'result-2',
-        source_beat_ids: ['source-page-2-2'],
+        source_beat_ids: [sourceId2!],
         change_type: 'language_polished' as const,
         original_pages: [2],
         proposed_page: 2,
@@ -104,14 +106,14 @@ describe('operation notices', () => {
           status: 'accepted',
           code: 'operation_applied',
           message: 'Language polished.',
-          source_beat_ids: ['source-page-1-1'],
+          source_beat_ids: [sourceId1!],
         },
         {
           operation_id: 'move-invalid',
           status: 'rejected',
           code: 'operation_forbidden',
           message: 'Keep My Order cannot move beats.',
-          source_beat_ids: ['source-page-2-2'],
+          source_beat_ids: [sourceId2!],
         },
       ],
     }, built.source);
@@ -122,14 +124,14 @@ describe('operation notices', () => {
         status: 'accepted',
         code: 'operation_applied',
         message: 'Language polished.',
-        sourceBeatIds: ['source-page-1-1'],
+        sourceBeatIds: [sourceId1!],
       },
       {
         operationId: 'move-invalid',
         status: 'rejected',
         code: 'operation_forbidden',
         message: 'Keep My Order cannot move beats.',
-        sourceBeatIds: ['source-page-2-2'],
+        sourceBeatIds: [sourceId2!],
       },
     ]);
   });

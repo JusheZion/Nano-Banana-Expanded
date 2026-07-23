@@ -63,6 +63,8 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
     'Every move and add must include anchor_source_beat_id and placement before or after.',
     'Add operations must use an empty source_beat_ids array.',
     'Every operation_id must be unique.',
+    'Source beat IDs are opaque tokens. Copy them exactly from the supplied id field.',
+    'Never derive, renumber, or repair an ID from ordinal, page_target, or page-like text inside a beat.',
     'Never claim a source ID whose supplied text does not match the event being changed.',
     'Do not propose recap or whole-outline summary operations.',
     MODE_INSTRUCTIONS[input.treatmentMode],

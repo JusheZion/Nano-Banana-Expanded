@@ -12503,6 +12503,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Removed the legacy compact-outline normalization, hydration, repair-prompt, and omitted-beat restoration runtime paths.
 - Made operation explanations optional at the model boundary and supplied deterministic user-facing explanations when Gemini omits them.
 - Added a proportional source-event continuity guard after production smoke revealed that Gemini could pair a valid final source ID with wording from the preceding beat; sharing only generic neighboring words such as “elder” and “tale” is insufficient, so mismatched edits are rejected and the original source beat remains intact.
+- Replaced page-derived treatment IDs with deterministic opaque beat tokens after live smoke proved Gemini was reconstructing IDs from embedded user page labels and shifting edits when those labels differed from sequential targets.
+- Strengthened the prompt to require exact copying of opaque IDs and prohibit deriving or repairing IDs from ordinals, page targets, or prose.
 - Updated the durable Writer AI Treatment contract in `AGENTS.md`.
 
 ### Files touched
@@ -12537,6 +12539,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Post-audit schema/engine regression: 3 files and 56 tests passed.
 - Post-live-smoke continuity regression: 3 files and 57 tests passed.
 - Tightened proportional-continuity regression: 3 files and 57 tests passed.
+- Opaque-ID consolidated treatment regression: 8 files and 95 tests passed.
+- `npm run build` passed after the opaque-ID change with the existing large-chunk advisory only.
 - Targeted lint passed with 0 errors and 2 pre-existing `any` warnings in `supabase/functions/writer-tools/index.ts`.
 - `npm run build` passed with the existing large-chunk advisory only.
 - `git diff --check` passed.

@@ -23,6 +23,8 @@ describe('buildOutlineTreatmentPrompt', () => {
 
     expect(prompt).toContain('Do not return a replacement outline');
     expect(prompt).toContain('Omit unchanged beats');
+    expect(prompt).toContain('Source beat IDs are opaque tokens');
+    expect(prompt).toContain('Never derive, renumber, or repair an ID');
     expect(prompt).toContain('"operations"');
     expect(prompt).not.toContain('"page_beats"');
   });
