@@ -110,6 +110,27 @@ describe('writerToolsRequestSchema', () => {
       },
     });
     expect(result.manifest.entries[0].change_type).toBe('language_polished');
+
+    const normalizedAlias = outlineTreatmentPreviewResultSchema.parse({
+      proposal: {
+        page_beats: [{ page_target: 1, summary: 'The elder begins.', treatment_beat_id: 'result-1' }],
+      },
+      manifest: {
+        treatment_mode: 'structure',
+        source_page_count: 1,
+        proposed_page_count: 1,
+        entries: [{
+          result_beat_id: 'result-1',
+          source_beat_ids: ['source-page-1-1'],
+          change_type: 'original',
+          original_pages: [1],
+          proposed_page: 1,
+          reason: 'No structural change was needed.',
+        }],
+      },
+    });
+    expect(normalizedAlias.manifest.entries[0].change_type).toBe('unchanged');
+
     expect(() => outlineTreatmentPreviewResultSchema.parse({
       proposal: { page_beats: [{ summary: 'Beat.' }] },
       manifest: {

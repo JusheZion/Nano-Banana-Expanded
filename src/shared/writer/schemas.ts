@@ -89,14 +89,17 @@ export const outlineClassificationPreviewResultSchema = z.object({
 }).strict();
 
 const writerOutlineTreatmentModeSchema = z.enum(['preserve', 'structure', 'expand']);
-const treatmentChangeTypeSchema = z.enum([
-  'unchanged',
-  'language_polished',
-  'moved',
-  'combined',
-  'enhanced',
-  'added',
-]);
+const treatmentChangeTypeSchema = z.preprocess(
+  (value) => value === 'original' ? 'unchanged' : value,
+  z.enum([
+    'unchanged',
+    'language_polished',
+    'moved',
+    'combined',
+    'enhanced',
+    'added',
+  ]),
+);
 const treatmentSourceBeatSchema = z.object({
   id: z.string().min(1).max(160),
   ordinal: z.number().int().min(1).max(200),
