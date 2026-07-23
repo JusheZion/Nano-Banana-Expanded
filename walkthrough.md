@@ -12514,9 +12514,13 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - TDD reproduced the exact optional-null failure before implementation.
 - Focused Edge regression: 1 test file, 10 tests passed.
 - Targeted ESLint: passed with no findings.
+- Commit `3989597` was pushed to `origin/main`.
+- Supabase `writer-tools` version 92 is active on project `vxclogwiytxjolisnakd`.
+- Signed-in production retry used the persistent `AP` QA account and its 70-page source. The review opened without an HTTP error, proposed 77 pages within the Organize and Polish 10% range, and contained no raw JSON in Simple Workflow.
+- The proposal was canceled without promotion; the QA official outline remained at v1.
 
 ### Outstanding issues
-- Production deployment and live retry remain pending.
+- None.
 
 ### Risks or caveats
 - None identified.
@@ -12525,7 +12529,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Commit, push, deploy `writer-tools`, and rerun the production treatment preview.
+- None for this repair.
 
 ## Writer Outline treatment review recovery implementation - 2026-07-23
 
