@@ -71,10 +71,15 @@ export function parseOutlineTreatmentPreview(
   validation: TreatmentValidationResult;
 } {
   const parsed = outlineTreatmentPreviewResultSchema.parse(raw);
+  const proposal = {
+    ...(source.outline ?? {}),
+    ...parsed.proposal,
+    page_beats: parsed.proposal.page_beats ?? [],
+  };
   const session: TreatmentProposalSession = {
     mode: parsed.manifest.treatment_mode,
     source,
-    proposal: parsed.proposal,
+    proposal,
     manifest: toManifest(parsed.manifest),
   };
   const validation = validateTreatmentProposal(session);

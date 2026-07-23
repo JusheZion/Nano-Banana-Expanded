@@ -5,6 +5,7 @@ import {
   buildOutlineTreatmentPrompt,
   buildOutlineTreatmentRepairPrompt,
   getOutlineTreatmentConsistencyErrors,
+  hydrateOutlineTreatmentResult,
   restorePreserveStructure,
 } from './outlineTreatmentPrompt';
 
@@ -27,7 +28,7 @@ describe('buildOutlineTreatmentPrompt', () => {
       protectedTerms: ['Elder'],
     });
     expect(prompt).toContain('Every source beat id must appear');
-    expect(prompt).toContain('one manifest entry for every result beat');
+    expect(prompt).toContain('Every result beat must have a unique treatment_beat_id');
     expect(prompt).toContain('Never delete or omit a source beat');
   });
 
@@ -96,37 +97,26 @@ describe('buildOutlineTreatmentPrompt', () => {
     ]);
   });
 
-  it('diagnoses inconsistent result IDs and requests one complete repaired response', () => {
-    const inconsistent = {
-      proposal: {
-        page_beats: [
-          { treatment_beat_id: 'proposal-1', page_target: 1, summary: 'The elder begins.' },
-          { treatment_beat_id: 'proposal-2', page_target: 2, summary: 'The warning arrives.' },
-        ],
-      },
-      manifest: {
-        treatment_mode: 'structure',
-        source_page_count: 2,
-        proposed_page_count: 2,
-        entries: [
-          {
-            result_beat_id: 'manifest-1',
-            source_beat_ids: ['source-page-1-1'],
-            change_type: 'unchanged',
-            original_pages: [1],
-            proposed_page: 1,
-            reason: 'Preserved.',
-          },
-          {
-            result_beat_id: 'manifest-2',
-            source_beat_ids: ['source-page-2-2'],
-            change_type: 'moved',
-            original_pages: [2],
-            proposed_page: 2,
-            reason: 'Repositioned.',
-          },
-        ],
-      },
+  it('derives a consistent manifest from one compact model response', () => {
+    const compact = {
+      page_beats: [
+        {
+          treatment_beat_id: 'result-1',
+          source_beat_ids: ['source-page-1-1'],
+          change_type: 'unchanged',
+          reason: 'Preserved.',
+          page_target: 1,
+          summary: 'The elder begins.',
+        },
+        {
+          treatment_beat_id: 'result-2',
+          source_beat_ids: ['source-page-2-2'],
+          change_type: 'moved',
+          reason: 'Repositioned.',
+          page_target: 2,
+          summary: 'The warning arrives.',
+        },
+      ],
     };
     const input = {
       treatmentMode: 'structure' as const,
@@ -136,13 +126,63 @@ describe('buildOutlineTreatmentPrompt', () => {
       protectedTerms: [],
     };
 
-    const errors = getOutlineTreatmentConsistencyErrors(inconsistent, input);
-    expect(errors).toContain('proposal result beat IDs do not match manifest result beat IDs');
+    const hydrated = hydrateOutlineTreatmentResult(compact, input);
+    expect(getOutlineTreatmentConsistencyErrors(hydrated, input)).toEqual([]);
+    expect(hydrated.manifest.entries).toEqual([
+      expect.objectContaining({
+        result_beat_id: 'result-1',
+        source_beat_ids: ['source-page-1-1'],
+        original_pages: [1],
+      }),
+      expect.objectContaining({
+        result_beat_id: 'result-2',
+        source_beat_ids: ['source-page-2-2'],
+        original_pages: [2],
+      }),
+    ]);
 
-    const repairPrompt = buildOutlineTreatmentRepairPrompt(input, inconsistent, errors);
-    expect(repairPrompt).toContain('Return the complete corrected proposal and manifest');
-    expect(repairPrompt).toContain('proposal result beat IDs do not match manifest result beat IDs');
-    expect(repairPrompt).toContain('manifest-1');
+    const repairPrompt = buildOutlineTreatmentRepairPrompt(
+      input,
+      compact,
+      ['source beat IDs must be represented exactly once'],
+    );
+    expect(repairPrompt).toContain('complete corrected compact page_beats array');
+    expect(repairPrompt).toContain('source beat IDs must be represented exactly once');
+    expect(repairPrompt).toContain('result-1');
+  });
+
+  it('keeps a 70-page prompt single-copy and derives all 70 manifest entries locally', () => {
+    const largeSource = Array.from({ length: 70 }, (_, index) => ({
+      id: `source-page-${index + 1}`,
+      ordinal: index + 1,
+      page_target: index + 1,
+      text: `Source event ${index + 1}.`,
+    }));
+    const input = {
+      treatmentMode: 'structure' as const,
+      sourcePageCount: 70,
+      allowedPageRange: { min: 62, max: 78 },
+      sourceBeats: largeSource,
+      protectedTerms: [],
+    };
+    const prompt = buildOutlineTreatmentPrompt(input);
+    expect(prompt.match(/Source event 1\./g)).toHaveLength(1);
+    expect(prompt).not.toContain('"manifest"');
+
+    const compact = {
+      page_beats: largeSource.map((beat) => ({
+        treatment_beat_id: `result-${beat.ordinal}`,
+        source_beat_ids: [beat.id],
+        change_type: 'language_polished',
+        reason: 'Polished.',
+        page_target: beat.page_target,
+        summary: `${beat.text} Polished.`,
+      })),
+    };
+    const hydrated = hydrateOutlineTreatmentResult(compact, input);
+    expect(hydrated.proposal.page_beats).toHaveLength(70);
+    expect(hydrated.manifest.entries).toHaveLength(70);
+    expect(getOutlineTreatmentConsistencyErrors(hydrated, input)).toEqual([]);
   });
 
   it('rejects unmapped proposal beats and duplicate source consumption', () => {

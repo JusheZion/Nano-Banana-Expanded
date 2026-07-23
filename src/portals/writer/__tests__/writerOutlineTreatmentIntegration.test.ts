@@ -80,6 +80,53 @@ describe('writer outline treatment integration', () => {
     }, built.source)).toThrow(/could not be promoted safely/i);
   });
 
+  it('preserves non-beat fields when the compact Edge response contains treated beats only', () => {
+    const outlineWithMetadata = {
+      title: 'Original title',
+      premise: 'Original premise',
+      acts: [{ name: 'Act III', summary: 'Keep this act summary.' }],
+      notes: 'Keep these notes.',
+      page_beats: [{ page_target: 1, summary: 'Original event.' }],
+    };
+    const built = buildOutlineTreatmentPreviewRequest({
+      issueId: '550e8400-e29b-41d4-a716-446655440000',
+      mode: 'preserve',
+      sourceOutline: outlineWithMetadata,
+    });
+    const parsed = parseOutlineTreatmentPreview({
+      proposal: {
+        page_beats: [{
+          treatment_beat_id: 'result-1',
+          page_target: 1,
+          summary: 'Original event, polished.',
+        }],
+      },
+      manifest: {
+        treatment_mode: 'preserve',
+        source_page_count: 1,
+        proposed_page_count: 1,
+        entries: [{
+          result_beat_id: 'result-1',
+          source_beat_ids: [built.source.beats[0].id],
+          change_type: 'language_polished',
+          original_pages: [1],
+          proposed_page: 1,
+          reason: 'Language polish only.',
+        }],
+      },
+    }, built.source);
+
+    expect(parsed.session.proposal).toMatchObject({
+      title: 'Original title',
+      premise: 'Original premise',
+      acts: [{ name: 'Act III', summary: 'Keep this act summary.' }],
+      notes: 'Keep these notes.',
+    });
+    expect(parsed.session.proposal.page_beats).toEqual([
+      expect.objectContaining({ summary: 'Original event, polished.' }),
+    ]);
+  });
+
   it('embeds the validated manifest only when building the promoted outline', () => {
     const built = buildOutlineTreatmentPreviewRequest({
       issueId: '550e8400-e29b-41d4-a716-446655440000',

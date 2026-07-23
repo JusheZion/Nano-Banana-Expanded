@@ -12494,6 +12494,51 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## 70-page AI Treatment Edge timeout repair - 2026-07-23
+
+### What changed
+- Confirmed from production invocation logs that the reported HTTP 546 request ran from 07:43:59 to 07:46:29 and was terminated at the Free-plan 150-second Edge worker limit.
+- Replaced the duplicated Gemini response contract with one compact treated-beat list. The Edge Function now derives proposed page count, original-page references, and all manifest entries locally.
+- Retained exact-once source coverage, unique result IDs, page-range validation, and the bounded repair attempt.
+- Preserved the source outline's title, premise, Acts, and notes on the client while replacing only the treated page beats.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/writerOutlineTreatmentIntegration.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The former contract required Gemini to generate the treated outline and then repeat the same identity, source, page, and reason data in a separate manifest. A failed consistency check could resend both full copies in the same Edge execution.
+- The compact response still undergoes strict Zod and deterministic consistency validation before reaching review.
+- Gemini structured-response schema enforcement was intentionally omitted after the production model rejected even a simplified schema as having too many serving states; application validation remains authoritative.
+- The official outline is never changed during production smoke testing; previews are canceled after verification.
+
+### Verification
+- Focused regression with worktrees excluded: 3 files, 21 tests passed.
+- Targeted ESLint: 0 errors; 2 pre-existing `any` warnings in `writer-tools/index.ts`.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Supabase `writer-tools` deployed successfully to project `vxclogwiytxjolisnakd`.
+- Exact signed-in 70-page production preview completed in under 50 seconds and opened review with 70 preserved source beats, 68 proposed pages, 2 combined results, 0 enhanced, and 0 added.
+- The preview was canceled and the original official title remained present.
+
+### Outstanding issues
+- Cloudflare must be deployed with the matching client preservation change before the compact Edge response is safe to promote.
+
+### Risks or caveats
+- A long model request can still vary in duration, but the successful representative run completed well below the 150-second hosted limit.
+
+### Operator follow-up
+- Deploy the matching Cloudflare frontend, repeat the 70-page preview, verify title/premise/Acts preservation, and cancel without promotion.
+
+### Next steps
+- Commit, push, deploy Cloudflare, and complete the final live preservation smoke.
+
 ## Organize and Polish duplicate-summary rejection - 2026-07-23
 
 ### What changed

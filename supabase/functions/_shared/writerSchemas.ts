@@ -180,6 +180,19 @@ export const outlineTreatmentPreviewResultSchema = z.object({
   }).strict(),
 }).strict();
 
+export const outlineTreatmentCompactResultSchema = z.object({
+  page_beats: z.array(z.object({
+    treatment_beat_id: z.string().min(1).max(160),
+    source_beat_ids: z.array(z.string().min(1).max(160)).max(200),
+    change_type: treatmentChangeTypeSchema,
+    reason: z.string().min(1).max(1000),
+    page_target: z.number().int().min(1).max(200).optional(),
+    scene: z.string().optional(),
+    summary: z.string(),
+    emotional_turn: z.string().optional(),
+  }).strict()).min(1).max(200),
+}).strict();
+
 const pageBeatPanelSchema = z.object({
   index: z.number().int().positive().max(99).optional(),
   action: z.string(),

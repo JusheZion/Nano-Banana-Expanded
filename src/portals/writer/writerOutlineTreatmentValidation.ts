@@ -25,6 +25,7 @@ export type NormalizedTreatmentSource = {
   beats: NormalizedTreatmentSourceBeat[];
   pageCount: number;
   protectedTerms: string[];
+  outline?: IssueOutline;
 };
 
 export type TreatmentManifestEntry = {
@@ -96,6 +97,7 @@ export function normalizeTreatmentSource(
     beats,
     pageCount: Math.max(1, beats.length, ...(explicitPages.length ? explicitPages : [0])),
     protectedTerms: [...new Set(protectedTerms.map((term) => term.trim()).filter(Boolean))],
+    outline: structuredClone(outline),
   };
 }
 

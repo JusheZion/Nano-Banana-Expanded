@@ -34,6 +34,19 @@ type CompleteTreatmentPreviewResult = TreatmentPreviewResult & {
   };
 };
 
+export type CompactTreatmentPreviewResult = {
+  page_beats: Array<{
+    treatment_beat_id: string;
+    source_beat_ids: string[];
+    change_type: string;
+    reason: string;
+    page_target?: number;
+    scene?: string;
+    summary: string;
+    emotional_turn?: string;
+  }>;
+};
+
 const MODE_INSTRUCTIONS: Record<OutlineTreatmentPromptInput['treatmentMode'], string> = {
   preserve: [
     'Beat IDs, order, events, outcomes, and page targets are immutable.',
@@ -54,15 +67,14 @@ const MODE_INSTRUCTIONS: Record<OutlineTreatmentPromptInput['treatmentMode'], st
 
 export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput): string {
   return [
-    'Return JSON only, with proposal and manifest fields matching the supplied schema.',
+    'Return JSON only, with one compact page_beats array matching the supplied schema.',
     `Treatment mode: ${input.treatmentMode}`,
     `Source page count: ${input.sourcePageCount}`,
     `Allowed page range: ${input.allowedPageRange.min}-${input.allowedPageRange.max}`,
     'Never delete or omit a source beat.',
-    'Every source beat id must appear exactly once across all manifest source_beat_ids arrays.',
-    'Create one manifest entry for every result beat.',
-    'Every proposal beat must have a unique treatment_beat_id matching exactly one manifest result_beat_id.',
-    'The number of proposal page_beats must equal manifest proposed_page_count.',
+    'Every source beat id must appear exactly once across all result source_beat_ids arrays.',
+    'Every result beat must have a unique treatment_beat_id.',
+    'Return a number of result beats within the allowed page range.',
     'Do not retain a source beat separately when a combined result already consumes it.',
     'Do not append recap or whole-outline summary beats that repeat material already represented.',
     MODE_INSTRUCTIONS[input.treatmentMode],
@@ -73,13 +85,45 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
     JSON.stringify(input.sourceBeats),
     [
       'Return shape:',
-      '{"proposal":{"title"?:string,"premise"?:string,"acts"?:array,"page_beats":[',
-      '{"treatment_beat_id":string,"page_target"?:number,"scene"?:string,"summary":string,"emotional_turn"?:string}]},',
-      '"manifest":{"treatment_mode":string,"source_page_count":number,"proposed_page_count":number,',
-      '"entries":[{"result_beat_id":string,"source_beat_ids":string[],"change_type":string,',
-      '"original_pages":number[],"proposed_page"?:number,"reason":string}]}}',
+      '{"page_beats":[{"treatment_beat_id":string,"source_beat_ids":string[],',
+      '"change_type":"unchanged"|"language_polished"|"moved"|"combined"|"enhanced"|"added",',
+      '"reason":string,"page_target"?:number,"scene"?:string,"summary":string,"emotional_turn"?:string}]}',
     ].join(''),
   ].join('\n\n');
+}
+
+export function hydrateOutlineTreatmentResult(
+  compact: CompactTreatmentPreviewResult,
+  input: OutlineTreatmentPromptInput,
+): CompleteTreatmentPreviewResult {
+  const sourceById = new Map(input.sourceBeats.map((beat) => [beat.id, beat]));
+  return {
+    proposal: {
+      page_beats: compact.page_beats.map((beat) => ({
+        treatment_beat_id: beat.treatment_beat_id,
+        ...(beat.page_target === undefined ? {} : { page_target: beat.page_target }),
+        ...(beat.scene === undefined ? {} : { scene: beat.scene }),
+        summary: beat.summary,
+        ...(beat.emotional_turn === undefined ? {} : { emotional_turn: beat.emotional_turn }),
+      })),
+    },
+    manifest: {
+      treatment_mode: input.treatmentMode,
+      source_page_count: input.sourcePageCount,
+      proposed_page_count: compact.page_beats.length,
+      entries: compact.page_beats.map((beat) => ({
+        result_beat_id: beat.treatment_beat_id,
+        source_beat_ids: beat.source_beat_ids,
+        change_type: beat.change_type,
+        original_pages: beat.source_beat_ids.flatMap((id) => {
+          const source = sourceById.get(id);
+          return source ? [source.page_target ?? source.ordinal] : [];
+        }),
+        ...(beat.page_target === undefined ? {} : { proposed_page: beat.page_target }),
+        reason: beat.reason,
+      })),
+    },
+  };
 }
 
 export function getOutlineTreatmentConsistencyErrors(
@@ -154,18 +198,16 @@ export function getOutlineTreatmentConsistencyErrors(
 
 export function buildOutlineTreatmentRepairPrompt(
   input: OutlineTreatmentPromptInput,
-  previousResult: CompleteTreatmentPreviewResult,
+  previousResult: CompactTreatmentPreviewResult,
   consistencyErrors: string[],
 ): string {
   return [
     buildOutlineTreatmentPrompt(input),
     'Your previous response was valid JSON but failed consistency validation.',
     `Correct every issue: ${JSON.stringify(consistencyErrors)}`,
-    'Return the complete corrected proposal and manifest, not a patch or explanation.',
-    'Use each proposal treatment_beat_id as exactly one manifest result_beat_id.',
-    'The number of proposal page_beats must equal manifest proposed_page_count.',
-    'Every source beat id must appear exactly once across the manifest; combinations replace their source beats.',
-    'Remove any retained, recap, or summary proposal beat that duplicates material consumed by another result.',
+    'Return the complete corrected compact page_beats array, not a patch or explanation.',
+    'Every source beat id must appear exactly once; combinations replace their source beats.',
+    'Remove any retained, recap, or summary beat that duplicates material consumed by another result.',
     'Use only these change_type values: unchanged, language_polished, moved, combined, enhanced, added.',
     'Previous response:',
     JSON.stringify(previousResult),

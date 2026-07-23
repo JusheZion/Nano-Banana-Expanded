@@ -6,6 +6,7 @@ import {
   ideaAssistResultSchema,
   issueOutlineSchema,
   outlineClassificationPreviewResultSchema,
+  outlineTreatmentCompactResultSchema,
   outlineTreatmentPreviewResultSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
@@ -18,6 +19,7 @@ import {
   buildOutlineTreatmentPrompt,
   buildOutlineTreatmentRepairPrompt,
   getOutlineTreatmentConsistencyErrors,
+  hydrateOutlineTreatmentResult,
   restorePreserveStructure,
 } from './outlineTreatmentPrompt.ts';
 
@@ -1417,14 +1419,17 @@ Deno.serve(async (req) => {
         return llmFailureResponse(e instanceof Error ? e.message : String(e));
       }
 
-      const initial = outlineTreatmentPreviewResultSchema.safeParse(treatmentJson);
+      const initial = outlineTreatmentCompactResultSchema.safeParse(treatmentJson);
       if (!initial.success) {
         return Response.json(
           { success: false, error: 'Outline treatment preview failed validation', details: initial.error.message },
           { status: 422, headers: corsHeaders },
         );
       }
-      const restored = restorePreserveStructure(initial.data, promptInput);
+      const restored = restorePreserveStructure(
+        hydrateOutlineTreatmentResult(initial.data, promptInput),
+        promptInput,
+      );
       let result = outlineTreatmentPreviewResultSchema.safeParse(restored);
       if (!result.success) {
         return Response.json(
@@ -1441,7 +1446,7 @@ Deno.serve(async (req) => {
               'You repair comics outline JSON that failed deterministic consistency validation.',
               'Return the complete corrected JSON only and preserve every source beat.',
             ].join(' '),
-            user: buildOutlineTreatmentRepairPrompt(promptInput, result.data, consistencyErrors),
+            user: buildOutlineTreatmentRepairPrompt(promptInput, initial.data, consistencyErrors),
             preferredModel: geminiModel,
             apiKey: geminiKey,
             temperature: 0.1,
@@ -1449,7 +1454,7 @@ Deno.serve(async (req) => {
         } catch (e) {
           return llmFailureResponse(e instanceof Error ? e.message : String(e));
         }
-        const repairedInitial = outlineTreatmentPreviewResultSchema.safeParse(repairedJson);
+        const repairedInitial = outlineTreatmentCompactResultSchema.safeParse(repairedJson);
         if (!repairedInitial.success) {
           return Response.json(
             {
@@ -1461,7 +1466,10 @@ Deno.serve(async (req) => {
           );
         }
         result = outlineTreatmentPreviewResultSchema.safeParse(
-          restorePreserveStructure(repairedInitial.data, promptInput),
+          restorePreserveStructure(
+            hydrateOutlineTreatmentResult(repairedInitial.data, promptInput),
+            promptInput,
+          ),
         );
         if (!result.success) {
           return Response.json(
