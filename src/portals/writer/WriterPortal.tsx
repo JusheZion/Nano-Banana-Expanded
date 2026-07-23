@@ -135,6 +135,10 @@ import {
   type SynopsisHelperParts,
 } from '@/portals/writer/writerSynopsisHelper';
 import {
+  TREATMENT_CONTRACTS,
+  WRITER_OUTLINE_TREATMENT_MODES,
+} from '@/portals/writer/writerOutlineTreatmentContracts';
+import {
   buildWriterVisualReferenceDigest,
   mergeVisualReferencesIntoSynopsisParts,
   mergeWriterVisualReferenceIntoNotes,
@@ -7068,18 +7072,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/45">Step 2 · AI treatment</p>
           <h3 className="mt-1 font-serif text-xl font-semibold text-slate-950">How should AI use my outline?</h3>
           <div className="mt-4 grid gap-2" role="radiogroup" aria-label="How AI should use the source outline">
-            {(
-              [
-                ['preserve', 'Keep my order', 'Polish wording while preserving your sequence and named events.'],
-                ['structure', 'Organize and polish', 'Keep your story, but improve structure, pacing, and page distribution.'],
-                ['expand', 'Expand creatively', 'Keep your spine and let AI add connective scenes where needed.'],
-              ] as const
-            ).map(([id, label, description]) => (
+            {WRITER_OUTLINE_TREATMENT_MODES.map((id) => {
+              const { label, description } = TREATMENT_CONTRACTS[id];
+              return (
               <button key={id} type="button" role="radio" aria-checked={authorOutlineMode === id} title={description} onClick={() => setAuthorOutlineMode(id)} className={`rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 ${authorOutlineMode === id ? 'border-black/65 bg-black text-white shadow-sm' : 'border-black/12 bg-white/55 text-black hover:bg-white/80'}`}>
                 <span className="block text-xs font-black">{label}</span>
                 <span className={`mt-0.5 block text-[11px] font-semibold leading-snug ${authorOutlineMode === id ? 'text-white/70' : 'text-black/52'}`}>{description}</span>
               </button>
-            ))}
+              );
+            })}
           </div>
           <button type="button" title="Save the source and create a new official outline version" disabled={!supabaseOk || !selectedIssueId || !authorOutlineText.trim() || outlineGenLoading} onClick={() => void runOutlineGenerate()} className="writer-attention-simple mt-4 w-full rounded-lg px-5 py-3 text-sm font-black text-black shadow-sm disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>
             {outlineGenLoading ? 'Creating official outline…' : latestOutline ? 'Update official outline with AI' : 'Create official outline with AI'}
@@ -8656,13 +8657,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           change your source text; it affects the next generated issue outline.
                         </p>
                         <div className="flex flex-wrap gap-1.5" aria-label="Author outline generation mode">
-                          {(
-                            [
-                              ['preserve', 'Keep my order', 'Keep order and named events strict.'],
-                              ['structure', 'Organize into production outline', 'Organize into production beats.'],
-                              ['expand', 'Add missing connective scenes', 'Add connective tissue around your spine.'],
-                            ] as const
-                          ).map(([id, label, description]) => (
+                          {WRITER_OUTLINE_TREATMENT_MODES.map((id) => {
+                            const { label, description } = TREATMENT_CONTRACTS[id];
+                            return (
                             <button
                               key={id}
                               type="button"
@@ -8676,7 +8673,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             >
                               {label}
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
                         <WriterOutlineSourceEditor
                           id="writer-advanced-outline-source"

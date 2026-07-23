@@ -2,6 +2,11 @@
  * Build a structured synopsis string from worksheet fields for writer_issues.synopsis / outline_issue context.
  */
 
+import {
+  WRITER_OUTLINE_TREATMENT_MODES,
+  type WriterOutlineTreatmentMode,
+} from './writerOutlineTreatmentContracts';
+
 export type SynopsisHelperParts = {
   logline: string;
   mustHappen: string;
@@ -25,7 +30,7 @@ export const EMPTY_SYNOPSIS_HELPER_PARTS: SynopsisHelperParts = {
 const NOTES_KEY = 'synopsis_helper';
 const AUTHOR_OUTLINE_NOTES_KEY = 'author_outline';
 
-export type AuthorOutlineMode = 'preserve' | 'structure' | 'expand';
+export type AuthorOutlineMode = WriterOutlineTreatmentMode;
 
 export type AuthorOutlineSource = {
   text: string;
@@ -38,7 +43,7 @@ export const EMPTY_AUTHOR_OUTLINE_SOURCE: AuthorOutlineSource = {
   mode: 'structure',
 };
 
-const AUTHOR_OUTLINE_MODES = new Set<AuthorOutlineMode>(['preserve', 'structure', 'expand']);
+const AUTHOR_OUTLINE_MODES = new Set<AuthorOutlineMode>(WRITER_OUTLINE_TREATMENT_MODES);
 
 function readAuthorOutlineMode(raw: unknown): AuthorOutlineMode {
   return typeof raw === 'string' && AUTHOR_OUTLINE_MODES.has(raw as AuthorOutlineMode)
