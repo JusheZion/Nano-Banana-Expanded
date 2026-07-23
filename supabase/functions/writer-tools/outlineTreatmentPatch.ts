@@ -3,6 +3,22 @@ import type {
   OutlineTreatmentPromptInput,
 } from './outlineTreatmentPrompt.ts';
 
+export function normalizeOutlineTreatmentPatchResult(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { operations?: unknown }).operations)) {
+    return value;
+  }
+  return {
+    ...(value as Record<string, unknown>),
+    operations: (value as { operations: unknown[] }).operations.map((operation) => {
+      if (!operation || typeof operation !== 'object') return operation;
+      const record = operation as Record<string, unknown>;
+      const { proposed_text: proposedText, ...rest } = record;
+      if (typeof proposedText !== 'string' || typeof record.summary === 'string') return rest;
+      return { ...rest, summary: proposedText };
+    }),
+  };
+}
+
 export type OutlineTreatmentPatchOperation = {
   operation_id: string;
   operation: 'edit' | 'move' | 'combine' | 'add';

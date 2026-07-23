@@ -19,7 +19,10 @@ import {
   buildOutlineTreatmentPrompt,
   getOutlineTreatmentConsistencyErrors,
 } from './outlineTreatmentPrompt.ts';
-import { applyOutlineTreatmentPatches } from './outlineTreatmentPatch.ts';
+import {
+  applyOutlineTreatmentPatches,
+  normalizeOutlineTreatmentPatchResult,
+} from './outlineTreatmentPatch.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1423,7 +1426,9 @@ Deno.serve(async (req) => {
         return llmFailureResponse(e instanceof Error ? e.message : String(e));
       }
 
-      const initial = outlineTreatmentPatchResultSchema.safeParse(treatmentJson);
+      const initial = outlineTreatmentPatchResultSchema.safeParse(
+        normalizeOutlineTreatmentPatchResult(treatmentJson),
+      );
       if (!initial.success) {
         return Response.json(
           { success: false, error: 'Outline treatment preview failed validation', details: initial.error.message },

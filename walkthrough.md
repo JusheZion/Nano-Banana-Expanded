@@ -12505,6 +12505,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Kept raw JSON and opaque source/result IDs in Advanced Tools, with IDs behind **Technical details**.
 - Rebuilt the review dialog as a fixed-height flex shell with one scrollable body and a separate non-sticky footer so controls do not cover content.
 - Added explicit readable text colors for Cancel and Regenerate controls.
+- Live QA exposed Gemini's undocumented `proposed_text` alias. The Edge boundary now normalizes it to `summary` before strict schema validation and removes the alias.
 
 ### Files touched
 - `src/portals/writer/WriterOutlineTreatmentReview.tsx`
@@ -12517,6 +12518,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `src/shared/writer/schemas.ts`
 - `supabase/functions/_shared/writerSchemas.ts`
 - `supabase/functions/writer-tools/outlineTreatmentPatch.ts`
+- `supabase/functions/writer-tools/index.ts`
 - Focused treatment-review test files
 - `docs/superpowers/specs/2026-07-23-writer-outline-review-recovery-design.md`
 - `docs/superpowers/plans/2026-07-23-writer-outline-review-recovery-implementation.md`
@@ -12537,9 +12539,12 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Targeted ESLint: passed with no findings.
 - `npm run build`: passed with the existing large-chunk advisory only.
 - Local signed-in QA confirmed the dedicated demo account and reusable Writer issue/source data are available.
+- First production smoke correctly detected 70 source pages and preserved official v1, but reproduced HTTP 422 because Gemini returned `proposed_text`.
+- Focused alias-normalization regression: 1 test file, 9 tests passed.
+- Targeted Edge lint passed with 0 errors and 2 pre-existing `no-explicit-any` warnings in `writer-tools/index.ts`.
 
 ### Outstanding issues
-- Supabase and Cloudflare deployment and the signed-in production visual/corridor smoke remain pending.
+- The repaired Supabase function and signed-in production visual/corridor smoke remain pending.
 
 ### Risks or caveats
 - Production remains on the previous review UI until the paired release completes.

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { applyOutlineTreatmentPatches } from './outlineTreatmentPatch';
+import {
+  applyOutlineTreatmentPatches,
+  normalizeOutlineTreatmentPatchResult,
+} from './outlineTreatmentPatch';
 
 function makeInput(count: number, treatmentMode: 'preserve' | 'structure' | 'expand' = 'structure') {
   return {
@@ -21,6 +24,25 @@ function makeInput(count: number, treatmentMode: 'preserve' | 'structure' | 'exp
 }
 
 describe('applyOutlineTreatmentPatches', () => {
+  it('normalizes the model proposed_text alias into an edit summary', () => {
+    const parsed = normalizeOutlineTreatmentPatchResult({
+      operations: [{
+        operation_id: 'edit-1',
+        operation: 'edit',
+        source_beat_ids: ['source-page-1-1'],
+        reason: 'Polish the wording.',
+        proposed_text: 'The elder opens the gathering.',
+      }],
+    });
+
+    expect(parsed).toMatchObject({
+      operations: [{
+        summary: 'The elder opens the gathering.',
+      }],
+    });
+    expect((parsed as { operations: unknown[] }).operations[0]).not.toHaveProperty('proposed_text');
+  });
+
   it('keeps untouched beats in place when AI returns only eight late-story edits', () => {
     const input = makeInput(70);
     const result = applyOutlineTreatmentPatches({
