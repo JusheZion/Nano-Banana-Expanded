@@ -63,13 +63,13 @@
 - [x] Run one consolidated release gate: `npm run test`, `npm run lint -- --quiet`, `npm run build`, and `git diff --check`.
 - [x] Run signed-in local browser QA for Simple/manual assignment, Advanced import, page-target inference, and 390px/desktop layouts. Defer live AI success/promotion verification until the changed Edge Function is deployed.
 - [x] Complete the DOX and walkthrough updates with actual evidence, then commit the final coherent diff.
-- [ ] Push the approved branch, deploy any changed `writer-tools` Edge Function after project/auth verification, deploy Cloudflare, and smoke-test the live URL.
+- [x] Push the approved branch, deploy the changed `writer-tools` Edge Function after project/auth verification, deploy Cloudflare, and smoke-test the live URL.
 
 **Smoke test:** Reload the live Writer Outline tab at desktop and mobile widths, complete a safe non-destructive paste review, confirm no console/network errors, and confirm AI preview requests create no official version until promotion.
 
 **Rollback:** Retain the previous live Cloudflare version and Edge Function version identifiers before deployment so either can be restored independently.
 
-**Result summary:** Local browser QA confirmed both review entry points, manual reassignment, three-page inference, and mobile footer clearance above the fixed navigation. Release gate: 111 files / 684 tests passed; lint and build passed. Deployment and live AI verification remain.
+**Result summary:** Local browser QA confirmed both review entry points, manual reassignment, three-page inference, and mobile footer clearance above the fixed navigation. Release gate: 111 files / 684 tests passed; lint and build passed. Supabase `writer-tools` and Cloudflare version `1700be78-e66e-4c6a-ba17-ce1c74807299` deployed successfully; the live Writer workflow and template/settings controls loaded under the signed-in QA account.
 
 ## Approval gate
 

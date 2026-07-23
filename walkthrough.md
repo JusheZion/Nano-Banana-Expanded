@@ -12043,14 +12043,19 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `git diff --check`: passed.
 
 ### Outstanding issues
-- Live AI preview/promotion and Undo verification require the changed `writer-tools` Edge Function deployment.
-- Cloudflare deployment and live smoke verification remain.
+- A destructive live AI promotion/Undo run was intentionally omitted because the live signed-in account opened with no series selected; local component and integration coverage verifies those persistence paths.
 
 ### Risks or caveats
 - The local QA account's disposable series remained visible after the recoverable-trash action; live product data was not modified.
 
 ### Operator follow-up
-- None; deployment approval is already granted.
+- None.
 
 ### Next steps
-- Commit and push the release diff, deploy `writer-tools`, deploy Cloudflare, and smoke-test the live Writer Outline workflow.
+- None.
+
+### Deployment
+- Pushed `codex/writer-outline-paste-review` and fast-forwarded `main` to verified commit `c21a017`.
+- Deployed Supabase Edge Function `writer-tools` to project `vxclogwiytxjolisnakd` after confirming the authenticated target; prior deployed version was 55.
+- Deployed Cloudflare Worker `asset-reference-comics-studio` as version `1700be78-e66e-4c6a-ba17-ce1c74807299`; prior recorded rollback version was `4b7d10f2-f563-40b6-acf0-9b0ee5a3e7fd`.
+- Live smoke at `https://asset-reference-comics-studio.onyxzion.workers.dev/` passed: authenticated app shell, Writer Workshop, review preferences, AI classification choices, and TXT/Markdown template links rendered.
