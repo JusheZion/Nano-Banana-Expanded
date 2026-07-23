@@ -581,7 +581,7 @@ npm run test -- --run src/portals/writer/__tests__/writerOutlineTreatmentContrac
 
 ### Task 8: Consolidated regression and audits
 
-- [ ] **Step 1: Run the release gate once**
+- [x] **Step 1: Run the release gate once**
 
 ```bash
 npm run test -- --run --exclude '.worktrees/**'
@@ -592,7 +592,7 @@ git diff --check
 
 Expected: all commands pass; record exact counts.
 
-- [ ] **Step 2: Run signed-in local browser QA**
+- [x] **Step 2: Run signed-in local browser QA**
 
 Using uniquely named disposable data:
 
@@ -607,19 +607,29 @@ Using uniquely named disposable data:
 9. Check desktop and 390px layouts, keyboard operation, status/error announcements, and console/network errors.
 10. Clean up the disposable series.
 
-- [ ] **Step 3: Perform final ReAct audit**
+- [x] **Step 3: Perform final ReAct audit**
 
 Verify every user action has observable feedback; validation uses current session state; retry preserves the selected contract; no hidden mutation occurs before promotion; and reload observations match persisted state.
 
-- [ ] **Step 4: Perform final QA audit**
+- [x] **Step 4: Perform final QA audit**
 
 Trace every acceptance criterion to evidence. Separately record rendering, request, validation, promotion, persistence-after-reload, and Undo-after-reload.
 
-- [ ] **Step 5: Perform final UI/UX audit**
+- [x] **Step 5: Perform final UI/UX audit**
 
 Check treatment distinction, contract discoverability, summary comprehension, Advanced decision ergonomics, focus order, responsive layout, disabled/error/loading states, and non-color cues.
 
-- [ ] **Step 6: Complete DOX and walkthrough**
+- [x] **Step 6: Complete DOX and walkthrough**
+
+**Local release-gate result (2026-07-23):** PASS after one QA-found repair.
+The 26-beat automated fixture covers all three modes and missing Page 26 label;
+the signed-in browser mutation used a two-page Keep My Order fixture to prove
+real Edge preview, explicit promotion, reload persistence, recovery
+rehydration, first-version Undo after reload, exact prior-source restoration,
+390px control availability/no horizontal overflow, and zero console warnings or
+errors. The first live attempt exposed memory-only first-version recovery; a
+TDD repair persisted and rehydrated the recovery record, then the repeated
+mutation passed. Final gate: 117 files, 725 tests; lint and build passed.
 
 Update the closest owning documentation only if contracts or file ownership changed. Append actual files, test counts, browser evidence, cleanup, deployment versions, risks, and rollback identifiers to `walkthrough.md`.
 

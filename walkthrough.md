@@ -12363,3 +12363,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Commit the mutation guard, deploy `writer-tools`, perform authenticated mutation/Undo QA, then deploy and smoke-test Cloudflare.
+
+## Reload-safe outline treatment Undo repair - 2026-07-23
+
+### What changed
+- Persisted the reviewed-outline recovery record in issue notes when treatment promotion synchronizes My Outline.
+- Rehydrates the recovery banner and Undo operation from saved issue notes plus outline versions after a full reload.
+- Clears the persisted recovery record only after prior source restoration succeeds.
+- Updated second-or-later Undo to restore the prior My Outline source as well as restoring the prior official outline version.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerOutlinePasteRecovery.ts`
+- `src/portals/writer/__tests__/writerOutlinePasteRecovery.test.ts`
+- `docs/superpowers/plans/2026-07-23-writer-ai-treatment-contracts-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Root cause: `lastReviewedInsert` contained the prior-source snapshot and first-version delete target only in React state; reload discarded that state even though the official version persisted.
+- The stored recovery record keys the inserted row by issue and version, then reconstructs the current row ID from freshly loaded outline rows.
+
+### Verification
+- TDD reproduced absent rehydration before the storage helpers existed.
+- Focused repair gate: 3 files and 37 tests passed.
+- Final consolidated regression: 117 files and 725 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Signed-in browser: Keep My Order preview returned 2 of 2 preserved beats; promotion created v1; full reload rehydrated **Undo reviewed update**; Undo removed v1 and restored the exact saved pre-treatment source.
+- Responsive check exposed both Simple/Advanced controls and Source outline at the 390px override with no document-level horizontal overflow; console warnings/errors: 0.
+- Disposable Issue 3 was moved to Recoverable Trash after successful cleanup.
+
+### Outstanding issues
+- The initial pre-repair smoke created a QA v1 on the previously empty Issue 2 in `Untitled series`. It was not deleted because Issue 2 pre-existed this QA run and deleting the issue would risk unrelated user data.
+- Cloudflare deployment and production smoke remain.
+
+### Risks or caveats
+- Simple review still offers the inherited JSON editor beneath the plain-language contract summary; a structured non-JSON proposal editor remains separate future work.
+
+### Operator follow-up
+- Remove the two-page `QA Treatment Check` outline from `Untitled series` Issue 2 if it is not wanted.
+
+### Next steps
+- Commit and push the reload-safe recovery repair, deploy Cloudflare, then run the production read/interaction smoke.

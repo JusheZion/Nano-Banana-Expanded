@@ -38,6 +38,80 @@ export type ReviewedOutlinePriorSource = {
   value?: unknown;
 };
 
+const REVIEWED_OUTLINE_RECOVERY_KEY = 'reviewed_outline_recovery';
+
+export type PersistedReviewedOutlineRecovery = {
+  issueId: string;
+  insertedVersion: number;
+  previousOutline: WriterIssueOutlineRow | null;
+  origin: ReviewedOutlineInsert['origin'];
+  canonicalSourceText: string;
+  priorAuthorOutline: ReviewedOutlinePriorSource;
+  priorAuthorSource: AuthorOutlineSource;
+};
+
+function readPersistedReviewedOutlineRecovery(notes: unknown): PersistedReviewedOutlineRecovery | null {
+  if (!notes || typeof notes !== 'object' || Array.isArray(notes)) return null;
+  const value = (notes as Record<string, unknown>)[REVIEWED_OUTLINE_RECOVERY_KEY];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Partial<PersistedReviewedOutlineRecovery>;
+  if (
+    typeof record.issueId !== 'string'
+    || !Number.isInteger(record.insertedVersion)
+    || (record.origin !== 'source' && record.origin !== 'official_editor')
+    || typeof record.canonicalSourceText !== 'string'
+    || !record.priorAuthorOutline
+    || typeof record.priorAuthorOutline.present !== 'boolean'
+    || !record.priorAuthorSource
+    || typeof record.priorAuthorSource.text !== 'string'
+    || !['preserve', 'structure', 'expand'].includes(record.priorAuthorSource.mode)
+  ) return null;
+  return record as PersistedReviewedOutlineRecovery;
+}
+
+export function mergeReviewedOutlineRecoveryIntoNotes(
+  notes: unknown,
+  recovery: PersistedReviewedOutlineRecovery,
+): Record<string, unknown> {
+  const next = notes && typeof notes === 'object' && !Array.isArray(notes)
+    ? { ...(notes as Record<string, unknown>) }
+    : {};
+  next[REVIEWED_OUTLINE_RECOVERY_KEY] = structuredClone(recovery);
+  return next;
+}
+
+export function clearReviewedOutlineRecoveryFromNotes(notes: unknown): Record<string, unknown> {
+  const next = notes && typeof notes === 'object' && !Array.isArray(notes)
+    ? { ...(notes as Record<string, unknown>) }
+    : {};
+  delete next[REVIEWED_OUTLINE_RECOVERY_KEY];
+  return next;
+}
+
+export function rehydrateReviewedOutlineRecovery(
+  notes: unknown,
+  outlines: WriterIssueOutlineRow[],
+): (ReviewedOutlineInsert & Omit<PersistedReviewedOutlineRecovery, 'issueId' | 'insertedVersion' | 'previousOutline' | 'origin'> & {
+  priorAuthorOutline: ReviewedOutlinePriorSource;
+  priorAuthorSource: AuthorOutlineSource;
+}) | null {
+  const stored = readPersistedReviewedOutlineRecovery(notes);
+  if (!stored) return null;
+  const insertedRow = outlines.find((row) => (
+    row.issue_id === stored.issueId && row.version === stored.insertedVersion
+  ));
+  if (!insertedRow) return null;
+  return {
+    insertedRow,
+    previousOutline: stored.previousOutline,
+    hadPreviousOutline: Boolean(stored.previousOutline),
+    origin: stored.origin,
+    canonicalSourceText: stored.canonicalSourceText,
+    priorAuthorOutline: stored.priorAuthorOutline,
+    priorAuthorSource: stored.priorAuthorSource,
+  };
+}
+
 export function captureReviewedOutlinePriorSource(notes: Record<string, unknown>): {
   priorAuthorOutline: ReviewedOutlinePriorSource;
   priorAuthorSource: AuthorOutlineSource;
@@ -271,6 +345,15 @@ export async function restoreReviewedOutlineInsert(
       phase: 'restore',
       error: restored.error ?? 'Could not restore the preceding official outline version.',
       partial: false,
+    };
+  }
+  const sourceRestore = await stepSafely(deps.restorePriorSource, 'Unexpected prior-source restore error');
+  if (!sourceRestore.ok) {
+    return {
+      ok: false,
+      phase: 'source_restore',
+      error: `The preceding official outline was restored, but the prior My Outline source could not be restored: ${sourceRestore.error}`,
+      partial: true,
     };
   }
 

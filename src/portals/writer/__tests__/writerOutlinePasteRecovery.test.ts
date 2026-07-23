@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WriterIssueOutlineRow } from '@/shared/api/arcsWriterRoom';
 import {
   clearReviewedOutlineRecoveryErrors,
+  clearReviewedOutlineRecoveryFromNotes,
   captureReviewedOutlinePriorSource,
   getReviewedOutlineUndoAvailability,
+  mergeReviewedOutlineRecoveryIntoNotes,
+  rehydrateReviewedOutlineRecovery,
   reviewedOutlineRecoveryGuidance,
   restoreReviewedOutlinePriorSource,
   retryReviewedOutlineSourceSync,
@@ -57,6 +60,28 @@ function createDeps(): ReviewedOutlineRecoveryDeps {
 }
 
 describe('reviewed outline recovery', () => {
+  it('persists and rehydrates first-version Undo across reload', () => {
+    const first = { ...inserted, id: 'outline-1', version: 1 };
+    const recovery = {
+      issueId: 'issue-1',
+      insertedVersion: 1,
+      previousOutline: null,
+      origin: 'official_editor' as const,
+      canonicalSourceText: 'PAGE BEATS:\n- Page 1: After',
+      priorAuthorOutline: { present: false as const },
+      priorAuthorSource: { text: '', mode: 'structure' as const },
+    };
+    const notes = mergeReviewedOutlineRecoveryIntoNotes({ unrelated: true }, recovery);
+    expect(rehydrateReviewedOutlineRecovery(notes, [first])).toMatchObject({
+      insertedRow: first,
+      previousOutline: null,
+      hadPreviousOutline: false,
+      canonicalSourceText: recovery.canonicalSourceText,
+      priorAuthorOutline: { present: false },
+    });
+    expect(clearReviewedOutlineRecoveryFromNotes(notes)).toEqual({ unrelated: true });
+  });
+
   it.each(['source', 'official_editor'] as const)(
     'reloads and restores the preceding version for %s-origin inserts',
     async (origin) => {
@@ -72,6 +97,7 @@ describe('reviewed outline recovery', () => {
         restoredFromVersion: 2,
         nextVersion: 4,
       });
+      expect(deps.restorePriorSource).toHaveBeenCalledOnce();
     },
   );
 

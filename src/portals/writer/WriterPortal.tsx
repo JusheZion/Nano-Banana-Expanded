@@ -192,8 +192,11 @@ import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePas
 import { mergeOutlineAlternateIntoNotes } from '@/portals/writer/writerOutlineAlternates';
 import {
   captureReviewedOutlinePriorSource,
+  clearReviewedOutlineRecoveryFromNotes,
   clearReviewedOutlineRecoveryErrors,
   getReviewedOutlineUndoAvailability,
+  mergeReviewedOutlineRecoveryIntoNotes,
+  rehydrateReviewedOutlineRecovery,
   reviewedOutlineRecoveryGuidance,
   restoreReviewedOutlinePriorSource,
   retryReviewedOutlineSourceSync,
@@ -1982,6 +1985,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const latestOutline = outlines[0];
   const latestShotPlan = shotPlans[0];
   const selectedIssue = issues.find((i) => i.id === selectedIssueId) ?? null;
+  useEffect(() => {
+    if (lastReviewedInsert || !selectedIssue || !outlines.length) return;
+    const recovery = rehydrateReviewedOutlineRecovery(selectedIssue.notes, outlines);
+    if (!recovery) return;
+    setLastReviewedInsert({
+      ...recovery,
+      diagnostic: analyzeOutlinePaste(recovery.canonicalSourceText, 'clipboard'),
+      sourceSyncPending: false,
+    });
+  }, [lastReviewedInsert, outlines, selectedIssue]);
   const writerLocks = useMemo(() => readWriterLocksFromNotes(selectedIssue?.notes), [selectedIssue?.notes]);
   const writerVisualReferences = useMemo(
     () => readWriterVisualReferencesFromNotes(selectedIssue?.notes),
@@ -3102,7 +3115,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         expectedPreviousId: latestOutline?.id ?? null,
       }),
       syncSource: async (sourceText) => {
-        const nextNotes = mergeAuthorOutlineIntoNotes(notesAfterSnapshot, { text: sourceText, mode: authorOutlineMode });
+        const sourceNotes = mergeAuthorOutlineIntoNotes(notesAfterSnapshot, { text: sourceText, mode: authorOutlineMode });
+        const nextNotes = mergeReviewedOutlineRecoveryIntoNotes(sourceNotes, {
+          issueId: selectedIssueId,
+          insertedVersion: (latestOutline?.version ?? 0) + 1,
+          previousOutline: latestOutline ?? null,
+          origin: 'official_editor',
+          canonicalSourceText: sourceText,
+          priorAuthorOutline,
+          priorAuthorSource,
+        });
         return await updateSelectedIssueNotes(nextNotes)
           ? { ok: true }
           : { ok: false, error: 'My Outline could not be synchronized.' };
@@ -4825,9 +4847,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         if (!selectedIssue || selectedIssue.id !== lastReviewedInsert.insertedRow.issue_id) {
           return { ok: false, error: 'The owning issue is no longer selected.' };
         }
-        const restored = await updateSelectedIssueNotes(restoreReviewedOutlinePriorSource(
-          selectedIssue.notes,
-          lastReviewedInsert.priorAuthorOutline,
+        const restored = await updateSelectedIssueNotes(clearReviewedOutlineRecoveryFromNotes(
+          restoreReviewedOutlinePriorSource(
+            selectedIssue.notes,
+            lastReviewedInsert.priorAuthorOutline,
+          ),
         ));
         return restored
           ? { ok: true }
