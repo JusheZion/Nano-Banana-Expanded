@@ -12527,19 +12527,22 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run build`: passed with the existing large-chunk advisory only.
 - Supabase `writer-tools` version 77 deployed successfully to project `vxclogwiytxjolisnakd`.
 - Exact signed-in 70-page production preview completed in about 40 seconds and opened review with 70 proposed pages, 70 preserved source beats, 0 combined, 0 enhanced, and 0 added.
-- The preview was canceled without promotion. Live QA then exposed the page-beats-only metadata fallback gap; the frontend safeguard was added and verified by focused regression and production build before Cloudflare release.
+- Live QA exposed the page-beats-only metadata fallback gap; the frontend safeguard was added and verified by focused regression and production build before Cloudflare release.
+- Commit `820e54d` was pushed to `origin/main`; Cloudflare Worker version `d911794f-7ffc-436f-aac5-f77f52d8a1a9` was deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- The post-deploy signed-in 70-page preview again completed in about 40 seconds. The editable proposal contained the official title, premise, 4 Acts, and 70 unique sequential page beats from 1 through 70.
+- Both production previews were canceled without promotion, and the original official title remained present.
 
 ### Outstanding issues
-- Final Cloudflare deployment and post-deploy metadata-preservation preview remain before closeout.
+- None.
 
 ### Risks or caveats
 - Model duration can still vary, but the supported low-latency route and representative run leave substantial headroom below the 150-second hosted limit.
 
 ### Operator follow-up
-- Deploy the matching Cloudflare frontend, repeat the 70-page preview, verify title/premise/Acts preservation, and cancel without promotion.
+- None.
 
 ### Next steps
-- Commit, push, deploy Cloudflare, and complete the final live preservation smoke.
+- None for this repair.
 
 ## Organize and Polish duplicate-summary rejection - 2026-07-23
 
