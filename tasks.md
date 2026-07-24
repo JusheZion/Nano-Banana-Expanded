@@ -2,6 +2,16 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Application-wide loading-state audit — NEXT UI UPDATE
+
+- [ ] Inventory every screen, panel, database-backed list, preview, file import, and cross-portal handoff that waits on asynchronous content.
+- [ ] Ensure loading is visually and semantically distinct from empty, missing, or deleted content.
+- [ ] Preserve previously loaded valid content during refresh where appropriate instead of briefly rendering an empty state.
+- [ ] Disable destructive, duplicate, or content-dependent actions until the relevant load finishes.
+- [ ] Add accessible progress/status announcements plus explicit failure, retry, and recovery states.
+- [ ] Verify slow-load behavior across all portals with throttled or delayed responses, including file parsing and preview generation.
+- [ ] Confirm Page Beats never temporarily reports saved pages as empty while their saved beat data is still loading.
+
 ## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — COMPLETE
 
 Detailed tracker: [`docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md`](docs/superpowers/plans/2026-06-01-imageshop-comic-production-portal-plan.md)

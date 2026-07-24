@@ -13148,3 +13148,36 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue Page Beats generation from page 35; the first 34 QA pages remain saved.
+
+## Application-wide loading-state audit requirement - 2026-07-24
+
+### What changed
+- Recorded a deferred requirement for the next application-wide UI update to audit loading states across every portal and asynchronous surface, not only Page Beats.
+- Added explicit coverage for database-backed screens, file loading and parsing, previews, refreshes, and cross-portal handoffs.
+- Required loading states to remain distinguishable from empty, missing, or deleted data so users are not led to believe saved work has disappeared.
+
+### Files touched
+- `AGENTS.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The Page Beats incident showed saved beats briefly appearing absent before the delayed load completed and changed their status to `Has Beats`.
+- The future audit must include accessible progress, safe action disabling, prior-content preservation during refresh where appropriate, failure/retry behavior, and deliberately delayed-response verification.
+
+### Verification
+- Confirmed the durable requirement is present in the root DOX contract.
+- Confirmed the deferred checklist is present near the top of `tasks.md`.
+- No runtime code, deployment, or product behavior changed in this documentation-only update.
+
+### Outstanding issues
+- The application-wide loading-state audit remains deferred until the next UI update.
+
+### Risks or caveats
+- Individual screens may still briefly render misleading empty states until the audit is implemented.
+
+### Operator follow-up
+- Include the loading-state checklist in the scope and acceptance criteria of the next UI implementation plan.
+
+### Next steps
+- Begin the next UI update with the application-wide loading-state inventory in `tasks.md`.
