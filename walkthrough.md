@@ -12494,6 +12494,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Page Beats partial-batch recovery - 2026-07-24
+
+### What changed
+- Reproduced the production Page Beats workflow with a persistent 70-page QA issue and completed a bounded five-page live batch.
+- Fixed a partial-success loop where a failed page remained eligible for the next `skip existing` round and could be retried indefinitely until the hosted workflow timed out.
+- Batch generation now stops safely after a round containing any page error, keeps successful pages saved, and shows each failed page number with the server-provided reason.
+- Added the same readable error handling to selected-page batches and to both Simple Workflow and Advanced Tools.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPageBeatsBatch.ts`
+- `src/portals/writer/__tests__/writerPageBeatsBatch.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The server already returned page-specific errors alongside successful page numbers, but the client reduced them to an error count, cleared the label at completion, and continued while `has_more` remained true.
+- Completed pages remain recoverable and are not rolled back when another page fails.
+- The existing root `AGENTS.md` remains accurate; the DOX pass found no durable contract or hierarchy change requiring an instruction update.
+
+### Verification
+- Focused Page Beats and writer-schema regression: 4 files and 117 tests passed.
+- Production QA account: created 70 page rows, generated Pages 1-5 successfully, and canceled before the next batch.
+- Canonical-checkout regression excluding nested `.worktrees`: 123 files and 776 tests passed.
+- `npm run lint -- --quiet`: passed with Babel's existing large-file styling notices only.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- The initial unconstrained root test command was rejected as invalid QA evidence because it recursively collected two nested worktrees and loaded duplicate React copies.
+
+### Outstanding issues
+- The exact page-level error from the user's earlier production attempt was erased by the previous client and cannot be recovered from the browser.
+
+### Risks or caveats
+- AI output can still fail schema validation on an individual page; the repaired workflow now stops safely and exposes the actionable reason instead of looping.
+
+### Operator follow-up
+- Retry Generate all beats after the deployment. Existing successful pages will be skipped by default.
+
+### Next steps
+- Commit, push, deploy, and complete the live recovery smoke.
+
 ## Outline Treatment whole-outline semantic coverage - 2026-07-23
 
 ### What changed

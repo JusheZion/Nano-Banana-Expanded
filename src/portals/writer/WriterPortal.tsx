@@ -89,6 +89,10 @@ import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportW
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
+import {
+  formatWriterPageBeatsBatchErrors,
+  shouldContinueWriterPageBeatsBatch,
+} from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
 import { useWriterMotionVisit } from '@/portals/writer/writerMotion';
@@ -3690,7 +3694,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         );
         const pageRows = await listWriterPages(selectedIssueId);
         setPages(pageRows);
-        if (!data.has_more) {
+        if (errs.length > 0) {
+          setBeatsError(formatWriterPageBeatsBatchErrors(errs));
+          pushHistory(
+            `batch beats stopped: ${errs.map((error) => `page ${error.page_number}`).join(', ')}`,
+          );
+          break;
+        }
+        if (!shouldContinueWriterPageBeatsBatch({ errors: errs, hasMore: data.has_more === true })) {
           pushHistory(`batch beats finished (${round} round(s))`);
           break;
         }
@@ -3757,6 +3768,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setBeatsBatchLabel(
         `Done: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
       );
+      if (errs.length > 0) {
+        setBeatsError(formatWriterPageBeatsBatchErrors(errs));
+      }
       const pageRows = await listWriterPages(selectedIssueId);
       setPages(pageRows);
       pushHistory(`batch beats (selected): ${processed.length} page(s)`);
@@ -7219,6 +7233,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
         </div>
         <label className="mt-6 inline-flex items-center gap-3 text-sm font-semibold text-black/72"><input type="checkbox" checked={beatsSkipExisting} onChange={(e) => setBeatsSkipExisting(e.target.checked)} /> Skip existing beats</label>
+        {beatsError ? (
+          <p role="alert" className="mt-4 whitespace-pre-line rounded-lg border border-red-300/70 bg-red-50/90 px-4 py-3 text-sm font-semibold text-red-950">
+            {beatsError}
+          </p>
+        ) : null}
         <div className="mt-7">
           <p className="text-[10px] font-black uppercase tracking-wider text-black/50">Beats Preview</p>
           {selectedPage?.beats_json ? (
@@ -10254,7 +10273,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           </button>
                         </div>
 	                        {beatsError && (
-	                          <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{beatsError}</p>
+	                          <p role="alert" className="whitespace-pre-line rounded-lg bg-red-100/80 px-3 py-2 text-xs text-red-800">{beatsError}</p>
 	                        )}
 	                        {renderScopePreview(selectedBeatsScope)}
 	                        {selectedPage ? (
