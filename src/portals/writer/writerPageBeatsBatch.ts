@@ -23,6 +23,41 @@ export function buildWriterPageBeatsSinglePageQueue(args: {
     .map((page) => [page.id]);
 }
 
+export function getWriterPageBeatsCheckpointProgress(args: {
+  queueIndex: number;
+  queueLength: number;
+  checkpointSize: number;
+}): {
+  checkpointNumber: number;
+  checkpointCount: number;
+  positionInCheckpoint: number;
+  pagesInCheckpoint: number;
+  shouldRefresh: boolean;
+} {
+  const checkpointSize = Math.max(1, Math.floor(args.checkpointSize));
+  const queueLength = Math.max(1, Math.floor(args.queueLength));
+  const queueIndex = Math.min(
+    queueLength - 1,
+    Math.max(0, Math.floor(args.queueIndex)),
+  );
+  const checkpointNumber = Math.floor(queueIndex / checkpointSize) + 1;
+  const checkpointCount = Math.ceil(queueLength / checkpointSize);
+  const checkpointStart = (checkpointNumber - 1) * checkpointSize;
+  const pagesInCheckpoint = Math.min(
+    checkpointSize,
+    queueLength - checkpointStart,
+  );
+  const positionInCheckpoint = queueIndex - checkpointStart + 1;
+
+  return {
+    checkpointNumber,
+    checkpointCount,
+    positionInCheckpoint,
+    pagesInCheckpoint,
+    shouldRefresh: positionInCheckpoint === pagesInCheckpoint,
+  };
+}
+
 export function isRetryableWriterPageBeatsBatchFailure(
   failure: WriterPageBeatsBatchFailure,
 ): boolean {

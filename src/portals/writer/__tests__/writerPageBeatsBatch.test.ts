@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildWriterPageBeatsSinglePageQueue,
   formatWriterPageBeatsBatchErrors,
+  getWriterPageBeatsCheckpointProgress,
   getWriterPageBeatsBatchRetryDelayMs,
   isRetryableWriterPageBeatsBatchFailure,
   runWriterPageBeatsBatchRequestWithRetries,
@@ -9,6 +10,47 @@ import {
 } from '../writerPageBeatsBatch';
 
 describe('Writer Page Beats batch recovery', () => {
+  it('creates five-page progress checkpoints without combining hosted requests', () => {
+    expect(
+      getWriterPageBeatsCheckpointProgress({
+        queueIndex: 0,
+        queueLength: 12,
+        checkpointSize: 5,
+      }),
+    ).toEqual({
+      checkpointNumber: 1,
+      checkpointCount: 3,
+      positionInCheckpoint: 1,
+      pagesInCheckpoint: 5,
+      shouldRefresh: false,
+    });
+    expect(
+      getWriterPageBeatsCheckpointProgress({
+        queueIndex: 4,
+        queueLength: 12,
+        checkpointSize: 5,
+      }),
+    ).toMatchObject({
+      checkpointNumber: 1,
+      positionInCheckpoint: 5,
+      pagesInCheckpoint: 5,
+      shouldRefresh: true,
+    });
+    expect(
+      getWriterPageBeatsCheckpointProgress({
+        queueIndex: 11,
+        queueLength: 12,
+        checkpointSize: 5,
+      }),
+    ).toEqual({
+      checkpointNumber: 3,
+      checkpointCount: 3,
+      positionInCheckpoint: 2,
+      pagesInCheckpoint: 2,
+      shouldRefresh: true,
+    });
+  });
+
   it('queues every eligible page as its own Edge Function invocation', () => {
     expect(
       buildWriterPageBeatsSinglePageQueue({

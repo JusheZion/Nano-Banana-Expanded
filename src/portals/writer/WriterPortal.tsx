@@ -92,6 +92,7 @@ import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceE
 import {
   buildWriterPageBeatsSinglePageQueue,
   formatWriterPageBeatsBatchErrors,
+  getWriterPageBeatsCheckpointProgress,
   runWriterPageBeatsBatchRequestWithRetries,
 } from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
@@ -3674,8 +3675,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           break;
         }
         const page = sortedPages.find((candidate) => candidate.id === pageIds[0]);
+        const checkpoint = getWriterPageBeatsCheckpointProgress({
+          queueIndex: index,
+          queueLength: queue.length,
+          checkpointSize: WRITER_PAGE_BEATS_ISSUE_MAX,
+        });
         setBeatsBatchLabel(
-          `Generating page ${page?.page_number ?? index + 1} · ${index + 1}/${queue.length}`,
+          `Page ${page?.page_number ?? index + 1} · group ${checkpoint.checkpointNumber}/${checkpoint.checkpointCount} · ${checkpoint.positionInCheckpoint}/${checkpoint.pagesInCheckpoint}`,
         );
         const notesTrim = beatsDirectorNotesDraft.trim();
         const res = await runWriterPageBeatsBatchRequestWithRetries({
@@ -3715,6 +3721,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             `batch beats stopped: ${errs.map((error) => `page ${error.page_number}`).join(', ')}`,
           );
           break;
+        }
+        if (checkpoint.shouldRefresh) {
+          const pageRows = await listWriterPages(selectedIssueId);
+          setPages(pageRows);
+          pushHistory(
+            `page beats checkpoint ${checkpoint.checkpointNumber}/${checkpoint.checkpointCount} saved`,
+          );
         }
       }
       if (!beatsBatchAbortRef.current?.signal.aborted && completed === queue.length) {
@@ -7295,9 +7308,23 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       <section className={`${WRITER_GLASS_CARD} p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <h3 className="font-serif text-2xl font-semibold text-slate-950">{selectedPage ? `Page ${selectedPage.page_number} — Beats` : 'Select a page'}</h3>
-          <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" disabled={!supabaseOk || !selectedIssueId || sortedPages.length === 0 || beatsBatchBusy || beatsLoading} onClick={() => void runBatchPageBeats()} className="writer-attention-simple rounded-lg px-5 py-2.5 text-sm font-black text-black disabled:opacity-45" style={{ background: ACCENT_GOLD_GRADIENT }}>{beatsBatchBusy ? beatsBatchLabel || 'Generating…' : 'Generate All Beats ✨'}</button>
+            {beatsBatchBusy && beatsBatchSource === 'all' ? (
+              <button
+                type="button"
+                onClick={() => beatsBatchAbortRef.current?.abort()}
+                className="rounded-lg border border-black/20 bg-white/80 px-3 py-2.5 text-xs font-black text-black"
+              >
+                Stop after current page
+              </button>
+            ) : null}
+          </div>
         </div>
         <label className="mt-6 inline-flex items-center gap-3 text-sm font-semibold text-black/72"><input type="checkbox" checked={beatsSkipExisting} onChange={(e) => setBeatsSkipExisting(e.target.checked)} /> Skip existing beats</label>
+        <p className="mt-2 text-xs font-semibold leading-relaxed text-black/55">
+          Generates and saves one page safely at a time, refreshes progress after each group of up to {WRITER_PAGE_BEATS_ISSUE_MAX}, then continues automatically.
+        </p>
         {beatsError ? (
           <p role="alert" className="mt-4 whitespace-pre-line rounded-lg border border-red-300/70 bg-red-50/90 px-4 py-3 text-sm font-semibold text-red-950">
             {beatsError}
@@ -10133,10 +10160,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                               }}
                               className="rounded-lg px-3 py-2 text-xs font-bold text-black border border-black/20 bg-white/80"
                             >
-                              Cancel after this batch
+                              Stop after current page
                             </button>
                           ) : null}
                         </div>
+                        <p className="text-[11px] font-semibold leading-relaxed text-black/55">
+                          Generate all saves one page at a time, refreshes after each group of up to {WRITER_PAGE_BEATS_ISSUE_MAX}, and then continues automatically.
+                        </p>
                         <div className="space-y-1 min-w-0 xl:max-w-none">
                           <div className="flex items-center gap-1.5">
                             <label
@@ -10265,8 +10295,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         ) : null}
                         {!selectedPageId && sortedPages.length > 0 && (
                           <p className="text-xs text-black/50">
-                            Pick pages above or use &ldquo;Generate all beats&rdquo; ({WRITER_PAGE_BEATS_ISSUE_MAX} pages
-                            per server round). Page previews open on the right.
+                            Pick up to {WRITER_PAGE_BEATS_ISSUE_MAX} pages above, or use &ldquo;Generate all beats&rdquo; to continue through five-page progress checkpoints. Page previews open on the right.
                           </p>
                         )}
                         {sortedPages.length === 0 && (
