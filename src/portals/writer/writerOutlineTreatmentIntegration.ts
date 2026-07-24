@@ -95,6 +95,14 @@ export function parseOutlineTreatmentPreview(
     source,
     proposal,
     manifest: toManifest(parsed.manifest),
+    overallAssessment: parsed.overall_assessment,
+    sectionReviews: parsed.section_reviews.map((review) => ({
+      startOrdinal: review.start_ordinal,
+      endOrdinal: review.end_ordinal,
+      assessment: review.assessment,
+      recommendation: review.recommendation,
+      operationIds: review.operation_ids,
+    })),
     ...(parsed.operation_notices
       ? {
           operationNotices: parsed.operation_notices.map((notice) => ({

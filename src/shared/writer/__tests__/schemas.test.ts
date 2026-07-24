@@ -91,6 +91,14 @@ describe('writerToolsRequestSchema', () => {
 
   it('validates outline treatment proposals and manifests', () => {
     const result = outlineTreatmentPreviewResultSchema.parse({
+      overall_assessment: 'The complete outline was reviewed and needs one careful language improvement.',
+      section_reviews: [{
+        start_ordinal: 1,
+        end_ordinal: 1,
+        assessment: 'Page 1 needs a small language improvement while preserving the original event.',
+        recommendation: 'language',
+        operation_ids: ['result-1'],
+      }],
       proposal: {
         title: 'Issue 1',
         page_beats: [{ page_target: 1, summary: 'The elder begins.', treatment_beat_id: 'result-1' }],
@@ -112,6 +120,14 @@ describe('writerToolsRequestSchema', () => {
     expect(result.manifest.entries[0].change_type).toBe('language_polished');
 
     const normalizedAlias = outlineTreatmentPreviewResultSchema.parse({
+      overall_assessment: 'The complete outline was reviewed and does not need a structural adjustment.',
+      section_reviews: [{
+        start_ordinal: 1,
+        end_ordinal: 1,
+        assessment: 'Page 1 is structurally sound and does not need its event order changed.',
+        recommendation: 'no_change',
+        operation_ids: [],
+      }],
       proposal: {
         page_beats: [{ page_target: 1, summary: 'The elder begins.', treatment_beat_id: 'result-1' }],
       },

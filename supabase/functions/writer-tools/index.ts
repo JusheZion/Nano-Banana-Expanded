@@ -23,6 +23,7 @@ import {
   applyOutlineTreatmentPatches,
   normalizeOutlineTreatmentPatchResult,
 } from './outlineTreatmentPatch.ts';
+import { getTreatmentCoverageErrors } from './outlineTreatmentCoverage.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1435,7 +1436,22 @@ Deno.serve(async (req) => {
           { status: 422, headers: corsHeaders },
         );
       }
-      const applied = applyOutlineTreatmentPatches(initial.data, promptInput);
+      const coverageErrors = getTreatmentCoverageErrors(initial.data, promptInput);
+      if (coverageErrors.length) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Outline treatment did not review the complete outline',
+            details: coverageErrors,
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const applied = {
+        ...applyOutlineTreatmentPatches(initial.data, promptInput),
+        overall_assessment: initial.data.overall_assessment,
+        section_reviews: initial.data.section_reviews,
+      };
       const result = outlineTreatmentPreviewResultSchema.safeParse(applied);
       if (!result.success) {
         return Response.json(

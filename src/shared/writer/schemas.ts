@@ -166,6 +166,14 @@ export const outlineTreatmentOperationNoticeSchema = z.object({
   }).strict().optional(),
 }).strict();
 
+export const outlineTreatmentSectionReviewSchema = z.object({
+  start_ordinal: z.number().int().min(1).max(200),
+  end_ordinal: z.number().int().min(1).max(200),
+  assessment: z.string().min(20).max(1200),
+  recommendation: z.enum(['no_change', 'language', 'structure', 'expand']),
+  operation_ids: z.array(z.string().min(1).max(160)).max(250),
+}).strict();
+
 export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
   mode: z.literal('outline_treatment_preview'),
   issue_id: z.string().uuid(),
@@ -183,6 +191,8 @@ export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
 }).strict();
 
 export const outlineTreatmentPreviewResultSchema = z.object({
+  overall_assessment: z.string().min(40).max(2400),
+  section_reviews: z.array(outlineTreatmentSectionReviewSchema).min(1).max(10),
   proposal: issueOutlineSchema,
   manifest: z.object({
     treatment_mode: writerOutlineTreatmentModeSchema,

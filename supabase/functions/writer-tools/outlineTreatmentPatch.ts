@@ -144,6 +144,10 @@ function significantTokens(value: string): Set<string> {
   );
 }
 
+export function normalizeTreatmentComparison(value: string): string {
+  return value.toLocaleLowerCase().match(/[\p{L}\p{N}']+/gu)?.join(' ') ?? '';
+}
+
 function preservesSourceEvent(source: string, proposal: string): boolean {
   const sourceTokens = significantTokens(source);
   if (sourceTokens.size === 0) return true;
@@ -222,6 +226,20 @@ export function applyOutlineTreatmentPatches(
         continue;
       }
       const source = sourceById.get(sourceId)!;
+      const proposedText = [
+        operation.scene,
+        operation.summary,
+        operation.emotional_turn,
+      ].filter((value): value is string => Boolean(value?.trim())).join(' ');
+      if (normalizeTreatmentComparison(proposedText) === normalizeTreatmentComparison(source.text)) {
+        reject(
+          notices,
+          operation,
+          'no_material_change',
+          'The proposed wording did not materially change this beat, so the original was retained.',
+        );
+        continue;
+      }
       if (
         operation.summary?.trim()
         && !preservesSourceEvent(source.text, operation.summary)

@@ -48,6 +48,23 @@ describe('outline treatment pipeline audit', () => {
     expect(prompt).toContain(`Allowed page range: ${range.min}-${range.max}`);
 
     const response = outlineTreatmentPreviewResultSchema.parse({
+      overall_assessment: 'The complete twelve-page outline was reviewed for pacing, sequence, density, and transitions.',
+      section_reviews: [
+        {
+          start_ordinal: 1,
+          end_ordinal: 6,
+          assessment: 'Pages 1 through 6 benefit from careful language improvements that preserve their sequence.',
+          recommendation: 'language',
+          operation_ids: Array.from({ length: 6 }, (_, index) => `result-${index + 1}`),
+        },
+        {
+          start_ordinal: 7,
+          end_ordinal: 12,
+          assessment: 'Pages 7 through 12 benefit from careful language improvements that preserve their sequence.',
+          recommendation: 'language',
+          operation_ids: Array.from({ length: 6 }, (_, index) => `result-${index + 7}`),
+        },
+      ],
       proposal: {
         title: 'Populated issue',
         page_beats: source.beats.map((beat, index) => ({

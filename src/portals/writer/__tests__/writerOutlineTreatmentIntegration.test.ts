@@ -21,6 +21,14 @@ const sourceOutline = {
 const [sourceId1, sourceId2] = normalizeTreatmentSource(sourceOutline).beats.map((beat) => beat.id);
 
 const response = {
+  overall_assessment: 'The complete outline was reviewed for language clarity and consistency across both pages.',
+  section_reviews: [{
+    start_ordinal: 1,
+    end_ordinal: 2,
+    assessment: 'Pages 1 through 2 were reviewed for grammar, clarity, consistency, and formatting quality.',
+    recommendation: 'language' as const,
+    operation_ids: ['result-1', 'result-2'],
+  }],
   proposal: {
     title: 'Harbor',
     page_beats: [
@@ -140,6 +148,23 @@ describe('operation notices', () => {
 });
 
 describe('writer outline treatment integration', () => {
+  it('maps whole-outline assessments into the proposal session', () => {
+    const built = buildOutlineTreatmentPreviewRequest({
+      issueId: '550e8400-e29b-41d4-a716-446655440000',
+      mode: 'preserve',
+      sourceOutline,
+    });
+    const parsed = parseOutlineTreatmentPreview(response, built.source);
+    expect(parsed.session.overallAssessment).toMatch(/complete outline/i);
+    expect(parsed.session.sectionReviews).toEqual([{
+      startOrdinal: 1,
+      endOrdinal: 2,
+      assessment: 'Pages 1 through 2 were reviewed for grammar, clarity, consistency, and formatting quality.',
+      recommendation: 'language',
+      operationIds: ['result-1', 'result-2'],
+    }]);
+  });
+
   it('builds preview input from detected source pages rather than a UI target', () => {
     const built = buildOutlineTreatmentPreviewRequest({
       issueId: '550e8400-e29b-41d4-a716-446655440000',
@@ -183,6 +208,14 @@ describe('writer outline treatment integration', () => {
       sourceOutline: outlineWithMetadata,
     });
     const parsed = parseOutlineTreatmentPreview({
+      overall_assessment: 'The complete one-page outline was reviewed for careful language improvements.',
+      section_reviews: [{
+        start_ordinal: 1,
+        end_ordinal: 1,
+        assessment: 'Page 1 benefits from a small language clarification without changing the event.',
+        recommendation: 'language',
+        operation_ids: ['result-1'],
+      }],
       proposal: {
         page_beats: [{
           treatment_beat_id: 'result-1',

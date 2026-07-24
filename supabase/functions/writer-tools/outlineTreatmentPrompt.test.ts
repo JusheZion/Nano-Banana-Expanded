@@ -70,6 +70,7 @@ describe('buildOutlineTreatmentPrompt', () => {
     });
     expect(prompt).toContain('edit, move, combine, and narrowly connective add operations');
     expect(prompt).toContain('Allowed page range: 46-58');
+    expect(prompt).toContain('pacing, density, sequence, transitions, and page distribution');
   });
 
   it('permits bounded enhancement and additions', () => {
@@ -82,6 +83,28 @@ describe('buildOutlineTreatmentPrompt', () => {
     });
     expect(prompt).toContain('creative add operations');
     expect(prompt).toContain('Allowed page range: 41-63');
+    expect(prompt).toContain('emotional development, escalation, connective scenes, and bounded creative opportunities');
+  });
+
+  it('requires explicit opening-through-ending section reviews', () => {
+    const largeSource = Array.from({ length: 70 }, (_, index) => ({
+      id: `source-page-${index + 1}`,
+      ordinal: index + 1,
+      page_target: index + 1,
+      text: `Source event ${index + 1}.`,
+    }));
+    const prompt = buildOutlineTreatmentPrompt({
+      treatmentMode: 'preserve',
+      sourcePageCount: 70,
+      allowedPageRange: { min: 70, max: 70 },
+      sourceBeats: largeSource,
+      protectedTerms: [],
+    });
+    expect(prompt).toContain('"startOrdinal":1,"endOrdinal":10');
+    expect(prompt).toContain('"startOrdinal":61,"endOrdinal":70');
+    expect(prompt).toContain('Return one section_reviews record for every range');
+    expect(prompt).toContain('grammar, clarity, consistency, and formatting');
+    expect(prompt).toContain('"overall_assessment"');
   });
 
   it('keeps a 70-page prompt single-copy and does not request a manifest', () => {

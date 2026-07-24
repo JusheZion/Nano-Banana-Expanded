@@ -12494,6 +12494,63 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Outline Treatment whole-outline semantic coverage - 2026-07-23
+
+### What changed
+- Added deterministic review ranges that require every AI treatment response to assess the complete outline from its first through final source beat.
+- Added mode-specific assessment contracts for language-only preservation, structural organization, and bounded creative expansion.
+- Rejected exact, whitespace-only, punctuation-only, and case-only edits as `no_material_change` while retaining the original beat.
+- Added a beginner-readable Whole-outline assessment panel that presents every reviewed page range chronologically and explains why a section did or did not need changes.
+- Kept internal operation IDs out of the Simple Workflow review.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/plans/2026-07-23-writer-outline-treatment-semantic-coverage-implementation.md`
+- `src/portals/writer/WriterOutlineTreatmentReadableReview.tsx`
+- `src/portals/writer/__tests__/WriterOutlineTreatmentReadableReview.test.tsx`
+- `src/portals/writer/__tests__/writerOutlineTreatmentIntegration.test.ts`
+- `src/portals/writer/__tests__/writerOutlineTreatmentPipeline.test.ts`
+- `src/portals/writer/writerOutlineTreatmentIntegration.ts`
+- `src/portals/writer/writerOutlineTreatmentValidation.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/outlineTreatmentCoverage.ts`
+- `supabase/functions/writer-tools/outlineTreatmentCoverage.test.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPatch.test.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.ts`
+- `supabase/functions/writer-tools/outlineTreatmentPrompt.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The previous exact-once manifest validation proved source preservation but not AI review coverage; a tail-only response could therefore pass.
+- A 70-beat outline now requires seven contiguous ten-beat assessments, while shorter and longer supported outlines derive no more than ten deterministic ranges.
+- Every model operation must be linked to exactly one range, and every referenced operation must exist.
+- Unchanged ranges remain valid only when the AI supplies a substantive mode-specific explanation.
+- The Edge Function remains authoritative: the AI returns assessments and explicit patch operations, never a replacement outline.
+
+### Verification
+- Pass 1 focused smoke: 1 file and 13 tests passed.
+- Pass 2 focused smoke: 5 files and 53 tests passed.
+- Expanded treatment regression: 7 files and 93 tests passed.
+- Consolidated regression: 122 files and 773 tests passed.
+- `npm run lint -- --quiet`: passed.
+- `npm run build`: passed with the existing large-chunk advisory only.
+
+### Outstanding issues
+- Paired Supabase and Cloudflare deployment and signed-in production semantic QA remain pending.
+
+### Risks or caveats
+- A model response that omits any expected section assessment now fails closed with a semantic-coverage error instead of presenting a misleading partial review.
+
+### Operator follow-up
+- Do not promote an existing proposal generated under the earlier contract; generate a fresh preview after deployment.
+
+### Next steps
+- Commit and push the tested source, deploy `writer-tools` and the Cloudflare frontend, then run Preserve, Organize, and Expand against the same representative long QA outline and cancel each proposal without promotion.
+
 ## Outline treatment optional-null compatibility repair - 2026-07-23
 
 ### What changed
@@ -12530,6 +12587,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this repair.
+
+## Organize and Polish semantic coverage diagnosis - 2026-07-23
+
+### What changed
+- Reproduced the reported late-outline concentration in production QA: the 70-page preview proposed changes beginning near page 63 while treating the earlier source base as unchanged.
+- Traced the behavior to the treatment contract rather than to proof that pages 1-61 needed no work.
+- Confirmed the prompt explicitly tells Gemini to omit unchanged beats and only says Organize and Polish *may* return structural operations.
+- Confirmed validation checks source preservation, identity, page range, and patch legality, but does not prove that Gemini reviewed every story section or produced a useful structural assessment.
+- Confirmed edit operations have a continuity threshold but no deterministic no-op/equivalence rejection, so identical or trivially changed wording can be accepted as a proposal.
+
+### Files touched
+- `walkthrough.md`
+
+### Implementation notes
+- The deterministic source-base architecture correctly prevents deletion, but its exact-once source coverage is a preservation guarantee, not an AI-review coverage guarantee.
+- The same late-page concentration occurred in both the user report and the persistent 70-page QA run, consistent with long-prompt tail/recency bias.
+- Organize and Polish currently lacks a quality distinction from Keep My Order beyond permitted operation types; it does not require a whole-outline pacing diagnosis or meaningful structural operation mix.
+
+### Verification
+- Inspected the complete treatment prompt, Edge request path, deterministic patch applicator, consistency checks, treatment contract, and focused tests.
+- Confirmed the prompt test currently enforces `Omit unchanged beats`.
+- Confirmed the patch engine applies continuity-valid edits without checking whether proposed wording is materially different.
+- No runtime code or production state changed during diagnosis.
+
+### Outstanding issues
+- Organize and Polish needs a semantic coverage contract and deterministic no-op rejection before its output can be considered meaningfully distinct from Keep My Order.
+
+### Risks or caveats
+- Requiring arbitrary edits would encourage unnecessary rewriting; the repair must prove whole-outline review while allowing a section to remain unchanged for an explicit pacing reason.
+
+### Operator follow-up
+- Do not promote the underwhelming proposal if it does not improve the outline.
+
+### Next steps
+- Implement the approved semantic-coverage design after user review.
 
 ## Writer Outline treatment review recovery implementation - 2026-07-23
 

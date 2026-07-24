@@ -57,11 +57,21 @@ export type TreatmentOperationNotice = {
   };
 };
 
+export type TreatmentSectionReview = {
+  startOrdinal: number;
+  endOrdinal: number;
+  assessment: string;
+  recommendation: 'no_change' | 'language' | 'structure' | 'expand';
+  operationIds: string[];
+};
+
 export type TreatmentProposalSession = {
   mode: WriterOutlineTreatmentMode;
   source: NormalizedTreatmentSource;
   proposal: Record<string, unknown>;
   manifest: TreatmentManifest;
+  overallAssessment?: string;
+  sectionReviews?: TreatmentSectionReview[];
   operationNotices?: TreatmentOperationNotice[];
 };
 

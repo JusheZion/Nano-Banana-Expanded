@@ -15,6 +15,13 @@ function beatCopy(beat: IssueOutlinePageBeat | null): string {
     .join(' — ');
 }
 
+const recommendationLabels = {
+  no_change: 'No change recommended',
+  language: 'Language improvement',
+  structure: 'Structural improvement',
+  expand: 'Creative expansion opportunity',
+} as const;
+
 export function WriterOutlineTreatmentReadableReview({
   draft,
   session,
@@ -47,6 +54,44 @@ export function WriterOutlineTreatmentReadableReview({
 
   return (
     <div className="space-y-5">
+      {session.overallAssessment && session.sectionReviews?.length ? (
+        <section
+          aria-labelledby="outline-assessment-heading"
+          className="rounded-xl border border-teal-900/15 bg-white/60 p-4"
+        >
+          <h3 id="outline-assessment-heading" className="text-sm font-black text-slate-950">
+            Whole-outline assessment
+          </h3>
+          <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-700">
+            {session.overallAssessment}
+          </p>
+          <ol className="mt-4 grid gap-3 md:grid-cols-2">
+            {session.sectionReviews.map((review) => {
+              const rangeLabel = review.startOrdinal === review.endOrdinal
+                ? `Page ${review.startOrdinal}`
+                : `Pages ${review.startOrdinal}–${review.endOrdinal}`;
+              return (
+                <li
+                  key={`${review.startOrdinal}-${review.endOrdinal}`}
+                  data-testid="outline-section-review"
+                  className="rounded-lg border border-slate-300 bg-white/75 p-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-xs text-slate-950">{rangeLabel}</strong>
+                    <span className="rounded-full bg-teal-100 px-2 py-1 text-[10px] font-black text-teal-950">
+                      {recommendationLabels[review.recommendation]}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-800">
+                    {review.assessment}
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+
       <section aria-labelledby="outline-change-review-heading" className="rounded-xl border border-teal-900/15 bg-white/60 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

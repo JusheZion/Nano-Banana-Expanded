@@ -67,6 +67,29 @@ describe('applyOutlineTreatmentPatches', () => {
     expect(parsed.operations[0]).not.toHaveProperty('placement');
   });
 
+  it.each([
+    'The elder opens the gathering.',
+    '  The elder opens the gathering.  ',
+    'THE ELDER OPENS THE GATHERING!',
+  ])('rejects a cosmetic no-op edit: %s', (summary) => {
+    const input = makeInput(1);
+    input.sourceBeats[0]!.text = 'The elder opens the gathering.';
+    const result = applyOutlineTreatmentPatches({
+      operations: [{
+        operation_id: 'edit-1',
+        operation: 'edit' as const,
+        source_beat_ids: [input.sourceBeats[0]!.id],
+        summary,
+      }],
+    }, input);
+
+    expect(result.operation_notices[0]).toMatchObject({
+      status: 'rejected',
+      code: 'no_material_change',
+    });
+    expect(result.proposal.page_beats?.[0]?.summary).toBe(input.sourceBeats[0]!.text);
+  });
+
   it('keeps untouched beats in place when AI returns only eight late-story edits', () => {
     const input = makeInput(70);
     const result = applyOutlineTreatmentPatches({

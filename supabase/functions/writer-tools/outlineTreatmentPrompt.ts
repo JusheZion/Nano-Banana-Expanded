@@ -1,3 +1,5 @@
+import { deriveTreatmentReviewBands } from './outlineTreatmentCoverage.ts';
+
 export type OutlineTreatmentPromptInput = {
   treatmentMode: 'preserve' | 'structure' | 'expand';
   sourcePageCount: number;
@@ -39,18 +41,22 @@ const MODE_INSTRUCTIONS: Record<OutlineTreatmentPromptInput['treatmentMode'], st
     'Beat IDs, order, events, outcomes, and page targets are immutable.',
     'Change language and formatting only.',
     'Return edit operations only.',
+    'Assess grammar, clarity, consistency, and formatting in every section.',
   ].join(' '),
   structure: [
     'You may return edit, move, combine, and narrowly connective add operations.',
     'Every original event and outcome must remain represented by the deterministic source base.',
+    'Assess pacing, density, sequence, transitions, and page distribution in every section.',
   ].join(' '),
   expand: [
     'You may return edit, move, combine, and creative add operations.',
     'Every original event and outcome must remain represented by the deterministic source base.',
+    'Assess emotional development, escalation, connective scenes, and bounded creative opportunities in every section.',
   ].join(' '),
 };
 
 export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput): string {
+  const expectedBands = deriveTreatmentReviewBands(input.sourceBeats.length);
   return [
     'Return JSON only with an operations array. Do not return a replacement outline.',
     'Omit unchanged beats; the application retains them automatically in their original positions.',
@@ -67,6 +73,11 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
     'Never derive, renumber, or repair an ID from ordinal, page_target, or page-like text inside a beat.',
     'Never claim a source ID whose supplied text does not match the event being changed.',
     'Do not propose recap or whole-outline summary operations.',
+    `Review every supplied section range: ${JSON.stringify(expectedBands)}.`,
+    'Return one section_reviews record for every range, in range order.',
+    'A no_change recommendation must explain why that section already satisfies the selected treatment mode.',
+    'Every operation_id must appear in exactly one section review.',
+    'Write an overall_assessment explaining the most important whole-outline findings.',
     MODE_INSTRUCTIONS[input.treatmentMode],
     input.protectedTerms.length
       ? `Preserve these terms exactly: ${JSON.stringify(input.protectedTerms)}`
@@ -75,7 +86,9 @@ export function buildOutlineTreatmentPrompt(input: OutlineTreatmentPromptInput):
     JSON.stringify(input.sourceBeats),
     [
       'Return shape:',
-      '{"operations":[{"operation_id":string,"operation":"edit"|"move"|"combine"|"add",',
+      '{"overall_assessment":string,"section_reviews":[{"start_ordinal":integer,"end_ordinal":integer,',
+      '"assessment":string,"recommendation":"no_change"|"language"|"structure"|"expand","operation_ids":string[]}],',
+      '"operations":[{"operation_id":string,"operation":"edit"|"move"|"combine"|"add",',
       '"source_beat_ids":string[],"anchor_source_beat_id"?:string,"placement"?:"before"|"after",',
       '"reason":string,"scene"?:string,"summary"?:string,"emotional_turn"?:string}]}',
     ].join(''),

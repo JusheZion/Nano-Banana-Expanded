@@ -27,6 +27,23 @@ const session: TreatmentProposalSession = {
     outline: draft,
   },
   proposal: draft,
+  overallAssessment: 'The complete outline was reviewed for pacing, sequence, density, and transitions.',
+  sectionReviews: [
+    {
+      startOrdinal: 1,
+      endOrdinal: 2,
+      assessment: 'Pages 1 through 2 establish the opening clearly, with one useful language improvement.',
+      recommendation: 'language',
+      operationIds: ['edit-2'],
+    },
+    {
+      startOrdinal: 3,
+      endOrdinal: 3,
+      assessment: 'Page 3 closes the sequence effectively and does not need a structural change.',
+      recommendation: 'no_change',
+      operationIds: [],
+    },
+  ],
   manifest: {
     treatmentMode: 'structure',
     sourcePageCount: 3,
@@ -48,6 +65,20 @@ const session: TreatmentProposalSession = {
 };
 
 describe('WriterOutlineTreatmentReadableReview', () => {
+  it('explains the whole-outline assessment in chronological page ranges', () => {
+    render(<WriterOutlineTreatmentReadableReview draft={draft} session={session} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'Whole-outline assessment' })).not.toBeNull();
+    expect(screen.getByText(/complete outline was reviewed/i)).not.toBeNull();
+    const ranges = screen.getAllByTestId('outline-section-review');
+    expect(ranges.map((range) => range.textContent)).toEqual([
+      expect.stringContaining('Pages 1–2'),
+      expect.stringContaining('Page 3'),
+    ]);
+    expect(ranges[1]?.textContent).toContain('No change recommended');
+    expect(document.body.textContent).not.toContain('edit-2');
+  });
+
   it('shows chronological human-readable changes without JSON or internal ids', () => {
     render(<WriterOutlineTreatmentReadableReview draft={draft} session={session} onChange={vi.fn()} />);
 
