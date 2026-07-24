@@ -12522,6 +12522,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run lint -- --quiet`: passed with existing Babel large-file notices only.
 - `npm run build`: passed with the existing large-chunk advisory only.
 - Signed-in production reproduction generated Pages 6-30 across five hosted rounds; cancellation then completed and prevented generation of the remaining QA pages.
+- Commit `30c5baa` was pushed to `origin/main`.
+- Cloudflare Worker version `3f9952e4-8763-4033-8d0e-46b184c8fdba` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in live verification loaded `WriterPortal-Dh1wHqDW.js`; the deployed bundle contains the transient interruption, failed-fetch, and rate-limit retry paths.
 
 ### Outstanding issues
 - The original user toast disappeared before inspection, so its exact HTTP body is unavailable. The production browser log confirms the transient fetch/session-refresh failure class handled by this repair.
@@ -12533,7 +12536,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Keep `Skip existing beats` enabled and retry generation after the deployment; completed pages remain saved.
 
 ### Next steps
-- Commit, push, deploy, and verify the live bundle contains the bounded retry behavior.
+- Retry Page Beats with `Skip existing beats` enabled; generation resumes from the first unfinished page.
 
 ## Page Beats partial-batch recovery - 2026-07-24
 
