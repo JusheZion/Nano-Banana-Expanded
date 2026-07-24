@@ -13096,3 +13096,55 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None for this repair.
+
+## Page Beats HTTP 546 worker-limit repair - 2026-07-24
+
+### What changed
+- Replaced five-page Page Beats Edge batches with an ordered client queue that sends one page per Supabase Edge Function invocation while preserving the existing one-click multi-page workflow.
+- Added a server-side one-page execution cap so alternate or stale callers cannot reintroduce resource-heavy multi-page AI execution.
+- Applied the same one-page invocation contract to the Guided Comic Writer bridge.
+- Preserved locked-page filtering, skip-existing behavior, safe transient retries, cancellation between pages, and already-saved page results.
+- Corrected Vitest discovery so the default full suite excludes duplicate `.worktrees` checkouts instead of loading multiple React installations and reporting false failures.
+- Updated the browser-QA DOX guidance to resolve the active versioned Browser plugin and use its current runtime API rather than a stale hard-coded path.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPageBeatsBatch.ts`
+- `src/portals/writer/__tests__/writerPageBeatsBatch.test.ts`
+- `src/shared/writer/schemas.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `vite.config.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Supabase HTTP 546 is a hosted worker resource-limit response. The former route performed up to five complete Gemini page generations sequentially inside one Edge invocation; observed five-page requests took roughly 75–90 seconds.
+- “Generate all beats” and selected-page generation now keep the logical batch in the browser, submit singleton `page_ids` requests in issue order, and refresh saved pages when the run finishes, fails, or is canceled.
+- Safe automatic retries remain limited to skip-existing mode, where replay cannot overwrite a completed page.
+- The visible selected-page limit remains five because that is a user selection affordance, not the hosted execution size.
+
+### Verification
+- Focused Page Beats and Guided Writer bridge regression: 4 files and 81 tests passed.
+- Default canonical regression after test-discovery repair: 123 files and 788 tests passed.
+- `npm run lint`: passed with 0 errors and 70 existing warnings.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Implementation commit `798b42b` created on `main`.
+- Supabase `writer-tools` production function version 95 deployed to project `vxclogwiytxjolisnakd`.
+- Cloudflare Worker version `f6e77c0a-ca0d-4b62-a372-c8323b715bb2` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in production smoke used the persistent 70-page QA issue. Starting at 30/70 generated pages, the browser visibly advanced through singleton jobs for pages 31, 32, 33, and 34; cancellation then restored the idle control with 34/70 saved.
+- Production browser console errors after the consecutive hosted requests: 0. No HTTP 546 or batch error appeared.
+
+### Outstanding issues
+- None for the Page Beats worker-limit repair.
+
+### Risks or caveats
+- A tab that remained open across deployment must be refreshed once to load the singleton-queue client bundle.
+- The existing large production chunks and unrelated lint warnings remain unchanged.
+
+### Operator follow-up
+- Refresh any older open Writers' Workshop tab before resuming Page Beats generation.
+
+### Next steps
+- Continue Page Beats generation from page 35; the first 34 QA pages remain saved.

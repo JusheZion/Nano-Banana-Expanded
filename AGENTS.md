@@ -31,23 +31,23 @@ If the user explicitly says the context window is nearly full, prepare the hando
 
 ## Browser Use / in-app browser access
 
-When the user asks Codex to inspect, click, screenshot, or QA the in-app browser for this project, use the Browser Use plugin through the Node REPL browser bridge.
+When the user asks Codex to inspect, click, screenshot, or QA the in-app browser for this project, use the Browser plugin through the Node REPL browser bridge.
 
-- First read the Browser Use skill file completely before browser work: `/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/skills/browser/SKILL.md`.
+- First read the currently listed `browser:control-in-app-browser` skill completely before browser work. Resolve its exact versioned path from the active Skills list; do not reuse a cached plugin-version path.
 - If the browser tool is not visible, use tool discovery for `node_repl js` or `node_repl JavaScript execution`; the actual callable tool is the Node REPL `js` tool, not a separate browser-specific tool.
-- Bootstrap the runtime with the Browser Use `iab` backend from `/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/scripts/browser-client.mjs`.
+- Bootstrap with the `scripts/browser-client.mjs` beside that skill, using the current skill's documented setup API.
 - Reuse the selected in-app tab when possible:
 
 ```js
-if (!globalThis.agent) {
-  const { setupAtlasRuntime } = await import('/Users/apoaaron/.codex/plugins/cache/openai-bundled/browser-use/0.1.0-alpha1/scripts/browser-client.mjs');
-  const backend = 'iab';
-  await setupAtlasRuntime({ globals: globalThis, backend });
+if (globalThis.agent?.browsers == null) {
+  const { setupBrowserRuntime } = await import('<current browser plugin root>/scripts/browser-client.mjs');
+  await setupBrowserRuntime({ globals: globalThis });
 }
-await agent.browser.nameSession('🔎 Guided Comic Flow QA');
-if (typeof tab === 'undefined') {
-  globalThis.tab = await agent.browser.tabs.selected();
+if (globalThis.browser == null) {
+  globalThis.browser = await agent.browsers.getForUrl('http://127.0.0.1:5173/');
+  nodeRepl.write(await browser.documentation());
 }
+await browser.nameSession('🔎 Guided Comic Flow QA');
 ```
 
 - A successful setup can confirm the current app tab with `await tab.url()` and `await tab.title()`; for this repo the expected local app is usually `http://127.0.0.1:5173/` with title `ARCS Expanded`.
