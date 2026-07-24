@@ -12520,6 +12520,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `npm run lint -- --quiet`: passed with Babel's existing large-file styling notices only.
 - `npm run build`: passed with the existing large-chunk advisory only.
 - The initial unconstrained root test command was rejected as invalid QA evidence because it recursively collected two nested worktrees and loaded duplicate React copies.
+- Commit `cb5330f` was pushed to `origin/main`.
+- Cloudflare Worker version `d4adc721-b4c9-4e7a-8e1e-0850bf0b91e4` deployed successfully to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in production verification loaded `WriterPortal-Cc1yXdB6.js`; the deployed bundle contains the persistent stop, saved-pages, and retry guidance.
 
 ### Outstanding issues
 - The exact page-level error from the user's earlier production attempt was erased by the previous client and cannot be recovered from the browser.
@@ -12531,7 +12534,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Retry Generate all beats after the deployment. Existing successful pages will be skipped by default.
 
 ### Next steps
-- Commit, push, deploy, and complete the live recovery smoke.
+- Retry the user's remaining Page Beats with Skip existing beats enabled; any failed page will now stop once and identify itself.
 
 ## Outline Treatment whole-outline semantic coverage - 2026-07-23
 
