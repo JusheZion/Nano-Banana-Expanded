@@ -12538,18 +12538,27 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Consolidated regression: 122 files and 773 tests passed.
 - `npm run lint -- --quiet`: passed.
 - `npm run build`: passed with the existing large-chunk advisory only.
+- Commit `8393650` was pushed to `origin/main`.
+- Supabase `writer-tools` deployed successfully to production project `vxclogwiytxjolisnakd`.
+- Cloudflare Worker version `570c6e16-fb3d-4fea-8f37-8e47535979b3` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in production QA reused the persistent AP account's saved 70-page outline for all three modes.
+- Keep My Order returned seven assessments spanning pages 1–70 and meaningful language-only edits on all 70 beats; opening, middle, and ending samples retained their source stage and event.
+- Organize and Polish returned seven structural assessments spanning pages 1–70. Six combinations that would breach the 10% page floor were visibly rejected; accepted operations produced a bounded 70-to-65-page proposal with one combination, one added challenge, and traceable reorder/edit follow-through.
+- Expand Creatively returned seven creative assessments spanning pages 1–70, with changes from the opening through ending, seven additions, seven combinations, and two enhancements while preserving all 70 source beats.
+- Top, middle, and lower review screenshots confirmed readable assessment cards, highlighted diffs, visible action controls, and no footer overlap.
+- All three proposals were canceled; the official outline remained `Saved · v1`, the 70-page source remained detected, and production console warnings/errors were 0.
 
 ### Outstanding issues
-- Paired Supabase and Cloudflare deployment and signed-in production semantic QA remain pending.
+- None.
 
 ### Risks or caveats
 - A model response that omits any expected section assessment now fails closed with a semantic-coverage error instead of presenting a misleading partial review.
 
 ### Operator follow-up
-- Do not promote an existing proposal generated under the earlier contract; generate a fresh preview after deployment.
+- Cancel any browser tab that still contains a proposal generated before this deployment, then generate a fresh preview.
 
 ### Next steps
-- Commit and push the tested source, deploy `writer-tools` and the Cloudflare frontend, then run Preserve, Organize, and Expand against the same representative long QA outline and cancel each proposal without promotion.
+- Retry the preferred treatment mode with the real outline and review the new whole-outline assessments before making any proposal official.
 
 ## Outline treatment optional-null compatibility repair - 2026-07-23
 

@@ -50,7 +50,7 @@
 
 **Rollback/fallback:** Revert only the equivalence guard if it rejects a proven meaningful change; keep the existing continuity protection.
 
-- [ ] Add failing tests to `outlineTreatmentPatch.test.ts`:
+- [x] Add failing tests to `outlineTreatmentPatch.test.ts`:
 
 ```ts
 it.each([
@@ -76,13 +76,13 @@ it.each([
 });
 ```
 
-- [ ] Run the focused test and confirm it fails because no-op edits are currently accepted:
+- [x] Run the focused test and confirm it fails because no-op edits are currently accepted:
 
 ```bash
 npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPatch.test.ts --exclude '.worktrees/**'
 ```
 
-- [ ] Add deterministic comparison:
+- [x] Add deterministic comparison:
 
 ```ts
 export function normalizeTreatmentComparison(value: string): string {
@@ -90,9 +90,9 @@ export function normalizeTreatmentComparison(value: string): string {
 }
 ```
 
-- [ ] Reject an edit when its proposed summary normalizes to the source text, using code `no_material_change` and a plain-language retained message.
+- [x] Reject an edit when its proposed summary normalizes to the source text, using code `no_material_change` and a plain-language retained message.
 
-- [ ] Run the focused patch test and record file/test counts.
+- [x] Run the focused patch test and record file/test counts.
 
 ### Pass 1 smoke test
 
@@ -115,7 +115,7 @@ npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPatch.test
 
 **Rollback/fallback:** If the live model cannot satisfy the compact band contract, leave the previous function version active and retain the Pass 1 no-op guard locally until the prompt is corrected.
 
-- [ ] Create `outlineTreatmentCoverage.test.ts` with failing tests for:
+- [x] Create `outlineTreatmentCoverage.test.ts` with failing tests for:
   - a 70-beat outline deriving seven 10-page bands;
   - missing first/middle/final bands;
   - duplicate/overlapping bands;
@@ -124,7 +124,7 @@ npm run test -- --run supabase/functions/writer-tools/outlineTreatmentPatch.test
   - valid no-change explanations;
   - all three treatment modes.
 
-- [ ] Create the coverage API:
+- [x] Create the coverage API:
 
 ```ts
 export type TreatmentReviewBand = {
@@ -146,13 +146,13 @@ export function getTreatmentCoverageErrors(
 ): string[];
 ```
 
-- [ ] Derive no more than ten contiguous bands:
+- [x] Derive no more than ten contiguous bands:
 
 ```ts
 const bandSize = Math.max(1, Math.ceil(sourceBeatCount / 10));
 ```
 
-- [ ] Extend the Edge schema:
+- [x] Extend the Edge schema:
 
 ```ts
 section_reviews: z.array(z.object({
@@ -165,7 +165,7 @@ section_reviews: z.array(z.object({
 overall_assessment: z.string().min(40).max(2400),
 ```
 
-- [ ] Change the prompt from “omit unchanged beats” alone to:
+- [x] Change the prompt from “omit unchanged beats” alone to:
 
 ```ts
 `Review every supplied section range: ${JSON.stringify(expectedBands)}.`,
@@ -174,14 +174,14 @@ overall_assessment: z.string().min(40).max(2400),
 'Every operation_id must appear in exactly one section review.',
 ```
 
-- [ ] Add mode-specific criteria:
+- [x] Add mode-specific criteria:
   - preserve: grammar, clarity, consistency, formatting;
   - structure: pacing, density, sequence, transitions, page distribution;
   - expand: emotional development, escalation, connective scenes, creative opportunities.
 
-- [ ] Validate coverage before `applyOutlineTreatmentPatches` and return a plain semantic-coverage 422 when incomplete.
+- [x] Validate coverage before `applyOutlineTreatmentPatches` and return a plain semantic-coverage 422 when incomplete.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run test -- --run \
@@ -193,7 +193,7 @@ npm run test -- --run \
 
 ### Pass 2 smoke test
 
-- [ ] Confirm opening, middle, and ending omissions fail and a complete 70-page review passes.
+- [x] Confirm opening, middle, and ending omissions fail and a complete 70-page review passes.
 
 ## Pass 3: Readable assessments, release gate, and production proof
 
@@ -209,16 +209,16 @@ npm run test -- --run \
 
 **Rollback/fallback:** Do not promote the paired release if any mode returns ending-only coverage, no-op edits, or indistinguishable mode behavior.
 
-- [ ] Add the client schema/types/integration mapping for `section_reviews` and `overall_assessment`.
+- [x] Add the client schema/types/integration mapping for `section_reviews` and `overall_assessment`.
 
-- [ ] Add failing readable-review tests asserting:
+- [x] Add failing readable-review tests asserting:
   - ranges appear from opening through ending;
   - `no_change` sections include their explanation;
   - assessment copy contains no opaque IDs;
   - Organize and Polish labels structure criteria;
   - changed page navigation remains intact.
 
-- [ ] Render:
+- [x] Render:
 
 ```tsx
 <section aria-labelledby="outline-assessment-heading">
@@ -234,11 +234,11 @@ npm run test -- --run \
 </section>
 ```
 
-- [ ] Run the focused client/Edge regression once, targeted lint once, and production build once.
+- [x] Run the focused client/Edge regression once, targeted lint once, and production build once.
 
-- [ ] Deploy paired Supabase/frontend changes only after the consolidated gate passes.
+- [x] Deploy paired Supabase/frontend changes only after the consolidated gate passes.
 
-- [ ] In the persistent signed-in QA account, run all three modes against the same representative long outline and verify:
+- [x] In the persistent signed-in QA account, run all three modes against the same representative long outline and verify:
   - every section range is present;
   - Keep My Order proposes only meaningful language changes;
   - Organize and Polish contains structural assessment and is not a copyedit-only masquerade;
@@ -248,12 +248,23 @@ npm run test -- --run \
 
 ### Pass 3 smoke test
 
-- [ ] Record test-file/test counts, versions, per-mode assessment/operation summaries, cancellation evidence, and any Yellow limitations.
+- [x] Record test-file/test counts, versions, per-mode assessment/operation summaries, cancellation evidence, and any Yellow limitations.
 
 ## Final audit
 
-- [ ] ReAct: confirm every implementation step follows reproduced evidence.
-- [ ] QA: confirm preservation, coverage, meaningful difference, mode distinction, and recovery.
-- [ ] UI/UX: confirm chronological beginner-readable assessments, keyboard access, contrast, and no overlap.
-- [ ] DOX: add the durable semantic-coverage contract to the nearest owning `AGENTS.md`.
-- [ ] Walkthrough: record exact implementation and production evidence.
+- [x] ReAct: confirm every implementation step follows reproduced evidence.
+- [x] QA: confirm preservation, coverage, meaningful difference, mode distinction, and recovery.
+- [x] UI/UX: confirm chronological beginner-readable assessments, keyboard access, contrast, and no overlap.
+- [x] DOX: add the durable semantic-coverage contract to the nearest owning `AGENTS.md`.
+- [x] Walkthrough: record exact implementation and production evidence.
+
+## Execution results
+
+- Pass 1: the no-op regression failed before implementation, then 1 file and 13 tests passed.
+- Pass 2: deterministic 70-beat range coverage, operation linkage, mode permissions, and client mapping passed in a 5-file, 53-test smoke.
+- Pass 3: 7 focused files and 93 tests passed; the consolidated gate passed 122 files and 773 tests, lint, and the production build.
+- Production: Supabase `writer-tools` and Cloudflare version `570c6e16-fb3d-4fea-8f37-8e47535979b3` deployed successfully.
+- Live Keep My Order: seven ranges covered pages 1–70 and all 70 beats received meaningful language-only edits.
+- Live Organize and Polish: seven structural assessments covered pages 1–70; six out-of-range combinations were rejected, while a bounded 70-to-65-page restructure retained all 70 source beats.
+- Live Expand Creatively: seven creative assessments covered pages 1–70, with changes spanning the opening through ending; all 70 source beats remained traceable.
+- All three previews were canceled; the official outline remained `Saved · v1`; production console warnings/errors were 0.
