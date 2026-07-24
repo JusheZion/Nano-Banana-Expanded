@@ -91,6 +91,7 @@ import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteS
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import {
   formatWriterPageBeatsBatchErrors,
+  runWriterPageBeatsBatchRequestWithRetries,
   shouldContinueWriterPageBeatsBatch,
 } from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
@@ -3656,16 +3657,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           break;
         }
         const notesTrim = beatsDirectorNotesDraft.trim();
-        const res = await invokeWriterTools({
-          mode: 'page_beats_issue',
-          issue_id: selectedIssueId,
-          skip_existing: beatsSkipExisting,
-          ...(lockedPageIds.length > 0 ? { page_ids: unlockedPageIds } : { batch_limit: WRITER_PAGE_BEATS_ISSUE_MAX }),
-          production_defaults: productionDefaultsPayload,
-          ...(!beatsSkipExisting && lockedPageIds.length === 0
-            ? { batch_offset: beatsBatchOffsetFullPassRef.current }
-            : {}),
-          ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+        const res = await runWriterPageBeatsBatchRequestWithRetries({
+          skipExisting: beatsSkipExisting,
+          invoke: () => invokeWriterTools({
+            mode: 'page_beats_issue',
+            issue_id: selectedIssueId,
+            skip_existing: beatsSkipExisting,
+            ...(lockedPageIds.length > 0 ? { page_ids: unlockedPageIds } : { batch_limit: WRITER_PAGE_BEATS_ISSUE_MAX }),
+            production_defaults: productionDefaultsPayload,
+            ...(!beatsSkipExisting && lockedPageIds.length === 0
+              ? { batch_offset: beatsBatchOffsetFullPassRef.current }
+              : {}),
+            ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+          }),
+          wait: (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs)),
+          shouldAbort: () => beatsBatchAbortRef.current?.signal.aborted === true,
+          onRetry: ({ attempt, maxAttempts, delayMs }) => {
+            setBeatsBatchLabel(
+              `Temporary interruption · retry ${attempt}/${maxAttempts} in ${Math.ceil(delayMs / 1000)}s`,
+            );
+            pushHistory(`batch beats temporary interruption; retry ${attempt}/${maxAttempts}`);
+          },
         });
         if (!res.success) {
           setBeatsError(toolErrorMessage(res));

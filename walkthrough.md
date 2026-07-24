@@ -12494,6 +12494,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - None for this repair.
 
+## Page Beats transient hosted-round recovery - 2026-07-24
+
+### What changed
+- Reproduced the 70-page production workflow beyond the reported 10-page boundary; the persistent QA issue reached 30/70 pages across five additional hosted rounds without a page/schema error.
+- Found a contemporaneous production browser error showing `TypeError: Failed to fetch` during Supabase session refresh, while the batch treated every request interruption as final.
+- Added a bounded retry wrapper for transient network, gateway, timeout, rate-limit, and HTTP 546 failures.
+- Retries are limited to two attempts and only run when `Skip existing beats` is enabled, making a lost response safe because already-saved pages are not generated again.
+- Permanent authentication, validation, and page-specific errors still stop immediately and remain visible.
+- The running button now explains when a temporary interruption is being retried and uses a longer pause for rate limits.
+
+### Files touched
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPageBeatsBatch.ts`
+- `src/portals/writer/__tests__/writerPageBeatsBatch.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- A transient failure after two successful rounds is a different failure class from the earlier partial-success loop.
+- Regenerate-all mode is intentionally excluded from automatic retries because a lost response could otherwise overwrite generated content twice.
+- The root `AGENTS.md` remains accurate; the DOX pass found no hierarchy or durable contract change requiring an instruction update.
+
+### Verification
+- TDD confirmed the new retry classifier and retry runner failed before implementation.
+- Focused Page Beats and writer-schema regression: 4 files and 127 tests passed.
+- Canonical-checkout regression excluding nested `.worktrees`: 123 files and 786 tests passed.
+- `npm run lint -- --quiet`: passed with existing Babel large-file notices only.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Signed-in production reproduction generated Pages 6-30 across five hosted rounds; cancellation then completed and prevented generation of the remaining QA pages.
+
+### Outstanding issues
+- The original user toast disappeared before inspection, so its exact HTTP body is unavailable. The production browser log confirms the transient fetch/session-refresh failure class handled by this repair.
+
+### Risks or caveats
+- A service interruption that persists through two retries will still stop the batch and display its final reason rather than looping indefinitely.
+
+### Operator follow-up
+- Keep `Skip existing beats` enabled and retry generation after the deployment; completed pages remain saved.
+
+### Next steps
+- Commit, push, deploy, and verify the live bundle contains the bounded retry behavior.
+
 ## Page Beats partial-batch recovery - 2026-07-24
 
 ### What changed
