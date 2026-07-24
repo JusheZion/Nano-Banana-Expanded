@@ -3704,8 +3704,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           },
         });
         if (!res.success) {
-          setBeatsError(toolErrorMessage(res));
-          pushHistory(`error: batch beats (page ${page?.page_number ?? index + 1})`);
+          const message = toolErrorMessage(res);
+          setBeatsError(message);
+          pushHistory(
+            `error: batch beats (page ${page?.page_number ?? index + 1}): ${message}`,
+          );
           break;
         }
         const data = res.data as {
@@ -3826,8 +3829,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           },
         });
         if (!res.success) {
-          setBeatsError(toolErrorMessage(res));
-          pushHistory(`error: batch beats (page ${page?.page_number ?? index + 1})`);
+          const message = toolErrorMessage(res);
+          setBeatsError(message);
+          pushHistory(
+            `error: batch beats (page ${page?.page_number ?? index + 1}): ${message}`,
+          );
           break;
         }
         const data = res.data as {

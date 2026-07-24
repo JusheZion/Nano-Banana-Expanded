@@ -69,7 +69,7 @@ export function isRetryableWriterPageBeatsBatchFailure(
     return false;
   }
   return (
-    /failed to fetch|network|timeout|timed out|quota|rate limit/.test(message) ||
+    /failed to fetch|failed to send a request|network|timeout|timed out|quota|rate limit/.test(message) ||
     /http (429|500|502|503|504|520|522|524|546)\b/.test(message) ||
     /edge function returned a non-2xx status code/.test(message)
   );

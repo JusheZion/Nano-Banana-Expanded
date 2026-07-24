@@ -108,6 +108,7 @@ describe('Writer Page Beats batch recovery', () => {
 
   it.each([
     ['Failed to fetch', undefined],
+    ['Failed to send a request to the Edge Function', undefined],
     ['Edge Function returned a non-2xx status code', 'HTTP 546'],
     ['Gemini request failed', 'Gemini HTTP 429: quota exceeded'],
     ['Gateway timeout', 'HTTP 504'],

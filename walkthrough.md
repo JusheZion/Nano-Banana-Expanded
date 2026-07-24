@@ -13181,3 +13181,47 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Begin the next UI update with the application-wide loading-state inventory in `tasks.md`.
+
+## Page Beats five-page checkpoint restoration - 2026-07-24
+
+### What changed
+- Restored visible five-page progress checkpoints to `Generate all beats` while retaining the safer one-page-per-Edge-invocation execution model.
+- Added live saved-page refreshes after every group of up to five pages, followed by automatic continuation into the next group.
+- Added a visible `Stop after current page` control to both Simple Workflow and Advanced Tools.
+- Updated the progress label to identify the current page, group, and position within the five-page checkpoint.
+- Recognized Supabase's `Failed to send a request to the Edge Function` transport response as safely retryable when skip-existing protection is enabled.
+- Expanded failure banners to include the underlying response instead of reporting only the affected page.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPageBeatsBatch.ts`
+- `src/portals/writer/__tests__/writerPageBeatsBatch.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Five pages are a client-side progress and refresh checkpoint, not a single hosted AI request. Each page remains a separate Supabase invocation to preserve completed work and avoid HTTP 546 worker limits.
+- The existing Advanced Tools selection cap of five pages was still present. The missing behavior was the checkpoint messaging and intermediate saved-state refresh during `Generate all beats`.
+- Safe retries remain restricted to skip-existing mode so a replay cannot overwrite a page that finished before the client received its response.
+
+### Verification
+- Focused checkpoint and retry regression: 1 file and 17 tests passed.
+- Consolidated regression: 123 files and 790 tests passed.
+- `npm run lint`: passed with 0 errors and 70 existing warnings.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Cloudflare Worker version `99957ca9-33b8-4347-bbd6-ff4f0d5e5d78` deployed to `https://asset-reference-comics-studio.onyxzion.workers.dev/`.
+- Signed-in production QA used the persistent 70-page issue. The first run advanced from 34/70 through the five-page checkpoint, visibly refreshed the saved count, and preserved 40/70 when a Page 41 transport request failed.
+- After adding the missing transport retry classification, production QA successfully resumed at Page 41, continued through Page 43, and stopped cleanly with 43/70 saved and no Page Beats action error.
+
+### Outstanding issues
+- None for the five-page checkpoint and transport-retry repair.
+
+### Risks or caveats
+- Browser logs retained unrelated dynamic-import errors produced by an open tab while Cloudflare assets were being replaced during deployment. The refreshed Writer bundle and Page Beats workflow loaded and completed normally afterward.
+- Existing large production chunks and unrelated lint warnings remain unchanged.
+
+### Operator follow-up
+- Refresh any Writers' Workshop tab that was open during deployment before resuming Page Beats generation.
+
+### Next steps
+- Resume generation from Page 44 when ready; the first 43 QA pages remain saved.
