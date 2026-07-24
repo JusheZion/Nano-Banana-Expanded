@@ -25,6 +25,10 @@ import {
   normalizeOutlineTreatmentPatchResult,
 } from './outlineTreatmentPatch.ts';
 import { getTreatmentCoverageErrors } from './outlineTreatmentCoverage.ts';
+import {
+  generatePageBeatsJsonWithMalformedRetry,
+  PAGE_BEATS_GEMINI_RESPONSE_SCHEMA,
+} from './pageBeatsStructuredOutput.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -281,6 +285,8 @@ async function callGeminiJson(args: {
   temperature?: number;
   /** Gemini 2.5 thinking tokens; 0 prioritizes deterministic low-latency transforms. */
   thinkingBudget?: number;
+  /** Optional Gemini structured-output schema for deterministic JSON shape. */
+  responseSchema?: Record<string, unknown>;
 }): Promise<unknown> {
   const modelsToTry = [
     args.preferredModel,
@@ -294,6 +300,7 @@ async function callGeminiJson(args: {
       contents: [{ role: 'user', parts: [{ text: args.user }, ...(args.userParts ?? [])] }],
       generationConfig: {
         responseMimeType: 'application/json',
+        ...(args.responseSchema ? { responseSchema: args.responseSchema } : {}),
         temperature: args.temperature ?? 0.65,
         ...(args.thinkingBudget !== undefined && model.startsWith('gemini-2.5-')
           ? { thinkingConfig: { thinkingBudget: args.thinkingBudget } }
@@ -1004,13 +1011,17 @@ async function executeSinglePageBeats(
   });
   let beatsJson: unknown;
   try {
-    beatsJson = await callGeminiJson({
-      system,
-      user: userPrompt,
-      userParts: visualReferenceImages.parts,
-      preferredModel: geminiModel,
-      apiKey: geminiKey,
-    });
+    beatsJson = await generatePageBeatsJsonWithMalformedRetry(
+      (temperature) => callGeminiJson({
+        system,
+        user: userPrompt,
+        userParts: visualReferenceImages.parts,
+        preferredModel: geminiModel,
+        apiKey: geminiKey,
+        temperature,
+        responseSchema: PAGE_BEATS_GEMINI_RESPONSE_SCHEMA,
+      }),
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, message: msg };

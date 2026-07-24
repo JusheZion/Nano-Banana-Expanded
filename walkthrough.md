@@ -13225,3 +13225,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Resume generation from Page 44 when ready; the first 43 QA pages remain saved.
+
+## Page Beats double-page-spread JSON repair - 2026-07-24
+
+### What changed
+- Added a Gemini structured-output schema specifically for Page Beats, requiring a `panels` array and a non-empty `action` field for each returned panel object.
+- Added one lower-temperature retry when Gemini still returns malformed JSON, while allowing permanent API and authentication failures to pass through without wasteful retries.
+- Preserved the existing double-page-spread contract: each page describes its own left or right composition and references the center gutter rather than returning a combined two-page payload.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pageBeatsStructuredOutput.ts`
+- `supabase/functions/writer-tools/pageBeatsStructuredOutput.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The reported Page 33 error occurred after the request reached Gemini. It was not a duplicate-page rejection: the model returned text that could not be parsed as JSON.
+- A spread annotation may have influenced the particular response that exposed the weakness, but spread handling was already present in the prompt. The missing safeguards were an enforced output schema and malformed-output recovery.
+- The second attempt uses the same source page and spread instructions at a lower temperature. No prior or neighboring page is overwritten by the retry.
+
+### Verification
+- Test-first regression failed on both missing safeguards before implementation.
+- Focused Page Beats structured-output and queue regression: 2 files and 22 tests passed.
+- Consolidated regression: 124 files and 795 tests passed.
+- `npm run lint`: passed with 0 errors and 70 existing warnings.
+- `npm run build`: passed with the existing large-chunk advisory only.
+- Supabase `writer-tools` version 97 deployed to project `vxclogwiytxjolisnakd`.
+- Signed-in production smoke used Page 44 of the persistent 70-page QA issue with an explicit left-half double-page-spread instruction. The saved result contained valid panel data, kept focal action left of the center gutter, referenced the double-page composition, and completed without Page Beats or browser errors.
+- Cleared the temporary QA director note after the smoke; Page 44 remains as useful spread-shaped persistent test data, bringing the QA issue to 44/70 generated pages.
+
+### Outstanding issues
+- None for malformed Page Beats JSON or double-page-spread generation.
+
+### Risks or caveats
+- The historical malformed Gemini text was not retained by the old function, so its exact invalid character or truncation point cannot be reconstructed.
+- Existing large production chunks and unrelated lint warnings remain unchanged.
+
+### Operator follow-up
+- Retry the failed spread page. The updated function will enforce the Page Beats schema and make one safe repair attempt automatically if Gemini returns malformed JSON again.
+
+### Next steps
+- Continue generating the remaining Page Beats after confirming the failed spread page now saves.
