@@ -5,6 +5,8 @@ import { z } from 'npm:zod@3.24.2';
 
 /** Must match src/shared/writer/schemas.ts */
 export const WRITER_PAGE_BEATS_ISSUE_MAX = 5;
+/** Must match src/shared/writer/schemas.ts */
+export const WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX = 1;
 
 const issueOutlineActSchema = z.object({
   name: z.string().optional(),

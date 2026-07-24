@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-/** Max pages per `page_beats_issue` call (Edge worker / Gemini limits; aligns with HTTP 546 mitigation). */
+/** Max pages a user may select for one logical Page Beats action. */
 export const WRITER_PAGE_BEATS_ISSUE_MAX = 5;
+/** Heavy AI page generation must run one page per hosted Edge invocation. */
+export const WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX = 1;
 
 const issueOutlineActSchema = z.object({
   name: z.string().optional(),

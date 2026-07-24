@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildWriterPageBeatsSinglePageQueue,
   formatWriterPageBeatsBatchErrors,
   getWriterPageBeatsBatchRetryDelayMs,
   isRetryableWriterPageBeatsBatchFailure,
@@ -8,6 +9,35 @@ import {
 } from '../writerPageBeatsBatch';
 
 describe('Writer Page Beats batch recovery', () => {
+  it('queues every eligible page as its own Edge Function invocation', () => {
+    expect(
+      buildWriterPageBeatsSinglePageQueue({
+        pages: [
+          { id: 'page-1', hasBeats: false },
+          { id: 'page-2', hasBeats: false },
+          { id: 'page-3', hasBeats: false },
+        ],
+        allowedPageIds: ['page-1', 'page-2', 'page-3'],
+        skipExisting: false,
+      }),
+    ).toEqual([['page-1'], ['page-2'], ['page-3']]);
+  });
+
+  it('preserves page order while excluding locked, duplicate, and completed pages', () => {
+    expect(
+      buildWriterPageBeatsSinglePageQueue({
+        pages: [
+          { id: 'page-1', hasBeats: false },
+          { id: 'page-2', hasBeats: true },
+          { id: 'page-3', hasBeats: false },
+          { id: 'page-4', hasBeats: false },
+        ],
+        allowedPageIds: ['page-3', 'page-1', 'page-3'],
+        skipExisting: true,
+      }),
+    ).toEqual([['page-1'], ['page-3']]);
+  });
+
   it('stops after a partial-success round so failed pages are not retried forever', () => {
     expect(
       shouldContinueWriterPageBeatsBatch({

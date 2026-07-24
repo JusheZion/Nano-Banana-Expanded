@@ -90,9 +90,9 @@ import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTrea
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import {
+  buildWriterPageBeatsSinglePageQueue,
   formatWriterPageBeatsBatchErrors,
   runWriterPageBeatsBatchRequestWithRetries,
-  shouldContinueWriterPageBeatsBatch,
 } from '@/portals/writer/writerPageBeatsBatch';
 import { useWriterHotkeys } from '@/portals/writer/useWriterHotkeys';
 import { getWriterQuickGenerateNextHint } from '@/portals/writer/writerNextStep';
@@ -914,8 +914,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     pageId?: string | null;
   } | null>(null);
   const beatsBatchAbortRef = useRef<AbortController | null>(null);
-  /** When "Skip pages that already have beats" is off, server advances by batch_offset; client tracks it across rounds. */
-  const beatsBatchOffsetFullPassRef = useRef(0);
   const [syncPagesBusy, setSyncPagesBusy] = useState(false);
   const [syncPagesError, setSyncPagesError] = useState<string | null>(null);
   const [arcSelectedIssueIds, setArcSelectedIssueIds] = useState<string[]>([]);
@@ -3648,14 +3646,37 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setBeatsBatchSource('all');
     setBeatsError(null);
     setBeatsBatchLabel('Running…');
-    beatsBatchOffsetFullPassRef.current = 0;
+    const queue = buildWriterPageBeatsSinglePageQueue({
+      pages: sortedPages.map((page) => ({
+        id: page.id,
+        hasBeats: pageRowHasPanelBeats(page),
+      })),
+      allowedPageIds: unlockedPageIds,
+      skipExisting: beatsSkipExisting,
+    });
+    if (queue.length === 0) {
+      setWriterSafetyMessage(
+        beatsSkipExisting
+          ? 'Every unlocked page already has beats.'
+          : 'No unlocked pages are available for beat generation.',
+      );
+      setBeatsBatchBusy(false);
+      setBeatsBatchLabel('');
+      setBeatsBatchSource(null);
+      beatsBatchAbortRef.current = null;
+      return;
+    }
+    let completed = 0;
     try {
-      let round = 0;
-      for (;;) {
+      for (const [index, pageIds] of queue.entries()) {
         if (beatsBatchAbortRef.current?.signal.aborted) {
           pushHistory('batch beats cancelled');
           break;
         }
+        const page = sortedPages.find((candidate) => candidate.id === pageIds[0]);
+        setBeatsBatchLabel(
+          `Generating page ${page?.page_number ?? index + 1} · ${index + 1}/${queue.length}`,
+        );
         const notesTrim = beatsDirectorNotesDraft.trim();
         const res = await runWriterPageBeatsBatchRequestWithRetries({
           skipExisting: beatsSkipExisting,
@@ -3663,11 +3684,8 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             mode: 'page_beats_issue',
             issue_id: selectedIssueId,
             skip_existing: beatsSkipExisting,
-            ...(lockedPageIds.length > 0 ? { page_ids: unlockedPageIds } : { batch_limit: WRITER_PAGE_BEATS_ISSUE_MAX }),
+            page_ids: pageIds,
             production_defaults: productionDefaultsPayload,
-            ...(!beatsSkipExisting && lockedPageIds.length === 0
-              ? { batch_offset: beatsBatchOffsetFullPassRef.current }
-              : {}),
             ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
           }),
           wait: (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs)),
@@ -3681,31 +3699,16 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         });
         if (!res.success) {
           setBeatsError(toolErrorMessage(res));
-          pushHistory('error: batch beats');
+          pushHistory(`error: batch beats (page ${page?.page_number ?? index + 1})`);
           break;
         }
         const data = res.data as {
           processed?: number[];
           errors?: { page_number: number; message: string }[];
-          has_more?: boolean;
-          batch_size?: number;
-          next_batch_offset?: number;
         };
-        round += 1;
         const processed = data.processed ?? [];
         const errs = data.errors ?? [];
-        if (!beatsSkipExisting) {
-          beatsBatchOffsetFullPassRef.current =
-            typeof data.next_batch_offset === 'number'
-              ? data.next_batch_offset
-              : beatsBatchOffsetFullPassRef.current +
-                (data.batch_size ?? WRITER_PAGE_BEATS_ISSUE_MAX);
-        }
-        setBeatsBatchLabel(
-          `Round ${round}: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
-        );
-        const pageRows = await listWriterPages(selectedIssueId);
-        setPages(pageRows);
+        completed += processed.length;
         if (errs.length > 0) {
           setBeatsError(formatWriterPageBeatsBatchErrors(errs));
           pushHistory(
@@ -3713,12 +3716,13 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           );
           break;
         }
-        if (!shouldContinueWriterPageBeatsBatch({ errors: errs, hasMore: data.has_more === true })) {
-          pushHistory(`batch beats finished (${round} round(s))`);
-          break;
-        }
+      }
+      if (!beatsBatchAbortRef.current?.signal.aborted && completed === queue.length) {
+        pushHistory(`batch beats finished (${completed} page(s))`);
       }
     } finally {
+      const pageRows = await listWriterPages(selectedIssueId);
+      setPages(pageRows);
       setBeatsBatchBusy(false);
       setBeatsBatchLabel('');
       setBeatsBatchSource(null);
@@ -3756,44 +3760,93 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setBeatsBatchSource('picked');
     setBeatsError(null);
     setBeatsBatchLabel('Selected…');
+    beatsBatchAbortRef.current = new AbortController();
+    const queue = buildWriterPageBeatsSinglePageQueue({
+      pages: sortedPages.map((page) => ({
+        id: page.id,
+        hasBeats: pageRowHasPanelBeats(page),
+      })),
+      allowedPageIds: unlockedPageIds,
+      skipExisting: beatsSkipExisting,
+    });
+    if (queue.length === 0) {
+      setWriterSafetyMessage(
+        beatsSkipExisting
+          ? 'Every selected unlocked page already has beats.'
+          : 'No selected unlocked pages are available for beat generation.',
+      );
+      setBeatsBatchBusy(false);
+      setBeatsBatchLabel('');
+      setBeatsBatchSource(null);
+      beatsBatchAbortRef.current = null;
+      return;
+    }
+    let completed = 0;
     try {
       const notesTrim = beatsDirectorNotesDraft.trim();
-      const res = await invokeWriterTools({
-        mode: 'page_beats_issue',
-        issue_id: selectedIssueId,
-        page_ids: unlockedPageIds,
-        skip_existing: beatsSkipExisting,
-        production_defaults: productionDefaultsPayload,
-        ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
-      });
-      if (!res.success) {
-        setBeatsError(toolErrorMessage(res));
-        pushHistory('error: batch beats (selected pages)');
-        return;
-      }
-      const data = res.data as {
-        processed?: number[];
-        errors?: { page_number: number; message: string }[];
-      };
-      const processed = data.processed ?? [];
-      const errs = data.errors ?? [];
-      setBeatsBatchLabel(
-        `Done: ok ${processed.length}${errs.length ? ` · errors ${errs.length}` : ''}`,
-      );
-      if (errs.length > 0) {
-        setBeatsError(formatWriterPageBeatsBatchErrors(errs));
+      for (const [index, pageIds] of queue.entries()) {
+        if (beatsBatchAbortRef.current?.signal.aborted) {
+          pushHistory('batch beats cancelled (selected pages)');
+          break;
+        }
+        const page = sortedPages.find((candidate) => candidate.id === pageIds[0]);
+        setBeatsBatchLabel(
+          `Generating page ${page?.page_number ?? index + 1} · ${index + 1}/${queue.length}`,
+        );
+        const res = await runWriterPageBeatsBatchRequestWithRetries({
+          skipExisting: beatsSkipExisting,
+          invoke: () => invokeWriterTools({
+            mode: 'page_beats_issue',
+            issue_id: selectedIssueId,
+            page_ids: pageIds,
+            skip_existing: beatsSkipExisting,
+            production_defaults: productionDefaultsPayload,
+            ...(notesTrim ? { director_notes_for_beats: notesTrim } : {}),
+          }),
+          wait: (delayMs) => new Promise((resolve) => window.setTimeout(resolve, delayMs)),
+          shouldAbort: () => beatsBatchAbortRef.current?.signal.aborted === true,
+          onRetry: ({ attempt, maxAttempts, delayMs }) => {
+            setBeatsBatchLabel(
+              `Temporary interruption · retry ${attempt}/${maxAttempts} in ${Math.ceil(delayMs / 1000)}s`,
+            );
+            pushHistory(`selected beats temporary interruption; retry ${attempt}/${maxAttempts}`);
+          },
+        });
+        if (!res.success) {
+          setBeatsError(toolErrorMessage(res));
+          pushHistory(`error: batch beats (page ${page?.page_number ?? index + 1})`);
+          break;
+        }
+        const data = res.data as {
+          processed?: number[];
+          errors?: { page_number: number; message: string }[];
+        };
+        const processed = data.processed ?? [];
+        const errs = data.errors ?? [];
+        completed += processed.length;
+        if (errs.length > 0) {
+          setBeatsError(formatWriterPageBeatsBatchErrors(errs));
+          pushHistory(
+            `selected beats stopped: ${errs.map((error) => `page ${error.page_number}`).join(', ')}`,
+          );
+          break;
+        }
       }
       const pageRows = await listWriterPages(selectedIssueId);
       setPages(pageRows);
-      pushHistory(`batch beats (selected): ${processed.length} page(s)`);
+      if (!beatsBatchAbortRef.current?.signal.aborted && completed === queue.length) {
+        pushHistory(`batch beats (selected): ${completed} page(s)`);
+      }
     } finally {
       setBeatsBatchBusy(false);
       setBeatsBatchLabel('');
       setBeatsBatchSource(null);
+      beatsBatchAbortRef.current = null;
     }
   }, [
     selectedIssueId,
     beatsPickOrdered,
+    sortedPages,
     selectedIssue?.notes,
     beatsSkipExisting,
     beatsDirectorNotesDraft,

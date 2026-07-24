@@ -12,6 +12,7 @@ import {
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
   shotPlanJsonSchema,
+  WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX,
   WRITER_PAGE_BEATS_ISSUE_MAX,
   writerToolsRequestSchema,
 } from '../_shared/writerSchemas.ts';
@@ -1759,7 +1760,7 @@ Deno.serve(async (req) => {
       const candidates = rows.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
       const limit = Math.min(
         Math.max(1, batch_limit ?? WRITER_PAGE_BEATS_ISSUE_MAX),
-        WRITER_PAGE_BEATS_ISSUE_MAX,
+        WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX,
       );
 
       let batch: typeof rows;
@@ -1792,8 +1793,9 @@ Deno.serve(async (req) => {
           );
         }
         selected.sort((a, b) => a.page_number - b.page_number);
-        batch = selected.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
-        has_more = false;
+        const eligible = selected.filter((p) => !skip || !pageHasPanelBeats(p.beats_json));
+        batch = eligible.slice(0, WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX);
+        has_more = batch.length < eligible.length;
         sliceStart = 0;
       } else {
         sliceStart = skip ? 0 : Math.min(Math.max(0, batch_offset ?? 0), candidates.length);

@@ -8,6 +8,21 @@ export type WriterPageBeatsBatchFailure = {
   details?: string;
 };
 
+export function buildWriterPageBeatsSinglePageQueue(args: {
+  pages: Array<{ id: string; hasBeats: boolean }>;
+  allowedPageIds: string[];
+  skipExisting: boolean;
+}): string[][] {
+  const allowed = new Set(args.allowedPageIds);
+  return args.pages
+    .filter(
+      (page) =>
+        allowed.has(page.id) &&
+        (!args.skipExisting || !page.hasBeats),
+    )
+    .map((page) => [page.id]);
+}
+
 export function isRetryableWriterPageBeatsBatchFailure(
   failure: WriterPageBeatsBatchFailure,
 ): boolean {

@@ -54,7 +54,11 @@ import {
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import { isSupabaseConfigured } from '@/shared/lib/supabase';
-import { guidedComicAssistResultSchema, issueOutlineSchema, WRITER_PAGE_BEATS_ISSUE_MAX } from '@/shared/writer/schemas';
+import {
+  guidedComicAssistResultSchema,
+  issueOutlineSchema,
+  WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX,
+} from '@/shared/writer/schemas';
 import type { GuidedComicAssistAction, GuidedComicAssistResult } from '@/shared/writer/types';
 import { useGuidedComicVaultBridge } from '@/stores/guidedComicVaultBridge';
 import { useImageWorkshopBridge, type GuidedImageWorkshopReference } from '@/stores/imageWorkshopBridge';
@@ -3302,12 +3306,15 @@ export function GuidedComicFlow({ onNavigatePortal, onOpenAdvancedStudio, reques
         setWriterBridgeError('Could not prepare Writer page rows before generating page beats.');
         return;
       }
-      const offsets = getGuidedWriterPageBeatBatchOffsets(targetPageCount, WRITER_PAGE_BEATS_ISSUE_MAX);
+      const offsets = getGuidedWriterPageBeatBatchOffsets(
+        targetPageCount,
+        WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX,
+      );
       for (const batchOffset of offsets) {
         const res = await invokeWriterTools(
           buildGuidedWriterToolRequest('page-beats', {
             issueId,
-            batchLimit: WRITER_PAGE_BEATS_ISSUE_MAX,
+            batchLimit: WRITER_PAGE_BEATS_EDGE_INVOCATION_MAX,
             batchOffset,
           }),
         );
