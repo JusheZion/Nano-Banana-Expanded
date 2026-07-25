@@ -135,7 +135,10 @@ export function buildPacingRevisionOutlinePreview(
       target_key: `outline:${operation.operation_id}`,
       page_number: manifest?.proposed_page ?? null,
       current_value: current,
-      ai_proposal: proposalById.get(operation.operation_id) ?? operation,
+      ai_proposal: {
+        operation,
+        proposed_beat: proposalById.get(operation.operation_id) ?? null,
+      },
       reason: operation.reason?.trim() || 'Pacing revision.',
     }];
   });

@@ -319,24 +319,24 @@ git commit -m "feat: queue pacing revision candidates"
 
 **Acceptance criteria:** Edited Candidates preserve AI Proposals; batch actions exclude ineligible changes; stale/locked/dependency conflicts block apply; failure compensates; undo restores through history.
 
-- [ ] Write failing model tests in `writerPacingRevisionModel.test.ts` for effective candidate selection, batch eligibility, and dependency blockers.
-- [ ] Implement pure selectors in `writerPacingRevisionModel.ts`.
-- [ ] Write failing apply tests with injected Outline/page writers and a forced Dialogue failure.
-- [ ] Implement `writerPacingRevisionApply.ts` with fingerprint/lock preflight, snapshot, Outline → rows → Beats → Dialogue order, reverse compensation, and undo.
-- [ ] Run:
+- [x] Write failing model tests in `writerPacingRevisionModel.test.ts` for effective candidate selection, batch eligibility, and dependency blockers.
+- [x] Implement pure selectors in `writerPacingRevisionModel.ts`.
+- [x] Write failing apply tests with injected Outline/page writers and a forced Dialogue failure.
+- [x] Implement `writerPacingRevisionApply.ts` with fingerprint/lock preflight, snapshot, Outline → rows → Beats → Dialogue order, reverse compensation, and undo.
+- [x] Run:
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/writerPacingRevisionApply.test.ts
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add src/portals/writer/writerPacingRevisionModel.ts src/portals/writer/writerPacingRevisionApply.ts src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/writerPacingRevisionApply.test.ts
 git commit -m "feat: apply pacing revisions safely"
 ```
 
-**Smoke result summary:** Record stale, locked, dependency, rollback, and undo cases.
+**Smoke result summary:** PASS — 3 focused files and 11 individual tests passed. Edited Candidates override without mutating immutable AI Proposals; rejected/locked changes are batch-ineligible; unmet dependencies exclude a child from apply; layer-qualified fingerprints prevent Beats/Dialogue collisions; writes execute Outline → Beats → Dialogue; a forced Dialogue failure compensates Beats then Outline; snapshot undo restores every layer.
 
 ## Pass 5 — Two-Panel Review Workspace
 
