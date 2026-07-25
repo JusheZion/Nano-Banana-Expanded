@@ -35,6 +35,10 @@ import {
   buildPacingRevisionOutlinePrompt,
 } from './pacingRevisionPrompt.ts';
 import { persistPacingRevisionOutlinePreview } from './pacingRevisionPersistence.ts';
+import {
+  generateValidatedPacingRevisionPageCandidate,
+  PACING_REVISION_PAGE_RESPONSE_SCHEMA,
+} from './pacingRevisionPageCandidate.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1629,6 +1633,272 @@ Deno.serve(async (req) => {
           mode: 'pacing_revision_outline_preview',
           issue_id,
           data: { ...revisionSetRow, items: hydratedItems },
+        },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'pacing_revision_page_preview') {
+      const {
+        revision_set_id,
+        page_id,
+        include_beats,
+        include_dialogue,
+      } = parsedReq.data;
+      const includeBeats = include_beats !== false;
+      const includeDialogue = include_dialogue !== false;
+      if (!includeBeats && !includeDialogue) {
+        return Response.json(
+          { success: false, error: 'Nothing selected for preview' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const { data: revisionSet, error: setError } = await supabase
+        .from('writer_pacing_revision_sets')
+        .select('id, issue_id, status, pacing_review_json, proposed_outline_json, progress_json, failure_ledger')
+        .eq('id', revision_set_id)
+        .maybeSingle();
+      if (setError || !revisionSet) {
+        return Response.json(
+          { success: false, error: 'Revision Set not found', details: setError?.message },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      if (['applied', 'discarded', 'applying'].includes(revisionSet.status)) {
+        return Response.json(
+          { success: false, error: 'Revision Set is not editable' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const issue = await loadIssueRow(supabase, revisionSet.issue_id);
+      if (!issue) {
+        return Response.json(
+          { success: false, error: 'Issue not found' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const { data: page, error: pageError } = await supabase
+        .from('writer_pages')
+        .select('id, issue_id, page_number, beats_json, script_text')
+        .eq('id', page_id)
+        .eq('issue_id', revisionSet.issue_id)
+        .maybeSingle();
+      if (pageError || !page) {
+        return Response.json(
+          { success: false, error: 'Page not found in this issue', details: pageError?.message },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const { data: itemRows, error: itemError } = await supabase
+        .from('writer_pacing_revision_items')
+        .select('id, affected_page_numbers, generation_status')
+        .eq('revision_set_id', revision_set_id)
+        .contains('affected_page_numbers', [page.page_number])
+        .order('position', { ascending: true });
+      if (itemError) {
+        return Response.json(
+          { success: false, error: 'Failed to load Revision Items', details: itemError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const item = (itemRows ?? []).find((candidate: { generation_status: string }) =>
+        candidate.generation_status !== 'locked'
+      );
+      if (!item) {
+        return Response.json(
+          {
+            success: false,
+            error: (itemRows ?? []).length ? 'Affected Revision Item is locked' : 'No Revision Item owns this page',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const sid = issue.series_id;
+      const [castRes, locRes, bibleRes, loreDigest] = await Promise.all([
+        supabase.from('writer_cast').select('*').eq('series_id', sid),
+        supabase.from('writer_locations').select('*').eq('series_id', sid),
+        supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
+        fetchLoreCardsDigest(supabase, sid),
+      ]);
+      const prompt = buildPacingRegenerationPreviewUserPrompt({
+        issue,
+        pages: [page],
+        latestOutline: revisionSet.proposed_outline_json,
+        pacingReview: revisionSet.pacing_review_json,
+        includeBeats,
+        includeDialogue,
+        cast: castRes.data ?? [],
+        locations: locRes.data ?? [],
+        styleBibles: bibleRes.data ?? [],
+        loreCardsDigest: loreDigest,
+        productionDefaults: resolveProductionDefaultsPayload(issue),
+      });
+      let candidate: {
+        page_id: string;
+        page_number: number;
+        reason?: string;
+        proposed_beats_json?: unknown;
+        proposed_script_text?: string;
+      };
+      try {
+        candidate = await generateValidatedPacingRevisionPageCandidate(
+          (temperature) => callGeminiJson({
+            system: [
+              'You are a comics editor generating one preview-only pacing revision page.',
+              'Output valid JSON only. Never modify saved content.',
+            ].join(' '),
+            user: prompt,
+            preferredModel: geminiModel,
+            apiKey: geminiKey,
+            temperature,
+            responseSchema: PACING_REVISION_PAGE_RESPONSE_SCHEMA,
+          }),
+          (value) => {
+            const parsed = pacingRegenerationPreviewResultSchema.parse(value);
+            if (parsed.pages.length !== 1) throw new Error('Exactly one page candidate is required');
+            const onlyPage = parsed.pages[0]!;
+            if (onlyPage.page_id !== page.id || onlyPage.page_number !== page.page_number) {
+              throw new Error('Page candidate does not match the requested page');
+            }
+            if (includeBeats && !onlyPage.proposed_beats_json) {
+              throw new Error('Page Beats candidate is required');
+            }
+            if (includeDialogue && !onlyPage.proposed_script_text?.trim()) {
+              throw new Error('Dialogue candidate is required');
+            }
+            return onlyPage;
+          },
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        const ledger = Array.isArray(revisionSet.failure_ledger)
+          ? revisionSet.failure_ledger
+          : [];
+        await supabase
+          .from('writer_pacing_revision_sets')
+          .update({
+            status: 'partially_ready',
+            failure_ledger: [
+              ...ledger.filter((entry: { page_number?: unknown }) => entry.page_number !== page.page_number),
+              { page_number: page.page_number, item_id: item.id, reason },
+            ],
+          })
+          .eq('id', revision_set_id);
+        return Response.json(
+          { success: false, error: 'Page candidate failed', details: reason },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const { data: existingChanges } = await supabase
+        .from('writer_pacing_revision_changes')
+        .select('id, layer, target_key, generation_status')
+        .eq('item_id', item.id);
+      const outlineDependencyIds = (existingChanges ?? [])
+        .filter((entry: { layer: string }) => entry.layer === 'outline')
+        .map((entry: { id: string }) => entry.id);
+      const existingPageChange = (layer: 'beats' | 'dialogue') =>
+        (existingChanges ?? []).find((entry: {
+          layer: string;
+          target_key: string;
+        }) => entry.layer === layer && entry.target_key === `page:${page.id}`);
+      const beatsUnlocked = existingPageChange('beats')?.generation_status !== 'locked';
+      const dialogueUnlocked = existingPageChange('dialogue')?.generation_status !== 'locked';
+      if ((!includeBeats || !beatsUnlocked) && (!includeDialogue || !dialogueUnlocked)) {
+        return Response.json(
+          { success: false, error: 'Selected page layers are locked' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const now = new Date().toISOString();
+      const changeRows: Array<Record<string, unknown>> = [];
+      let beatsChangeId: string | null = null;
+      if (includeBeats && beatsUnlocked && candidate.proposed_beats_json) {
+        beatsChangeId = existingPageChange('beats')?.id ?? crypto.randomUUID();
+        changeRows.push({
+          id: beatsChangeId,
+          item_id: item.id,
+          layer: 'beats',
+          target_key: `page:${page.id}`,
+          page_id: page.id,
+          page_number: page.page_number,
+          current_value: page.beats_json,
+          ai_proposal: candidate.proposed_beats_json,
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: outlineDependencyIds,
+          reason: candidate.reason?.trim() || 'Pacing-aligned Page Beats revision.',
+          source_fingerprint: await sha256Hex(JSON.stringify(page.beats_json)),
+          generation_status: 'ready',
+          applied_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      if (includeDialogue && dialogueUnlocked && candidate.proposed_script_text) {
+        changeRows.push({
+          id: existingPageChange('dialogue')?.id ?? crypto.randomUUID(),
+          item_id: item.id,
+          layer: 'dialogue',
+          target_key: `page:${page.id}`,
+          page_id: page.id,
+          page_number: page.page_number,
+          current_value: page.script_text,
+          ai_proposal: candidate.proposed_script_text,
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: beatsChangeId ? [beatsChangeId] : outlineDependencyIds,
+          reason: candidate.reason?.trim() || 'Pacing-aligned Dialogue revision.',
+          source_fingerprint: await sha256Hex(JSON.stringify(page.script_text)),
+          generation_status: 'ready',
+          applied_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      const { data: persistedChanges, error: changesError } = await supabase
+        .from('writer_pacing_revision_changes')
+        .upsert(changeRows, { onConflict: 'item_id,layer,target_key' })
+        .select('*');
+      if (changesError) {
+        return Response.json(
+          { success: false, error: 'Failed to save page candidates', details: changesError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      await supabase
+        .from('writer_pacing_revision_items')
+        .update({ generation_status: 'ready' })
+        .eq('id', item.id);
+      const progress = asJsonObject(revisionSet.progress_json);
+      const completedPages = [...new Set([
+        ...(Array.isArray(progress.completed_pages) ? progress.completed_pages : []),
+        page.page_number,
+      ])].filter((value): value is number => typeof value === 'number').sort((a, b) => a - b);
+      const totalPages = typeof progress.total_pages === 'number' ? progress.total_pages : completedPages.length;
+      const failureLedger = (Array.isArray(revisionSet.failure_ledger) ? revisionSet.failure_ledger : [])
+        .filter((entry: { page_number?: unknown }) => entry.page_number !== page.page_number);
+      await supabase
+        .from('writer_pacing_revision_sets')
+        .update({
+          status: completedPages.length >= totalPages && failureLedger.length === 0 ? 'ready' : 'partially_ready',
+          progress_json: {
+            ...progress,
+            completed_pages: completedPages,
+            current_page: null,
+          },
+          failure_ledger: failureLedger,
+        })
+        .eq('id', revision_set_id);
+      return Response.json(
+        {
+          success: true,
+          mode: 'pacing_revision_page_preview',
+          issue_id: revisionSet.issue_id,
+          page_id,
+          data: {
+            page_number: page.page_number,
+            changes: persistedChanges ?? changeRows,
+          },
         },
         { headers: corsHeaders },
       );

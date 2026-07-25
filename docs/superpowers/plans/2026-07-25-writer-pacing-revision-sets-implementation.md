@@ -253,7 +253,7 @@ git commit -m "feat: preview pacing outline revisions"
 
 **Acceptance criteria:** One page per Edge call; later pages continue after isolated failures; persisted successes survive cancellation/reload; failed-only retry excludes successful pages.
 
-- [ ] **Step 1: Write failing queue tests**
+- [x] **Step 1: Write failing queue tests**
 
 Create `src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts` with an injected runner:
 
@@ -269,47 +269,49 @@ expect(result.completedPages).toEqual([1, 2, 4, 5, 6]);
 expect(result.failures).toEqual([{ page: 3, reason: 'Malformed model output' }]);
 ```
 
-- [ ] **Step 2: Confirm the queue test fails**
+- [x] **Step 2: Confirm the queue test fails**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts
 ```
 
-- [ ] **Step 3: Implement queue and retry selectors**
+- [x] **Step 3: Implement queue and retry selectors**
 
 Create `writerPacingRevisionQueue.ts` with ordered execution, abort-after-current-page, checkpoint callbacks, continuation after failure, and `failedPagesOnly(result)`.
 
-- [ ] **Step 4: Add page-preview Edge mode**
+- [x] **Step 4: Add page-preview Edge mode**
 
 Add `pacing_revision_page_preview` with a server-side one-page request cap. Load the proposed outline beat plus neighbors, current page, canon, and defaults. Require schema-constrained `panels` and Dialogue output, retry malformed JSON once at lower temperature, and persist changes before returning.
 
-- [ ] **Step 5: Add structured-output and endpoint tests**
+- [x] **Step 5: Add structured-output and endpoint tests**
 
 Cover missing panel actions, malformed JSON repair, second failure ledger entry, locked-layer exclusion, and persisted page success.
 
-- [ ] **Step 6: Run the Pass 3 smoke test**
+- [x] **Step 6: Run the Pass 3 smoke test**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/pageBeatsStructuredOutput.test.ts
 ```
 
-- [ ] **Step 7: Commit Pass 3**
+- [x] **Step 7: Commit Pass 3**
 
 ```bash
 git add src/portals/writer/writerPacingRevisionQueue.ts src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts supabase/functions/writer-tools/pacingRevisionPrompt.ts supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/index.ts supabase/functions/_shared/writerSchemas.ts src/shared/writer/schemas.ts src/shared/writer/types.ts
 git commit -m "feat: queue pacing revision candidates"
 ```
 
-**Smoke result summary:** Record checkpoint, cancellation, continuation, and failed-only retry evidence.
+**Smoke result summary:** PASS — 4 focused files and 12 individual tests passed. The client queue checkpoints at five attempts, preserves later successes after an isolated failure, stops before beginning the next page, and selects failed pages only for retry. The Edge request accepts exactly one `page_id`, retries invalid structured output once at lower temperature, preserves stable change IDs on regeneration, excludes locked layers, and updates the persistent progress/failure ledger.
 
 ## Audit 1 — After Three Passes
 
-- [ ] Compare implementation against every design section through Generation Architecture.
-- [ ] Confirm no page endpoint accepts more than one page.
-- [ ] Confirm RLS ownership paths match existing Writer policies.
-- [ ] Confirm no official Outline/Page Beats/Dialogue write occurs in preview modes.
-- [ ] Run `git diff --check`.
-- [ ] Record findings in the plan; repair any defect before Pass 4.
+- [x] Compare implementation against every design section through Generation Architecture.
+- [x] Confirm no page endpoint accepts more than one page.
+- [x] Confirm RLS ownership paths match existing Writer policies.
+- [x] Confirm no official Outline/Page Beats/Dialogue write occurs in preview modes.
+- [x] Run `git diff --check`.
+- [x] Record findings in the plan; repair any defect before Pass 4.
+
+**Audit 1 result:** PASS — preview modes write only the three owner-scoped revision tables; the official outline and page records remain read-only. The singular `page_id` contract enforces the server-side one-page cap. Review found and repaired one regeneration defect: Page Beat and Dialogue upserts now reuse existing change UUIDs so dependency links remain stable. Locked layers are excluded, RLS traces through issue → series owner, TypeScript passes, and the diff is whitespace-clean.
 
 ## Pass 4 — Decisions, Dependencies, Staleness, Apply, and Undo
 

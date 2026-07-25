@@ -216,6 +216,14 @@ export const writerToolsPacingRevisionOutlinePreviewRequestSchema = z.object({
   issue_id: z.string().uuid(),
 }).strict();
 
+export const writerToolsPacingRevisionPagePreviewRequestSchema = z.object({
+  mode: z.literal('pacing_revision_page_preview'),
+  revision_set_id: z.string().uuid(),
+  page_id: z.string().uuid(),
+  include_beats: z.boolean().optional(),
+  include_dialogue: z.boolean().optional(),
+}).strict();
+
 export const pacingRevisionPlanSchema = z.object({
   items: z.array(z.object({
     item_id: z.string().min(1).max(160),
@@ -607,6 +615,7 @@ export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineClassificationPreviewRequestSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,
   writerToolsPacingRevisionOutlinePreviewRequestSchema,
+  writerToolsPacingRevisionPagePreviewRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,
