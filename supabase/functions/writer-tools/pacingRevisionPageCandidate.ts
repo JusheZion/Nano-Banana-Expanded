@@ -43,17 +43,17 @@ export async function generateValidatedPacingRevisionPageCandidate<T>(
   generate: (temperature: number) => Promise<unknown>,
   validate: (value: unknown) => T,
 ): Promise<T> {
-  let firstError: unknown;
+  const firstValue = await generate(0.45);
   try {
-    return validate(await generate(0.45));
+    return validate(firstValue);
   } catch (error) {
-    firstError = error;
-  }
-  try {
-    return validate(await generate(0.15));
-  } catch (error) {
-    const first = firstError instanceof Error ? firstError.message : String(firstError);
-    const second = error instanceof Error ? error.message : String(error);
-    throw new Error(`Page candidate validation failed twice: ${first}; ${second}`);
+    const first = error instanceof Error ? error.message : String(error);
+    const secondValue = await generate(0.15);
+    try {
+      return validate(secondValue);
+    } catch (secondError) {
+      const second = secondError instanceof Error ? secondError.message : String(secondError);
+      throw new Error(`Page candidate validation failed twice: ${first}; ${second}`);
+    }
   }
 }

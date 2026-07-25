@@ -64,6 +64,8 @@ export const pacingRevisionItemSchema = z.object({
   affected_page_numbers: z.array(z.number().int().positive().max(500)).max(500),
   generation_status: pacingRevisionGenerationStatusSchema,
   changes: z.array(pacingRevisionChangeSchema).max(1000).default([]),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
 }).strict();
 
 export const pacingRevisionSetSchema = z.object({

@@ -7736,6 +7736,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
             </p>
             <div className="flex flex-wrap gap-2">
+              {!pacingRevision.generating && pacingRevision.hasPendingCandidates && (
+                <button type="button" disabled={pacingApplyBusy} onClick={() => void pacingRevision.generatePages()} className="border border-teal-700 bg-teal-50 px-3 py-2 text-xs font-black text-teal-950 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-40">
+                  Continue generating candidates
+                </button>
+              )}
               {pacingRevision.generating && (
                 <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
                   Stop after current page
@@ -7756,10 +7761,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <WriterPacingRevisionWorkspace
             revisionSet={pacingRevision.activeSet}
             busy={pacingRevision.generating || pacingApplyBusy}
+            applying={pacingApplyBusy}
             advanced={!writerFocusedMode}
             onChange={pacingRevision.updateChange}
             onApply={applyPacingRevision}
             onRetryFailed={pacingRevision.retryFailed}
+            onNavigateToPage={(pageNumber) => {
+              const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
+              if (page) {
+                setSelectedPageId(page.id);
+                setActiveTab('beats');
+              }
+            }}
           />
         </section>
       )}
@@ -11412,6 +11425,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                             Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
                           </p>
                           <div className="flex flex-wrap gap-2">
+                            {!pacingRevision.generating && pacingRevision.hasPendingCandidates && (
+                              <button type="button" disabled={pacingApplyBusy} onClick={() => void pacingRevision.generatePages()} className="border border-teal-700 bg-teal-50 px-3 py-2 text-xs font-black text-teal-950 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-40">
+                                Continue generating candidates
+                              </button>
+                            )}
                             {pacingRevision.generating && (
                               <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
                                 Stop after current page
@@ -11431,10 +11449,18 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <WriterPacingRevisionWorkspace
                           revisionSet={pacingRevision.activeSet}
                           busy={pacingRevision.generating || pacingApplyBusy}
+                          applying={pacingApplyBusy}
                           advanced
                           onChange={pacingRevision.updateChange}
                           onApply={applyPacingRevision}
                           onRetryFailed={pacingRevision.retryFailed}
+                          onNavigateToPage={(pageNumber) => {
+                            const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
+                            if (page) {
+                              setSelectedPageId(page.id);
+                              setActiveTab('beats');
+                            }
+                          }}
                         />
                       </section>
                     )}

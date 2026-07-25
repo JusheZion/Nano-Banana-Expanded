@@ -82,12 +82,17 @@ describe('WriterPacingRevisionWorkspace', () => {
 
   it('navigates dependencies and retries failed pages only', () => {
     const onRetryFailed = vi.fn();
-    render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} />);
+    const onNavigateToPage = vi.fn();
+    render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} onNavigateToPage={onNavigateToPage} />);
     fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
     expect(screen.getByRole('note').textContent).toContain('depends on 1 earlier change');
     fireEvent.click(screen.getByRole('button', { name: 'Go to dependency' }));
     expect(screen.getByRole('tab', { name: /Live Outline/ }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Retry failed pages only' }));
     expect(onRetryFailed).toHaveBeenCalledWith([4]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry page 4' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([4]);
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 4' }));
+    expect(onNavigateToPage).toHaveBeenCalledWith(4);
   });
 });

@@ -2,6 +2,22 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Writers' Workshop — Pacing Revision Sets (2026-07-25) — RELEASE BLOCKED
+
+Detailed tracker: [`docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md`](docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md)
+
+- [x] Pass 1: Add owner-scoped revision-set, parent-item, and child-change persistence with shared client/Edge contracts.
+- [x] Pass 2: Convert saved Pacing Review results into deterministic, preview-only outline operations.
+- [x] Pass 3: Add one-page candidate generation, resumable queues, five-page checkpoints, stop-after-current-page, and failed-page recovery.
+- [x] Pass 4: Add dependency-aware decisions, staleness/lock checks, ordered apply, compensation, snapshots, and undo.
+- [x] Pass 5: Add the readable two-panel review workspace with individual editing/decisions and batch selection.
+- [x] Pass 6: Integrate the explicit `Create Revision Set` workflow into Simple Workflow and Advanced Tools.
+- [x] Local release gate: 134 test files / 827 tests, lint with 0 errors and 71 warnings, production build, and diff check passed.
+- [x] Supabase migration is applied and `writer-tools` version 102 is ACTIVE.
+- [x] Signed-in QA verified persistence across reload, edit/reset state, individual and batch decisions, page-specific retry/navigation, responsive layout, approved outline apply, and undo on the dedicated 70-page QA issue.
+- [ ] Release: hosted Page Beats/Dialogue candidate generation must complete successfully. Page 2 timed out at the bounded 75-second Gemini limit even after switching this mode to Flash Lite.
+- [ ] After the hosted smoke passes, deploy the Cloudflare frontend, verify the production URL, merge to `main`, and push `main`.
+
 ## Application-wide loading-state audit — NEXT UI UPDATE
 
 - [ ] Inventory every screen, panel, database-backed list, preview, file import, and cross-portal handoff that waits on asynchronous content.

@@ -14,10 +14,12 @@ import {
 type Props = {
   revisionSet: PacingRevisionSet;
   busy?: boolean;
+  applying?: boolean;
   advanced?: boolean;
   onChange: (changeId: string, patch: PacingRevisionDecisionPatch) => Promise<void> | void;
   onApply: () => Promise<void> | void;
   onRetryFailed?: (pages: number[]) => Promise<void> | void;
+  onNavigateToPage?: (pageNumber: number) => Promise<void> | void;
 };
 
 const LAYERS: Array<{ id: PacingRevisionLayer; label: string }> = [
@@ -99,10 +101,12 @@ function editableValue(change: PacingRevisionChange): string {
 export function WriterPacingRevisionWorkspace({
   revisionSet,
   busy = false,
+  applying = false,
   advanced = false,
   onChange,
   onApply,
   onRetryFailed,
+  onNavigateToPage,
 }: Props) {
   const allChanges = useMemo(() => flattenPacingRevisionChanges(revisionSet), [revisionSet]);
   const [layer, setLayer] = useState<PacingRevisionLayer>('outline');
@@ -151,7 +155,7 @@ export function WriterPacingRevisionWorkspace({
           onClick={() => void onApply()}
           className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? 'Applying…' : 'Apply approved changes'}
+          {applying ? 'Applying…' : 'Apply approved changes'}
         </button>
       </header>
 
@@ -178,18 +182,39 @@ export function WriterPacingRevisionWorkspace({
       </div>
 
       {revisionSet.failure_ledger.length > 0 && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
-          <span><strong>Some pages need attention:</strong> {revisionSet.failure_ledger.map((failure) => failure.page_number).join(', ')}</span>
-          {onRetryFailed && (
-            <button type="button" disabled={busy} onClick={() => void onRetryFailed(revisionSet.failure_ledger.map((failure) => failure.page_number))} className="font-black underline decoration-2 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
-              Retry failed pages only
-            </button>
-          )}
+        <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <strong>Some pages need attention.</strong>
+            {onRetryFailed && (
+              <button type="button" disabled={busy} onClick={() => void onRetryFailed(revisionSet.failure_ledger.map((failure) => failure.page_number))} className="font-black underline decoration-2 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+                Retry failed pages only
+              </button>
+            )}
+          </div>
+          <ul className="mt-3 space-y-2">
+            {revisionSet.failure_ledger.map((failure) => (
+              <li key={failure.page_number} className="flex flex-wrap items-center justify-between gap-3 border-t border-red-200 pt-2">
+                <span><strong>Page {failure.page_number}:</strong> {failure.reason}</span>
+                <span className="flex gap-3">
+                  {onNavigateToPage && (
+                    <button type="button" disabled={busy} onClick={() => void onNavigateToPage(failure.page_number)} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+                      Open page {failure.page_number}
+                    </button>
+                  )}
+                  {onRetryFailed && (
+                    <button type="button" disabled={busy} onClick={() => void onRetryFailed([failure.page_number])} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+                      Retry page {failure.page_number}
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      <div className="grid min-h-[520px] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <nav aria-label="Revision items" className="border-b border-slate-300 bg-[#e7e0d2] lg:border-b-0 lg:border-r">
+      <div className="grid min-h-[520px] grid-cols-[minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <nav aria-label="Revision items" className="min-w-0 border-b border-slate-300 bg-[#e7e0d2] lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Revision items</span>
             <span className="text-[10px] font-bold text-slate-500">{visibleItems.length}</span>
@@ -252,12 +277,12 @@ export function WriterPacingRevisionWorkspace({
                   </button>
                 </div>
               )}
-              <div className="grid gap-4 md:grid-cols-2" data-testid="revision-comparison-panels">
-                <article className="border-t-4 border-slate-500 bg-slate-100 p-4">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2" data-testid="revision-comparison-panels">
+                <article className="min-w-0 border-t-4 border-slate-500 bg-slate-100 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Current live</p>
-                  <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-800">{readableValue(activeChange.layer, activeChange.current_value)}</pre>
+                  <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-800">{readableValue(activeChange.layer, activeChange.current_value)}</pre>
                 </article>
-                <article className="border-t-4 border-amber-500 bg-amber-50 p-4">
+                <article className="min-w-0 border-t-4 border-amber-500 bg-amber-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">{activeChange.edited_candidate == null ? 'AI proposal' : 'Edited candidate'}</p>
                     <button
@@ -281,7 +306,7 @@ export function WriterPacingRevisionWorkspace({
                       </div>
                     </div>
                   ) : (
-                    <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-900">{readableValue(activeChange.layer, effectivePacingRevisionCandidate(activeChange))}</pre>
+                    <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-900">{readableValue(activeChange.layer, effectivePacingRevisionCandidate(activeChange))}</pre>
                   )}
                   {activeChange.edited_candidate != null && !editing && (
                     <button type="button" onClick={() => void onChange(activeChange.id, { edited_candidate: null })} className="mt-3 text-xs font-black text-amber-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Reset to AI proposal</button>

@@ -266,6 +266,7 @@ function extractAuthorOutlineForPrompt(notes: Record<string, unknown> | undefine
 /** Public API ids that work with AI Studio keys; preview ids last (may 400 "unexpected model name" on some keys). */
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
 const OUTLINE_TREATMENT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+const PACING_REVISION_PAGE_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-3-flash-preview',
@@ -330,6 +331,8 @@ async function callGeminiJson(args: {
   thinkingBudget?: number;
   /** Optional Gemini structured-output schema for deterministic JSON shape. */
   responseSchema?: Record<string, unknown>;
+  /** Bound the upstream model call so the Edge Function can persist a recoverable failure. */
+  requestTimeoutMs?: number;
 }): Promise<unknown> {
   const modelsToTry = [
     args.preferredModel,
@@ -352,11 +355,24 @@ async function callGeminiJson(args: {
     };
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${args.apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const requestTimeoutMs = args.requestTimeoutMs ?? 90_000;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
+    } catch (error) {
+      const name = error && typeof error === 'object' && 'name' in error
+        ? String((error as { name: unknown }).name)
+        : '';
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        throw new Error(`Gemini request timed out after ${Math.ceil(requestTimeoutMs / 1000)} seconds`);
+      }
+      throw error;
+    }
     let data: unknown;
     try {
       data = await res.json();
@@ -1748,10 +1764,11 @@ Deno.serve(async (req) => {
               'Output valid JSON only. Never modify saved content.',
             ].join(' '),
             user: prompt,
-            preferredModel: geminiModel,
+            preferredModel: PACING_REVISION_PAGE_GEMINI_MODEL,
             apiKey: geminiKey,
             temperature,
             responseSchema: PACING_REVISION_PAGE_RESPONSE_SCHEMA,
+            requestTimeoutMs: 75_000,
           }),
           (value) => {
             const parsed = pacingRegenerationPreviewResultSchema.parse(value);

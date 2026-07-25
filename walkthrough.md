@@ -13408,3 +13408,72 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Decide how edited Child Changes preserve provenance and support recovery.
+
+## Pacing Revision Set implementation and blocked release - 2026-07-25
+
+### What changed
+- Added an explicit `Create Revision Set` action after a saved Pacing Review; running the review alone remains diagnostic.
+- Added durable owner-scoped Pacing Revision Sets with parent Revision Items and independently editable/approvable/rejectable Outline, Page Beats, and Dialogue Child Changes.
+- Added deterministic outline-operation validation, one-page-per-invocation child generation, five-page checkpoints, stop/resume, completed-page skipping, persistent failure ledgers, one-page retry, failed-only retry, and page navigation.
+- Added a readable two-panel review workspace in Simple Workflow and Advanced Tools, including immutable AI proposals, edited candidates, dependency warnings, individual decisions, batch selection, explicit apply, compensation, snapshots, and undo.
+- Repaired release defects found during signed-in QA: persisted timestamp parsing, recovery controls for incomplete sets incorrectly marked ready, stopped-state persistence, transport timeout retry classification, client/server request bounds, legacy outline-beat preservation during apply, detailed failed-page actions, and mobile grid overflow.
+
+### Files touched
+- `AGENTS.md`
+- `CONTEXT.md`
+- `tasks.md`
+- `docs/adr/2026-07-25-pacing-revision-set.md`
+- `docs/superpowers/specs/2026-07-25-writer-pacing-revision-sets-design.md`
+- `docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/writerPacingRevisionOutline.ts`
+- `src/portals/writer/writerPacingRevisionQueue.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/writerTools.ts`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `supabase/migrations/20260725000000_writer_pacing_revision_sets.sql`
+- `supabase/functions/_shared/pacingRevisionSchemas.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- Focused tests beside the new modules and under `src/portals/writer/__tests__` and `src/shared/api/__tests__`.
+
+### Implementation notes
+- `Pacing Review` never changes official content. `Create Revision Set` creates persisted proposals; only explicit approved-change application promotes content.
+- The client owns the ordered page queue. Each Edge request is capped at one page, completed page candidates are skipped on resume, and an isolated failure does not discard surrounding success.
+- The apply path validates source fingerprints, locks, dependencies, and approved candidates, writes Outline before Page Beats before Dialogue, and compensates completed writes if a later write fails.
+- Legacy or unrelated malformed outline beats are preserved instead of blocking an approved edit to another valid beat.
+- The page-child mode uses Gemini 2.5 Flash Lite with a 75-second server bound and a 90-second client bound. Transport failures are not retried as malformed JSON; schema-invalid model output receives one lower-temperature repair attempt.
+
+### Verification
+- Focused red-green tests covered incomplete-ready recovery, completed-page skipping, stopped-state persistence, transport-versus-validation retry behavior, bounded client invocation, failed-page actions, legacy outline preservation, apply compensation, and responsive review behavior.
+- Consolidated regression: 134 test files and 827 individual tests passed.
+- `npm run lint`: passed with 0 errors and 71 repository warnings.
+- `npm run build`: passed with the existing large-chunk advisory (`WriterPortal` about 511 kB and `ComicPortal` about 999 kB).
+- `git diff --check`: passed.
+- Supabase migration `20260725000000_writer_pacing_revision_sets.sql` is applied to project `vxclogwiytxjolisnakd`.
+- Supabase `writer-tools` version 102 is ACTIVE.
+- Signed-in QA at `http://127.0.0.1:5174/` used the dedicated `Untitled series` Issue 1 with 70 pages and 44 saved Page Beats. The Revision Set survived reload; edit, reset-state rendering, reject, decide-later, individual approval, batch approval, page-specific failure recovery, desktop/phone/landscape containment, outline apply, and undo behaved as designed.
+- Browser logs contained no new runtime errors after the clean reload; earlier 05:02 HMR-only hook-order logs predated the final QA state.
+
+### Outstanding issues
+- **RELEASE BLOCKER:** hosted Page Beats/Dialogue candidate generation did not complete. Page 2 timed out at the bounded 75-second Gemini limit even after the mode switched to Flash Lite.
+- A successful hosted child candidate is still required before the frontend can be deployed or the branch merged.
+
+### Risks or caveats
+- The migration and additive Edge modes are live, but the client entry control is not live because the frontend was intentionally not deployed.
+- The dedicated QA Revision Set retains page-specific timeout entries so the recovery path can be resumed without touching the user's completed 70-page story.
+- The unauthenticated hosted RLS path was not directly probed in this session; the owner rules remain covered by migration review and focused persistence tests.
+
+### Operator follow-up
+- Confirm Gemini availability and the Supabase `GEMINI_API_KEY`/model service health, then retry only Page 2 on the dedicated QA Revision Set.
+- If Page 2 produces both Page Beats and Dialogue children, approve/apply/undo those children, deploy the Cloudflare frontend, verify the production URL, and merge the branch.
+
+### Next steps
+- From the preserved worktree, start `npm run dev -- --host 127.0.0.1 --port 5174 --strictPort`, open Story Review for the dedicated QA issue, and choose `Retry page 2`. Do not retry the full failed-page batch until the single-page hosted smoke succeeds.

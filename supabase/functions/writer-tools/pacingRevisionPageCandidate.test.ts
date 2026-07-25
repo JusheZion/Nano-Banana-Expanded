@@ -17,4 +17,14 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(result).toBe('She opens the door.');
     expect(generate.mock.calls.map(([temperature]) => temperature)).toEqual([0.45, 0.15]);
   });
+
+  it('does not retry transport failures as malformed model output', async () => {
+    const generate = vi.fn().mockRejectedValue(new Error('Gemini request timed out'));
+
+    await expect(generateValidatedPacingRevisionPageCandidate(
+      generate,
+      (value) => value,
+    )).rejects.toThrow('Gemini request timed out');
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
 });

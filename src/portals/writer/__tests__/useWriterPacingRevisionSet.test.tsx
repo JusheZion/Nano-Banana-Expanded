@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   get: vi.fn(),
   update: vi.fn(),
+  updateProgress: vi.fn(),
   discard: vi.fn(),
 }));
 
@@ -15,6 +16,7 @@ vi.mock('@/shared/api/writerPacingRevisionSets', () => ({
   listWriterPacingRevisionSets: mocks.list,
   getWriterPacingRevisionSet: mocks.get,
   updateWriterPacingRevisionChange: mocks.update,
+  updateWriterPacingRevisionProgress: mocks.updateProgress,
   discardWriterPacingRevisionSet: mocks.discard,
 }));
 
@@ -52,6 +54,7 @@ describe('useWriterPacingRevisionSet', () => {
     vi.clearAllMocks();
     mocks.list.mockResolvedValue({ ok: true, sets: [] });
     mocks.get.mockResolvedValue({ ok: true, set: revisionSet });
+    mocks.updateProgress.mockResolvedValue({ ok: true, set: revisionSet });
     mocks.discard.mockResolvedValue({ ok: true });
   });
 
@@ -83,5 +86,88 @@ describe('useWriterPacingRevisionSet', () => {
     const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
     await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
     expect(result.current.loading).toBe(false);
+  });
+
+  it('offers recovery when a ready set is missing page-layer candidates', async () => {
+    mocks.list.mockResolvedValue({
+      ok: true,
+      sets: [{ ...revisionSet, status: 'ready' }],
+    });
+    mocks.invoke.mockResolvedValue({
+      success: true,
+      mode: 'pacing_revision_page_preview',
+      data: {},
+    });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(
+      ISSUE_ID,
+      [{ id: PAGE_ID, page_number: 1 }],
+    ));
+    await waitFor(() => expect(result.current.activeSet?.status).toBe('ready'));
+
+    expect(result.current.hasPendingCandidates).toBe(true);
+    await act(async () => { await result.current.generatePages(); });
+
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).toHaveBeenCalledWith({
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: PAGE_ID,
+    });
+  });
+
+  it('skips pages that already have both Page Beats and Dialogue candidates', async () => {
+    mocks.list.mockResolvedValue({
+      ok: true,
+      sets: [{
+        ...revisionSet,
+        status: 'partially_ready',
+        items: [{
+          ...revisionSet.items[0]!,
+          changes: [
+            {
+              id: '10000000-0000-4000-8000-000000000005',
+              item_id: ITEM_ID,
+              layer: 'beats',
+              target_key: `page:${PAGE_ID}`,
+              page_id: PAGE_ID,
+              page_number: 1,
+              current_value: {},
+              ai_proposal: { panels: [{ action: 'Open' }] },
+              edited_candidate: null,
+              decision: 'pending',
+              dependency_ids: [],
+              reason: 'Improve pacing.',
+              source_fingerprint: 'beats-source',
+              generation_status: 'ready',
+            },
+            {
+              id: '10000000-0000-4000-8000-000000000006',
+              item_id: ITEM_ID,
+              layer: 'dialogue',
+              target_key: `page:${PAGE_ID}`,
+              page_id: PAGE_ID,
+              page_number: 1,
+              current_value: '',
+              ai_proposal: 'CAPTION: Open.',
+              edited_candidate: null,
+              decision: 'pending',
+              dependency_ids: [],
+              reason: 'Improve pacing.',
+              source_fingerprint: 'dialogue-source',
+              generation_status: 'ready',
+            },
+          ],
+        }],
+      }],
+    });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(
+      ISSUE_ID,
+      [{ id: PAGE_ID, page_number: 1 }],
+    ));
+    await waitFor(() => expect(result.current.activeSet).not.toBeNull());
+
+    expect(result.current.hasPendingCandidates).toBe(false);
+    await act(async () => { await result.current.generatePages(); });
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });

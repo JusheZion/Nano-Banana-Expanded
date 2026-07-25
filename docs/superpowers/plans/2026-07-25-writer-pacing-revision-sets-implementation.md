@@ -13,7 +13,7 @@
 ## Risk and Dependency Check
 
 - Preserve the intentional dirty `AGENTS.md`, `tasks.md`, `walkthrough.md`, and handoff changes.
-- Work only on `codex/pacing-revision-set`.
+- Implement in the isolated `codex/pacing-revision-set-impl` worktree; preserve the design/continuity branch history.
 - Use the authenticated Supabase CLI fallback because Supabase MCP is not exposed.
 - Use the dedicated QA account and persistent QA issue; never mutate the user's completed 70-page issue.
 - Keep every page-generation Edge invocation capped at one page.
@@ -404,13 +404,13 @@ git commit -m "feat: connect pacing review to live story revisions"
 
 **Acceptance criteria:** Migration and Edge deploy succeed; bounded QA set survives reload; apply and undo work on disposable QA data; full tests/lint/build pass; no blocking UX defect remains.
 
-- [ ] Apply the migration to the linked Supabase project and verify tables/RLS using owner and unauthenticated paths.
-- [ ] Deploy `writer-tools`; confirm ACTIVE version increased from 97.
-- [ ] Start Vite at the registered strict port and perform browser QA with the dedicated QA account.
-- [ ] Capture production-viewport top/middle/bottom evidence plus phone and landscape views.
+- [x] Apply the migration to the linked Supabase project. Owner-scoped RLS is covered by the migration and focused persistence tests; a separate unauthenticated hosted SQL probe was not available in this session.
+- [x] Deploy `writer-tools`; ACTIVE version increased from 97 to 102.
+- [x] Start Vite at the registered strict port and perform browser QA with the dedicated QA account.
+- [x] Capture production-viewport top/middle/bottom evidence plus phone and landscape views.
 - [ ] Exercise keyboard order, focus, contrast, overlap, edit/reset, individual and batch decisions, checkpoint continuation, isolated failure recovery, reload/resume, apply, and undo.
 - [ ] Run one bounded hosted smoke on disposable QA pages only.
-- [ ] Run the consolidated final gate once:
+- [x] Run the consolidated final gate once:
 
 ```bash
 npm run test -- --run
@@ -419,18 +419,18 @@ npm run build
 git diff --check
 ```
 
-- [ ] Record test-file and individual-test counts separately, lint warning baseline, build advisory, deployed versions, URLs, and live-smoke outcome.
-- [ ] Perform the final ReAct, QA, UI/UX, DOX, and walkthrough audit.
-- [ ] Update `AGENTS.md` only for durable contracts, `tasks.md` for completion state, and `walkthrough.md` with the immediate implementation record.
-- [ ] Commit final documentation, push `codex/pacing-revision-set`, merge into `main`, push `main`, deploy the final Cloudflare bundle if client code changed, and verify the live URL.
+- [x] Record test-file and individual-test counts separately, lint warning baseline, build advisory, deployed versions, URLs, and live-smoke outcome.
+- [x] Perform the final ReAct, QA, UI/UX, DOX, and walkthrough audit.
+- [x] Update `AGENTS.md` only for durable contracts, `tasks.md` for completion state, and `walkthrough.md` with the immediate implementation record.
+- [ ] Commit final documentation, push `codex/pacing-revision-set-impl`, merge into `main`, push `main`, deploy the final Cloudflare bundle if client code changed, and verify the live URL.
 
-**Smoke result summary:** Record local and production results; if any required check fails, do not merge and leave the branch with an exact recovery command.
+**Smoke result summary — 2026-07-25:** Local release gates passed: 134 test files / 827 tests, lint with 0 errors and 71 warnings, production build with the existing `WriterPortal`/`ComicPortal` chunk advisory, and `git diff --check`. Supabase migration is live and `writer-tools` version 102 is ACTIVE. Signed-in QA on the dedicated 70-page issue proved reload/resume, readable comparison, edited-candidate provenance, individual and batch decisions, mobile/landscape containment, outline apply, and undo. The hosted page-child smoke remains blocked: Page 2 timed out at the explicit 75-second Gemini bound after the mode was moved to Flash Lite. The failure ledger, one-page retry, failed-only retry, and no-promotion recovery all worked. Per the release gate, do not merge or deploy the frontend until one Page Beats and Dialogue candidate completes successfully.
 
 ## Final Completion Checklist
 
-- [ ] Every pass checklist and smoke result is complete.
-- [ ] Both audits and the final audit have no unresolved blocker.
-- [ ] The diff passes focused tests, full regression, lint, build, and browser QA.
-- [ ] Supabase migration/function and Cloudflare client deployment are live and verified.
+- [ ] Every pass checklist and smoke result is complete. Pass 7 is blocked on hosted candidate generation.
+- [ ] Both audits and the final audit have no unresolved blocker. Gemini latency remains blocking.
+- [x] The diff passes focused tests, full regression, lint, build, and available browser QA.
+- [ ] Supabase migration/function and Cloudflare client deployment are live and verified. Supabase is live; the frontend is intentionally not deployed.
 - [ ] Branch commits are pushed and successfully merged to `main`.
 - [ ] Walkthrough and operator continuity records identify deployed versions, verification, risks, and the next action.

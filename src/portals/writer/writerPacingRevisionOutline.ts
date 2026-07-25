@@ -72,16 +72,20 @@ export async function buildPacingRevisionOutlineFromApprovedChanges(args: {
 }): Promise<Record<string, unknown>> {
   const source = asRecord(args.sourceOutline);
   const sourceBeats = Array.isArray(source.page_beats) ? source.page_beats : [];
-  const working = await Promise.all(sourceBeats.map(async (rawBeat, index) => {
+  const working: Array<{ id: string; beat: unknown }> = await Promise.all(sourceBeats.map(async (rawBeat, index) => {
     const beat = readBeat(rawBeat);
-    if (!beat) throw new Error(`Source outline beat ${index + 1} is invalid.`);
-    const text = [
-      beat.scene ? `Scene: ${beat.scene}` : '',
-      beat.summary,
-      beat.emotional_turn ? `Emotional turn: ${beat.emotional_turn}` : '',
-    ].filter(Boolean).join('\n');
+    const text = beat
+      ? [
+          beat.scene ? `Scene: ${beat.scene}` : '',
+          beat.summary,
+          beat.emotional_turn ? `Emotional turn: ${beat.emotional_turn}` : '',
+        ].filter(Boolean).join('\n')
+      : JSON.stringify(rawBeat);
     const digest = await sha256Hex(`${index + 1}\u0000${text}`);
-    return { id: `beat_${digest.slice(0, 24)}`, beat };
+    return {
+      id: `${beat ? 'beat' : 'legacy'}_${digest.slice(0, 24)}`,
+      beat: rawBeat,
+    };
   }));
 
   for (const change of args.approvedOutlineChanges) {
@@ -122,7 +126,14 @@ export async function buildPacingRevisionOutlineFromApprovedChanges(args: {
 
   return {
     ...source,
-    page_beats: working.map((entry, index) => ({ ...entry.beat, page_target: index + 1 })),
+    page_beats: working.map((entry, index) => {
+      const record = asRecord(entry.beat);
+      const beat = readBeat(entry.beat);
+      if (Object.keys(record).length > 0) {
+        return { ...record, ...(beat ?? {}), page_target: index + 1 };
+      }
+      return entry.beat;
+    }),
     pacing_revision_manifest: {
       revision_set_id: args.revisionSetId,
       applied_change_ids: args.approvedOutlineChanges.map((change) => change.id),

@@ -169,4 +169,52 @@ describe('applyPacingRevisionSet', () => {
       page_beats: [{ page_target: 1, summary: 'The door bursts open.' }],
     });
   });
+
+  it('preserves unrelated legacy beats instead of blocking an approved edit', async () => {
+    const editableSummary = 'The warning arrives.';
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(`2\u0000${editableSummary}`),
+    );
+    const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const itemId = crypto.randomUUID();
+    const approved = {
+      id: crypto.randomUUID(),
+      item_id: itemId,
+      layer: 'outline' as const,
+      target_key: 'outline:edit-warning',
+      current_value: [{ summary: editableSummary }],
+      ai_proposal: {
+        operation: {
+          operation_id: 'edit-warning',
+          operation: 'edit',
+          source_beat_ids: [`beat_${hex.slice(0, 24)}`],
+          summary: 'The warning names the danger.',
+        },
+        proposed_beat: { summary: 'The warning names the danger.' },
+      },
+      edited_candidate: null,
+      decision: 'approved' as const,
+      dependency_ids: [],
+      reason: 'Clarify the warning.',
+      source_fingerprint: 'source',
+      generation_status: 'ready' as const,
+    };
+
+    const result = await buildPacingRevisionOutlineFromApprovedChanges({
+      sourceOutline: {
+        page_beats: [
+          { page: 1, text: 'Legacy beat without a summary field.' },
+          { summary: editableSummary },
+        ],
+      },
+      approvedOutlineChanges: [approved],
+      revisionSetId: '10000000-0000-4000-8000-000000000001',
+    });
+
+    expect(result.page_beats).toEqual([
+      { page: 1, text: 'Legacy beat without a summary field.', page_target: 1 },
+      { summary: 'The warning names the danger.', page_target: 2 },
+    ]);
+  });
 });

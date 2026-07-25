@@ -128,4 +128,25 @@ describe('invokeWriterTools token refresh behavior', () => {
       expect.objectContaining({ body }),
     );
   });
+
+  it('bounds the one-page pacing revision invocation', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const freshToken = makeJwt({ role: 'authenticated', exp: now + 3600 });
+    const body: WriterToolsRequest = {
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
+      page_id: '550e8400-e29b-41d4-a716-446655440001',
+    };
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: freshToken, refresh_token: 'refresh-token' } },
+      error: null,
+    });
+
+    await invokeWriterTools(body);
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      'writer-tools',
+      expect.objectContaining({ body, timeout: 90_000 }),
+    );
+  });
 });
