@@ -117,3 +117,54 @@ export async function discardWriterPacingRevisionSet(setId: string): Promise<{ o
     return { ok: false, error: message(error) };
   }
 }
+
+export async function completeWriterPacingRevisionSet(
+  setId: string,
+  appliedChangeIds: string[],
+  snapshot: unknown,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const now = new Date().toISOString();
+    const { error: changesError } = await supabase
+      .from('writer_pacing_revision_changes')
+      .update({ generation_status: 'applied', applied_at: now })
+      .in('id', appliedChangeIds);
+    if (changesError) return { ok: false, error: changesError.message };
+    const { error: setError } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ status: 'applied', apply_snapshot: snapshot, recovery_status: null })
+      .eq('id', setId);
+    if (setError) {
+      await supabase
+        .from('writer_pacing_revision_changes')
+        .update({ generation_status: 'ready', applied_at: null })
+        .in('id', appliedChangeIds);
+      return { ok: false, error: setError.message };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function reopenWriterPacingRevisionSetAfterUndo(
+  setId: string,
+  appliedChangeIds: string[],
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { error: changesError } = await supabase
+      .from('writer_pacing_revision_changes')
+      .update({ generation_status: 'ready', applied_at: null })
+      .in('id', appliedChangeIds);
+    if (changesError) return { ok: false, error: changesError.message };
+    const { error: setError } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ status: 'ready', recovery_status: 'undone' })
+      .eq('id', setId);
+    return setError ? { ok: false, error: setError.message } : { ok: true };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}

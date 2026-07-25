@@ -11,7 +11,7 @@ type ApplyWriters = {
   buildOutline: (approvedOutlineChanges: PacingRevisionChange[]) => Promise<unknown>;
   writeOutline: (outline: unknown) => Promise<void>;
   writeBeats: (pageId: string, value: unknown) => Promise<void>;
-  writeDialogue: (pageId: string, value: string) => Promise<void>;
+  writeDialogue: (pageId: string, value: string | null) => Promise<void>;
 };
 
 export type PacingRevisionApplySnapshot = {
@@ -36,7 +36,7 @@ export async function applyPacingRevisionSet(args: {
     args.currentFingerprints.get(pacingRevisionFingerprintKey(change)) !== change.source_fingerprint
   );
   if (stale) throw new Error(`Change ${stale.target_key} is stale. Refresh the Revision Set.`);
-  const locked = approved.find((change) => args.lockedTargetKeys.has(change.target_key));
+  const locked = approved.find((change) => args.lockedTargetKeys.has(pacingRevisionFingerprintKey(change)));
   if (locked) throw new Error(`Change ${locked.target_key} is locked.`);
 
   const outlineChanges = approved.filter((change) => change.layer === 'outline');
@@ -69,7 +69,7 @@ export async function applyPacingRevisionSet(args: {
       await args.writers.writeDialogue(change.page_id, value);
       completed.push(() => args.writers.writeDialogue(
         change.page_id!,
-        typeof change.current_value === 'string' ? change.current_value : '',
+        typeof change.current_value === 'string' ? change.current_value : null,
       ));
     }
   } catch (error) {
@@ -92,6 +92,6 @@ export async function undoPacingRevisionApply(
   await writers.writeOutline(snapshot.outline);
   for (const beat of snapshot.beats) await writers.writeBeats(beat.pageId, beat.value);
   for (const dialogue of snapshot.dialogue) {
-    await writers.writeDialogue(dialogue.pageId, dialogue.value ?? '');
+    await writers.writeDialogue(dialogue.pageId, dialogue.value);
   }
 }

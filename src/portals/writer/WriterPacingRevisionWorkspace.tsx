@@ -87,6 +87,15 @@ function editedCandidateFromText(change: PacingRevisionChange, text: string): un
   };
 }
 
+function editableValue(change: PacingRevisionChange): string {
+  const value = effectivePacingRevisionCandidate(change);
+  if (change.layer === 'outline') {
+    const summary = proposedBeat(value).summary;
+    return typeof summary === 'string' ? summary : '';
+  }
+  return readableValue(change.layer, value);
+}
+
 export function WriterPacingRevisionWorkspace({
   revisionSet,
   busy = false,
@@ -254,7 +263,7 @@ export function WriterPacingRevisionWorkspace({
                     <button
                       type="button"
                       onClick={() => {
-                        setDraft(readableValue(activeChange.layer, effectivePacingRevisionCandidate(activeChange)));
+                        setDraft(editableValue(activeChange));
                         setEditing(true);
                       }}
                       className="text-[10px] font-black underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"

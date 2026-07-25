@@ -368,33 +368,35 @@ git commit -m "feat: add pacing revision review workspace"
 
 **Acceptance criteria:** Entry is discoverable in Simple and Advanced modes; loading is distinct from empty; refresh preserves valid content; duplicate/destructive controls disable correctly; all recovery actions are reachable.
 
-- [ ] Write failing integration tests for the hook and WriterPortal Story Review entry.
-- [ ] Implement `useWriterPacingRevisionSet.ts` with persisted refresh, queue lifecycle, announcements, and active-set selection.
-- [ ] Integrate `Create Revision Set`, scope confirmation, progress checkpoints, workspace, discard, apply, and undo into `WriterPortal.tsx`.
-- [ ] Add focused accessibility coverage to `writerOverlaysAccessibility.test.tsx`.
-- [ ] Run:
+- [x] Write failing integration tests for the hook and WriterPortal Story Review entry.
+- [x] Implement `useWriterPacingRevisionSet.ts` with persisted refresh, queue lifecycle, announcements, and active-set selection.
+- [x] Integrate `Create Revision Set`, scope confirmation, progress checkpoints, workspace, discard, apply, and undo into `WriterPortal.tsx`.
+- [x] Add focused accessibility coverage to `writerOverlaysAccessibility.test.tsx`.
+- [x] Run:
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/writerOverlaysAccessibility.test.tsx
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add src/portals/writer/useWriterPacingRevisionSet.ts src/portals/writer/WriterPortal.tsx src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx src/portals/writer/__tests__/writerOverlaysAccessibility.test.tsx
 git commit -m "feat: connect pacing review to live story revisions"
 ```
 
-**Smoke result summary:** Record Simple/Advanced entry, loading, recovery, and accessibility evidence.
+**Smoke result summary:** PASS — 4 focused files and 12 individual tests passed, followed by a 17-file/89-test Writer regression. Simple Workflow and Advanced Tools both expose `Create Revision Set` only after a saved Pacing Review, distinguish loading/generating/error/resumed states, hide duplicate creation while an active set exists, checkpoint every five pages, preserve valid content while refreshing, and expose stop, failed-only retry, discard, dependency-safe apply, and persisted undo. Browser QA confirmed the signed-in 70-page Writer workspace and both Story Review modes; pre-migration loading correctly surfaced a specific missing-table error rather than an empty state.
 
 ## Audit 2 — Midpoint and Six-Pass Audit
 
-- [ ] Audit code boundaries and reduce any new module that mixes persistence, generation, UI, and apply responsibilities.
-- [ ] Audit ReAct behavior: every AI action must expose observation, persisted progress, and a recoverable next action.
-- [ ] Audit UI/UX against the accepted companion mockup and project style.
-- [ ] Audit loading, empty, failed, stale, locked, permission, and partial-success states.
-- [ ] Run focused regression for all new test files plus existing pacing preview, outline treatment, Page Beats, Dialogue, and Writer bridge tests.
-- [ ] Repair every blocking or high-severity finding before release work.
+- [x] Audit code boundaries and reduce any new module that mixes persistence, generation, UI, and apply responsibilities.
+- [x] Audit ReAct behavior: every AI action must expose observation, persisted progress, and a recoverable next action.
+- [x] Audit UI/UX against the accepted companion mockup and project style.
+- [x] Audit loading, empty, failed, stale, locked, permission, and partial-success states.
+- [x] Run focused regression for all new test files plus existing pacing preview, outline treatment, Page Beats, Dialogue, and Writer bridge tests.
+- [x] Repair every blocking or high-severity finding before release work.
+
+**Audit 2 result:** PASS after two repairs. The feature remains separated into persistence, deterministic outline planning, one-page generation, queue, decision model, apply/undo, hook, and view modules. Every AI action has visible observation and a persisted recovery route. The accepted parent/child and two-panel hierarchy is preserved in both modes. Review found (1) an outline edit draft could duplicate scene/emotional text inside the summary and (2) a set-status write failure could leave change rows marked applied after official-content compensation; both were corrected. Loading, empty, failed, partial, stale, locked, applied, undo, and retry states are reachable. Focused regression: 17 files / 89 tests passed; TypeScript, focused ESLint with zero errors, and `git diff --check` passed.
 
 ## Pass 7 — Deployment, Production QA, Regression, and Merge
 

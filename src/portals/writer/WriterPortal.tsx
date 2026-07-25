@@ -58,6 +58,10 @@ import {
   type WriterVideoShotPlanRow,
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
+import {
+  completeWriterPacingRevisionSet,
+  reopenWriterPacingRevisionSetAfterUndo,
+} from '@/shared/api/writerPacingRevisionSets';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { uploadImageFileToArcsGenerations } from '@/shared/api/arcsPersistence';
 import { useAuth } from '@/shared/context/AuthContext';
@@ -87,6 +91,8 @@ import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterS
 import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
 import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
+import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
+import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import {
@@ -195,6 +201,16 @@ import {
 } from '@/portals/writer/writerDraftPersistence';
 import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/portals/writer/writerRegenerationScope';
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
+import {
+  applyPacingRevisionSet,
+  pacingRevisionFingerprintKey,
+  undoPacingRevisionApply,
+  type PacingRevisionApplySnapshot,
+} from '@/portals/writer/writerPacingRevisionApply';
+import {
+  buildPacingRevisionOutlineFromApprovedChanges,
+  fingerprintPacingRevisionValue,
+} from '@/portals/writer/writerPacingRevisionOutline';
 import { persistReviewedOutlineVersion } from '@/portals/writer/writerOutlinePasteApply';
 import { mergeOutlineAlternateIntoNotes } from '@/portals/writer/writerOutlineAlternates';
 import {
@@ -2534,6 +2550,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     () => [...pages].sort((a, b) => a.page_number - b.page_number),
     [pages],
   );
+  const pacingRevision = useWriterPacingRevisionSet(selectedIssueId, sortedPages);
 
   const beatsPickOrdered = useMemo(() => {
     const sel = new Set(beatsPickPageIds);
@@ -3432,6 +3449,195 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     },
     [refreshPagesForIssue, guardWriterLock, pushHistory],
   );
+
+  const applyPacingRevision = useCallback(async () => {
+    const revisionSet = pacingRevision.activeSet;
+    if (!revisionSet || !selectedIssueId || !latestOutline) return;
+    setPacingApplyBusy(true);
+    setPacingApplyError(null);
+    let createdOutline: WriterIssueOutlineRow | null = null;
+    try {
+      const allChanges = revisionSet.items.flatMap((item) => item.changes);
+      const pageById = new Map(sortedPages.map((page) => [page.id, page]));
+      const currentFingerprints = new Map<string, string>();
+      for (const change of allChanges) {
+        if (change.layer === 'outline') {
+          currentFingerprints.set(
+            pacingRevisionFingerprintKey(change),
+            await fingerprintPacingRevisionValue(latestOutline.outline_json),
+          );
+        } else {
+          const page = change.page_id ? pageById.get(change.page_id) : null;
+          const currentValue = change.layer === 'beats' ? page?.beats_json : page?.script_text;
+          currentFingerprints.set(
+            pacingRevisionFingerprintKey(change),
+            await fingerprintPacingRevisionValue(currentValue ?? null),
+          );
+        }
+      }
+      const lockedTargetKeys = new Set<string>();
+      for (const change of allChanges) {
+        if (change.layer === 'outline' && writerLocks['outline.latest']) {
+          lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
+        }
+        if (change.page_id && change.layer === 'beats' && writerLocks[writerPageBeatsLockKey(change.page_id)]) {
+          lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
+        }
+        if (change.page_id && change.layer === 'dialogue' && writerLocks[writerPageDialogueLockKey(change.page_id)]) {
+          lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
+        }
+      }
+      const result = await applyPacingRevisionSet({
+        set: revisionSet,
+        currentFingerprints,
+        lockedTargetKeys,
+        writers: {
+          buildOutline: (approvedOutlineChanges) => buildPacingRevisionOutlineFromApprovedChanges({
+            sourceOutline: revisionSet.source_outline_json,
+            approvedOutlineChanges,
+            revisionSetId: revisionSet.id,
+          }),
+          writeOutline: async (outline) => {
+            if (createdOutline && outline === revisionSet.source_outline_json) {
+              const rollback = await deleteWriterOutlineById({
+                issueId: selectedIssueId,
+                outlineId: createdOutline.id,
+              });
+              if (!rollback.ok) throw new Error(rollback.error);
+              createdOutline = null;
+              return;
+            }
+            const saved = await createWriterOutlineVersion({
+              issueId: selectedIssueId,
+              outlineJson: outline as Record<string, unknown>,
+              sourceMode: 'pacing_revision',
+              expectedPreviousId: latestOutline.id,
+            });
+            if (!saved.ok) throw new Error(saved.error);
+            createdOutline = saved.row;
+          },
+          writeBeats: async (pageId, value) => {
+            const ok = await updateWriterPageBeatsJson(
+              pageId,
+              value && typeof value === 'object' && !Array.isArray(value)
+                ? value as Record<string, unknown>
+                : null,
+            );
+            if (!ok) throw new Error(`Could not save Page Beats for ${pageId}.`);
+          },
+          writeDialogue: async (pageId, value) => {
+            if (!await updateWriterPageScriptText(pageId, value)) {
+              throw new Error(`Could not save Dialogue for ${pageId}.`);
+            }
+          },
+        },
+      });
+      const durableSnapshot = {
+        ...result.snapshot,
+        appliedIds: result.appliedIds,
+        outlineApplied: Boolean(createdOutline),
+        appliedOutlineId: createdOutline?.id ?? null,
+      };
+      const completed = await completeWriterPacingRevisionSet(
+        revisionSet.id,
+        result.appliedIds,
+        durableSnapshot,
+      );
+      if (!completed.ok) {
+        await undoPacingRevisionApply(result.snapshot, {
+          writeOutline: async () => {
+            if (!createdOutline) return;
+            const rollback = await deleteWriterOutlineById({
+              issueId: selectedIssueId,
+              outlineId: createdOutline.id,
+            });
+            if (!rollback.ok) throw new Error(rollback.error);
+            createdOutline = null;
+          },
+          writeBeats: async (pageId, value) => {
+            if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
+              throw new Error(`Could not restore Page Beats for ${pageId}.`);
+            }
+          },
+          writeDialogue: async (pageId, value) => {
+            if (!await updateWriterPageScriptText(pageId, value)) {
+              throw new Error(`Could not restore Dialogue for ${pageId}.`);
+            }
+          },
+        });
+        throw new Error(completed.error);
+      }
+      setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
+      await refreshPagesForIssue();
+      await pacingRevision.refresh(revisionSet.id);
+      pushHistory(`applied pacing Revision Set (${result.appliedIds.length} change(s))`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not apply the Revision Set.';
+      setPacingApplyError(message);
+      pushHistory(`error: pacing Revision Set apply — ${message}`);
+    } finally {
+      setPacingApplyBusy(false);
+    }
+  }, [
+    latestOutline,
+    pacingRevision,
+    pushHistory,
+    refreshPagesForIssue,
+    selectedIssueId,
+    sortedPages,
+    writerLocks,
+  ]);
+
+  const undoPacingRevision = useCallback(async () => {
+    const revisionSet = pacingRevision.activeSet;
+    if (!revisionSet?.apply_snapshot || !selectedIssueId) return;
+    const snapshot = revisionSet.apply_snapshot as PacingRevisionApplySnapshot & {
+      appliedIds?: string[];
+      outlineApplied?: boolean;
+    };
+    setPacingApplyBusy(true);
+    setPacingApplyError(null);
+    try {
+      const latest = (await listWriterOutlinesForIssue(selectedIssueId))[0] ?? null;
+      await undoPacingRevisionApply(snapshot, {
+        writeOutline: async (outline) => {
+          if (!snapshot.outlineApplied) return;
+          const saved = await createWriterOutlineVersion({
+            issueId: selectedIssueId,
+            outlineJson: outline as Record<string, unknown>,
+            sourceMode: 'pacing_revision',
+            expectedPreviousId: latest?.id ?? null,
+          });
+          if (!saved.ok) throw new Error(saved.error);
+        },
+        writeBeats: async (pageId, value) => {
+          if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
+            throw new Error(`Could not restore Page Beats for ${pageId}.`);
+          }
+        },
+        writeDialogue: async (pageId, value) => {
+          if (!await updateWriterPageScriptText(pageId, value)) {
+            throw new Error(`Could not restore Dialogue for ${pageId}.`);
+          }
+        },
+      });
+      const reopened = await reopenWriterPacingRevisionSetAfterUndo(
+        revisionSet.id,
+        snapshot.appliedIds ?? [],
+      );
+      if (!reopened.ok) throw new Error(reopened.error);
+      setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
+      await refreshPagesForIssue();
+      await pacingRevision.refresh(revisionSet.id);
+      pushHistory('undid pacing Revision Set');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not undo the Revision Set.';
+      setPacingApplyError(message);
+      pushHistory(`error: pacing Revision Set undo — ${message}`);
+    } finally {
+      setPacingApplyBusy(false);
+    }
+  }, [pacingRevision, pushHistory, refreshPagesForIssue, selectedIssueId]);
 
   const runLibraryDeleteSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
@@ -7490,9 +7696,69 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <div className="mt-5 min-h-[150px] rounded-lg bg-white/90 p-5 text-sm text-black">
               {review.saved?.result ? <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">{JSON.stringify(review.saved.result, null, 2)}</pre> : <div className="flex min-h-[110px] flex-col items-center justify-center gap-4 text-center"><p className="font-semibold text-black/42">No {review.title.toLowerCase()} results available.</p><button type="button" disabled={!selectedIssueId || review.loading} onClick={() => void review.action()} className={`${review.title === 'Pacing Review' ? (!pacingSaved ? 'writer-attention-simple' : '') : (pacingSaved && !canonSaved ? 'writer-attention-simple' : '')} rounded-lg px-5 py-2.5 text-xs font-black text-black disabled:opacity-45`} style={{ background: ACCENT_GOLD_GRADIENT }}>{review.loading ? 'Running…' : review.button}</button></div>}
             </div>
+            {review.title === 'Pacing Review' && review.saved?.result && !pacingRevision.activeSet && (
+              <div className="mt-4 border-l-4 border-amber-500 bg-amber-50/85 px-4 py-3">
+                <p className="text-xs font-bold text-slate-800">Ready to turn this diagnosis into reviewable story changes.</p>
+                <button
+                  type="button"
+                  disabled={pacingRevision.generating || pacingRevision.loading}
+                  onClick={() => void pacingRevision.create()}
+                  className="mt-2 bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-40"
+                >
+                  {pacingRevision.generating ? 'Creating Revision Set…' : 'Create Revision Set'}
+                </button>
+              </div>
+            )}
           </section>
         ))}
       </div>
+
+      {(pacingRevision.loading || pacingRevision.generating) && (
+        <div role="status" className="border-l-4 border-teal-600 bg-white/80 px-5 py-4 text-sm font-bold text-slate-800">
+          {pacingRevision.generating
+            ? 'Building revision candidates one page at a time. Completed work is saved every five pages.'
+            : 'Loading the saved Pacing Revision Set…'}
+        </div>
+      )}
+      {(pacingRevision.error || pacingApplyError) && (
+        <div role="alert" className="border-l-4 border-red-600 bg-red-50 px-5 py-4 text-sm text-red-900">
+          <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
+        </div>
+      )}
+      {pacingRevision.activeSet && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-bold text-slate-700">
+              Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {pacingRevision.generating && (
+                <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
+                  Stop after current page
+                </button>
+              )}
+              {pacingRevision.activeSet.status === 'applied' && pacingRevision.activeSet.apply_snapshot != null && (
+                <button type="button" disabled={pacingApplyBusy} onClick={() => void undoPacingRevision()} className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:opacity-40">
+                  Undo applied set
+                </button>
+              )}
+              {pacingRevision.activeSet.status !== 'applied' && (
+                <button type="button" disabled={pacingRevision.generating || pacingApplyBusy} onClick={() => void pacingRevision.discard()} className="px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40">
+                  Discard set
+                </button>
+              )}
+            </div>
+          </div>
+          <WriterPacingRevisionWorkspace
+            revisionSet={pacingRevision.activeSet}
+            busy={pacingRevision.generating || pacingApplyBusy}
+            advanced={!writerFocusedMode}
+            onChange={pacingRevision.updateChange}
+            onApply={applyPacingRevision}
+            onRetryFailed={pacingRevision.retryFailed}
+          />
+        </section>
+      )}
 
       <section className={`${WRITER_GLASS_CARD} p-6`}>
         <h3 className="font-serif text-2xl font-semibold text-slate-950">Readiness Summary</h3>
@@ -11104,13 +11370,70 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{pacingError}</p>
                       )}
                       {pacingSaved?.result ? (
-                        <p className="text-[10px] text-black/45">
-                          Last run{pacingSaved.at ? ` — ${pacingSaved.at}` : ''} — see combined output below.
-                        </p>
+                        <>
+                          <p className="text-[10px] text-black/45">
+                            Last run{pacingSaved.at ? ` — ${pacingSaved.at}` : ''} — see combined output below.
+                          </p>
+                          {!pacingRevision.activeSet && (
+                            <button
+                              type="button"
+                              disabled={pacingRevision.generating || pacingRevision.loading}
+                              onClick={() => void pacingRevision.create()}
+                              className="border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-black text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-40"
+                            >
+                              {pacingRevision.generating ? 'Creating Revision Set…' : 'Create Revision Set'}
+                            </button>
+                          )}
+                        </>
                       ) : (
                         <p className="text-xs text-black/50">No pacing review yet for this issue.</p>
                       )}
                     </div>
+                    {(pacingRevision.loading || pacingRevision.generating) && (
+                      <div role="status" className="border-l-4 border-teal-600 bg-white/80 px-4 py-3 text-xs font-bold text-slate-800">
+                        {pacingRevision.generating
+                          ? 'Building revision candidates one page at a time. Completed work is saved every five pages.'
+                          : 'Loading the saved Pacing Revision Set…'}
+                      </div>
+                    )}
+                    {(pacingRevision.error || pacingApplyError) && (
+                      <div role="alert" className="border-l-4 border-red-600 bg-red-50 px-4 py-3 text-xs text-red-900">
+                        <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
+                      </div>
+                    )}
+                    {pacingRevision.activeSet && (
+                      <section className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs font-bold text-slate-700">
+                            Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {pacingRevision.generating && (
+                              <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
+                                Stop after current page
+                              </button>
+                            )}
+                            {pacingRevision.activeSet.status === 'applied' && pacingRevision.activeSet.apply_snapshot != null ? (
+                              <button type="button" disabled={pacingApplyBusy} onClick={() => void undoPacingRevision()} className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:opacity-40">
+                                Undo applied set
+                              </button>
+                            ) : (
+                              <button type="button" disabled={pacingRevision.generating || pacingApplyBusy} onClick={() => void pacingRevision.discard()} className="px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40">
+                                Discard set
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <WriterPacingRevisionWorkspace
+                          revisionSet={pacingRevision.activeSet}
+                          busy={pacingRevision.generating || pacingApplyBusy}
+                          advanced
+                          onChange={pacingRevision.updateChange}
+                          onApply={applyPacingRevision}
+                          onRetryFailed={pacingRevision.retryFailed}
+                        />
+                      </section>
+                    )}
                     <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Canon check</p>
                       <button

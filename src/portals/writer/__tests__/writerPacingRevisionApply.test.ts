@@ -5,6 +5,7 @@ import {
   pacingRevisionFingerprintKey,
   undoPacingRevisionApply,
 } from '../writerPacingRevisionApply';
+import { buildPacingRevisionOutlineFromApprovedChanges } from '../writerPacingRevisionOutline';
 
 function fixture() {
   const itemId = crypto.randomUUID();
@@ -120,5 +121,52 @@ describe('applyPacingRevisionSet', () => {
     expect(writeOutline).toHaveBeenCalledWith('old');
     expect(writeBeats).toHaveBeenCalledWith('page', { panels: [] });
     expect(writeDialogue).toHaveBeenCalledWith('page', 'OLD');
+  });
+
+  it('builds an official outline from approved operations only and preserves metadata', async () => {
+    const text = 'The door stays closed.';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`1\u0000${text}`));
+    const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const itemId = crypto.randomUUID();
+    const approved = {
+      id: crypto.randomUUID(),
+      item_id: itemId,
+      layer: 'outline' as const,
+      target_key: 'outline:edit-opening',
+      current_value: [{ summary: text }],
+      ai_proposal: {
+        operation: {
+          operation_id: 'edit-opening',
+          operation: 'edit',
+          source_beat_ids: [`beat_${hex.slice(0, 24)}`],
+          summary: 'The door bursts open.',
+        },
+        proposed_beat: { summary: 'The door bursts open.' },
+      },
+      edited_candidate: null,
+      decision: 'approved' as const,
+      dependency_ids: [],
+      reason: 'Open faster.',
+      source_fingerprint: 'source',
+      generation_status: 'ready' as const,
+    };
+    const result = await buildPacingRevisionOutlineFromApprovedChanges({
+      sourceOutline: {
+        title: 'Issue One',
+        premise: 'A sealed room.',
+        acts: [{ name: 'Act I' }],
+        notes: 'Keep the reveal.',
+        page_beats: [{ page_target: 1, summary: text }],
+      },
+      approvedOutlineChanges: [approved],
+      revisionSetId: '10000000-0000-4000-8000-000000000001',
+    });
+    expect(result).toMatchObject({
+      title: 'Issue One',
+      premise: 'A sealed room.',
+      acts: [{ name: 'Act I' }],
+      notes: 'Keep the reveal.',
+      page_beats: [{ page_target: 1, summary: 'The door bursts open.' }],
+    });
   });
 });
