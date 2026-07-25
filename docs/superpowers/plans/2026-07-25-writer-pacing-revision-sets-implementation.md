@@ -43,7 +43,7 @@
 
 **Acceptance criteria:** Owner RLS is explicit; three-state values, decisions, dependencies, progress, failures, fingerprints, and recovery snapshots validate on both runtimes.
 
-- [ ] **Step 1: Write failing schema tests**
+- [x] **Step 1: Write failing schema tests**
 
 Create `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts` with cases that parse a complete set and reject an edited candidate without an AI proposal:
 
@@ -63,7 +63,7 @@ expect(pacingRevisionChildChangeSchema.parse({
 })).toMatchObject({ layer: 'beats', decision: 'pending' });
 ```
 
-- [ ] **Step 2: Run the schema test and confirm failure**
+- [x] **Step 2: Run the schema test and confirm failure**
 
 Run:
 
@@ -73,7 +73,7 @@ npm run test -- --run src/shared/writer/__tests__/pacingRevisionSchemas.test.ts
 
 Expected: FAIL because `pacingRevisionSchemas.ts` does not exist.
 
-- [ ] **Step 3: Add the migration**
+- [x] **Step 3: Add the migration**
 
 Create `supabase/migrations/20260725000000_writer_pacing_revision_sets.sql` with:
 
@@ -130,7 +130,7 @@ create table public.writer_pacing_revision_changes (
 
 Add indexes, updated-at triggers, RLS, and `FOR ALL` policies using `writer_issues → writer_series.owner_id = auth.uid()` for all three tables.
 
-- [ ] **Step 4: Implement mirrored Zod schemas**
+- [x] **Step 4: Implement mirrored Zod schemas**
 
 Create the client and Edge schema files with identical enums and payload shapes. Export:
 
@@ -155,7 +155,7 @@ export const pacingRevisionChildChangeSchema = z.object({
 });
 ```
 
-- [ ] **Step 5: Add CRUD API tests and implementation**
+- [x] **Step 5: Add CRUD API tests and implementation**
 
 Create `src/shared/api/__tests__/writerPacingRevisionSets.test.ts` around injected Supabase responses, then create `src/shared/api/writerPacingRevisionSets.ts` exporting:
 
@@ -167,7 +167,7 @@ updateWriterPacingRevisionProgress(setId: string, progress: ProgressPatch)
 discardWriterPacingRevisionSet(setId: string)
 ```
 
-- [ ] **Step 6: Run the Pass 1 smoke test**
+- [x] **Step 6: Run the Pass 1 smoke test**
 
 Run:
 
@@ -177,14 +177,14 @@ npm run test -- --run src/shared/writer/__tests__/pacingRevisionSchemas.test.ts 
 
 Expected: both files pass; record file and individual-test counts in the checklist.
 
-- [ ] **Step 7: Commit Pass 1**
+- [x] **Step 7: Commit Pass 1**
 
 ```bash
 git add supabase/migrations/20260725000000_writer_pacing_revision_sets.sql src/shared/writer/pacingRevisionSchemas.ts src/shared/writer/__tests__/pacingRevisionSchemas.test.ts supabase/functions/_shared/pacingRevisionSchemas.ts src/shared/api/writerPacingRevisionSets.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts
 git commit -m "feat: persist pacing revision sets"
 ```
 
-**Smoke result summary:** Record the exact passing files/tests and confirm no runtime UI behavior changed.
+**Smoke result summary:** PASS — 2 focused files and 5 individual tests passed. Persistence contracts and owner RLS were added; no runtime UI behavior changed.
 
 ## Pass 2 — Deterministic Outline Revision Preview
 
