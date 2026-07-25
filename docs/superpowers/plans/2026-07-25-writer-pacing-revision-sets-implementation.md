@@ -192,11 +192,11 @@ git commit -m "feat: persist pacing revision sets"
 
 **Acceptance criteria:** The model returns operations only; untouched source beats survive exactly once; invalid operations are rejected individually; items own non-overlapping affected pages.
 
-- [ ] **Step 1: Write failing prompt and patch tests**
+- [x] **Step 1: Write failing prompt and patch tests**
 
 Create `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts` covering a 70-beat source, eight returned operations, invalid IDs, duplicate page ownership, and no-material-change edits.
 
-- [ ] **Step 2: Run the focused test and confirm failure**
+- [x] **Step 2: Run the focused test and confirm failure**
 
 ```bash
 npm run test -- --run supabase/functions/writer-tools/pacingRevisionPrompt.test.ts
@@ -204,7 +204,7 @@ npm run test -- --run supabase/functions/writer-tools/pacingRevisionPrompt.test.
 
 Expected: FAIL because the pacing revision prompt module is missing.
 
-- [ ] **Step 3: Implement the outline planning contract**
+- [x] **Step 3: Implement the outline planning contract**
 
 Create `pacingRevisionPrompt.ts`. Reuse `applyOutlineTreatmentPatches` and require:
 
@@ -222,15 +222,15 @@ type PacingRevisionPlan = {
 
 Normalize overlapping pages by merging their intents before patch application. Derive Outline Child Changes from accepted operation notices and the immutable source.
 
-- [ ] **Step 4: Add request/result schemas and Writer tool mode**
+- [x] **Step 4: Add request/result schemas and Writer tool mode**
 
 Extend client and Edge writer schemas with `pacing_revision_outline_preview`. In `index.ts`, load the saved Pacing Review and full source outline, call Gemini JSON with structured output, apply operations deterministically, insert set/items/outline changes, and return the hydrated set.
 
-- [ ] **Step 5: Add endpoint tests**
+- [x] **Step 5: Add endpoint tests**
 
 Extend `src/shared/api/__tests__/writerTools.test.ts` and add an Edge helper test proving the mode is preview-only and does not insert `writer_issue_outlines`.
 
-- [ ] **Step 6: Run the Pass 2 smoke test**
+- [x] **Step 6: Run the Pass 2 smoke test**
 
 ```bash
 npm run test -- --run supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/outlineTreatmentPatch.test.ts src/shared/api/__tests__/writerTools.test.ts
@@ -238,14 +238,14 @@ npm run test -- --run supabase/functions/writer-tools/pacingRevisionPrompt.test.
 
 Expected: all focused tests pass.
 
-- [ ] **Step 7: Commit Pass 2**
+- [x] **Step 7: Commit Pass 2**
 
 ```bash
 git add supabase/functions/writer-tools/pacingRevisionPrompt.ts supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/index.ts supabase/functions/_shared/writerSchemas.ts src/shared/writer/schemas.ts src/shared/writer/types.ts src/shared/api/__tests__/writerTools.test.ts
 git commit -m "feat: preview pacing outline revisions"
 ```
 
-**Smoke result summary:** Record accepted/rejected operation coverage and confirm the official outline remains unchanged.
+**Smoke result summary:** PASS — 4 focused files and 21 individual tests passed. The deterministic engine preserved a 70-beat source while accepting valid operations and rejecting invalid or cosmetic edits individually. The persistence spy confirmed preview creation writes only Revision Set tables and never inserts an official outline. `npx tsc --noEmit` and `git diff --check` also passed.
 
 ## Pass 3 — Resumable Page Candidate Queue
 

@@ -56,6 +56,11 @@ export type WriterToolsOutlineTreatmentPreviewPayload = {
   protected_terms?: string[];
 };
 
+export type WriterToolsPacingRevisionOutlinePreviewPayload = {
+  mode: 'pacing_revision_outline_preview';
+  issue_id: string;
+};
+
 export type OutlineTreatmentPreviewResult = {
   proposal: IssueOutline;
   manifest: {
@@ -240,6 +245,7 @@ export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsOutlineClassificationPreviewPayload
   | WriterToolsOutlineTreatmentPreviewPayload
+  | WriterToolsPacingRevisionOutlinePreviewPayload
   | WriterToolsPageBeatsPayload
   | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload

@@ -192,6 +192,11 @@ export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
   protected_terms: z.array(z.string().min(1).max(200)).max(250).optional(),
 }).strict();
 
+export const writerToolsPacingRevisionOutlinePreviewRequestSchema = z.object({
+  mode: z.literal('pacing_revision_outline_preview'),
+  issue_id: z.string().uuid(),
+}).strict();
+
 export const outlineTreatmentPreviewResultSchema = z.object({
   overall_assessment: z.string().min(40).max(2400),
   section_reviews: z.array(outlineTreatmentSectionReviewSchema).min(1).max(10),
@@ -577,6 +582,7 @@ export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
   writerToolsOutlineIssueRequestSchema,
   writerToolsOutlineClassificationPreviewRequestSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,
+  writerToolsPacingRevisionOutlinePreviewRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,

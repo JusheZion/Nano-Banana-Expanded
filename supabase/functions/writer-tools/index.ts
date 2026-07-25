@@ -8,6 +8,7 @@ import {
   outlineClassificationPreviewResultSchema,
   outlineTreatmentPatchResultSchema,
   outlineTreatmentPreviewResultSchema,
+  pacingRevisionPlanSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
@@ -29,6 +30,11 @@ import {
   generatePageBeatsJsonWithMalformedRetry,
   PAGE_BEATS_GEMINI_RESPONSE_SCHEMA,
 } from './pageBeatsStructuredOutput.ts';
+import {
+  buildPacingRevisionOutlinePreview,
+  buildPacingRevisionOutlinePrompt,
+} from './pacingRevisionPrompt.ts';
+import { persistPacingRevisionOutlinePreview } from './pacingRevisionPersistence.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -73,6 +79,39 @@ function mergeWriterToolCache(
 
 function readWriterToolCache(notes: unknown): Record<string, unknown> {
   return asJsonObject(asJsonObject(notes).writer_tool_cache);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function normalizePacingRevisionSourceBeats(outline: unknown) {
+  const record = asJsonObject(outline);
+  const rawBeats = Array.isArray(record.page_beats) ? record.page_beats : [];
+  return Promise.all(rawBeats.flatMap((rawBeat, index) => {
+    const beat = asJsonObject(rawBeat);
+    const summary = typeof beat.summary === 'string' ? beat.summary.trim() : '';
+    if (!summary) return [];
+    const scene = typeof beat.scene === 'string' ? beat.scene.trim() : '';
+    const emotionalTurn = typeof beat.emotional_turn === 'string' ? beat.emotional_turn.trim() : '';
+    const text = [
+      scene ? `Scene: ${scene}` : '',
+      summary,
+      emotionalTurn ? `Emotional turn: ${emotionalTurn}` : '',
+    ].filter(Boolean).join('\n');
+    const ordinal = index + 1;
+    const pageTarget = typeof beat.page_target === 'number' && Number.isInteger(beat.page_target)
+      ? beat.page_target
+      : undefined;
+    return [sha256Hex(`${ordinal}\u0000${text}`).then((digest) => ({
+      id: `beat_${digest.slice(0, 24)}`,
+      ordinal,
+      ...(pageTarget ? { page_target: pageTarget } : {}),
+      text,
+    }))];
+  }));
 }
 
 type WriterVisualReferenceKind = 'character' | 'location' | 'prop';
@@ -1395,6 +1434,203 @@ Deno.serve(async (req) => {
       return Response.json(
         { success: false, error: 'Invalid JWT', details: authErr.message },
         { status: 401, headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'pacing_revision_outline_preview') {
+      const { issue_id } = parsedReq.data;
+      const issue = await loadIssueRow(supabase, issue_id);
+      if (!issue) {
+        return Response.json(
+          { success: false, error: 'Issue not found' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const cachedPacingReview = asJsonObject(readWriterToolCache(issue.notes).pacing_review);
+      const pacingReview = cachedPacingReview.result;
+      if (pacingReview == null) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Run Pacing Review first',
+            details: 'Create Revision Set requires a saved Pacing Review for this issue.',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const { data: outlineRow, error: outlineError } = await supabase
+        .from('writer_issue_outlines')
+        .select('id, outline_json')
+        .eq('issue_id', issue_id)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (outlineError) {
+        return Response.json(
+          { success: false, error: 'Failed to load the Live Outline', details: outlineError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      if (!outlineRow?.outline_json) {
+        return Response.json(
+          { success: false, error: 'Live Outline not found' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const sourceBeats = await normalizePacingRevisionSourceBeats(outlineRow.outline_json);
+      if (sourceBeats.length === 0) {
+        return Response.json(
+          { success: false, error: 'Live Outline has no page beats' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const sourcePageCount = Math.max(
+        sourceBeats.length,
+        ...sourceBeats.map((beat) => beat.page_target ?? 0),
+      );
+      const promptInput = {
+        treatmentMode: 'structure' as const,
+        sourcePageCount,
+        allowedPageRange: {
+          min: Math.max(1, Math.floor(sourcePageCount * 0.9)),
+          max: Math.min(200, Math.max(sourcePageCount, Math.ceil(sourcePageCount * 1.1))),
+        },
+        sourceBeats,
+        protectedTerms: [] as string[],
+        pacingReview,
+      };
+      let planJson: unknown;
+      try {
+        planJson = await callGeminiJson({
+          system: [
+            'You are a careful comics pacing editor.',
+            'Return a preview-only revision plan as valid JSON.',
+            'Never return a replacement outline.',
+          ].join(' '),
+          user: buildPacingRevisionOutlinePrompt(promptInput),
+          preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL,
+          apiKey: geminiKey,
+          temperature: 0.35,
+          thinkingBudget: 0,
+        });
+      } catch (error) {
+        return llmFailureResponse(error instanceof Error ? error.message : String(error));
+      }
+      const normalizedPlan = normalizeOutlineTreatmentPatchResult(planJson);
+      const parsedPlan = pacingRevisionPlanSchema.safeParse(normalizedPlan);
+      if (!parsedPlan.success) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing revision plan failed validation',
+            details: parsedPlan.error.message,
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const preview = buildPacingRevisionOutlinePreview(parsedPlan.data, promptInput);
+      if (preview.outlineChanges.length === 0) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing Review produced no usable outline changes',
+            details: 'The deterministic validator rejected every proposed change.',
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const proposedOutline = {
+        ...asJsonObject(outlineRow.outline_json),
+        ...preview.patch.proposal,
+      };
+      const sourceFingerprint = await sha256Hex(JSON.stringify(outlineRow.outline_json));
+      const affectedPages = [...new Set(
+        preview.items.flatMap((item) => item.affected_page_numbers),
+      )].sort((a, b) => a - b);
+      const revisionSetId = crypto.randomUUID();
+      const itemIdByModelId = new Map(
+        preview.items.map((item) => [item.item_id, crypto.randomUUID()]),
+      );
+      const now = new Date().toISOString();
+      const revisionSetRow = {
+        id: revisionSetId,
+        issue_id,
+        source_outline_id: outlineRow.id,
+        status: 'partially_ready',
+        pacing_review_json: pacingReview,
+        source_outline_json: outlineRow.outline_json,
+        proposed_outline_json: proposedOutline,
+        source_fingerprint: sourceFingerprint,
+        progress_json: {
+          total_pages: affectedPages.length,
+          completed_pages: [],
+          current_page: null,
+          stopped: false,
+        },
+        failure_ledger: [],
+        created_at: now,
+        updated_at: now,
+      };
+      const itemRows = preview.items.map((item, position) => ({
+        id: itemIdByModelId.get(item.item_id)!,
+        revision_set_id: revisionSetId,
+        position,
+        title: item.title,
+        rationale: item.rationale,
+        affected_page_numbers: item.affected_page_numbers,
+        generation_status: 'pending',
+        created_at: now,
+        updated_at: now,
+      }));
+      const outlineChangeRows = preview.outlineChanges.map((change) => ({
+        id: crypto.randomUUID(),
+        item_id: itemIdByModelId.get(change.item_id)!,
+        layer: 'outline',
+        target_key: change.target_key,
+        page_id: null,
+        page_number: change.page_number,
+        current_value: change.current_value,
+        ai_proposal: change.ai_proposal,
+        edited_candidate: null,
+        decision: 'pending',
+        dependency_ids: [],
+        reason: change.reason,
+        source_fingerprint: sourceFingerprint,
+        generation_status: 'ready',
+        applied_at: null,
+        created_at: now,
+        updated_at: now,
+      }));
+      const persistence = await persistPacingRevisionOutlinePreview(
+        supabase,
+        revisionSetRow,
+        itemRows,
+        outlineChangeRows,
+      );
+      if (!persistence.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: persistence.stage === 'set'
+              ? 'Failed to create Revision Set'
+              : 'Failed to save the Revision Set',
+            details: persistence.error,
+          },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const hydratedItems = itemRows.map((item) => ({
+        ...item,
+        changes: outlineChangeRows.filter((change) => change.item_id === item.id),
+      }));
+      return Response.json(
+        {
+          success: true,
+          mode: 'pacing_revision_outline_preview',
+          issue_id,
+          data: { ...revisionSetRow, items: hydratedItems },
+        },
+        { headers: corsHeaders },
       );
     }
 
