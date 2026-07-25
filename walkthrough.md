@@ -13267,3 +13267,144 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue generating the remaining Page Beats after confirming the failed spread page now saves.
+
+## Deferred UI requirements: resilient Page Beats and copy controls - 2026-07-24
+
+### What changed
+- Added a requirement for Page Beats multi-page generation to continue after isolated page failures rather than stopping the remaining queue.
+- Required an end-of-run summary that lists every failed page and plain-language reason while preserving successfully generated pages before and after each failure.
+- Added recovery actions to navigate to a failed page, retry one page, or retry failed pages only without regenerating successful work.
+- Added an application-wide inventory for dense or reusable text surfaces that should receive consistent corner copy controls.
+
+### Files touched
+- `AGENTS.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Continuing past an isolated failure improves throughput and produces neighboring successful pages that can help diagnose why one page behaved differently.
+- Copy controls should preserve useful plain text and meaningful line breaks. They must include keyboard access, accessible labeling, visible focus, and copied/error feedback.
+- Raw implementation metadata should remain excluded unless the user is intentionally viewing an Advanced Tools data surface.
+
+### Verification
+- Confirmed both requirements are recorded in the root DOX contract.
+- Confirmed the implementation checklist is present in the `NEXT UI UPDATE` section at the top of `tasks.md`.
+- No runtime code, deployment, or product behavior changed in this documentation-only update.
+
+### Outstanding issues
+- Both requirements remain deferred until the next UI implementation pass.
+
+### Risks or caveats
+- Page Beats generation still stops on the first page-specific generation error until the queued-failure behavior is implemented.
+- Copy controls remain inconsistent or absent across some dense-text surfaces until the UI inventory is completed.
+
+### Operator follow-up
+- Include both requirements in the acceptance criteria and signed-in browser QA for the next UI update.
+
+### Next steps
+- Implement the queued Page Beats failure ledger and application-wide copy-control pattern during the next UI update.
+
+## Dialogue transition handoff checkpoint - 2026-07-24
+
+### What changed
+- Used the `$handoff` skill to create a next-chat continuation artifact at `.agents/handoffs/2026-07-24-writers-workshop-dialogue-transition-handoff.md`.
+- Recorded the checkpoint after the user completed all 70 Page Beats and before Dialogue production begins.
+- Preserved the intentional uncommitted UI-requirement changes in `AGENTS.md`, `tasks.md`, and `walkthrough.md`.
+- Documented the current Dialogue batch architecture, access state, deployed versions, verification evidence, and the first safety check for the next chat.
+
+### Files touched
+- `.agents/handoffs/2026-07-24-writers-workshop-dialogue-transition-handoff.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Dialogue batches already continue after individual failures, but currently retain only aggregate error counts.
+- Dialogue still lacks the structured-output and malformed-JSON recovery safeguards added to Page Beats, and its five-request concurrent groups have not received current production QA.
+- The user's completed 70-page Page Beats data must not be mutated during QA; use the persistent demo account first.
+
+### Verification
+- Refreshed branch, commit, dirty-tree, tracker, Dialogue code-path, GitHub auth, Cloudflare auth/deployment, Supabase function version, and live URL evidence before writing the handoff.
+- Confirmed the live URL returned HTTP 200.
+- Confirmed `writer-tools` is ACTIVE at Supabase version 97.
+- Confirmed the handoff records the intentional dirty files and one exact next action.
+- No runtime code, tests, build, deployment, or live Dialogue generation was performed for this documentation-only handoff.
+
+### Outstanding issues
+- Dialogue structured-output enforcement, malformed-JSON recovery, page-specific failure reporting, and current production smoke remain pending.
+
+### Risks or caveats
+- Five concurrent Dialogue requests may create quota or hosted-load pressure; this has not been validated against the current 70-page QA issue.
+
+### Operator follow-up
+- None before the next chat begins; current CLI access is sufficient.
+
+### Next steps
+- Begin the next chat with a focused failing Dialogue regression before any multi-page production generation.
+
+## Pacing Revision Set workflow decision - 2026-07-24
+
+### What changed
+- Confirmed that the current Story Review has no complete review-safe action that connects a Pacing Review to the Live Outline, Page Beats, and Dialogue.
+- Selected an explicit `Create Revision Set` action after Pacing Review instead of automatically generating or applying downstream changes.
+- Established canonical domain terms for the diagnostic review, proposed revision set, explicit creation action, and approved live story layers.
+
+### Files touched
+- `CONTEXT.md`
+- `AGENTS.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `Pacing Review` remains diagnostic and cannot change story content.
+- `Create Revision Set` is a separate user action that may generate proposed connected changes.
+- A `Pacing Revision Set` remains isolated from the `Live Story` until the user approves changes.
+- This is a product-design decision only; no runtime implementation or persistence behavior changed.
+
+### Verification
+- Confirmed `CONTEXT.md` defines each resolved term without implementation details.
+- Confirmed the root DOX index identifies `CONTEXT.md` as the domain-language record.
+- No runtime tests, build, deployment, or hosted mutation were needed for this documentation-only decision.
+
+### Outstanding issues
+- The granularity and dependency rules for individual revision items still need user confirmation.
+
+### Risks or caveats
+- The current Story Review continues to expose only the existing partial pacing workflow until implementation is approved and completed.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Decide whether each reviewable item is one cross-layer editorial change or separate unrelated changes per story layer.
+
+## Pacing Revision Item hierarchy decision - 2026-07-25
+
+### What changed
+- Approved a parent/child review model for Pacing Revision Sets.
+- Defined each parent `Revision Item` around one editorial intent, with independently reviewable `Child Changes` for the Outline, Page Beats, and Dialogue.
+- Required dependency warnings when a user's child-level approvals or rejections would leave the proposed cross-layer revision inconsistent.
+
+### Files touched
+- `CONTEXT.md`
+- `walkthrough.md`
+
+### Implementation notes
+- A Revision Item groups related downstream effects without forcing the user to accept them together.
+- Every Child Change remains independently editable, approvable, or rejectable.
+- Dependency warnings inform the user about inconsistent selections but do not silently approve, reject, or rewrite another Child Change.
+- This is a product-design decision only; no runtime implementation or persistence behavior changed.
+
+### Verification
+- Confirmed the new glossary terms are domain concepts and contain no implementation details.
+- Confirmed the existing root DOX index already identifies `CONTEXT.md` as the domain-language record, so no further AGENTS.md change was required.
+- `git diff --check -- CONTEXT.md walkthrough.md` passed.
+
+### Outstanding issues
+- The design still needs a decision on whether user edits preserve the original AI proposal as a separate review state.
+
+### Risks or caveats
+- Allowing independent decisions can create cross-layer inconsistencies; the eventual interface must make dependency warnings prominent and actionable.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Decide how edited Child Changes preserve provenance and support recovery.
