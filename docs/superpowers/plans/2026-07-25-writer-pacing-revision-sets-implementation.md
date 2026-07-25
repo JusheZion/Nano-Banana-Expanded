@@ -344,23 +344,23 @@ git commit -m "feat: apply pacing revisions safely"
 
 **Acceptance criteria:** Two distinct panels, direct edit/reset, individual and batch decisions, item/layer navigation, accessible statuses, responsive stacking, and no raw JSON in Simple Workflow.
 
-- [ ] Write failing component tests in `WriterPacingRevisionWorkspace.test.tsx` for current/proposed headings, edit/reset, approve/reject, batch counts, dependency navigation, failed-page retry, and phone stacking classes.
-- [ ] Implement `WriterPacingRevisionWorkspace.tsx` with semantic navigation, tabs, status regions, alerts, selection checkboxes, primary buttons, and matching overflow actions.
-- [ ] Keep technical data inside an `Advanced details` disclosure controlled by an `advanced` prop.
-- [ ] Run:
+- [x] Write failing component tests in `WriterPacingRevisionWorkspace.test.tsx` for current/proposed headings, edit/reset, approve/reject, batch counts, dependency navigation, failed-page retry, and phone stacking classes.
+- [x] Implement `WriterPacingRevisionWorkspace.tsx` with semantic navigation, tabs, status regions, alerts, selection checkboxes, primary buttons, and matching overflow actions.
+- [x] Keep technical data inside an `Advanced details` disclosure controlled by an `advanced` prop.
+- [x] Run:
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add src/portals/writer/WriterPacingRevisionWorkspace.tsx src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx
 git commit -m "feat: add pacing revision review workspace"
 ```
 
-**Smoke result summary:** Record component test counts and confirm Simple Workflow contains no implementation metadata.
+**Smoke result summary:** PASS — 2 focused files and 6 individual tests passed. The workspace exposes semantic tabs/navigation, a polite status region, visible focus, separate `Current live` and `AI proposal` panels that stack below `md`, readable layer-specific text without JSON, direct edit/reset, individual and counted batch decisions, dependency navigation, and failed-only retry. The UI-critic pass ranked apply eligibility, decision-state visibility, batch clarity, dense navigation, and raw-data leakage as the highest risks; revisions added dependency-aware apply enablement, pressed states, counted actions, compact three-zone hierarchy, and Advanced-only technical data.
 
 ## Pass 6 — Story Review Integration and UX States
 

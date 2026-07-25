@@ -92,6 +92,7 @@ export const pacingRevisionDecisionPatchSchema = z.object({
 });
 
 export type PacingRevisionChange = z.infer<typeof pacingRevisionChangeSchema>;
+export type PacingRevisionLayer = z.infer<typeof pacingRevisionLayerSchema>;
 export type PacingRevisionItem = z.infer<typeof pacingRevisionItemSchema>;
 export type PacingRevisionSet = z.infer<typeof pacingRevisionSetSchema>;
 export type PacingRevisionDecisionPatch = z.infer<typeof pacingRevisionDecisionPatchSchema>;
