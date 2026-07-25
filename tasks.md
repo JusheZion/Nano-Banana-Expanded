@@ -11,6 +11,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [ ] Add accessible progress/status announcements plus explicit failure, retry, and recovery states.
 - [ ] Verify slow-load behavior across all portals with throttled or delayed responses, including file parsing and preview generation.
 - [ ] Confirm Page Beats never temporarily reports saved pages as empty while their saved beat data is still loading.
+- [ ] Change Page Beats multi-page generation so an isolated page failure is recorded and skipped rather than stopping the remaining queue.
+- [ ] Preserve every successful Page Beats result before and after a failed page, then show one end-of-run summary listing each failed page and its plain-language reason.
+- [ ] Add end-of-run actions to jump to a failed page, retry one failed page, or retry failed pages only; do not regenerate successful pages.
+- [ ] Verify the Page Beats failure summary remains available long enough to compare the failed page with its successfully generated neighboring pages.
+- [ ] Inventory panels, cards, previews, editors, error details, generated outputs, prompts, and other surfaces containing dense or reusable text.
+- [ ] Add a consistent corner copy button to appropriate text surfaces, with an accessible name, keyboard access, tooltip, visible focus, and copied/error feedback.
+- [ ] Copy useful plain text rather than hidden metadata or decorative labels, preserving meaningful line breaks for pasting elsewhere inside or outside the portal.
 
 ## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — COMPLETE
 
