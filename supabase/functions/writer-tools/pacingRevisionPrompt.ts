@@ -133,7 +133,7 @@ export function buildPacingRevisionOutlinePreview(
       item_id: operation.item_id,
       operation_id: operation.operation_id,
       target_key: `outline:${operation.operation_id}`,
-      page_number: manifest?.proposed_page ?? null,
+      page_number: typeof manifest?.proposed_page === 'number' ? manifest.proposed_page : null,
       current_value: current,
       ai_proposal: {
         operation,

@@ -3456,6 +3456,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     let createdOutline: WriterIssueOutlineRow | null = null;
+    let createdOutlineId: string | null = null;
     try {
       const allChanges = revisionSet.items.flatMap((item) => item.changes);
       const pageById = new Map(sortedPages.map((page) => [page.id, page]));
@@ -3505,6 +3506,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               });
               if (!rollback.ok) throw new Error(rollback.error);
               createdOutline = null;
+              createdOutlineId = null;
               return;
             }
             const saved = await createWriterOutlineVersion({
@@ -3515,6 +3517,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             });
             if (!saved.ok) throw new Error(saved.error);
             createdOutline = saved.row;
+            createdOutlineId = saved.row.id;
           },
           writeBeats: async (pageId, value) => {
             const ok = await updateWriterPageBeatsJson(
@@ -3536,7 +3539,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ...result.snapshot,
         appliedIds: result.appliedIds,
         outlineApplied: Boolean(createdOutline),
-        appliedOutlineId: createdOutline?.id ?? null,
+        appliedOutlineId: createdOutlineId,
       };
       const completed = await completeWriterPacingRevisionSet(
         revisionSet.id,
@@ -3553,6 +3556,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             });
             if (!rollback.ok) throw new Error(rollback.error);
             createdOutline = null;
+            createdOutlineId = null;
           },
           writeBeats: async (pageId, value) => {
             if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
@@ -7696,7 +7700,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <div className="mt-5 min-h-[150px] rounded-lg bg-white/90 p-5 text-sm text-black">
               {review.saved?.result ? <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed">{JSON.stringify(review.saved.result, null, 2)}</pre> : <div className="flex min-h-[110px] flex-col items-center justify-center gap-4 text-center"><p className="font-semibold text-black/42">No {review.title.toLowerCase()} results available.</p><button type="button" disabled={!selectedIssueId || review.loading} onClick={() => void review.action()} className={`${review.title === 'Pacing Review' ? (!pacingSaved ? 'writer-attention-simple' : '') : (pacingSaved && !canonSaved ? 'writer-attention-simple' : '')} rounded-lg px-5 py-2.5 text-xs font-black text-black disabled:opacity-45`} style={{ background: ACCENT_GOLD_GRADIENT }}>{review.loading ? 'Running…' : review.button}</button></div>}
             </div>
-            {review.title === 'Pacing Review' && review.saved?.result && !pacingRevision.activeSet && (
+            {review.title === 'Pacing Review' && Boolean(review.saved?.result) && !pacingRevision.activeSet && (
               <div className="mt-4 border-l-4 border-amber-500 bg-amber-50/85 px-4 py-3">
                 <p className="text-xs font-bold text-slate-800">Ready to turn this diagnosis into reviewable story changes.</p>
                 <button

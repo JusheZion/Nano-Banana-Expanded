@@ -1,4 +1,4 @@
-import { z } from 'npm:zod@3.23.8';
+import { z } from 'npm:zod@3.24.2';
 
 export const pacingRevisionLayerSchema = z.enum(['outline', 'beats', 'dialogue']);
 export const pacingRevisionDecisionSchema = z.enum(['pending', 'approved', 'rejected']);

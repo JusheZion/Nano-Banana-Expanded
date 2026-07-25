@@ -234,7 +234,7 @@ export const pacingRevisionPlanSchema = z.object({
   operations: z.array(outlineTreatmentPatchOperationSchema.extend({
     item_id: z.string().min(1).max(160),
   })).max(250),
-}).strict();
+}).passthrough();
 
 export const outlineTreatmentPreviewResultSchema = z.object({
   proposal: issueOutlineSchema,
