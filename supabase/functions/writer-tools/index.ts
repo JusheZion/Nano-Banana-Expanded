@@ -266,7 +266,7 @@ function extractAuthorOutlineForPrompt(notes: Record<string, unknown> | undefine
 /** Public API ids that work with AI Studio keys; preview ids last (may 400 "unexpected model name" on some keys). */
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
 const OUTLINE_TREATMENT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const PACING_REVISION_PAGE_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+const PACING_REVISION_PAGE_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-3-flash-preview',

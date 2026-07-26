@@ -13477,3 +13477,44 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - From the preserved worktree, start `npm run dev -- --host 127.0.0.1 --port 5174 --strictPort`, open Story Review for the dedicated QA issue, and choose `Retry page 2`. Do not retry the full failed-page batch until the single-page hosted smoke succeeds.
+
+## Pacing Revision Page 2 hosted retry and model diagnosis - 2026-07-26
+
+### What changed
+- Re-ran only the dedicated QA Revision Set's Page 2 child-generation smoke; no failed-page batch retry was used.
+- Confirmed that the silent Supabase CLI behavior was a macOS Keychain authorization wait, not part of the application request path.
+- Replaced the retired `gemini-2.5-flash-lite` Page 2 candidate model with the key-supported stable `gemini-3.1-flash-lite`.
+- Added a focused regression assertion that keeps the bounded Pacing Revision page-preview branch on the verified stable model.
+- Deployed `writer-tools` version 104 with the model correction.
+
+### Files touched
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The QA account, Supabase database reads/writes, Revision Set persistence, failure ledger, and browser recovery flow all remained operational.
+- A no-story-content provider health probe showed `gemini-2.5-flash-lite` returns HTTP 404 with a retirement message for this key.
+- The key's model list includes stable `gemini-3.1-flash-lite`; a minimal structured-output probe returned HTTP 200 in 3.3 seconds.
+- The full Page 2 call still requests Page Beats and Dialogue together with pacing, outline, page, cast, location, style, and lore context. That combined contract remains the leading latency suspect.
+
+### Verification
+- Red-green check: the stable-model regression assertion failed against `gemini-2.5-flash-lite`, then passed after selecting `gemini-3.1-flash-lite`.
+- `npm test -- supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`: 1 test file and 3 tests passed.
+- Supabase CLI deployment completed, and `writer-tools` version 104 reported `ACTIVE`.
+- Signed-in browser QA at `http://127.0.0.1:5174/` confirmed each retry stayed single-page, disabled duplicate controls while running, preserved the prior Outline proposal, created no Page Beats or Dialogue changes on failure, and restored page-specific retry/navigation afterward.
+- Browser console inspection returned no warnings or errors.
+
+### Outstanding issues
+- **RELEASE BLOCKER:** the v104 Page 2 request still timed out at the explicit 75-second Gemini boundary. Page Beats and Dialogue remain at zero candidates.
+- The final apply/undo child-change smoke could not run because no hosted child proposals were produced.
+
+### Risks or caveats
+- Do not raise the timeout or submit another Page 2 retry without changing the request contract; repeated model and timeout adjustments have not resolved the full call.
+- `writer-tools` v104 is live, but the frontend remains intentionally undeployed and draft PR #27 must not be merged while the hosted child-generation gate is blocked.
+
+### Operator follow-up
+- Decide whether to split Page Beats and Dialogue into separately bounded child requests while retaining the same one-page client queue, dependency ordering, two-panel review, and explicit apply behavior.
+
+### Next steps
+- Prepare and approve a small bridge plan for separate Page Beats and Dialogue generation, including partial-success persistence and retry-one-layer behavior, before further implementation or hosted retries.
