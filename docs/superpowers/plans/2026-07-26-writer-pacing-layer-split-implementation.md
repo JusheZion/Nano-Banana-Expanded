@@ -385,6 +385,8 @@ Audit:
 
 **Pass 5 regression result:** PASS — the first consolidated run exposed a test-only readiness race in the new Beats-edit refresh regression (839 of 840 tests passed). Waiting for the Revision Set to load before invoking the hook corrected the setup; the focused 8-test hook suite then passed, followed by the complete 134-file/840-test gate.
 
-- [ ] **Step 7: Update continuity records and finish the branch**
+- [x] **Step 7: Update continuity records and finish the branch**
 
 Update `walkthrough.md` with actual evidence and mark this plan's completed checkboxes. Commit and push. Merge draft PR #27 and deploy the frontend only if every hosted and consolidated gate passes; otherwise leave the PR draft and report the exact blocker.
+
+**Release result:** PASS — the reviewed branch was pushed, PR #27 was updated with actual evidence and marked ready, and Cloudflare deployed version `086cd53e-18ab-4c7a-b85e-845d4dc4b651` to `https://asset-reference-comics-studio.onyxzion.workers.dev`. A fresh production tab loaded `ARCS Expanded` with no browser warnings/errors, and the deployed Writer bundle contained the new layer-recovery contract. The final merge follows this closeout commit.

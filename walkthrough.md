@@ -13576,6 +13576,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Editing the hosted Page 2 Beats candidate immediately marked Dialogue stale and exposed a Dialogue-only retry. Resetting the edit preserved invalidation; the v108 retry regenerated Dialogue from the effective Beats candidate and returned it as a pending user decision without automatic application.
 - The approved Outline, Page Beats, and Dialogue changes applied in dependency order. Official Page 2 content matched the proposals; undo restored the exact original Beats and empty Dialogue while retaining all three proposals as ready to apply.
 - Browser console inspection returned no warnings or errors. Desktop visual QA confirmed the recovery ledger remains readable and height-bounded.
+- Cloudflare deployed frontend version `086cd53e-18ab-4c7a-b85e-845d4dc4b651` to `https://asset-reference-comics-studio.onyxzion.workers.dev`. A fresh production tab loaded `ARCS Expanded` with no browser warnings/errors, and the deployed Writer chunk contained `Pacing revision workspace` and `Retry all failed layers`.
 
 ### Outstanding issues
 - The preserved QA Revision Set intentionally still contains missing Page Beats and Dialogue candidates for pages 45-70. They were not generated because the hosted release smoke was deliberately scoped to Page 2.
@@ -13585,7 +13586,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Existing repository lint warnings and large bundle advisories are unchanged and outside this feature's scope.
 
 ### Operator follow-up
-- None for the Page 2 release gate.
+- None.
 
 ### Next steps
-- Publish the verified branch, deploy the frontend, verify the production bundle, and merge draft PR #27.
+- Merge ready PR #27 immediately after the final continuity commit is pushed.
