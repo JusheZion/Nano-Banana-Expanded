@@ -56,7 +56,7 @@ export type WriterIssueOutlineRow = {
   source_mode: string | null;
 };
 
-export type WriterOutlineSourceMode = 'paste_review' | 'outline_import' | 'ai_treatment';
+export type WriterOutlineSourceMode = 'paste_review' | 'outline_import' | 'ai_treatment' | 'pacing_revision';
 
 /** Series lore / worldbuilding cards (injected into writer-tools prompts when include_in_prompt is true). */
 export type WriterLoreCardRow = {

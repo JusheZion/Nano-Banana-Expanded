@@ -56,6 +56,19 @@ export type WriterToolsOutlineTreatmentPreviewPayload = {
   protected_terms?: string[];
 };
 
+export type WriterToolsPacingRevisionOutlinePreviewPayload = {
+  mode: 'pacing_revision_outline_preview';
+  issue_id: string;
+};
+
+export type WriterToolsPacingRevisionPagePreviewPayload = {
+  mode: 'pacing_revision_page_preview';
+  revision_set_id: string;
+  page_id: string;
+  include_beats: boolean;
+  include_dialogue: boolean;
+};
+
 export type OutlineTreatmentPreviewResult = {
   proposal: IssueOutline;
   manifest: {
@@ -240,6 +253,8 @@ export type WriterToolsRequest =
   | WriterToolsOutlineIssuePayload
   | WriterToolsOutlineClassificationPreviewPayload
   | WriterToolsOutlineTreatmentPreviewPayload
+  | WriterToolsPacingRevisionOutlinePreviewPayload
+  | WriterToolsPacingRevisionPagePreviewPayload
   | WriterToolsPageBeatsPayload
   | WriterToolsPageBeatsIssuePayload
   | WriterToolsDraftDialoguePayload

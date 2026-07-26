@@ -8,6 +8,7 @@ import {
   outlineClassificationPreviewResultSchema,
   outlineTreatmentPatchResultSchema,
   outlineTreatmentPreviewResultSchema,
+  pacingRevisionPlanSchema,
   pacingRegenerationPreviewResultSchema,
   pacingReviewResultSchema,
   pageBeatsJsonSchema,
@@ -29,6 +30,20 @@ import {
   generatePageBeatsJsonWithMalformedRetry,
   PAGE_BEATS_GEMINI_RESPONSE_SCHEMA,
 } from './pageBeatsStructuredOutput.ts';
+import {
+  buildPacingRevisionOutlinePreview,
+  buildPacingRevisionOutlinePrompt,
+} from './pacingRevisionPrompt.ts';
+import {
+  persistPacingRevisionOutlinePreview,
+  projectPacingRevisionFailureLedger,
+  type PacingRevisionChildLayer,
+  type PacingRevisionFailure,
+} from './pacingRevisionPersistence.ts';
+import {
+  generateValidatedPacingRevisionPageCandidate,
+  pacingRevisionPageResponseSchema,
+} from './pacingRevisionPageCandidate.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -73,6 +88,39 @@ function mergeWriterToolCache(
 
 function readWriterToolCache(notes: unknown): Record<string, unknown> {
   return asJsonObject(asJsonObject(notes).writer_tool_cache);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function normalizePacingRevisionSourceBeats(outline: unknown) {
+  const record = asJsonObject(outline);
+  const rawBeats = Array.isArray(record.page_beats) ? record.page_beats : [];
+  return Promise.all(rawBeats.flatMap((rawBeat, index) => {
+    const beat = asJsonObject(rawBeat);
+    const summary = typeof beat.summary === 'string' ? beat.summary.trim() : '';
+    if (!summary) return [];
+    const scene = typeof beat.scene === 'string' ? beat.scene.trim() : '';
+    const emotionalTurn = typeof beat.emotional_turn === 'string' ? beat.emotional_turn.trim() : '';
+    const text = [
+      scene ? `Scene: ${scene}` : '',
+      summary,
+      emotionalTurn ? `Emotional turn: ${emotionalTurn}` : '',
+    ].filter(Boolean).join('\n');
+    const ordinal = index + 1;
+    const pageTarget = typeof beat.page_target === 'number' && Number.isInteger(beat.page_target)
+      ? beat.page_target
+      : undefined;
+    return [sha256Hex(`${ordinal}\u0000${text}`).then((digest) => ({
+      id: `beat_${digest.slice(0, 24)}`,
+      ordinal,
+      ...(pageTarget ? { page_target: pageTarget } : {}),
+      text,
+    }))];
+  }));
 }
 
 type WriterVisualReferenceKind = 'character' | 'location' | 'prop';
@@ -223,6 +271,7 @@ function extractAuthorOutlineForPrompt(notes: Record<string, unknown> | undefine
 /** Public API ids that work with AI Studio keys; preview ids last (may 400 "unexpected model name" on some keys). */
 const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
 const OUTLINE_TREATMENT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+const PACING_REVISION_PAGE_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-3-flash-preview',
@@ -287,6 +336,8 @@ async function callGeminiJson(args: {
   thinkingBudget?: number;
   /** Optional Gemini structured-output schema for deterministic JSON shape. */
   responseSchema?: Record<string, unknown>;
+  /** Bound the upstream model call so the Edge Function can persist a recoverable failure. */
+  requestTimeoutMs?: number;
 }): Promise<unknown> {
   const modelsToTry = [
     args.preferredModel,
@@ -309,11 +360,24 @@ async function callGeminiJson(args: {
     };
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${args.apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const requestTimeoutMs = args.requestTimeoutMs ?? 90_000;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
+    } catch (error) {
+      const name = error && typeof error === 'object' && 'name' in error
+        ? String((error as { name: unknown }).name)
+        : '';
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        throw new Error(`Gemini request timed out after ${Math.ceil(requestTimeoutMs / 1000)} seconds`);
+      }
+      throw error;
+    }
     let data: unknown;
     try {
       data = await res.json();
@@ -715,12 +779,17 @@ function buildPacingRegenerationPreviewUserPrompt(args: {
       : '',
     '',
     'Return exactly this shape:',
-    '{ "pages": [ { "page_id": string, "page_number": number, "reason"?: string, "proposed_beats_json"?: pageBeatsJson, "proposed_script_text"?: string } ] }',
+    args.includeBeats && !args.includeDialogue
+      ? '{ "pages": [ { "page_id": string, "page_number": number, "reason"?: string, "proposed_beats_json": pageBeatsJson } ] }'
+      : !args.includeBeats && args.includeDialogue
+        ? '{ "pages": [ { "page_id": string, "page_number": number, "reason"?: string, "proposed_script_text": string } ] }'
+        : '{ "pages": [ { "page_id": string, "page_number": number, "reason"?: string, "proposed_beats_json": pageBeatsJson, "proposed_script_text": string } ] }',
     'Rules:',
     '- Include exactly one object for each selected page id.',
     '- Echo page_id and page_number exactly from the selected pages.',
     '- If page beats were requested, proposed_beats_json must satisfy the page beats schema with non-empty panels[].action.',
     '- If dialogue was requested, proposed_script_text must be plain text suitable for a comic script.',
+    '- Omit every proposal field that was not requested. Do not generate the unrequested child layer.',
     '- Respect pacing review cut/add/rebalance guidance while preserving author outline, lore, cast names, locations, and production defaults.',
     '- Keep proposals concise enough for direct review; do not include markdown fences.',
   ]
@@ -1395,6 +1464,538 @@ Deno.serve(async (req) => {
       return Response.json(
         { success: false, error: 'Invalid JWT', details: authErr.message },
         { status: 401, headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'pacing_revision_outline_preview') {
+      const { issue_id } = parsedReq.data;
+      const issue = await loadIssueRow(supabase, issue_id);
+      if (!issue) {
+        return Response.json(
+          { success: false, error: 'Issue not found' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const cachedPacingReview = asJsonObject(readWriterToolCache(issue.notes).pacing_review);
+      const pacingReview = cachedPacingReview.result;
+      if (pacingReview == null) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Run Pacing Review first',
+            details: 'Create Revision Set requires a saved Pacing Review for this issue.',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const { data: outlineRow, error: outlineError } = await supabase
+        .from('writer_issue_outlines')
+        .select('id, outline_json')
+        .eq('issue_id', issue_id)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (outlineError) {
+        return Response.json(
+          { success: false, error: 'Failed to load the Live Outline', details: outlineError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      if (!outlineRow?.outline_json) {
+        return Response.json(
+          { success: false, error: 'Live Outline not found' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const sourceBeats = await normalizePacingRevisionSourceBeats(outlineRow.outline_json);
+      if (sourceBeats.length === 0) {
+        return Response.json(
+          { success: false, error: 'Live Outline has no page beats' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const sourcePageCount = Math.max(
+        sourceBeats.length,
+        ...sourceBeats.map((beat) => beat.page_target ?? 0),
+      );
+      const promptInput = {
+        treatmentMode: 'structure' as const,
+        sourcePageCount,
+        allowedPageRange: {
+          min: Math.max(1, Math.floor(sourcePageCount * 0.9)),
+          max: Math.min(200, Math.max(sourcePageCount, Math.ceil(sourcePageCount * 1.1))),
+        },
+        sourceBeats,
+        protectedTerms: [] as string[],
+        pacingReview,
+      };
+      let planJson: unknown;
+      try {
+        planJson = await callGeminiJson({
+          system: [
+            'You are a careful comics pacing editor.',
+            'Return a preview-only revision plan as valid JSON.',
+            'Never return a replacement outline.',
+          ].join(' '),
+          user: buildPacingRevisionOutlinePrompt(promptInput),
+          preferredModel: OUTLINE_TREATMENT_GEMINI_MODEL,
+          apiKey: geminiKey,
+          temperature: 0.35,
+          thinkingBudget: 0,
+        });
+      } catch (error) {
+        return llmFailureResponse(error instanceof Error ? error.message : String(error));
+      }
+      const normalizedPlan = normalizeOutlineTreatmentPatchResult(planJson);
+      const parsedPlan = pacingRevisionPlanSchema.safeParse(normalizedPlan);
+      if (!parsedPlan.success) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing revision plan failed validation',
+            details: parsedPlan.error.message,
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const preview = buildPacingRevisionOutlinePreview(parsedPlan.data, promptInput);
+      if (preview.outlineChanges.length === 0) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing Review produced no usable outline changes',
+            details: 'The deterministic validator rejected every proposed change.',
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const proposedOutline = {
+        ...asJsonObject(outlineRow.outline_json),
+        ...preview.patch.proposal,
+      };
+      const sourceFingerprint = await sha256Hex(JSON.stringify(outlineRow.outline_json));
+      const affectedPages = [...new Set(
+        preview.items.flatMap((item) => item.affected_page_numbers),
+      )].sort((a, b) => a - b);
+      const revisionSetId = crypto.randomUUID();
+      const itemIdByModelId = new Map(
+        preview.items.map((item) => [item.item_id, crypto.randomUUID()]),
+      );
+      const now = new Date().toISOString();
+      const revisionSetRow = {
+        id: revisionSetId,
+        issue_id,
+        source_outline_id: outlineRow.id,
+        status: 'partially_ready',
+        pacing_review_json: pacingReview,
+        source_outline_json: outlineRow.outline_json,
+        proposed_outline_json: proposedOutline,
+        source_fingerprint: sourceFingerprint,
+        progress_json: {
+          total_pages: affectedPages.length,
+          completed_pages: [],
+          current_page: null,
+          stopped: false,
+        },
+        failure_ledger: [],
+        created_at: now,
+        updated_at: now,
+      };
+      const itemRows = preview.items.map((item, position) => ({
+        id: itemIdByModelId.get(item.item_id)!,
+        revision_set_id: revisionSetId,
+        position,
+        title: item.title,
+        rationale: item.rationale,
+        affected_page_numbers: item.affected_page_numbers,
+        generation_status: 'pending',
+        created_at: now,
+        updated_at: now,
+      }));
+      const outlineChangeRows = preview.outlineChanges.map((change) => ({
+        id: crypto.randomUUID(),
+        item_id: itemIdByModelId.get(change.item_id)!,
+        layer: 'outline',
+        target_key: change.target_key,
+        page_id: null,
+        page_number: change.page_number,
+        current_value: change.current_value,
+        ai_proposal: change.ai_proposal,
+        edited_candidate: null,
+        decision: 'pending',
+        dependency_ids: [],
+        reason: change.reason,
+        source_fingerprint: sourceFingerprint,
+        generation_status: 'ready',
+        applied_at: null,
+        created_at: now,
+        updated_at: now,
+      }));
+      const persistence = await persistPacingRevisionOutlinePreview(
+        supabase,
+        revisionSetRow,
+        itemRows,
+        outlineChangeRows,
+      );
+      if (!persistence.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: persistence.stage === 'set'
+              ? 'Failed to create Revision Set'
+              : 'Failed to save the Revision Set',
+            details: persistence.error,
+          },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const hydratedItems = itemRows.map((item) => ({
+        ...item,
+        changes: outlineChangeRows.filter((change) => change.item_id === item.id),
+      }));
+      return Response.json(
+        {
+          success: true,
+          mode: 'pacing_revision_outline_preview',
+          issue_id,
+          data: { ...revisionSetRow, items: hydratedItems },
+        },
+        { headers: corsHeaders },
+      );
+    }
+
+    if (parsedReq.data.mode === 'pacing_revision_page_preview') {
+      const {
+        revision_set_id,
+        page_id,
+        include_beats,
+        include_dialogue,
+      } = parsedReq.data;
+      const includeBeats = include_beats;
+      const includeDialogue = include_dialogue;
+      if (includeBeats === includeDialogue) {
+        return Response.json(
+          { success: false, error: 'Exactly one page child layer must be selected' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const { data: revisionSet, error: setError } = await supabase
+        .from('writer_pacing_revision_sets')
+        .select('id, issue_id, status, pacing_review_json, proposed_outline_json, progress_json, failure_ledger')
+        .eq('id', revision_set_id)
+        .maybeSingle();
+      if (setError || !revisionSet) {
+        return Response.json(
+          { success: false, error: 'Revision Set not found', details: setError?.message },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      if (['applied', 'discarded', 'applying'].includes(revisionSet.status)) {
+        return Response.json(
+          { success: false, error: 'Revision Set is not editable' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const issue = await loadIssueRow(supabase, revisionSet.issue_id);
+      if (!issue) {
+        return Response.json(
+          { success: false, error: 'Issue not found' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const { data: page, error: pageError } = await supabase
+        .from('writer_pages')
+        .select('id, issue_id, page_number, beats_json, script_text')
+        .eq('id', page_id)
+        .eq('issue_id', revisionSet.issue_id)
+        .maybeSingle();
+      if (pageError || !page) {
+        return Response.json(
+          { success: false, error: 'Page not found in this issue', details: pageError?.message },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const { data: itemRows, error: itemError } = await supabase
+        .from('writer_pacing_revision_items')
+        .select('id, affected_page_numbers, generation_status')
+        .eq('revision_set_id', revision_set_id)
+        .contains('affected_page_numbers', [page.page_number])
+        .order('position', { ascending: true });
+      if (itemError) {
+        return Response.json(
+          { success: false, error: 'Failed to load Revision Items', details: itemError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const item = (itemRows ?? []).find((candidate: { generation_status: string }) =>
+        candidate.generation_status !== 'locked'
+      );
+      if (!item) {
+        return Response.json(
+          {
+            success: false,
+            error: (itemRows ?? []).length ? 'Affected Revision Item is locked' : 'No Revision Item owns this page',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      type ExistingPageChange = {
+        id: string;
+        layer: string;
+        target_key: string;
+        generation_status: string;
+        ai_proposal: unknown;
+        edited_candidate: unknown;
+      };
+      const requestedLayers: PacingRevisionChildLayer[] = [
+        ...(includeBeats ? ['beats' as const] : []),
+        ...(includeDialogue ? ['dialogue' as const] : []),
+      ];
+      const { data: existingChanges, error: existingChangesError } = await supabase
+        .from('writer_pacing_revision_changes')
+        .select('id, layer, target_key, generation_status, ai_proposal, edited_candidate')
+        .eq('item_id', item.id);
+      if (existingChangesError) {
+        return Response.json(
+          { success: false, error: 'Failed to load existing page candidates', details: existingChangesError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const existingPageChange = (layer: PacingRevisionChildLayer) =>
+        (existingChanges ?? []).find((entry: ExistingPageChange) =>
+          entry.layer === layer && entry.target_key === `page:${page.id}`
+        ) as ExistingPageChange | undefined;
+      const beatsChange = existingPageChange('beats');
+      const dialogueChange = existingPageChange('dialogue');
+      const beatsUnlocked = beatsChange?.generation_status !== 'locked';
+      const dialogueUnlocked = dialogueChange?.generation_status !== 'locked';
+      if ((includeBeats && !beatsUnlocked) || (includeDialogue && !dialogueUnlocked)) {
+        return Response.json(
+          { success: false, error: 'Selected page layer is locked' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      let pageHasReadyBeats = Boolean(
+        beatsChange && ['ready', 'applied'].includes(beatsChange.generation_status)
+      );
+      let pageHasReadyDialogue = Boolean(
+        dialogueChange && ['ready', 'applied'].includes(dialogueChange.generation_status)
+      );
+      const effectiveBeatsCandidate = beatsChange?.edited_candidate ?? beatsChange?.ai_proposal;
+      if (includeDialogue && !includeBeats && (!pageHasReadyBeats || effectiveBeatsCandidate == null)) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Page Beats candidate is required before Dialogue',
+            details: 'Generate or restore the Page Beats child change, then retry Dialogue.',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const promptPage = includeDialogue && !includeBeats
+        ? { ...page, beats_json: effectiveBeatsCandidate }
+        : page;
+      const sid = issue.series_id;
+      const [castRes, locRes, bibleRes, loreDigest] = await Promise.all([
+        supabase.from('writer_cast').select('*').eq('series_id', sid),
+        supabase.from('writer_locations').select('*').eq('series_id', sid),
+        supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
+        fetchLoreCardsDigest(supabase, sid),
+      ]);
+      const prompt = buildPacingRegenerationPreviewUserPrompt({
+        issue,
+        pages: [promptPage],
+        latestOutline: revisionSet.proposed_outline_json,
+        pacingReview: revisionSet.pacing_review_json,
+        includeBeats,
+        includeDialogue,
+        cast: castRes.data ?? [],
+        locations: locRes.data ?? [],
+        styleBibles: bibleRes.data ?? [],
+        loreCardsDigest: loreDigest,
+        productionDefaults: resolveProductionDefaultsPayload(issue),
+      });
+      let candidate: {
+        page_id: string;
+        page_number: number;
+        reason?: string;
+        proposed_beats_json?: unknown;
+        proposed_script_text?: string;
+      };
+      try {
+        candidate = await generateValidatedPacingRevisionPageCandidate(
+          (temperature) => callGeminiJson({
+            system: [
+              'You are a comics editor generating one preview-only pacing revision page.',
+              'Output valid JSON only. Never modify saved content.',
+            ].join(' '),
+            user: prompt,
+            preferredModel: PACING_REVISION_PAGE_GEMINI_MODEL,
+            apiKey: geminiKey,
+            temperature,
+            responseSchema: pacingRevisionPageResponseSchema(includeBeats, includeDialogue),
+            requestTimeoutMs: 75_000,
+          }),
+          (value) => {
+            const parsed = pacingRegenerationPreviewResultSchema.parse(value);
+            if (parsed.pages.length !== 1) throw new Error('Exactly one page candidate is required');
+            const onlyPage = parsed.pages[0]!;
+            if (onlyPage.page_id !== page.id || onlyPage.page_number !== page.page_number) {
+              throw new Error('Page candidate does not match the requested page');
+            }
+            if (includeBeats && !onlyPage.proposed_beats_json) {
+              throw new Error('Page Beats candidate is required');
+            }
+            if (includeDialogue && !onlyPage.proposed_script_text?.trim()) {
+              throw new Error('Dialogue candidate is required');
+            }
+            return onlyPage;
+          },
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        const ledger = Array.isArray(revisionSet.failure_ledger)
+          ? revisionSet.failure_ledger
+          : [];
+        const requestedFailures = [
+          ...(includeBeats
+            ? [{ page_number: page.page_number, item_id: item.id, layer: 'beats' as const, reason }]
+            : []),
+          ...(includeDialogue
+            ? [{ page_number: page.page_number, item_id: item.id, layer: 'dialogue' as const, reason }]
+            : []),
+        ];
+        await supabase
+          .from('writer_pacing_revision_sets')
+          .update({
+            status: 'partially_ready',
+            failure_ledger: projectPacingRevisionFailureLedger({
+              ledger: ledger as PacingRevisionFailure[],
+              pageNumber: page.page_number,
+              requestedLayers,
+              readyLayers: [
+                ...(pageHasReadyBeats ? ['beats' as const] : []),
+                ...(pageHasReadyDialogue ? ['dialogue' as const] : []),
+              ],
+              newFailures: requestedFailures,
+            }),
+          })
+          .eq('id', revision_set_id);
+        return Response.json(
+          { success: false, error: 'Page candidate failed', details: reason },
+          { status: 422, headers: corsHeaders },
+        );
+      }
+      const outlineDependencyIds = (existingChanges ?? [])
+        .filter((entry: { layer: string }) => entry.layer === 'outline')
+        .map((entry: { id: string }) => entry.id);
+      const now = new Date().toISOString();
+      const changeRows: Array<Record<string, unknown>> = [];
+      let beatsChangeId: string | null = beatsChange?.id ?? null;
+      if (includeBeats && beatsUnlocked && candidate.proposed_beats_json) {
+        beatsChangeId = beatsChange?.id ?? crypto.randomUUID();
+        pageHasReadyBeats = true;
+        pageHasReadyDialogue = false;
+        changeRows.push({
+          id: beatsChangeId,
+          item_id: item.id,
+          layer: 'beats',
+          target_key: `page:${page.id}`,
+          page_id: page.id,
+          page_number: page.page_number,
+          current_value: page.beats_json,
+          ai_proposal: candidate.proposed_beats_json,
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: outlineDependencyIds,
+          reason: candidate.reason?.trim() || 'Pacing-aligned Page Beats revision.',
+          source_fingerprint: await sha256Hex(JSON.stringify(page.beats_json)),
+          generation_status: 'ready',
+          applied_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      if (includeDialogue && dialogueUnlocked && candidate.proposed_script_text) {
+        pageHasReadyDialogue = true;
+        changeRows.push({
+          id: dialogueChange?.id ?? crypto.randomUUID(),
+          item_id: item.id,
+          layer: 'dialogue',
+          target_key: `page:${page.id}`,
+          page_id: page.id,
+          page_number: page.page_number,
+          current_value: page.script_text,
+          ai_proposal: candidate.proposed_script_text,
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: beatsChangeId ? [beatsChangeId] : outlineDependencyIds,
+          reason: candidate.reason?.trim() || 'Pacing-aligned Dialogue revision.',
+          source_fingerprint: await sha256Hex(JSON.stringify(page.script_text)),
+          generation_status: 'ready',
+          applied_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+      const { data: persistedChanges, error: changesError } = await supabase
+        .from('writer_pacing_revision_changes')
+        .upsert(changeRows, { onConflict: 'item_id,layer,target_key' })
+        .select('*');
+      if (changesError) {
+        return Response.json(
+          { success: false, error: 'Failed to save page candidates', details: changesError.message },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      await supabase
+        .from('writer_pacing_revision_items')
+        .update({ generation_status: pageHasReadyBeats && pageHasReadyDialogue ? 'ready' : 'pending' })
+        .eq('id', item.id);
+      const progress = asJsonObject(revisionSet.progress_json);
+      const priorCompletedPages = (Array.isArray(progress.completed_pages) ? progress.completed_pages : [])
+        .filter((value): value is number => typeof value === 'number');
+      const pageIsComplete = pageHasReadyBeats && pageHasReadyDialogue;
+      const completedPages = (pageIsComplete
+        ? [...new Set([...priorCompletedPages, page.page_number])]
+        : priorCompletedPages.filter((value) => value !== page.page_number)
+      ).sort((a, b) => a - b);
+      const totalPages = typeof progress.total_pages === 'number' ? progress.total_pages : completedPages.length;
+      const failureLedger = projectPacingRevisionFailureLedger({
+        ledger: (Array.isArray(revisionSet.failure_ledger)
+          ? revisionSet.failure_ledger
+          : []) as PacingRevisionFailure[],
+        pageNumber: page.page_number,
+        requestedLayers,
+        readyLayers: [
+          ...(pageHasReadyBeats ? ['beats' as const] : []),
+          ...(pageHasReadyDialogue ? ['dialogue' as const] : []),
+        ],
+      });
+      await supabase
+        .from('writer_pacing_revision_sets')
+        .update({
+          status: completedPages.length >= totalPages && failureLedger.length === 0 ? 'ready' : 'partially_ready',
+          progress_json: {
+            ...progress,
+            completed_pages: completedPages,
+            current_page: null,
+          },
+          failure_ledger: failureLedger,
+        })
+        .eq('id', revision_set_id);
+      return Response.json(
+        {
+          success: true,
+          mode: 'pacing_revision_page_preview',
+          issue_id: revisionSet.issue_id,
+          page_id,
+          data: {
+            page_number: page.page_number,
+            changes: persistedChanges ?? changeRows,
+          },
+        },
+        { headers: corsHeaders },
       );
     }
 

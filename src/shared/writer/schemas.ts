@@ -192,6 +192,21 @@ export const writerToolsOutlineTreatmentPreviewRequestSchema = z.object({
   protected_terms: z.array(z.string().min(1).max(200)).max(250).optional(),
 }).strict();
 
+export const writerToolsPacingRevisionOutlinePreviewRequestSchema = z.object({
+  mode: z.literal('pacing_revision_outline_preview'),
+  issue_id: z.string().uuid(),
+}).strict();
+
+export const writerToolsPacingRevisionPagePreviewRequestSchema = z.object({
+  mode: z.literal('pacing_revision_page_preview'),
+  revision_set_id: z.string().uuid(),
+  page_id: z.string().uuid(),
+  include_beats: z.boolean(),
+  include_dialogue: z.boolean(),
+}).strict().refine((request) => request.include_beats !== request.include_dialogue, {
+  message: 'Exactly one Pacing Revision child layer must be requested.',
+});
+
 export const outlineTreatmentPreviewResultSchema = z.object({
   overall_assessment: z.string().min(40).max(2400),
   section_reviews: z.array(outlineTreatmentSectionReviewSchema).min(1).max(10),
@@ -573,10 +588,12 @@ export const guidedComicAssistResultSchema = z
   })
   .passthrough();
 
-export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
+export const writerToolsRequestSchema = z.union([
   writerToolsOutlineIssueRequestSchema,
   writerToolsOutlineClassificationPreviewRequestSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,
+  writerToolsPacingRevisionOutlinePreviewRequestSchema,
+  writerToolsPacingRevisionPagePreviewRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsDraftDialogueRequestSchema,

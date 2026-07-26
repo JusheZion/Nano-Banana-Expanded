@@ -124,6 +124,7 @@ async function invokeWriterToolsWithToken(
   return supabase.functions.invoke('writer-tools', {
     body,
     headers: { Authorization: `Bearer ${accessToken}` },
+    ...(body.mode === 'pacing_revision_page_preview' ? { timeout: 90_000 } : {}),
   });
 }
 

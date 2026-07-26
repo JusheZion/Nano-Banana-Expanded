@@ -2,6 +2,22 @@
 
 Checklist for current and upcoming phases. Update as work completes.
 
+## Writers' Workshop — Pacing Revision Sets (2026-07-25) — RELEASE BLOCKED
+
+Detailed tracker: [`docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md`](docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md)
+
+- [x] Pass 1: Add owner-scoped revision-set, parent-item, and child-change persistence with shared client/Edge contracts.
+- [x] Pass 2: Convert saved Pacing Review results into deterministic, preview-only outline operations.
+- [x] Pass 3: Add one-page candidate generation, resumable queues, five-page checkpoints, stop-after-current-page, and failed-page recovery.
+- [x] Pass 4: Add dependency-aware decisions, staleness/lock checks, ordered apply, compensation, snapshots, and undo.
+- [x] Pass 5: Add the readable two-panel review workspace with individual editing/decisions and batch selection.
+- [x] Pass 6: Integrate the explicit `Create Revision Set` workflow into Simple Workflow and Advanced Tools.
+- [x] Local release gate: 134 test files / 827 tests, lint with 0 errors and 71 warnings, production build, and diff check passed.
+- [x] Supabase migration is applied and `writer-tools` version 102 is ACTIVE.
+- [x] Signed-in QA verified persistence across reload, edit/reset state, individual and batch decisions, page-specific retry/navigation, responsive layout, approved outline apply, and undo on the dedicated 70-page QA issue.
+- [ ] Release: hosted Page Beats/Dialogue candidate generation must complete successfully. Page 2 timed out at the bounded 75-second Gemini limit even after switching this mode to Flash Lite.
+- [ ] After the hosted smoke passes, deploy the Cloudflare frontend, verify the production URL, merge to `main`, and push `main`.
+
 ## Application-wide loading-state audit — NEXT UI UPDATE
 
 - [ ] Inventory every screen, panel, database-backed list, preview, file import, and cross-portal handoff that waits on asynchronous content.
@@ -11,6 +27,13 @@ Checklist for current and upcoming phases. Update as work completes.
 - [ ] Add accessible progress/status announcements plus explicit failure, retry, and recovery states.
 - [ ] Verify slow-load behavior across all portals with throttled or delayed responses, including file parsing and preview generation.
 - [ ] Confirm Page Beats never temporarily reports saved pages as empty while their saved beat data is still loading.
+- [ ] Change Page Beats multi-page generation so an isolated page failure is recorded and skipped rather than stopping the remaining queue.
+- [ ] Preserve every successful Page Beats result before and after a failed page, then show one end-of-run summary listing each failed page and its plain-language reason.
+- [ ] Add end-of-run actions to jump to a failed page, retry one failed page, or retry failed pages only; do not regenerate successful pages.
+- [ ] Verify the Page Beats failure summary remains available long enough to compare the failed page with its successfully generated neighboring pages.
+- [ ] Inventory panels, cards, previews, editors, error details, generated outputs, prompts, and other surfaces containing dense or reusable text.
+- [ ] Add a consistent corner copy button to appropriate text surfaces, with an accessible name, keyboard access, tooltip, visible focus, and copied/error feedback.
+- [ ] Copy useful plain text rather than hidden metadata or decorative labels, preserving meaningful line breaks for pasting elsewhere inside or outside the portal.
 
 ## Illustrator's Imageshop — Comic Production Portal (2026-06-01) — COMPLETE
 

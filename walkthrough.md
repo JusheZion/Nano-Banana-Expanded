@@ -13267,3 +13267,326 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue generating the remaining Page Beats after confirming the failed spread page now saves.
+
+## Deferred UI requirements: resilient Page Beats and copy controls - 2026-07-24
+
+### What changed
+- Added a requirement for Page Beats multi-page generation to continue after isolated page failures rather than stopping the remaining queue.
+- Required an end-of-run summary that lists every failed page and plain-language reason while preserving successfully generated pages before and after each failure.
+- Added recovery actions to navigate to a failed page, retry one page, or retry failed pages only without regenerating successful work.
+- Added an application-wide inventory for dense or reusable text surfaces that should receive consistent corner copy controls.
+
+### Files touched
+- `AGENTS.md`
+- `tasks.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Continuing past an isolated failure improves throughput and produces neighboring successful pages that can help diagnose why one page behaved differently.
+- Copy controls should preserve useful plain text and meaningful line breaks. They must include keyboard access, accessible labeling, visible focus, and copied/error feedback.
+- Raw implementation metadata should remain excluded unless the user is intentionally viewing an Advanced Tools data surface.
+
+### Verification
+- Confirmed both requirements are recorded in the root DOX contract.
+- Confirmed the implementation checklist is present in the `NEXT UI UPDATE` section at the top of `tasks.md`.
+- No runtime code, deployment, or product behavior changed in this documentation-only update.
+
+### Outstanding issues
+- Both requirements remain deferred until the next UI implementation pass.
+
+### Risks or caveats
+- Page Beats generation still stops on the first page-specific generation error until the queued-failure behavior is implemented.
+- Copy controls remain inconsistent or absent across some dense-text surfaces until the UI inventory is completed.
+
+### Operator follow-up
+- Include both requirements in the acceptance criteria and signed-in browser QA for the next UI update.
+
+### Next steps
+- Implement the queued Page Beats failure ledger and application-wide copy-control pattern during the next UI update.
+
+## Dialogue transition handoff checkpoint - 2026-07-24
+
+### What changed
+- Used the `$handoff` skill to create a next-chat continuation artifact at `.agents/handoffs/2026-07-24-writers-workshop-dialogue-transition-handoff.md`.
+- Recorded the checkpoint after the user completed all 70 Page Beats and before Dialogue production begins.
+- Preserved the intentional uncommitted UI-requirement changes in `AGENTS.md`, `tasks.md`, and `walkthrough.md`.
+- Documented the current Dialogue batch architecture, access state, deployed versions, verification evidence, and the first safety check for the next chat.
+
+### Files touched
+- `.agents/handoffs/2026-07-24-writers-workshop-dialogue-transition-handoff.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Dialogue batches already continue after individual failures, but currently retain only aggregate error counts.
+- Dialogue still lacks the structured-output and malformed-JSON recovery safeguards added to Page Beats, and its five-request concurrent groups have not received current production QA.
+- The user's completed 70-page Page Beats data must not be mutated during QA; use the persistent demo account first.
+
+### Verification
+- Refreshed branch, commit, dirty-tree, tracker, Dialogue code-path, GitHub auth, Cloudflare auth/deployment, Supabase function version, and live URL evidence before writing the handoff.
+- Confirmed the live URL returned HTTP 200.
+- Confirmed `writer-tools` is ACTIVE at Supabase version 97.
+- Confirmed the handoff records the intentional dirty files and one exact next action.
+- No runtime code, tests, build, deployment, or live Dialogue generation was performed for this documentation-only handoff.
+
+### Outstanding issues
+- Dialogue structured-output enforcement, malformed-JSON recovery, page-specific failure reporting, and current production smoke remain pending.
+
+### Risks or caveats
+- Five concurrent Dialogue requests may create quota or hosted-load pressure; this has not been validated against the current 70-page QA issue.
+
+### Operator follow-up
+- None before the next chat begins; current CLI access is sufficient.
+
+### Next steps
+- Begin the next chat with a focused failing Dialogue regression before any multi-page production generation.
+
+## Pacing Revision Set workflow decision - 2026-07-24
+
+### What changed
+- Confirmed that the current Story Review has no complete review-safe action that connects a Pacing Review to the Live Outline, Page Beats, and Dialogue.
+- Selected an explicit `Create Revision Set` action after Pacing Review instead of automatically generating or applying downstream changes.
+- Established canonical domain terms for the diagnostic review, proposed revision set, explicit creation action, and approved live story layers.
+
+### Files touched
+- `CONTEXT.md`
+- `AGENTS.md`
+- `walkthrough.md`
+
+### Implementation notes
+- `Pacing Review` remains diagnostic and cannot change story content.
+- `Create Revision Set` is a separate user action that may generate proposed connected changes.
+- A `Pacing Revision Set` remains isolated from the `Live Story` until the user approves changes.
+- This is a product-design decision only; no runtime implementation or persistence behavior changed.
+
+### Verification
+- Confirmed `CONTEXT.md` defines each resolved term without implementation details.
+- Confirmed the root DOX index identifies `CONTEXT.md` as the domain-language record.
+- No runtime tests, build, deployment, or hosted mutation were needed for this documentation-only decision.
+
+### Outstanding issues
+- The granularity and dependency rules for individual revision items still need user confirmation.
+
+### Risks or caveats
+- The current Story Review continues to expose only the existing partial pacing workflow until implementation is approved and completed.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Decide whether each reviewable item is one cross-layer editorial change or separate unrelated changes per story layer.
+
+## Pacing Revision Item hierarchy decision - 2026-07-25
+
+### What changed
+- Approved a parent/child review model for Pacing Revision Sets.
+- Defined each parent `Revision Item` around one editorial intent, with independently reviewable `Child Changes` for the Outline, Page Beats, and Dialogue.
+- Required dependency warnings when a user's child-level approvals or rejections would leave the proposed cross-layer revision inconsistent.
+
+### Files touched
+- `CONTEXT.md`
+- `walkthrough.md`
+
+### Implementation notes
+- A Revision Item groups related downstream effects without forcing the user to accept them together.
+- Every Child Change remains independently editable, approvable, or rejectable.
+- Dependency warnings inform the user about inconsistent selections but do not silently approve, reject, or rewrite another Child Change.
+- This is a product-design decision only; no runtime implementation or persistence behavior changed.
+
+### Verification
+- Confirmed the new glossary terms are domain concepts and contain no implementation details.
+- Confirmed the existing root DOX index already identifies `CONTEXT.md` as the domain-language record, so no further AGENTS.md change was required.
+- `git diff --check -- CONTEXT.md walkthrough.md` passed.
+
+### Outstanding issues
+- The design still needs a decision on whether user edits preserve the original AI proposal as a separate review state.
+
+### Risks or caveats
+- Allowing independent decisions can create cross-layer inconsistencies; the eventual interface must make dependency warnings prominent and actionable.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Decide how edited Child Changes preserve provenance and support recovery.
+
+## Pacing Revision Set implementation and blocked release - 2026-07-25
+
+### What changed
+- Added an explicit `Create Revision Set` action after a saved Pacing Review; running the review alone remains diagnostic.
+- Added durable owner-scoped Pacing Revision Sets with parent Revision Items and independently editable/approvable/rejectable Outline, Page Beats, and Dialogue Child Changes.
+- Added deterministic outline-operation validation, one-page-per-invocation child generation, five-page checkpoints, stop/resume, completed-page skipping, persistent failure ledgers, one-page retry, failed-only retry, and page navigation.
+- Added a readable two-panel review workspace in Simple Workflow and Advanced Tools, including immutable AI proposals, edited candidates, dependency warnings, individual decisions, batch selection, explicit apply, compensation, snapshots, and undo.
+- Repaired release defects found during signed-in QA: persisted timestamp parsing, recovery controls for incomplete sets incorrectly marked ready, stopped-state persistence, transport timeout retry classification, client/server request bounds, legacy outline-beat preservation during apply, detailed failed-page actions, and mobile grid overflow.
+
+### Files touched
+- `AGENTS.md`
+- `CONTEXT.md`
+- `tasks.md`
+- `docs/adr/2026-07-25-pacing-revision-set.md`
+- `docs/superpowers/specs/2026-07-25-writer-pacing-revision-sets-design.md`
+- `docs/superpowers/plans/2026-07-25-writer-pacing-revision-sets-implementation.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/writerPacingRevisionOutline.ts`
+- `src/portals/writer/writerPacingRevisionQueue.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/writerTools.ts`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `supabase/migrations/20260725000000_writer_pacing_revision_sets.sql`
+- `supabase/functions/_shared/pacingRevisionSchemas.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- Focused tests beside the new modules and under `src/portals/writer/__tests__` and `src/shared/api/__tests__`.
+
+### Implementation notes
+- `Pacing Review` never changes official content. `Create Revision Set` creates persisted proposals; only explicit approved-change application promotes content.
+- The client owns the ordered page queue. Each Edge request is capped at one page, completed page candidates are skipped on resume, and an isolated failure does not discard surrounding success.
+- The apply path validates source fingerprints, locks, dependencies, and approved candidates, writes Outline before Page Beats before Dialogue, and compensates completed writes if a later write fails.
+- Legacy or unrelated malformed outline beats are preserved instead of blocking an approved edit to another valid beat.
+- The page-child mode uses Gemini 2.5 Flash Lite with a 75-second server bound and a 90-second client bound. Transport failures are not retried as malformed JSON; schema-invalid model output receives one lower-temperature repair attempt.
+
+### Verification
+- Focused red-green tests covered incomplete-ready recovery, completed-page skipping, stopped-state persistence, transport-versus-validation retry behavior, bounded client invocation, failed-page actions, legacy outline preservation, apply compensation, and responsive review behavior.
+- Consolidated regression: 134 test files and 827 individual tests passed.
+- `npm run lint`: passed with 0 errors and 71 repository warnings.
+- `npm run build`: passed with the existing large-chunk advisory (`WriterPortal` about 511 kB and `ComicPortal` about 999 kB).
+- `git diff --check`: passed.
+- Supabase migration `20260725000000_writer_pacing_revision_sets.sql` is applied to project `vxclogwiytxjolisnakd`.
+- Supabase `writer-tools` version 102 is ACTIVE.
+- Signed-in QA at `http://127.0.0.1:5174/` used the dedicated `Untitled series` Issue 1 with 70 pages and 44 saved Page Beats. The Revision Set survived reload; edit, reset-state rendering, reject, decide-later, individual approval, batch approval, page-specific failure recovery, desktop/phone/landscape containment, outline apply, and undo behaved as designed.
+- Browser logs contained no new runtime errors after the clean reload; earlier 05:02 HMR-only hook-order logs predated the final QA state.
+
+### Outstanding issues
+- **RELEASE BLOCKER:** hosted Page Beats/Dialogue candidate generation did not complete. Page 2 timed out at the bounded 75-second Gemini limit even after the mode switched to Flash Lite.
+- A successful hosted child candidate is still required before the frontend can be deployed or the branch merged.
+
+### Risks or caveats
+- The migration and additive Edge modes are live, but the client entry control is not live because the frontend was intentionally not deployed.
+- The dedicated QA Revision Set retains page-specific timeout entries so the recovery path can be resumed without touching the user's completed 70-page story.
+- The unauthenticated hosted RLS path was not directly probed in this session; the owner rules remain covered by migration review and focused persistence tests.
+
+### Operator follow-up
+- Confirm Gemini availability and the Supabase `GEMINI_API_KEY`/model service health, then retry only Page 2 on the dedicated QA Revision Set.
+- If Page 2 produces both Page Beats and Dialogue children, approve/apply/undo those children, deploy the Cloudflare frontend, verify the production URL, and merge the branch.
+
+### Next steps
+- From the preserved worktree, start `npm run dev -- --host 127.0.0.1 --port 5174 --strictPort`, open Story Review for the dedicated QA issue, and choose `Retry page 2`. Do not retry the full failed-page batch until the single-page hosted smoke succeeds.
+
+## Pacing Revision Page 2 hosted retry and model diagnosis - 2026-07-26
+
+### What changed
+- Re-ran only the dedicated QA Revision Set's Page 2 child-generation smoke; no failed-page batch retry was used.
+- Confirmed that the silent Supabase CLI behavior was a macOS Keychain authorization wait, not part of the application request path.
+- Replaced the retired `gemini-2.5-flash-lite` Page 2 candidate model with the key-supported stable `gemini-3.1-flash-lite`.
+- Added a focused regression assertion that keeps the bounded Pacing Revision page-preview branch on the verified stable model.
+- Deployed `writer-tools` version 104 with the model correction.
+
+### Files touched
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- The QA account, Supabase database reads/writes, Revision Set persistence, failure ledger, and browser recovery flow all remained operational.
+- A no-story-content provider health probe showed `gemini-2.5-flash-lite` returns HTTP 404 with a retirement message for this key.
+- The key's model list includes stable `gemini-3.1-flash-lite`; a minimal structured-output probe returned HTTP 200 in 3.3 seconds.
+- The full Page 2 call still requests Page Beats and Dialogue together with pacing, outline, page, cast, location, style, and lore context. That combined contract remains the leading latency suspect.
+
+### Verification
+- Red-green check: the stable-model regression assertion failed against `gemini-2.5-flash-lite`, then passed after selecting `gemini-3.1-flash-lite`.
+- `npm test -- supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`: 1 test file and 3 tests passed.
+- Supabase CLI deployment completed, and `writer-tools` version 104 reported `ACTIVE`.
+- Signed-in browser QA at `http://127.0.0.1:5174/` confirmed each retry stayed single-page, disabled duplicate controls while running, preserved the prior Outline proposal, created no Page Beats or Dialogue changes on failure, and restored page-specific retry/navigation afterward.
+- Browser console inspection returned no warnings or errors.
+
+### Outstanding issues
+- **RELEASE BLOCKER:** the v104 Page 2 request still timed out at the explicit 75-second Gemini boundary. Page Beats and Dialogue remain at zero candidates.
+- The final apply/undo child-change smoke could not run because no hosted child proposals were produced.
+
+### Risks or caveats
+- Do not raise the timeout or submit another Page 2 retry without changing the request contract; repeated model and timeout adjustments have not resolved the full call.
+- `writer-tools` v104 is live, but the frontend remains intentionally undeployed and draft PR #27 must not be merged while the hosted child-generation gate is blocked.
+
+### Operator follow-up
+- Decide whether to split Page Beats and Dialogue into separately bounded child requests while retaining the same one-page client queue, dependency ordering, two-panel review, and explicit apply behavior.
+
+### Next steps
+- Prepare and approve a small bridge plan for separate Page Beats and Dialogue generation, including partial-success persistence and retry-one-layer behavior, before further implementation or hosted retries.
+
+## Pacing Revision layer-split generation and hosted completion - 2026-07-26
+
+### What changed
+- Split each Pacing Revision page into separately bounded Page Beats and Dialogue model requests while preserving the existing browser-owned page queue.
+- Made Dialogue depend on the saved effective Page Beats proposal, preferring an edited candidate when present, rather than unchanged official Beats.
+- Added page-and-layer failure persistence, individual layer retry, batch layer retry, legacy page-only ledger migration, and recovery rows for genuinely missing layers that have no ledger entry.
+- Restricted Gemini's structured-output schema and prompt to only the requested child layer.
+- Enforced an exact-one-layer API contract so omitted or combined child requests are rejected by both shared validation and the hosted Edge boundary.
+- Made final completion derive from freshly persisted Revision Set state instead of merging stale client progress.
+- Added database-backed dependency invalidation: changing a Page Beats AI proposal or edit marks its dependent Dialogue stale and removes that page from completed progress until Dialogue is regenerated.
+- Bounded the recovery ledger with an internal scroll region so large incomplete Revision Sets do not push the comparison workspace far below the fold.
+- Recorded the durable Pacing Revision split contract in the root `AGENTS.md`.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/plans/2026-07-26-writer-pacing-layer-split-implementation.md`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `src/shared/api/__tests__/writerTools.test.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
+- `supabase/functions/_shared/pacingRevisionSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`
+- `supabase/migrations/20260726000000_writer_pacing_revision_beats_invalidation.sql`
+- `walkthrough.md`
+
+### Implementation notes
+- Initial generation and resume derive missing layers from ready/applied Child Changes. Page Beats runs first; Dialogue runs only after Beats succeeds or already exists.
+- One layer's transport or validation failure no longer discards or regenerates its successful sibling.
+- A page enters `completed_pages` only when both Page Beats and Dialogue are ready or applied.
+- New failure rows carry `layer: "beats" | "dialogue"`; the field is optional so saved legacy rows remain valid.
+- Legacy rows are expanded into explicit missing siblings during a one-layer retry, preventing an unrequested failure from disappearing.
+- A Beats proposal/edit trigger marks the matching dependent Dialogue Child Change `stale`, resets its decision to `pending`, clears any edited candidate, and returns the parent item/set to a non-complete state.
+- Recovery controls use unique page-and-layer accessible names and expose current/proposed content through the existing two-panel review.
+
+### Verification
+- Focused implementation gate: 6 test files and 20 tests passed before hosted deployment; subsequent recovery and UI corrections were covered by focused red-green tests.
+- Consolidated post-review regression: 134 test files and 840 individual tests passed.
+- The first post-review full run found a test-only readiness race in the new Beats-edit refresh regression (839 of 840 tests passed). After requiring the loaded Revision Set as the test precondition, the focused hook suite passed 1 file / 8 tests and the full gate passed on rerun.
+- `npm run lint`: passed with 0 errors and 71 existing repository warnings.
+- `npm run build`: passed with the existing large-chunk advisories for WriterPortal and ComicPortal.
+- `git diff --check`: passed.
+- Supabase project `vxclogwiytxjolisnakd` reports `writer-tools` version 108 `ACTIVE`; the Beats-to-Dialogue invalidation migration is applied.
+- Signed-in hosted QA produced Page 2 Page Beats and Dialogue in separate requests in under 30 seconds each. Dialogue matched the saved proposed Beats content, both proposals survived reload, and Page 2 recovery entries cleared.
+- Editing the hosted Page 2 Beats candidate immediately marked Dialogue stale and exposed a Dialogue-only retry. Resetting the edit preserved invalidation; the v108 retry regenerated Dialogue from the effective Beats candidate and returned it as a pending user decision without automatic application.
+- The approved Outline, Page Beats, and Dialogue changes applied in dependency order. Official Page 2 content matched the proposals; undo restored the exact original Beats and empty Dialogue while retaining all three proposals as ready to apply.
+- Browser console inspection returned no warnings or errors. Desktop visual QA confirmed the recovery ledger remains readable and height-bounded.
+- Cloudflare deployed frontend version `086cd53e-18ab-4c7a-b85e-845d4dc4b651` to `https://asset-reference-comics-studio.onyxzion.workers.dev`. A fresh production tab loaded `ARCS Expanded` with no browser warnings/errors, and the deployed Writer chunk contained `Pacing revision workspace` and `Retry all failed layers`.
+
+### Outstanding issues
+- The preserved QA Revision Set intentionally still contains missing Page Beats and Dialogue candidates for pages 45-70. They were not generated because the hosted release smoke was deliberately scoped to Page 2.
+
+### Risks or caveats
+- The recovery batch now accurately includes every genuinely missing layer, not only historical ledger failures. On the preserved 70-page QA set this is 52 layer targets; users can still retry any layer individually.
+- Existing repository lint warnings and large bundle advisories are unchanged and outside this feature's scope.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Merge ready PR #27 immediately after the final continuity commit is pushed.
