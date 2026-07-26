@@ -135,20 +135,23 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       },
       onCheckpoint: async () => { await refresh(set.id); },
     });
-    const completedPages = result.completedPages.filter((pageNumber) => {
-      const pageMissing = missing.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
-      const pageRan = layersToRunByPage.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
-      return [...pageMissing].every((layer) => pageRan.has(layer));
-    });
-    await updateWriterPacingRevisionProgress(set.id, {
-      ...set.progress_json,
-      completed_pages: [...new Set([
-        ...set.progress_json.completed_pages,
-        ...completedPages,
-      ])].sort((a, b) => a - b),
-      current_page: null,
-      stopped: result.stopped,
-    });
+    const persistedResult = await getWriterPacingRevisionSet(set.id);
+    if (persistedResult.ok) {
+      const persistedMissing = missingLayersByPage(persistedResult.set);
+      const affectedPages = new Set(
+        persistedResult.set.items.flatMap((item) => item.affected_page_numbers)
+      );
+      await updateWriterPacingRevisionProgress(set.id, {
+        ...persistedResult.set.progress_json,
+        completed_pages: [...affectedPages]
+          .filter((pageNumber) => !persistedMissing.has(pageNumber))
+          .sort((a, b) => a - b),
+        current_page: null,
+        stopped: result.stopped,
+      });
+    } else {
+      setError(persistedResult.error);
+    }
     setGenerating(false);
     await refresh(set.id);
     if (result.failures.length) setError(`${result.failures.length} page candidate${result.failures.length === 1 ? '' : 's'} need retry.`);
@@ -189,6 +192,13 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
   const updateChange = useCallback(async (changeId: string, patch: PacingRevisionDecisionPatch) => {
     const result = await updateWriterPacingRevisionChange(changeId, patch);
     if (!result.ok) { setError(result.error); return; }
+    if (
+      result.change.layer === 'beats'
+      && Object.prototype.hasOwnProperty.call(patch, 'edited_candidate')
+    ) {
+      await refresh(activeSet?.id);
+      return;
+    }
     setActiveSet((current) => current ? {
       ...current,
       items: current.items.map((item) => ({
@@ -196,7 +206,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
         changes: item.changes.map((change) => change.id === changeId ? result.change : change),
       })),
     } : current);
-  }, []);
+  }, [activeSet?.id, refresh]);
 
   const discard = useCallback(async () => {
     if (!activeSet) return;

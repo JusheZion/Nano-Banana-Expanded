@@ -220,9 +220,11 @@ export const writerToolsPacingRevisionPagePreviewRequestSchema = z.object({
   mode: z.literal('pacing_revision_page_preview'),
   revision_set_id: z.string().uuid(),
   page_id: z.string().uuid(),
-  include_beats: z.boolean().optional(),
-  include_dialogue: z.boolean().optional(),
-}).strict();
+  include_beats: z.boolean(),
+  include_dialogue: z.boolean(),
+}).strict().refine((request) => request.include_beats !== request.include_dialogue, {
+  message: 'Exactly one Pacing Revision child layer must be requested.',
+});
 
 export const pacingRevisionPlanSchema = z.object({
   items: z.array(z.object({
@@ -610,7 +612,7 @@ export const guidedComicAssistResultSchema = z
   })
   .passthrough();
 
-export const writerToolsRequestSchema = z.discriminatedUnion('mode', [
+export const writerToolsRequestSchema = z.union([
   writerToolsOutlineIssueRequestSchema,
   writerToolsOutlineClassificationPreviewRequestSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,

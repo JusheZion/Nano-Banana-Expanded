@@ -65,8 +65,8 @@ export type WriterToolsPacingRevisionPagePreviewPayload = {
   mode: 'pacing_revision_page_preview';
   revision_set_id: string;
   page_id: string;
-  include_beats?: boolean;
-  include_dialogue?: boolean;
+  include_beats: boolean;
+  include_dialogue: boolean;
 };
 
 export type OutlineTreatmentPreviewResult = {

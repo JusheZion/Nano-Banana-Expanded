@@ -360,9 +360,30 @@ Audit:
 - UI/UX hierarchy, density, loading/error/success states, keyboard focus, and accessible labels,
 - DOX chain and walkthrough accuracy.
 
-**Pass 4 verification:** PASS — 134 test files and 836 individual tests; lint completed with 0 errors and 71 existing repository warnings; production build and `git diff --check` passed. Hosted `writer-tools` v107 produced separate Page 2 Page Beats and Dialogue candidates, reload preserved them, apply promoted all three approved layers in dependency order, and undo restored exact prior official content while retaining the proposals.
+**Pass 4 verification:** PASS — the post-review consolidated gate passed 134 test files and 840 individual tests; lint completed with 0 errors and 71 existing repository warnings; production build and `git diff --check` passed. Hosted `writer-tools` v108 produced separate Page 2 Page Beats and Dialogue candidates, reload preserved them, apply promoted all three approved layers in dependency order, and undo restored exact prior official content while retaining the proposals.
 
 **Final audit:** PASS — explicit preview/apply control remains intact; layer failures preserve successful siblings; legacy and absent ledger entries project into recoverable layer targets; current/proposed panels remain readable; the recovery ledger is keyboard-accessible and height-bounded; browser warnings/errors were empty; and the root DOX contract now records the approved split behavior.
+
+### Pass 5: Independent review corrections
+
+**Objective:** Close the release-blocking contract and dependency gaps found during independent code review.
+
+**Acceptance criteria:** The API accepts exactly one requested child layer, stale client progress cannot mark incomplete pages complete, and changing Page Beats invalidates dependent Dialogue until it is regenerated.
+
+- [x] Require exactly one of `includeBeats` or `includeDialogue` in shared/client and Edge request schemas.
+- [x] Reject omitted-layer and combined-layer requests at the Edge boundary.
+- [x] Re-fetch persisted Revision Set state before deriving final page completion.
+- [x] Add a database trigger that marks dependent Dialogue stale after a Page Beats proposal or edit changes.
+- [x] Refresh the client Revision Set after a direct Beats edit.
+- [x] Add focused schema, Edge, persistence, migration, stale-progress, and edit-refresh regressions.
+- [x] Apply migration `20260726000000_writer_pacing_revision_beats_invalidation.sql`.
+- [x] Deploy and verify `writer-tools` v108.
+
+**Pass 5 smoke test:** PASS — editing the Page 2 Beats candidate immediately exposed `Retry Dialogue for page 2`; resetting the edit preserved the stale dependency; the v108 Dialogue-only retry regenerated from the effective Beats candidate, cleared only the Page 2 Dialogue recovery row, and returned as a pending user decision. After explicit approval, all three layers applied and undo restored the official story. Browser warnings/errors remained empty.
+
+**Pass 5 result:** PASS — the split request contract is enforced at both client and hosted boundaries, completion derives from fresh persisted state, and Page Beats changes can no longer leave an apparently valid but outdated Dialogue proposal.
+
+**Pass 5 regression result:** PASS — the first consolidated run exposed a test-only readiness race in the new Beats-edit refresh regression (839 of 840 tests passed). Waiting for the Revision Set to load before invoking the hook corrected the setup; the focused 8-test hook suite then passed, followed by the complete 134-file/840-test gate.
 
 - [ ] **Step 7: Update continuity records and finish the branch**
 

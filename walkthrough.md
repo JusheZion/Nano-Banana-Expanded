@@ -13526,6 +13526,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Made Dialogue depend on the saved effective Page Beats proposal, preferring an edited candidate when present, rather than unchanged official Beats.
 - Added page-and-layer failure persistence, individual layer retry, batch layer retry, legacy page-only ledger migration, and recovery rows for genuinely missing layers that have no ledger entry.
 - Restricted Gemini's structured-output schema and prompt to only the requested child layer.
+- Enforced an exact-one-layer API contract so omitted or combined child requests are rejected by both shared validation and the hosted Edge boundary.
+- Made final completion derive from freshly persisted Revision Set state instead of merging stale client progress.
+- Added database-backed dependency invalidation: changing a Page Beats AI proposal or edit marks its dependent Dialogue stale and removes that page from completed progress until Dialogue is regenerated.
 - Bounded the recovery ledger with an internal scroll region so large incomplete Revision Sets do not push the comparison workspace far below the fold.
 - Recorded the durable Pacing Revision split contract in the root `AGENTS.md`.
 
@@ -13537,13 +13540,19 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
 - `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
 - `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/schemas.ts`
+- `src/shared/writer/types.ts`
+- `src/shared/writer/__tests__/schemas.test.ts`
+- `src/shared/api/__tests__/writerTools.test.ts`
 - `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `supabase/functions/_shared/writerSchemas.ts`
 - `supabase/functions/_shared/pacingRevisionSchemas.ts`
 - `supabase/functions/writer-tools/index.ts`
 - `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
 - `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
 - `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
 - `supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`
+- `supabase/migrations/20260726000000_writer_pacing_revision_beats_invalidation.sql`
 - `walkthrough.md`
 
 ### Implementation notes
@@ -13552,16 +13561,19 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - A page enters `completed_pages` only when both Page Beats and Dialogue are ready or applied.
 - New failure rows carry `layer: "beats" | "dialogue"`; the field is optional so saved legacy rows remain valid.
 - Legacy rows are expanded into explicit missing siblings during a one-layer retry, preventing an unrequested failure from disappearing.
+- A Beats proposal/edit trigger marks the matching dependent Dialogue Child Change `stale`, resets its decision to `pending`, clears any edited candidate, and returns the parent item/set to a non-complete state.
 - Recovery controls use unique page-and-layer accessible names and expose current/proposed content through the existing two-panel review.
 
 ### Verification
 - Focused implementation gate: 6 test files and 20 tests passed before hosted deployment; subsequent recovery and UI corrections were covered by focused red-green tests.
-- Consolidated regression: 134 test files and 836 individual tests passed.
+- Consolidated post-review regression: 134 test files and 840 individual tests passed.
+- The first post-review full run found a test-only readiness race in the new Beats-edit refresh regression (839 of 840 tests passed). After requiring the loaded Revision Set as the test precondition, the focused hook suite passed 1 file / 8 tests and the full gate passed on rerun.
 - `npm run lint`: passed with 0 errors and 71 existing repository warnings.
 - `npm run build`: passed with the existing large-chunk advisories for WriterPortal and ComicPortal.
 - `git diff --check`: passed.
-- Supabase project `vxclogwiytxjolisnakd` reports `writer-tools` version 107 `ACTIVE`.
+- Supabase project `vxclogwiytxjolisnakd` reports `writer-tools` version 108 `ACTIVE`; the Beats-to-Dialogue invalidation migration is applied.
 - Signed-in hosted QA produced Page 2 Page Beats and Dialogue in separate requests in under 30 seconds each. Dialogue matched the saved proposed Beats content, both proposals survived reload, and Page 2 recovery entries cleared.
+- Editing the hosted Page 2 Beats candidate immediately marked Dialogue stale and exposed a Dialogue-only retry. Resetting the edit preserved invalidation; the v108 retry regenerated Dialogue from the effective Beats candidate and returned it as a pending user decision without automatic application.
 - The approved Outline, Page Beats, and Dialogue changes applied in dependency order. Official Page 2 content matched the proposals; undo restored the exact original Beats and empty Dialogue while retaining all three proposals as ready to apply.
 - Browser console inspection returned no warnings or errors. Desktop visual QA confirmed the recovery ledger remains readable and height-bounded.
 

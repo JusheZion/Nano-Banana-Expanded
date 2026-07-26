@@ -136,6 +136,8 @@ describe('invokeWriterTools token refresh behavior', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
       page_id: '550e8400-e29b-41d4-a716-446655440001',
+      include_beats: true,
+      include_dialogue: false,
     };
     getSessionMock.mockResolvedValue({
       data: { session: { access_token: freshToken, refresh_token: 'refresh-token' } },

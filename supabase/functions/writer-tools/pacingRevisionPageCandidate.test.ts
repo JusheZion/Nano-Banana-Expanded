@@ -68,5 +68,8 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(previewBranch).toContain('pageHasReadyDialogue');
     expect(previewBranch).toContain('effectiveBeatsCandidate');
     expect(previewBranch).toContain('Page Beats candidate is required before Dialogue');
+    expect(previewBranch).toContain('includeBeats === includeDialogue');
+    expect(previewBranch).not.toContain('include_beats !== false');
+    expect(previewBranch).not.toContain('include_dialogue !== false');
   });
 });

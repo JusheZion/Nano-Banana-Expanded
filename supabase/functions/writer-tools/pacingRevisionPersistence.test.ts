@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   persistPacingRevisionOutlinePreview,
   projectPacingRevisionFailureLedger,
@@ -52,5 +54,18 @@ describe('persistPacingRevisionOutlinePreview', () => {
     })).toEqual([
       { page_number: 2, layer: 'dialogue', reason: 'Legacy combined timeout' },
     ]);
+  });
+
+  it('invalidates dependent Dialogue whenever the effective Beats candidate changes', () => {
+    const migration = readFileSync(
+      join(process.cwd(), 'supabase/migrations/20260726000000_writer_pacing_revision_beats_invalidation.sql'),
+      'utf8',
+    );
+    expect(migration).toContain("new.layer = 'beats'");
+    expect(migration).toMatch(/new\.ai_proposal is distinct from old\.ai_proposal/i);
+    expect(migration).toMatch(/new\.edited_candidate is distinct from old\.edited_candidate/i);
+    expect(migration).toContain("generation_status = 'stale'");
+    expect(migration).toContain("decision = 'pending'");
+    expect(migration).toMatch(/new\.id = any\(dependency_ids\)/i);
   });
 });

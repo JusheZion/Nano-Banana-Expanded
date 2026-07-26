@@ -1671,11 +1671,11 @@ Deno.serve(async (req) => {
         include_beats,
         include_dialogue,
       } = parsedReq.data;
-      const includeBeats = include_beats !== false;
-      const includeDialogue = include_dialogue !== false;
-      if (!includeBeats && !includeDialogue) {
+      const includeBeats = include_beats;
+      const includeDialogue = include_dialogue;
+      if (includeBeats === includeDialogue) {
         return Response.json(
-          { success: false, error: 'Nothing selected for preview' },
+          { success: false, error: 'Exactly one page child layer must be selected' },
           { status: 400, headers: corsHeaders },
         );
       }
@@ -1895,6 +1895,7 @@ Deno.serve(async (req) => {
       if (includeBeats && beatsUnlocked && candidate.proposed_beats_json) {
         beatsChangeId = beatsChange?.id ?? crypto.randomUUID();
         pageHasReadyBeats = true;
+        pageHasReadyDialogue = false;
         changeRows.push({
           id: beatsChangeId,
           item_id: item.id,

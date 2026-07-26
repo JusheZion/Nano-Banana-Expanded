@@ -13,6 +13,7 @@ import {
   writerToolsDraftDialogueRequestSchema,
   writerToolsOutlineIssueRequestSchema,
   writerToolsOutlineTreatmentPreviewRequestSchema,
+  writerToolsPacingRevisionPagePreviewRequestSchema,
   writerToolsPageBeatsIssueRequestSchema,
   writerToolsPageBeatsRequestSchema,
   writerToolsRequestSchema,
@@ -60,6 +61,25 @@ describe('writerToolsRequestSchema', () => {
       treatment_mode: 'structure',
     });
     expect(writerToolsOutlineTreatmentPreviewRequestSchema.parse(treatmentRequest).source_beats).toHaveLength(1);
+  });
+
+  it('requires exactly one Pacing Revision child layer per page request', () => {
+    const base = {
+      mode: 'pacing_revision_page_preview' as const,
+      revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
+      page_id: '550e8400-e29b-41d4-a716-446655440001',
+    };
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.parse({
+      ...base,
+      include_beats: true,
+      include_dialogue: false,
+    })).toMatchObject({ include_beats: true, include_dialogue: false });
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse(base).success).toBe(false);
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
+      ...base,
+      include_beats: true,
+      include_dialogue: true,
+    }).success).toBe(false);
   });
 
   it('rejects malformed outline treatment preview requests', () => {
