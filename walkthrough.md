@@ -13518,3 +13518,62 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Prepare and approve a small bridge plan for separate Page Beats and Dialogue generation, including partial-success persistence and retry-one-layer behavior, before further implementation or hosted retries.
+
+## Pacing Revision layer-split generation and hosted completion - 2026-07-26
+
+### What changed
+- Split each Pacing Revision page into separately bounded Page Beats and Dialogue model requests while preserving the existing browser-owned page queue.
+- Made Dialogue depend on the saved effective Page Beats proposal, preferring an edited candidate when present, rather than unchanged official Beats.
+- Added page-and-layer failure persistence, individual layer retry, batch layer retry, legacy page-only ledger migration, and recovery rows for genuinely missing layers that have no ledger entry.
+- Restricted Gemini's structured-output schema and prompt to only the requested child layer.
+- Bounded the recovery ledger with an internal scroll region so large incomplete Revision Sets do not push the comparison workspace far below the fold.
+- Recorded the durable Pacing Revision split contract in the root `AGENTS.md`.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/plans/2026-07-26-writer-pacing-layer-split-implementation.md`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `supabase/functions/_shared/pacingRevisionSchemas.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- Initial generation and resume derive missing layers from ready/applied Child Changes. Page Beats runs first; Dialogue runs only after Beats succeeds or already exists.
+- One layer's transport or validation failure no longer discards or regenerates its successful sibling.
+- A page enters `completed_pages` only when both Page Beats and Dialogue are ready or applied.
+- New failure rows carry `layer: "beats" | "dialogue"`; the field is optional so saved legacy rows remain valid.
+- Legacy rows are expanded into explicit missing siblings during a one-layer retry, preventing an unrequested failure from disappearing.
+- Recovery controls use unique page-and-layer accessible names and expose current/proposed content through the existing two-panel review.
+
+### Verification
+- Focused implementation gate: 6 test files and 20 tests passed before hosted deployment; subsequent recovery and UI corrections were covered by focused red-green tests.
+- Consolidated regression: 134 test files and 836 individual tests passed.
+- `npm run lint`: passed with 0 errors and 71 existing repository warnings.
+- `npm run build`: passed with the existing large-chunk advisories for WriterPortal and ComicPortal.
+- `git diff --check`: passed.
+- Supabase project `vxclogwiytxjolisnakd` reports `writer-tools` version 107 `ACTIVE`.
+- Signed-in hosted QA produced Page 2 Page Beats and Dialogue in separate requests in under 30 seconds each. Dialogue matched the saved proposed Beats content, both proposals survived reload, and Page 2 recovery entries cleared.
+- The approved Outline, Page Beats, and Dialogue changes applied in dependency order. Official Page 2 content matched the proposals; undo restored the exact original Beats and empty Dialogue while retaining all three proposals as ready to apply.
+- Browser console inspection returned no warnings or errors. Desktop visual QA confirmed the recovery ledger remains readable and height-bounded.
+
+### Outstanding issues
+- The preserved QA Revision Set intentionally still contains missing Page Beats and Dialogue candidates for pages 45-70. They were not generated because the hosted release smoke was deliberately scoped to Page 2.
+
+### Risks or caveats
+- The recovery batch now accurately includes every genuinely missing layer, not only historical ledger failures. On the preserved 70-page QA set this is 52 layer targets; users can still retry any layer individually.
+- Existing repository lint warnings and large bundle advisories are unchanged and outside this feature's scope.
+
+### Operator follow-up
+- None for the Page 2 release gate.
+
+### Next steps
+- Publish the verified branch, deploy the frontend, verify the production bundle, and merge draft PR #27.

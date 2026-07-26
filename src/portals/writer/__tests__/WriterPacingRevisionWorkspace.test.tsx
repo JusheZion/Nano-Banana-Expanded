@@ -15,7 +15,10 @@ function fixture(): PacingRevisionSet {
     proposed_outline_json: {},
     source_fingerprint: 'source',
     progress_json: { total_pages: 1, completed_pages: [1], current_page: null, stopped: false },
-    failure_ledger: [{ page_number: 4, reason: 'Malformed model output' }],
+    failure_ledger: [
+      { page_number: 4, layer: 'beats', reason: 'Beats failed' },
+      { page_number: 4, layer: 'dialogue', reason: 'Dialogue failed' },
+    ],
     items: [{
       id: itemId,
       revision_set_id: crypto.randomUUID(),
@@ -80,7 +83,7 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(onChange).toHaveBeenCalledWith(expect.any(String), { decision: 'approved' });
   });
 
-  it('navigates dependencies and retries failed pages only', () => {
+  it('navigates dependencies and retries individual or batched failed layers', () => {
     const onRetryFailed = vi.fn();
     const onNavigateToPage = vi.fn();
     render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} onNavigateToPage={onNavigateToPage} />);
@@ -88,11 +91,40 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByRole('note').textContent).toContain('depends on 1 earlier change');
     fireEvent.click(screen.getByRole('button', { name: 'Go to dependency' }));
     expect(screen.getByRole('tab', { name: /Live Outline/ }).getAttribute('aria-selected')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: 'Retry failed pages only' }));
-    expect(onRetryFailed).toHaveBeenCalledWith([4]);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry page 4' }));
-    expect(onRetryFailed).toHaveBeenCalledWith([4]);
-    fireEvent.click(screen.getByRole('button', { name: 'Open page 4' }));
+    expect(screen.getByTestId('pacing-recovery-list').className).toContain('max-h-80');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry all failed layers' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([
+      { page: 1, layer: 'dialogue' },
+      { page: 4, layer: 'beats' },
+      { page: 4, layer: 'dialogue' },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Page Beats for page 4' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([{ page: 4, layer: 'beats' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 4' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([{ page: 4, layer: 'dialogue' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 4 for Page Beats' }));
     expect(onNavigateToPage).toHaveBeenCalledWith(4);
+  });
+
+  it('expands a legacy page-only failure into only the missing layer', () => {
+    const legacySet = fixture();
+    legacySet.failure_ledger = [{ page_number: 1, reason: 'Legacy page failure' }];
+    const onRetryFailed = vi.fn();
+    render(<WriterPacingRevisionWorkspace revisionSet={legacySet} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} />);
+
+    expect(screen.queryByRole('button', { name: 'Retry Page Beats for page 1' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 1' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([{ page: 1, layer: 'dialogue' }]);
+  });
+
+  it('offers an individual retry for a missing child layer without a ledger entry', () => {
+    const incompleteSet = fixture();
+    incompleteSet.failure_ledger = [];
+    const onRetryFailed = vi.fn();
+    render(<WriterPacingRevisionWorkspace revisionSet={incompleteSet} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 1' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([{ page: 1, layer: 'dialogue' }]);
+    expect(screen.getByText('Candidate has not been generated yet.')).toBeTruthy();
   });
 });

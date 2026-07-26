@@ -10,6 +10,7 @@ import {
   effectivePacingRevisionCandidate,
   flattenPacingRevisionChanges,
 } from './writerPacingRevisionModel';
+import type { PacingRevisionRetryTarget } from './useWriterPacingRevisionSet';
 
 type Props = {
   revisionSet: PacingRevisionSet;
@@ -18,7 +19,7 @@ type Props = {
   advanced?: boolean;
   onChange: (changeId: string, patch: PacingRevisionDecisionPatch) => Promise<void> | void;
   onApply: () => Promise<void> | void;
-  onRetryFailed?: (pages: number[]) => Promise<void> | void;
+  onRetryFailed?: (targets: PacingRevisionRetryTarget[]) => Promise<void> | void;
   onNavigateToPage?: (pageNumber: number) => Promise<void> | void;
 };
 
@@ -128,6 +129,60 @@ export function WriterPacingRevisionWorkspace({
   );
   const pendingCount = allChanges.filter((change) => change.decision === 'pending').length;
   const approvedEligibleCount = approvedPacingRevisionChanges(revisionSet).length;
+  const failureRows = useMemo(() => {
+    const readyLayers = new Map<number, Set<'beats' | 'dialogue'>>();
+    for (const change of allChanges) {
+      if (
+        change.page_number == null
+        || !['beats', 'dialogue'].includes(change.layer)
+        || !['ready', 'applied'].includes(change.generation_status)
+      ) continue;
+      const layers = readyLayers.get(change.page_number) ?? new Set<'beats' | 'dialogue'>();
+      layers.add(change.layer as 'beats' | 'dialogue');
+      readyLayers.set(change.page_number, layers);
+    }
+    const rows = new Map<string, {
+      page: number;
+      layer: 'beats' | 'dialogue';
+      reason: string;
+    }>();
+    for (const failure of revisionSet.failure_ledger) {
+      const layers = failure.layer
+        ? [failure.layer]
+        : (['beats', 'dialogue'] as const).filter(
+          (candidate) => !readyLayers.get(failure.page_number)?.has(candidate)
+        );
+      for (const failedLayer of layers) {
+        const key = `${failure.page_number}:${failedLayer}`;
+        if (!rows.has(key)) {
+          rows.set(key, {
+            page: failure.page_number,
+            layer: failedLayer,
+            reason: failure.reason,
+          });
+        }
+      }
+    }
+    const affectedPages = new Set(
+      revisionSet.items.flatMap((item) => item.affected_page_numbers)
+    );
+    for (const page of affectedPages) {
+      for (const missingLayer of ['beats', 'dialogue'] as const) {
+        if (readyLayers.get(page)?.has(missingLayer)) continue;
+        const key = `${page}:${missingLayer}`;
+        if (!rows.has(key)) {
+          rows.set(key, {
+            page,
+            layer: missingLayer,
+            reason: 'Candidate has not been generated yet.',
+          });
+        }
+      }
+    }
+    return [...rows.values()].sort((a, b) =>
+      a.page - b.page || (a.layer === 'beats' ? -1 : 1)
+    );
+  }, [allChanges, revisionSet.failure_ledger, revisionSet.items]);
 
   const chooseLayer = (nextLayer: PacingRevisionLayer) => {
     setLayer(nextLayer);
@@ -147,7 +202,7 @@ export function WriterPacingRevisionWorkspace({
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Story Review · Revision Set</p>
           <h2 id="pacing-revision-title" className="mt-1 font-serif text-2xl font-semibold">Pacing revision workspace</h2>
-          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {revisionSet.failure_ledger.length} failed pages</p>
+          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed layers</p>
         </div>
         <button
           type="button"
@@ -181,34 +236,37 @@ export function WriterPacingRevisionWorkspace({
         })}
       </div>
 
-      {revisionSet.failure_ledger.length > 0 && (
+      {failureRows.length > 0 && (
         <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <strong>Some pages need attention.</strong>
             {onRetryFailed && (
-              <button type="button" disabled={busy} onClick={() => void onRetryFailed(revisionSet.failure_ledger.map((failure) => failure.page_number))} className="font-black underline decoration-2 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
-                Retry failed pages only
+              <button type="button" disabled={busy} onClick={() => void onRetryFailed(failureRows.map(({ page, layer }) => ({ page, layer })))} className="font-black underline decoration-2 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
+                Retry all failed layers
               </button>
             )}
           </div>
-          <ul className="mt-3 space-y-2">
-            {revisionSet.failure_ledger.map((failure) => (
-              <li key={failure.page_number} className="flex flex-wrap items-center justify-between gap-3 border-t border-red-200 pt-2">
-                <span><strong>Page {failure.page_number}:</strong> {failure.reason}</span>
+          <ul data-testid="pacing-recovery-list" className="mt-3 max-h-80 space-y-2 overflow-y-auto overscroll-contain pr-2">
+            {failureRows.map((failure) => {
+              const layerLabel = failure.layer === 'beats' ? 'Page Beats' : 'Dialogue';
+              return (
+              <li key={`${failure.page}:${failure.layer}`} className="flex flex-wrap items-center justify-between gap-3 border-t border-red-200 pt-2">
+                <span><strong>Page {failure.page} · {layerLabel}:</strong> {failure.reason}</span>
                 <span className="flex gap-3">
                   {onNavigateToPage && (
-                    <button type="button" disabled={busy} onClick={() => void onNavigateToPage(failure.page_number)} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
-                      Open page {failure.page_number}
+                    <button type="button" disabled={busy} aria-label={`Open page ${failure.page} for ${layerLabel}`} onClick={() => void onNavigateToPage(failure.page)} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
+                      Open page {failure.page}
                     </button>
                   )}
                   {onRetryFailed && (
-                    <button type="button" disabled={busy} onClick={() => void onRetryFailed([failure.page_number])} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
-                      Retry page {failure.page_number}
+                    <button type="button" disabled={busy} aria-label={`Retry ${layerLabel} for page ${failure.page}`} onClick={() => void onRetryFailed([{ page: failure.page, layer: failure.layer }])} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
+                      Retry {layerLabel}
                     </button>
                   )}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       )}

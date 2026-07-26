@@ -15,27 +15,41 @@ import {
 import { runPacingRevisionQueue } from './writerPacingRevisionQueue';
 
 type PageRef = { id: string; page_number: number };
+type PacingRevisionChildLayer = 'beats' | 'dialogue';
 
-function pagesMissingCandidates(set: PacingRevisionSet | null): number[] {
-  if (!set || ['applied', 'discarded'].includes(set.status)) return [];
-  const affectedPages = new Set(set.items.flatMap((item) => item.affected_page_numbers));
-  const readyLayersByPage = new Map<number, Set<string>>();
+export type PacingRevisionRetryTarget = {
+  page: number;
+  layer?: PacingRevisionChildLayer;
+};
+
+function readyLayersByPage(set: PacingRevisionSet): Map<number, Set<PacingRevisionChildLayer>> {
+  const readyLayers = new Map<number, Set<PacingRevisionChildLayer>>();
   for (const change of set.items.flatMap((item) => item.changes)) {
     if (
       change.page_number == null
       || !['beats', 'dialogue'].includes(change.layer)
       || !['ready', 'applied'].includes(change.generation_status)
     ) continue;
-    const layers = readyLayersByPage.get(change.page_number) ?? new Set<string>();
-    layers.add(change.layer);
-    readyLayersByPage.set(change.page_number, layers);
+    const layers = readyLayers.get(change.page_number) ?? new Set<PacingRevisionChildLayer>();
+    layers.add(change.layer as PacingRevisionChildLayer);
+    readyLayers.set(change.page_number, layers);
   }
-  return [...affectedPages]
-    .filter((pageNumber) => {
-      const layers = readyLayersByPage.get(pageNumber);
-      return !layers?.has('beats') || !layers.has('dialogue');
-    })
-    .sort((a, b) => a - b);
+  return readyLayers;
+}
+
+function missingLayersByPage(set: PacingRevisionSet | null): Map<number, Set<PacingRevisionChildLayer>> {
+  if (!set || ['applied', 'discarded'].includes(set.status)) return new Map();
+  const affectedPages = new Set(set.items.flatMap((item) => item.affected_page_numbers));
+  const readyLayers = readyLayersByPage(set);
+  const missing = new Map<number, Set<PacingRevisionChildLayer>>();
+  for (const pageNumber of affectedPages) {
+    const pageReadyLayers = readyLayers.get(pageNumber);
+    const pageMissing = new Set<PacingRevisionChildLayer>();
+    if (!pageReadyLayers?.has('beats')) pageMissing.add('beats');
+    if (!pageReadyLayers?.has('dialogue')) pageMissing.add('dialogue');
+    if (pageMissing.size > 0) missing.set(pageNumber, pageMissing);
+  }
+  return new Map([...missing.entries()].sort(([a], [b]) => a - b));
 }
 
 export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRef[]) {
@@ -63,8 +77,27 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     void refresh();
   }, [refresh]);
 
-  const generatePagesForSet = useCallback(async (set: PacingRevisionSet, pageNumbers?: number[]) => {
-    const requested = new Set(pageNumbers ?? pagesMissingCandidates(set));
+  const generatePagesForSet = useCallback(async (
+    set: PacingRevisionSet,
+    retryTargets?: PacingRevisionRetryTarget[],
+  ) => {
+    const missing = missingLayersByPage(set);
+    const ready = readyLayersByPage(set);
+    const layersToRunByPage = new Map<number, Set<PacingRevisionChildLayer>>();
+    if (retryTargets) {
+      for (const target of retryTargets) {
+        const layers = layersToRunByPage.get(target.page) ?? new Set<PacingRevisionChildLayer>();
+        const targetLayers = target.layer ? [target.layer] : [...(missing.get(target.page) ?? [])];
+        for (const layer of targetLayers) layers.add(layer);
+        if (layers.has('dialogue') && !ready.get(target.page)?.has('beats')) layers.add('beats');
+        if (layers.size > 0) layersToRunByPage.set(target.page, layers);
+      }
+    } else {
+      for (const [pageNumber, layers] of missing) {
+        layersToRunByPage.set(pageNumber, new Set(layers));
+      }
+    }
+    const requested = new Set(layersToRunByPage.keys());
     const pageByNumber = new Map(pagesRef.current.map((page) => [page.page_number, page]));
     const runnablePages = [...requested].filter((page) => pageByNumber.has(page));
     if (runnablePages.length === 0) {
@@ -82,22 +115,36 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       pages: runnablePages,
       shouldStop: () => stopRef.current,
       runPage: async (pageNumber) => {
-        const response = await invokeWriterTools({
-          mode: 'pacing_revision_page_preview',
-          revision_set_id: set.id,
-          page_id: pageByNumber.get(pageNumber)!.id,
-        });
-        return response.success
-          ? { ok: true as const, page: pageNumber }
-          : { ok: false as const, page: pageNumber, reason: [response.error, response.details].filter(Boolean).join(': ') };
+        const layersToRun = layersToRunByPage.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
+        for (const layer of ['beats', 'dialogue'] as const) {
+          if (!layersToRun.has(layer)) continue;
+          const response = await invokeWriterTools({
+            mode: 'pacing_revision_page_preview',
+            revision_set_id: set.id,
+            page_id: pageByNumber.get(pageNumber)!.id,
+            include_beats: layer === 'beats',
+            include_dialogue: layer === 'dialogue',
+          });
+          if (!response.success) {
+            const label = layer === 'beats' ? 'Page Beats' : 'Dialogue';
+            const detail = [response.error, response.details].filter(Boolean).join(': ');
+            return { ok: false as const, page: pageNumber, reason: `${label}: ${detail}` };
+          }
+        }
+        return { ok: true as const, page: pageNumber };
       },
       onCheckpoint: async () => { await refresh(set.id); },
+    });
+    const completedPages = result.completedPages.filter((pageNumber) => {
+      const pageMissing = missing.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
+      const pageRan = layersToRunByPage.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
+      return [...pageMissing].every((layer) => pageRan.has(layer));
     });
     await updateWriterPacingRevisionProgress(set.id, {
       ...set.progress_json,
       completed_pages: [...new Set([
         ...set.progress_json.completed_pages,
-        ...result.completedPages,
+        ...completedPages,
       ])].sort((a, b) => a - b),
       current_page: null,
       stopped: result.stopped,
@@ -107,9 +154,9 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     if (result.failures.length) setError(`${result.failures.length} page candidate${result.failures.length === 1 ? '' : 's'} need retry.`);
   }, [refresh]);
 
-  const generatePages = useCallback(async (pageNumbers?: number[]) => {
+  const generatePages = useCallback(async (retryTargets?: PacingRevisionRetryTarget[]) => {
     if (!activeSet) return;
-    await generatePagesForSet(activeSet, pageNumbers);
+    await generatePagesForSet(activeSet, retryTargets);
   }, [activeSet, generatePagesForSet]);
 
   const create = useCallback(async () => {
@@ -159,7 +206,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
   }, [activeSet]);
 
   const hasPendingCandidates = useMemo(
-    () => pagesMissingCandidates(activeSet).length > 0,
+    () => missingLayersByPage(activeSet).size > 0,
     [activeSet],
   );
 
@@ -174,7 +221,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     discard,
     hasPendingCandidates,
     generatePages,
-    retryFailed: (pageNumbers: number[]) => generatePages(pageNumbers),
+    retryFailed: (targets: PacingRevisionRetryTarget[]) => generatePages(targets),
     stopAfterCurrentPage: () => { stopRef.current = true; },
   };
 }

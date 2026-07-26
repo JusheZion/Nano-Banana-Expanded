@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   pacingRevisionChangeSchema,
+  pacingRevisionFailureSchema,
   pacingRevisionSetSchema,
 } from '../pacingRevisionSchemas';
 
@@ -78,5 +79,25 @@ describe('pacing revision schemas', () => {
       generation_status: 'ready',
       reason: 'Delay the reveal.',
     })).toThrow();
+  });
+
+  it('parses legacy and layer-specific failure ledger entries', () => {
+    expect(pacingRevisionFailureSchema.parse({
+      page_number: 3,
+      reason: 'Legacy page failure',
+    })).toEqual({
+      page_number: 3,
+      reason: 'Legacy page failure',
+    });
+
+    expect(pacingRevisionFailureSchema.parse({
+      page_number: 3,
+      layer: 'dialogue',
+      reason: 'Dialogue request timed out',
+    })).toEqual({
+      page_number: 3,
+      layer: 'dialogue',
+      reason: 'Dialogue request timed out',
+    });
   });
 });

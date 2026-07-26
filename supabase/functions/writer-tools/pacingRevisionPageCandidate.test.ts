@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { generateValidatedPacingRevisionPageCandidate } from './pacingRevisionPageCandidate.ts';
+import {
+  generateValidatedPacingRevisionPageCandidate,
+  pacingRevisionPageResponseSchema,
+} from './pacingRevisionPageCandidate.ts';
 
 describe('generateValidatedPacingRevisionPageCandidate', () => {
   it('retries malformed output once at lower temperature', async () => {
@@ -30,6 +33,20 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 
+  it('exposes only the requested child layer in the structured output schema', () => {
+    const beatsSchema = pacingRevisionPageResponseSchema(true, false);
+    const dialogueSchema = pacingRevisionPageResponseSchema(false, true);
+    const beatsItem = beatsSchema.properties.pages.items;
+    const dialogueItem = dialogueSchema.properties.pages.items;
+
+    expect(beatsItem.properties).toHaveProperty('proposed_beats_json');
+    expect(beatsItem.properties).not.toHaveProperty('proposed_script_text');
+    expect(beatsItem.required).toContain('proposed_beats_json');
+    expect(dialogueItem.properties).toHaveProperty('proposed_script_text');
+    expect(dialogueItem.properties).not.toHaveProperty('proposed_beats_json');
+    expect(dialogueItem.required).toContain('proposed_script_text');
+  });
+
   it('uses the verified stable Flash Lite model for the bounded page preview request', () => {
     const indexSource = readFileSync(
       join(process.cwd(), 'supabase/functions/writer-tools/index.ts'),
@@ -45,5 +62,11 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
       "const PACING_REVISION_PAGE_GEMINI_MODEL = 'gemini-3.1-flash-lite';",
     );
     expect(previewBranch).toContain('preferredModel: PACING_REVISION_PAGE_GEMINI_MODEL');
+    expect(previewBranch).toContain("layer: 'beats'");
+    expect(previewBranch).toContain("layer: 'dialogue'");
+    expect(previewBranch).toContain('pageHasReadyBeats');
+    expect(previewBranch).toContain('pageHasReadyDialogue');
+    expect(previewBranch).toContain('effectiveBeatsCandidate');
+    expect(previewBranch).toContain('Page Beats candidate is required before Dialogue');
   });
 });

@@ -22,6 +22,7 @@ export const pacingRevisionSetStatusSchema = z.enum([
 
 export const pacingRevisionFailureSchema = z.object({
   page_number: z.number().int().positive().max(500),
+  layer: z.enum(['beats', 'dialogue']).optional(),
   reason: z.string().min(1).max(4000),
   item_id: z.string().uuid().optional(),
 }).strict();

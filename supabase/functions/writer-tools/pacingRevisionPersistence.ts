@@ -5,6 +5,52 @@ export type PacingRevisionPersistenceResult =
   | { ok: true }
   | { ok: false; stage: 'set' | 'children'; error: string };
 
+export type PacingRevisionChildLayer = 'beats' | 'dialogue';
+
+export type PacingRevisionFailure = {
+  page_number: number;
+  layer?: PacingRevisionChildLayer;
+  reason: string;
+  item_id?: string;
+};
+
+export function projectPacingRevisionFailureLedger({
+  ledger,
+  pageNumber,
+  requestedLayers,
+  readyLayers,
+  newFailures = [],
+}: {
+  ledger: PacingRevisionFailure[];
+  pageNumber: number;
+  requestedLayers: PacingRevisionChildLayer[];
+  readyLayers: PacingRevisionChildLayer[];
+  newFailures?: PacingRevisionFailure[];
+}): PacingRevisionFailure[] {
+  const requested = new Set(requestedLayers);
+  const ready = new Set(readyLayers);
+  const retained: PacingRevisionFailure[] = [];
+  for (const entry of ledger) {
+    if (entry.page_number !== pageNumber) {
+      retained.push(entry);
+      continue;
+    }
+    if (entry.layer) {
+      if (!requested.has(entry.layer)) retained.push(entry);
+      continue;
+    }
+    for (const layer of ['beats', 'dialogue'] as const) {
+      if (!requested.has(layer) && !ready.has(layer)) retained.push({ ...entry, layer });
+    }
+  }
+  const projected = [...retained, ...newFailures];
+  const deduplicated = new Map<string, PacingRevisionFailure>();
+  for (const entry of projected) {
+    deduplicated.set(`${entry.page_number}:${entry.layer ?? 'legacy'}`, entry);
+  }
+  return [...deduplicated.values()];
+}
+
 export async function persistPacingRevisionOutlinePreview(
   supabase: SupabaseClient,
   setRow: Record<string, unknown>,

@@ -58,9 +58,10 @@ describe('useWriterPacingRevisionSet', () => {
     mocks.discard.mockResolvedValue({ ok: true });
   });
 
-  it('creates the outline preview then runs exactly one page per request', async () => {
+  it('creates the outline preview then runs Page Beats and Dialogue as separate requests', async () => {
     mocks.invoke
       .mockResolvedValueOnce({ success: true, mode: 'pacing_revision_outline_preview', data: revisionSet })
+      .mockResolvedValueOnce({ success: true, mode: 'pacing_revision_page_preview', data: {} })
       .mockResolvedValueOnce({ success: true, mode: 'pacing_revision_page_preview', data: {} });
     const { result } = renderHook(() => useWriterPacingRevisionSet(
       ISSUE_ID,
@@ -78,6 +79,15 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      include_beats: true,
+      include_dialogue: false,
+    });
+    expect(mocks.invoke).toHaveBeenNthCalledWith(3, {
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: PAGE_ID,
+      include_beats: false,
+      include_dialogue: true,
     });
   });
 
@@ -107,12 +117,88 @@ describe('useWriterPacingRevisionSet', () => {
     expect(result.current.hasPendingCandidates).toBe(true);
     await act(async () => { await result.current.generatePages(); });
 
+    expect(mocks.invoke).toHaveBeenCalledTimes(2);
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, {
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: PAGE_ID,
+      include_beats: true,
+      include_dialogue: false,
+    });
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, {
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: PAGE_ID,
+      include_beats: false,
+      include_dialogue: true,
+    });
+  });
+
+  it('resumes a partial page by invoking only the missing Dialogue layer', async () => {
+    const partialSet: PacingRevisionSet = {
+      ...revisionSet,
+      items: [{
+        ...revisionSet.items[0]!,
+        changes: [{
+          id: '10000000-0000-4000-8000-000000000005',
+          item_id: ITEM_ID,
+          layer: 'beats',
+          target_key: `page:${PAGE_ID}`,
+          page_id: PAGE_ID,
+          page_number: 1,
+          current_value: {},
+          ai_proposal: { panels: [{ action: 'Open' }] },
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: [],
+          reason: 'Improve pacing.',
+          source_fingerprint: 'beats-source',
+          generation_status: 'ready',
+        }],
+      }],
+    };
+    mocks.list.mockResolvedValue({ ok: true, sets: [partialSet] });
+    mocks.invoke.mockResolvedValue({ success: true, mode: 'pacing_revision_page_preview', data: {} });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(
+      ISSUE_ID,
+      [{ id: PAGE_ID, page_number: 1 }],
+    ));
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    await act(async () => { await result.current.generatePages(); });
+
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     expect(mocks.invoke).toHaveBeenCalledWith({
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      include_beats: false,
+      include_dialogue: true,
     });
+  });
+
+  it('preserves the Page Beats success when the following Dialogue request fails', async () => {
+    mocks.list.mockResolvedValue({ ok: true, sets: [revisionSet] });
+    mocks.invoke
+      .mockResolvedValueOnce({ success: true, mode: 'pacing_revision_page_preview', data: {} })
+      .mockResolvedValueOnce({ success: false, error: 'Page candidate failed', details: 'Dialogue timed out' });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(
+      ISSUE_ID,
+      [{ id: PAGE_ID, page_number: 1 }],
+    ));
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    await act(async () => { await result.current.generatePages(); });
+
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      include_beats: true,
+      include_dialogue: false,
+    }));
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      include_beats: false,
+      include_dialogue: true,
+    }));
+    expect(result.current.error).toContain('need retry');
   });
 
   it('skips pages that already have both Page Beats and Dialogue candidates', async () => {

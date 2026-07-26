@@ -1,43 +1,57 @@
-export const PACING_REVISION_PAGE_RESPONSE_SCHEMA = {
+const proposedBeatsJsonSchema = {
   type: 'object',
   properties: {
-    pages: {
+    panels: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          page_id: { type: 'string' },
-          page_number: { type: 'integer' },
-          reason: { type: 'string' },
-          proposed_beats_json: {
-            type: 'object',
-            properties: {
-              panels: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    index: { type: 'integer' },
-                    action: { type: 'string' },
-                    composition: { type: 'string' },
-                    emotion: { type: 'string' },
-                    dialogue_placeholder: { type: 'string' },
-                    sfx: { type: 'string' },
-                  },
-                  required: ['action'],
-                },
-              },
-            },
-            required: ['panels'],
-          },
-          proposed_script_text: { type: 'string' },
+          index: { type: 'integer' },
+          action: { type: 'string' },
+          composition: { type: 'string' },
+          emotion: { type: 'string' },
+          dialogue_placeholder: { type: 'string' },
+          sfx: { type: 'string' },
         },
-        required: ['page_id', 'page_number'],
+        required: ['action'],
       },
     },
   },
-  required: ['pages'],
+  required: ['panels'],
 } as const;
+
+export function pacingRevisionPageResponseSchema(
+  includeBeats: boolean,
+  includeDialogue: boolean,
+) {
+  return {
+    type: 'object',
+    properties: {
+      pages: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            page_id: { type: 'string' },
+            page_number: { type: 'integer' },
+            reason: { type: 'string' },
+            ...(includeBeats ? { proposed_beats_json: proposedBeatsJsonSchema } : {}),
+            ...(includeDialogue ? { proposed_script_text: { type: 'string' } } : {}),
+          },
+          required: [
+            'page_id',
+            'page_number',
+            ...(includeBeats ? ['proposed_beats_json'] : []),
+            ...(includeDialogue ? ['proposed_script_text'] : []),
+          ],
+        },
+      },
+    },
+    required: ['pages'],
+  };
+}
+
+export const PACING_REVISION_PAGE_RESPONSE_SCHEMA = pacingRevisionPageResponseSchema(true, true);
 
 export async function generateValidatedPacingRevisionPageCandidate<T>(
   generate: (temperature: number) => Promise<unknown>,
