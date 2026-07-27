@@ -13590,3 +13590,36 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Merge ready PR #27 immediately after the final continuity commit is pushed.
+
+## Pacing Revision selection UX design - 2026-07-26
+
+### What changed
+- Documented the approved design for tab-scoped select-all and clear-selection controls in the Pacing revision workspace.
+- Specified a persistently visible batch action footer, a collapsed-by-default failure summary, and explicit messaging that child-generation failures do not block independent Outline approval.
+- Recorded the durable interaction contract in the root DOX instructions.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/specs/2026-07-26-pacing-revision-selection-ux-design.md`
+- `walkthrough.md`
+
+### Implementation notes
+- This prompt produced design documentation only; no application code or runtime behavior changed.
+- Batch counts and decisions are scoped to the active tab even if selections remain stored while visiting another tab.
+- The proposed correction is client-only and does not alter schemas, Supabase, Edge Functions, or persistence.
+
+### Verification
+- Completed a specification self-review for placeholders, contradictions, scope, and ambiguity.
+- Confirmed the design preserves individual decisions, explicit apply, dependencies, retry, and undo.
+
+### Outstanding issues
+- Implementation and runtime verification remain pending written-spec review.
+
+### Risks or caveats
+- None identified beyond preserving adequate list padding so the sticky footer cannot overlap the final item.
+
+### Operator follow-up
+- Review and approve the written specification before implementation planning begins.
+
+### Next steps
+- Prepare the pass-based implementation plan after written-spec approval.
