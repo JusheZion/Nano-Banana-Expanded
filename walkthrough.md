@@ -13833,3 +13833,39 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue only after Pass 2 re-review approval.
+
+## Pacing Revision shifted virtual-page dependency authorization - 2026-07-27
+
+### What changed
+- Corrected hosted preview authorization for virtual pages created by structural shifts.
+- A virtual page owned by a deterministically backed Revision Item now depends on that item's accepted Outline changes even when the operation's result page precedes the shifted virtual target.
+- Added executable coverage for a page-3 insertion whose deterministic affected range includes virtual page 5.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Persisted `affected_page_numbers` remains the target-ownership gate and is derived from accepted deterministic operations.
+- Virtual dependency IDs come only from ready/applied, non-rejected Outline changes on the same owning item.
+- Model-declared affected pages remain unused for authorization.
+
+### Verification
+- RED: virtual page 5 was rejected because the accepted insertion Outline child recorded page 3.
+- GREEN: the hosted flow persists virtual Page Beats with `page_id: null` and the page-3 insertion dependency.
+- Focused Pass 2 gate, targeted TypeScript, focused lint, and `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 re-review approval.

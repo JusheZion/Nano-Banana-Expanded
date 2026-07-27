@@ -171,6 +171,63 @@ describe('executePacingRevisionPagePreviewFlow', () => {
     expect(physicalPages).toEqual(originalPages);
   });
 
+  it('backs a shifted virtual page with the accepted mid-outline insertion on its owning item', async () => {
+    const insertedOutlineChange = {
+      ...outlineChange,
+      id: 'outline-change-insert-page-3',
+      item_id: 'item-mid-insert',
+      target_key: 'outline:add-after-page-2',
+      page_number: 3,
+      ai_proposal: { proposed_beat: { page_target: 3 } },
+    };
+    const persistedRows: Array<Record<string, unknown>> = [];
+
+    await executePacingRevisionPagePreviewFlow({
+      ...baseInput(),
+      requestedPageNumber: 5,
+      physicalPages: Array.from({ length: 4 }, (_, index) => ({
+        id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        issue_id: 'issue-id',
+        page_number: index + 1,
+        beats_json: { panels: [{ action: `Physical action ${index + 1}` }] },
+        script_text: `Physical script ${index + 1}`,
+      })),
+      proposedOutline: {
+        page_beats: Array.from({ length: 5 }, (_, index) => ({
+          page_target: index + 1,
+          summary: `Proposed beat ${index + 1}`,
+        })),
+      },
+      itemRows: [{
+        id: 'item-mid-insert',
+        affected_page_numbers: [3, 4, 5],
+        generation_status: 'pending',
+      }],
+      existingChanges: [insertedOutlineChange],
+      generate: async (promptPage) => ({
+        pages: [{
+          page_id: promptPage.id,
+          page_number: 5,
+          proposed_beats_json: { panels: [{ action: 'Shifted virtual ending action' }] },
+        }],
+      }),
+      persistChanges: async (rows) => {
+        persistedRows.push(...rows);
+        return rows;
+      },
+    });
+
+    expect(persistedRows).toEqual([
+      expect.objectContaining({
+        item_id: 'item-mid-insert',
+        target_key: 'virtual-page:5',
+        page_id: null,
+        page_number: 5,
+        dependency_ids: ['outline-change-insert-page-3'],
+      }),
+    ]);
+  });
+
   it('builds virtual Dialogue from effective edited Beats and depends on the Beats change', async () => {
     const editedBeats = { panels: [{ action: 'Edited virtual action' }] };
     const persistedRows: Array<Record<string, unknown>> = [];

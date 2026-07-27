@@ -94,8 +94,7 @@ export async function executePacingRevisionPagePreviewFlow(input: {
     .filter((change) => {
       if (change.layer !== 'outline') return false;
       if (target.kind === 'physical') return true;
-      return change.page_number === target.pageNumber
-        && ['ready', 'applied'].includes(change.generation_status)
+      return ['ready', 'applied'].includes(change.generation_status)
         && change.decision !== 'rejected';
     })
     .map((change) => change.id);
