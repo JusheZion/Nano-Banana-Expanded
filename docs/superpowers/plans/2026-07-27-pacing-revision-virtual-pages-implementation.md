@@ -405,7 +405,7 @@ git commit -m "fix: verify pacing expansion apply"
 - Every comparison identifies its page.
 - Revision Item page numbers navigate to physical content or the matching virtual preview.
 
-- [ ] **Step 1: Add RED model and component tests**
+- [x] **Step 1: Add RED model and component tests**
 
 Add summary/blocker lifecycle tests to `writerPacingRevisionModel.test.ts`. Add component cases for:
 
@@ -417,7 +417,7 @@ Add summary/blocker lifecycle tests to `writerPacingRevisionModel.test.ts`. Add 
 - virtual-page local selection and badge;
 - applied-set failure suppression.
 
-- [ ] **Step 2: Run focused UI tests and confirm failure**
+- [x] **Step 2: Run focused UI tests and confirm failure**
 
 Run:
 
@@ -427,7 +427,7 @@ npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts sr
 
 Expected: FAIL on historical counts, unconditional dependency banner, applied wording, and missing page controls.
 
-- [ ] **Step 3: Add fail-closed layer summaries**
+- [x] **Step 3: Add fail-closed layer summaries**
 
 In `writerPacingRevisionModel.ts`, make missing dependency IDs unresolved and export:
 
@@ -442,28 +442,28 @@ export type PacingRevisionLayerSummary = {
 
 Derive `ready` through the same dependency-valid predicate used by Apply.
 
-- [ ] **Step 4: Implement terminal and comparison language**
+- [x] **Step 4: Implement terminal and comparison language**
 
 Use `generation_status` and set status for sidebar labels, panel labels, edit/decision visibility, failure suppression, and primary action text. Prune stale selected IDs after refresh.
 
-- [ ] **Step 5: Implement context and page controls**
+- [x] **Step 5: Implement context and page controls**
 
 Render wrapped native buttons for each affected page. Physical pages call `onNavigateToPage(page, destinationLayer)`; virtual pages select a matching local child or show a clear missing-preview/retry state. Map Outline page navigation to Page Beats in `WriterPortal`.
 
-- [ ] **Step 6: Run Pass 5 smoke**
+- [x] **Step 6: Run Pass 5 smoke**
 
 Run model and workspace tests. Expected: all pass.
 
-- [ ] **Step 7: Commit Pass 5**
+- [x] **Step 7: Commit Pass 5**
 
 ```bash
 git add src/portals/writer/WriterPacingRevisionWorkspace.tsx src/portals/writer/writerPacingRevisionModel.ts src/portals/writer/WriterPortal.tsx src/portals/writer/__tests__ docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md
 git commit -m "fix: show current pacing revision status"
 ```
 
-**Pass 5 smoke test:** Model and workspace component tests only.
+**Pass 5 smoke test:** PASS — 3 focused files / 29 tests cover model summaries, Apply-equivalent dependency validity, workspace lifecycle and navigation, and WriterPortal destination mapping. Focused ESLint reports 0 errors and the same 3 pre-existing `WriterPortal` warnings; `git diff --check` passes.
 
-**Pass 5 result:** Pending.
+**Pass 5 result:** PASS — layer tabs now report pending-decision remaining, dependency-valid approved ready, and applied counts while excluding rejected history. Missing dependencies fail closed, resolved banners disappear, applied/discarded sets are read-only, failure actions are suppressed after terminal completion, and selected IDs are pruned when candidates stop being actionable. Comparison and sidebar language reflects approved/rejected/applied lifecycle state. Every review identifies its page/layer; wrapped native page controls route physical Outline/Page Beats/Dialogue to the mapped Writer workspace, while virtual pages select their local preview or expose a direct layer retry without dead external navigation. The existing two-panel comparison, dense sidebar, and sticky batch footer remain intact.
 
 ## Pass 6: Integrated local QA and contract documentation
 

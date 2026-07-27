@@ -301,7 +301,7 @@ describe('WriterPacingRevisionWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 4' }));
     expect(onRetryFailed).toHaveBeenCalledWith([{ page: 4, layer: 'dialogue' }]);
     fireEvent.click(screen.getByRole('button', { name: 'Open page 4 for Page Beats' }));
-    expect(onNavigateToPage).toHaveBeenCalledWith(4);
+    expect(onNavigateToPage).toHaveBeenCalledWith(4, 'beats');
   });
 
   it('expands a legacy page-only failure into only the missing layer', () => {
@@ -326,5 +326,262 @@ describe('WriterPacingRevisionWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 1' }));
     expect(onRetryFailed).toHaveBeenCalledWith([{ page: 1, layer: 'dialogue' }]);
     expect(screen.getByText('Candidate has not been generated yet.')).toBeTruthy();
+  });
+
+  it('shows current remaining, ready, and applied counts instead of historical layer totals', () => {
+    const revisionSet = fixture();
+    const outline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    const { rerender } = render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: 'Live Outline · 1 remaining' })).toBeTruthy();
+
+    outline.decision = 'approved';
+    rerender(
+      <WriterPacingRevisionWorkspace
+        revisionSet={{ ...revisionSet, items: [...revisionSet.items] }}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Live Outline · 0 remaining · 1 ready' })).toBeTruthy();
+
+    outline.generation_status = 'applied';
+    revisionSet.status = 'applied';
+    rerender(
+      <WriterPacingRevisionWorkspace
+        revisionSet={{ ...revisionSet, items: [...revisionSet.items] }}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Live Outline · 0 remaining · 1 applied' })).toBeTruthy();
+  });
+
+  it('shows only actual dependency blockers and hides the banner after resolution', () => {
+    const revisionSet = fixture();
+    const outline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    const { rerender } = render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
+    expect(screen.getByRole('note').textContent).toContain('1 unresolved dependency');
+
+    outline.decision = 'approved';
+    rerender(
+      <WriterPacingRevisionWorkspace
+        revisionSet={{ ...revisionSet, items: [...revisionSet.items] }}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('renders applied and approved lifecycle comparisons with terminal actions read-only', () => {
+    const revisionSet = fixture();
+    const outline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    outline.decision = 'approved';
+    outline.generation_status = 'applied';
+    revisionSet.status = 'applied';
+    const rejected = {
+      ...outline,
+      id: crypto.randomUUID(),
+      target_key: 'outline:rejected',
+      decision: 'rejected' as const,
+      generation_status: 'ready' as const,
+      reason: 'Keep the original ending.',
+    };
+    revisionSet.items[0]!.changes.push(rejected);
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onRetryFailed={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Before this revision')).toBeTruthy();
+    expect(screen.getByText('Applied revision')).toBeTruthy();
+    expect(screen.getByText('Applied')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Revision applied' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Edit suggestion' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve change' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep the original ending/ }));
+    expect(screen.getByText('Rejected proposal')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit suggestion' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve change' })).toBeNull();
+  });
+
+  it('labels approved waiting proposals and disables Apply when every approved change is applied', () => {
+    const revisionSet = fixture();
+    const outline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    outline.decision = 'approved';
+
+    const { rerender } = render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Current live')).toBeTruthy();
+    expect(screen.getByText('Approved proposal')).toBeTruthy();
+
+    outline.generation_status = 'applied';
+    rerender(
+      <WriterPacingRevisionWorkspace
+        revisionSet={{ ...revisionSet, items: [...revisionSet.items] }}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'All approved changes applied' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('renders page context buttons and routes physical Beats and Dialogue with their destination layers', () => {
+    const revisionSet = fixture();
+    const beats = revisionSet.items[0]!.changes.find((change) => change.layer === 'beats')!;
+    revisionSet.items[0]!.changes.push({
+      ...beats,
+      id: crypto.randomUUID(),
+      layer: 'dialogue',
+      target_key: 'page:1:dialogue',
+      current_value: 'Wait.',
+      ai_proposal: 'Open it.',
+      reason: 'Sharpen the exchange.',
+    });
+    const onNavigateToPage = vi.fn();
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onNavigateToPage={onNavigateToPage}
+      />,
+    );
+
+    expect(screen.getByText('Affected pages')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 1 in Page Beats' }));
+    expect(onNavigateToPage).toHaveBeenCalledWith(1, 'outline');
+
+    fireEvent.click(screen.getByRole('tab', { name: /Dialogue/ }));
+    expect(screen.getByText('Page 1 · Dialogue')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 1 in Dialogue' }));
+    expect(onNavigateToPage).toHaveBeenCalledWith(1, 'dialogue');
+  });
+
+  it('keeps virtual page navigation local and explains missing virtual previews', () => {
+    const revisionSet = fixture();
+    const item = revisionSet.items[0]!;
+    const beats = item.changes.find((change) => change.layer === 'beats')!;
+    item.affected_page_numbers = [1, 2, 3];
+    item.changes.push({
+      ...beats,
+      id: crypto.randomUUID(),
+      target_key: 'virtual-page:2',
+      page_id: null,
+      page_number: 2,
+      reason: 'Preview the new bridge page.',
+    });
+    const onNavigateToPage = vi.fn();
+    const onRetryFailed = vi.fn();
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onNavigateToPage={onNavigateToPage}
+        onRetryFailed={onRetryFailed}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open virtual page 2 Page Beats preview' }));
+    expect(screen.getByText('Page 2 · Page Beats')).toBeTruthy();
+    expect(screen.getByText('Virtual page · will be created on Apply')).toBeTruthy();
+    expect(onNavigateToPage).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open virtual page 3 Page Beats preview' }));
+    expect(screen.getByText('Page 3 Page Beats preview has not been generated yet.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Page Beats for virtual page 3' }));
+    expect(onRetryFailed).toHaveBeenCalledWith([{ page: 3, layer: 'beats' }]);
+    expect(onNavigateToPage).not.toHaveBeenCalled();
+  });
+
+  it('passes the failed layer when navigating physical failures and keeps virtual failures local', () => {
+    const revisionSet = fixture();
+    const beats = revisionSet.items[0]!.changes.find((change) => change.layer === 'beats')!;
+    revisionSet.items[0]!.affected_page_numbers = [1, 2];
+    revisionSet.items[0]!.changes.push({
+      ...beats,
+      id: crypto.randomUUID(),
+      target_key: 'virtual-page:2',
+      page_id: null,
+      page_number: 2,
+    });
+    revisionSet.failure_ledger = [
+      { page_number: 1, layer: 'dialogue', reason: 'Physical failure' },
+      { page_number: 2, layer: 'beats', reason: 'Virtual failure' },
+    ];
+    const onNavigateToPage = vi.fn();
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onNavigateToPage={onNavigateToPage}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show failed layers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 1 for Dialogue' }));
+    expect(onNavigateToPage).toHaveBeenCalledWith(1, 'dialogue');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 2 for Page Beats' }));
+    expect(screen.getByText('Page 2 · Page Beats')).toBeTruthy();
+    expect(onNavigateToPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('prunes selected IDs after refresh removes or terminalizes a change', () => {
+    const revisionSet = fixture();
+    const { rerender } = render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText(/Select Strengthen the opening outline change/));
+    expect(screen.getByRole('button', { name: 'Approve selected (1)' })).toBeTruthy();
+
+    revisionSet.items[0]!.changes[0]!.generation_status = 'applied';
+    rerender(
+      <WriterPacingRevisionWorkspace
+        revisionSet={{ ...revisionSet, items: [...revisionSet.items] }}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Approve selected (0)' }).hasAttribute('disabled')).toBe(true);
   });
 });

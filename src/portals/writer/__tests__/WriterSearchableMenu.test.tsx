@@ -1,8 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { WriterSearchableMenu } from '@/portals/writer/WriterPortal';
+import {
+  getPacingRevisionNavigationTab,
+  WriterSearchableMenu,
+} from '@/portals/writer/WriterPortal';
 
 describe('WriterSearchableMenu', () => {
+  it('maps pacing revision Outline pages to Page Beats and preserves Dialogue navigation', () => {
+    expect(getPacingRevisionNavigationTab('outline')).toBe('beats');
+    expect(getPacingRevisionNavigationTab('beats')).toBe('beats');
+    expect(getPacingRevisionNavigationTab('dialogue')).toBe('dialogue');
+  });
+
   it('wires its combobox to a keyboard-navigable listbox', () => {
     const onChange = vi.fn();
     render(

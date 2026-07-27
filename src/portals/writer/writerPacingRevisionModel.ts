@@ -34,10 +34,27 @@ export function pacingRevisionDependencyBlockers(
   return change.dependency_ids.flatMap((id) => {
     const dependency = byId.get(id);
     if (!dependency) return [];
-    return dependency.decision !== 'approved' && dependency.generation_status !== 'applied'
+    return dependency.decision !== 'approved'
+      || !['ready', 'applied'].includes(dependency.generation_status)
       ? [dependency]
       : [];
   });
+}
+
+export function pacingRevisionMissingDependencyIds(
+  change: PacingRevisionChange,
+  allChanges: PacingRevisionChange[],
+): string[] {
+  const knownIds = new Set(allChanges.map((candidate) => candidate.id));
+  return change.dependency_ids.filter((id) => !knownIds.has(id));
+}
+
+export function pacingRevisionDependenciesResolved(
+  change: PacingRevisionChange,
+  allChanges: PacingRevisionChange[],
+): boolean {
+  return pacingRevisionDependencyBlockers(change, allChanges).length === 0
+    && pacingRevisionMissingDependencyIds(change, allChanges).length === 0;
 }
 
 export function approvedPacingRevisionChanges(set: PacingRevisionSet): PacingRevisionChange[] {
@@ -45,6 +62,35 @@ export function approvedPacingRevisionChanges(set: PacingRevisionSet): PacingRev
   return all.filter((change) =>
     change.decision === 'approved'
     && change.generation_status === 'ready'
-    && pacingRevisionDependencyBlockers(change, all).length === 0
+    && pacingRevisionDependenciesResolved(change, all)
   );
+}
+
+export type PacingRevisionLayerSummary = {
+  remaining: number;
+  ready: number;
+  applied: number;
+  rejected: number;
+};
+
+export function pacingRevisionLayerSummary(
+  set: PacingRevisionSet,
+  layer: PacingRevisionChange['layer'],
+): PacingRevisionLayerSummary {
+  const all = flattenPacingRevisionChanges(set);
+  const changes = all.filter((change) => change.layer === layer);
+  return {
+    remaining: changes.filter((change) =>
+      change.decision === 'pending' && change.generation_status !== 'applied'
+    ).length,
+    ready: changes.filter((change) =>
+      change.decision === 'approved'
+      && change.generation_status === 'ready'
+      && pacingRevisionDependenciesResolved(change, all)
+    ).length,
+    applied: changes.filter((change) =>
+      change.decision !== 'rejected' && change.generation_status === 'applied'
+    ).length,
+    rejected: changes.filter((change) => change.decision === 'rejected').length,
+  };
 }

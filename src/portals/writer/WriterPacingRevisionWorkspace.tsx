@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   PacingRevisionChange,
   PacingRevisionDecisionPatch,
@@ -8,7 +8,11 @@ import type {
 import {
   approvedPacingRevisionChanges,
   effectivePacingRevisionCandidate,
+  eligiblePacingRevisionChanges,
   flattenPacingRevisionChanges,
+  pacingRevisionDependencyBlockers,
+  pacingRevisionLayerSummary,
+  pacingRevisionMissingDependencyIds,
 } from './writerPacingRevisionModel';
 import type { PacingRevisionRetryTarget } from './useWriterPacingRevisionSet';
 
@@ -20,7 +24,10 @@ type Props = {
   onChange: (changeId: string, patch: PacingRevisionDecisionPatch) => Promise<void> | void;
   onApply: () => Promise<void> | void;
   onRetryFailed?: (targets: PacingRevisionRetryTarget[]) => Promise<void> | void;
-  onNavigateToPage?: (pageNumber: number) => Promise<void> | void;
+  onNavigateToPage?: (
+    pageNumber: number,
+    destinationLayer: PacingRevisionLayer,
+  ) => Promise<void> | void;
 };
 
 const LAYERS: Array<{ id: PacingRevisionLayer; label: string }> = [
@@ -28,6 +35,28 @@ const LAYERS: Array<{ id: PacingRevisionLayer; label: string }> = [
   { id: 'beats', label: 'Page Beats' },
   { id: 'dialogue', label: 'Dialogue' },
 ];
+
+function destinationLayer(
+  layer: PacingRevisionLayer,
+): Extract<PacingRevisionLayer, 'beats' | 'dialogue'> {
+  return layer === 'dialogue' ? 'dialogue' : 'beats';
+}
+
+function layerSummaryLabel(
+  summary: ReturnType<typeof pacingRevisionLayerSummary>,
+): string {
+  const parts = [`${summary.remaining} remaining`];
+  if (summary.ready > 0) parts.push(`${summary.ready} ready`);
+  if (summary.applied > 0) parts.push(`${summary.applied} applied`);
+  return parts.join(' · ');
+}
+
+function sidebarStatus(change: PacingRevisionChange): string {
+  if (change.generation_status === 'applied') return 'Applied';
+  if (change.decision === 'rejected') return 'Rejected';
+  if (change.decision === 'approved') return 'Approved';
+  return 'Pending';
+}
 
 function proposedBeat(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -118,17 +147,28 @@ export function WriterPacingRevisionWorkspace({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [showFailures, setShowFailures] = useState(false);
+  const [missingPreview, setMissingPreview] = useState<{
+    page: number;
+    layer: Extract<PacingRevisionLayer, 'beats' | 'dialogue'>;
+  } | null>(null);
   const failureRegionId = 'pacing-failed-layer-details';
+  const terminal = revisionSet.status === 'applied' || revisionSet.status === 'discarded';
 
   const visibleItems = revisionSet.items.filter((item) =>
     item.changes.some((change) => change.layer === layer)
   );
-  const activeChange = allChanges.find((change) => change.id === activeChangeId && change.layer === layer)
-    ?? visibleItems[0]?.changes.find((change) => change.layer === layer)
-    ?? null;
+  const activeChange = missingPreview?.layer === layer
+    ? null
+    : allChanges.find((change) => change.id === activeChangeId && change.layer === layer)
+      ?? visibleItems[0]?.changes.find((change) => change.layer === layer)
+      ?? null;
   const activeLayerLabel = LAYERS.find((entry) => entry.id === layer)?.label ?? 'current tab';
-  const activeLayerEligible = allChanges.filter((change) =>
-    change.layer === layer && change.generation_status === 'ready'
+  const activeLayerEligible = terminal
+    ? []
+    : eligiblePacingRevisionChanges(revisionSet, { layer });
+  const selectableChanges = useMemo(
+    () => terminal ? [] : eligiblePacingRevisionChanges(revisionSet),
+    [revisionSet, terminal],
   );
   const selectedEligible = activeLayerEligible.filter((change) => selectedIds.has(change.id));
   const allActiveEligibleSelected = activeLayerEligible.length > 0
@@ -136,6 +176,7 @@ export function WriterPacingRevisionWorkspace({
   const pendingCount = allChanges.filter((change) => change.decision === 'pending').length;
   const approvedEligibleCount = approvedPacingRevisionChanges(revisionSet).length;
   const failureRows = useMemo(() => {
+    if (terminal) return [];
     const readyLayers = new Map<number, Set<'beats' | 'dialogue'>>();
     for (const change of allChanges) {
       if (
@@ -188,13 +229,82 @@ export function WriterPacingRevisionWorkspace({
     return [...rows.values()].sort((a, b) =>
       a.page - b.page || (a.layer === 'beats' ? -1 : 1)
     );
-  }, [allChanges, revisionSet.failure_ledger, revisionSet.items]);
+  }, [allChanges, revisionSet.failure_ledger, revisionSet.items, terminal]);
+  const approvedChanges = allChanges.filter((change) => change.decision === 'approved');
+  const allApprovedChangesApplied = approvedChanges.length > 0
+    && approvedChanges.every((change) => change.generation_status === 'applied');
+  const applyLabel = revisionSet.status === 'applied'
+    ? 'Revision applied'
+    : allApprovedChangesApplied
+      ? 'All approved changes applied'
+      : revisionSet.status === 'discarded'
+        ? 'Revision discarded'
+        : 'Apply approved changes';
+
+  useEffect(() => {
+    const eligibleIds = new Set(selectableChanges.map((change) => change.id));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => eligibleIds.has(id)));
+      if (
+        next.size === current.size
+        && [...next].every((id) => current.has(id))
+      ) return current;
+      return next;
+    });
+  }, [selectableChanges]);
 
   const chooseLayer = (nextLayer: PacingRevisionLayer) => {
     setLayer(nextLayer);
     setEditing(false);
+    setMissingPreview(null);
     const first = allChanges.find((change) => change.layer === nextLayer);
     setActiveChangeId(first?.id ?? null);
+  };
+
+  const isVirtualPage = (
+    pageNumber: number,
+    item = revisionSet.items.find((candidate) =>
+      candidate.affected_page_numbers.includes(pageNumber)
+    ),
+  ) => {
+    const pageChanges = item?.changes.filter((change) => change.page_number === pageNumber) ?? [];
+    if (pageChanges.some((change) => change.page_id === null)) return true;
+    if (pageChanges.some((change) => typeof change.page_id === 'string')) return false;
+    if (!item?.changes.some((change) => change.page_id === null)) return false;
+    const physicalPageNumbers = allChanges.flatMap((change) =>
+      typeof change.page_id === 'string' && change.page_number != null
+        ? [change.page_number]
+        : []
+    );
+    return pageNumber > Math.max(0, ...physicalPageNumbers);
+  };
+
+  const openPage = (
+    pageNumber: number,
+    requestedLayer: PacingRevisionLayer,
+    item = revisionSet.items.find((candidate) =>
+      candidate.affected_page_numbers.includes(pageNumber)
+    ),
+  ) => {
+    const nextLayer = destinationLayer(requestedLayer);
+    if (!isVirtualPage(pageNumber, item)) {
+      void onNavigateToPage?.(pageNumber, requestedLayer);
+      return;
+    }
+    setLayer(nextLayer);
+    setEditing(false);
+    const matchingChange = item?.changes.find((change) =>
+      change.layer === nextLayer && change.page_number === pageNumber
+    ) ?? allChanges.find((change) =>
+      change.layer === nextLayer && change.page_number === pageNumber
+    );
+    if (matchingChange) {
+      setMissingPreview(null);
+      setActiveChangeId(matchingChange.id);
+      return;
+    }
+    setActiveChangeId(null);
+    setMissingPreview({ page: pageNumber, layer: nextLayer });
   };
 
   const selectAllActiveLayer = () => {
@@ -235,17 +345,17 @@ export function WriterPacingRevisionWorkspace({
         </div>
         <button
           type="button"
-          disabled={busy || approvedEligibleCount === 0}
+          disabled={busy || terminal || approvedEligibleCount === 0}
           onClick={() => void onApply()}
           className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {applying ? 'Applying…' : 'Apply approved changes'}
+          {applying ? 'Applying…' : applyLabel}
         </button>
       </header>
 
       <div className="flex overflow-x-auto border-b border-slate-300 bg-white" role="tablist" aria-label="Revision layers">
         {LAYERS.map((entry) => {
-          const count = allChanges.filter((change) => change.layer === entry.id).length;
+          const summary = pacingRevisionLayerSummary(revisionSet, entry.id);
           return (
             <button
               key={entry.id}
@@ -259,7 +369,7 @@ export function WriterPacingRevisionWorkspace({
                   : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              {entry.label} <span className="ml-1 text-[10px] opacity-60">{count}</span>
+              {entry.label} <span className="ml-1 text-[10px] opacity-60">· {layerSummaryLabel(summary)}</span>
             </button>
           );
         })}
@@ -309,7 +419,7 @@ export function WriterPacingRevisionWorkspace({
                     <span><strong>Page {failure.page} · {layerLabel}:</strong> {failure.reason}</span>
                     <span className="flex gap-3">
                       {onNavigateToPage && (
-                        <button type="button" disabled={busy} aria-label={`Open page ${failure.page} for ${layerLabel}`} onClick={() => void onNavigateToPage(failure.page)} className="font-black underline transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button type="button" disabled={busy} aria-label={`Open page ${failure.page} for ${layerLabel}`} onClick={() => openPage(failure.page, failure.layer)} className="font-black underline transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-not-allowed disabled:opacity-40">
                           Open page {failure.page}
                         </button>
                       )}
@@ -354,16 +464,37 @@ export function WriterPacingRevisionWorkspace({
           <ol data-testid="pacing-revision-item-list" className="max-h-60 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
             {visibleItems.map((item) => (
               <li key={item.id}>
-                <p className="border-y border-slate-300/70 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-slate-600">
-                  {item.title} · p. {item.affected_page_numbers.join(', ')}
-                </p>
+                <div className="border-y border-slate-300/70 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-slate-600">
+                  <p>{item.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span>{layer === 'outline' ? 'Affected pages' : 'Pages'}</span>
+                    {item.affected_page_numbers.map((pageNumber) => {
+                      const nextLayer = destinationLayer(layer);
+                      const virtual = isVirtualPage(pageNumber, item);
+                      const layerLabel = nextLayer === 'beats' ? 'Page Beats' : 'Dialogue';
+                      return (
+                        <button
+                          key={pageNumber}
+                          type="button"
+                          aria-label={virtual
+                            ? `Open virtual page ${pageNumber} ${layerLabel} preview`
+                            : `Open page ${pageNumber} in ${layerLabel}`}
+                          onClick={() => openPage(pageNumber, layer, item)}
+                          className="min-h-7 min-w-7 border border-slate-400 bg-white/70 px-1.5 text-[10px] font-black text-slate-800 transition-colors hover:border-amber-600 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+                        >
+                          {pageNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 {item.changes.filter((change) => change.layer === layer).map((change) => (
                   <div key={change.id} className={`flex items-start gap-2 px-3 py-2 ${activeChange?.id === change.id ? 'bg-white' : 'hover:bg-white/55'}`}>
                     <input
                       type="checkbox"
                       aria-label={`Select ${item.title} ${layer} change`}
                       checked={selectedIds.has(change.id)}
-                      disabled={busy || change.generation_status !== 'ready'}
+                      disabled={busy || terminal || !activeLayerEligible.some((eligible) => eligible.id === change.id)}
                       onChange={(event) => {
                         const next = new Set(selectedIds);
                         if (event.target.checked) next.add(change.id);
@@ -378,7 +509,7 @@ export function WriterPacingRevisionWorkspace({
                       className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
                     >
                       <span className="block truncate text-xs font-bold">{change.reason}</span>
-                      <span className="mt-1 block text-[10px] font-black uppercase text-slate-500">{change.decision}</span>
+                      <span className="mt-1 block text-[10px] font-black uppercase text-slate-500">{sidebarStatus(change)}</span>
                     </button>
                   </div>
                 ))}
@@ -394,30 +525,62 @@ export function WriterPacingRevisionWorkspace({
         <main className="min-w-0 bg-white/65 p-4 md:p-6">
           {activeChange ? (
             <>
-              {activeChange.dependency_ids.length > 0 && (
+              {(() => {
+                const blockers = pacingRevisionDependencyBlockers(activeChange, allChanges);
+                const missingIds = pacingRevisionMissingDependencyIds(activeChange, allChanges);
+                const blockerCount = blockers.length + missingIds.length;
+                if (blockerCount === 0) return null;
+                return (
                 <div role="note" className="mb-4 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-xs text-amber-950">
-                  This suggestion depends on {activeChange.dependency_ids.length} earlier change{activeChange.dependency_ids.length === 1 ? '' : 's'}. Approve its parent changes before applying.
-                  <button
+                  This suggestion depends on {blockerCount} earlier change{blockerCount === 1 ? '' : 's'}. {blockerCount} unresolved dependenc{blockerCount === 1 ? 'y' : 'ies'} must be approved or applied before this suggestion is ready.
+                  {blockers[0] && <button
                     type="button"
                     onClick={() => {
-                      const dependency = allChanges.find((change) => change.id === activeChange.dependency_ids[0]);
-                      if (dependency) { setLayer(dependency.layer); setActiveChangeId(dependency.id); }
+                      const dependency = blockers[0];
+                      setLayer(dependency.layer);
+                      setActiveChangeId(dependency.id);
+                      setMissingPreview(null);
                     }}
                     className="ml-2 font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     Go to dependency
-                  </button>
+                  </button>}
                 </div>
-              )}
+                );
+              })()}
+              <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-slate-300 pb-3 text-xs font-black text-slate-700">
+                <span>
+                  {activeChange.layer === 'outline'
+                    ? `Affected pages ${revisionSet.items.find((item) => item.id === activeChange.item_id)?.affected_page_numbers.join(', ') ?? 'unavailable'} · Live Outline`
+                    : `Page ${activeChange.page_number ?? 'unavailable'} · ${activeChange.layer === 'beats' ? 'Page Beats' : 'Dialogue'}`}
+                </span>
+                {activeChange.page_id === null && activeChange.layer !== 'outline' && (
+                  <span className="bg-teal-100 px-2 py-1 text-[10px] uppercase tracking-wide text-teal-900">
+                    Virtual page · will be created on Apply
+                  </span>
+                )}
+              </div>
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2" data-testid="revision-comparison-panels">
                 <article className="min-w-0 border-t-4 border-slate-500 bg-slate-100 p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Current live</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                    {activeChange.generation_status === 'applied' ? 'Before this revision' : 'Current live'}
+                  </p>
                   <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-800">{readableValue(activeChange.layer, activeChange.current_value)}</pre>
                 </article>
                 <article className="min-w-0 border-t-4 border-amber-500 bg-amber-50 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">{activeChange.edited_candidate == null ? 'AI proposal' : 'Edited candidate'}</p>
-                    <button
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
+                      {activeChange.generation_status === 'applied'
+                        ? 'Applied revision'
+                        : activeChange.decision === 'rejected'
+                          ? 'Rejected proposal'
+                          : activeChange.decision === 'approved'
+                            ? 'Approved proposal'
+                            : activeChange.edited_candidate == null
+                              ? 'AI proposal'
+                              : 'Edited candidate'}
+                    </p>
+                    {!terminal && activeChange.generation_status !== 'applied' && <button
                       type="button"
                       onClick={() => {
                         setDraft(editableValue(activeChange));
@@ -426,7 +589,7 @@ export function WriterPacingRevisionWorkspace({
                       className="text-[10px] font-black underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                     >
                       Edit suggestion
-                    </button>
+                    </button>}
                   </div>
                   {editing ? (
                     <div className="mt-3">
@@ -440,16 +603,16 @@ export function WriterPacingRevisionWorkspace({
                   ) : (
                     <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-900">{readableValue(activeChange.layer, effectivePacingRevisionCandidate(activeChange))}</pre>
                   )}
-                  {activeChange.edited_candidate != null && !editing && (
+                  {activeChange.edited_candidate != null && !editing && !terminal && activeChange.generation_status !== 'applied' && (
                     <button type="button" onClick={() => void onChange(activeChange.id, { edited_candidate: null })} className="mt-3 text-xs font-black text-amber-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Reset to AI proposal</button>
                   )}
                 </article>
               </div>
-              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-4">
+              {!terminal && activeChange.generation_status !== 'applied' && <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-4">
                 <button type="button" aria-pressed={activeChange.decision === 'rejected'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'rejected' })} className={`px-4 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40 ${activeChange.decision === 'rejected' ? 'bg-red-100 ring-1 ring-red-300' : ''}`}>Reject</button>
                 <button type="button" aria-pressed={activeChange.decision === 'pending'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'pending' })} className={`px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 disabled:opacity-40 ${activeChange.decision === 'pending' ? 'bg-slate-200 ring-1 ring-slate-300' : ''}`}>Decide later</button>
                 <button type="button" aria-pressed={activeChange.decision === 'approved'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'approved' })} className={`bg-emerald-700 px-5 py-2 text-xs font-black text-white hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-950 disabled:opacity-40 ${activeChange.decision === 'approved' ? 'ring-2 ring-emerald-950 ring-offset-2' : ''}`}>Approve change</button>
-              </div>
+              </div>}
               {advanced && (
                 <details className="mt-5 border-t border-slate-300 pt-3 text-xs">
                   <summary className="cursor-pointer font-black">Advanced details</summary>
@@ -457,6 +620,28 @@ export function WriterPacingRevisionWorkspace({
                 </details>
               )}
             </>
+          ) : missingPreview?.layer === layer ? (
+            <div className="flex min-h-[420px] items-center justify-center text-center">
+              <div>
+                <p className="font-serif text-xl font-semibold">
+                  Page {missingPreview.page} {missingPreview.layer === 'beats' ? 'Page Beats' : 'Dialogue'} preview has not been generated yet.
+                </p>
+                <p className="mt-2 text-sm text-slate-500">Use the failed-layer recovery action to generate this virtual-page preview.</p>
+                {onRetryFailed && !terminal && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onRetryFailed([{
+                      page: missingPreview.page,
+                      layer: missingPreview.layer,
+                    }])}
+                    className="mt-4 bg-slate-950 px-4 py-2 text-xs font-black text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Retry {missingPreview.layer === 'beats' ? 'Page Beats' : 'Dialogue'} for virtual page {missingPreview.page}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="flex min-h-[420px] items-center justify-center text-center">
               <div>

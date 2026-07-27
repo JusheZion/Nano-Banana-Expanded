@@ -4,7 +4,9 @@ import {
   approvedPacingRevisionChanges,
   effectivePacingRevisionCandidate,
   eligiblePacingRevisionChanges,
+  pacingRevisionLayerSummary,
   pacingRevisionDependencyBlockers,
+  pacingRevisionMissingDependencyIds,
 } from '../writerPacingRevisionModel';
 
 function change(overrides: Partial<PacingRevisionChange> = {}): PacingRevisionChange {
@@ -76,5 +78,79 @@ describe('writerPacingRevisionModel', () => {
     const set = setWith([outline, beats]);
     expect(pacingRevisionDependencyBlockers(beats, [outline, beats])).toEqual([outline]);
     expect(approvedPacingRevisionChanges(set)).toEqual([]);
+  });
+
+  it('uses the Apply dependency predicate for approved parents that are not ready', () => {
+    const failedOutline = change({
+      decision: 'approved',
+      generation_status: 'failed',
+    });
+    const beats = change({
+      layer: 'beats',
+      decision: 'approved',
+      dependency_ids: [failedOutline.id],
+    });
+    const set = setWith([failedOutline, beats]);
+
+    expect(pacingRevisionDependencyBlockers(beats, [failedOutline, beats])).toEqual([failedOutline]);
+    expect(approvedPacingRevisionChanges(set)).toEqual([]);
+  });
+
+  it('fails closed when an approved change references a missing dependency', () => {
+    const missingDependencyId = crypto.randomUUID();
+    const beats = change({
+      layer: 'beats',
+      decision: 'approved',
+      dependency_ids: [missingDependencyId],
+    });
+    const set = setWith([beats]);
+
+    expect(pacingRevisionMissingDependencyIds(beats, [beats])).toEqual([missingDependencyId]);
+    expect(approvedPacingRevisionChanges(set)).toEqual([]);
+    expect(pacingRevisionLayerSummary(set, 'beats')).toEqual({
+      remaining: 0,
+      ready: 0,
+      applied: 0,
+      rejected: 0,
+    });
+  });
+
+  it('summarizes current remaining, dependency-valid ready, applied, and rejected changes', () => {
+    const outline = change({ decision: 'approved' });
+    const pendingBeats = change({ layer: 'beats', decision: 'pending' });
+    const readyBeats = change({
+      layer: 'beats',
+      decision: 'approved',
+      dependency_ids: [outline.id],
+    });
+    const blockedBeats = change({
+      layer: 'beats',
+      decision: 'approved',
+      dependency_ids: [change().id],
+    });
+    const appliedBeats = change({
+      layer: 'beats',
+      decision: 'approved',
+      generation_status: 'applied',
+    });
+    const rejectedBeats = change({
+      layer: 'beats',
+      decision: 'rejected',
+    });
+    const set = setWith([
+      outline,
+      pendingBeats,
+      readyBeats,
+      blockedBeats,
+      appliedBeats,
+      rejectedBeats,
+    ]);
+
+    expect(pacingRevisionLayerSummary(set, 'beats')).toEqual({
+      remaining: 1,
+      ready: 1,
+      applied: 1,
+      rejected: 1,
+    });
   });
 });

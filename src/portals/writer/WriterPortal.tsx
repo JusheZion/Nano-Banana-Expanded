@@ -103,6 +103,7 @@ import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportW
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
+import type { PacingRevisionLayer } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import {
@@ -299,6 +300,12 @@ import {
   WRITER_PAGE_BEATS_ISSUE_MAX,
 } from '@/shared/writer/schemas';
 import type { PageBeatsJson } from '@/shared/writer/types';
+
+export function getPacingRevisionNavigationTab(
+  layer: PacingRevisionLayer,
+): Extract<WriterWorkspaceTabId, 'beats' | 'dialogue'> {
+  return layer === 'dialogue' ? 'dialogue' : 'beats';
+}
 
 const titleTextStyle: React.CSSProperties = {
   background: WRITERS_TIFFANY_TEXT,
@@ -2572,6 +2579,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [pages],
   );
   const pacingRevision = useWriterPacingRevisionSet(selectedIssueId, sortedPages);
+  const navigateToPacingRevisionPage = useCallback((
+    pageNumber: number,
+    layer: PacingRevisionLayer,
+  ) => {
+    const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
+    if (!page) return;
+    setSelectedPageId(page.id);
+    setActiveTab(getPacingRevisionNavigationTab(layer));
+  }, [sortedPages]);
 
   const beatsPickOrdered = useMemo(() => {
     const sel = new Set(beatsPickPageIds);
@@ -8058,13 +8074,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             onChange={pacingRevision.updateChange}
             onApply={applyPacingRevision}
             onRetryFailed={pacingRevision.retryFailed}
-            onNavigateToPage={(pageNumber) => {
-              const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
-              if (page) {
-                setSelectedPageId(page.id);
-                setActiveTab('beats');
-              }
-            }}
+            onNavigateToPage={navigateToPacingRevisionPage}
           />
         </section>
       )}
@@ -11746,13 +11756,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           onChange={pacingRevision.updateChange}
                           onApply={applyPacingRevision}
                           onRetryFailed={pacingRevision.retryFailed}
-                          onNavigateToPage={(pageNumber) => {
-                            const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
-                            if (page) {
-                              setSelectedPageId(page.id);
-                              setActiveTab('beats');
-                            }
-                          }}
+                          onNavigateToPage={navigateToPacingRevisionPage}
                         />
                       </section>
                     )}

@@ -14230,3 +14230,46 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Proceed only after final review approval.
+
+## Pacing Revision truthful status and page navigation - 2026-07-27
+
+### What changed
+- Replaced historical layer totals with current `remaining`, dependency-valid `ready`, and `applied` summaries; rejected changes no longer inflate visible progress.
+- Made missing dependency IDs fail closed and limited dependency guidance to blockers that are still unresolved.
+- Made applied/discarded Revision Sets read-only, suppressed obsolete failure recovery alerts, pruned stale selections, and aligned sidebar, comparison-panel, and primary-action wording with the persisted lifecycle.
+- Added compact page/layer context, virtual-page Apply badges, wrapped native page buttons, local virtual preview selection, direct missing-preview retry, and layer-aware physical navigation.
+- Deduplicated the two WriterPortal navigation callbacks behind one tested helper that maps Outline and Page Beats to the Page Beats workspace while preserving Dialogue routing.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionModel.test.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/portals/writer/__tests__/WriterSearchableMenu.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The existing two-panel comparison, dense Revision Item sidebar, and sticky layer-scoped batch footer remain structurally unchanged.
+- Physical page buttons delegate page number plus source layer to WriterPortal; virtual page buttons never call external navigation and instead select the matching child change or render a retryable local missing state.
+- The UI critique pass added an explicit missing-virtual-preview recovery control and increased the compact page-button target without expanding the workspace into card-heavy layout.
+
+### Verification
+- RED run: 2 files / 9 expected failures reproduced missing summaries, fail-closed dependency handling, terminal wording/read-only behavior, and page navigation controls.
+- WriterPortal navigation RED: 1 expected failure reproduced the missing Outline/Page Beats/Dialogue mapping helper.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 29 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- Integrated browser QA and hosted virtual preview/Apply/Undo verification remain in Pass 6 and later release passes.
+
+### Risks or caveats
+- A page without any child preview is treated as virtual locally only when its Revision Item already contains explicit virtual child identity; unrelated legacy failure rows continue to route as physical pages.
+
+### Operator follow-up
+- None for this local UI pass.
+
+### Next steps
+- Run Pass 6 integrated local QA across preview, review, Apply, and Undo before hosted release work.
