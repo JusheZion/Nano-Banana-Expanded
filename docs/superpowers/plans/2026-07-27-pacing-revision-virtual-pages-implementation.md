@@ -617,3 +617,45 @@ Use concise conventional commits, push `codex/pacing-revision-virtual-pages`, op
 - [x] Production smoke is successful for bundle/UI/console checks; representative mutation is distinctly documented as blocked by safe QA data.
 - [x] Walkthrough and DOX updates are verified.
 - [ ] PR is reviewed, merged, and live deployment status confirmed.
+
+## Post-release correction: legacy applied-snapshot Undo
+
+**Objective:** Reopen Revision Sets applied before transactional snapshots existed without weakening modern Undo validation.
+
+### Pass 1 — Reproduce the compatibility failure
+
+- [x] Add an API test for the strict `Applied recovery snapshot is invalid` response.
+- [x] Add a migration-contract test requiring an authenticated owner-scoped legacy adapter.
+- [x] Smoke: focused RED reproduced the missing adapter and missing retry.
+
+**Result:** PASS — the reported legacy snapshot rejection failed for the intended reason while unrelated modern validation remained fail-closed.
+
+### Pass 2 — Normalize and delegate
+
+- [x] Add `undo_legacy_writer_pacing_revision_apply`.
+- [x] Accept only the exact pre-transaction snapshot boundary.
+- [x] Derive current contiguous page count and exact latest applied-outline authority.
+- [x] Normalize only the snapshot, then invoke the strict transactional Undo in the same transaction.
+- [x] Retry the adapter once only for the strict legacy-invalid error.
+- [x] Smoke: 2 files / 16 tests passed.
+
+**Result:** PASS — the adapter contains no live page/outline mutation and modern validation failures do not enter the compatibility path.
+
+### Pass 3 — Regression and audit
+
+- [x] Focused Pacing/Undo gate: 5 files / 63 tests passed.
+- [x] Full Vitest: 142 files / 982 tests passed.
+- [x] Full ESLint: 0 errors / 71 existing warnings.
+- [x] Production build and `git diff --check`: passed.
+- [x] DOX compatibility contract updated.
+
+**Result:** PASS — no release-blocking code, QA, transaction, UI, or DOX finding remains.
+
+### Pass 4 — Hosted recovery
+
+- [ ] Deploy migration and frontend.
+- [ ] Verify production exposes the compatibility RPC.
+- [ ] Retry the reported stuck set and confirm it reopens without unrelated live-content mutation.
+- [ ] Commit, push, review, merge, and record immutable deployment state.
+
+**Result:** Pending hosted verification.

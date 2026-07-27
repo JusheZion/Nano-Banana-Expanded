@@ -83,6 +83,7 @@ const setRow = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rpc.mockReset();
   mocks.from.mockReturnValue({ select: mocks.select, update: mocks.update });
   mocks.select.mockReturnValue({ eq: mocks.eq });
   mocks.eq.mockReturnValue({ neq: mocks.neq, select: mocks.select });
@@ -201,6 +202,40 @@ describe('writer pacing revision persistence', () => {
     expect(mocks.rpc).toHaveBeenCalledWith('undo_writer_pacing_revision_apply', {
       p_set_id: SET_ID,
     });
+  });
+
+  it('normalizes a legacy applied snapshot and retries Undo once', async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Applied recovery snapshot is invalid' },
+      })
+      .mockResolvedValueOnce({ data: true, error: null });
+
+    await expect(undoWriterPacingRevisionSet(SET_ID))
+      .resolves.toEqual({ ok: true });
+
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1, 'undo_writer_pacing_revision_apply', {
+      p_set_id: SET_ID,
+    });
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, 'undo_legacy_writer_pacing_revision_apply', {
+      p_set_id: SET_ID,
+    });
+  });
+
+  it('does not reinterpret a modern Undo validation failure as legacy data', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Applied page content changed before Undo' },
+    });
+
+    await expect(undoWriterPacingRevisionSet(SET_ID))
+      .resolves.toEqual({
+        ok: false,
+        error: 'Applied page content changed before Undo',
+      });
+
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed when a transactional RPC rejects the transition', async () => {
