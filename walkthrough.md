@@ -14356,7 +14356,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Diagnosed the reported `Applied recovery snapshot is invalid` failure as a compatibility boundary: the affected set was applied before transactional snapshots stored planned page IDs/counts and exact applied-outline JSON.
 - Added a narrowly gated authenticated owner-scoped adapter for the exact legacy snapshot shape.
 - The adapter derives only the current contiguous physical page count and exact latest applied-outline authority, normalizes the stored snapshot, and delegates restoration to the existing strict transactional Undo in the same database transaction.
-- The frontend retries the adapter once only when the strict Undo returns the exact legacy-invalid error. Modern content-change, identity, or corruption failures remain on the strict path and fail closed.
+- The frontend retries the adapter once only when the strict Undo error is exactly `Applied recovery snapshot is invalid`. Prefixed, suffixed, modern content-change, identity, or corruption failures remain on the strict path and fail closed.
+- A follow-up tightening migration restricts eligibility to the exact sorted six-key legacy schema and requires an object-valued source outline; unknown, future, or partially modern keys are rejected.
 
 ### Files touched
 - `AGENTS.md`
@@ -14364,6 +14365,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
 - `src/shared/api/__tests__/writerPacingRevisionLegacyUndoMigration.test.ts`
 - `supabase/migrations/20260727010000_writer_pacing_revision_legacy_undo.sql`
+- `supabase/migrations/20260727020000_tighten_writer_pacing_revision_legacy_undo.sql`
 - `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
 - `walkthrough.md`
 
@@ -14376,12 +14378,13 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - TDD RED reproduced the missing fallback and migration.
 - Focused API/migration smoke: PASS, 2 files / 16 tests.
 - Focused Pacing/Undo regression: PASS, 5 files / 63 tests.
-- Full Vitest: PASS, 142 files / 982 tests.
+- Full Vitest: PASS, 142 files / 983 tests.
 - Full ESLint: PASS, 0 errors / 71 existing warnings.
 - Production build and `git diff --check`: PASS.
-- Supabase migration `20260727010000` applied and local/remote ledgers align.
-- Cloudflare production version `5ff8d019-58f7-4805-a21b-987ec68b6342` serves `index-CVDkQu8b.js`.
+- Supabase migrations `20260727010000` and `20260727020000` applied and local/remote ledgers align.
+- Cloudflare production version `9280ee53-f506-4530-8a28-d3bfda91aa93` serves the exact-error recovery bundle.
 - Fresh signed-in production QA reload: PASS with no browser warnings or errors.
+- Final independent review after tightening: APPROVED with no Critical, Important, or Minor finding.
 
 ### Outstanding issues
 - The reported stuck set is in a different signed-in browser/account session than the available QA account. Its representative confirmation requires the owner to refresh and press `Undo applied set` once.

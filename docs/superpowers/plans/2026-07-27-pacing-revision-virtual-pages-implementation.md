@@ -644,18 +644,18 @@ Use concise conventional commits, push `codex/pacing-revision-virtual-pages`, op
 ### Pass 3 — Regression and audit
 
 - [x] Focused Pacing/Undo gate: 5 files / 63 tests passed.
-- [x] Full Vitest: 142 files / 982 tests passed.
+- [x] Full Vitest: 142 files / 983 tests passed.
 - [x] Full ESLint: 0 errors / 71 existing warnings.
 - [x] Production build and `git diff --check`: passed.
 - [x] DOX compatibility contract updated.
 
-**Result:** PASS — no release-blocking code, QA, transaction, UI, or DOX finding remains.
+**Result:** PASS — final independent re-review found no Critical, Important, or Minor issue after exact error equality, an exact six-key legacy whitelist, and negative near-match coverage were added.
 
 ### Pass 4 — Hosted recovery
 
 - [x] Deploy migration and frontend.
-- [x] Verify the hosted migration ledger and current production bundle.
+- [x] Verify the tightened hosted migration ledger and current production bundle.
 - [ ] Retry the reported stuck set and confirm it reopens without unrelated live-content mutation.
 - [ ] Commit, push, review, merge, and record immutable deployment state.
 
-**Result:** Migration `20260727010000` is aligned locally/remotely and Cloudflare version `5ff8d019-58f7-4805-a21b-987ec68b6342` serves the tested `index-CVDkQu8b.js` bundle with a clean signed-in QA console. The exact stuck set belongs to a different signed-in browser/account session, so its one-click recovery remains the required representative confirmation.
+**Result:** Migrations `20260727010000` and tightening replacement `20260727020000` are aligned locally/remotely. Cloudflare version `9280ee53-f506-4530-8a28-d3bfda91aa93` serves the tested exact-error bundle with a clean signed-in QA console. The exact stuck set belongs to a different signed-in browser/account session, so its one-click recovery remains the required representative confirmation.
