@@ -78,8 +78,12 @@ begin
       <> (p_expectation->>'target_page_count')::integer
     or (
       coalesce((p_snapshot->>'outlineApplied')::boolean, false)
-      and (p_snapshot->>'appliedOutlineId')::uuid
-        <> (p_expectation->>'outline_id')::uuid
+      and (
+        (p_snapshot->>'appliedOutlineId')::uuid
+          <> (p_expectation->>'outline_id')::uuid
+        or p_snapshot->'appliedOutlineJson'
+          is distinct from p_expectation->'outline_json'
+      )
     )
     or exists (
       select 1

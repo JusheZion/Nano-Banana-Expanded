@@ -264,6 +264,7 @@ describe('applyPacingRevisionSet', () => {
       plannedOutlineId: outlineId,
       outlineApplied: true,
       appliedOutlineId: outlineId,
+      appliedOutlineJson: { title: 'Applied' },
       beats: [{ pageId: existingPageId, value: { panels: [] } }],
       dialogue: [{ pageId: existingPageId, value: 'OLD' }],
       createdPages: [],
@@ -281,7 +282,7 @@ describe('applyPacingRevisionSet', () => {
         beats_json: { panels: [{ action: 'new' }] },
         script_text: 'NEW',
       }],
-      freshOutlines: [{ id: outlineId }],
+      freshOutlines: [{ id: outlineId, outline_json: { title: 'Applied' } }],
     })).toEqual({ ok: true, snapshot: set.apply_snapshot });
 
     expect(validatePacingRevisionUndoAuthority({
@@ -293,8 +294,23 @@ describe('applyPacingRevisionSet', () => {
         beats_json: { panels: [{ action: 'new' }] },
         script_text: 'NEW',
       }],
-      freshOutlines: [{ id: outlineId }],
+      freshOutlines: [{ id: outlineId, outline_json: { title: 'Applied' } }],
     })).toEqual({ ok: false, error: expect.stringMatching(/snapshot is invalid/i) });
+
+    expect(validatePacingRevisionUndoAuthority({
+      set,
+      issueId: set.issue_id,
+      freshPages: [{
+        id: existingPageId,
+        page_number: 1,
+        beats_json: { panels: [{ action: 'new' }] },
+        script_text: 'NEW',
+      }],
+      freshOutlines: [{
+        id: outlineId,
+        outline_json: { title: 'POST-APPLY IN-PLACE EDIT' },
+      }],
+    })).toEqual({ ok: false, error: expect.stringMatching(/outline changed after Apply/i) });
   });
 
   it('blocks Undo before writes when physical or created applied content was edited', () => {
@@ -308,6 +324,7 @@ describe('applyPacingRevisionSet', () => {
       plannedOutlineId: outlineId,
       outlineApplied: true,
       appliedOutlineId: outlineId,
+      appliedOutlineJson: builtOutline(2),
       beats: [],
       dialogue: [],
       createdPages: [{ pageId: createdPageId, pageNumber: 2 }],
@@ -328,7 +345,7 @@ describe('applyPacingRevisionSet', () => {
       set,
       issueId: set.issue_id,
       freshPages: [{ ...basePages[0]! }, { ...basePages[1]!, script_text: 'POST-APPLY EDIT' }],
-      freshOutlines: [{ id: outlineId }],
+      freshOutlines: [{ id: outlineId, outline_json: builtOutline(2) }],
     })).toEqual({ ok: false, error: expect.stringMatching(/changed after Apply/i) });
 
     const physical = fixture();
@@ -341,6 +358,7 @@ describe('applyPacingRevisionSet', () => {
       plannedOutlineId: physicalOutlineId,
       outlineApplied: true,
       appliedOutlineId: physicalOutlineId,
+      appliedOutlineJson: { title: 'Applied physical outline' },
       beats: [{ pageId: physicalPageId, value: physical.beats.current_value }],
       dialogue: [{ pageId: physicalPageId, value: physical.dialogue.current_value as string }],
       createdPages: [],
@@ -357,7 +375,10 @@ describe('applyPacingRevisionSet', () => {
         beats_json: { panels: [{ action: 'POST-APPLY EDIT' }] },
         script_text: 'NEW',
       }],
-      freshOutlines: [{ id: physicalOutlineId }],
+      freshOutlines: [{
+        id: physicalOutlineId,
+        outline_json: { title: 'Applied physical outline' },
+      }],
     })).toEqual({ ok: false, error: expect.stringMatching(/changed after Apply/i) });
   });
 

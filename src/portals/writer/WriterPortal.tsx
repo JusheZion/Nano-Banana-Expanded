@@ -3559,6 +3559,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               ...snapshot,
               outlineApplied: false,
               appliedOutlineId: null,
+              appliedOutlineJson: null,
             });
             if (!begun.ok) throw new Error(begun.error);
           },
@@ -3567,6 +3568,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               ...snapshot,
               outlineApplied: Boolean(createdOutline),
               appliedOutlineId: createdOutlineId,
+              appliedOutlineJson: createdOutline?.outline_json ?? null,
             });
             if (!persisted.ok) throw new Error(persisted.error);
           },
@@ -3689,6 +3691,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         ...result.snapshot,
         outlineApplied: Boolean(createdOutline),
         appliedOutlineId: createdOutlineId,
+        appliedOutlineJson: createdOutline ? result.targetOutline : null,
       };
       const completionExpectation = buildPacingRevisionCompletionExpectation({
         issueId: selectedIssueId,

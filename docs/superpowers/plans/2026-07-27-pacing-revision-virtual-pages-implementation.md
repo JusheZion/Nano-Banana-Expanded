@@ -391,6 +391,8 @@ git commit -m "fix: verify pacing expansion apply"
 
 **Pass 4 final continuity correction:** PASS — locked completion now proves the exact distinct contiguous page-number set `1..target`, including min/max, missing-number, and out-of-range checks, so a same-count gap plus extra page cannot pass. Undo authority compares live physical and created-page Beats/Dialogue with the authoritative applied candidates before any restore/delete; post-Apply edits block Undo without writes. Reopen failures now use a reusable persisted-state resolver: `ready` confirms a lost-response commit, `applied` records explicit recovery-required detail without further destructive mutation, and unreadable/unknown states fail closed. Focused coverage passes 8 files / 79 tests and the production build passes.
 
+**Pass 4 outline-freshness correction:** PASS — the guarded Apply snapshot now persists the exact applied outline JSON, the completion transaction binds that JSON to its locked expectation, and normal Undo compares the freshly loaded latest same-ID outline row with the persisted applied result before any destructive write. An in-place outline edit after Apply therefore blocks Undo instead of deleting or restoring across newer content. Focused coverage passes 8 files / 79 tests; the production build passes; focused ESLint reports 0 errors and 3 pre-existing `WriterPortal` warnings.
+
 ## Pass 5: Truthful workspace status and page navigation
 
 **Objective:** Make all visible status, dependency, comparison, and navigation controls reflect current persisted state.

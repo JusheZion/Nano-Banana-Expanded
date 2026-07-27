@@ -14196,3 +14196,37 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Proceed only after final review approval.
+
+## Pacing Revision Undo outline freshness - 2026-07-27
+
+### What changed
+- Persisted the exact applied outline JSON in the guarded Apply snapshot and bound it to the locked completion expectation.
+- Normal Undo now compares the freshly reloaded latest same-ID outline row with the persisted applied result before any delete or restore.
+- Added regression coverage proving that an in-place outline edit after Apply blocks Undo before writes.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 gate — PASS, 8 files / 79 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+
+### Outstanding issues
+- Updated migration deployment and hosted 71→85 Apply/Undo smoke remain pending.
+
+### Risks or caveats
+- Legacy applied snapshots without the applied outline JSON now fail closed rather than authorizing destructive Undo.
+
+### Operator follow-up
+- Deploy the updated migration before hosted validation.
+
+### Next steps
+- Proceed only after final review approval.

@@ -33,6 +33,8 @@ describe('Pacing Revision Apply transaction migration', () => {
     expect(sql).toMatch(/Target page-number set changed before completion/);
     expect(sql).toMatch(/Completion expectation does not match approved candidates/);
     expect(sql).toMatch(/Completion snapshot does not match expected live identities/);
+    expect(sql).toMatch(/p_snapshot->'appliedOutlineJson'/);
+    expect(sql).toMatch(/is distinct from p_expectation->'outline_json'/);
     expect(sql).toMatch(/change\.decision = 'approved'/);
   });
 

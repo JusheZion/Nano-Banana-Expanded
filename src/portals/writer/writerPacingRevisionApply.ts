@@ -30,6 +30,7 @@ export type PacingRevisionApplySnapshot = {
   appliedIds: string[];
   outlineApplied?: boolean;
   appliedOutlineId?: string | null;
+  appliedOutlineJson?: unknown;
 };
 
 export function pacingRevisionApplySnapshotFromUnknown(
@@ -54,6 +55,7 @@ export function pacingRevisionApplySnapshotFromUnknown(
   const plannedOutlineId = record.plannedOutlineId;
   const hasOutlineApplied = Object.prototype.hasOwnProperty.call(record, 'outlineApplied');
   const hasAppliedOutlineId = Object.prototype.hasOwnProperty.call(record, 'appliedOutlineId');
+  const hasAppliedOutlineJson = Object.prototype.hasOwnProperty.call(record, 'appliedOutlineJson');
   if (
     sourcePageCount < 0
     || sourcePageCount > 200
@@ -65,6 +67,7 @@ export function pacingRevisionApplySnapshotFromUnknown(
     )
     || (targetPageCount > sourcePageCount && plannedOutlineId === null)
     || hasOutlineApplied !== hasAppliedOutlineId
+    || hasOutlineApplied !== hasAppliedOutlineJson
   ) {
     return null;
   }
@@ -79,6 +82,12 @@ export function pacingRevisionApplySnapshotFromUnknown(
       || record.appliedOutlineId !== plannedOutlineId
     ))
     || (!record.outlineApplied && record.appliedOutlineId !== null)
+    || (record.outlineApplied && (
+      record.appliedOutlineJson == null
+      || typeof record.appliedOutlineJson !== 'object'
+      || Array.isArray(record.appliedOutlineJson)
+    ))
+    || (!record.outlineApplied && record.appliedOutlineJson !== null)
   )) return null;
   const createdPages = record.createdPages as Array<Record<string, unknown>>;
   if (
@@ -129,6 +138,7 @@ export function pacingRevisionApplySnapshotFromUnknown(
   if (hasOutlineApplied) {
     snapshot.outlineApplied = record.outlineApplied as boolean;
     snapshot.appliedOutlineId = record.appliedOutlineId as string | null;
+    snapshot.appliedOutlineJson = record.appliedOutlineJson;
   }
   return snapshot;
 }
@@ -189,7 +199,7 @@ export function validatePacingRevisionUndoAuthority(args: {
     beats_json: unknown;
     script_text: string | null;
   }>;
-  freshOutlines: Array<{ id: string }>;
+  freshOutlines: Array<{ id: string; outline_json: unknown }>;
 }): { ok: true; snapshot: PacingRevisionApplySnapshot } | { ok: false; error: string } {
   if (args.set.status !== 'applied' || args.set.issue_id !== args.issueId) {
     return { ok: false, error: 'The applied Revision Set no longer belongs to the selected issue.' };
@@ -280,10 +290,18 @@ export function validatePacingRevisionUndoAuthority(args: {
       !snapshot.appliedOutlineId
       || snapshot.appliedOutlineId !== snapshot.plannedOutlineId
       || args.freshOutlines[0]?.id !== snapshot.appliedOutlineId
+      || stableValue(args.freshOutlines[0]?.outline_json) !== stableValue(snapshot.appliedOutlineJson)
     ) {
-      return { ok: false, error: 'The applied outline no longer matches the recovery ledger.' };
+      return {
+        ok: false,
+        error: 'The applied outline changed after Apply; Undo is blocked to preserve the newer edit.',
+      };
     }
-  } else if (snapshot.plannedOutlineId !== null || snapshot.appliedOutlineId !== null) {
+  } else if (
+    snapshot.plannedOutlineId !== null
+    || snapshot.appliedOutlineId !== null
+    || snapshot.appliedOutlineJson !== null
+  ) {
     return { ok: false, error: 'The non-outline Apply snapshot contains an outline identity.' };
   }
   return { ok: true, snapshot };
