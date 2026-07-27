@@ -48,6 +48,14 @@ describe('Pacing Revision replacement lifecycle', () => {
       });
   });
 
+  it('blocks generation even when no active set has loaded yet', () => {
+    expect(getPacingRevisionReplacementPolicy({ status: null, generating: true }))
+      .toEqual({
+        kind: 'blocked',
+        message: 'Wait for the current Revision Set page candidates to finish generating before running a new Pacing Review.',
+      });
+  });
+
   it('requires no replacement action when no active set exists', () => {
     expect(getPacingRevisionReplacementPolicy({ status: null, generating: false }))
       .toEqual({ kind: 'none' });

@@ -80,13 +80,13 @@ export function getPacingRevisionReplacementPolicy(input: {
   status: PacingRevisionSet['status'] | null;
   generating: boolean;
 }): PacingRevisionReplacementPolicy {
-  if (!input.status) return { kind: 'none' };
   if (input.generating) {
     return {
       kind: 'blocked',
       message: 'Wait for the current Revision Set page candidates to finish generating before running a new Pacing Review.',
     };
   }
+  if (!input.status) return { kind: 'none' };
   if (input.status === 'generating') {
     return {
       kind: 'blocked',

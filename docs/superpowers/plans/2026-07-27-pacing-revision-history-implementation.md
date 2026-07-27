@@ -232,6 +232,19 @@ Revision history only if the new review succeeds. The corrected focused gate pas
 WriterPortal warnings. Targeted app TypeScript validation and `git diff --check`
 also pass.
 
+**Pass 2 async-lifecycle re-review correction:** Replacement policy now blocks
+whenever page generation is active, including the interval before an active set has
+loaded. Create and page generation capture an issue/version token plus an immutable
+page snapshot, validate after every asynchronous boundary, and stop old-issue work
+without restarting generation, using new-issue pages, or publishing stale
+active/error/loading state. Change updates, discard, and archive likewise revalidate
+the captured issue and target-set identity after persistence returns. Active and
+history refreshes now use independent monotonically increasing request sequences so
+same-issue overlap is last-request-wins for data, errors, and loading. RED produced
+7 expected failures with 29 existing tests passing; corrected GREEN passes 4 files /
+61 tests. Targeted TypeScript, focused ESLint with 0 errors and 3 pre-existing
+WriterPortal warnings, and `git diff --check` pass.
+
 ## Pass 3: Simple Workflow history and manual archive
 
 **Objective:** Make archived versions discoverable and safely readable in both workflow modes.

@@ -14360,6 +14360,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Corrected the post-review order to guarded archive before issue refresh and replaced source inspection with executable orchestration coverage.
 - Hardened issue switching so late active/history responses, errors, and loading completions from issue A cannot overwrite issue B, and neither the hook nor Portal can archive a cross-issue stale set.
 - Classified guarded archive conflicts separately from operational archive failures and made the unfinished-set confirmation explicit about decisions/edits moving to Revision history.
+- Closed remaining async races with frozen issue/page operation contexts, post-await target validation, and independent latest-request sequencing for active and history refreshes.
 
 ### Files touched
 - `src/portals/writer/writerPacingRevisionLifecycle.ts`
@@ -14378,6 +14379,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Successful guarded archive optimistically moves the captured set to archived history, then refreshes active and history queries. Any guard/API failure leaves active state unchanged and returns the detail to the Portal.
 - The Portal suppresses the hook-level API detail for automatic replacement conflicts and renders exactly `The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.`
 - Operational authentication, network, or RPC archive failures instead preserve their actionable reason in `The new Pacing Review was saved, but archiving the previous Revision Set failed: …`.
+- Late create/generation/update/discard/archive completions from a prior issue cannot publish state into the newly selected issue. Page generation keeps the page identities captured at operation start.
+- Same-issue active/history refresh overlap is last-request-wins for data, errors, and loading indicators.
 - `ready` and `partially_ready` require one browser confirmation before AI. `applied` and `failed` archive automatically after success. Active `generating`, `applying`, or hook page generation blocks before AI.
 - Root `AGENTS.md` was intentionally unchanged: Pass 2 implements the durable archive/replacement contract already recorded for Pass 1 and does not add a new DOX boundary or rule.
 
@@ -14389,6 +14392,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Quality-review RED: 4 files ran with 9 expected failures and 45 passing tests for stale cross-issue state/archive, missing archive classification, stale Portal policy input, and incomplete confirmation copy.
 - Quality-review GREEN: 4 focused files / 54 tests passed.
 - `npx tsc -p tsconfig.app.json --pretty false` passed.
+- Async-lifecycle re-review RED: 2 files ran with 7 expected failures and 29 passing tests.
+- Async-lifecycle corrected GREEN: 4 focused files / 61 tests passed.
 - Focused ESLint completed with 0 errors.
 
 ### Outstanding issues

@@ -32,6 +32,8 @@ const ITEM_ID = '10000000-0000-4000-8000-000000000003';
 const PAGE_ID = '10000000-0000-4000-8000-000000000004';
 const PHYSICAL_PAGE_71_ID = '10000000-0000-4000-8000-000000000071';
 const ISSUE_B_ID = '20000000-0000-4000-8000-000000000001';
+const SET_B_ID = '20000000-0000-4000-8000-000000000002';
+const PAGE_B_ID = '20000000-0000-4000-8000-000000000004';
 
 const revisionSet: PacingRevisionSet = {
   id: SET_ID,
@@ -196,6 +198,199 @@ describe('useWriterPacingRevisionSet', () => {
       error: 'This Pacing Revision Set belongs to a different issue.',
     });
     expect(mocks.archive).not.toHaveBeenCalled();
+  });
+
+  it('ignores a late issue-A create result without restarting generation or using issue-B pages', async () => {
+    const createA = deferred<{
+      success: true;
+      mode: 'pacing_revision_outline_preview';
+      data: PacingRevisionSet;
+    }>();
+    mocks.invoke.mockReturnValueOnce(createA.promise);
+    const { result, rerender } = renderHook(
+      ({ issueId, pages }) => useWriterPacingRevisionSet(issueId, pages),
+      {
+        initialProps: {
+          issueId: ISSUE_ID,
+          pages: [{ id: PAGE_ID, page_number: 1 }],
+        },
+      },
+    );
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith(ISSUE_ID));
+
+    let createPromise!: Promise<void>;
+    act(() => {
+      createPromise = result.current.create();
+    });
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1));
+    mocks.list.mockResolvedValue({ ok: true, sets: [] });
+    rerender({
+      issueId: ISSUE_B_ID,
+      pages: [{ id: PAGE_B_ID, page_number: 1 }],
+    });
+    createA.resolve({
+      success: true,
+      mode: 'pacing_revision_outline_preview',
+      data: revisionSet,
+    });
+    await act(async () => { await createPromise; });
+
+    expect(result.current.activeSet).toBeNull();
+    expect(result.current.generating).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).not.toHaveBeenCalledWith(expect.objectContaining({
+      page_id: PAGE_B_ID,
+    }));
+  });
+
+  it('stops late issue-A page generation without using issue-B pages or errors', async () => {
+    const issueASet = { ...revisionSet, status: 'ready' as const };
+    const firstPageRequest = deferred<{
+      success: true;
+      mode: 'pacing_revision_page_preview';
+      data: Record<string, never>;
+    }>();
+    mocks.list.mockResolvedValueOnce({ ok: true, sets: [issueASet] });
+    mocks.invoke.mockReturnValueOnce(firstPageRequest.promise);
+    const { result, rerender } = renderHook(
+      ({ issueId, pages }) => useWriterPacingRevisionSet(issueId, pages),
+      {
+        initialProps: {
+          issueId: ISSUE_ID,
+          pages: [{ id: PAGE_ID, page_number: 1 }],
+        },
+      },
+    );
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    let generationPromise!: Promise<void>;
+    act(() => {
+      generationPromise = result.current.generatePages();
+    });
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1));
+    mocks.list.mockResolvedValue({ ok: true, sets: [] });
+    rerender({
+      issueId: ISSUE_B_ID,
+      pages: [{ id: PAGE_B_ID, page_number: 1 }],
+    });
+    firstPageRequest.resolve({
+      success: true,
+      mode: 'pacing_revision_page_preview',
+      data: {},
+    });
+    await act(async () => { await generationPromise; });
+
+    expect(result.current.activeSet).toBeNull();
+    expect(result.current.generating).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).toHaveBeenCalledWith(expect.objectContaining({ page_id: PAGE_ID }));
+    expect(mocks.invoke).not.toHaveBeenCalledWith(expect.objectContaining({ page_id: PAGE_B_ID }));
+  });
+
+  it('ignores late issue-A updateChange errors after issue B becomes active', async () => {
+    const updateA = deferred<{ ok: false; error: string }>();
+    const issueBSet = { ...revisionSet, id: SET_B_ID, issue_id: ISSUE_B_ID };
+    mocks.list
+      .mockResolvedValueOnce({ ok: true, sets: [revisionSet] })
+      .mockResolvedValue({ ok: true, sets: [issueBSet] });
+    mocks.update.mockReturnValueOnce(updateA.promise);
+    const { result, rerender } = renderHook(
+      ({ issueId }) => useWriterPacingRevisionSet(issueId, []),
+      { initialProps: { issueId: ISSUE_ID } },
+    );
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    let updatePromise!: Promise<void>;
+    act(() => {
+      updatePromise = result.current.updateChange('change-a', { decision: 'approved' });
+    });
+    rerender({ issueId: ISSUE_B_ID });
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_B_ID));
+    updateA.resolve({ ok: false, error: 'Issue A update failed' });
+    await act(async () => { await updatePromise; });
+
+    expect(result.current.activeSet?.id).toBe(SET_B_ID);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('ignores a late issue-A discard completion after issue B becomes active', async () => {
+    const discardA = deferred<{ ok: true }>();
+    const issueBSet = { ...revisionSet, id: SET_B_ID, issue_id: ISSUE_B_ID };
+    mocks.list
+      .mockResolvedValueOnce({ ok: true, sets: [revisionSet] })
+      .mockResolvedValue({ ok: true, sets: [issueBSet] });
+    mocks.discard.mockReturnValueOnce(discardA.promise);
+    const { result, rerender } = renderHook(
+      ({ issueId }) => useWriterPacingRevisionSet(issueId, []),
+      { initialProps: { issueId: ISSUE_ID } },
+    );
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    let discardPromise!: Promise<void>;
+    act(() => {
+      discardPromise = result.current.discard();
+    });
+    rerender({ issueId: ISSUE_B_ID });
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_B_ID));
+    discardA.resolve({ ok: true });
+    await act(async () => { await discardPromise; });
+
+    expect(result.current.activeSet?.id).toBe(SET_B_ID);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('keeps only the latest same-issue active refresh result and loading state', async () => {
+    const older = deferred<{ ok: false; error: string }>();
+    const newer = deferred<{ ok: true; sets: PacingRevisionSet[] }>();
+    const newerSet = { ...revisionSet, status: 'applied' as const };
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(mocks.list).toHaveBeenCalled());
+    mocks.list
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    let olderPromise!: Promise<void>;
+    let newerPromise!: Promise<void>;
+    act(() => {
+      olderPromise = result.current.refresh();
+      newerPromise = result.current.refresh();
+    });
+    newer.resolve({ ok: true, sets: [newerSet] });
+    await act(async () => { await newerPromise; });
+    older.resolve({ ok: false, error: 'Older refresh failed' });
+    await act(async () => { await olderPromise; });
+
+    expect(result.current.activeSet).toEqual(newerSet);
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('keeps only the latest same-issue history refresh result and loading state', async () => {
+    const older = deferred<{ ok: false; error: string }>();
+    const newer = deferred<{ ok: true; sets: PacingRevisionSet[] }>();
+    const newestHistory = { ...revisionSet, status: 'archived' as const };
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(mocks.listHistory).toHaveBeenCalled());
+    mocks.listHistory
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    let olderPromise!: Promise<void>;
+    let newerPromise!: Promise<void>;
+    act(() => {
+      olderPromise = result.current.refreshHistory();
+      newerPromise = result.current.refreshHistory();
+    });
+    newer.resolve({ ok: true, sets: [newestHistory] });
+    await act(async () => { await newerPromise; });
+    older.resolve({ ok: false, error: 'Older history failed' });
+    await act(async () => { await olderPromise; });
+
+    expect(result.current.historySets).toEqual([newestHistory]);
+    expect(result.current.historyError).toBeNull();
+    expect(result.current.historyLoading).toBe(false);
   });
 
   it('preserves active state when history loading fails and exposes a retry', async () => {
