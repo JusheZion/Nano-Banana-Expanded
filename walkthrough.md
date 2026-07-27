@@ -13705,3 +13705,782 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None. PR #28 merged as `81b9a2e331bd7258619a7f723b67c2842e1bd509`, and fetched `origin/main` contains the reviewed branch head.
+
+## Pacing Revision virtual hosted preview - 2026-07-27
+
+### What changed
+- Added fail-closed physical and virtual Pacing Revision page-target resolution with server-owned stable keys.
+- Made Outline preview derive the deterministic expansion target from the saved Pacing Review, clamp it to 200 pages, prohibit page-count contraction, and reject underfilled or non-sequential deterministic proposals.
+- Extended the hosted one-page preview branch to authorize virtual targets against all issue pages, Revision Item ownership, and the saved proposed outline.
+- Added ephemeral virtual prompt pages and persisted virtual Page Beats or Dialogue candidates with null live identity/current values without creating `writer_pages`.
+
+### Files touched
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageTarget.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Physical targets require an issue-owned page whose UUID and page number match exactly and use `page:<uuid>`.
+- Virtual targets require a null request ID, a bounded unoccupied number above the physical maximum, contiguous proposed pages from the physical maximum through the request, and saved proposed-outline presence; they use `virtual-page:<number>`.
+- The model sees an ephemeral UUID for response echo validation, but persistence derives identity from the resolved target and forces virtual `page_id` and current values to null.
+- Virtual Dialogue still requires ready effective virtual Page Beats and depends on that Beats change. Existing auth/RLS, one-layer selection, locked-state rejection, malformed-output retry, progress, and failure-ledger behavior remain intact.
+- Follow-up specification review added the missing root DOX contract for fully previewed virtual pages, saved-proposal authority, null live IDs during preview, exact Outline/Beats dependencies, and read-back-verified Apply.
+
+### Verification
+- TDD RED runs failed for the missing resolver/target helpers, missing handler wiring, virtual persistence identity, in-range null-ID authorization, and the old contraction-capable lower bound.
+- `npx vitest run supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`: 4 files and 37 tests passed.
+- Targeted pure-module TypeScript check passed.
+- Focused ESLint completed with 0 errors and 3 pre-existing explicit-`any` warnings.
+- `git diff --check` and the final staged diff check passed before the Pass 2 commit.
+
+### Outstanding issues
+- Client mixed physical/virtual queueing, atomic Apply/Undo, UI state, deployment, and live browser smoke remain in later implementation passes.
+
+### Risks or caveats
+- No hosted Edge Function deployment or production mutation was performed in this pass.
+- A future page must be owned by a saved Revision Item; malformed model ownership fails closed during child preview rather than authorizing an arbitrary page.
+
+### Operator follow-up
+- None for this pass.
+
+### Next steps
+- Execute Pass 3 mixed physical/virtual client queueing after the Pass 2 commit.
+
+## Pacing Revision hosted-preview specification hardening - 2026-07-27
+
+### What changed
+- Removed model-only Revision Item page ownership: persisted item/page relationships now derive exclusively from accepted deterministic Outline changes.
+- Required virtual Page Beats to carry a non-empty applicable Outline dependency for the exact item/page and rejected virtual Dialogue whose effective Beats are not backed by that dependency.
+- Extracted an executable hosted-preview flow used by the Edge handler for target resolution, ownership, ephemeral model identity, effective Beats, candidate validation, and Revision Change persistence.
+- Added the durable fully-previewed virtual-page and verified-Apply contract to root DOX.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Physical page preview preserves its prior UUID/current-value behavior and may continue without virtual-only Outline dependency requirements.
+- Virtual prompt UUIDs remain ephemeral model echo identities. Persisted virtual children retain the real page number, `page_id: null`, `virtual-page:<number>`, and null current values.
+- The executable flow exposes no live-page mutation path; the handler only reads `writer_pages` during preview and persists candidates to `writer_pacing_revision_changes`.
+
+### Verification
+- Focused RED tests reproduced unsupported model ownership and the missing executable hosted-flow seam.
+- Corrected focused gate: 5 server files and 45 tests passed.
+- Targeted production-module TypeScript check passed.
+- Focused ESLint completed with 0 errors and the same 3 pre-existing explicit-`any` warnings.
+- `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation implementation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deploy or live production mutation was performed in this review-fix pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue to Pass 3 only after the corrected Pass 2 specification review is approved.
+
+## Pacing Revision deterministic affected-page ownership - 2026-07-27
+
+### What changed
+- Replaced single-result-page ownership with deterministic source-versus-proposal assignment comparison.
+- Moves now own every changed page from the original through proposed position.
+- Combines and mid-outline additions own every actually shifted later page, including newly introduced future pages.
+- Exact edits remain page-local, and append-only 71-to-85 expansion retains contiguous future-page ownership.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Global changed pages are identified by comparing the source beat assigned to each page with the final deterministic manifest entry.
+- Operation-specific ranges then assign only changed pages to the accepted Revision Item; model `affected_page_numbers` remain non-authoritative.
+- Overlapping structural impacts continue through the existing deterministic item merge.
+
+### Verification
+- RED: move page 2→4 reported only page 4; combine reported only page 2; mid-outline add reported only page 3.
+- GREEN: 5 focused server files and 50 tests passed.
+- Targeted production-module TypeScript and focused prompt lint passed.
+- `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 re-review approval.
+
+## Pacing Revision shifted virtual-page dependency authorization - 2026-07-27
+
+### What changed
+- Corrected hosted preview authorization for virtual pages created by structural shifts.
+- A virtual page owned by a deterministically backed Revision Item now depends on that item's accepted Outline changes even when the operation's result page precedes the shifted virtual target.
+- Added executable coverage for a page-3 insertion whose deterministic affected range includes virtual page 5.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Persisted `affected_page_numbers` remains the target-ownership gate and is derived from accepted deterministic operations.
+- Virtual dependency IDs come only from ready/applied, non-rejected Outline changes on the same owning item.
+- Model-declared affected pages remain unused for authorization.
+
+### Verification
+- RED: virtual page 5 was rejected because the accepted insertion Outline child recorded page 3.
+- GREEN: the hosted flow persists virtual Page Beats with `page_id: null` and the page-3 insertion dependency.
+- Focused Pass 2 gate, targeted TypeScript, focused lint, and `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 re-review approval.
+
+## Pacing Revision deterministic item grouping - 2026-07-27
+
+### What changed
+- Removed pre-validation Revision Item merging based on model-declared affected pages.
+- Accepted deterministic impact pages are now computed for each original item before overlap merging.
+- Operations and persisted Outline children are remapped only after deterministic item merging, preserving the correct surviving item relationship.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Unknown item references remain excluded before patch application.
+- Model `affected_page_numbers` no longer influence whether separate editorial intents are grouped.
+- Deterministically overlapping items still use the established title/rationale composition and operation remapping.
+
+### Verification
+- RED: two accepted page-local edits at deterministic pages 1 and 4 merged because both model items falsely claimed page 99.
+- GREEN: both items remain separate with their original titles, rationales, operation linkage, and Outline child linkage.
+- A deterministic move/edit overlap still merges title/rationale text and remaps both accepted operations and Outline children to the surviving item.
+- Focused Pass 2 gate, targeted TypeScript, focused lint, and `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 quality review approval.
+
+## Pacing Revision mixed physical/virtual client queue - 2026-07-27
+
+### What changed
+- Updated the Pacing Revision client queue to run every requested affected page number, including proposed future pages that do not yet have a `writer_pages` row.
+- Physical page requests continue to send their UUID and page number; virtual requests now send `page_id: null` with the requested page number.
+- Added mixed physical/virtual coverage for numeric ordering, Beats-before-Dialogue generation, virtual resume, and layer-specific failed-only retry.
+- Removed the obsolete client error that treated a missing physical row as an unavailable affected page.
+
+### Files touched
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The queue remains sequential and invokes exactly one child layer per hosted request.
+- Requested pages are sorted numerically before entering the existing queue; the queue also preserves its deduplication, isolated-failure continuation, five-page checkpoint, and stop-between-pages behavior.
+- Resume still derives missing layers from persisted ready/applied changes, so ready virtual Beats are not regenerated before Dialogue.
+- Failed-only retry remains page-and-layer scoped and does not replay successful pages.
+
+### Verification
+- TDD RED: 3 new hook tests failed because virtual pages were filtered through the physical page map; the existing 10 hook/queue tests passed.
+- TDD GREEN and Pass 3 smoke: `npx vitest run src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts` — PASS, 2 files / 13 tests.
+- Three-pass audit: shared request mirrors accept nullable page IDs; the server derives and authorizes target keys from persisted physical/proposed-outline state; one-layer invocation, queue ordering, failure continuation, checkpoints, and stop behavior remain enforced.
+- Preview live-write audit: the hosted preview branch reads `writer_pages` and writes only Revision Set candidate/progress records; no live page insert, update, or upsert path was found.
+- DOX pass: `AGENTS.md` remains unchanged because this implementation satisfies the existing virtual-preview contract without changing durable project rules.
+
+### Outstanding issues
+- Atomic creation, verification, rollback, and undo for virtual rows remain scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted logic, Apply behavior, user-facing review UI, deployment, or live data was changed in this pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Begin Pass 4 with RED Apply tests for complete virtual units, ascending creation, read-back verification, compensation, and Undo.
+
+## Pacing Revision atomic expansion Apply and verified Undo - 2026-07-27
+
+### What changed
+- Added fail-closed preflight for complete approved virtual Outline, Page Beats, and Dialogue units, exact physical identity, dependencies, fingerprints, locks, collisions, and sequential target pages.
+- Apply now creates only the exact future rows in ascending order with `createWriterPage`, maps candidates through the returned row IDs, and compensates the exact created IDs on any later failure.
+- Added pure read-back verification for the complete target page-number set, exact created mapping, and persisted approved Page Beats and Dialogue candidates.
+- Moved Revision Set completion behind fresh read-back verification; verification or completion failure restores existing content and outline state, deletes created rows, verifies their absence, and leaves the set unapplied.
+- Extended the durable snapshot with exact created pages, source/target page counts, and applied change IDs. Undo restores existing data, deletes and verifies the exact recorded rows, and only then reopens the set.
+- Hardened completion and reopen persistence against silent zero-row updates.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The built approved outline is validated before the first live write and establishes the exact future creation range.
+- Snapshots retain prior content only for existing pages; newly created content is removed by exact row deletion instead of being restored.
+- Cleanup failures retain the original Apply error and add explicit recovery-failure detail.
+- Existing-only legacy snapshots remain undoable without a created-page ledger.
+- `AGENTS.md` was intentionally unchanged because the root DOX already specifies fully previewed virtual pages, verified Apply, exact compensation, and exact Undo.
+
+### Verification
+- TDD RED reproduced virtual mapping, incomplete dependency units, collisions, physical identity mismatch, malformed target numbering, creation/content cleanup, read-back mismatch, persistence zero-row, and Undo deletion gaps.
+- Pass 4 focused smoke: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts` — PASS, 3 files / 27 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- Midpoint QA audit found and corrected fail-open physical identity, non-sequential target, zero-row persistence, cleanup-message, and legacy Undo cases.
+
+### Outstanding issues
+- Pass 5 truthful workspace status and page navigation remain pending.
+- Local browser and hosted expansion Apply/Undo smoke remain scheduled for Passes 6–7.
+
+### Risks or caveats
+- No migration, hosted deployment, browser mutation smoke, or Pass 5 UI behavior was included in this pass.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Begin Pass 5 with RED status, blocker-lifecycle, comparison-context, and physical/virtual navigation tests.
+
+## Pacing Revision Apply specification-review corrections - 2026-07-27
+
+### What changed
+- Reloaded the authoritative latest outline and physical issue pages before deriving Apply fingerprints, page identities, lock targets, and the expected prior outline version.
+- Added fail-closed physical-page contiguity validation; a physical set such as pages 1 and 3 cannot begin Apply or write live data.
+- Added guarded persistence transitions that store the base recovery snapshot and move an eligible set to `applying` before live mutation.
+- Refreshed the applying snapshot after the outline write and after every successful page creation so crash recovery has the exact created row IDs as promptly as possible.
+- Changed Apply compensation and Undo to attempt every reverse recovery step even when an earlier restore fails, while preserving and surfacing all cleanup errors.
+- Hardened completion and reopen transitions with conditional statuses, verified child rollback, and checked set compensation to prevent silent set/child state splits.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Preflight and deterministic outline construction remain read-only; the guarded `applying` snapshot is the first persistence transition and occurs before the outline mutation.
+- Completion requires the set to still be `applying`. Failed set completion checks that every child is rolled back to ready.
+- Undo is called only after live content/page cleanup; it conditionally moves the set from applied to ready, then reopens children, compensating the set back to applied if the child transition fails.
+- No schema migration was required because `status`, `apply_snapshot`, and `recovery_status` already support the recovery contract.
+
+### Verification
+- RED tests reproduced cached authority use, physical `[1, 3]` acceptance, missing pre-mutation recovery persistence, early-stop Undo, unguarded completion, unchecked rollback, and split reopen state.
+- Focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts` — PASS, 3 files / 36 tests.
+- `npm run build` — PASS.
+- Specification re-audit: all five blocking findings are addressed with executable coverage.
+
+### Outstanding issues
+- Pass 5 truthful workspace status and navigation remain pending.
+- Browser and hosted crash-recovery smoke remain scheduled for later integration/release passes.
+
+### Risks or caveats
+- A process can always terminate between a successful remote page insert and the immediately following snapshot update; the implementation minimizes this window by persisting after each returned row before any child content write.
+- No migration, browser mutation, hosted deployment, or Pass 5 UI work was performed.
+
+### Operator follow-up
+- None for this correction.
+
+### Next steps
+- Continue to Pass 5 only after this corrected Pass 4 review is approved.
+
+## Pacing Revision Apply crash-safe atomicity correction - 2026-07-27
+
+### What changed
+- Reloaded the persisted Revision Set and issue record alongside the latest outline and pages before Apply; lock enforcement now derives from fresh issue notes.
+- Preassigned the outline UUID and every possible new page UUID, persisted the full cleanup plan before the first insert, and passed those IDs into outline/page creation.
+- Made exact planned-outline cleanup idempotent when interruption occurs before an insert is confirmed.
+- Added verified abort recovery: complete cleanup returns the set to retryable `ready` with visible detail, while incomplete cleanup remains `applying` with `recovery_required` detail.
+- Replaced client-side multi-table completion and Undo reopen sequences with authenticated owner-scoped PostgreSQL transactions that validate exact change membership, status, and row counts.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomOutlineCreate.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomOutlineDeleteExact.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomPageCreate.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The durable `applying` snapshot now contains all cleanup identities before any remote mutation, removing the response-to-snapshot crash window.
+- Recovery first reloads the set and only compensates a still-`applying` attempt, avoiding cleanup after a completion transaction may already have committed.
+- Completion and reopen functions use `SECURITY INVOKER`, explicit `auth.uid()` ownership, RLS-compatible writes, status locks, exact child membership, and exception-driven transaction rollback.
+
+### Verification
+- Focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts src/shared/api/__tests__/arcsWriterRoomOutlineCreate.test.ts src/shared/api/__tests__/arcsWriterRoomOutlineDeleteExact.test.ts src/shared/api/__tests__/arcsWriterRoomPageCreate.test.ts` — PASS, 7 files / 53 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The new migration has not been applied to hosted Supabase in this pass.
+- Browser and hosted Apply/Undo interruption smoke remain scheduled for later integration/release work.
+- Pass 5 truthful workspace status and navigation remain pending.
+
+### Risks or caveats
+- Continuing Apply on a set left `applying` by a hard process termination invokes cleanup from the persisted snapshot before retry; this pass intentionally does not add a separate Pass 5 recovery control.
+
+### Operator follow-up
+- Apply migration `20260727000000_writer_pacing_revision_apply_transactions.sql` before exercising completion or Undo against a hosted environment.
+
+### Next steps
+- Re-review the corrected Pass 4 diff, then continue to Pass 5 only after approval.
+
+## Pacing Revision Apply final release blockers - 2026-07-27
+
+### What changed
+- Resolved ambiguous completion responses from freshly persisted set state before any compensation.
+- Treat a persisted `applied` state as committed success only after fresh content verification; compensate only a confirmed `applying` state.
+- Block cleanup and surface recovery-required detail when completion state is unreadable, unexpected, or committed content cannot be verified.
+- Hardened persisted recovery snapshot parsing with canonical UUID, uniqueness, bounded-count, exact contiguous-range, outline-plan, and applied-ID invariants before destructive cleanup.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- RED tests reproduced lost-response-after-commit compensation risk and acceptance of tampered recovery ledgers.
+- Focused Pass 4 gate — PASS, 7 files / 67 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The transactional migration remains local and is not deployed in this pass.
+- Hosted Apply/Undo verification remains pending.
+
+### Risks or caveats
+- Unknown completion state intentionally leaves live content untouched for operator recovery.
+
+### Operator follow-up
+- Apply the pending migration before hosted completion/Undo verification.
+
+### Next steps
+- Proceed only after final Pass 4 review approval.
+
+## Pacing Revision Apply/Undo integrity closure - 2026-07-27
+
+### What changed
+- Normal Undo now strictly parses the persisted applied snapshot and binds it to freshly reloaded set, issue, changes, pages, created rows, and latest outline before writes.
+- Added result-bearing page reads and exact returned-row checks for Page Beats, Dialogue, and page deletion in the Apply/recovery/Undo path.
+- Abort and Undo now verify restored existing content plus exact created-page and planned-outline absence before state transitions.
+- Extended atomic completion with locked database-side validation of expected outline identity/JSON, target page count, page identities/numbers, and approved candidate values.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/arcsWriterRoomPageExactResults.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 integrity gate — PASS, 8 files / 75 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The updated transaction migration remains local and requires hosted deployment and smoke.
+
+### Risks or caveats
+- The short completion transaction uses a table-level write-conflicting lock on writer pages/outlines to close insert/update races; keep the transaction bounded and monitor contention during hosted verification.
+
+### Operator follow-up
+- Deploy the updated migration before hosted 71→85 Apply/Undo verification.
+
+### Next steps
+- Proceed only after final integrity review approval.
+
+## Pacing Revision exact page set and Undo continuity - 2026-07-27
+
+### What changed
+- Completion now validates the exact distinct contiguous page-number set `1..target` under lock, rejecting same-count gap/out-of-range substitutions.
+- Undo preflight now compares live physical and created-page Page Beats/Dialogue against authoritative applied candidates; newer edits block Undo before mutation.
+- Added persisted-state reopen ambiguity handling: `ready` confirms success, `applied` records recovery-required detail, and unreadable/unknown state performs no further mutation.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 gate — PASS, 8 files / 79 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- Updated migration deployment and hosted 71→85 Apply/Undo smoke remain pending.
+
+### Risks or caveats
+- A reopen failure after live Undo deliberately leaves the set `applied` with explicit recovery-required detail rather than attempting another content mutation.
+
+### Operator follow-up
+- Deploy the updated migration before hosted validation.
+
+### Next steps
+- Proceed only after final review approval.
+
+## Pacing Revision Undo outline freshness - 2026-07-27
+
+### What changed
+- Persisted the exact applied outline JSON in the guarded Apply snapshot and bound it to the locked completion expectation.
+- Normal Undo now compares the freshly reloaded latest same-ID outline row with the persisted applied result before any delete or restore.
+- Added regression coverage proving that an in-place outline edit after Apply blocks Undo before writes.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 gate — PASS, 8 files / 79 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+
+### Outstanding issues
+- Updated migration deployment and hosted 71→85 Apply/Undo smoke remain pending.
+
+### Risks or caveats
+- Legacy applied snapshots without the applied outline JSON now fail closed rather than authorizing destructive Undo.
+
+### Operator follow-up
+- Deploy the updated migration before hosted validation.
+
+### Next steps
+- Proceed only after final review approval.
+
+## Pacing Revision truthful status and page navigation - 2026-07-27
+
+### What changed
+- Replaced historical layer totals with current `remaining`, dependency-valid `ready`, and `applied` summaries; rejected changes no longer inflate visible progress.
+- Made missing dependency IDs fail closed and limited dependency guidance to blockers that are still unresolved.
+- Made applied/discarded Revision Sets read-only, suppressed obsolete failure recovery alerts, pruned stale selections, and aligned sidebar, comparison-panel, and primary-action wording with the persisted lifecycle.
+- Added compact page/layer context, virtual-page Apply badges, wrapped native page buttons, local virtual preview selection, direct missing-preview retry, and layer-aware physical navigation.
+- Deduplicated the two WriterPortal navigation callbacks behind one tested helper that maps Outline and Page Beats to the Page Beats workspace while preserving Dialogue routing.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionModel.test.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/portals/writer/__tests__/WriterSearchableMenu.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The existing two-panel comparison, dense Revision Item sidebar, and sticky layer-scoped batch footer remain structurally unchanged.
+- Physical page buttons delegate page number plus source layer to WriterPortal; virtual page buttons never call external navigation and instead select the matching child change or render a retryable local missing state.
+- The UI critique pass added an explicit missing-virtual-preview recovery control and increased the compact page-button target without expanding the workspace into card-heavy layout.
+
+### Verification
+- RED run: 2 files / 9 expected failures reproduced missing summaries, fail-closed dependency handling, terminal wording/read-only behavior, and page navigation controls.
+- WriterPortal navigation RED: 1 expected failure reproduced the missing Outline/Page Beats/Dialogue mapping helper.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 29 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- Integrated browser QA and hosted virtual preview/Apply/Undo verification remain in Pass 6 and later release passes.
+
+### Risks or caveats
+- A page without any child preview is treated as virtual locally only when its Revision Item already contains explicit virtual child identity; unrelated legacy failure rows continue to route as physical pages.
+
+### Operator follow-up
+- None for this local UI pass.
+
+### Next steps
+- Run Pass 6 integrated local QA across preview, review, Apply, and Undo before hosted release work.
+
+## Pacing Revision terminal-state specification correction - 2026-07-27
+
+### What changed
+- Made every rejected change read-only immediately, including nonterminal Revision Sets, while preserving the `Rejected proposal` comparison label.
+- Removed selection controls, row checkboxes, and the sticky batch-decision footer entirely from applied and discarded sets instead of showing disabled editing chrome.
+- Cleared a local missing-virtual-preview state whenever a normal same-layer sidebar change is selected.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Terminal workspaces retain the layer tabs, item navigation, context strip, and two-panel comparison, but omit controls that imply further review decisions.
+- Nonterminal rejected rows remain visible for audit and comparison without edit, reset, or decision actions.
+- The existing sidebar button is the exit path from a local missing-preview state; no new navigation surface was added.
+
+### Verification
+- RED: 4 focused cases failed on the three reviewed gaps.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 33 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this focused lifecycle correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA.
+
+## Pacing Revision applied-page and status semantics correction - 2026-07-27
+
+### What changed
+- Treated an applied child change with `page_id: null` and a persisted `page_number` as a created physical page for context and external Writer navigation.
+- Restricted layer `remaining` counts to pending changes whose generation status is exactly `ready`; pending failed, stale, locked, or not-yet-generated rows no longer inflate actionable progress.
+- Standardized the applied primary action label as `All approved changes applied`.
+- Added one polite semantic `status` announcement to the applied success text and to an unapplied virtual-preview badge without duplicating visible copy.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionModel.test.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The proposal row retains `page_id: null` as immutable preview provenance after Apply; `generation_status: applied` is the lifecycle evidence that its `page_number` now identifies a physical page.
+- The terminal status text remains the disabled primary button's accessible name while its single nested status node supplies the live announcement.
+
+### Verification
+- RED: 4 focused failures reproduced the ready-count, applied label, semantic status, and applied virtual-navigation gaps.
+- Focused GREEN: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx` — PASS, 2 files / 32 tests.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 35 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` and targeted walkthrough presence check — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this focused lifecycle correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA after the consolidated focused gate.
+
+## Pacing Revision virtual-page release - 2026-07-27
+
+### What changed
+- Completed and released the preview-first Pacing Revision workflow that can expand an approved Outline beyond the current physical page count without creating live pages during preview.
+- Future Page Beats and Dialogue candidates remain virtual until explicit Apply; Apply creates the exact contiguous pages, verifies persisted Outline/Beats/Dialogue content under database locks, and marks the Revision Set applied only after the transaction proves the complete target state.
+- Replaced client-sequenced Undo with an owner-scoped transaction that restores prior existing content, deletes only the exact created pages and applied outline, and reopens the exact Revision Set changes atomically.
+- Updated the workspace to show current remaining/ready/applied counts, hide resolved dependency warnings, keep failed Beats/Dialogue from blocking Outline approval, identify comparison pages/layers, and provide physical or virtual page navigation.
+- Deployed the database transaction migration, `writer-tools` v110, and the tested frontend bundle to production.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- related Pacing, persistence, migration, and workspace tests
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Virtual children use `page_id: null`, a deterministic `page_number`, and `virtual-page:N` preview identity. The server accepts them only when the accepted Outline impact deterministically owns that future page.
+- Apply preassigns and persists cleanup UUIDs before insertion, reloads authoritative issue/outline/page state, rejects gaps or collisions, and delegates final exact-state completion to an authenticated transaction.
+- Beats regeneration uses the existing database trigger to stale its dependent Dialogue candidate and remove completed progress before regeneration.
+- Production application commit: `c1e21f3`. Cloudflare version: `0fe36432-dcad-4dbe-bd9a-00f9deb93b04`.
+
+### Verification
+- Full Vitest: PASS, 141 test files / 977 tests.
+- Full ESLint: PASS, 0 errors / 71 existing warnings.
+- `npm run build`: PASS.
+- `git diff --check`: PASS.
+- Final independent code review: APPROVED with no remaining Critical or Important release blocker.
+- Supabase migration list: local/remote `20260727000000` aligned.
+- Supabase Function: `writer-tools` ACTIVE v110.
+- Local signed-in browser: truthful layer counts, comparison context, physical page navigation, and clean console verified.
+- Fresh signed-in production browser: current three-layer status labels and non-blocking layer-failure messaging verified; console returned no warnings or errors.
+
+### Outstanding issues
+- The dedicated QA account contains a 70-page non-expanding Revision Set, not a safe representative 71→85 set. A destructive hosted 71→85 Apply/Undo replay was therefore not fabricated against unrelated story data.
+
+### Risks or caveats
+- The production mutation contract is covered by focused, migration, persistence, concurrency, compensation, and full-regression tests, but the user's exact 71→85 story remains the first representative live expansion after refresh.
+
+### Operator follow-up
+- Refresh production, reopen the user's Pacing Revision Set, and confirm the future pages appear in Page Beats and Dialogue before applying. If the old 71-page projection is cached, regenerate only the affected Revision Set layers; do not recreate the story.
+
+### Next steps
+- Merge PR #30, confirm production remains live, and use the user's actual 71→85 set as the representative production confirmation.
+
+## Pacing Revision transactional Undo and Dialogue invalidation closure - 2026-07-27
+
+### What changed
+- Replaced normal client-sequenced Undo with one authenticated owner-scoped database RPC.
+- The transaction locks the applied Revision Set and stored snapshot plus issue pages/outlines, rejects changed applied candidates or outline/page-set state, restores prior existing content, deletes exact created pages and applied outline, and reopens exact children plus the set atomically.
+- Ambiguous RPC responses now use read-only persisted-status reconciliation: `ready` or `partially_ready` confirms success, while `applied` remains unchanged and retryable.
+- Added a Portal regression forbidding client-side live Undo mutations and an explicit Edge/trigger regression proving regenerated Beats stale dependent Dialogue and remove the page from completed progress.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionPortalUndo.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- RED gate reproduced the missing atomic RPC, old mutating ambiguity handler, and absent migration transaction contract.
+- Initial GREEN gate — PASS, 4 files / 62 tests.
+- Final focused gate with Portal and concurrency-lock coverage — PASS, 5 files / 63 tests.
+- Full relevant Pacing/persistence gate — PASS, 19 files / 184 tests.
+- Full project gate — PASS, 141 files / 977 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- Full `npm run lint` — PASS with 0 errors and 71 existing repository warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- The updated migration has not been executed against local or hosted PostgreSQL in this pass.
+- Hosted 71→85 Apply/Undo smoke remains pending.
+
+### Risks or caveats
+- Local Supabase migration execution was blocked because the Docker daemon was stopped.
+- Supabase MCP/tool discovery found no callable Supabase connector in this session.
+
+### Operator follow-up
+- Start Docker for local migration execution or expose/authenticate Supabase MCP, then deploy the updated migration before hosted Undo validation.
+
+### Next steps
+- Re-run migration-level validation in PostgreSQL, deploy the exact tested migration, and complete hosted Apply/Undo smoke before release.
+
+## Pacing Revision independent applied status region - 2026-07-27
+
+### What changed
+- Moved the applied-success live region out of the disabled primary action into an independent sibling.
+- Kept the visible button label exactly `All approved changes applied` and made the standalone polite status screen-reader-only, avoiding duplicate visible copy.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The status and action share one wrapper but neither contains the other; the disabled button therefore retains native button semantics without owning the live region.
+- Unapplied virtual previews continue to use their own visible `status` badge, and no state renders duplicate applied status regions.
+
+### Verification
+- RED: the focused workspace case failed because the applied status was nested inside the disabled action.
+- Focused GREEN: `npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx` — PASS, 1 file / 25 tests.
+- Final focused gate: 3 files / 35 tests — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` and targeted walkthrough presence check — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this semantic-structure correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA after the consolidated focused gate.

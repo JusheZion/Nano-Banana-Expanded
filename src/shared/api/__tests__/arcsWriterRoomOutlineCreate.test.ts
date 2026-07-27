@@ -77,6 +77,20 @@ describe('createWriterOutlineVersion', () => {
     );
   });
 
+  it('uses a caller-preassigned outline id for crash-safe cleanup', async () => {
+    await createWriterOutlineVersion({
+      outlineId: '10000000-0000-4000-8000-000000000099',
+      issueId: 'issue-1',
+      outlineJson: row.outline_json,
+      sourceMode: 'pacing_revision',
+      expectedPreviousId: predecessor.id,
+    });
+
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({
+      id: '10000000-0000-4000-8000-000000000099',
+    }));
+  });
+
   it('starts at version one and returns a latest-query error', async () => {
     mocks.latestLimit.mockResolvedValueOnce({ data: [], error: null });
     await expect(createWriterOutlineVersion({

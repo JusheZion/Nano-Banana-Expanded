@@ -239,6 +239,39 @@ export async function updateWriterPageBeatsJson(
   return true;
 }
 
+function stableApiValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableApiValue).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableApiValue(entry)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export async function updateWriterPageBeatsJsonExact(
+  pageId: string,
+  beatsJson: Record<string, unknown> | null,
+): Promise<{ ok: true; row: Pick<WriterPageRow, 'id' | 'beats_json'> } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const { data, error } = await supabase
+    .from('writer_pages')
+    .update({ beats_json: beatsJson, updated_at: nowUtcIso() })
+    .eq('id', pageId)
+    .select('id, beats_json');
+  if (error) return { ok: false, error: error.message };
+  const rows = (data ?? []) as Array<Pick<WriterPageRow, 'id' | 'beats_json'>>;
+  if (
+    rows.length !== 1
+    || rows[0]?.id !== pageId
+    || stableApiValue(rows[0].beats_json) !== stableApiValue(beatsJson)
+  ) {
+    return { ok: false, error: 'Exact Page Beats update was not confirmed.' };
+  }
+  return { ok: true, row: rows[0] };
+}
+
 export async function updateWriterPageScriptText(pageId: string, scriptText: string | null): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase
@@ -250,6 +283,24 @@ export async function updateWriterPageScriptText(pageId: string, scriptText: str
     return false;
   }
   return true;
+}
+
+export async function updateWriterPageScriptTextExact(
+  pageId: string,
+  scriptText: string | null,
+): Promise<{ ok: true; row: Pick<WriterPageRow, 'id' | 'script_text'> } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const { data, error } = await supabase
+    .from('writer_pages')
+    .update({ script_text: scriptText, updated_at: nowUtcIso() })
+    .eq('id', pageId)
+    .select('id, script_text');
+  if (error) return { ok: false, error: error.message };
+  const rows = (data ?? []) as Array<Pick<WriterPageRow, 'id' | 'script_text'>>;
+  if (rows.length !== 1 || rows[0]?.id !== pageId || rows[0].script_text !== scriptText) {
+    return { ok: false, error: 'Exact Dialogue update was not confirmed.' };
+  }
+  return { ok: true, row: rows[0] };
 }
 
 export async function updateWriterSeries(
@@ -325,6 +376,26 @@ export async function listWriterIssues(seriesId: string): Promise<WriterIssueRow
   })) as WriterIssueRow[];
 }
 
+/** Reload one issue directly so lock notes are authoritative at mutation time. */
+export async function getWriterIssue(issueId: string): Promise<WriterIssueRow | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from('writer_issues')
+    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at, deleted_at')
+    .eq('id', issueId)
+    .maybeSingle();
+  if (error || !data) {
+    if (error) console.warn('[arcsWriterRoom] getWriterIssue', error.message);
+    return null;
+  }
+  return {
+    ...data,
+    notes: data.notes && typeof data.notes === 'object' && !Array.isArray(data.notes)
+      ? data.notes as Record<string, unknown>
+      : {},
+  } as WriterIssueRow;
+}
+
 /** List series that the signed-in owner has moved to Recoverable Trash. */
 export async function listTrashedWriterSeries(): Promise<WriterSeriesRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
@@ -384,7 +455,14 @@ export async function getNextWriterIssueNumber(seriesId: string): Promise<number
 }
 
 export async function listWriterPages(issueId: string): Promise<WriterPageRow[]> {
-  if (!isSupabaseConfigured() || !supabase) return [];
+  const result = await listWriterPagesResult(issueId);
+  return result.ok ? result.rows : [];
+}
+
+export async function listWriterPagesResult(
+  issueId: string,
+): Promise<{ ok: true; rows: WriterPageRow[] } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   const { data, error } = await supabase
     .from('writer_pages')
     .select('id, issue_id, page_number, beats_json, script_text, created_at, updated_at')
@@ -392,13 +470,14 @@ export async function listWriterPages(issueId: string): Promise<WriterPageRow[]>
     .order('page_number', { ascending: true });
   if (error) {
     console.warn('[arcsWriterRoom] listWriterPages', error.message);
-    return [];
+    return { ok: false, error: error.message };
   }
-  return (data ?? []) as WriterPageRow[];
+  return { ok: true, rows: (data ?? []) as WriterPageRow[] };
 }
 
 /** Insert a page row for an issue (next page_number must be unique for that issue). */
 export async function createWriterPage(input: {
+  id?: string;
   issue_id: string;
   page_number: number;
 }): Promise<WriterPageRow | null> {
@@ -406,6 +485,7 @@ export async function createWriterPage(input: {
   const { data, error } = await supabase
     .from('writer_pages')
     .insert({
+      ...(input.id ? { id: input.id } : {}),
       issue_id: input.issue_id,
       page_number: input.page_number,
     })
@@ -450,6 +530,38 @@ export async function deleteWriterPages(pageIds: string[]): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+export async function deleteWriterPagesExact(
+  issueId: string,
+  pageIds: string[],
+  options?: { allowMissing?: boolean },
+): Promise<{ ok: true; deletedIds: string[] } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
+  const expectedIds = [...new Set(pageIds)];
+  if (expectedIds.length !== pageIds.length || expectedIds.length === 0) {
+    return { ok: false, error: 'Unique page IDs are required for exact deletion.' };
+  }
+  const { data, error } = await supabase
+    .from('writer_pages')
+    .delete()
+    .eq('issue_id', issueId)
+    .in('id', expectedIds)
+    .select('id');
+  if (error) return { ok: false, error: error.message };
+  const deletedIds = ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+  const unexpected = deletedIds.find((id) => !expectedIds.includes(id));
+  if (
+    unexpected
+    || new Set(deletedIds).size !== deletedIds.length
+    || (!options?.allowMissing && (
+      deletedIds.length !== expectedIds.length
+      || expectedIds.some((id) => !deletedIds.includes(id))
+    ))
+  ) {
+    return { ok: false, error: 'Exact page deletion was not confirmed.' };
+  }
+  return { ok: true, deletedIds };
 }
 
 /** Set beats_json to null for the given page ids. */
@@ -539,6 +651,7 @@ export async function listWriterOutlinesForIssue(issueId: string): Promise<Write
 
 /** Inserts a new immutable outline version after reading the current latest version. */
 export async function createWriterOutlineVersion(input: {
+  outlineId?: string;
   issueId: string;
   outlineJson: Record<string, unknown>;
   sourceMode: WriterOutlineSourceMode;
@@ -578,6 +691,7 @@ export async function createWriterOutlineVersion(input: {
     const { data, error } = await supabase
       .from('writer_issue_outlines')
       .insert({
+        ...(input.outlineId ? { id: input.outlineId } : {}),
         issue_id: input.issueId,
         version: nextVersion,
         outline_json: input.outlineJson,
@@ -602,6 +716,7 @@ export async function createWriterOutlineVersion(input: {
 export async function deleteWriterOutlineById(input: {
   issueId: string;
   outlineId: string;
+  allowMissing?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   try {
@@ -616,6 +731,7 @@ export async function deleteWriterOutlineById(input: {
       return { ok: false, error: error.message };
     }
     const deletedRows = (data ?? []) as Array<{ id: string }>;
+    if (input.allowMissing && deletedRows.length === 0) return { ok: true };
     if (deletedRows.length !== 1 || deletedRows[0]?.id !== input.outlineId) {
       const message = 'Exact outline row was not returned after deletion';
       console.warn('[arcsWriterRoom] deleteWriterOutlineById', message);

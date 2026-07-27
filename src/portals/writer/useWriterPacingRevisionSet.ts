@@ -99,11 +99,8 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     }
     const requested = new Set(layersToRunByPage.keys());
     const pageByNumber = new Map(pagesRef.current.map((page) => [page.page_number, page]));
-    const runnablePages = [...requested].filter((page) => pageByNumber.has(page));
-    if (runnablePages.length === 0) {
-      if (requested.size > 0) setError('The affected pages are not available in the current issue.');
-      return;
-    }
+    const runnablePages = [...requested].sort((a, b) => a - b);
+    if (runnablePages.length === 0) return;
     stopRef.current = false;
     setGenerating(true);
     await updateWriterPacingRevisionProgress(set.id, {
@@ -118,10 +115,12 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
         const layersToRun = layersToRunByPage.get(pageNumber) ?? new Set<PacingRevisionChildLayer>();
         for (const layer of ['beats', 'dialogue'] as const) {
           if (!layersToRun.has(layer)) continue;
+          const physicalPage = pageByNumber.get(pageNumber);
           const response = await invokeWriterTools({
             mode: 'pacing_revision_page_preview',
             revision_set_id: set.id,
-            page_id: pageByNumber.get(pageNumber)!.id,
+            page_id: physicalPage?.id ?? null,
+            page_number: pageNumber,
             include_beats: layer === 'beats',
             include_dialogue: layer === 'dialogue',
           });

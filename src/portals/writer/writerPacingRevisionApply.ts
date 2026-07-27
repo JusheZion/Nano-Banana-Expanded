@@ -3,35 +3,450 @@ import type {
   PacingRevisionSet,
 } from '@/shared/writer/pacingRevisionSchemas';
 import {
-  approvedPacingRevisionChanges,
   effectivePacingRevisionCandidate,
+  flattenPacingRevisionChanges,
 } from './writerPacingRevisionModel';
+import type { PacingRevisionCreatedPage } from './writerPacingRevisionApplyVerification';
 
 type ApplyWriters = {
+  beginApply?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
+  persistSnapshot?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
   buildOutline: (approvedOutlineChanges: PacingRevisionChange[]) => Promise<unknown>;
-  writeOutline: (outline: unknown) => Promise<void>;
+  writeOutline: (outline: unknown, plannedOutlineId: string | null) => Promise<void>;
+  createPage: (pageNumber: number, plannedPageId: string) => Promise<PacingRevisionCreatedPage>;
+  deletePages: (pageIds: string[]) => Promise<void>;
   writeBeats: (pageId: string, value: unknown) => Promise<void>;
   writeDialogue: (pageId: string, value: string | null) => Promise<void>;
 };
 
 export type PacingRevisionApplySnapshot = {
   outline: unknown;
+  plannedOutlineId: string | null;
   beats: Array<{ pageId: string; value: unknown }>;
   dialogue: Array<{ pageId: string; value: string | null }>;
+  createdPages: PacingRevisionCreatedPage[];
+  sourcePageCount: number;
+  targetPageCount: number;
+  appliedIds: string[];
+  outlineApplied?: boolean;
+  appliedOutlineId?: string | null;
+  appliedOutlineJson?: unknown;
 };
+
+export function pacingRevisionApplySnapshotFromUnknown(
+  value: unknown,
+): PacingRevisionApplySnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (
+    !Array.isArray(record.beats)
+    || !Array.isArray(record.dialogue)
+    || !Array.isArray(record.createdPages)
+    || !Array.isArray(record.appliedIds)
+    || !Number.isInteger(record.sourcePageCount)
+    || !Number.isInteger(record.targetPageCount)
+    || !Object.prototype.hasOwnProperty.call(record, 'plannedOutlineId')
+  ) {
+    return null;
+  }
+  const sourcePageCount = record.sourcePageCount as number;
+  const targetPageCount = record.targetPageCount as number;
+  const plannedOutlineId = record.plannedOutlineId;
+  const hasOutlineApplied = Object.prototype.hasOwnProperty.call(record, 'outlineApplied');
+  const hasAppliedOutlineId = Object.prototype.hasOwnProperty.call(record, 'appliedOutlineId');
+  const hasAppliedOutlineJson = Object.prototype.hasOwnProperty.call(record, 'appliedOutlineJson');
+  if (
+    sourcePageCount < 0
+    || sourcePageCount > 200
+    || targetPageCount < sourcePageCount
+    || targetPageCount > 200
+    || !(
+      plannedOutlineId === null
+      || (typeof plannedOutlineId === 'string' && uuidPattern.test(plannedOutlineId))
+    )
+    || (targetPageCount > sourcePageCount && plannedOutlineId === null)
+    || hasOutlineApplied !== hasAppliedOutlineId
+    || hasOutlineApplied !== hasAppliedOutlineJson
+  ) {
+    return null;
+  }
+  if (hasOutlineApplied && (
+    typeof record.outlineApplied !== 'boolean'
+    || !(
+      record.appliedOutlineId === null
+      || (typeof record.appliedOutlineId === 'string' && uuidPattern.test(record.appliedOutlineId))
+    )
+    || (record.outlineApplied && (
+      record.appliedOutlineId === null
+      || record.appliedOutlineId !== plannedOutlineId
+    ))
+    || (!record.outlineApplied && record.appliedOutlineId !== null)
+    || (record.outlineApplied && (
+      record.appliedOutlineJson == null
+      || typeof record.appliedOutlineJson !== 'object'
+      || Array.isArray(record.appliedOutlineJson)
+    ))
+    || (!record.outlineApplied && record.appliedOutlineJson !== null)
+  )) return null;
+  const createdPages = record.createdPages as Array<Record<string, unknown>>;
+  if (
+    createdPages.length !== targetPageCount - sourcePageCount
+    || !createdPages.every((created, index) =>
+      created
+      && typeof created === 'object'
+      && !Array.isArray(created)
+      && typeof created.pageId === 'string'
+      && uuidPattern.test(created.pageId)
+      && created.pageNumber === sourcePageCount + index + 1
+    )
+    || new Set(createdPages.map((created) => created.pageId)).size !== createdPages.length
+    || new Set(createdPages.map((created) => created.pageNumber)).size !== createdPages.length
+  ) {
+    return null;
+  }
+  const priorContentEntryIsValid = (entry: unknown): boolean => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const prior = entry as Record<string, unknown>;
+    return typeof prior.pageId === 'string' && uuidPattern.test(prior.pageId);
+  };
+  const appliedIds = record.appliedIds as unknown[];
+  if (!record.beats.every(priorContentEntryIsValid) || !record.dialogue.every(priorContentEntryIsValid)) {
+    return null;
+  }
+  const beatsPageIds = record.beats.map((entry) => (entry as Record<string, unknown>).pageId);
+  const dialoguePageIds = record.dialogue.map((entry) => (entry as Record<string, unknown>).pageId);
+  if (
+    new Set(beatsPageIds).size !== beatsPageIds.length
+    || new Set(dialoguePageIds).size !== dialoguePageIds.length
+    || appliedIds.length === 0
+    || !appliedIds.every((id) => typeof id === 'string' && uuidPattern.test(id))
+    || new Set(appliedIds).size !== appliedIds.length
+  ) {
+    return null;
+  }
+  const snapshot: PacingRevisionApplySnapshot = {
+    outline: record.outline,
+    plannedOutlineId,
+    beats: record.beats as PacingRevisionApplySnapshot['beats'],
+    dialogue: record.dialogue as PacingRevisionApplySnapshot['dialogue'],
+    createdPages: createdPages as PacingRevisionCreatedPage[],
+    sourcePageCount,
+    targetPageCount,
+    appliedIds: appliedIds as string[],
+  };
+  if (hasOutlineApplied) {
+    snapshot.outlineApplied = record.outlineApplied as boolean;
+    snapshot.appliedOutlineId = record.appliedOutlineId as string | null;
+    snapshot.appliedOutlineJson = record.appliedOutlineJson;
+  }
+  return snapshot;
+}
 
 export function pacingRevisionFingerprintKey(change: PacingRevisionChange): string {
   return `${change.layer}:${change.target_key}`;
 }
 
+export function buildPacingRevisionCompletionExpectation(args: {
+  issueId: string;
+  outlineId: string;
+  outlineJson: unknown;
+  targetPageCount: number;
+  createdPages: PacingRevisionCreatedPage[];
+  approvedChanges: PacingRevisionChange[];
+}): {
+  issue_id: string;
+  outline_id: string;
+  outline_json: unknown;
+  target_page_count: number;
+  pages: Array<Record<string, unknown>>;
+} {
+  const createdByNumber = new Map(args.createdPages.map((page) => [page.pageNumber, page.pageId]));
+  const pages = new Map<string, Record<string, unknown>>();
+  for (const change of args.approvedChanges) {
+    if (change.layer === 'outline' || change.page_number == null) continue;
+    const pageId = change.page_id ?? createdByNumber.get(change.page_number);
+    if (!pageId) throw new Error(`Completion expectation cannot resolve page ${change.page_number}.`);
+    const expected = pages.get(pageId) ?? {
+      id: pageId,
+      page_number: change.page_number,
+    };
+    if (expected.page_number !== change.page_number) {
+      throw new Error(`Completion expectation has conflicting page identity for ${pageId}.`);
+    }
+    if (change.layer === 'beats') {
+      expected.beats_json = effectivePacingRevisionCandidate(change);
+    } else {
+      expected.script_text = effectivePacingRevisionCandidate(change);
+    }
+    pages.set(pageId, expected);
+  }
+  return {
+    issue_id: args.issueId,
+    outline_id: args.outlineId,
+    outline_json: args.outlineJson,
+    target_page_count: args.targetPageCount,
+    pages: [...pages.values()],
+  };
+}
+
+export function validatePacingRevisionUndoAuthority(args: {
+  set: PacingRevisionSet;
+  issueId: string;
+  freshPages: Array<{
+    id: string;
+    page_number: number;
+    beats_json: unknown;
+    script_text: string | null;
+  }>;
+  freshOutlines: Array<{ id: string; outline_json: unknown }>;
+}): { ok: true; snapshot: PacingRevisionApplySnapshot } | { ok: false; error: string } {
+  if (args.set.status !== 'applied' || args.set.issue_id !== args.issueId) {
+    return { ok: false, error: 'The applied Revision Set no longer belongs to the selected issue.' };
+  }
+  const snapshot = pacingRevisionApplySnapshotFromUnknown(args.set.apply_snapshot);
+  if (!snapshot || typeof snapshot.outlineApplied !== 'boolean') {
+    return { ok: false, error: 'The applied recovery snapshot is invalid.' };
+  }
+  const changes = flattenPacingRevisionChanges(args.set);
+  const appliedChanges = changes.filter((change) => change.generation_status === 'applied');
+  const appliedChangeIds = appliedChanges.map((change) => change.id);
+  if (
+    appliedChangeIds.length !== snapshot.appliedIds.length
+    || snapshot.appliedIds.some((id) => !appliedChangeIds.includes(id))
+  ) {
+    return { ok: false, error: 'The applied change ledger no longer matches the Revision Set.' };
+  }
+  const pagesById = new Map(args.freshPages.map((page) => [page.id, page]));
+  const createdByNumber = new Map(snapshot.createdPages.map((page) => [page.pageNumber, page.pageId]));
+  const expectedPriorBeats = appliedChanges.filter((change) => change.layer === 'beats' && change.page_id);
+  const expectedPriorDialogue = appliedChanges.filter((change) => change.layer === 'dialogue' && change.page_id);
+  if (
+    expectedPriorBeats.length !== snapshot.beats.length
+    || expectedPriorDialogue.length !== snapshot.dialogue.length
+    || snapshot.beats.some((prior) => !expectedPriorBeats.some((change) => change.page_id === prior.pageId))
+    || snapshot.dialogue.some((prior) => !expectedPriorDialogue.some((change) => change.page_id === prior.pageId))
+  ) {
+    return { ok: false, error: 'The prior-content ledger no longer matches the applied changes.' };
+  }
+  for (const created of snapshot.createdPages) {
+    const page = pagesById.get(created.pageId);
+    if (!page || page.page_number !== created.pageNumber) {
+      return { ok: false, error: `Created page ${created.pageNumber} no longer matches the applied ledger.` };
+    }
+  }
+  for (const prior of [...snapshot.beats, ...snapshot.dialogue]) {
+    const page = pagesById.get(prior.pageId);
+    const change = appliedChanges.find((candidate) =>
+      candidate.layer !== 'outline' && candidate.page_id === prior.pageId
+    );
+    if (
+      !page
+      || !change
+      || page.page_number !== change.page_number
+      || page.page_number < 1
+      || page.page_number > snapshot.sourcePageCount
+    ) {
+      return { ok: false, error: 'A prior-content page no longer matches the applied issue.' };
+    }
+  }
+  const virtualPageNumbers = [...new Set(appliedChanges
+    .filter((change) => change.layer !== 'outline' && change.page_id == null)
+    .map((change) => change.page_number))];
+  if (
+    virtualPageNumbers.length !== snapshot.createdPages.length
+    || snapshot.createdPages.some((created) => !virtualPageNumbers.includes(created.pageNumber))
+  ) {
+    return { ok: false, error: 'The created-page ledger no longer matches the applied changes.' };
+  }
+  const stableValue = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`;
+    if (value && typeof value === 'object') {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => `${JSON.stringify(key)}:${stableValue(entry)}`)
+        .join(',')}}`;
+    }
+    return JSON.stringify(value);
+  };
+  for (const change of appliedChanges) {
+    if (change.layer === 'outline' || change.page_number == null) continue;
+    const pageId = change.page_id ?? createdByNumber.get(change.page_number);
+    const page = pageId ? pagesById.get(pageId) : null;
+    const candidate = effectivePacingRevisionCandidate(change);
+    if (
+      !page
+      || (change.layer === 'beats' && stableValue(page.beats_json) !== stableValue(candidate))
+      || (change.layer === 'dialogue' && page.script_text !== candidate)
+    ) {
+      return {
+        ok: false,
+        error: `Page ${change.page_number} changed after Apply; Undo is blocked to preserve the newer edit.`,
+      };
+    }
+  }
+  if (snapshot.outlineApplied) {
+    if (
+      !snapshot.appliedOutlineId
+      || snapshot.appliedOutlineId !== snapshot.plannedOutlineId
+      || args.freshOutlines[0]?.id !== snapshot.appliedOutlineId
+      || stableValue(args.freshOutlines[0]?.outline_json) !== stableValue(snapshot.appliedOutlineJson)
+    ) {
+      return {
+        ok: false,
+        error: 'The applied outline changed after Apply; Undo is blocked to preserve the newer edit.',
+      };
+    }
+  } else if (
+    snapshot.plannedOutlineId !== null
+    || snapshot.appliedOutlineId !== null
+    || snapshot.appliedOutlineJson !== null
+  ) {
+    return { ok: false, error: 'The non-outline Apply snapshot contains an outline identity.' };
+  }
+  return { ok: true, snapshot };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export class PacingRevisionCompletionResolutionError extends Error {
+  readonly cleanupAllowed: boolean;
+
+  constructor(
+    message: string,
+    cleanupAllowed: boolean,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'PacingRevisionCompletionResolutionError';
+    this.cleanupAllowed = cleanupAllowed;
+  }
+}
+
+export async function resolvePacingRevisionReopenFailure(args: {
+  reopenError: string;
+  loadPersistedStatus: () => Promise<string>;
+}): Promise<'committed'> {
+  let status: string;
+  try {
+    status = await args.loadPersistedStatus();
+  } catch (error) {
+    throw new Error(
+      `${args.reopenError} Reopen state is unreadable; recovery required. No further mutation was attempted. ${errorMessage(error)}`,
+      { cause: error },
+    );
+  }
+  if (status === 'ready' || status === 'partially_ready') return 'committed';
+  if (status === 'applied') {
+    throw new Error(
+      `${args.reopenError} The Revision Set remains applied and live content is unchanged; retry Undo.`,
+    );
+  }
+  throw new Error(
+    `${args.reopenError} Reopen state is ${status || 'unknown'}; recovery required. No further mutation was attempted.`,
+  );
+}
+
+export async function resolvePacingRevisionCompletionFailure(args: {
+  completionError: string;
+  loadPersistedStatus: () => Promise<string>;
+  verifyCommitted: () => Promise<{ ok: boolean; error?: string }>;
+  compensate: () => Promise<void>;
+}): Promise<'committed'> {
+  let status: string;
+  try {
+    status = await args.loadPersistedStatus();
+  } catch (error) {
+    throw new PacingRevisionCompletionResolutionError(
+      `${args.completionError} Completion state is unreadable; recovery required. No cleanup was attempted. ${errorMessage(error)}`,
+      false,
+      { cause: error },
+    );
+  }
+  if (status === 'applied') {
+    const verification = await args.verifyCommitted();
+    if (!verification.ok) {
+      throw new PacingRevisionCompletionResolutionError(
+        `${args.completionError} Completion committed, but fresh verification failed; recovery required. ${verification.error ?? ''}`.trim(),
+        false,
+      );
+    }
+    return 'committed';
+  }
+  if (status === 'applying') {
+    try {
+      await args.compensate();
+    } catch (error) {
+      throw new PacingRevisionCompletionResolutionError(
+        `${args.completionError} Recovery also failed: ${errorMessage(error)}`,
+        true,
+        { cause: error },
+      );
+    }
+    throw new PacingRevisionCompletionResolutionError(args.completionError, true);
+  }
+  throw new PacingRevisionCompletionResolutionError(
+    `${args.completionError} Completion state is ${status || 'unknown'}; recovery required. No cleanup was attempted.`,
+    false,
+  );
+}
+
+function copySnapshot(snapshot: PacingRevisionApplySnapshot): PacingRevisionApplySnapshot {
+  return {
+    ...snapshot,
+    beats: [...snapshot.beats],
+    dialogue: [...snapshot.dialogue],
+    createdPages: snapshot.createdPages.map((page) => ({ ...page })),
+    appliedIds: [...snapshot.appliedIds],
+  };
+}
+
+export async function loadPacingRevisionApplyAuthority<TSet, TIssue, TOutline, TPage>(readers: {
+  loadSet: () => Promise<TSet>;
+  loadIssue: () => Promise<TIssue>;
+  loadOutlines: () => Promise<TOutline[]>;
+  loadPages: () => Promise<TPage[]>;
+}): Promise<{ set: TSet; issue: TIssue; latestOutline: TOutline; pages: TPage[] }> {
+  const [set, issue, outlines, pages] = await Promise.all([
+    readers.loadSet(),
+    readers.loadIssue(),
+    readers.loadOutlines(),
+    readers.loadPages(),
+  ]);
+  const latestOutline = outlines[0];
+  if (!latestOutline) throw new Error('A current saved outline is required before Apply.');
+  return { set, issue, latestOutline, pages };
+}
+
 export async function applyPacingRevisionSet(args: {
   set: PacingRevisionSet;
+  existingPages: Array<{ pageId: string; pageNumber: number }>;
   currentFingerprints: Map<string, string>;
   lockedTargetKeys: Set<string>;
   writers: ApplyWriters;
-}): Promise<{ snapshot: PacingRevisionApplySnapshot; appliedIds: string[] }> {
-  const approved = approvedPacingRevisionChanges(args.set);
+}): Promise<{
+  snapshot: PacingRevisionApplySnapshot;
+  appliedIds: string[];
+  approvedChanges: PacingRevisionChange[];
+  targetOutline: unknown;
+}> {
+  const allChanges = flattenPacingRevisionChanges(args.set);
+  const byId = new Map(allChanges.map((change) => [change.id, change]));
+  const approved = allChanges.filter((change) =>
+    change.decision === 'approved' && change.generation_status === 'ready'
+  );
   if (approved.length === 0) throw new Error('Approve at least one eligible change before applying.');
+  const invalidDependency = approved.find((change) => change.dependency_ids.some((dependencyId) => {
+    const dependency = byId.get(dependencyId);
+    return !dependency
+      || dependency.decision !== 'approved'
+      || !['ready', 'applied'].includes(dependency.generation_status);
+  }));
+  if (invalidDependency) {
+    throw new Error(`Change ${invalidDependency.target_key} has an unresolved dependency.`);
+  }
   const stale = approved.find((change) =>
     args.currentFingerprints.get(pacingRevisionFingerprintKey(change)) !== change.source_fingerprint
   );
@@ -42,56 +457,253 @@ export async function applyPacingRevisionSet(args: {
   const outlineChanges = approved.filter((change) => change.layer === 'outline');
   const beatsChanges = approved.filter((change) => change.layer === 'beats');
   const dialogueChanges = approved.filter((change) => change.layer === 'dialogue');
+  const targetOutline = await args.writers.buildOutline(outlineChanges);
+  const targetOutlineRecord = targetOutline && typeof targetOutline === 'object' && !Array.isArray(targetOutline)
+    ? targetOutline as Record<string, unknown>
+    : null;
+  const targetBeats = targetOutlineRecord && Array.isArray(targetOutlineRecord.page_beats)
+    ? targetOutlineRecord.page_beats
+    : null;
+  if (targetBeats?.some((beat, index) => {
+    const record = beat && typeof beat === 'object' && !Array.isArray(beat)
+      ? beat as Record<string, unknown>
+      : null;
+    return record?.page_target !== index + 1;
+  })) {
+    throw new Error('The built approved outline must contain sequential page targets.');
+  }
+  const physicalNumbers = new Set<number>();
+  const physicalById = new Map<string, number>();
+  let existingMax = 0;
+  for (const page of args.existingPages) {
+    if (!page.pageId || !Number.isInteger(page.pageNumber) || page.pageNumber < 1) {
+      throw new Error('Existing page identity is invalid.');
+    }
+    if (physicalNumbers.has(page.pageNumber)) {
+      throw new Error(`Existing page-number collision at page ${page.pageNumber}.`);
+    }
+    physicalNumbers.add(page.pageNumber);
+    if (physicalById.has(page.pageId)) {
+      throw new Error(`Existing page identity ${page.pageId} is duplicated.`);
+    }
+    physicalById.set(page.pageId, page.pageNumber);
+    existingMax = Math.max(existingMax, page.pageNumber);
+  }
+  for (let pageNumber = 1; pageNumber <= existingMax; pageNumber += 1) {
+    if (!physicalNumbers.has(pageNumber)) {
+      throw new Error(`Existing physical pages must be contiguous from 1 through ${existingMax}.`);
+    }
+  }
+  const physicalTargetKeys = new Set<string>();
+  for (const change of approved) {
+    if (change.layer === 'outline' || change.page_id == null) continue;
+    if (
+      !Number.isInteger(change.page_number)
+      || (change.page_number ?? 0) < 1
+      || physicalById.get(change.page_id) !== change.page_number
+    ) {
+      throw new Error(`Approved ${change.layer} change has a mismatched physical page identity.`);
+    }
+    const target = `${change.layer}:${change.page_id}`;
+    if (physicalTargetKeys.has(target)) {
+      throw new Error(`Approved ${change.layer} changes collide on page ${change.page_number}.`);
+    }
+    physicalTargetKeys.add(target);
+  }
+  const approvedVirtual = approved.filter((change) => change.layer !== 'outline' && change.page_id == null);
+  for (const change of approvedVirtual) {
+    if (!Number.isInteger(change.page_number) || (change.page_number ?? 0) < 1) {
+      throw new Error(`Virtual ${change.layer} change has an invalid page number.`);
+    }
+    if (physicalNumbers.has(change.page_number!)) {
+      throw new Error(`Virtual page ${change.page_number} collides with an existing page.`);
+    }
+  }
+  const targetPageCount = targetBeats?.length ?? existingMax;
+  if (targetPageCount < existingMax) {
+    throw new Error('Pacing Revision Apply cannot contract existing physical pages.');
+  }
+  const createdPageNumbers = Array.from(
+    { length: targetPageCount - existingMax },
+    (_, index) => existingMax + index + 1,
+  );
+  const expectedVirtualNumbers = new Set(createdPageNumbers);
+  const unexpectedVirtual = approvedVirtual.find((change) => !expectedVirtualNumbers.has(change.page_number!));
+  if (unexpectedVirtual) {
+    throw new Error(`Virtual page ${unexpectedVirtual.page_number} is not contiguous with the approved outline target.`);
+  }
+  for (const pageNumber of createdPageNumbers) {
+    const beatsForPage = beatsChanges.filter((change) =>
+      change.page_id == null && change.page_number === pageNumber
+    );
+    const dialogueForPage = dialogueChanges.filter((change) =>
+      change.page_id == null && change.page_number === pageNumber
+    );
+    if (beatsForPage.length !== 1) {
+      throw new Error(`Virtual page ${pageNumber} requires one approved ready Page Beats change.`);
+    }
+    if (dialogueForPage.length !== 1) {
+      throw new Error(`Virtual page ${pageNumber} requires one approved ready Dialogue change.`);
+    }
+    const beats = beatsForPage[0]!;
+    const dialogue = dialogueForPage[0]!;
+    const applicableOutline = beats.dependency_ids
+      .map((dependencyId) => byId.get(dependencyId))
+      .some((dependency) =>
+        dependency?.layer === 'outline'
+        && dependency.item_id === beats.item_id
+        && dependency.decision === 'approved'
+        && ['ready', 'applied'].includes(dependency.generation_status)
+      );
+    if (!applicableOutline) {
+      throw new Error(`Virtual page ${pageNumber} requires an applicable approved Outline change.`);
+    }
+    if (!dialogue.dependency_ids.includes(beats.id)) {
+      throw new Error(`Virtual page ${pageNumber} Dialogue must depend on its approved Page Beats change.`);
+    }
+  }
   const snapshot: PacingRevisionApplySnapshot = {
     outline: args.set.source_outline_json,
+    plannedOutlineId: outlineChanges.length > 0 ? crypto.randomUUID() : null,
     beats: beatsChanges.flatMap((change) => change.page_id
       ? [{ pageId: change.page_id, value: change.current_value }]
       : []),
     dialogue: dialogueChanges.flatMap((change) => change.page_id
       ? [{ pageId: change.page_id, value: typeof change.current_value === 'string' ? change.current_value : null }]
       : []),
+    createdPages: createdPageNumbers.map((pageNumber) => ({
+      pageId: crypto.randomUUID(),
+      pageNumber,
+    })),
+    sourcePageCount: args.existingPages.length,
+    targetPageCount,
+    appliedIds: approved.map((change) => change.id),
   };
-  const completed: Array<() => Promise<void>> = [];
+  const completedExistingWrites: Array<() => Promise<void>> = [];
+  let outlineWritten = false;
+  const createdByPageNumber = new Map<number, string>();
+  if (!args.writers.beginApply || !args.writers.persistSnapshot) {
+    throw new Error('Durable Apply snapshot writers are required before mutation.');
+  }
+  await args.writers.beginApply(copySnapshot(snapshot));
   try {
     if (outlineChanges.length) {
-      await args.writers.writeOutline(await args.writers.buildOutline(outlineChanges));
-      completed.push(() => args.writers.writeOutline(snapshot.outline));
+      await args.writers.writeOutline(targetOutline, snapshot.plannedOutlineId);
+      outlineWritten = true;
+      await args.writers.persistSnapshot(copySnapshot(snapshot));
+    }
+    for (const pageNumber of createdPageNumbers) {
+      const planned = snapshot.createdPages.find((page) => page.pageNumber === pageNumber);
+      if (!planned) throw new Error(`Created page ${pageNumber} is missing its planned identity.`);
+      const created = await args.writers.createPage(pageNumber, planned.pageId);
+      if (
+        !created?.pageId
+        || created.pageNumber !== pageNumber
+        || created.pageId !== planned.pageId
+        || createdByPageNumber.has(pageNumber)
+        || [...createdByPageNumber.values()].includes(created.pageId)
+      ) {
+        throw new Error(`Created page ${pageNumber} did not return its exact identity.`);
+      }
+      createdByPageNumber.set(pageNumber, created.pageId);
     }
     for (const change of beatsChanges) {
-      if (!change.page_id) throw new Error('Page Beats change is missing a page target.');
-      await args.writers.writeBeats(change.page_id, effectivePacingRevisionCandidate(change));
-      completed.push(() => args.writers.writeBeats(change.page_id!, change.current_value));
+      const pageId = change.page_id ?? (
+        change.page_number == null ? undefined : createdByPageNumber.get(change.page_number)
+      );
+      if (!pageId) throw new Error('Page Beats change is missing a page target.');
+      await args.writers.writeBeats(pageId, effectivePacingRevisionCandidate(change));
+      if (change.page_id) {
+        completedExistingWrites.push(() => args.writers.writeBeats(change.page_id!, change.current_value));
+      }
     }
     for (const change of dialogueChanges) {
-      if (!change.page_id) throw new Error('Dialogue change is missing a page target.');
+      const pageId = change.page_id ?? (
+        change.page_number == null ? undefined : createdByPageNumber.get(change.page_number)
+      );
+      if (!pageId) throw new Error('Dialogue change is missing a page target.');
       const value = effectivePacingRevisionCandidate(change);
       if (typeof value !== 'string') throw new Error('Dialogue candidate must be text.');
-      await args.writers.writeDialogue(change.page_id, value);
-      completed.push(() => args.writers.writeDialogue(
-        change.page_id!,
-        typeof change.current_value === 'string' ? change.current_value : null,
-      ));
+      await args.writers.writeDialogue(pageId, value);
+      if (change.page_id) {
+        completedExistingWrites.push(() => args.writers.writeDialogue(
+          change.page_id!,
+          typeof change.current_value === 'string' ? change.current_value : null,
+        ));
+      }
     }
   } catch (error) {
-    for (const compensate of completed.reverse()) {
+    const recoveryErrors: string[] = [];
+    for (const compensate of completedExistingWrites.reverse()) {
       try {
         await compensate();
-      } catch {
-        // Preserve the original failure; caller records recovery-required state.
+      } catch (recoveryError) {
+        recoveryErrors.push(errorMessage(recoveryError));
       }
+    }
+    if (snapshot.createdPages.length > 0) {
+      try {
+        await args.writers.deletePages(snapshot.createdPages.map((page) => page.pageId));
+      } catch (recoveryError) {
+        recoveryErrors.push(errorMessage(recoveryError));
+      }
+    }
+    if (outlineWritten) {
+      try {
+        await args.writers.writeOutline(snapshot.outline, snapshot.plannedOutlineId);
+      } catch (recoveryError) {
+        recoveryErrors.push(errorMessage(recoveryError));
+      }
+    }
+    if (recoveryErrors.length > 0) {
+      throw new Error(
+        `${errorMessage(error)} Recovery also failed: ${recoveryErrors.join(' ')}`,
+        { cause: error },
+      );
     }
     throw error;
   }
-  return { snapshot, appliedIds: approved.map((change) => change.id) };
+  return {
+    snapshot,
+    appliedIds: snapshot.appliedIds,
+    approvedChanges: approved,
+    targetOutline,
+  };
 }
 
 export async function undoPacingRevisionApply(
   snapshot: PacingRevisionApplySnapshot,
-  writers: Omit<ApplyWriters, 'buildOutline'>,
+  writers: Pick<ApplyWriters, 'writeOutline' | 'writeBeats' | 'writeDialogue' | 'deletePages'>,
 ): Promise<void> {
-  await writers.writeOutline(snapshot.outline);
-  for (const beat of snapshot.beats) await writers.writeBeats(beat.pageId, beat.value);
-  for (const dialogue of snapshot.dialogue) {
-    await writers.writeDialogue(dialogue.pageId, dialogue.value);
+  const recoveryErrors: string[] = [];
+  for (const dialogue of [...snapshot.dialogue].reverse()) {
+    try {
+      await writers.writeDialogue(dialogue.pageId, dialogue.value);
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
+  }
+  for (const beat of [...snapshot.beats].reverse()) {
+    try {
+      await writers.writeBeats(beat.pageId, beat.value);
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
+  }
+  const createdPages = snapshot.createdPages ?? [];
+  if (createdPages.length > 0) {
+    try {
+      await writers.deletePages(createdPages.map((page) => page.pageId));
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
+  }
+  try {
+    await writers.writeOutline(snapshot.outline, snapshot.plannedOutlineId);
+  } catch (error) {
+    recoveryErrors.push(errorMessage(error));
+  }
+  if (recoveryErrors.length > 0) {
+    throw new Error(`Undo recovery failed: ${recoveryErrors.join(' ')}`);
   }
 }

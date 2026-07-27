@@ -26,6 +26,7 @@ const ISSUE_ID = '10000000-0000-4000-8000-000000000001';
 const SET_ID = '10000000-0000-4000-8000-000000000002';
 const ITEM_ID = '10000000-0000-4000-8000-000000000003';
 const PAGE_ID = '10000000-0000-4000-8000-000000000004';
+const PHYSICAL_PAGE_71_ID = '10000000-0000-4000-8000-000000000071';
 
 const revisionSet: PacingRevisionSet = {
   id: SET_ID,
@@ -46,6 +47,20 @@ const revisionSet: PacingRevisionSet = {
     affected_page_numbers: [1],
     generation_status: 'pending',
     changes: [],
+  }],
+};
+
+const mixedPhysicalVirtualSet: PacingRevisionSet = {
+  ...revisionSet,
+  progress_json: {
+    total_pages: 3,
+    completed_pages: [],
+    current_page: null,
+    stopped: false,
+  },
+  items: [{
+    ...revisionSet.items[0]!,
+    affected_page_numbers: [73, 71, 72],
   }],
 };
 
@@ -79,6 +94,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: true,
       include_dialogue: false,
     });
@@ -86,9 +102,143 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });
+  });
+
+  it('queues mixed physical and virtual pages in numeric order with nullable physical identity', async () => {
+    mocks.invoke
+      .mockResolvedValueOnce({
+        success: true,
+        mode: 'pacing_revision_outline_preview',
+        data: mixedPhysicalVirtualSet,
+      })
+      .mockResolvedValue({ success: true, mode: 'pacing_revision_page_preview', data: {} });
+    mocks.get.mockResolvedValue({ ok: true, set: mixedPhysicalVirtualSet });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(
+      ISSUE_ID,
+      [{ id: PHYSICAL_PAGE_71_ID, page_number: 71 }],
+    ));
+    await waitFor(() => expect(mocks.list).toHaveBeenCalled());
+
+    await act(async () => { await result.current.create(); });
+
+    expect(mocks.invoke.mock.calls.slice(1).map(([request]) => ({
+      page_id: request.page_id,
+      page_number: request.page_number,
+      include_beats: request.include_beats,
+      include_dialogue: request.include_dialogue,
+    }))).toEqual([
+      { page_id: PHYSICAL_PAGE_71_ID, page_number: 71, include_beats: true, include_dialogue: false },
+      { page_id: PHYSICAL_PAGE_71_ID, page_number: 71, include_beats: false, include_dialogue: true },
+      { page_id: null, page_number: 72, include_beats: true, include_dialogue: false },
+      { page_id: null, page_number: 72, include_beats: false, include_dialogue: true },
+      { page_id: null, page_number: 73, include_beats: true, include_dialogue: false },
+      { page_id: null, page_number: 73, include_beats: false, include_dialogue: true },
+    ]);
+    expect(result.current.error).not.toBe('The affected pages are not available in the current issue.');
+  });
+
+  it('resumes a virtual page by skipping ready Beats and generating Dialogue only', async () => {
+    const virtualBeatsId = '10000000-0000-4000-8000-000000000072';
+    const resumableVirtualSet: PacingRevisionSet = {
+      ...mixedPhysicalVirtualSet,
+      items: [{
+        ...mixedPhysicalVirtualSet.items[0]!,
+        affected_page_numbers: [72],
+        changes: [{
+          id: virtualBeatsId,
+          item_id: ITEM_ID,
+          layer: 'beats',
+          target_key: 'virtual-page:72',
+          page_id: null,
+          page_number: 72,
+          current_value: null,
+          ai_proposal: { panels: [{ action: 'A new bridge scene.' }] },
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: [],
+          reason: 'Restore the bridge.',
+          source_fingerprint: 'virtual-beats-source',
+          generation_status: 'ready',
+        }],
+      }],
+    };
+    mocks.list.mockResolvedValue({ ok: true, sets: [resumableVirtualSet] });
+    mocks.get.mockResolvedValue({ ok: true, set: resumableVirtualSet });
+    mocks.invoke.mockResolvedValue({
+      success: true,
+      mode: 'pacing_revision_page_preview',
+      data: {},
+    });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    await act(async () => { await result.current.generatePages(); });
+
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).toHaveBeenCalledWith({
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: null,
+      page_number: 72,
+      include_beats: false,
+      include_dialogue: true,
+    });
+    expect(result.current.error).not.toBe('The affected pages are not available in the current issue.');
+  });
+
+  it('retries only the failed virtual layer without regenerating successful work', async () => {
+    const virtualBeatsId = '10000000-0000-4000-8000-000000000073';
+    const retryableVirtualSet: PacingRevisionSet = {
+      ...mixedPhysicalVirtualSet,
+      items: [{
+        ...mixedPhysicalVirtualSet.items[0]!,
+        affected_page_numbers: [72, 73],
+        changes: [{
+          id: virtualBeatsId,
+          item_id: ITEM_ID,
+          layer: 'beats',
+          target_key: 'virtual-page:73',
+          page_id: null,
+          page_number: 73,
+          current_value: null,
+          ai_proposal: { panels: [{ action: 'The successful Beats candidate.' }] },
+          edited_candidate: null,
+          decision: 'pending',
+          dependency_ids: [],
+          reason: 'Preserve successful work.',
+          source_fingerprint: 'virtual-beats-source',
+          generation_status: 'ready',
+        }],
+      }],
+    };
+    mocks.list.mockResolvedValue({ ok: true, sets: [retryableVirtualSet] });
+    mocks.get.mockResolvedValue({ ok: true, set: retryableVirtualSet });
+    mocks.invoke.mockResolvedValue({
+      success: true,
+      mode: 'pacing_revision_page_preview',
+      data: {},
+    });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+
+    await act(async () => {
+      await result.current.retryFailed([{ page: 73, layer: 'dialogue' }]);
+    });
+
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).toHaveBeenCalledWith({
+      mode: 'pacing_revision_page_preview',
+      revision_set_id: SET_ID,
+      page_id: null,
+      page_number: 73,
+      include_beats: false,
+      include_dialogue: true,
+    });
+    expect(mocks.invoke).not.toHaveBeenCalledWith(expect.objectContaining({ page_number: 72 }));
   });
 
   it('resumes the newest persisted non-discarded set on load', async () => {
@@ -122,6 +272,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: true,
       include_dialogue: false,
     });
@@ -129,6 +280,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });
@@ -172,6 +324,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });

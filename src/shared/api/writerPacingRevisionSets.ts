@@ -118,52 +118,142 @@ export async function discardWriterPacingRevisionSet(setId: string): Promise<{ o
   }
 }
 
-export async function completeWriterPacingRevisionSet(
+export async function beginWriterPacingRevisionApply(
   setId: string,
-  appliedChangeIds: string[],
   snapshot: unknown,
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
-    const now = new Date().toISOString();
-    const { error: changesError } = await supabase
-      .from('writer_pacing_revision_changes')
-      .update({ generation_status: 'applied', applied_at: now })
-      .in('id', appliedChangeIds);
-    if (changesError) return { ok: false, error: changesError.message };
-    const { error: setError } = await supabase
+    const { data, error } = await supabase
       .from('writer_pacing_revision_sets')
-      .update({ status: 'applied', apply_snapshot: snapshot, recovery_status: null })
-      .eq('id', setId);
-    if (setError) {
-      await supabase
-        .from('writer_pacing_revision_changes')
-        .update({ generation_status: 'ready', applied_at: null })
-        .in('id', appliedChangeIds);
-      return { ok: false, error: setError.message };
-    }
-    return { ok: true };
+      .update({
+        status: 'applying',
+        apply_snapshot: snapshot,
+        recovery_status: 'applying',
+      })
+      .eq('id', setId)
+      .in('status', ['ready', 'partially_ready'])
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not begin Apply because the Revision Set state changed.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }
 }
 
-export async function reopenWriterPacingRevisionSetAfterUndo(
+export async function updateWriterPacingRevisionApplySnapshot(
   setId: string,
-  appliedChangeIds: string[],
+  snapshot: unknown,
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
-    const { error: changesError } = await supabase
-      .from('writer_pacing_revision_changes')
-      .update({ generation_status: 'ready', applied_at: null })
-      .in('id', appliedChangeIds);
-    if (changesError) return { ok: false, error: changesError.message };
-    const { error: setError } = await supabase
+    const { data, error } = await supabase
       .from('writer_pacing_revision_sets')
-      .update({ status: 'ready', recovery_status: 'undone' })
-      .eq('id', setId);
-    return setError ? { ok: false, error: setError.message } : { ok: true };
+      .update({ apply_snapshot: snapshot, recovery_status: 'applying' })
+      .eq('id', setId)
+      .eq('status', 'applying')
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the applying recovery snapshot.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function completeWriterPacingRevisionSet(
+  setId: string,
+  appliedChangeIds: string[],
+  snapshot: unknown,
+  expectation: unknown,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const expectedIds = [...new Set(appliedChangeIds)];
+    if (expectedIds.length === 0) {
+      return { ok: false, error: 'No approved changes were provided for completion.' };
+    }
+    const { data, error } = await supabase.rpc('complete_writer_pacing_revision_apply', {
+      p_set_id: setId,
+      p_change_ids: expectedIds,
+      p_snapshot: snapshot,
+      p_expectation: expectation,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data === true
+      ? { ok: true }
+      : { ok: false, error: 'Completion transaction did not confirm success.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function undoWriterPacingRevisionSet(
+  setId: string,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { data, error } = await supabase.rpc('undo_writer_pacing_revision_apply', {
+      p_set_id: setId,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data === true
+      ? { ok: true }
+      : { ok: false, error: 'Undo transaction did not confirm success.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function recoverWriterPacingRevisionApply(
+  setId: string,
+  snapshot: unknown,
+  detail: string,
+  cleanupComplete: boolean,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const normalizedDetail = detail.trim().slice(0, 500) || 'cleanup status unavailable';
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({
+        status: cleanupComplete ? 'ready' : 'applying',
+        apply_snapshot: snapshot,
+        recovery_status: `${cleanupComplete ? 'recovered' : 'recovery_required'}: ${normalizedDetail}`,
+      })
+      .eq('id', setId)
+      .eq('status', 'applying')
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the Apply recovery state.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function markWriterPacingRevisionRecoveryRequired(
+  setId: string,
+  expectedStatus: 'applied' | 'applying',
+  detail: string,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const normalizedDetail = detail.trim().slice(0, 500) || 'recovery required';
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ recovery_status: `recovery_required: ${normalizedDetail}` })
+      .eq('id', setId)
+      .eq('status', expectedStatus)
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the recovery-required state.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }

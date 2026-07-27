@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  buildPacingRevisionPageChangeRow,
   persistPacingRevisionOutlinePreview,
   projectPacingRevisionFailureLedger,
 } from './pacingRevisionPersistence.ts';
@@ -67,5 +68,43 @@ describe('persistPacingRevisionOutlinePreview', () => {
     expect(migration).toContain("generation_status = 'stale'");
     expect(migration).toContain("decision = 'pending'");
     expect(migration).toMatch(/new\.id = any\(dependency_ids\)/i);
+  });
+
+  it('persists a virtual candidate with stable identity and null current value', () => {
+    expect(buildPacingRevisionPageChangeRow({
+      id: 'change-id',
+      itemId: 'item-id',
+      layer: 'beats',
+      target: {
+        kind: 'virtual',
+        pageId: null,
+        pageNumber: 72,
+        targetKey: 'virtual-page:72',
+      },
+      currentValue: { panels: [{ action: 'Must not persist' }] },
+      aiProposal: { panels: [{ action: 'New virtual action' }] },
+      dependencyIds: ['outline-change-id'],
+      reason: 'Add connective action.',
+      sourceFingerprint: 'null-fingerprint',
+      now: '2026-07-27T00:00:00.000Z',
+    })).toEqual({
+      id: 'change-id',
+      item_id: 'item-id',
+      layer: 'beats',
+      target_key: 'virtual-page:72',
+      page_id: null,
+      page_number: 72,
+      current_value: null,
+      ai_proposal: { panels: [{ action: 'New virtual action' }] },
+      edited_candidate: null,
+      decision: 'pending',
+      dependency_ids: ['outline-change-id'],
+      reason: 'Add connective action.',
+      source_fingerprint: 'null-fingerprint',
+      generation_status: 'ready',
+      applied_at: null,
+      created_at: '2026-07-27T00:00:00.000Z',
+      updated_at: '2026-07-27T00:00:00.000Z',
+    });
   });
 });

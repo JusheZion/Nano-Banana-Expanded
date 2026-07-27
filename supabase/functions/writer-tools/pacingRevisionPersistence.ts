@@ -1,3 +1,5 @@
+import type { PacingRevisionPageTarget } from './pacingRevisionPageTarget.ts';
+
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
@@ -13,6 +15,39 @@ export type PacingRevisionFailure = {
   reason: string;
   item_id?: string;
 };
+
+export function buildPacingRevisionPageChangeRow(input: {
+  id: string;
+  itemId: string;
+  layer: PacingRevisionChildLayer;
+  target: PacingRevisionPageTarget;
+  currentValue: unknown;
+  aiProposal: unknown;
+  dependencyIds: string[];
+  reason: string;
+  sourceFingerprint: string;
+  now: string;
+}): Record<string, unknown> {
+  return {
+    id: input.id,
+    item_id: input.itemId,
+    layer: input.layer,
+    target_key: input.target.targetKey,
+    page_id: input.target.pageId,
+    page_number: input.target.pageNumber,
+    current_value: input.target.kind === 'virtual' ? null : input.currentValue,
+    ai_proposal: input.aiProposal,
+    edited_candidate: null,
+    decision: 'pending',
+    dependency_ids: input.dependencyIds,
+    reason: input.reason,
+    source_fingerprint: input.sourceFingerprint,
+    generation_status: 'ready',
+    applied_at: null,
+    created_at: input.now,
+    updated_at: input.now,
+  };
+}
 
 export function projectPacingRevisionFailureLedger({
   ledger,

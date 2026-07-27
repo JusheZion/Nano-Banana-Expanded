@@ -27,12 +27,15 @@ import {
   deleteLatestWriterOutline,
   deleteWriterLoreCard,
   deleteWriterPages,
+  deleteWriterPagesExact,
   ensureWriterPagesToCount,
   getNextWriterIssueNumber,
+  getWriterIssue,
   listWriterIssues,
   listWriterOutlinesForIssue,
   listWriterOutlinesForIssueResult,
   listWriterPages,
+  listWriterPagesResult,
   listWriterLoreCards,
   listWriterSeries,
   listWriterShotPlansForIssue,
@@ -46,7 +49,9 @@ import {
   updateWriterIssue,
   updateWriterIssueOutlineJson,
   updateWriterPageBeatsJson,
+  updateWriterPageBeatsJsonExact,
   updateWriterPageScriptText,
+  updateWriterPageScriptTextExact,
   updateWriterSeries,
   updateWriterLoreCard,
   updateWriterVideoShotPlanJson,
@@ -59,8 +64,12 @@ import {
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import {
+  beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
-  reopenWriterPacingRevisionSetAfterUndo,
+  getWriterPacingRevisionSet,
+  recoverWriterPacingRevisionApply,
+  undoWriterPacingRevisionSet,
+  updateWriterPacingRevisionApplySnapshot,
 } from '@/shared/api/writerPacingRevisionSets';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { uploadImageFileToArcsGenerations } from '@/shared/api/arcsPersistence';
@@ -93,6 +102,7 @@ import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportW
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
+import type { PacingRevisionLayer } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
 import {
@@ -203,10 +213,20 @@ import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/po
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import {
   applyPacingRevisionSet,
+  buildPacingRevisionCompletionExpectation,
+  loadPacingRevisionApplyAuthority,
+  PacingRevisionCompletionResolutionError,
+  pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
+  resolvePacingRevisionCompletionFailure,
+  resolvePacingRevisionReopenFailure,
   undoPacingRevisionApply,
-  type PacingRevisionApplySnapshot,
 } from '@/portals/writer/writerPacingRevisionApply';
+import {
+  verifyPacingRevisionApply,
+  verifyPacingRevisionCreatedPagesAbsent,
+  verifyPacingRevisionUndoRecovery,
+} from '@/portals/writer/writerPacingRevisionApplyVerification';
 import {
   buildPacingRevisionOutlineFromApprovedChanges,
   fingerprintPacingRevisionValue,
@@ -278,6 +298,12 @@ import {
   WRITER_PAGE_BEATS_ISSUE_MAX,
 } from '@/shared/writer/schemas';
 import type { PageBeatsJson } from '@/shared/writer/types';
+
+export function getPacingRevisionNavigationTab(
+  layer: PacingRevisionLayer,
+): Extract<WriterWorkspaceTabId, 'beats' | 'dialogue'> {
+  return layer === 'dialogue' ? 'dialogue' : 'beats';
+}
 
 const titleTextStyle: React.CSSProperties = {
   background: WRITERS_TIFFANY_TEXT,
@@ -2551,6 +2577,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [pages],
   );
   const pacingRevision = useWriterPacingRevisionSet(selectedIssueId, sortedPages);
+  const navigateToPacingRevisionPage = useCallback((
+    pageNumber: number,
+    layer: PacingRevisionLayer,
+  ) => {
+    const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
+    if (!page) return;
+    setSelectedPageId(page.id);
+    setActiveTab(getPacingRevisionNavigationTab(layer));
+  }, [sortedPages]);
 
   const beatsPickOrdered = useMemo(() => {
     const sel = new Set(beatsPickPageIds);
@@ -3452,20 +3487,56 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const applyPacingRevision = useCallback(async () => {
     const revisionSet = pacingRevision.activeSet;
-    if (!revisionSet || !selectedIssueId || !latestOutline) return;
+    if (!revisionSet || !selectedIssueId) return;
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     let createdOutline: WriterIssueOutlineRow | null = null;
     let createdOutlineId: string | null = null;
+    let applyingSetId: string | null = null;
+    let completionCleanupBlocked = false;
     try {
-      const allChanges = revisionSet.items.flatMap((item) => item.changes);
-      const pageById = new Map(sortedPages.map((page) => [page.id, page]));
+      const {
+        set: authoritativeSet,
+        issue: authoritativeIssue,
+        latestOutline: authoritativeOutline,
+        pages: authoritativePages,
+      } = await loadPacingRevisionApplyAuthority({
+        loadSet: async () => {
+          const loaded = await getWriterPacingRevisionSet(revisionSet.id);
+          if (!loaded.ok) throw new Error(loaded.error);
+          return loaded.set;
+        },
+        loadIssue: async () => {
+          const loaded = await getWriterIssue(selectedIssueId);
+          if (!loaded) throw new Error('The issue could not be reloaded before Apply.');
+          return loaded;
+        },
+        loadOutlines: () => listWriterOutlinesForIssue(selectedIssueId),
+        loadPages: async () => {
+          const loaded = await listWriterPagesResult(selectedIssueId);
+          if (!loaded.ok) throw new Error(loaded.error);
+          return loaded.rows;
+        },
+      });
+      if (authoritativeSet.issue_id !== authoritativeIssue.id) {
+        throw new Error('The Revision Set no longer belongs to the selected issue.');
+      }
+      applyingSetId = authoritativeSet.id;
+      if (authoritativeSet.status === 'applying') {
+        if (!pacingRevisionApplySnapshotFromUnknown(authoritativeSet.apply_snapshot)) {
+          throw new Error('The interrupted Apply snapshot is invalid. Recovery must remain blocked.');
+        }
+        throw new Error('Recovering the interrupted Apply attempt before retry.');
+      }
+      const allChanges = authoritativeSet.items.flatMap((item) => item.changes);
+      const authoritativeLocks = readWriterLocksFromNotes(authoritativeIssue.notes);
+      const pageById = new Map(authoritativePages.map((page) => [page.id, page]));
       const currentFingerprints = new Map<string, string>();
       for (const change of allChanges) {
         if (change.layer === 'outline') {
           currentFingerprints.set(
             pacingRevisionFingerprintKey(change),
-            await fingerprintPacingRevisionValue(latestOutline.outline_json),
+            await fingerprintPacingRevisionValue(authoritativeOutline.outline_json),
           );
         } else {
           const page = change.page_id ? pageById.get(change.page_id) : null;
@@ -3478,31 +3549,55 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       const lockedTargetKeys = new Set<string>();
       for (const change of allChanges) {
-        if (change.layer === 'outline' && writerLocks['outline.latest']) {
+        if (change.layer === 'outline' && authoritativeLocks['outline.latest']) {
           lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
         }
-        if (change.page_id && change.layer === 'beats' && writerLocks[writerPageBeatsLockKey(change.page_id)]) {
+        if (change.page_id && change.layer === 'beats' && authoritativeLocks[writerPageBeatsLockKey(change.page_id)]) {
           lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
         }
-        if (change.page_id && change.layer === 'dialogue' && writerLocks[writerPageDialogueLockKey(change.page_id)]) {
+        if (change.page_id && change.layer === 'dialogue' && authoritativeLocks[writerPageDialogueLockKey(change.page_id)]) {
           lockedTargetKeys.add(pacingRevisionFingerprintKey(change));
         }
       }
       const result = await applyPacingRevisionSet({
-        set: revisionSet,
+        set: authoritativeSet,
+        existingPages: authoritativePages.map((page) => ({
+          pageId: page.id,
+          pageNumber: page.page_number,
+        })),
         currentFingerprints,
         lockedTargetKeys,
         writers: {
+          beginApply: async (snapshot) => {
+            const begun = await beginWriterPacingRevisionApply(authoritativeSet.id, {
+              ...snapshot,
+              outlineApplied: false,
+              appliedOutlineId: null,
+              appliedOutlineJson: null,
+            });
+            if (!begun.ok) throw new Error(begun.error);
+          },
+          persistSnapshot: async (snapshot) => {
+            const persisted = await updateWriterPacingRevisionApplySnapshot(authoritativeSet.id, {
+              ...snapshot,
+              outlineApplied: Boolean(createdOutline),
+              appliedOutlineId: createdOutlineId,
+              appliedOutlineJson: createdOutline?.outline_json ?? null,
+            });
+            if (!persisted.ok) throw new Error(persisted.error);
+          },
           buildOutline: (approvedOutlineChanges) => buildPacingRevisionOutlineFromApprovedChanges({
-            sourceOutline: revisionSet.source_outline_json,
+            sourceOutline: authoritativeSet.source_outline_json,
             approvedOutlineChanges,
-            revisionSetId: revisionSet.id,
+            revisionSetId: authoritativeSet.id,
           }),
-          writeOutline: async (outline) => {
-            if (createdOutline && outline === revisionSet.source_outline_json) {
+          writeOutline: async (outline, plannedOutlineId) => {
+            if (outline === authoritativeSet.source_outline_json) {
+              if (!plannedOutlineId) return;
               const rollback = await deleteWriterOutlineById({
                 issueId: selectedIssueId,
-                outlineId: createdOutline.id,
+                outlineId: plannedOutlineId,
+                allowMissing: true,
               });
               if (!rollback.ok) throw new Error(rollback.error);
               createdOutline = null;
@@ -3510,43 +3605,49 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               return;
             }
             const saved = await createWriterOutlineVersion({
+              outlineId: plannedOutlineId ?? undefined,
               issueId: selectedIssueId,
               outlineJson: outline as Record<string, unknown>,
               sourceMode: 'pacing_revision',
-              expectedPreviousId: latestOutline.id,
+              expectedPreviousId: authoritativeOutline.id,
             });
             if (!saved.ok) throw new Error(saved.error);
             createdOutline = saved.row;
             createdOutlineId = saved.row.id;
           },
+          createPage: async (pageNumber, plannedPageId) => {
+            const row = await createWriterPage({
+              id: plannedPageId,
+              issue_id: selectedIssueId,
+              page_number: pageNumber,
+            });
+            if (!row) throw new Error(`Could not create page ${pageNumber}.`);
+            return { pageId: row.id, pageNumber: row.page_number };
+          },
+          deletePages: async (pageIds) => {
+            const deleted = await deleteWriterPagesExact(
+              selectedIssueId,
+              pageIds,
+              { allowMissing: true },
+            );
+            if (!deleted.ok) throw new Error(deleted.error);
+          },
           writeBeats: async (pageId, value) => {
-            const ok = await updateWriterPageBeatsJson(
+            const saved = await updateWriterPageBeatsJsonExact(
               pageId,
               value && typeof value === 'object' && !Array.isArray(value)
                 ? value as Record<string, unknown>
                 : null,
             );
-            if (!ok) throw new Error(`Could not save Page Beats for ${pageId}.`);
+            if (!saved.ok) throw new Error(saved.error);
           },
           writeDialogue: async (pageId, value) => {
-            if (!await updateWriterPageScriptText(pageId, value)) {
-              throw new Error(`Could not save Dialogue for ${pageId}.`);
-            }
+            const saved = await updateWriterPageScriptTextExact(pageId, value);
+            if (!saved.ok) throw new Error(saved.error);
           },
         },
       });
-      const durableSnapshot = {
-        ...result.snapshot,
-        appliedIds: result.appliedIds,
-        outlineApplied: Boolean(createdOutline),
-        appliedOutlineId: createdOutlineId,
-      };
-      const completed = await completeWriterPacingRevisionSet(
-        revisionSet.id,
-        result.appliedIds,
-        durableSnapshot,
-      );
-      if (!completed.ok) {
+      const compensateApply = async () => {
         await undoPacingRevisionApply(result.snapshot, {
           writeOutline: async () => {
             if (!createdOutline) return;
@@ -3559,80 +3660,222 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             createdOutlineId = null;
           },
           writeBeats: async (pageId, value) => {
-            if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
-              throw new Error(`Could not restore Page Beats for ${pageId}.`);
-            }
+            const restored = await updateWriterPageBeatsJsonExact(
+              pageId,
+              value as Record<string, unknown> | null,
+            );
+            if (!restored.ok) throw new Error(restored.error);
           },
           writeDialogue: async (pageId, value) => {
-            if (!await updateWriterPageScriptText(pageId, value)) {
-              throw new Error(`Could not restore Dialogue for ${pageId}.`);
-            }
+            const restored = await updateWriterPageScriptTextExact(pageId, value);
+            if (!restored.ok) throw new Error(restored.error);
+          },
+          deletePages: async (pageIds) => {
+            const deleted = await deleteWriterPagesExact(
+              selectedIssueId,
+              pageIds,
+              { allowMissing: true },
+            );
+            if (!deleted.ok) throw new Error(deleted.error);
           },
         });
-        throw new Error(completed.error);
+        const cleanupPages = await listWriterPagesResult(selectedIssueId);
+        if (!cleanupPages.ok) throw new Error(cleanupPages.error);
+        const cleanupVerification = verifyPacingRevisionCreatedPagesAbsent({
+          freshPages: cleanupPages.rows,
+          createdPages: result.snapshot.createdPages,
+        });
+        if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
+      };
+      const freshPageResult = await listWriterPagesResult(selectedIssueId);
+      if (!freshPageResult.ok) throw new Error(freshPageResult.error);
+      const freshPages = freshPageResult.rows;
+      const verification = verifyPacingRevisionApply({
+        sourcePageCount: result.snapshot.sourcePageCount,
+        targetPageCount: result.snapshot.targetPageCount,
+        freshPages,
+        createdPages: result.snapshot.createdPages,
+        approvedChanges: result.approvedChanges,
+      });
+      if (!verification.ok) {
+        await compensateApply();
+        throw new Error(verification.error);
+      }
+      const durableSnapshot = {
+        ...result.snapshot,
+        outlineApplied: Boolean(createdOutline),
+        appliedOutlineId: createdOutlineId,
+        appliedOutlineJson: createdOutline ? result.targetOutline : null,
+      };
+      const completionExpectation = buildPacingRevisionCompletionExpectation({
+        issueId: selectedIssueId,
+        outlineId: createdOutlineId ?? authoritativeOutline.id,
+        outlineJson: createdOutline ? result.targetOutline : authoritativeOutline.outline_json,
+        targetPageCount: result.snapshot.targetPageCount,
+        createdPages: result.snapshot.createdPages,
+        approvedChanges: result.approvedChanges,
+      });
+      const completed = await completeWriterPacingRevisionSet(
+        authoritativeSet.id,
+        result.appliedIds,
+        durableSnapshot,
+        completionExpectation,
+      );
+      if (!completed.ok) {
+        try {
+          await resolvePacingRevisionCompletionFailure({
+            completionError: completed.error,
+            loadPersistedStatus: async () => {
+              const persisted = await getWriterPacingRevisionSet(authoritativeSet.id);
+              if (!persisted.ok) throw new Error(persisted.error);
+              return persisted.set.status;
+            },
+            verifyCommitted: async () => {
+              const committedPageResult = await listWriterPagesResult(selectedIssueId);
+              if (!committedPageResult.ok) {
+                return { ok: false, error: committedPageResult.error };
+              }
+              return verifyPacingRevisionApply({
+                sourcePageCount: result.snapshot.sourcePageCount,
+                targetPageCount: result.snapshot.targetPageCount,
+                freshPages: committedPageResult.rows,
+                createdPages: result.snapshot.createdPages,
+                approvedChanges: result.approvedChanges,
+              });
+            },
+            compensate: compensateApply,
+          });
+        } catch (resolutionError) {
+          completionCleanupBlocked = resolutionError instanceof PacingRevisionCompletionResolutionError
+            && !resolutionError.cleanupAllowed;
+          throw resolutionError;
+        }
       }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
-      await pacingRevision.refresh(revisionSet.id);
+      await pacingRevision.refresh(authoritativeSet.id);
       pushHistory(`applied pacing Revision Set (${result.appliedIds.length} change(s))`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not apply the Revision Set.';
+      let message = error instanceof Error ? error.message : 'Could not apply the Revision Set.';
+      if (applyingSetId && !completionCleanupBlocked) {
+        const persisted = await getWriterPacingRevisionSet(applyingSetId);
+        if (persisted.ok && persisted.set.status === 'applying') {
+          const recoverySnapshot = pacingRevisionApplySnapshotFromUnknown(
+            persisted.set.apply_snapshot,
+          );
+          if (!recoverySnapshot) {
+            const invalidDetail = 'the persisted Apply snapshot is invalid';
+            const recorded = await recoverWriterPacingRevisionApply(
+              applyingSetId,
+              persisted.set.apply_snapshot,
+              invalidDetail,
+              false,
+            );
+            message = `${message} Recovery required: ${invalidDetail}.`;
+            if (!recorded.ok) message = `${message} Recovery state could not be recorded: ${recorded.error}`;
+            setPacingApplyError(message);
+            pushHistory(`error: pacing Revision Set apply — ${message}`);
+            return;
+          }
+          try {
+            await undoPacingRevisionApply(recoverySnapshot, {
+              writeOutline: async (_outline, plannedOutlineId) => {
+                if (!plannedOutlineId) return;
+                const deleted = await deleteWriterOutlineById({
+                  issueId: selectedIssueId,
+                  outlineId: plannedOutlineId,
+                  allowMissing: true,
+                });
+                if (!deleted.ok) throw new Error(deleted.error);
+              },
+              writeBeats: async (pageId, value) => {
+                const restored = await updateWriterPageBeatsJsonExact(
+                  pageId,
+                  value as Record<string, unknown> | null,
+                );
+                if (!restored.ok) throw new Error(restored.error);
+              },
+              writeDialogue: async (pageId, value) => {
+                const restored = await updateWriterPageScriptTextExact(pageId, value);
+                if (!restored.ok) throw new Error(restored.error);
+              },
+              deletePages: async (pageIds) => {
+                const deleted = await deleteWriterPagesExact(
+                  selectedIssueId,
+                  pageIds,
+                  { allowMissing: true },
+                );
+                if (!deleted.ok) throw new Error(deleted.error);
+              },
+            });
+            const [freshPageResult, freshOutlineResult] = await Promise.all([
+              listWriterPagesResult(selectedIssueId),
+              listWriterOutlinesForIssueResult(selectedIssueId),
+            ]);
+            if (!freshPageResult.ok) throw new Error(freshPageResult.error);
+            if (!freshOutlineResult.ok) throw new Error(freshOutlineResult.error);
+            const freshPages = freshPageResult.rows;
+            const freshOutlines = freshOutlineResult.rows;
+            const recoveryVerification = verifyPacingRevisionUndoRecovery({
+              freshPages,
+              freshOutlines,
+              snapshot: recoverySnapshot,
+            });
+            if (!recoveryVerification.ok) throw new Error(recoveryVerification.error);
+            const recovered = await recoverWriterPacingRevisionApply(
+              applyingSetId,
+              recoverySnapshot,
+              message,
+              true,
+            );
+            if (!recovered.ok) throw new Error(recovered.error);
+            message = `${message} Cleanup was verified; the Revision Set is ready to retry.`;
+          } catch (recoveryError) {
+            const recoveryMessage = recoveryError instanceof Error
+              ? recoveryError.message
+              : String(recoveryError);
+            await recoverWriterPacingRevisionApply(
+              applyingSetId,
+              recoverySnapshot,
+              recoveryMessage,
+              false,
+            );
+            message = `${message} Recovery required: ${recoveryMessage}`;
+          }
+        }
+      }
       setPacingApplyError(message);
       pushHistory(`error: pacing Revision Set apply — ${message}`);
     } finally {
       setPacingApplyBusy(false);
     }
   }, [
-    latestOutline,
     pacingRevision,
     pushHistory,
     refreshPagesForIssue,
     selectedIssueId,
-    sortedPages,
-    writerLocks,
   ]);
 
   const undoPacingRevision = useCallback(async () => {
-    const revisionSet = pacingRevision.activeSet;
-    if (!revisionSet?.apply_snapshot || !selectedIssueId) return;
-    const snapshot = revisionSet.apply_snapshot as PacingRevisionApplySnapshot & {
-      appliedIds?: string[];
-      outlineApplied?: boolean;
-    };
+    const cachedSet = pacingRevision.activeSet;
+    if (!cachedSet?.apply_snapshot || !selectedIssueId) return;
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     try {
-      const latest = (await listWriterOutlinesForIssue(selectedIssueId))[0] ?? null;
-      await undoPacingRevisionApply(snapshot, {
-        writeOutline: async (outline) => {
-          if (!snapshot.outlineApplied) return;
-          const saved = await createWriterOutlineVersion({
-            issueId: selectedIssueId,
-            outlineJson: outline as Record<string, unknown>,
-            sourceMode: 'pacing_revision',
-            expectedPreviousId: latest?.id ?? null,
-          });
-          if (!saved.ok) throw new Error(saved.error);
-        },
-        writeBeats: async (pageId, value) => {
-          if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
-            throw new Error(`Could not restore Page Beats for ${pageId}.`);
-          }
-        },
-        writeDialogue: async (pageId, value) => {
-          if (!await updateWriterPageScriptText(pageId, value)) {
-            throw new Error(`Could not restore Dialogue for ${pageId}.`);
-          }
-        },
-      });
-      const reopened = await reopenWriterPacingRevisionSetAfterUndo(
-        revisionSet.id,
-        snapshot.appliedIds ?? [],
-      );
-      if (!reopened.ok) throw new Error(reopened.error);
+      const undone = await undoWriterPacingRevisionSet(cachedSet.id);
+      if (!undone.ok) {
+        await resolvePacingRevisionReopenFailure({
+          reopenError: undone.error,
+          loadPersistedStatus: async () => {
+            const persisted = await getWriterPacingRevisionSet(cachedSet.id);
+            if (!persisted.ok) throw new Error(persisted.error);
+            return persisted.set.status;
+          },
+        });
+      }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
-      await pacingRevision.refresh(revisionSet.id);
+      await pacingRevision.refresh(cachedSet.id);
       pushHistory('undid pacing Revision Set');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not undo the Revision Set.';
@@ -7766,13 +8009,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             onChange={pacingRevision.updateChange}
             onApply={applyPacingRevision}
             onRetryFailed={pacingRevision.retryFailed}
-            onNavigateToPage={(pageNumber) => {
-              const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
-              if (page) {
-                setSelectedPageId(page.id);
-                setActiveTab('beats');
-              }
-            }}
+            onNavigateToPage={navigateToPacingRevisionPage}
           />
         </section>
       )}
@@ -11454,13 +11691,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           onChange={pacingRevision.updateChange}
                           onApply={applyPacingRevision}
                           onRetryFailed={pacingRevision.retryFailed}
-                          onNavigateToPage={(pageNumber) => {
-                            const page = sortedPages.find((candidate) => candidate.page_number === pageNumber);
-                            if (page) {
-                              setSelectedPageId(page.id);
-                              setActiveTab('beats');
-                            }
-                          }}
+                          onNavigateToPage={navigateToPacingRevisionPage}
                         />
                       </section>
                     )}

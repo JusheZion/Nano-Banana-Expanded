@@ -55,4 +55,14 @@ describe('deleteWriterOutlineById', () => {
         error: 'Exact outline row was not returned after deletion',
       });
   });
+
+  it('allows an already-absent preplanned row during idempotent recovery', async () => {
+    mocks.selectDeleted.mockResolvedValueOnce({ data: [], error: null });
+
+    await expect(deleteWriterOutlineById({
+      issueId: 'issue-1',
+      outlineId: 'outline-1',
+      allowMissing: true,
+    })).resolves.toEqual({ ok: true });
+  });
 });
