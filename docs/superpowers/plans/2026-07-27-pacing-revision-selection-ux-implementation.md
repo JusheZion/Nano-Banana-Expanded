@@ -347,7 +347,7 @@ npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.t
 
 Expected: the component test file passes with disclosure and footer coverage.
 
-- [ ] **Step 6: Run the midpoint browser QA smoke**
+- [x] **Step 6: Run the midpoint browser QA smoke**
 
 Start the registered local frontend in this worktree using the project host registry, then inspect a representative failed Revision Set at the production viewport. Verify:
 
@@ -369,7 +369,7 @@ git commit -m "fix: keep pacing review actions visible"
 
 **Pass 2 smoke test:** Component tests plus the focused local browser workflow.
 
-**Pass 2 result:** AUTOMATED PASS — focused smoke completed with 1 test file and 9 individual tests passing. RED first produced 5 expected failures and 4 passes because the disclosure, Outline independence message, and persistent sidebar structure were absent. Browser QA is intentionally deferred to the controller after this code-review-ready commit; Step 6 remains open until that visual smoke is recorded.
+**Pass 2 result:** PASS — focused smoke completed with 1 test file and 9 individual tests passing. RED first produced 5 expected failures and 4 passes because the disclosure, Outline independence message, and persistent sidebar structure were absent. Signed-in midpoint QA at `http://127.0.0.1:5174/` with a `2560x1536` viewport override confirmed the 52-layer failure summary starts collapsed, the Outline independence message and retry-all remain visible, select-all and clear update the active count, and the batch footer follows the scrolling item list without overlap. Expanding failures produced a bounded 320px region with 1695px of scrollable recovery content, preserved individual navigation/retry controls, and produced no browser warnings or errors.
 
 ## Pass 3: Integration behavior and audit
 
