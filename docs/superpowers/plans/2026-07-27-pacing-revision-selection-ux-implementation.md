@@ -443,10 +443,10 @@ Third-pass audit conclusions:
 
 - **ReAct:** Selection remains component-local `Set` state. Individual and batch decisions still cross the component boundary only through `onChange`, while promotion remains isolated behind the explicit `onApply` entry point.
 - **QA:** Active-layer eligibility prevents hidden cross-tab mutation; select-all excludes non-ready changes and all selection mutation is disabled while busy. The controlled disclosure retains retry-all, per-layer retry, and page navigation. The integration characterization confirms the failed-or-missing summary remains present after every ready Outline change receives `{ decision: 'approved' }`.
-- **UI/UX:** The inspected component and focused tests preserve exact layer labels and selected counts, the visible sticky batch footer, collapsed failure summary, `aria-expanded`/`aria-controls`, alert containment, visible focus rings, disabled states, horizontal tab overflow, bounded recovery scrolling, responsive comparison/sidebar classes, and the relevant containment test IDs. Browser-only keyboard order, contrast, viewport containment, final-item visibility, and console checks remain pending Step 4.
+- **UI/UX:** The inspected component and focused tests preserve exact layer labels and selected counts, the visible sticky batch footer, collapsed failure summary, `aria-expanded`/`aria-controls`, alert containment, visible focus rings, disabled states, horizontal tab overflow, bounded recovery scrolling, responsive comparison/sidebar classes, and the relevant containment test IDs. The signed-in browser smoke also confirmed the fixed controls remained reachable at the representative production-sized viewport, the Page Beats tab began with an independent zero selection, and no warning or error console entries were emitted.
 - **DOX:** The root `AGENTS.md` active-tab selection contract matches the implementation. The root Child DOX Index confirms no nested `AGENTS.md` exists or is needed for these test/plan-only changes; the root contract remains unchanged.
 
-- [ ] **Step 4: Run a browser interaction smoke**
+- [x] **Step 4: Run a browser interaction smoke**
 
 On the representative Revision Set:
 
@@ -459,6 +459,8 @@ On the representative Revision Set:
 7. Do not apply official changes during this smoke unless a disposable QA set is used.
 8. Inspect browser warnings/errors.
 
+Browser result: PASS — on the signed-in representative QA Revision Set, the existing Outline decision was moved back to pending without applying official content. `Select all in Live Outline` changed the batch count from zero to one, `Clear Live Outline selection` returned it to zero, and selecting and approving again restored the header to `0 pending · 3 ready to apply · 52 failed or missing layers`. The unresolved Page Beats and Dialogue failures remained visible throughout. Opening `Page Beats 1` showed `Approve selected (0)` with its own Page Beats selection controls. Browser logs contained no warning or error entries.
+
 - [x] **Step 5: Commit Pass 3 records**
 
 ```bash
@@ -468,7 +470,7 @@ git commit -m "test: verify pacing selection workflow"
 
 **Pass 3 smoke test:** Focused Writer regressions and the active-tab browser workflow.
 
-**Pass 3 result:** LOCAL PASS / BROWSER PENDING — the required integration characterization passed on its first run, and the focused Writer suite passed 4 files / 29 tests. Focused ESLint passed with no findings. The third-pass ReAct, QA, UI/UX, and DOX code/test audit passed with the browser-only subsection explicitly pending the controller's signed-in Step 4 smoke.
+**Pass 3 result:** PASS — the required integration characterization passed on its first run, and the focused Writer suite passed 4 files / 29 tests. Focused ESLint passed with no findings. The third-pass ReAct, QA, UI/UX, and DOX audit passed, including the signed-in active-tab browser workflow with unresolved child failures and clean browser warning/error logs.
 
 ## Pass 4: Final gate, release, and continuity
 
