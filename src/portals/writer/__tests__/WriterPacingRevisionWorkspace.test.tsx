@@ -162,6 +162,43 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect((outlineCheckboxes[1] as HTMLInputElement).checked).toBe(false);
   });
 
+  it('disables all active-tab selection mutation while busy', () => {
+    const revisionSet = fixture();
+    const firstOutline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    revisionSet.items[0]!.changes.push({
+      ...firstOutline,
+      id: crypto.randomUUID(),
+      target_key: 'outline:second-ready-turn',
+      reason: 'Strengthen the second ready turn.',
+    });
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        busy
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    for (const buttonName of [
+      'Select all in Live Outline',
+      'Clear Live Outline selection',
+      'Approve selected (0)',
+      'Reject selected (0)',
+    ]) {
+      expect(screen.getByRole('button', { name: buttonName }).hasAttribute('disabled')).toBe(true);
+    }
+    for (const checkbox of screen.getAllByRole('checkbox')) {
+      expect(checkbox.hasAttribute('disabled')).toBe(true);
+    }
+  });
+
+  it('labels the header count as failed or missing layers', () => {
+    render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} />);
+    expect(screen.getByText('2 pending · 0 ready to apply · 3 failed or missing layers')).toBeTruthy();
+  });
+
   it('collapses failure details without hiding recovery or Outline independence', () => {
     const onRetryFailed = vi.fn();
     render(
@@ -182,7 +219,9 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(onRetryFailed).toHaveBeenCalled();
 
     fireEvent.click(disclosure);
-    expect(screen.getByTestId('pacing-recovery-list')).toBeTruthy();
+    const recoveryList = screen.getByTestId('pacing-recovery-list');
+    expect(recoveryList).toBeTruthy();
+    expect(screen.getByRole('alert').contains(recoveryList)).toBe(false);
     expect(screen.getByRole('button', { name: 'Hide failed layers' }).getAttribute('aria-expanded')).toBe('true');
   });
 

@@ -231,7 +231,7 @@ export function WriterPacingRevisionWorkspace({
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Story Review · Revision Set</p>
           <h2 id="pacing-revision-title" className="mt-1 font-serif text-2xl font-semibold">Pacing revision workspace</h2>
-          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed layers</p>
+          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed or missing layers</p>
         </div>
         <button
           type="button"
@@ -266,8 +266,8 @@ export function WriterPacingRevisionWorkspace({
       </div>
 
       {failureRows.length > 0 && (
-        <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <strong>{failureRows.length} failed or missing layers need attention.</strong>
               {layer === 'outline' && (
@@ -363,7 +363,7 @@ export function WriterPacingRevisionWorkspace({
                       type="checkbox"
                       aria-label={`Select ${item.title} ${layer} change`}
                       checked={selectedIds.has(change.id)}
-                      disabled={change.generation_status !== 'ready'}
+                      disabled={busy || change.generation_status !== 'ready'}
                       onChange={(event) => {
                         const next = new Set(selectedIds);
                         if (event.target.checked) next.add(change.id);
