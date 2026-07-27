@@ -72,10 +72,20 @@ describe('Pacing Revision archive migration', () => {
     expect(sql).toMatch(/p_expected_status not in\s*\(\s*'ready',\s*'partially_ready',\s*'failed'\s*\)/i);
     expect(sql).toMatch(/revision_set\.status = p_expected_status[\s\S]*revision_set\.updated_at = p_expected_updated_at[\s\S]*for update of revision_set/i);
     expect(sql).toMatch(/set status = 'generating',[\s\S]*generation_lease_id = p_lease_id,[\s\S]*generation_lease_previous_status = p_expected_status/i);
-    expect(sql).toMatch(/generation_lease_expires_at = clock_timestamp\(\) \+ interval '2 minutes'/i);
+    expect(sql).toMatch(/v_generation_lease_duration constant interval := interval '4 minutes'/i);
+    expect(sql).toMatch(/generation_lease_expires_at = clock_timestamp\(\) \+ v_generation_lease_duration/i);
     expect(sql).toMatch(/get diagnostics v_affected_count = row_count[\s\S]*return v_affected_count = 1/i);
     expect(sql).toMatch(/grant execute on function public\.acquire_writer_pacing_revision_generation_lease\(uuid, text, timestamptz, uuid\) to authenticated/i);
     expect(sql).toMatch(/archive_writer_pacing_revision_set[\s\S]*revision_set\.status in\s*\(\s*'ready',\s*'partially_ready',\s*'applied',\s*'failed'\s*\)/i);
+  });
+
+  it('keeps a two-attempt slow preview valid while fencing only truly expired work', () => {
+    const supportedAttemptWindowSeconds = 2 * 75;
+    const leaseWindowSeconds = 4 * 60;
+    expect(leaseWindowSeconds).toBeGreaterThan(supportedAttemptWindowSeconds + 60);
+    expect(sql).toMatch(/must exceed two 75-second Gemini attempts plus prompt and persistence overhead/i);
+    expect(sql).toMatch(/commit_writer_pacing_revision_page_preview[\s\S]*generation_lease_expires_at >= clock_timestamp\(\)/i);
+    expect(sql).toMatch(/recover_stale_writer_pacing_revision_generation_lease[\s\S]*generation_lease_expires_at < clock_timestamp\(\)/i);
   });
 
   it('releases only the matching generation lease into an explicit final state', () => {

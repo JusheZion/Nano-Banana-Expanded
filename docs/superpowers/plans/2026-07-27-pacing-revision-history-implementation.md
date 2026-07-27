@@ -325,8 +325,8 @@ failed from unfinished confirmation copy, accurately explains the loss of local
 Undo after archiving an applied set, humanizes prior statuses, gives each View
 action a distinct accessible name, and proves both actual WriterPortal workflow
 branches mount the shared layout with the correct workflow value. The focused
-correction gate passes 5 files / 60 tests and the broader Pacing regression passes
-21 files / 249 tests. The production build, targeted TypeScript compilation,
+correction gate passes 5 files / 61 tests and the broader Pacing regression passes
+21 files / 250 tests. The production build, targeted TypeScript compilation,
 focused ESLint with 0 errors and 2 existing Edge Function warnings, and
 `git diff --check` pass.
 
@@ -353,6 +353,10 @@ final status, and lease release commit together, and stale request A after
 recovery/new request B acquisition returns before any mutation. Ordinary child
 edits are blocked during `generating`, and direct lease metadata/status tampering
 is rejected even for privileged writes.
+The generation lease is four minutes so the supported two 75-second Gemini
+attempts still have more than one minute for prompt construction and persistence.
+Commit accepts the lease through its exact expiry instant; recovery begins only
+after expiry, preventing an equality-boundary race.
 
 ## Pass 4: Batch consistency and recovery edges
 

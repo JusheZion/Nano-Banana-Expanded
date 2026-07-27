@@ -14844,3 +14844,45 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Complete hosted migration/function deployment and the signed-in concurrency smoke.
+
+## Pacing Revision lease duration alignment - 2026-07-27
+
+### What changed
+- Increased the page-preview generation lease from two minutes to four minutes so one supported request can complete two 75-second Gemini attempts plus prompt construction and transactional persistence overhead.
+- Centralized the lease interval as a named SQL constant beside the acquisition transaction.
+- Added a migration contract test that protects the retry-time budget and the exact expiry boundary: commit remains valid at expiry, while recovery begins only after expiry.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The four-minute lease provides 90 seconds beyond the two model-attempt timeouts.
+- Lease fencing remains unchanged: only the exact owner-scoped lease may commit, and a recovered/replaced lease rejects the stale request before mutation.
+
+### Verification
+- RED: the migration contract failed while the lease remained two minutes.
+- Focused migration contract: PASS, 1 file / 13 tests.
+- Transactional DB/Edge gate: PASS, 4 files / 32 tests.
+- Focused archive/fencing gate: PASS, 5 files / 61 tests.
+- Broader Pacing regression: PASS, 21 files / 250 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not been deployed.
+- Hosted PostgreSQL execution and signed-in concurrency smoke remain for the deployment pass.
+
+### Risks or caveats
+- The duration is deliberately tied to the current two-attempt, 75-second model timeout contract and must be revisited if that request budget changes.
+
+### Operator follow-up
+- Deploy the migration before `writer-tools`.
+
+### Next steps
+- Complete the focused and broader Pacing regression gates, then proceed to hosted release verification.

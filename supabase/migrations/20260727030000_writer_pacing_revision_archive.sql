@@ -408,6 +408,8 @@ security definer
 set search_path = public
 as $$
 declare
+  -- Must exceed two 75-second Gemini attempts plus prompt and persistence overhead.
+  v_generation_lease_duration constant interval := interval '4 minutes';
   v_affected_count integer;
 begin
   if auth.uid() is null then
@@ -446,7 +448,7 @@ begin
   set status = 'generating',
       generation_lease_id = p_lease_id,
       generation_lease_previous_status = p_expected_status,
-      generation_lease_expires_at = clock_timestamp() + interval '2 minutes'
+      generation_lease_expires_at = clock_timestamp() + v_generation_lease_duration
   where revision_set.id = p_set_id
     and revision_set.status = p_expected_status
     and revision_set.updated_at = p_expected_updated_at
