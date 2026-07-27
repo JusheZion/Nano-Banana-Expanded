@@ -381,7 +381,7 @@ git commit -m "fix: keep pacing review actions visible"
 - An Outline-only batch approval changes header readiness even while child failures remain.
 - Keyboard order and responsive layout remain usable.
 
-- [ ] **Step 1: Add an Outline-with-child-failures integration regression**
+- [x] **Step 1: Add an Outline-with-child-failures integration regression**
 
 Add a controlled rerender test:
 
@@ -389,7 +389,7 @@ Add a controlled rerender test:
 it('allows Outline approval while child generation failures remain', async () => {
   const revisionSet = fixture();
   const outlineChanges = revisionSet.items.flatMap((item) => item.changes)
-    .filter((change) => change.layer === 'outline');
+    .filter((change) => change.layer === 'outline' && change.generation_status === 'ready');
   const onChange = vi.fn().mockResolvedValue(undefined);
 
   render(
@@ -400,6 +400,7 @@ it('allows Outline approval while child generation failures remain', async () =>
     />,
   );
 
+  expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
   fireEvent.click(screen.getByRole('button', { name: `Approve selected (${outlineChanges.length})` }));
 
@@ -411,7 +412,9 @@ it('allows Outline approval while child generation failures remain', async () =>
 });
 ```
 
-- [ ] **Step 2: Run focused Writer regressions**
+First-run result: PASS — the isolated integration characterization passed immediately (1 test passed, 11 skipped by the name filter). Existing production behavior already kept Outline batch decisions independent from the child failure ledger, so no production code changed and no artificial RED cycle was created.
+
+- [x] **Step 2: Run focused Writer regressions**
 
 Run:
 
@@ -425,7 +428,9 @@ npx vitest run \
 
 Expected: all listed files and tests pass.
 
-- [ ] **Step 3: Perform the third-pass audit**
+Focused result: PASS — 4 test files and 29 individual tests passed.
+
+- [x] **Step 3: Perform the third-pass audit**
 
 Audit and record:
 
@@ -433,6 +438,13 @@ Audit and record:
 - QA: no hidden cross-tab batch mutation; failure disclosure does not remove recovery.
 - UI/UX: tab labels, selected counts, sticky footer, collapse state, focus order, contrast, responsive containment, loading/busy states, and final-item visibility.
 - DOX: the root active-tab selection contract matches the implementation.
+
+Third-pass audit conclusions:
+
+- **ReAct:** Selection remains component-local `Set` state. Individual and batch decisions still cross the component boundary only through `onChange`, while promotion remains isolated behind the explicit `onApply` entry point.
+- **QA:** Active-layer eligibility prevents hidden cross-tab mutation; select-all excludes non-ready changes and all selection mutation is disabled while busy. The controlled disclosure retains retry-all, per-layer retry, and page navigation. The integration characterization confirms the failed-or-missing summary remains present after every ready Outline change receives `{ decision: 'approved' }`.
+- **UI/UX:** The inspected component and focused tests preserve exact layer labels and selected counts, the visible sticky batch footer, collapsed failure summary, `aria-expanded`/`aria-controls`, alert containment, visible focus rings, disabled states, horizontal tab overflow, bounded recovery scrolling, responsive comparison/sidebar classes, and the relevant containment test IDs. Browser-only keyboard order, contrast, viewport containment, final-item visibility, and console checks remain pending Step 4.
+- **DOX:** The root `AGENTS.md` active-tab selection contract matches the implementation. The root Child DOX Index confirms no nested `AGENTS.md` exists or is needed for these test/plan-only changes; the root contract remains unchanged.
 
 - [ ] **Step 4: Run a browser interaction smoke**
 
@@ -447,7 +459,7 @@ On the representative Revision Set:
 7. Do not apply official changes during this smoke unless a disposable QA set is used.
 8. Inspect browser warnings/errors.
 
-- [ ] **Step 5: Commit Pass 3 records**
+- [x] **Step 5: Commit Pass 3 records**
 
 ```bash
 git add docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md
@@ -456,7 +468,7 @@ git commit -m "test: verify pacing selection workflow"
 
 **Pass 3 smoke test:** Focused Writer regressions and the active-tab browser workflow.
 
-**Pass 3 result:** Record test counts, browser results, and the three-pass audit.
+**Pass 3 result:** LOCAL PASS / BROWSER PENDING — the required integration characterization passed on its first run, and the focused Writer suite passed 4 files / 29 tests. Focused ESLint passed with no findings. The third-pass ReAct, QA, UI/UX, and DOX code/test audit passed with the browser-only subsection explicitly pending the controller's signed-in Step 4 smoke.
 
 ## Pass 4: Final gate, release, and continuity
 

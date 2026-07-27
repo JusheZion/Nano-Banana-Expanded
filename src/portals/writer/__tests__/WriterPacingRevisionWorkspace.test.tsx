@@ -225,6 +225,33 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Hide failed layers' }).getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('allows Outline approval while child generation failures remain', async () => {
+    const revisionSet = fixture();
+    const outlineChanges = revisionSet.items.flatMap((item) => item.changes)
+      .filter((change) => change.layer === 'outline' && change.generation_status === 'ready');
+    const onChange = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={onChange}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
+    fireEvent.click(screen.getByRole('button', {
+      name: `Approve selected (${outlineChanges.length})`,
+    }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(outlineChanges.length));
+    for (const change of outlineChanges) {
+      expect(onChange).toHaveBeenCalledWith(change.id, { decision: 'approved' });
+    }
+    expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
+  });
+
   it('keeps batch actions in a persistent sidebar footer', () => {
     render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} />);
     expect(screen.getByTestId('pacing-batch-footer').className).toContain('sticky');
