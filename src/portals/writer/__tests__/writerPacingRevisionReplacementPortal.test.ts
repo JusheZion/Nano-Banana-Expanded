@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE,
@@ -11,6 +13,16 @@ const capturedSet = {
 };
 
 describe('WriterPortal single Pacing Review replacement orchestration', () => {
+  it('mounts the history layout in both actual Story Review render branches', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/portals/writer/WriterPortal.tsx'),
+      'utf8',
+    );
+    expect(source).toMatch(/<WriterPacingRevisionHistoryLayout\s+workflow="Simple"/);
+    expect(source).toMatch(/<WriterPacingRevisionHistoryLayout\s+workflow="Advanced"/);
+    expect(source.match(/<WriterPacingRevisionHistoryLayout/g)).toHaveLength(2);
+  });
+
   it('cancels before AI or archive when unfinished-set confirmation is declined', async () => {
     const confirmArchive = vi.fn(() => false);
     const runReview = vi.fn();

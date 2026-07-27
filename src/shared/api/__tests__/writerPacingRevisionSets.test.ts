@@ -20,6 +20,7 @@ import {
   archiveWriterPacingRevisionSet,
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
+  discardWriterPacingRevisionSet,
   listWriterPacingRevisionSetHistory,
   listWriterPacingRevisionSets,
   markWriterPacingRevisionRecoveryRequired,
@@ -27,6 +28,7 @@ import {
   undoWriterPacingRevisionSet,
   updateWriterPacingRevisionApplySnapshot,
   updateWriterPacingRevisionChange,
+  updateWriterPacingRevisionProgress,
 } from '../writerPacingRevisionSets';
 
 const SET_ID = '10000000-0000-4000-8000-000000000001';
@@ -54,10 +56,12 @@ const expectation = {
 function updateChain(result: { data: unknown[] | null; error: { message: string } | null }) {
   const chain = {
     eq: vi.fn(),
+    neq: vi.fn(),
     in: vi.fn(),
     select: vi.fn().mockResolvedValue(result),
   };
   chain.eq.mockReturnValue(chain);
+  chain.neq.mockReturnValue(chain);
   chain.in.mockReturnValue(chain);
   return chain;
 }
@@ -239,13 +243,52 @@ describe('writer pacing revision persistence', () => {
     mocks.select.mockReturnValueOnce({ eq: mocks.eq });
     mocks.eq.mockReturnValueOnce({ select: () => ({ single: mocks.single }) });
 
-    const result = await updateWriterPacingRevisionChange(CHANGE_ID, { decision: 'approved' });
+    const result = await updateWriterPacingRevisionChange(
+      CHANGE_ID,
+      { decision: 'approved' },
+      'ready',
+    );
 
     expect(result).toEqual({
       ok: true,
       change: expect.objectContaining({ id: CHANGE_ID, decision: 'approved' }),
     });
     expect(mocks.update).toHaveBeenCalledWith({ decision: 'approved' });
+  });
+
+  it('rejects archived direct client mutations before issuing a table update', async () => {
+    await expect(updateWriterPacingRevisionChange(
+      CHANGE_ID,
+      { decision: 'approved' },
+      'archived',
+    )).resolves.toEqual({
+      ok: false,
+      error: 'Archived Pacing Revision Sets are read-only.',
+    });
+    await expect(updateWriterPacingRevisionProgress(
+      SET_ID,
+      { total_pages: 0, completed_pages: [], current_page: null, stopped: false },
+      'archived',
+    )).resolves.toEqual({
+      ok: false,
+      error: 'Archived Pacing Revision Sets are read-only.',
+    });
+    await expect(discardWriterPacingRevisionSet(SET_ID, 'archived')).resolves.toEqual({
+      ok: false,
+      error: 'Archived Pacing Revision Sets are read-only.',
+    });
+
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('does not report discard success when no parent row was updated', async () => {
+    const chain = updateChain({ data: [], error: null });
+    mocks.from.mockReturnValue({ update: vi.fn().mockReturnValue(chain) });
+
+    await expect(discardWriterPacingRevisionSet(SET_ID, 'ready')).resolves.toEqual({
+      ok: false,
+      error: 'Could not discard the Revision Set because its state changed.',
+    });
   });
 
   it('begins Apply only from an allowed state and stores the base recovery snapshot', async () => {

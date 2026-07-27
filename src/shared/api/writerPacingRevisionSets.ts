@@ -22,6 +22,7 @@ const ARCHIVE_ELIGIBLE_STATUSES: readonly string[] = [
   'applied',
   'failed',
 ];
+const ARCHIVED_READ_ONLY_ERROR = 'Archived Pacing Revision Sets are read-only.';
 
 const SET_SELECT = `
   *,
@@ -127,7 +128,11 @@ export async function getWriterPacingRevisionSet(setId: string): Promise<SetResu
 export async function updateWriterPacingRevisionChange(
   changeId: string,
   patch: PacingRevisionDecisionPatch,
+  revisionSetStatus: PacingRevisionSet['status'],
 ): Promise<ChangeResult> {
+  if (revisionSetStatus === 'archived') {
+    return { ok: false, error: ARCHIVED_READ_ONLY_ERROR };
+  }
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   const parsedPatch = pacingRevisionDecisionPatchSchema.parse(patch);
   try {
@@ -147,7 +152,11 @@ export async function updateWriterPacingRevisionChange(
 export async function updateWriterPacingRevisionProgress(
   setId: string,
   progress: unknown,
+  revisionSetStatus: PacingRevisionSet['status'],
 ): Promise<SetResult> {
+  if (revisionSetStatus === 'archived') {
+    return { ok: false, error: ARCHIVED_READ_ONLY_ERROR };
+  }
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   const progressJson = pacingRevisionProgressSchema.parse(progress);
   try {
@@ -164,14 +173,28 @@ export async function updateWriterPacingRevisionProgress(
   }
 }
 
-export async function discardWriterPacingRevisionSet(setId: string): Promise<{ ok: true } | ApiFailure> {
+export async function discardWriterPacingRevisionSet(
+  setId: string,
+  revisionSetStatus: PacingRevisionSet['status'],
+): Promise<{ ok: true } | ApiFailure> {
+  if (revisionSetStatus === 'archived') {
+    return { ok: false, error: ARCHIVED_READ_ONLY_ERROR };
+  }
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('writer_pacing_revision_sets')
       .update({ status: 'discarded' })
-      .eq('id', setId);
-    return error ? { ok: false, error: error.message } : { ok: true };
+      .eq('id', setId)
+      .neq('status', 'archived')
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : {
+          ok: false,
+          error: 'Could not discard the Revision Set because its state changed.',
+        };
   } catch (error) {
     return { ok: false, error: message(error) };
   }

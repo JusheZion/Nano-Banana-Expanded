@@ -14694,3 +14694,54 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
+
+## Pacing Revision archive immutability and truthful history safety copy - 2026-07-27
+
+### What changed
+- Enforced archived Revision Set immutability at the database boundary for sets, Revision Items, and Child Changes, including service-role writes.
+- Kept the guarded archive transaction functional through a transaction-local authorization marker while rejecting direct archived inserts and all later archived mutations.
+- Added client and Edge Function archived-state preflights and required affected parent/item/set writes to succeed before generation reports success.
+- Split unfinished, failed, and applied archive confirmations. Applied-set copy now states that local `Undo applied set` is removed, Outline version history can restore only an Outline version, and prior Page Beats, Dialogue, and pacing-created pages are not recoverable through Undo.
+- Humanized archived prior-status labels, gave each history View action a distinct accessible name, and proved both actual Simple and Advanced WriterPortal branches mount the shared history layout with the correct workflow value.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPacingRevisionHistory.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionReplacementPortal.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Database triggers are `SECURITY DEFINER` and cover set/item/change `INSERT`, `UPDATE`, and `DELETE`; child guards lock the parent set before allowing a write so archival cannot race a child mutation.
+- The archive RPC sets a transaction-local exact set ID before performing the sole allowed terminal-to-archived transition. Subsequent writes remain blocked.
+- The client passes the known set status to direct mutation APIs for immediate rejection; database triggers remain the authoritative protection against stale or privileged callers.
+
+### Verification
+- Focused correction gate: PASS, 5 files / 49 tests.
+- Broader Pacing regression: PASS, 21 files / 237 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not yet been deployed in this pass.
+- Signed-in browser and production smoke remain part of the later deployment pass.
+
+### Risks or caveats
+- Static migration tests validate the trigger contract; hosted PostgreSQL execution remains required before release.
+
+### Operator follow-up
+- Deploy the migration before the matching Edge Function/frontend bundle so archived data is protected at the database boundary throughout rollout.
+
+### Next steps
+- Continue with batch lifecycle work, final regression/audits, signed-in QA, and live deployment.

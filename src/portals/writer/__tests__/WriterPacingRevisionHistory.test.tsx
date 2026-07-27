@@ -77,13 +77,18 @@ describe('WriterPacingRevisionHistory', () => {
       expect(summary.closest('summary')).toBeTruthy();
       expect(screen.getByTestId(`pacing-revision-history-${workflow.toLowerCase()}`)).toBeTruthy();
       fireEvent.click(summary);
-      const viewButtons = screen.getAllByRole('button', { name: 'View archived revision set' });
+      const viewButtons = screen.getAllByRole('button', {
+        name: /View archived revision set \d+ of 2/,
+      });
       expect(viewButtons).toHaveLength(2);
+      expect(viewButtons[0]!.getAttribute('aria-label')).not.toBe(
+        viewButtons[1]!.getAttribute('aria-label'),
+      );
       fireEvent.click(viewButtons[0]!);
       expect(onSelect).toHaveBeenCalledWith(newest);
       expect(screen.getAllByText(/Created/)).toHaveLength(2);
       expect(screen.getAllByText(/Archived/).length).toBeGreaterThanOrEqual(2);
-      expect(screen.getAllByText(/Previous status: applied/)).toHaveLength(2);
+      expect(screen.getAllByText(/Previous status: Applied/)).toHaveLength(2);
     },
   );
 
@@ -157,12 +162,12 @@ describe('WriterPacingRevisionHistory', () => {
     expect(screen.getByText('Archived')).toBeTruthy();
     expect(screen.getByText(/Created on/)).toBeTruthy();
     expect(screen.getByText(/Archived on/)).toBeTruthy();
-    expect(screen.getByText('Previous status: applied')).toBeTruthy();
+    expect(screen.getByText('Previous status: Applied')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Back to current revision set' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it.each(['ready', 'partially_ready', 'failed'] as const)(
+  it.each(['ready', 'partially_ready'] as const)(
     'warns that unfinished %s work becomes read-only before manual archive',
     (status) => {
     const activeSet = archivedFixture({
@@ -195,6 +200,35 @@ describe('WriterPacingRevisionHistory', () => {
     },
   );
 
+  it('preserves failed-set details as read-only history without calling them unfinished decisions', () => {
+    const activeSet = archivedFixture({
+      status: 'failed',
+      archived_at: undefined,
+      archived_from_status: undefined,
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <WriterPacingRevisionHistory
+        workflow="Simple"
+        activeSet={activeSet}
+        historySets={[]}
+        selectedSet={null}
+        loading={false}
+        error={null}
+        onRetry={vi.fn()}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onArchive={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archive revision set' }));
+    expect(confirm).toHaveBeenLastCalledWith(
+      'Move this failed Revision Set to Revision history? Its failure details will be preserved as read-only history. The live outline, Page Beats, and Dialogue will not change.',
+    );
+    expect(confirm.mock.calls.at(-1)?.[0]).not.toContain('unfinished decisions');
+  });
+
   it('warns that archiving an applied set removes Undo here but preserves version history restoration', () => {
     const activeSet = archivedFixture({
       status: 'applied',
@@ -219,7 +253,7 @@ describe('WriterPacingRevisionHistory', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Archive revision set' }));
     expect(confirm).toHaveBeenLastCalledWith(
-      'Move this applied Revision Set to Revision history? “Undo applied set” will no longer be available here; restore official content through version history instead. The live outline, Page Beats, and Dialogue will not change.',
+      'Move this applied Revision Set to Revision history? “Undo applied set” will no longer be available here. Outline version history can restore an Outline version, but prior Page Beats, Dialogue, and pacing-created pages will no longer be recoverable through Undo. The live outline, Page Beats, and Dialogue will not change.',
     );
   });
 
@@ -272,7 +306,7 @@ describe('WriterPacingRevisionHistory', () => {
 
     render(<Harness />);
     await user.click(screen.getByText('Revision history (1)'));
-    await user.click(screen.getByRole('button', { name: 'View archived revision set' }));
+    await user.click(screen.getByRole('button', { name: 'View archived revision set 1 of 1' }));
     expect(screen.getByRole('heading', { name: 'Archived Pacing Revision Set' }))
       .toBe(document.activeElement);
     await user.click(screen.getByRole('button', { name: 'Back to current revision set' }));
@@ -305,4 +339,23 @@ describe('WriterPacingRevisionHistory', () => {
       expect(screen.getByText('Current workspace')).toBeTruthy();
     },
   );
+
+  it('human-formats prior lifecycle statuses', () => {
+    const selectedSet = archivedFixture({ archived_from_status: 'partially_ready' });
+    render(
+      <WriterPacingRevisionHistory
+        workflow="Simple"
+        historySets={[selectedSet]}
+        selectedSet={selectedSet}
+        loading={false}
+        error={null}
+        onRetry={vi.fn()}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Previous status: Partially ready')).toBeTruthy();
+    expect(screen.queryByText(/partially_ready/)).toBeNull();
+  });
 });

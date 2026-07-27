@@ -317,10 +317,18 @@ existing guarded hook and reports a visible success status. Review corrections
 atomically preserve `archived_from_status` and `archived_at`, order and label
 history by the archive timestamp, tailor confirmation to unfinished versus applied
 sets, move focus into the archived view and back to the disclosure, and route both
-actual Story Review paths through one tested extracted layout. The final focused
-smoke gate passes 8 files / 105 tests; the production build, targeted TypeScript
-compilation, focused ESLint with 0 errors and 3 pre-existing WriterPortal warnings,
-and `git diff --check` pass.
+actual Story Review paths through one tested extracted layout. The final
+archive-safety correction adds database-level immutability for archived sets,
+Items, and Child Changes (including service-role writes), plus matching client and
+Edge Function preflights and affected-write verification. It also distinguishes
+failed from unfinished confirmation copy, accurately explains the loss of local
+Undo after archiving an applied set, humanizes prior statuses, gives each View
+action a distinct accessible name, and proves both actual WriterPortal workflow
+branches mount the shared layout with the correct workflow value. The focused
+correction gate passes 5 files / 49 tests and the broader Pacing regression passes
+21 files / 237 tests. The production build, targeted TypeScript compilation,
+focused ESLint with 0 errors and 2 existing Edge Function warnings, and
+`git diff --check` pass.
 
 **Three-pass audit result:** PASS — audited lifecycle truthfulness, metadata-only
 archive messaging, confirmation copy, Pass 2 stale-state guards, archived control
@@ -329,8 +337,10 @@ access, responsive wrapping, and matching Simple/Advanced placement. No P0/P1
 issue remains. Archive status is cleared on issue switches and before a new pacing
 review so a prior success message cannot describe newer work. The correction
 re-audit also verified durable archive provenance, status-specific safety copy,
-focus entry/restoration, and actual extracted-layout mounting in both workflow
-paths.
+focus entry/restoration, actual extracted-layout mounting in both workflow paths,
+and defense-in-depth immutability at database, Edge Function, and client
+boundaries. Archived data cannot be changed even through service-role writes, and
+failed writes cannot be reported as successful.
 
 ## Pass 4: Batch consistency and recovery edges
 

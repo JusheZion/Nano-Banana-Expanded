@@ -789,6 +789,7 @@ describe('useWriterPacingRevisionSet', () => {
     expect(mocks.updateProgress).toHaveBeenLastCalledWith(
       SET_ID,
       expect.objectContaining({ completed_pages: [] }),
+      legacyCompleteSet.status,
     );
   });
 

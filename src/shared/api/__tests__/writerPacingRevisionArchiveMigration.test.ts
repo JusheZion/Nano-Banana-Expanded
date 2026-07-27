@@ -44,4 +44,21 @@ describe('Pacing Revision archive migration', () => {
     expect(sql).not.toMatch(/(?:update|insert into|delete from)\s+public\.writer_pacing_revision_items/i);
     expect(sql).not.toMatch(/(?:update|insert into|delete from)\s+public\.writer_pacing_revision_changes/i);
   });
+
+  it('blocks archived set, item, and child mutations even for service-role traffic', () => {
+    expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_set_mutation\(\)/i);
+    expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_item_mutation\(\)/i);
+    expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_change_mutation\(\)/i);
+    expect(sql.match(/security definer/gi)).toHaveLength(3);
+    expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_sets/i);
+    expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_items/i);
+    expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_changes/i);
+    expect(sql).toMatch(/old\.status = 'archived'/i);
+    expect(sql).toMatch(/new\.status = 'archived'[\s\S]*current_setting\('app\.pacing_revision_archive_set_id', true\)/i);
+    expect(sql).toMatch(/old\.status not in\s*\(\s*'ready',\s*'partially_ready',\s*'applied',\s*'failed'\s*\)/i);
+    expect(sql).toMatch(/set_config\('app\.pacing_revision_archive_set_id', p_set_id::text, true\)/i);
+    expect(sql).toMatch(/v_revision_set_status = 'archived'/i);
+    expect(sql.match(/for update(?: of revision_set)?/gi)?.length).toBeGreaterThanOrEqual(5);
+    expect(sql).not.toMatch(/disable trigger/i);
+  });
 });

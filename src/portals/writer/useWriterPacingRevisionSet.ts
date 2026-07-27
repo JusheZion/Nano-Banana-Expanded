@@ -205,7 +205,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       ...set.progress_json,
       current_page: null,
       stopped: false,
-    });
+    }, set.status);
     if (!isCurrentOperation(operationContext.issueId, operationContext.issueVersion)) return;
     const result = await runPacingRevisionQueue({
       pages: runnablePages,
@@ -261,7 +261,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
           .sort((a, b) => a - b),
         current_page: null,
         stopped: result.stopped,
-      });
+      }, persistedResult.set.status);
       if (!isCurrentOperation(operationContext.issueId, operationContext.issueVersion)) return;
     } else {
       setError(persistedResult.error);
@@ -326,7 +326,11 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     const operationIssueId = activeSetForIssue.issue_id;
     const operationIssueVersion = issueVersionRef.current;
     const targetSetId = activeSetForIssue.id;
-    const result = await updateWriterPacingRevisionChange(changeId, patch);
+    const result = await updateWriterPacingRevisionChange(
+      changeId,
+      patch,
+      activeSetForIssue.status,
+    );
     if (
       !isCurrentOperation(operationIssueId, operationIssueVersion)
       || activeSetRef.current?.id !== targetSetId
@@ -357,7 +361,10 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     const operationIssueId = activeSetForIssue.issue_id;
     const operationIssueVersion = issueVersionRef.current;
     const targetSetId = activeSetForIssue.id;
-    const result = await discardWriterPacingRevisionSet(targetSetId);
+    const result = await discardWriterPacingRevisionSet(
+      targetSetId,
+      activeSetForIssue.status,
+    );
     if (
       !isCurrentOperation(operationIssueId, operationIssueVersion)
       || activeSetRef.current?.id !== targetSetId

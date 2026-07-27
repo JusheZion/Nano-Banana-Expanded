@@ -1733,7 +1733,7 @@ Deno.serve(async (req) => {
           { status: 404, headers: corsHeaders },
         );
       }
-      if (['applied', 'discarded', 'applying'].includes(revisionSet.status)) {
+      if (['applied', 'discarded', 'applying', 'archived'].includes(revisionSet.status)) {
         return Response.json(
           { success: false, error: 'Revision Set is not editable' },
           { status: 409, headers: corsHeaders },
@@ -1893,7 +1893,7 @@ Deno.serve(async (req) => {
             ? [{ page_number, item_id: item?.id, layer: 'dialogue' as const, reason }]
             : []),
         ];
-        await supabase
+        const { error: failureUpdateError } = await supabase
           .from('writer_pacing_revision_sets')
           .update({
             status: 'partially_ready',
@@ -1909,6 +1909,16 @@ Deno.serve(async (req) => {
             }),
           })
           .eq('id', revision_set_id);
+        if (failureUpdateError) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Failed to record page candidate failure',
+              details: failureUpdateError.message,
+            },
+            { status: 409, headers: corsHeaders },
+          );
+        }
         return Response.json(
           { success: false, error: 'Page candidate failed', details: reason },
           { status: 422, headers: corsHeaders },
@@ -1922,10 +1932,20 @@ Deno.serve(async (req) => {
         pageHasReadyBeats,
         pageHasReadyDialogue,
       } = flowResult;
-      await supabase
+      const { error: itemUpdateError } = await supabase
         .from('writer_pacing_revision_items')
         .update({ generation_status: pageHasReadyBeats && pageHasReadyDialogue ? 'ready' : 'pending' })
         .eq('id', item.id);
+      if (itemUpdateError) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Failed to update Revision Item',
+            details: itemUpdateError.message,
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
       const progress = asJsonObject(revisionSet.progress_json);
       const priorCompletedPages = (Array.isArray(progress.completed_pages) ? progress.completed_pages : [])
         .filter((value): value is number => typeof value === 'number');
@@ -1946,7 +1966,7 @@ Deno.serve(async (req) => {
           ...(pageHasReadyDialogue ? ['dialogue' as const] : []),
         ],
       });
-      await supabase
+      const { error: setUpdateError } = await supabase
         .from('writer_pacing_revision_sets')
         .update({
           status: completedPages.length >= totalPages && failureLedger.length === 0 ? 'ready' : 'partially_ready',
@@ -1958,6 +1978,16 @@ Deno.serve(async (req) => {
           failure_ledger: failureLedger,
         })
         .eq('id', revision_set_id);
+      if (setUpdateError) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Failed to update Revision Set',
+            details: setUpdateError.message,
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
       return Response.json(
         {
           success: true,
