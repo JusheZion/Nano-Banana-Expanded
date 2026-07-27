@@ -118,6 +118,57 @@ export async function discardWriterPacingRevisionSet(setId: string): Promise<{ o
   }
 }
 
+function exactIds(rows: Array<{ id: string }> | null, expectedIds: string[]): boolean {
+  const ids = new Set((rows ?? []).map((row) => row.id));
+  return ids.size === expectedIds.length && expectedIds.every((id) => ids.has(id));
+}
+
+export async function beginWriterPacingRevisionApply(
+  setId: string,
+  snapshot: unknown,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({
+        status: 'applying',
+        apply_snapshot: snapshot,
+        recovery_status: 'applying',
+      })
+      .eq('id', setId)
+      .in('status', ['ready', 'partially_ready'])
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not begin Apply because the Revision Set state changed.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function updateWriterPacingRevisionApplySnapshot(
+  setId: string,
+  snapshot: unknown,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ apply_snapshot: snapshot, recovery_status: 'applying' })
+      .eq('id', setId)
+      .eq('status', 'applying')
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the applying recovery snapshot.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
 export async function completeWriterPacingRevisionSet(
   setId: string,
   appliedChangeIds: string[],
@@ -134,25 +185,35 @@ export async function completeWriterPacingRevisionSet(
       .from('writer_pacing_revision_changes')
       .update({ generation_status: 'applied', applied_at: now })
       .in('id', expectedIds)
+      .eq('generation_status', 'ready')
       .select('id');
     if (changesError) return { ok: false, error: changesError.message };
-    const changedIds = new Set((changedRows ?? []).map((row) => row.id));
-    if (changedIds.size !== expectedIds.length || expectedIds.some((id) => !changedIds.has(id))) {
+    if (!exactIds(changedRows, expectedIds)) {
       return { ok: false, error: 'Completion did not mark every approved change as applied.' };
     }
     const { data: setRows, error: setError } = await supabase
       .from('writer_pacing_revision_sets')
       .update({ status: 'applied', apply_snapshot: snapshot, recovery_status: null })
       .eq('id', setId)
+      .eq('status', 'applying')
       .select('id');
     if (setError || setRows?.length !== 1) {
-      await supabase
+      const { data: rollbackRows, error: rollbackError } = await supabase
         .from('writer_pacing_revision_changes')
         .update({ generation_status: 'ready', applied_at: null })
-        .in('id', expectedIds);
+        .in('id', expectedIds)
+        .eq('generation_status', 'applied')
+        .select('id');
+      const completionError = setError?.message ?? 'Completion did not update the applying Revision Set.';
+      if (rollbackError || !exactIds(rollbackRows, expectedIds)) {
+        return {
+          ok: false,
+          error: `${completionError} Rollback did not restore every change to ready.`,
+        };
+      }
       return {
         ok: false,
-        error: setError?.message ?? 'Completion did not update the Revision Set.',
+        error: completionError,
       };
     }
     return { ok: true };
@@ -171,25 +232,38 @@ export async function reopenWriterPacingRevisionSetAfterUndo(
     if (expectedIds.length === 0) {
       return { ok: false, error: 'No applied changes were provided for Undo.' };
     }
-    const { data: changedRows, error: changesError } = await supabase
-      .from('writer_pacing_revision_changes')
-      .update({ generation_status: 'ready', applied_at: null })
-      .in('id', expectedIds)
-      .select('id');
-    if (changesError) return { ok: false, error: changesError.message };
-    const changedIds = new Set((changedRows ?? []).map((row) => row.id));
-    if (changedIds.size !== expectedIds.length || expectedIds.some((id) => !changedIds.has(id))) {
-      return { ok: false, error: 'Undo did not reopen every applied change.' };
-    }
     const { data: setRows, error: setError } = await supabase
       .from('writer_pacing_revision_sets')
       .update({ status: 'ready', recovery_status: 'undone' })
       .eq('id', setId)
+      .eq('status', 'applied')
       .select('id');
     if (setError) return { ok: false, error: setError.message };
-    return setRows?.length === 1
-      ? { ok: true }
-      : { ok: false, error: 'Undo did not reopen the Revision Set.' };
+    if (setRows?.length !== 1) {
+      return { ok: false, error: 'Undo did not reopen the applied Revision Set.' };
+    }
+    const { data: changedRows, error: changesError } = await supabase
+      .from('writer_pacing_revision_changes')
+      .update({ generation_status: 'ready', applied_at: null })
+      .in('id', expectedIds)
+      .eq('generation_status', 'applied')
+      .select('id');
+    if (!changesError && exactIds(changedRows, expectedIds)) return { ok: true };
+
+    const { data: compensationRows, error: compensationError } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ status: 'applied', recovery_status: null })
+      .eq('id', setId)
+      .eq('status', 'ready')
+      .select('id');
+    const reopenError = changesError?.message ?? 'Undo did not reopen every applied change.';
+    if (compensationError || compensationRows?.length !== 1) {
+      return {
+        ok: false,
+        error: `${reopenError} Set compensation back to applied failed.`,
+      };
+    }
+    return { ok: false, error: reopenError };
   } catch (error) {
     return { ok: false, error: message(error) };
   }

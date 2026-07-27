@@ -59,8 +59,10 @@ import {
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import {
+  beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   reopenWriterPacingRevisionSetAfterUndo,
+  updateWriterPacingRevisionApplySnapshot,
 } from '@/shared/api/writerPacingRevisionSets';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { uploadImageFileToArcsGenerations } from '@/shared/api/arcsPersistence';
@@ -203,6 +205,7 @@ import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/po
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import {
   applyPacingRevisionSet,
+  loadPacingRevisionApplyAuthority,
   pacingRevisionFingerprintKey,
   undoPacingRevisionApply,
   type PacingRevisionApplySnapshot,
@@ -3456,20 +3459,27 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
 
   const applyPacingRevision = useCallback(async () => {
     const revisionSet = pacingRevision.activeSet;
-    if (!revisionSet || !selectedIssueId || !latestOutline) return;
+    if (!revisionSet || !selectedIssueId) return;
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     let createdOutline: WriterIssueOutlineRow | null = null;
     let createdOutlineId: string | null = null;
     try {
+      const {
+        latestOutline: authoritativeOutline,
+        pages: authoritativePages,
+      } = await loadPacingRevisionApplyAuthority({
+        loadOutlines: () => listWriterOutlinesForIssue(selectedIssueId),
+        loadPages: () => listWriterPages(selectedIssueId),
+      });
       const allChanges = revisionSet.items.flatMap((item) => item.changes);
-      const pageById = new Map(sortedPages.map((page) => [page.id, page]));
+      const pageById = new Map(authoritativePages.map((page) => [page.id, page]));
       const currentFingerprints = new Map<string, string>();
       for (const change of allChanges) {
         if (change.layer === 'outline') {
           currentFingerprints.set(
             pacingRevisionFingerprintKey(change),
-            await fingerprintPacingRevisionValue(latestOutline.outline_json),
+            await fingerprintPacingRevisionValue(authoritativeOutline.outline_json),
           );
         } else {
           const page = change.page_id ? pageById.get(change.page_id) : null;
@@ -3494,13 +3504,29 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       const result = await applyPacingRevisionSet({
         set: revisionSet,
-        existingPages: sortedPages.map((page) => ({
+        existingPages: authoritativePages.map((page) => ({
           pageId: page.id,
           pageNumber: page.page_number,
         })),
         currentFingerprints,
         lockedTargetKeys,
         writers: {
+          beginApply: async (snapshot) => {
+            const begun = await beginWriterPacingRevisionApply(revisionSet.id, {
+              ...snapshot,
+              outlineApplied: false,
+              appliedOutlineId: null,
+            });
+            if (!begun.ok) throw new Error(begun.error);
+          },
+          persistSnapshot: async (snapshot) => {
+            const persisted = await updateWriterPacingRevisionApplySnapshot(revisionSet.id, {
+              ...snapshot,
+              outlineApplied: Boolean(createdOutline),
+              appliedOutlineId: createdOutlineId,
+            });
+            if (!persisted.ok) throw new Error(persisted.error);
+          },
           buildOutline: (approvedOutlineChanges) => buildPacingRevisionOutlineFromApprovedChanges({
             sourceOutline: revisionSet.source_outline_json,
             approvedOutlineChanges,
@@ -3521,7 +3547,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               issueId: selectedIssueId,
               outlineJson: outline as Record<string, unknown>,
               sourceMode: 'pacing_revision',
-              expectedPreviousId: latestOutline.id,
+              expectedPreviousId: authoritativeOutline.id,
             });
             if (!saved.ok) throw new Error(saved.error);
             createdOutline = saved.row;
@@ -3628,12 +3654,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPacingApplyBusy(false);
     }
   }, [
-    latestOutline,
     pacingRevision,
     pushHistory,
     refreshPagesForIssue,
     selectedIssueId,
-    sortedPages,
     writerLocks,
   ]);
 

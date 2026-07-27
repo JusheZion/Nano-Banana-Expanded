@@ -13993,3 +13993,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Begin Pass 5 with RED status, blocker-lifecycle, comparison-context, and physical/virtual navigation tests.
+
+## Pacing Revision Apply specification-review corrections - 2026-07-27
+
+### What changed
+- Reloaded the authoritative latest outline and physical issue pages before deriving Apply fingerprints, page identities, lock targets, and the expected prior outline version.
+- Added fail-closed physical-page contiguity validation; a physical set such as pages 1 and 3 cannot begin Apply or write live data.
+- Added guarded persistence transitions that store the base recovery snapshot and move an eligible set to `applying` before live mutation.
+- Refreshed the applying snapshot after the outline write and after every successful page creation so crash recovery has the exact created row IDs as promptly as possible.
+- Changed Apply compensation and Undo to attempt every reverse recovery step even when an earlier restore fails, while preserving and surfacing all cleanup errors.
+- Hardened completion and reopen transitions with conditional statuses, verified child rollback, and checked set compensation to prevent silent set/child state splits.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Preflight and deterministic outline construction remain read-only; the guarded `applying` snapshot is the first persistence transition and occurs before the outline mutation.
+- Completion requires the set to still be `applying`. Failed set completion checks that every child is rolled back to ready.
+- Undo is called only after live content/page cleanup; it conditionally moves the set from applied to ready, then reopens children, compensating the set back to applied if the child transition fails.
+- No schema migration was required because `status`, `apply_snapshot`, and `recovery_status` already support the recovery contract.
+
+### Verification
+- RED tests reproduced cached authority use, physical `[1, 3]` acceptance, missing pre-mutation recovery persistence, early-stop Undo, unguarded completion, unchecked rollback, and split reopen state.
+- Focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts` — PASS, 3 files / 36 tests.
+- `npm run build` — PASS.
+- Specification re-audit: all five blocking findings are addressed with executable coverage.
+
+### Outstanding issues
+- Pass 5 truthful workspace status and navigation remain pending.
+- Browser and hosted crash-recovery smoke remain scheduled for later integration/release passes.
+
+### Risks or caveats
+- A process can always terminate between a successful remote page insert and the immediately following snapshot update; the implementation minimizes this window by persisting after each returned row before any child content write.
+- No migration, browser mutation, hosted deployment, or Pass 5 UI work was performed.
+
+### Operator follow-up
+- None for this correction.
+
+### Next steps
+- Continue to Pass 5 only after this corrected Pass 4 review is approved.

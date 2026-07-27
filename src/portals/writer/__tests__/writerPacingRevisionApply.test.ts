@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PacingRevisionChange, PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
 import {
   applyPacingRevisionSet,
+  loadPacingRevisionApplyAuthority,
   pacingRevisionFingerprintKey,
   type PacingRevisionApplySnapshot,
   undoPacingRevisionApply,
@@ -102,7 +103,31 @@ function builtOutline(pageCount: number) {
   };
 }
 
+function lifecycle() {
+  return {
+    beginApply: vi.fn(),
+    persistSnapshot: vi.fn(),
+  };
+}
+
 describe('applyPacingRevisionSet', () => {
+  it('loads authoritative outline and pages instead of accepting cached state', async () => {
+    const freshOutline = { id: 'fresh-outline', outline_json: { page_beats: [] } };
+    const freshPages = [{ id: 'fresh-page', page_number: 1 }];
+    const loadOutlines = vi.fn().mockResolvedValue([freshOutline]);
+    const loadPages = vi.fn().mockResolvedValue(freshPages);
+
+    await expect(loadPacingRevisionApplyAuthority({
+      loadOutlines,
+      loadPages,
+    })).resolves.toEqual({
+      latestOutline: freshOutline,
+      pages: freshPages,
+    });
+    expect(loadOutlines).toHaveBeenCalledOnce();
+    expect(loadPages).toHaveBeenCalledOnce();
+  });
+
   it('creates virtual pages in order, maps returned IDs, and snapshots exact created rows', async () => {
     const { set, changes } = virtualFixture();
     const calls: string[] = [];
@@ -112,6 +137,10 @@ describe('applyPacingRevisionSet', () => {
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
+        beginApply: async () => { calls.push('begin'); },
+        persistSnapshot: async (snapshot) => {
+          calls.push(`snapshot:${snapshot.createdPages.map((page) => page.pageNumber).join(',')}`);
+        },
         buildOutline: async () => builtOutline(3),
         writeOutline: async () => { calls.push('outline'); },
         createPage: async (pageNumber) => {
@@ -124,9 +153,13 @@ describe('applyPacingRevisionSet', () => {
       },
     });
     expect(calls).toEqual([
+      'begin',
       'outline',
+      'snapshot:',
       'create:2',
+      'snapshot:2',
       'create:3',
+      'snapshot:2,3',
       'beats:created-2',
       'beats:created-3',
       'dialogue:created-2',
@@ -142,6 +175,33 @@ describe('applyPacingRevisionSet', () => {
       beats: [],
       dialogue: [],
     });
+  });
+
+  it('rejects gaps in existing physical pages before beginning Apply', async () => {
+    const { set, changes } = virtualFixture([4]);
+    const beginApply = vi.fn();
+    const writeOutline = vi.fn();
+    await expect(applyPacingRevisionSet({
+      set,
+      existingPages: [
+        { pageId: 'physical-1', pageNumber: 1 },
+        { pageId: 'physical-3', pageNumber: 3 },
+      ],
+      currentFingerprints: fingerprints(changes),
+      lockedTargetKeys: new Set(),
+      writers: {
+        beginApply,
+        persistSnapshot: vi.fn(),
+        buildOutline: async () => builtOutline(4),
+        writeOutline,
+        createPage: vi.fn(),
+        deletePages: vi.fn(),
+        writeBeats: vi.fn(),
+        writeDialogue: vi.fn(),
+      },
+    })).rejects.toThrow(/contiguous.*1.*3/i);
+    expect(beginApply).not.toHaveBeenCalled();
+    expect(writeOutline).not.toHaveBeenCalled();
   });
 
   it('rejects an incomplete virtual unit before any mutation', async () => {
@@ -180,6 +240,7 @@ describe('applyPacingRevisionSet', () => {
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => builtOutline(3),
         writeOutline,
         createPage: vi.fn(),
@@ -267,6 +328,7 @@ describe('applyPacingRevisionSet', () => {
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => builtOutline(3),
         writeOutline: async (value) => { calls.push(value === set.source_outline_json ? 'restore-outline' : 'outline'); },
         createPage: async (pageNumber) => ({ pageId: `created-${pageNumber}`, pageNumber }),
@@ -293,6 +355,7 @@ describe('applyPacingRevisionSet', () => {
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => builtOutline(3),
         writeOutline: vi.fn(),
         createPage: async (pageNumber) => {
@@ -315,6 +378,7 @@ describe('applyPacingRevisionSet', () => {
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => builtOutline(2),
         writeOutline: vi.fn(),
         createPage: async () => ({ pageId: 'created-2', pageNumber: 2 }),
@@ -323,6 +387,36 @@ describe('applyPacingRevisionSet', () => {
         writeDialogue: vi.fn(),
       },
     })).rejects.toThrow(/Beats write failed.*Recovery also failed.*Delete cleanup failed/i);
+  });
+
+  it('attempts exact created-page deletion when an earlier existing restore fails', async () => {
+    const { set, changes } = virtualFixture([2]);
+    const existingBeats = fixture().beats;
+    existingBeats.item_id = changes[0]!.item_id;
+    existingBeats.dependency_ids = [changes[0]!.id];
+    set.items[0]!.changes = [changes[0]!, existingBeats, ...changes.slice(1)];
+    const deletePages = vi.fn();
+    await expect(applyPacingRevisionSet({
+      set,
+      existingPages: [{ pageId: existingBeats.page_id!, pageNumber: 1 }],
+      currentFingerprints: fingerprints([...changes, existingBeats]),
+      lockedTargetKeys: new Set(),
+      writers: {
+        ...lifecycle(),
+        buildOutline: async () => builtOutline(2),
+        writeOutline: vi.fn(),
+        createPage: async () => ({ pageId: 'created-2', pageNumber: 2 }),
+        deletePages,
+        writeBeats: async (pageId, value) => {
+          if (pageId === existingBeats.page_id && value === existingBeats.current_value) {
+            throw new Error('Existing Beats restore failed');
+          }
+          if (pageId === 'created-2') throw new Error('Created Beats write failed');
+        },
+        writeDialogue: vi.fn(),
+      },
+    })).rejects.toThrow(/Created Beats write failed.*Existing Beats restore failed/i);
+    expect(deletePages).toHaveBeenCalledWith(['created-2']);
   });
 
   it('applies outline, beats, then dialogue and returns an undo snapshot', async () => {
@@ -338,6 +432,7 @@ describe('applyPacingRevisionSet', () => {
       ]),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => 'built outline',
         writeOutline: async () => { calls.push('outline'); },
         createPage: vi.fn(),
@@ -363,6 +458,7 @@ describe('applyPacingRevisionSet', () => {
       ]),
       lockedTargetKeys: new Set(),
       writers: {
+        ...lifecycle(),
         buildOutline: async () => 'built',
         writeOutline: async (value) => { calls.push(`outline:${value}`); },
         createPage: vi.fn(),
@@ -437,6 +533,28 @@ describe('applyPacingRevisionSet', () => {
       writeDialogue: vi.fn(),
       deletePages: async () => { throw new Error('Delete failed'); },
     })).rejects.toThrow('Delete failed');
+  });
+
+  it('attempts every Undo recovery step after an earlier restore failure', async () => {
+    const calls: string[] = [];
+    await expect(undoPacingRevisionApply({
+      outline: 'old',
+      beats: [{ pageId: 'existing', value: { panels: [] } }],
+      dialogue: [{ pageId: 'existing', value: 'OLD' }],
+      createdPages: [{ pageId: 'created', pageNumber: 2 }],
+      sourcePageCount: 1,
+      targetPageCount: 2,
+      appliedIds: [],
+    }, {
+      writeDialogue: async () => {
+        calls.push('dialogue');
+        throw new Error('Dialogue restore failed');
+      },
+      writeBeats: async () => { calls.push('beats'); },
+      deletePages: async () => { calls.push('delete'); },
+      writeOutline: async () => { calls.push('outline'); },
+    })).rejects.toThrow(/Dialogue restore failed/i);
+    expect(calls).toEqual(['dialogue', 'beats', 'delete', 'outline']);
   });
 
   it('keeps existing-only legacy snapshots undoable without a delete call', async () => {

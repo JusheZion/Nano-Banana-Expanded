@@ -9,6 +9,8 @@ import {
 import type { PacingRevisionCreatedPage } from './writerPacingRevisionApplyVerification';
 
 type ApplyWriters = {
+  beginApply?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
+  persistSnapshot?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
   buildOutline: (approvedOutlineChanges: PacingRevisionChange[]) => Promise<unknown>;
   writeOutline: (outline: unknown) => Promise<void>;
   createPage: (pageNumber: number) => Promise<PacingRevisionCreatedPage>;
@@ -33,6 +35,29 @@ export function pacingRevisionFingerprintKey(change: PacingRevisionChange): stri
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function copySnapshot(snapshot: PacingRevisionApplySnapshot): PacingRevisionApplySnapshot {
+  return {
+    ...snapshot,
+    beats: [...snapshot.beats],
+    dialogue: [...snapshot.dialogue],
+    createdPages: snapshot.createdPages.map((page) => ({ ...page })),
+    appliedIds: [...snapshot.appliedIds],
+  };
+}
+
+export async function loadPacingRevisionApplyAuthority<TOutline, TPage>(readers: {
+  loadOutlines: () => Promise<TOutline[]>;
+  loadPages: () => Promise<TPage[]>;
+}): Promise<{ latestOutline: TOutline; pages: TPage[] }> {
+  const [outlines, pages] = await Promise.all([
+    readers.loadOutlines(),
+    readers.loadPages(),
+  ]);
+  const latestOutline = outlines[0];
+  if (!latestOutline) throw new Error('A current saved outline is required before Apply.');
+  return { latestOutline, pages };
 }
 
 export async function applyPacingRevisionSet(args: {
@@ -103,6 +128,11 @@ export async function applyPacingRevisionSet(args: {
     }
     physicalById.set(page.pageId, page.pageNumber);
     existingMax = Math.max(existingMax, page.pageNumber);
+  }
+  for (let pageNumber = 1; pageNumber <= existingMax; pageNumber += 1) {
+    if (!physicalNumbers.has(pageNumber)) {
+      throw new Error(`Existing physical pages must be contiguous from 1 through ${existingMax}.`);
+    }
   }
   const physicalTargetKeys = new Set<string>();
   for (const change of approved) {
@@ -188,14 +218,22 @@ export async function applyPacingRevisionSet(args: {
   const completedExistingWrites: Array<() => Promise<void>> = [];
   let outlineWritten = false;
   const createdByPageNumber = new Map<number, string>();
+  if (!args.writers.beginApply || !args.writers.persistSnapshot) {
+    throw new Error('Durable Apply snapshot writers are required before mutation.');
+  }
+  await args.writers.beginApply(copySnapshot(snapshot));
   try {
     if (outlineChanges.length) {
       await args.writers.writeOutline(targetOutline);
       outlineWritten = true;
+      await args.writers.persistSnapshot(copySnapshot(snapshot));
     }
     for (const pageNumber of createdPageNumbers) {
       const created = await args.writers.createPage(pageNumber);
-      if (created?.pageId) snapshot.createdPages.push(created);
+      if (created?.pageId) {
+        snapshot.createdPages.push(created);
+        await args.writers.persistSnapshot(copySnapshot(snapshot));
+      }
       if (
         !created?.pageId
         || created.pageNumber !== pageNumber
@@ -274,13 +312,35 @@ export async function undoPacingRevisionApply(
   snapshot: PacingRevisionApplySnapshot,
   writers: Pick<ApplyWriters, 'writeOutline' | 'writeBeats' | 'writeDialogue' | 'deletePages'>,
 ): Promise<void> {
-  await writers.writeOutline(snapshot.outline);
-  for (const beat of snapshot.beats) await writers.writeBeats(beat.pageId, beat.value);
-  for (const dialogue of snapshot.dialogue) {
-    await writers.writeDialogue(dialogue.pageId, dialogue.value);
+  const recoveryErrors: string[] = [];
+  for (const dialogue of [...snapshot.dialogue].reverse()) {
+    try {
+      await writers.writeDialogue(dialogue.pageId, dialogue.value);
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
+  }
+  for (const beat of [...snapshot.beats].reverse()) {
+    try {
+      await writers.writeBeats(beat.pageId, beat.value);
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
   }
   const createdPages = snapshot.createdPages ?? [];
   if (createdPages.length > 0) {
-    await writers.deletePages(createdPages.map((page) => page.pageId));
+    try {
+      await writers.deletePages(createdPages.map((page) => page.pageId));
+    } catch (error) {
+      recoveryErrors.push(errorMessage(error));
+    }
+  }
+  try {
+    await writers.writeOutline(snapshot.outline);
+  } catch (error) {
+    recoveryErrors.push(errorMessage(error));
+  }
+  if (recoveryErrors.length > 0) {
+    throw new Error(`Undo recovery failed: ${recoveryErrors.join(' ')}`);
   }
 }

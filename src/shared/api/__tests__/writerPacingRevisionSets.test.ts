@@ -16,9 +16,11 @@ vi.mock('@/shared/lib/supabase', () => ({
 }));
 
 import {
+  beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   listWriterPacingRevisionSets,
   reopenWriterPacingRevisionSetAfterUndo,
+  updateWriterPacingRevisionApplySnapshot,
   updateWriterPacingRevisionChange,
 } from '../writerPacingRevisionSets';
 
@@ -26,6 +28,26 @@ const SET_ID = '10000000-0000-4000-8000-000000000001';
 const ITEM_ID = '10000000-0000-4000-8000-000000000002';
 const CHANGE_ID = '10000000-0000-4000-8000-000000000003';
 const ISSUE_ID = '10000000-0000-4000-8000-000000000004';
+const snapshot = {
+  outline: {},
+  beats: [],
+  dialogue: [],
+  createdPages: [],
+  sourcePageCount: 1,
+  targetPageCount: 2,
+  appliedIds: [CHANGE_ID],
+};
+
+function updateChain(result: { data: unknown[] | null; error: { message: string } | null }) {
+  const chain = {
+    eq: vi.fn(),
+    in: vi.fn(),
+    select: vi.fn().mockResolvedValue(result),
+  };
+  chain.eq.mockReturnValue(chain);
+  chain.in.mockReturnValue(chain);
+  return chain;
+}
 
 const setRow = {
   id: SET_ID,
@@ -101,10 +123,52 @@ describe('writer pacing revision persistence', () => {
     expect(mocks.update).toHaveBeenCalledWith({ decision: 'approved' });
   });
 
+  it('begins Apply only from an allowed state and stores the base recovery snapshot', async () => {
+    const chain = updateChain({ data: [{ id: SET_ID }], error: null });
+    const update = vi.fn().mockReturnValue(chain);
+    mocks.from.mockReturnValue({ update });
+
+    await expect(beginWriterPacingRevisionApply(SET_ID, snapshot)).resolves.toEqual({ ok: true });
+
+    expect(update).toHaveBeenCalledWith({
+      status: 'applying',
+      apply_snapshot: snapshot,
+      recovery_status: 'applying',
+    });
+    expect(chain.eq).toHaveBeenCalledWith('id', SET_ID);
+    expect(chain.in).toHaveBeenCalledWith('status', ['ready', 'partially_ready']);
+  });
+
+  it('fails begin when the set is no longer in an allowed state', async () => {
+    const chain = updateChain({ data: [], error: null });
+    mocks.from.mockReturnValue({ update: vi.fn().mockReturnValue(chain) });
+
+    await expect(beginWriterPacingRevisionApply(SET_ID, snapshot)).resolves.toEqual({
+      ok: false,
+      error: expect.stringMatching(/could not begin/i),
+    });
+  });
+
+  it('updates created-page recovery IDs only while the set is applying', async () => {
+    const chain = updateChain({ data: [{ id: SET_ID }], error: null });
+    const update = vi.fn().mockReturnValue(chain);
+    mocks.from.mockReturnValue({ update });
+    const withCreated = {
+      ...snapshot,
+      createdPages: [{ pageId: 'page-2', pageNumber: 2 }],
+    };
+
+    await expect(updateWriterPacingRevisionApplySnapshot(SET_ID, withCreated)).resolves.toEqual({ ok: true });
+
+    expect(update).toHaveBeenCalledWith({
+      apply_snapshot: withCreated,
+      recovery_status: 'applying',
+    });
+    expect(chain.eq).toHaveBeenCalledWith('status', 'applying');
+  });
+
   it('fails closed when completion updates zero approved changes', async () => {
-    const selectUpdated = vi.fn().mockResolvedValue({ data: [], error: null });
-    const inIds = vi.fn().mockReturnValue({ select: selectUpdated });
-    const updateChanges = vi.fn().mockReturnValue({ in: inIds });
+    const updateChanges = vi.fn().mockReturnValue(updateChain({ data: [], error: null }));
     const updateSet = vi.fn();
     mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_changes'
       ? { update: updateChanges }
@@ -124,10 +188,10 @@ describe('writer pacing revision persistence', () => {
   });
 
   it('fails closed when Undo reopens zero applied changes', async () => {
-    const selectUpdated = vi.fn().mockResolvedValue({ data: [], error: null });
-    const inIds = vi.fn().mockReturnValue({ select: selectUpdated });
-    const updateChanges = vi.fn().mockReturnValue({ in: inIds });
-    const updateSet = vi.fn();
+    const updateChanges = vi.fn().mockReturnValue(updateChain({ data: [], error: null }));
+    const updateSet = vi.fn()
+      .mockReturnValueOnce(updateChain({ data: [{ id: SET_ID }], error: null }))
+      .mockReturnValueOnce(updateChain({ data: [{ id: SET_ID }], error: null }));
     mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_changes'
       ? { update: updateChanges }
       : { update: updateSet });
@@ -138,6 +202,49 @@ describe('writer pacing revision persistence', () => {
       ok: false,
       error: expect.stringMatching(/did not reopen every applied change/i),
     });
-    expect(updateSet).not.toHaveBeenCalled();
+    expect(updateSet).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires applying status for completion and reports failed child rollback', async () => {
+    const applyChildren = updateChain({ data: [{ id: CHANGE_ID }], error: null });
+    const rollbackChildren = updateChain({ data: [], error: null });
+    const completeSet = updateChain({ data: [], error: null });
+    const changeUpdate = vi.fn()
+      .mockReturnValueOnce(applyChildren)
+      .mockReturnValueOnce(rollbackChildren);
+    const setUpdate = vi.fn().mockReturnValue(completeSet);
+    mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_changes'
+      ? { update: changeUpdate }
+      : { update: setUpdate });
+
+    const result = await completeWriterPacingRevisionSet(SET_ID, [CHANGE_ID], snapshot);
+
+    expect(completeSet.eq).toHaveBeenCalledWith('status', 'applying');
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringMatching(/rollback.*every change/i),
+    });
+  });
+
+  it('compensates the set back to applied when reopening children fails', async () => {
+    const reopenSet = updateChain({ data: [{ id: SET_ID }], error: null });
+    const compensateSet = updateChain({ data: [], error: null });
+    const reopenChildren = updateChain({ data: null, error: { message: 'Child reopen failed' } });
+    const setUpdate = vi.fn()
+      .mockReturnValueOnce(reopenSet)
+      .mockReturnValueOnce(compensateSet);
+    const changeUpdate = vi.fn().mockReturnValue(reopenChildren);
+    mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_sets'
+      ? { update: setUpdate }
+      : { update: changeUpdate });
+
+    const result = await reopenWriterPacingRevisionSetAfterUndo(SET_ID, [CHANGE_ID]);
+
+    expect(reopenSet.eq).toHaveBeenCalledWith('status', 'applied');
+    expect(compensateSet.eq).toHaveBeenCalledWith('status', 'ready');
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringMatching(/Child reopen failed.*compensation.*failed/i),
+    });
   });
 });
