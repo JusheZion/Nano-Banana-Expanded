@@ -91,6 +91,121 @@ describe('pacing revision outline planning', () => {
     expect(result.items).toEqual([]);
   });
 
+  it('keeps disjoint deterministic items separate despite overlapping model page claims', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [
+        {
+          item_id: 'item-opening',
+          title: 'Strengthen the opening',
+          rationale: 'Land the first cost.',
+          affected_page_numbers: [99],
+        },
+        {
+          item_id: 'item-ending',
+          title: 'Strengthen the ending',
+          rationale: 'Land the final consequence.',
+          affected_page_numbers: [99],
+        },
+      ],
+      operations: [
+        {
+          item_id: 'item-opening',
+          operation_id: 'edit-opening',
+          operation: 'edit',
+          source_beat_ids: ['structural-1'],
+          reason: 'Clarify the opening cost.',
+          summary: 'Structural event 1 reaches outcome 1 and immediately costs the hero their refuge.',
+        },
+        {
+          item_id: 'item-ending',
+          operation_id: 'edit-ending',
+          operation: 'edit',
+          source_beat_ids: ['structural-4'],
+          reason: 'Clarify the ending consequence.',
+          summary: 'Structural event 4 reaches outcome 4 and permanently separates the surviving allies.',
+        },
+      ],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      {
+        item_id: 'item-opening',
+        title: 'Strengthen the opening',
+        rationale: 'Land the first cost.',
+        affected_page_numbers: [1],
+      },
+      {
+        item_id: 'item-ending',
+        title: 'Strengthen the ending',
+        rationale: 'Land the final consequence.',
+        affected_page_numbers: [4],
+      },
+    ]);
+    expect(result.operations.map(({ operation_id, item_id }) => ({ operation_id, item_id }))).toEqual([
+      { operation_id: 'edit-opening', item_id: 'item-opening' },
+      { operation_id: 'edit-ending', item_id: 'item-ending' },
+    ]);
+    expect(result.outlineChanges.map(({ operation_id, item_id }) => ({ operation_id, item_id }))).toEqual([
+      { operation_id: 'edit-opening', item_id: 'item-opening' },
+      { operation_id: 'edit-ending', item_id: 'item-ending' },
+    ]);
+  });
+
+  it('merges deterministically overlapping items and remaps their accepted operations', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [
+        {
+          item_id: 'item-move',
+          title: 'Delay the second event',
+          rationale: 'Let the middle escalate first.',
+          affected_page_numbers: [1],
+        },
+        {
+          item_id: 'item-edit',
+          title: 'Clarify the third event',
+          rationale: 'Make its consequence explicit.',
+          affected_page_numbers: [99],
+        },
+      ],
+      operations: [
+        {
+          item_id: 'item-move',
+          operation_id: 'move-second',
+          operation: 'move',
+          source_beat_ids: ['structural-2'],
+          anchor_source_beat_id: 'structural-4',
+          placement: 'after',
+          reason: 'Delay the second event.',
+        },
+        {
+          item_id: 'item-edit',
+          operation_id: 'edit-third',
+          operation: 'edit',
+          source_beat_ids: ['structural-3'],
+          reason: 'Clarify the third event.',
+          summary: 'Structural event 3 reaches outcome 3 and immediately exposes the hidden cost.',
+        },
+      ],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      {
+        item_id: 'item-move',
+        title: 'Delay the second event / Clarify the third event',
+        rationale: 'Let the middle escalate first. Make its consequence explicit.',
+        affected_page_numbers: [2, 3, 4],
+      },
+    ]);
+    expect(result.operations.map(({ operation_id, item_id }) => ({ operation_id, item_id }))).toEqual([
+      { operation_id: 'move-second', item_id: 'item-move' },
+      { operation_id: 'edit-third', item_id: 'item-move' },
+    ]);
+    expect(result.outlineChanges.map(({ operation_id, item_id }) => ({ operation_id, item_id }))).toEqual([
+      { operation_id: 'move-second', item_id: 'item-move' },
+      { operation_id: 'edit-third', item_id: 'item-move' },
+    ]);
+  });
+
   it('drops model item pages that have no accepted deterministic Outline change', () => {
     const result = buildPacingRevisionOutlinePreview({
       items: [

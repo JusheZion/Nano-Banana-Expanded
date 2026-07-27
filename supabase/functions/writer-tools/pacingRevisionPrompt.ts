@@ -175,12 +175,8 @@ export function buildPacingRevisionOutlinePreview(
   plan: PacingRevisionPlan,
   input: OutlineTreatmentPromptInput,
 ) {
-  const normalized = mergeOverlappingItems(plan.items);
-  const validItemIds = new Set(normalized.items.map((item) => item.item_id));
-  const operations = plan.operations.flatMap((operation): PacingRevisionPlanOperation[] => {
-    const itemId = normalized.itemIdMap.get(operation.item_id) ?? operation.item_id;
-    return validItemIds.has(itemId) ? [{ ...operation, item_id: itemId }] : [];
-  });
+  const validItemIds = new Set(plan.items.map((item) => item.item_id));
+  const operations = plan.operations.filter((operation) => validItemIds.has(operation.item_id));
   const patch = applyOutlineTreatmentPatches({ operations }, input);
   const acceptedOperationIds = new Set(
     patch.operation_notices
@@ -224,23 +220,6 @@ export function buildPacingRevisionOutlinePreview(
   const manifestById = new Map<string, ManifestEntry>(
     manifestEntries.map((entry) => [entry.result_beat_id, entry] as const),
   );
-  const outlineChanges: PacingOutlineChildChange[] = operations.flatMap((operation) => {
-    if (!acceptedOperationIds.has(operation.operation_id)) return [];
-    const manifest = manifestById.get(operation.operation_id);
-    const current = operation.source_beat_ids.map((sourceId) => sourceById.get(sourceId)).filter(Boolean);
-    return [{
-      item_id: operation.item_id,
-      operation_id: operation.operation_id,
-      target_key: `outline:${operation.operation_id}`,
-      page_number: typeof manifest?.proposed_page === 'number' ? manifest.proposed_page : null,
-      current_value: current,
-      ai_proposal: {
-        operation,
-        proposed_beat: proposalById.get(operation.operation_id) ?? null,
-      },
-      reason: operation.reason?.trim() || 'Pacing revision.',
-    }];
-  });
   const sourceIdByPage = new Map<number, string>(
     input.sourceBeats.map((beat) => [beat.page_target ?? beat.ordinal, beat.id] as const),
   );
@@ -283,7 +262,7 @@ export function buildPacingRevisionOutlinePreview(
     }
     acceptedPagesByItemId.set(operation.item_id, pages);
   }
-  const backedItems = normalized.items.flatMap((item): PacingRevisionItemPlan[] => {
+  const backedItems = plan.items.flatMap((item): PacingRevisionItemPlan[] => {
     const acceptedPages = uniquePages(acceptedPagesByItemId.get(item.item_id) ?? []);
     return acceptedPages.length > 0
       ? [{ ...item, affected_page_numbers: acceptedPages }]
@@ -291,15 +270,32 @@ export function buildPacingRevisionOutlinePreview(
   });
   const backed = mergeOverlappingItems(backedItems);
   const backedItemIds = new Set(backed.items.map((item) => item.item_id));
-  const backedOutlineChanges = outlineChanges.flatMap((change): PacingOutlineChildChange[] => {
-    const itemId = backed.itemIdMap.get(change.item_id);
-    return itemId && backedItemIds.has(itemId) ? [{ ...change, item_id: itemId }] : [];
+  const backedOperations = operations.flatMap((operation): PacingRevisionPlanOperation[] => {
+    const itemId = backed.itemIdMap.get(operation.item_id);
+    return itemId && backedItemIds.has(itemId) ? [{ ...operation, item_id: itemId }] : [];
+  });
+  const outlineChanges: PacingOutlineChildChange[] = backedOperations.flatMap((operation) => {
+    if (!acceptedOperationIds.has(operation.operation_id)) return [];
+    const manifest = manifestById.get(operation.operation_id);
+    const current = operation.source_beat_ids.map((sourceId) => sourceById.get(sourceId)).filter(Boolean);
+    return [{
+      item_id: operation.item_id,
+      operation_id: operation.operation_id,
+      target_key: `outline:${operation.operation_id}`,
+      page_number: typeof manifest?.proposed_page === 'number' ? manifest.proposed_page : null,
+      current_value: current,
+      ai_proposal: {
+        operation,
+        proposed_beat: proposalById.get(operation.operation_id) ?? null,
+      },
+      reason: operation.reason?.trim() || 'Pacing revision.',
+    }];
   });
 
   return {
     items: backed.items,
-    operations,
+    operations: backedOperations,
     patch,
-    outlineChanges: backedOutlineChanges,
+    outlineChanges,
   };
 }

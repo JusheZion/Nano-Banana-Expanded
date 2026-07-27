@@ -13869,3 +13869,40 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue only after Pass 2 re-review approval.
+
+## Pacing Revision deterministic item grouping - 2026-07-27
+
+### What changed
+- Removed pre-validation Revision Item merging based on model-declared affected pages.
+- Accepted deterministic impact pages are now computed for each original item before overlap merging.
+- Operations and persisted Outline children are remapped only after deterministic item merging, preserving the correct surviving item relationship.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Unknown item references remain excluded before patch application.
+- Model `affected_page_numbers` no longer influence whether separate editorial intents are grouped.
+- Deterministically overlapping items still use the established title/rationale composition and operation remapping.
+
+### Verification
+- RED: two accepted page-local edits at deterministic pages 1 and 4 merged because both model items falsely claimed page 99.
+- GREEN: both items remain separate with their original titles, rationales, operation linkage, and Outline child linkage.
+- A deterministic move/edit overlap still merges title/rationale text and remaps both accepted operations and Outline children to the surviving item.
+- Focused Pass 2 gate, targeted TypeScript, focused lint, and `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 quality review approval.
