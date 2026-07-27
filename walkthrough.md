@@ -14977,3 +14977,58 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue directly to the final consolidated release, browser QA, deployment, and production smoke pass.
+
+## Pacing Revision history release and production verification - 2026-07-27
+
+### What changed
+- Completed the integrated release gate for safe Pacing Review replacement, confirmed manual archive, read-only Revision history, and batch replacement consistency.
+- Applied the archive, provenance, immutability, and lease-fenced persistence migration to the production ARCS Supabase project.
+- Deployed the matching Writer Tools Edge Function and frontend bundle.
+- Opened, reviewed, and merged PR #32 into `main`.
+
+### Files touched
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Production migration: `20260727030000_writer_pacing_revision_archive.sql`.
+- Supabase project: `vxclogwiytxjolisnakd`.
+- Active Edge Function: `writer-tools` version 112.
+- Cloudflare frontend version: `2896a65d-75c2-49ae-b287-24cfefd9743d`.
+- Merged PR: `https://github.com/JusheZion/Nano-Banana-Expanded/pull/32`.
+- Merge commit: `24b00440fe1bf2d761b7de02aef7dac4147a650d`.
+
+### Verification
+- `npm run test`: PASS, 150 files / 1,071 tests.
+- `npm run lint`: PASS, 0 errors / 71 existing warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check 9016910...HEAD`: PASS.
+- Independent final code review: APPROVED.
+- Supabase migration dry run: exactly one pending migration.
+- Supabase migration apply: PASS.
+- `supabase functions list --project-ref vxclogwiytxjolisnakd`: `writer-tools` ACTIVE, version 112.
+- Cloudflare deployment: PASS, version `2896a65d-75c2-49ae-b287-24cfefd9743d`.
+- Signed-in production smoke on the representative 70-page QA issue:
+  - manual archive moved the prior set to `Revision history (1)`;
+  - live issue remained 70 pages and the UI stated live story content was unchanged;
+  - archived view showed Created, Archived, and Previous status metadata;
+  - archived view exposed no Apply, Edit, Approve, Reject, Retry, Undo, or Archive mutations;
+  - Back restored focus to the Revision history disclosure;
+  - `Create Revision Set` produced a fresh active set and stop-after-current-page completed safely;
+  - a confirmed new Pacing Review automatically archived that active set only after success;
+  - history advanced to `Revision history (2)` and `Create Revision Set` became available again;
+  - production console warnings/errors were empty.
+- Narrow production viewport QA: primary Story Review controls remained reachable and readable.
+
+### Outstanding issues
+- None for this release.
+
+### Risks or caveats
+- The QA account now contains two archived Revision Sets and the latest saved Pacing Review; no live Outline, Page Beats, Dialogue, or page count was changed by archive/replacement.
+- Existing ESLint warnings and build chunk-size advisories remain outside this Pacing release.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Use the new `Create Revision Set` action on the latest saved Pacing Review when ready to generate and approve the next set of proposed changes.
