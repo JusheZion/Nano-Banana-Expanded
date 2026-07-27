@@ -577,13 +577,13 @@ Open a fresh production tab and verify:
 
 Release result: PASS — the final reviewer approved the branch without findings. Cloudflare deployed version `eae0523c-92a8-45fb-b2fa-12fe5494551f` to `https://asset-reference-comics-studio.onyxzion.workers.dev`. A fresh signed-in production tab showed `Select all in Live Outline`, `Clear Live Outline selection`, `Show failed layers`, `Approve selected (0)`, and `Reject selected (0)`. Browser warning/error logs were empty, the page title was `ARCS Expanded`, and the endpoint returned HTTP 200.
 
-- [ ] **Step 7: Merge only after every gate passes**
+- [x] **Step 7: Merge only after every gate passes**
 
 Merge the ready pull request, verify remote `main` contains the merge commit, and confirm the production endpoint remains healthy.
 
 **Pass 4 smoke test:** Fresh production UI and endpoint verification.
 
-**Pass 4 result:** Record final test, deployment, and merge evidence.
+**Pass 4 result:** PASS — the consolidated gate passed 134 test files / 847 tests, lint completed with 0 errors / 71 existing warnings, the production build and both diff checks passed, and the final whole-branch review reported no findings. Cloudflare version `eae0523c-92a8-45fb-b2fa-12fe5494551f` passed the fresh signed-in production UI smoke with clean warning/error logs and HTTP 200. Ready PR #28 merged as `81b9a2e331bd7258619a7f723b67c2842e1bd509`; fetched `origin/main` contains the reviewed branch head.
 
 ## Plan self-review
 
