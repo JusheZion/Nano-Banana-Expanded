@@ -328,7 +328,6 @@ export class PacingRevisionCompletionResolutionError extends Error {
 export async function resolvePacingRevisionReopenFailure(args: {
   reopenError: string;
   loadPersistedStatus: () => Promise<string>;
-  markRecoveryRequired: (detail: string) => Promise<{ ok: boolean; error?: string }>;
 }): Promise<'committed'> {
   let status: string;
   try {
@@ -339,14 +338,10 @@ export async function resolvePacingRevisionReopenFailure(args: {
       { cause: error },
     );
   }
-  if (status === 'ready') return 'committed';
+  if (status === 'ready' || status === 'partially_ready') return 'committed';
   if (status === 'applied') {
-    const detail = `${args.reopenError} Live Undo completed, but the Revision Set remains applied.`;
-    const marked = await args.markRecoveryRequired(detail);
     throw new Error(
-      marked.ok
-        ? `${detail} Recovery required; no further mutation was attempted.`
-        : `${detail} Recovery state could not be recorded: ${marked.error ?? 'unknown error'}`,
+      `${args.reopenError} The Revision Set remains applied and live content is unchanged; retry Undo.`,
     );
   }
   throw new Error(

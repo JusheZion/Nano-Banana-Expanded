@@ -382,29 +382,25 @@ describe('applyPacingRevisionSet', () => {
     })).toEqual({ ok: false, error: expect.stringMatching(/changed after Apply/i) });
   });
 
-  it('resolves reopen ambiguity without additional destructive writes', async () => {
-    const markRecoveryRequired = vi.fn().mockResolvedValue({ ok: true });
+  it('reconciles an ambiguous transactional Undo without additional mutations', async () => {
     await expect(resolvePacingRevisionReopenFailure({
-      reopenError: 'response lost',
+      reopenError: 'Undo response lost',
       loadPersistedStatus: async () => 'ready',
-      markRecoveryRequired,
     })).resolves.toBe('committed');
-    expect(markRecoveryRequired).not.toHaveBeenCalled();
+    await expect(resolvePacingRevisionReopenFailure({
+      reopenError: 'Undo response lost',
+      loadPersistedStatus: async () => 'partially_ready',
+    })).resolves.toBe('committed');
 
     await expect(resolvePacingRevisionReopenFailure({
-      reopenError: 'reopen rejected',
+      reopenError: 'Undo response lost',
       loadPersistedStatus: async () => 'applied',
-      markRecoveryRequired,
-    })).rejects.toThrow(/remains applied.*recovery required/i);
-    expect(markRecoveryRequired).toHaveBeenCalledOnce();
+    })).rejects.toThrow(/remains applied.*unchanged.*retry/i);
 
-    markRecoveryRequired.mockClear();
     await expect(resolvePacingRevisionReopenFailure({
-      reopenError: 'read failed',
+      reopenError: 'Undo response lost',
       loadPersistedStatus: async () => { throw new Error('offline'); },
-      markRecoveryRequired,
     })).rejects.toThrow(/unreadable.*no further mutation/i);
-    expect(markRecoveryRequired).not.toHaveBeenCalled();
   });
 
   it('loads authoritative outline and pages instead of accepting cached state', async () => {

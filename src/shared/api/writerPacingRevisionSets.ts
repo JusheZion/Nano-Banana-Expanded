@@ -191,19 +191,13 @@ export async function completeWriterPacingRevisionSet(
   }
 }
 
-export async function reopenWriterPacingRevisionSetAfterUndo(
+export async function undoWriterPacingRevisionSet(
   setId: string,
-  appliedChangeIds: string[],
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
-    const expectedIds = [...new Set(appliedChangeIds)];
-    if (expectedIds.length === 0) {
-      return { ok: false, error: 'No applied changes were provided for Undo.' };
-    }
-    const { data, error } = await supabase.rpc('reopen_writer_pacing_revision_after_undo', {
+    const { data, error } = await supabase.rpc('undo_writer_pacing_revision_apply', {
       p_set_id: setId,
-      p_change_ids: expectedIds,
     });
     if (error) return { ok: false, error: error.message };
     return data === true

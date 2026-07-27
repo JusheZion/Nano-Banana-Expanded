@@ -67,9 +67,8 @@ import {
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   getWriterPacingRevisionSet,
-  markWriterPacingRevisionRecoveryRequired,
   recoverWriterPacingRevisionApply,
-  reopenWriterPacingRevisionSetAfterUndo,
+  undoWriterPacingRevisionSet,
   updateWriterPacingRevisionApplySnapshot,
 } from '@/shared/api/writerPacingRevisionSets';
 import { getSupabaseDiagnostic, isSupabaseConfigured } from '@/shared/lib/supabase';
@@ -222,7 +221,6 @@ import {
   resolvePacingRevisionCompletionFailure,
   resolvePacingRevisionReopenFailure,
   undoPacingRevisionApply,
-  validatePacingRevisionUndoAuthority,
 } from '@/portals/writer/writerPacingRevisionApply';
 import {
   verifyPacingRevisionApply,
@@ -3864,83 +3862,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     try {
-      const [setResult, issue, pageResult, outlineResult] = await Promise.all([
-        getWriterPacingRevisionSet(cachedSet.id),
-        getWriterIssue(selectedIssueId),
-        listWriterPagesResult(selectedIssueId),
-        listWriterOutlinesForIssueResult(selectedIssueId),
-      ]);
-      if (!setResult.ok) throw new Error(setResult.error);
-      if (!issue) throw new Error('The issue could not be reloaded before Undo.');
-      if (!pageResult.ok) throw new Error(pageResult.error);
-      if (!outlineResult.ok) throw new Error(outlineResult.error);
-      const authority = validatePacingRevisionUndoAuthority({
-        set: setResult.set,
-        issueId: issue.id,
-        freshPages: pageResult.rows,
-        freshOutlines: outlineResult.rows,
-      });
-      if (!authority.ok) throw new Error(authority.error);
-      const snapshot = authority.snapshot;
-      await undoPacingRevisionApply(snapshot, {
-        writeOutline: async () => {
-          if (!snapshot.outlineApplied) return;
-          const deleted = await deleteWriterOutlineById({
-            issueId: selectedIssueId,
-            outlineId: snapshot.plannedOutlineId!,
-          });
-          if (!deleted.ok) throw new Error(deleted.error);
-        },
-        writeBeats: async (pageId, value) => {
-          const restored = await updateWriterPageBeatsJsonExact(
-            pageId,
-            value as Record<string, unknown> | null,
-          );
-          if (!restored.ok) throw new Error(restored.error);
-        },
-        writeDialogue: async (pageId, value) => {
-          const restored = await updateWriterPageScriptTextExact(pageId, value);
-          if (!restored.ok) throw new Error(restored.error);
-        },
-        deletePages: async (pageIds) => {
-          const deleted = await deleteWriterPagesExact(selectedIssueId, pageIds);
-          if (!deleted.ok) throw new Error(deleted.error);
-        },
-      });
-      const [restoredPages, restoredOutlines] = await Promise.all([
-        listWriterPagesResult(selectedIssueId),
-        listWriterOutlinesForIssueResult(selectedIssueId),
-      ]);
-      if (!restoredPages.ok) throw new Error(restoredPages.error);
-      if (!restoredOutlines.ok) throw new Error(restoredOutlines.error);
-      const cleanupVerification = verifyPacingRevisionUndoRecovery({
-        freshPages: restoredPages.rows,
-        freshOutlines: restoredOutlines.rows,
-        snapshot,
-      });
-      if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
-      const reopened = await reopenWriterPacingRevisionSetAfterUndo(
-        setResult.set.id,
-        snapshot.appliedIds,
-      );
-      if (!reopened.ok) {
+      const undone = await undoWriterPacingRevisionSet(cachedSet.id);
+      if (!undone.ok) {
         await resolvePacingRevisionReopenFailure({
-          reopenError: reopened.error,
+          reopenError: undone.error,
           loadPersistedStatus: async () => {
-            const persisted = await getWriterPacingRevisionSet(setResult.set.id);
+            const persisted = await getWriterPacingRevisionSet(cachedSet.id);
             if (!persisted.ok) throw new Error(persisted.error);
             return persisted.set.status;
           },
-          markRecoveryRequired: (detail) => markWriterPacingRevisionRecoveryRequired(
-            setResult.set.id,
-            'applied',
-            detail,
-          ),
         });
       }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
-      await pacingRevision.refresh(setResult.set.id);
+      await pacingRevision.refresh(cachedSet.id);
       pushHistory('undid pacing Revision Set');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not undo the Revision Set.';

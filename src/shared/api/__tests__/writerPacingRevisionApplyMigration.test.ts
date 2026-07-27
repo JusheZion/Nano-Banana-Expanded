@@ -47,4 +47,34 @@ describe('Pacing Revision Apply transaction migration', () => {
     expect(sql.indexOf('Target page-number set changed before completion'))
       .toBeLessThan(sql.indexOf('update public.writer_pacing_revision_changes change'));
   });
+
+  it('performs authoritative Undo restoration, cleanup, and reopen in one rollback-safe RPC', () => {
+    const undoStart = sql.indexOf('create or replace function public.undo_writer_pacing_revision_apply');
+    const undoSql = sql.slice(undoStart);
+    const firstRestore = undoSql.indexOf('update public.writer_pages page');
+    const createdDelete = undoSql.indexOf('delete from public.writer_pages page');
+    const outlineDelete = undoSql.indexOf('delete from public.writer_issue_outlines outline');
+    const reopen = undoSql.indexOf('set status = v_reopen_status');
+
+    expect(undoStart).toBeGreaterThan(-1);
+    expect(undoSql).toMatch(/revision_set\.apply_snapshot/);
+    expect(undoSql).toMatch(/revision_set\.status = 'applied'/);
+    expect(undoSql).toMatch(/for update of revision_set/);
+    expect(undoSql).toMatch(/from public\.writer_issues issue[\s\S]*for update/);
+    expect(undoSql).toMatch(/lock table\s+public\.writer_pacing_revision_items,\s+public\.writer_pacing_revision_changes/);
+    expect(undoSql).toMatch(/for update of item, change/);
+    expect(undoSql).toMatch(/lock table public\.writer_pages, public\.writer_issue_outlines in share row exclusive mode/);
+    expect(undoSql).toMatch(/Applied page content changed before Undo/);
+    expect(undoSql).toMatch(/Applied outline changed before Undo/);
+    expect(undoSql).toMatch(/Target page-number set changed before Undo/);
+    expect(undoSql).toMatch(/Applied recovery snapshot does not match exact page-layer ownership/);
+    expect(firstRestore).toBeGreaterThan(-1);
+    expect(createdDelete).toBeGreaterThan(firstRestore);
+    expect(outlineDelete).toBeGreaterThan(createdDelete);
+    expect(reopen).toBeGreaterThan(outlineDelete);
+    expect(undoSql).toMatch(/raise exception 'Undo restoration verification failed'/);
+    expect(undoSql).toMatch(/raise exception 'Undo did not delete every planned created page'/);
+    expect(undoSql).toMatch(/raise exception 'Undo did not delete the applied outline'/);
+    expect(undoSql).toMatch(/grant execute on function public\.undo_writer_pacing_revision_apply\(uuid\) to authenticated/);
+  });
 });

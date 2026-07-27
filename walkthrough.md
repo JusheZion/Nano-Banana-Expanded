@@ -14350,6 +14350,53 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision transactional Undo and Dialogue invalidation closure - 2026-07-27
+
+### What changed
+- Replaced normal client-sequenced Undo with one authenticated owner-scoped database RPC.
+- The transaction locks the applied Revision Set and stored snapshot plus issue pages/outlines, rejects changed applied candidates or outline/page-set state, restores prior existing content, deletes exact created pages and applied outline, and reopens exact children plus the set atomically.
+- Ambiguous RPC responses now use read-only persisted-status reconciliation: `ready` or `partially_ready` confirms success, while `applied` remains unchanged and retryable.
+- Added a Portal regression forbidding client-side live Undo mutations and an explicit Edge/trigger regression proving regenerated Beats stale dependent Dialogue and remove the page from completed progress.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionPortalUndo.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- RED gate reproduced the missing atomic RPC, old mutating ambiguity handler, and absent migration transaction contract.
+- Initial GREEN gate — PASS, 4 files / 62 tests.
+- Final focused gate with Portal and concurrency-lock coverage — PASS, 5 files / 63 tests.
+- Full relevant Pacing/persistence gate — PASS, 19 files / 184 tests.
+- Full project gate — PASS, 141 files / 977 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- Full `npm run lint` — PASS with 0 errors and 71 existing repository warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- The updated migration has not been executed against local or hosted PostgreSQL in this pass.
+- Hosted 71→85 Apply/Undo smoke remains pending.
+
+### Risks or caveats
+- Local Supabase migration execution was blocked because the Docker daemon was stopped.
+- Supabase MCP/tool discovery found no callable Supabase connector in this session.
+
+### Operator follow-up
+- Start Docker for local migration execution or expose/authenticate Supabase MCP, then deploy the updated migration before hosted Undo validation.
+
+### Next steps
+- Re-run migration-level validation in PostgreSQL, deploy the exact tested migration, and complete hosted Apply/Undo smoke before release.
+
 ## Pacing Revision independent applied status region - 2026-07-27
 
 ### What changed

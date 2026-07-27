@@ -78,4 +78,27 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(previewBranch).not.toContain('include_beats !== false');
     expect(previewBranch).not.toContain('include_dialogue !== false');
   });
+
+  it('upserts regenerated Beats through the trigger that stales and requeues dependent Dialogue', () => {
+    const indexSource = readFileSync(
+      join(process.cwd(), 'supabase/functions/writer-tools/index.ts'),
+      'utf8',
+    );
+    const triggerSource = readFileSync(
+      join(process.cwd(), 'supabase/migrations/20260726000000_writer_pacing_revision_beats_invalidation.sql'),
+      'utf8',
+    );
+    const branchStart = indexSource.indexOf("parsedReq.data.mode === 'pacing_revision_page_preview'");
+    const branchEnd = indexSource.indexOf("parsedReq.data.mode === 'outline_treatment_preview'", branchStart);
+    const previewBranch = indexSource.slice(branchStart, branchEnd);
+
+    expect(previewBranch).toContain(".upsert(changeRows, { onConflict: 'item_id,layer,target_key' })");
+    expect(triggerSource).toMatch(/BEFORE UPDATE OF ai_proposal, edited_candidate/);
+    expect(triggerSource).toMatch(/new\.layer = 'beats'/);
+    expect(triggerSource).toMatch(/new\.id = ANY\(dependency_ids\)/);
+    expect(triggerSource).toMatch(/generation_status = 'stale'/);
+    expect(triggerSource).toMatch(/decision = 'pending'/);
+    expect(triggerSource).toMatch(/completed_page <> to_jsonb\(new\.page_number\)/);
+    expect(triggerSource).toMatch(/status = 'partially_ready'/);
+  });
 });

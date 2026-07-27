@@ -21,8 +21,8 @@ import {
   completeWriterPacingRevisionSet,
   listWriterPacingRevisionSets,
   markWriterPacingRevisionRecoveryRequired,
-  reopenWriterPacingRevisionSetAfterUndo,
   recoverWriterPacingRevisionApply,
+  undoWriterPacingRevisionSet,
   updateWriterPacingRevisionApplySnapshot,
   updateWriterPacingRevisionChange,
 } from '../writerPacingRevisionSets';
@@ -194,13 +194,12 @@ describe('writer pacing revision persistence', () => {
     });
   });
 
-  it('reopens the set and exact children through one transactional RPC', async () => {
-    await expect(reopenWriterPacingRevisionSetAfterUndo(SET_ID, [CHANGE_ID]))
+  it('restores live content and reopens the set through one transactional RPC', async () => {
+    await expect(undoWriterPacingRevisionSet(SET_ID))
       .resolves.toEqual({ ok: true });
 
-    expect(mocks.rpc).toHaveBeenCalledWith('reopen_writer_pacing_revision_after_undo', {
+    expect(mocks.rpc).toHaveBeenCalledWith('undo_writer_pacing_revision_apply', {
       p_set_id: SET_ID,
-      p_change_ids: [CHANGE_ID],
     });
   });
 
