@@ -236,7 +236,7 @@ git commit -m "feat: preview virtual pacing pages"
 - Dialogue automatically queues after/restores Beats.
 - Isolated failure and failed-only retry behavior remains intact.
 
-- [ ] **Step 1: Add RED hook/queue tests**
+- [x] **Step 1: Add RED hook/queue tests**
 
 Extend `useWriterPacingRevisionSet.test.tsx` with a set affecting physical page 71 and virtual pages 72–73. Assert invocations:
 
@@ -253,7 +253,7 @@ expect(mocks.invoke).toHaveBeenNthCalledWith(2, {
 
 Then assert Dialogue follows, virtual resume skips ready Beats, failed-only retry does not regenerate successful pages, and the old “not available” error is absent.
 
-- [ ] **Step 2: Run hook/queue tests and confirm failure**
+- [x] **Step 2: Run hook/queue tests and confirm failure**
 
 Run:
 
@@ -263,7 +263,7 @@ npx vitest run src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx 
 
 Expected: FAIL because virtual page numbers are filtered by `pagesRef`.
 
-- [ ] **Step 3: Queue all affected page numbers**
+- [x] **Step 3: Queue all affected page numbers**
 
 Replace the runnable-page physical filter with sorted requested page numbers and invoke:
 
@@ -281,15 +281,15 @@ await invokeWriterTools({
 
 Keep the existing sequential layer loop and five-page checkpoint callback.
 
-- [ ] **Step 4: Run Pass 3 smoke**
+- [x] **Step 4: Run Pass 3 smoke**
 
 Run hook and queue test files. Expected: both pass.
 
-- [ ] **Step 5: Audit after three passes**
+- [x] **Step 5: Audit after three passes**
 
 Audit schema mirrors, one-page invocation, server-derived target keys, proposed-outline authorization, queue ordering, isolated-failure continuation, and no live write during preview. Record findings in this plan before proceeding.
 
-- [ ] **Step 6: Commit Pass 3**
+- [x] **Step 6: Commit Pass 3**
 
 ```bash
 git add src/portals/writer/useWriterPacingRevisionSet.ts src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md
@@ -298,9 +298,9 @@ git commit -m "feat: queue virtual pacing previews"
 
 **Pass 3 smoke test:** Hook and queue tests only.
 
-**Pass 3 result:** Pending.
+**Pass 3 result:** PASS — RED reproduced the physical-row filter across mixed generation, virtual resume, and layer-specific virtual retry. The client now sorts every requested affected page number, sends the physical UUID when a row exists and `null` otherwise, and preserves the existing per-page Beats-then-Dialogue loop. Virtual resume skips ready Beats, failed-only retry does not regenerate successful pages, and the obsolete unavailable-page error is removed. The focused smoke passes 2 files / 13 tests.
 
-**Three-pass audit result:** Pending.
+**Three-pass audit result:** PASS — the shared payload type and Zod request schema both require `page_id: string | null`, `page_number`, and exactly one selected child layer. The hosted resolver verifies physical ID/number ownership or derives a `virtual-page:<number>` target only for an unoccupied, contiguous proposed-outline page owned by a persisted Revision Item. The preview flow requires applicable accepted Outline provenance for virtual Beats and a ready, provenance-backed Beats candidate before virtual Dialogue. Both client and server retain one layer per invocation; the queue sorts and deduplicates page numbers, continues after isolated failures, checkpoints after at most five attempts, and stops only between pages. Source inspection and the existing preview-branch regression confirm `writer_pages` is read-only during preview; only Revision Set change/progress records are written. No schema drift, authorization bypass, queue regression, or preview live-write path was found. Root DOX remains current because this pass implements its existing virtual-preview contract without changing durable responsibilities or workflow rules.
 
 ## Pass 4: Atomic virtual-page Apply, verification, and Undo
 

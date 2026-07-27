@@ -13906,3 +13906,42 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue only after Pass 2 quality review approval.
+
+## Pacing Revision mixed physical/virtual client queue - 2026-07-27
+
+### What changed
+- Updated the Pacing Revision client queue to run every requested affected page number, including proposed future pages that do not yet have a `writer_pages` row.
+- Physical page requests continue to send their UUID and page number; virtual requests now send `page_id: null` with the requested page number.
+- Added mixed physical/virtual coverage for numeric ordering, Beats-before-Dialogue generation, virtual resume, and layer-specific failed-only retry.
+- Removed the obsolete client error that treated a missing physical row as an unavailable affected page.
+
+### Files touched
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The queue remains sequential and invokes exactly one child layer per hosted request.
+- Requested pages are sorted numerically before entering the existing queue; the queue also preserves its deduplication, isolated-failure continuation, five-page checkpoint, and stop-between-pages behavior.
+- Resume still derives missing layers from persisted ready/applied changes, so ready virtual Beats are not regenerated before Dialogue.
+- Failed-only retry remains page-and-layer scoped and does not replay successful pages.
+
+### Verification
+- TDD RED: 3 new hook tests failed because virtual pages were filtered through the physical page map; the existing 10 hook/queue tests passed.
+- TDD GREEN and Pass 3 smoke: `npx vitest run src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx src/portals/writer/__tests__/writerPacingRevisionQueue.test.ts` — PASS, 2 files / 13 tests.
+- Three-pass audit: shared request mirrors accept nullable page IDs; the server derives and authorizes target keys from persisted physical/proposed-outline state; one-layer invocation, queue ordering, failure continuation, checkpoints, and stop behavior remain enforced.
+- Preview live-write audit: the hosted preview branch reads `writer_pages` and writes only Revision Set candidate/progress records; no live page insert, update, or upsert path was found.
+- DOX pass: `AGENTS.md` remains unchanged because this implementation satisfies the existing virtual-preview contract without changing durable project rules.
+
+### Outstanding issues
+- Atomic creation, verification, rollback, and undo for virtual rows remain scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted logic, Apply behavior, user-facing review UI, deployment, or live data was changed in this pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Begin Pass 4 with RED Apply tests for complete virtual units, ascending creation, read-back verification, compensation, and Undo.
