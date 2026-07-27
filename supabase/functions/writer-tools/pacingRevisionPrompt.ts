@@ -35,10 +35,75 @@ export type PacingOutlineChildChange = {
 
 type PacingPromptInput = OutlineTreatmentPromptInput & {
   pacingReview: unknown;
+  expansionTarget: number | null;
 };
 
 function uniquePages(values: number[]): number[] {
   return [...new Set(values.filter((page) => Number.isInteger(page) && page > 0))].sort((a, b) => a - b);
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+export function derivePacingRevisionExpansionTarget(
+  pacingReview: unknown,
+  currentPhysicalPageMax: number,
+): number | null {
+  const lengthAlignment = asObject(asObject(pacingReview).length_alignment);
+  const recommendation = asObject(lengthAlignment.recommended_pages);
+  let recommendedTarget: number | null = null;
+
+  if (Number.isInteger(recommendation.exact)) {
+    recommendedTarget = Number(recommendation.exact);
+  } else if (Number.isInteger(recommendation.min) && Number.isInteger(recommendation.max)) {
+    const minimum = Math.min(Number(recommendation.min), Number(recommendation.max));
+    const maximum = Math.max(Number(recommendation.min), Number(recommendation.max));
+    recommendedTarget = currentPhysicalPageMax >= minimum && currentPhysicalPageMax <= maximum
+      ? currentPhysicalPageMax
+      : currentPhysicalPageMax < minimum
+      ? minimum
+      : maximum;
+  }
+
+  if (recommendedTarget === null) return null;
+  const supportedTarget = Math.max(1, Math.min(200, recommendedTarget));
+  return supportedTarget > currentPhysicalPageMax ? supportedTarget : null;
+}
+
+export function pacingRevisionAllowedPageRange(
+  sourcePageCount: number,
+  expansionTarget: number | null,
+): { min: number; max: number } {
+  const supportedSourceCount = Math.max(1, Math.min(200, Math.trunc(sourcePageCount)));
+  return {
+    min: supportedSourceCount,
+    max: Math.min(200, Math.max(
+      supportedSourceCount,
+      Math.ceil(supportedSourceCount * 1.1),
+      expansionTarget ?? 0,
+    )),
+  };
+}
+
+export function assertPacingRevisionProposalReachesTarget(
+  proposal: unknown,
+  expansionTarget: number | null,
+): void {
+  if (expansionTarget === null) return;
+  const pageBeats = asObject(proposal).page_beats;
+  const reachesTarget = Array.isArray(pageBeats)
+    && pageBeats.length >= expansionTarget
+    && pageBeats.slice(0, expansionTarget).every((beat, index) =>
+      asObject(beat).page_target === index + 1
+    );
+  if (!reachesTarget) {
+    throw new Error(
+      `Pacing revision proposal must contain sequential page beats through page ${expansionTarget}`,
+    );
+  }
 }
 
 function mergeOverlappingItems(items: PacingRevisionItemPlan[]): {
@@ -88,6 +153,12 @@ export function buildPacingRevisionOutlinePrompt(input: PacingPromptInput): stri
     'Every operation must include item_id matching exactly one item.',
     'Each item represents one editorial intent and owns a non-overlapping set of affected page numbers.',
     'If two intentions affect the same page, combine them into one item.',
+    ...(input.expansionTarget === null
+      ? []
+      : [
+          `The saved pacing target requires exactly ${input.expansionTarget} sequential page beats.`,
+          `Add enough substantive connective beats for deterministic page_target 1 through ${input.expansionTarget}.`,
+        ]),
     `Saved pacing review:\n${JSON.stringify(input.pacingReview)}`,
     buildOutlineTreatmentPrompt(input),
     [

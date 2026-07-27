@@ -13705,3 +13705,50 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - None. PR #28 merged as `81b9a2e331bd7258619a7f723b67c2842e1bd509`, and fetched `origin/main` contains the reviewed branch head.
+
+## Pacing Revision virtual hosted preview - 2026-07-27
+
+### What changed
+- Added fail-closed physical and virtual Pacing Revision page-target resolution with server-owned stable keys.
+- Made Outline preview derive the deterministic expansion target from the saved Pacing Review, clamp it to 200 pages, prohibit page-count contraction, and reject underfilled or non-sequential deterministic proposals.
+- Extended the hosted one-page preview branch to authorize virtual targets against all issue pages, Revision Item ownership, and the saved proposed outline.
+- Added ephemeral virtual prompt pages and persisted virtual Page Beats or Dialogue candidates with null live identity/current values without creating `writer_pages`.
+
+### Files touched
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageTarget.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Physical targets require an issue-owned page whose UUID and page number match exactly and use `page:<uuid>`.
+- Virtual targets require a null request ID, a bounded unoccupied number above the physical maximum, contiguous proposed pages from the physical maximum through the request, and saved proposed-outline presence; they use `virtual-page:<number>`.
+- The model sees an ephemeral UUID for response echo validation, but persistence derives identity from the resolved target and forces virtual `page_id` and current values to null.
+- Virtual Dialogue still requires ready effective virtual Page Beats and depends on that Beats change. Existing auth/RLS, one-layer selection, locked-state rejection, malformed-output retry, progress, and failure-ledger behavior remain intact.
+- The DOX pass left `AGENTS.md` unchanged because the root contract already records preview-first Pacing Revision generation, dependency order, one-page hosted requests, and no automatic promotion; this pass did not alter ownership or repository structure.
+
+### Verification
+- TDD RED runs failed for the missing resolver/target helpers, missing handler wiring, virtual persistence identity, in-range null-ID authorization, and the old contraction-capable lower bound.
+- `npx vitest run supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts supabase/functions/writer-tools/pacingRevisionPrompt.test.ts supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts supabase/functions/writer-tools/pacingRevisionPersistence.test.ts`: 4 files and 37 tests passed.
+- Targeted pure-module TypeScript check passed.
+- Focused ESLint completed with 0 errors and 3 pre-existing explicit-`any` warnings.
+- `git diff --check` and the final staged diff check passed before the Pass 2 commit.
+
+### Outstanding issues
+- Client mixed physical/virtual queueing, atomic Apply/Undo, UI state, deployment, and live browser smoke remain in later implementation passes.
+
+### Risks or caveats
+- No hosted Edge Function deployment or production mutation was performed in this pass.
+- A future page must be owned by a saved Revision Item; malformed model ownership fails closed during child preview rather than authorizing an arbitrary page.
+
+### Operator follow-up
+- None for this pass.
+
+### Next steps
+- Execute Pass 3 mixed physical/virtual client queueing after the Pass 2 commit.

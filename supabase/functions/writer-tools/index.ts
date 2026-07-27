@@ -31,10 +31,14 @@ import {
   PAGE_BEATS_GEMINI_RESPONSE_SCHEMA,
 } from './pageBeatsStructuredOutput.ts';
 import {
+  assertPacingRevisionProposalReachesTarget,
   buildPacingRevisionOutlinePreview,
   buildPacingRevisionOutlinePrompt,
+  derivePacingRevisionExpansionTarget,
+  pacingRevisionAllowedPageRange,
 } from './pacingRevisionPrompt.ts';
 import {
+  buildPacingRevisionPageChangeRow,
   persistPacingRevisionOutlinePreview,
   projectPacingRevisionFailureLedger,
   type PacingRevisionChildLayer,
@@ -44,6 +48,12 @@ import {
   generateValidatedPacingRevisionPageCandidate,
   pacingRevisionPageResponseSchema,
 } from './pacingRevisionPageCandidate.ts';
+import {
+  buildPacingRevisionPromptPage,
+  proposedOutlinePageNumbers,
+  resolvePacingRevisionPageTarget,
+  type PacingRevisionPhysicalPage,
+} from './pacingRevisionPageTarget.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1518,16 +1528,36 @@ Deno.serve(async (req) => {
         sourceBeats.length,
         ...sourceBeats.map((beat) => beat.page_target ?? 0),
       );
+      const { data: physicalPageRefs, error: physicalPageRefsError } = await supabase
+        .from('writer_pages')
+        .select('page_number')
+        .eq('issue_id', issue_id);
+      if (physicalPageRefsError) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Failed to load issue page references',
+            details: physicalPageRefsError.message,
+          },
+          { status: 500, headers: corsHeaders },
+        );
+      }
+      const currentPhysicalPageMax = (physicalPageRefs ?? []).reduce(
+        (maximum: number, page: { page_number: number }) => Math.max(maximum, page.page_number),
+        0,
+      );
+      const expansionTarget = derivePacingRevisionExpansionTarget(
+        pacingReview,
+        currentPhysicalPageMax,
+      );
       const promptInput = {
         treatmentMode: 'structure' as const,
         sourcePageCount,
-        allowedPageRange: {
-          min: Math.max(1, Math.floor(sourcePageCount * 0.9)),
-          max: Math.min(200, Math.max(sourcePageCount, Math.ceil(sourcePageCount * 1.1))),
-        },
+        allowedPageRange: pacingRevisionAllowedPageRange(sourcePageCount, expansionTarget),
         sourceBeats,
         protectedTerms: [] as string[],
         pacingReview,
+        expansionTarget,
       };
       let planJson: unknown;
       try {
@@ -1559,6 +1589,18 @@ Deno.serve(async (req) => {
         );
       }
       const preview = buildPacingRevisionOutlinePreview(parsedPlan.data, promptInput);
+      try {
+        assertPacingRevisionProposalReachesTarget(preview.patch.proposal, expansionTarget);
+      } catch (error) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Pacing revision proposal did not reach the saved expansion target',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 422, headers: corsHeaders },
+        );
+      }
       if (preview.outlineChanges.length === 0) {
         return Response.json(
           {
@@ -1668,6 +1710,7 @@ Deno.serve(async (req) => {
       const {
         revision_set_id,
         page_id,
+        page_number,
         include_beats,
         include_dialogue,
       } = parsedReq.data;
@@ -1703,23 +1746,45 @@ Deno.serve(async (req) => {
           { status: 404, headers: corsHeaders },
         );
       }
-      const { data: page, error: pageError } = await supabase
+      const { data: physicalPages, error: pageError } = await supabase
         .from('writer_pages')
         .select('id, issue_id, page_number, beats_json, script_text')
-        .eq('id', page_id)
         .eq('issue_id', revisionSet.issue_id)
-        .maybeSingle();
-      if (pageError || !page) {
+        .order('page_number', { ascending: true });
+      if (pageError) {
         return Response.json(
-          { success: false, error: 'Page not found in this issue', details: pageError?.message },
-          { status: 404, headers: corsHeaders },
+          { success: false, error: 'Failed to load issue pages', details: pageError.message },
+          { status: 500, headers: corsHeaders },
         );
       }
+      let target;
+      try {
+        target = resolvePacingRevisionPageTarget({
+          requestedPageId: page_id,
+          requestedPageNumber: page_number,
+          physicalPages: (physicalPages ?? []) as PacingRevisionPhysicalPage[],
+          proposedPageNumbers: proposedOutlinePageNumbers(revisionSet.proposed_outline_json),
+        });
+      } catch (error) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Page target is not authorized for this Revision Set',
+            details: error instanceof Error ? error.message : String(error),
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const basePromptPage = buildPacingRevisionPromptPage(
+        target,
+        (physicalPages ?? []) as PacingRevisionPhysicalPage[],
+        crypto.randomUUID(),
+      );
       const { data: itemRows, error: itemError } = await supabase
         .from('writer_pacing_revision_items')
         .select('id, affected_page_numbers, generation_status')
         .eq('revision_set_id', revision_set_id)
-        .contains('affected_page_numbers', [page.page_number])
+        .contains('affected_page_numbers', [target.pageNumber])
         .order('position', { ascending: true });
       if (itemError) {
         return Response.json(
@@ -1763,7 +1828,7 @@ Deno.serve(async (req) => {
       }
       const existingPageChange = (layer: PacingRevisionChildLayer) =>
         (existingChanges ?? []).find((entry: ExistingPageChange) =>
-          entry.layer === layer && entry.target_key === `page:${page.id}`
+          entry.layer === layer && entry.target_key === target.targetKey
         ) as ExistingPageChange | undefined;
       const beatsChange = existingPageChange('beats');
       const dialogueChange = existingPageChange('dialogue');
@@ -1793,8 +1858,8 @@ Deno.serve(async (req) => {
         );
       }
       const promptPage = includeDialogue && !includeBeats
-        ? { ...page, beats_json: effectiveBeatsCandidate }
-        : page;
+        ? { ...basePromptPage, beats_json: effectiveBeatsCandidate }
+        : basePromptPage;
       const sid = issue.series_id;
       const [castRes, locRes, bibleRes, loreDigest] = await Promise.all([
         supabase.from('writer_cast').select('*').eq('series_id', sid),
@@ -1840,7 +1905,7 @@ Deno.serve(async (req) => {
             const parsed = pacingRegenerationPreviewResultSchema.parse(value);
             if (parsed.pages.length !== 1) throw new Error('Exactly one page candidate is required');
             const onlyPage = parsed.pages[0]!;
-            if (onlyPage.page_id !== page.id || onlyPage.page_number !== page.page_number) {
+            if (onlyPage.page_id !== promptPage.id || onlyPage.page_number !== target.pageNumber) {
               throw new Error('Page candidate does not match the requested page');
             }
             if (includeBeats && !onlyPage.proposed_beats_json) {
@@ -1859,10 +1924,10 @@ Deno.serve(async (req) => {
           : [];
         const requestedFailures = [
           ...(includeBeats
-            ? [{ page_number: page.page_number, item_id: item.id, layer: 'beats' as const, reason }]
+            ? [{ page_number: target.pageNumber, item_id: item.id, layer: 'beats' as const, reason }]
             : []),
           ...(includeDialogue
-            ? [{ page_number: page.page_number, item_id: item.id, layer: 'dialogue' as const, reason }]
+            ? [{ page_number: target.pageNumber, item_id: item.id, layer: 'dialogue' as const, reason }]
             : []),
         ];
         await supabase
@@ -1871,7 +1936,7 @@ Deno.serve(async (req) => {
             status: 'partially_ready',
             failure_ledger: projectPacingRevisionFailureLedger({
               ledger: ledger as PacingRevisionFailure[],
-              pageNumber: page.page_number,
+              pageNumber: target.pageNumber,
               requestedLayers,
               readyLayers: [
                 ...(pageHasReadyBeats ? ['beats' as const] : []),
@@ -1896,47 +1961,35 @@ Deno.serve(async (req) => {
         beatsChangeId = beatsChange?.id ?? crypto.randomUUID();
         pageHasReadyBeats = true;
         pageHasReadyDialogue = false;
-        changeRows.push({
+        const currentValue = target.kind === 'virtual' ? null : basePromptPage.beats_json;
+        changeRows.push(buildPacingRevisionPageChangeRow({
           id: beatsChangeId,
-          item_id: item.id,
+          itemId: item.id,
           layer: 'beats',
-          target_key: `page:${page.id}`,
-          page_id: page.id,
-          page_number: page.page_number,
-          current_value: page.beats_json,
-          ai_proposal: candidate.proposed_beats_json,
-          edited_candidate: null,
-          decision: 'pending',
-          dependency_ids: outlineDependencyIds,
+          target,
+          currentValue,
+          aiProposal: candidate.proposed_beats_json,
+          dependencyIds: outlineDependencyIds,
           reason: candidate.reason?.trim() || 'Pacing-aligned Page Beats revision.',
-          source_fingerprint: await sha256Hex(JSON.stringify(page.beats_json)),
-          generation_status: 'ready',
-          applied_at: null,
-          created_at: now,
-          updated_at: now,
-        });
+          sourceFingerprint: await sha256Hex(JSON.stringify(currentValue)),
+          now,
+        }));
       }
       if (includeDialogue && dialogueUnlocked && candidate.proposed_script_text) {
         pageHasReadyDialogue = true;
-        changeRows.push({
+        const currentValue = target.kind === 'virtual' ? null : basePromptPage.script_text;
+        changeRows.push(buildPacingRevisionPageChangeRow({
           id: dialogueChange?.id ?? crypto.randomUUID(),
-          item_id: item.id,
+          itemId: item.id,
           layer: 'dialogue',
-          target_key: `page:${page.id}`,
-          page_id: page.id,
-          page_number: page.page_number,
-          current_value: page.script_text,
-          ai_proposal: candidate.proposed_script_text,
-          edited_candidate: null,
-          decision: 'pending',
-          dependency_ids: beatsChangeId ? [beatsChangeId] : outlineDependencyIds,
+          target,
+          currentValue,
+          aiProposal: candidate.proposed_script_text,
+          dependencyIds: beatsChangeId ? [beatsChangeId] : outlineDependencyIds,
           reason: candidate.reason?.trim() || 'Pacing-aligned Dialogue revision.',
-          source_fingerprint: await sha256Hex(JSON.stringify(page.script_text)),
-          generation_status: 'ready',
-          applied_at: null,
-          created_at: now,
-          updated_at: now,
-        });
+          sourceFingerprint: await sha256Hex(JSON.stringify(currentValue)),
+          now,
+        }));
       }
       const { data: persistedChanges, error: changesError } = await supabase
         .from('writer_pacing_revision_changes')
@@ -1957,15 +2010,15 @@ Deno.serve(async (req) => {
         .filter((value): value is number => typeof value === 'number');
       const pageIsComplete = pageHasReadyBeats && pageHasReadyDialogue;
       const completedPages = (pageIsComplete
-        ? [...new Set([...priorCompletedPages, page.page_number])]
-        : priorCompletedPages.filter((value) => value !== page.page_number)
+        ? [...new Set([...priorCompletedPages, target.pageNumber])]
+        : priorCompletedPages.filter((value) => value !== target.pageNumber)
       ).sort((a, b) => a - b);
       const totalPages = typeof progress.total_pages === 'number' ? progress.total_pages : completedPages.length;
       const failureLedger = projectPacingRevisionFailureLedger({
         ledger: (Array.isArray(revisionSet.failure_ledger)
           ? revisionSet.failure_ledger
           : []) as PacingRevisionFailure[],
-        pageNumber: page.page_number,
+        pageNumber: target.pageNumber,
         requestedLayers,
         readyLayers: [
           ...(pageHasReadyBeats ? ['beats' as const] : []),
@@ -1989,9 +2042,9 @@ Deno.serve(async (req) => {
           success: true,
           mode: 'pacing_revision_page_preview',
           issue_id: revisionSet.issue_id,
-          page_id,
+          page_id: target.pageId,
           data: {
-            page_number: page.page_number,
+            page_number: target.pageNumber,
             changes: persistedChanges ?? changeRows,
           },
         },

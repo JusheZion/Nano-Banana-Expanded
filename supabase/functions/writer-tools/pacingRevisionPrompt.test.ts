@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  assertPacingRevisionProposalReachesTarget,
   buildPacingRevisionOutlinePreview,
   buildPacingRevisionOutlinePrompt,
+  derivePacingRevisionExpansionTarget,
+  pacingRevisionAllowedPageRange,
   type PacingRevisionPlan,
 } from './pacingRevisionPrompt';
 
@@ -114,10 +119,117 @@ describe('pacing revision outline planning', () => {
     const prompt = buildPacingRevisionOutlinePrompt({
       ...input,
       pacingReview: { overall_pacing: 'The midpoint arrives too early.' },
+      expansionTarget: null,
     });
 
     expect(prompt).toContain('Every operation must include item_id');
     expect(prompt).toContain('Do not return a replacement outline');
     expect(prompt).toContain('The midpoint arrives too early.');
+  });
+
+  it('derives an exact 71-to-85 expansion target and expands the allowed range', () => {
+    const pacingReview = {
+      length_alignment: {
+        recommended_pages: { exact: 85 },
+      },
+    };
+
+    const target = derivePacingRevisionExpansionTarget(pacingReview, 71);
+
+    expect(target).toBe(85);
+    expect(pacingRevisionAllowedPageRange(71, target)).toEqual({ min: 71, max: 85 });
+  });
+
+  it('uses the established deterministic range target and ignores contraction', () => {
+    expect(derivePacingRevisionExpansionTarget({
+      length_alignment: { recommended_pages: { min: 85, max: 82 } },
+    }, 71)).toBe(82);
+    expect(derivePacingRevisionExpansionTarget({
+      length_alignment: { recommended_pages: { min: 68, max: 74 } },
+    }, 71)).toBeNull();
+    expect(derivePacingRevisionExpansionTarget({
+      length_alignment: { recommended_pages: { exact: 65 } },
+    }, 71)).toBeNull();
+  });
+
+  it('clamps an expansion recommendation to the supported 200-page maximum', () => {
+    expect(derivePacingRevisionExpansionTarget({
+      length_alignment: { recommended_pages: { exact: 250 } },
+    }, 71)).toBe(200);
+  });
+
+  it('never allows the pacing proposal to delete source pages', () => {
+    expect(pacingRevisionAllowedPageRange(71, null)).toEqual({ min: 71, max: 79 });
+  });
+
+  it('requires the prompt to materialize sequential page beats through the expansion target', () => {
+    const prompt = buildPacingRevisionOutlinePrompt({
+      ...input,
+      allowedPageRange: { min: 63, max: 85 },
+      pacingReview: {
+        length_alignment: { recommended_pages: { exact: 85 } },
+      },
+      expansionTarget: 85,
+    });
+
+    expect(prompt).toContain('exactly 85 sequential page beats');
+    expect(prompt).toContain('page_target 1 through 85');
+  });
+
+  it('rejects a deterministic proposal that stops before the expansion target', () => {
+    const underfilledProposal = {
+      page_beats: Array.from({ length: 84 }, (_, index) => ({
+        page_target: index + 1,
+        summary: `Beat ${index + 1}`,
+      })),
+    };
+
+    expect(() => assertPacingRevisionProposalReachesTarget(
+      underfilledProposal,
+      85,
+    )).toThrow('sequential page beats through page 85');
+  });
+
+  it('rejects a deterministic proposal with a page-number gap before the target', () => {
+    const gappedProposal = {
+      page_beats: Array.from({ length: 85 }, (_, index) => ({
+        page_target: index === 71 ? 73 : index + 1,
+        summary: `Beat ${index + 1}`,
+      })),
+    };
+
+    expect(() => assertPacingRevisionProposalReachesTarget(
+      gappedProposal,
+      85,
+    )).toThrow('sequential page beats through page 85');
+  });
+
+  it('accepts a deterministic proposal with sequential page beats through the target', () => {
+    const completeProposal = {
+      page_beats: Array.from({ length: 85 }, (_, index) => ({
+        page_target: index + 1,
+        summary: `Beat ${index + 1}`,
+      })),
+    };
+
+    expect(() => assertPacingRevisionProposalReachesTarget(
+      completeProposal,
+      85,
+    )).not.toThrow();
+  });
+
+  it('wires the saved expansion target into the outline-preview handler', () => {
+    const indexSource = readFileSync(
+      join(process.cwd(), 'supabase/functions/writer-tools/index.ts'),
+      'utf8',
+    );
+    const branchStart = indexSource.indexOf("parsedReq.data.mode === 'pacing_revision_outline_preview'");
+    const branchEnd = indexSource.indexOf("parsedReq.data.mode === 'pacing_revision_page_preview'", branchStart);
+    const outlineBranch = indexSource.slice(branchStart, branchEnd);
+
+    expect(outlineBranch).toContain('derivePacingRevisionExpansionTarget');
+    expect(outlineBranch).toContain('pacingRevisionAllowedPageRange');
+    expect(outlineBranch).toContain('expansionTarget');
+    expect(outlineBranch).toContain('assertPacingRevisionProposalReachesTarget');
   });
 });

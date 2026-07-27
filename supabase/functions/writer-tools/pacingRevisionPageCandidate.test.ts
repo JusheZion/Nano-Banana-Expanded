@@ -69,6 +69,18 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(previewBranch).toContain('effectiveBeatsCandidate');
     expect(previewBranch).toContain('Page Beats candidate is required before Dialogue');
     expect(previewBranch).toContain('includeBeats === includeDialogue');
+    expect(previewBranch).toContain('page_number');
+    expect(previewBranch).toContain('proposedOutlinePageNumbers');
+    expect(previewBranch).toContain('resolvePacingRevisionPageTarget');
+    expect(previewBranch).toContain('buildPacingRevisionPromptPage');
+    expect(previewBranch).toContain('target.targetKey');
+    expect(previewBranch).toContain('target.pageId');
+    expect(previewBranch).toContain('target.pageNumber');
+    expect(previewBranch).toContain('onlyPage.page_id !== promptPage.id');
+    expect(previewBranch).toContain('onlyPage.page_number !== target.pageNumber');
+    expect(previewBranch).not.toMatch(
+      /\.from\('writer_pages'\)\s*\.(?:insert|upsert|update)\(/,
+    );
     expect(previewBranch).not.toContain('include_beats !== false');
     expect(previewBranch).not.toContain('include_dialogue !== false');
   });

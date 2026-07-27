@@ -130,7 +130,7 @@ git commit -m "feat: define virtual pacing page requests"
 - Virtual candidates persist with `page_id: null`, stable target keys, null current values, and normal dependency relationships.
 - Preview never inserts a live page.
 
-- [ ] **Step 1: Add RED outline-target and target-resolution tests**
+- [x] **Step 1: Add RED outline-target and target-resolution tests**
 
 Create `supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts` with pure cases:
 
@@ -150,7 +150,7 @@ expect(resolvePacingRevisionPageTarget({
 
 Also prove mismatched physical identity, occupied null-ID targets, in-range virtual targets, gaps, and absent proposed beats fail. Extend `pacingRevisionPrompt.test.ts` for 71→85 exact target acceptance and underfilled proposal rejection.
 
-- [ ] **Step 2: Run focused server tests and confirm failure**
+- [x] **Step 2: Run focused server tests and confirm failure**
 
 Run:
 
@@ -160,7 +160,7 @@ npx vitest run supabase/functions/writer-tools/pacingRevisionPageTarget.test.ts 
 
 Expected: FAIL because the resolver and target enforcement do not exist.
 
-- [ ] **Step 3: Implement pure target resolution**
+- [x] **Step 3: Implement pure target resolution**
 
 Create `pacingRevisionPageTarget.ts` with a fail-closed result:
 
@@ -182,11 +182,11 @@ export function resolvePacingRevisionPageTarget(input: {
 
 Return server-owned `page:<uuid>` / `virtual-page:<number>` keys only.
 
-- [ ] **Step 4: Enforce the Pacing Review target**
+- [x] **Step 4: Enforce the Pacing Review target**
 
 In the outline-preview branch, derive the deterministic target from `length_alignment.recommended_pages`, clamp 1–200, make the allowed range include that expansion target, and reject a built proposal that does not contain sequential page beats through the target.
 
-- [ ] **Step 5: Extend the hosted page-preview branch**
+- [x] **Step 5: Extend the hosted page-preview branch**
 
 Load issue pages, resolve the target, synthesize an ephemeral UUID prompt page for virtual targets, and persist:
 
@@ -201,11 +201,11 @@ Load issue pages, resolve the target, synthesize an ephemeral UUID prompt page f
 
 Validate model echo against the ephemeral ID/page number, but never persist the ephemeral ID. Dialogue must still require the effective Beats child candidate.
 
-- [ ] **Step 6: Run Pass 2 smoke**
+- [x] **Step 6: Run Pass 2 smoke**
 
 Run the three server test files plus persistence tests. Expected: all pass and source inspection proves no `writer_pages` insert occurs in preview.
 
-- [ ] **Step 7: Commit Pass 2**
+- [x] **Step 7: Commit Pass 2**
 
 ```bash
 git add supabase/functions/writer-tools src/shared/writer docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md
@@ -214,7 +214,7 @@ git commit -m "feat: preview virtual pacing pages"
 
 **Pass 2 smoke test:** Hosted target, prompt, candidate, and persistence tests only.
 
-**Pass 2 result:** Pending.
+**Pass 2 result:** Complete in commit `feat: preview virtual pacing pages`. RED coverage proved the resolver, expansion-target enforcement, virtual prompt identity, server wiring, and persistence projection were absent; follow-up RED coverage caught in-range null-ID targets and a pacing-specific lower bound that still allowed page deletion. GREEN passed 4 focused server files / 37 tests. The pure modules passed a targeted TypeScript check, focused ESLint completed with 0 errors and 3 pre-existing explicit-`any` warnings, and source inspection confirms the preview branch only reads `writer_pages` and never inserts, upserts, or updates a live page. Exact and range recommendations reuse the established deterministic selection semantics, clamp at 200, ignore contraction, and require sequential proposal coverage through the expansion target. Physical targets require exact issue ID/number identity; virtual targets require null ID, an unoccupied number beyond the physical maximum, contiguous proposed-outline coverage, Revision Item ownership, and a server-derived `virtual-page:<number>` key. Virtual model prompts use an ephemeral UUID, while persisted candidates retain `page_id: null`, the real page number, null current values, normal Outline/Beats dependencies, one-layer locking/retry behavior, and no live page mutation.
 
 ## Pass 3: Mixed physical/virtual client queue
 
