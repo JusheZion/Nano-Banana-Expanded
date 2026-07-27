@@ -35,23 +35,32 @@ describe('writer-tools archived Pacing Revision immutability', () => {
     expect(branch).toMatch(/Another page preview is already running for this Revision Set/);
   });
 
-  it('releases the matching lease after success and recoverable failures', () => {
+  it('releases the matching lease after recoverable failures', () => {
     expect(branch).toMatch(/const releaseGenerationLease = async[\s\S]*rpc\(\s*'release_writer_pacing_revision_generation_lease'/);
     expect(branch).toMatch(/p_lease_id: generationLeaseId[\s\S]*p_final_status: finalStatus/);
     expect(branch).toMatch(/if \(releaseError \|\| released !== true\)[\s\S]*Failed to release Revision Set generation lease/);
     expect(branch).not.toMatch(/\.update\(\{\s*status: 'partially_ready'/);
     expect(branch).not.toMatch(/\.update\(\{\s*status: completedPages/);
     expect(branch).toMatch(/await releaseGenerationLease\(\s*'partially_ready'/);
-    expect(branch).toMatch(/const finalStatus = completedPages\.length >= totalPages[\s\S]*await releaseGenerationLease\(\s*finalStatus/);
+    expect(branch).toMatch(/const finalStatus = completedPages\.length >= totalPages[\s\S]*commit_writer_pacing_revision_page_preview/);
   });
 
-  it('checks every parent/item mutation result before returning success', () => {
-    expect(branch).toMatch(/const \{ data: updatedItems, error: itemUpdateError \} = await supabase[\s\S]*writer_pacing_revision_items[\s\S]*\.update[\s\S]*\.select\('id'\)/);
-    expect(branch).toMatch(/if \(itemUpdateError \|\| updatedItems\?\.length !== 1\)[\s\S]*Failed to update Revision Item/);
-    expect(branch).toMatch(/const releaseFailure = await releaseGenerationLease\([\s\S]*if \(releaseFailure\)[\s\S]*Failed to release Revision Set generation lease/);
+  it('persists successful candidates and aggregate state through one transactional lease commit', () => {
+    expect(branch).toMatch(/persistChanges: async \(changeRows\) => changeRows/);
+    expect(branch).not.toMatch(/\.from\('writer_pacing_revision_changes'\)\s*\.upsert/);
+    expect(branch).not.toMatch(/\.from\('writer_pacing_revision_items'\)\s*\.update/);
+    expect(branch).toMatch(/rpc\(\s*'commit_writer_pacing_revision_page_preview',[\s\S]*p_lease_id: generationLeaseId,[\s\S]*p_change_rows: changeRows,[\s\S]*p_item_id: item\.id,[\s\S]*p_item_generation_status:[\s\S]*p_final_status: finalStatus,[\s\S]*p_progress_json:[\s\S]*p_failure_ledger: failureLedger/);
+    expect(branch).toMatch(/if \(commitError \|\| commitResult\?\.success !== true\)[\s\S]*Failed to commit page candidates/);
     const successIndex = branch.lastIndexOf('success: true');
-    expect(successIndex).toBeGreaterThan(branch.indexOf('updatedItems?.length !== 1'));
-    expect(successIndex).toBeGreaterThan(branch.lastIndexOf('if (releaseFailure)'));
+    expect(successIndex).toBeGreaterThan(branch.indexOf("commit_writer_pacing_revision_page_preview"));
+    expect(successIndex).toBeGreaterThan(branch.indexOf("commitResult?.success !== true"));
+  });
+
+  it('checks the atomic persistence result before returning success', () => {
+    expect(branch).toMatch(/const \{ data: commitResult, error: commitError \} = await supabase\.rpc/);
+    expect(branch).toMatch(/if \(commitError \|\| commitResult\?\.success !== true\)[\s\S]*Failed to commit page candidates/);
+    const successIndex = branch.lastIndexOf('success: true');
+    expect(successIndex).toBeGreaterThan(branch.indexOf('commitResult?.success !== true'));
   });
 
   it('never treats an archived-race failure-ledger update as a successful failure write', () => {

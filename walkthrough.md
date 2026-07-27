@@ -14795,3 +14795,52 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with final audits, hosted concurrency smoke, and live deployment.
+
+## Pacing Revision transactional page-preview fencing - 2026-07-27
+
+### What changed
+- Replaced separate candidate, Revision Item, and parent-state writes with one owner-scoped `SECURITY DEFINER` page-preview commit transaction.
+- The transaction locks the parent and validates the exact unexpired lease before any write, validates the Item belongs to the set and the one-page candidate payload, upserts the Child Change, updates the Item, publishes progress/failure state, sets the final status, and clears the lease atomically.
+- Refactored `writer-tools` to generate candidates in memory and invoke the transactional commit once; nominal success now requires the RPC to return `success: true`.
+- Blocked ordinary Revision Item and Child Change mutations while the parent is `generating` unless the transaction-local write marker matches the exact lease.
+- Hardened every lease metadata/status transition against direct owner or service-role writes and disallowed `generating` records without complete lease metadata.
+- Preserved Beats-to-Dialogue invalidation inside the fenced transaction while preventing its intermediate aggregate update from prematurely leaving `generating`.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Stale/foreign/expired leases return before the transaction-local child-write marker or any Child Change mutation.
+- The A-expiry/recovery-B-acquire fence is lease-ID based: stale A cannot commit or release B’s lease, while B can commit all page-preview state atomically.
+- Failure/preflight paths use the fenced owner-scoped lease-release transaction and do not write children.
+- The commit RPC accepts exactly one candidate row, preserving the one-page-per-call contract and existing retry queue semantics.
+
+### Verification
+- RED: 2 files / 4 expected failures for missing transactional commit, stale-request fencing, generating edit locks, and lease tamper guards.
+- Transactional DB/Edge gate: PASS, 4 files / 31 tests.
+- Focused archive/fencing gate: PASS, 5 files / 60 tests.
+- Broader Pacing regression: PASS, 21 files / 249 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not been deployed.
+- Hosted PostgreSQL execution and signed-in A/B lease concurrency smoke remain for the deployment pass.
+
+### Risks or caveats
+- Static transaction-contract tests prove lock/fence/write ordering, while hosted PostgreSQL remains the final runtime proof of trigger/RPC integration.
+
+### Operator follow-up
+- Deploy the migration before `writer-tools`; the Edge Function now depends on the transactional commit RPC.
+
+### Next steps
+- Complete hosted migration/function deployment and the signed-in concurrency smoke.

@@ -325,8 +325,8 @@ failed from unfinished confirmation copy, accurately explains the loss of local
 Undo after archiving an applied set, humanizes prior statuses, gives each View
 action a distinct accessible name, and proves both actual WriterPortal workflow
 branches mount the shared layout with the correct workflow value. The focused
-correction gate passes 5 files / 56 tests and the broader Pacing regression passes
-21 files / 245 tests. The production build, targeted TypeScript compilation,
+correction gate passes 5 files / 60 tests and the broader Pacing regression passes
+21 files / 249 tests. The production build, targeted TypeScript compilation,
 focused ESLint with 0 errors and 2 existing Edge Function warnings, and
 `git diff --check` pass.
 
@@ -346,6 +346,13 @@ acquisition and archive lock the same aggregate row, `generating` blocks archive
 and second previews, every Child Change/Item mutation advances the parent
 `updated_at`, only the matching lease can publish final aggregate state, and an
 expired lease can be recovered to an editable state before a fresh retry.
+The final fencing correction moves successful page-preview persistence behind one
+owner-scoped `SECURITY DEFINER` transaction: exact unexpired lease validation
+precedes every write, candidate upsert, Item state, parent progress/failure state,
+final status, and lease release commit together, and stale request A after
+recovery/new request B acquisition returns before any mutation. Ordinary child
+edits are blocked during `generating`, and direct lease metadata/status tampering
+is rejected even for privileged writes.
 
 ## Pass 4: Batch consistency and recovery edges
 
