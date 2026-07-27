@@ -13623,3 +13623,35 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Prepare the pass-based implementation plan after written-spec approval.
+
+## Pacing Revision selection UX implementation plan - 2026-07-27
+
+### What changed
+- Marked the Pacing Revision selection UX specification approved for implementation.
+- Added a four-pass, test-driven implementation plan covering tab-scoped selection, persistent batch actions, compact failure disclosure, integration QA, final audits, deployment, and merge.
+- Included a risk/dependency check, acceptance criteria and scoped smoke test for every pass, midpoint browser QA, a third-pass audit, regression gate, rollback, and release verification.
+
+### Files touched
+- `docs/superpowers/specs/2026-07-26-pacing-revision-selection-ux-design.md`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The plan keeps the correction client-only and preserves all existing callback and persistence contracts.
+- Each behavior change begins with a failing component test before production code changes.
+
+### Verification
+- Plan self-review covers specification requirements, placeholders, type consistency, pass smoke tests, audits, rollback, and release evidence.
+- `git diff --check` remains required before execution and in the final gate.
+
+### Outstanding issues
+- Application code and runtime behavior remain unchanged until plan execution begins.
+
+### Risks or caveats
+- Browser QA requires a representative signed-in Revision Set with Outline proposals and unresolved child failures.
+
+### Operator follow-up
+- Choose inline or subagent-driven execution.
+
+### Next steps
+- Execute the approved plan using the selected implementation workflow.

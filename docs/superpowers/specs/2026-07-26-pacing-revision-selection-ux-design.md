@@ -1,7 +1,7 @@
 # Pacing Revision Selection and Failure Summary UX Design
 
 **Date:** 2026-07-26  
-**Status:** Approved design; awaiting written-spec review  
+**Status:** Approved for implementation on 2026-07-27
 **Scope:** Writers' Workshop → Story Review → Pacing revision workspace
 
 ## Problem
