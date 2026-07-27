@@ -17,8 +17,10 @@ vi.mock('@/shared/lib/supabase', () => ({
 }));
 
 import {
+  archiveWriterPacingRevisionSet,
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
+  listWriterPacingRevisionSetHistory,
   listWriterPacingRevisionSets,
   markWriterPacingRevisionRecoveryRequired,
   recoverWriterPacingRevisionApply,
@@ -31,6 +33,7 @@ const SET_ID = '10000000-0000-4000-8000-000000000001';
 const ITEM_ID = '10000000-0000-4000-8000-000000000002';
 const CHANGE_ID = '10000000-0000-4000-8000-000000000003';
 const ISSUE_ID = '10000000-0000-4000-8000-000000000004';
+const UPDATED_AT = '2026-07-27T10:00:00.000Z';
 const snapshot = {
   outline: {},
   beats: [],
@@ -112,14 +115,83 @@ beforeEach(() => {
 });
 
 describe('writer pacing revision persistence', () => {
-  it('lists non-discarded sets with nested items and changes', async () => {
+  it('lists active sets newest first without archived or discarded sets', async () => {
+    const chain = {
+      eq: vi.fn(),
+      neq: vi.fn(),
+      order: vi.fn().mockResolvedValue({ data: [setRow], error: null }),
+    };
+    chain.eq.mockReturnValue(chain);
+    chain.neq.mockReturnValue(chain);
+    mocks.select.mockReturnValueOnce(chain);
+
     await expect(listWriterPacingRevisionSets(ISSUE_ID)).resolves.toEqual({
       ok: true,
       sets: [expect.objectContaining({ id: SET_ID, items: [expect.objectContaining({ id: ITEM_ID })] })],
     });
     expect(mocks.from).toHaveBeenCalledWith('writer_pacing_revision_sets');
-    expect(mocks.eq).toHaveBeenCalledWith('issue_id', ISSUE_ID);
-    expect(mocks.neq).toHaveBeenCalledWith('status', 'discarded');
+    expect(chain.eq).toHaveBeenCalledWith('issue_id', ISSUE_ID);
+    expect(chain.neq).toHaveBeenNthCalledWith(1, 'status', 'archived');
+    expect(chain.neq).toHaveBeenNthCalledWith(2, 'status', 'discarded');
+    expect(chain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('lists archived history only and newest first', async () => {
+    const archivedRow = { ...setRow, status: 'archived' };
+    const chain = {
+      eq: vi.fn(),
+      order: vi.fn().mockResolvedValue({ data: [archivedRow], error: null }),
+    };
+    chain.eq.mockReturnValue(chain);
+    mocks.select.mockReturnValueOnce(chain);
+
+    await expect(listWriterPacingRevisionSetHistory(ISSUE_ID)).resolves.toEqual({
+      ok: true,
+      sets: [expect.objectContaining({ id: SET_ID, status: 'archived' })],
+    });
+
+    expect(chain.eq).toHaveBeenNthCalledWith(1, 'issue_id', ISSUE_ID);
+    expect(chain.eq).toHaveBeenNthCalledWith(2, 'status', 'archived');
+    expect(chain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('archives an eligible set through the exact guarded RPC arguments', async () => {
+    await expect(archiveWriterPacingRevisionSet({
+      setId: SET_ID,
+      expectedStatus: 'applied',
+      expectedUpdatedAt: UPDATED_AT,
+    })).resolves.toEqual({ ok: true });
+
+    expect(mocks.rpc).toHaveBeenCalledWith('archive_writer_pacing_revision_set', {
+      p_set_id: SET_ID,
+      p_expected_status: 'applied',
+      p_expected_updated_at: UPDATED_AT,
+    });
+  });
+
+  it('fails before the archive RPC when the expected status is ineligible', async () => {
+    await expect(archiveWriterPacingRevisionSet({
+      setId: SET_ID,
+      expectedStatus: 'applying',
+      expectedUpdatedAt: UPDATED_AT,
+    } as Parameters<typeof archiveWriterPacingRevisionSet>[0])).resolves.toEqual({
+      ok: false,
+      error: expect.stringMatching(/not eligible/i),
+    });
+
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('fails before the archive RPC when updated_at is absent', async () => {
+    await expect(archiveWriterPacingRevisionSet({
+      setId: SET_ID,
+      expectedStatus: 'ready',
+    } as Parameters<typeof archiveWriterPacingRevisionSet>[0])).resolves.toEqual({
+      ok: false,
+      error: expect.stringMatching(/updated_at/i),
+    });
+
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it('persists an individual decision without replacing the AI proposal', async () => {

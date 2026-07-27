@@ -14350,6 +14350,48 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision archive persistence lifecycle - 2026-07-27
+
+### What changed
+- Added `archived` as a durable Pacing Revision Set status.
+- Split active and archived-history reads: active results exclude both archived and discarded sets, while history returns only archived sets newest first.
+- Added a guarded archive API and authenticated owner-scoped database RPC that requires an eligible exact status plus exact `updated_at`.
+- The archive transaction updates only the Revision Set status and leaves official story content, Revision Items, Child Changes, and recovery metadata untouched.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Eligible source states are limited to `ready`, `partially_ready`, `applied`, and `failed`.
+- The client rejects an ineligible status or missing timestamp before invoking Supabase.
+- The RPC requires authentication, joins the set through issue and series ownership, locks the target set row, rechecks exact status/time guards, and verifies exactly one affected row.
+
+### Verification
+- RED: 3 files failed for the absent archived schema value, active/history/API behavior, and migration.
+- Focused GREEN: 3 files / 27 tests passed.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- The migration has not been executed against local or hosted PostgreSQL.
+- UI, hook orchestration, and Portal history work remain intentionally deferred to later passes.
+
+### Risks or caveats
+- Static migration-contract coverage cannot replace a real PostgreSQL transaction smoke.
+
+### Operator follow-up
+- Apply and validate the migration through the approved Supabase release workflow in the deployment pass.
+
+### Next steps
+- Continue with Pass 2 replacement policy and hook orchestration without mutating live story content during archive.
+
 ## Pacing Revision legacy applied-snapshot Undo recovery - 2026-07-27
 
 ### What changed

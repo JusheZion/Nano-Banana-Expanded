@@ -50,7 +50,7 @@
 - Archive RPC requires the authenticated owner plus exact status and `updated_at`.
 - RPC rejects generating/applying/foreign/changed sets and updates only the set row.
 
-- [ ] **Step 1: Write RED schema/API/migration tests**
+- [x] **Step 1: Write RED schema/API/migration tests**
 
 Add assertions equivalent to:
 
@@ -67,7 +67,7 @@ expect(rpc).toHaveBeenCalledWith('archive_writer_pacing_revision_set', {
 
 Migration-contract tests must assert `security invoker`, `auth.uid()`, `series.owner_id`, `for update`, exact expected status/time comparisons, allowed archive sources, one-row verification, authenticated-only grant, and absence of `writer_pages`, `writer_issue_outlines`, Item, or Child Change mutation.
 
-- [ ] **Step 2: Run Pass 1 RED**
+- [x] **Step 2: Run Pass 1 RED**
 
 ```bash
 npm run test -- --run src/shared/api/__tests__/writerPacingRevisionSets.test.ts src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts
@@ -75,7 +75,7 @@ npm run test -- --run src/shared/api/__tests__/writerPacingRevisionSets.test.ts 
 
 Expected: failures for missing status, history query, archive RPC, and migration.
 
-- [ ] **Step 3: Implement migration and schema**
+- [x] **Step 3: Implement migration and schema**
 
 Add `archived` to the database status constraint and Zod enum. Implement:
 
@@ -89,7 +89,7 @@ create or replace function public.archive_writer_pacing_revision_set(
 
 The function locks the owner’s set, requires `p_expected_status in ('ready','partially_ready','applied','failed')`, compares status/time exactly, updates only `writer_pacing_revision_sets.status = 'archived'`, and verifies one affected row.
 
-- [ ] **Step 4: Implement active/history/archive API**
+- [x] **Step 4: Implement active/history/archive API**
 
 Add:
 
@@ -104,11 +104,11 @@ archiveWriterPacingRevisionSet(input: {
 
 Fail before RPC when `updated_at` is absent or status is ineligible.
 
-- [ ] **Step 5: Run Pass 1 smoke**
+- [x] **Step 5: Run Pass 1 smoke**
 
 Run the two focused files plus `git diff --check`. Expected: all pass.
 
-- [ ] **Step 6: Commit Pass 1**
+- [x] **Step 6: Commit Pass 1**
 
 ```bash
 git add src/shared/writer/pacingRevisionSchemas.ts src/shared/api/writerPacingRevisionSets.ts src/shared/api/__tests__ supabase/migrations/20260727030000_writer_pacing_revision_archive.sql
@@ -117,7 +117,7 @@ git commit -m "feat: add pacing revision archive lifecycle"
 
 **Pass 1 smoke test:** Schema, API, and migration-contract files only.
 
-**Pass 1 result:** Pending.
+**Pass 1 result:** PASS — added the owner-scoped guarded archive lifecycle and separate active/history queries. RED failed for the missing status, API functions/query guards, and migration. GREEN passed 3 files / 27 tests, including schema, API, and static migration contracts; `git diff --check` passed. No live Supabase migration or deployment was performed.
 
 ## Pass 2: Replacement orchestration and hook state
 

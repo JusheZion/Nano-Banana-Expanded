@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   pacingRevisionChangeSchema,
   pacingRevisionFailureSchema,
+  pacingRevisionSetStatusSchema,
   pacingRevisionSetSchema,
 } from '../pacingRevisionSchemas';
 
@@ -11,6 +12,10 @@ const CHANGE_ID = '10000000-0000-4000-8000-000000000003';
 const ISSUE_ID = '10000000-0000-4000-8000-000000000004';
 
 describe('pacing revision schemas', () => {
+  it('parses archived as a durable Revision Set status', () => {
+    expect(pacingRevisionSetStatusSchema.parse('archived')).toBe('archived');
+  });
+
   it('preserves current, AI, and edited candidate states independently', () => {
     const parsed = pacingRevisionChangeSchema.parse({
       id: CHANGE_ID,

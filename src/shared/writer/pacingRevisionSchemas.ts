@@ -17,6 +17,7 @@ export const pacingRevisionSetStatusSchema = z.enum([
   'applying',
   'applied',
   'failed',
+  'archived',
   'discarded',
 ]);
 

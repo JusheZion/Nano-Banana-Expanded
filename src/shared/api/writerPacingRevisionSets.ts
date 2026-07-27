@@ -13,6 +13,14 @@ type ApiFailure = { ok: false; error: string };
 type SetsResult = { ok: true; sets: PacingRevisionSet[] } | ApiFailure;
 type SetResult = { ok: true; set: PacingRevisionSet } | ApiFailure;
 type ChangeResult = { ok: true; change: PacingRevisionChange } | ApiFailure;
+type ArchiveEligibleStatus = 'ready' | 'partially_ready' | 'applied' | 'failed';
+
+const ARCHIVE_ELIGIBLE_STATUSES: readonly string[] = [
+  'ready',
+  'partially_ready',
+  'applied',
+  'failed',
+];
 
 const SET_SELECT = `
   *,
@@ -40,10 +48,54 @@ export async function listWriterPacingRevisionSets(issueId: string): Promise<Set
       .from('writer_pacing_revision_sets')
       .select(SET_SELECT)
       .eq('issue_id', issueId)
+      .neq('status', 'archived')
       .neq('status', 'discarded')
       .order('created_at', { ascending: false });
     if (error) return { ok: false, error: error.message };
     return { ok: true, sets: (data ?? []).map((row) => pacingRevisionSetSchema.parse(row)) };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function listWriterPacingRevisionSetHistory(issueId: string): Promise<SetsResult> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .select(SET_SELECT)
+      .eq('issue_id', issueId)
+      .eq('status', 'archived')
+      .order('created_at', { ascending: false });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, sets: (data ?? []).map((row) => pacingRevisionSetSchema.parse(row)) };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
+
+export async function archiveWriterPacingRevisionSet(input: {
+  setId: string;
+  expectedStatus: ArchiveEligibleStatus;
+  expectedUpdatedAt: string;
+}): Promise<{ ok: true } | ApiFailure> {
+  if (!ARCHIVE_ELIGIBLE_STATUSES.includes(input.expectedStatus)) {
+    return { ok: false, error: 'This Pacing Revision Set status is not eligible for archive.' };
+  }
+  if (!input.expectedUpdatedAt) {
+    return { ok: false, error: 'The Pacing Revision Set updated_at value is required for archive.' };
+  }
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const { data, error } = await supabase.rpc('archive_writer_pacing_revision_set', {
+      p_set_id: input.setId,
+      p_expected_status: input.expectedStatus,
+      p_expected_updated_at: input.expectedUpdatedAt,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data === true
+      ? { ok: true }
+      : { ok: false, error: 'Archive transaction did not confirm success.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }
