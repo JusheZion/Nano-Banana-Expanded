@@ -122,6 +122,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
             mode: 'pacing_revision_page_preview',
             revision_set_id: set.id,
             page_id: pageByNumber.get(pageNumber)!.id,
+            page_number: pageNumber,
             include_beats: layer === 'beats',
             include_dialogue: layer === 'dialogue',
           });

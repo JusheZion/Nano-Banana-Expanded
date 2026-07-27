@@ -79,6 +79,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: true,
       include_dialogue: false,
     });
@@ -86,6 +87,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });
@@ -122,6 +124,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: true,
       include_dialogue: false,
     });
@@ -129,6 +132,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });
@@ -172,6 +176,7 @@ describe('useWriterPacingRevisionSet', () => {
       mode: 'pacing_revision_page_preview',
       revision_set_id: SET_ID,
       page_id: PAGE_ID,
+      page_number: 1,
       include_beats: false,
       include_dialogue: true,
     });

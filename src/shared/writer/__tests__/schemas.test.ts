@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import edgeWriterSchemasSource from '../../../../supabase/functions/_shared/writerSchemas.ts?raw';
+import clientWriterSchemasSource from '../schemas.ts?raw';
 import {
   guidedComicAssistResultSchema,
   ideaAssistResultSchema,
@@ -128,6 +130,16 @@ describe('writerToolsRequestSchema', () => {
       include_beats: false,
       include_dialogue: false,
     }).success).toBe(false);
+  });
+
+  it('keeps the Pacing Revision page-preview schema identical at the Edge boundary', () => {
+    const schemaBlock = /export const writerToolsPacingRevisionPagePreviewRequestSchema = z\.object\(\{[\s\S]*?\n\}\);/;
+    const clientSchemaBlock = clientWriterSchemasSource.match(schemaBlock)?.[0];
+    const edgeSchemaBlock = edgeWriterSchemasSource.match(schemaBlock)?.[0];
+
+    expect(clientSchemaBlock).toBeDefined();
+    expect(edgeSchemaBlock).toBeDefined();
+    expect(edgeSchemaBlock).toBe(clientSchemaBlock);
   });
 
   it('rejects malformed outline treatment preview requests', () => {

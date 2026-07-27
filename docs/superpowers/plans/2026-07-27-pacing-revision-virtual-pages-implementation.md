@@ -116,7 +116,7 @@ git commit -m "feat: define virtual pacing page requests"
 
 **Pass 1 smoke test:** Request schema/API tests only.
 
-**Pass 1 result:** Complete. RED failed on the new physical request because the strict schema did not accept `page_number`; GREEN passed both focused files (47 tests). Client and Edge schemas now accept UUID-backed physical targets and null-ID virtual targets with required integer page numbers from 1 through 200, still reject equal include flags, and API coverage confirms the 90-second timeout for both target kinds.
+**Pass 1 result:** Complete after quality follow-up. Initial RED failed because the strict schema did not accept `page_number`; follow-up RED then proved the physical client queue omitted the now-required number. GREEN passed the schema, API, and queue files (56 tests), and `npm run build` passed. Client and Edge schemas accept UUID-backed physical targets and null-ID virtual targets with required integer page numbers from 1 through 200, still reject equal include flags, and a source-parity regression test now catches mirror drift. API coverage confirms the 90-second timeout for both target kinds, and physical queue requests send their matching page number.
 
 ## Pass 2: Outline target enforcement and virtual hosted preview
 
