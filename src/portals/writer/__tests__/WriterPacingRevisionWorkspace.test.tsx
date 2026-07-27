@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
@@ -229,16 +230,34 @@ describe('WriterPacingRevisionWorkspace', () => {
     const revisionSet = fixture();
     const outlineChanges = revisionSet.items.flatMap((item) => item.changes)
       .filter((change) => change.layer === 'outline' && change.generation_status === 'ready');
-    const onChange = vi.fn().mockResolvedValue(undefined);
+    const onChange = vi.fn();
+    const onApply = vi.fn();
 
-    render(
-      <WriterPacingRevisionWorkspace
-        revisionSet={revisionSet}
-        onChange={onChange}
-        onApply={vi.fn()}
-      />,
-    );
+    function ControlledWorkspace() {
+      const [controlledSet, setControlledSet] = useState(revisionSet);
+      return (
+        <WriterPacingRevisionWorkspace
+          revisionSet={controlledSet}
+          onChange={async (changeId, patch) => {
+            onChange(changeId, patch);
+            setControlledSet((current) => ({
+              ...current,
+              items: current.items.map((item) => ({
+                ...item,
+                changes: item.changes.map((change) =>
+                  change.id === changeId ? { ...change, ...patch } : change
+                ),
+              })),
+            }));
+          }}
+          onApply={onApply}
+        />
+      );
+    }
 
+    render(<ControlledWorkspace />);
+
+    expect(screen.getByText('2 pending · 0 ready to apply · 3 failed or missing layers')).toBeTruthy();
     expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
     fireEvent.click(screen.getByRole('button', {
@@ -249,7 +268,9 @@ describe('WriterPacingRevisionWorkspace', () => {
     for (const change of outlineChanges) {
       expect(onChange).toHaveBeenCalledWith(change.id, { decision: 'approved' });
     }
+    expect(screen.getByText('1 pending · 1 ready to apply · 3 failed or missing layers')).toBeTruthy();
     expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
+    expect(onApply).not.toHaveBeenCalled();
   });
 
   it('keeps batch actions in a persistent sidebar footer', () => {

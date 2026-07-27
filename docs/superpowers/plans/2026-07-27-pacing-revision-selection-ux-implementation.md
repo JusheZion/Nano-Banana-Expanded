@@ -390,16 +390,33 @@ it('allows Outline approval while child generation failures remain', async () =>
   const revisionSet = fixture();
   const outlineChanges = revisionSet.items.flatMap((item) => item.changes)
     .filter((change) => change.layer === 'outline' && change.generation_status === 'ready');
-  const onChange = vi.fn().mockResolvedValue(undefined);
+  const onChange = vi.fn();
+  const onApply = vi.fn();
 
-  render(
-    <WriterPacingRevisionWorkspace
-      revisionSet={revisionSet}
-      onChange={onChange}
-      onApply={vi.fn()}
-    />,
-  );
+  function ControlledWorkspace() {
+    const [controlledSet, setControlledSet] = useState(revisionSet);
+    return (
+      <WriterPacingRevisionWorkspace
+        revisionSet={controlledSet}
+        onChange={async (changeId, patch) => {
+          onChange(changeId, patch);
+          setControlledSet((current) => ({
+            ...current,
+            items: current.items.map((item) => ({
+              ...item,
+              changes: item.changes.map((change) =>
+                change.id === changeId ? { ...change, ...patch } : change
+              ),
+            })),
+          }));
+        }}
+        onApply={onApply}
+      />
+    );
+  }
 
+  render(<ControlledWorkspace />);
+  expect(screen.getByText('2 pending · 0 ready to apply · 3 failed or missing layers')).toBeTruthy();
   expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
   fireEvent.click(screen.getByRole('button', { name: `Approve selected (${outlineChanges.length})` }));
@@ -408,11 +425,13 @@ it('allows Outline approval while child generation failures remain', async () =>
   for (const change of outlineChanges) {
     expect(onChange).toHaveBeenCalledWith(change.id, { decision: 'approved' });
   }
+  expect(screen.getByText('1 pending · 1 ready to apply · 3 failed or missing layers')).toBeTruthy();
   expect(screen.getByText(/failed or missing layers need attention/)).toBeTruthy();
+  expect(onApply).not.toHaveBeenCalled();
 });
 ```
 
-First-run result: PASS — the isolated integration characterization passed immediately (1 test passed, 11 skipped by the name filter). Existing production behavior already kept Outline batch decisions independent from the child failure ledger, so no production code changed and no artificial RED cycle was created.
+First-run result: PASS — both the initial integration characterization and the later controlled-rerender strengthening passed immediately in isolation (1 test passed, 11 skipped by the name filter on each run). The controlled test now proves the header transitions from zero to one ready change, unresolved child failures remain summarized, and batch approval does not call `onApply`. Existing production behavior already satisfies the contract, so no production code changed and no artificial RED cycle was created.
 
 - [x] **Step 2: Run focused Writer regressions**
 
@@ -441,8 +460,8 @@ Audit and record:
 
 Third-pass audit conclusions:
 
-- **ReAct:** Selection remains component-local `Set` state. Individual and batch decisions still cross the component boundary only through `onChange`, while promotion remains isolated behind the explicit `onApply` entry point.
-- **QA:** Active-layer eligibility prevents hidden cross-tab mutation; select-all excludes non-ready changes and all selection mutation is disabled while busy. The controlled disclosure retains retry-all, per-layer retry, and page navigation. The integration characterization confirms the failed-or-missing summary remains present after every ready Outline change receives `{ decision: 'approved' }`.
+- **ReAct:** Selection remains component-local `Set` state. Individual and batch decisions still cross the component boundary only through `onChange`; the controlled-rerender regression proves batch approval does not call `onApply`, so promotion remains isolated behind that explicit entry point.
+- **QA:** Active-layer eligibility prevents hidden cross-tab mutation; select-all excludes non-ready changes and all selection mutation is disabled while busy. The controlled disclosure retains retry-all, per-layer retry, and page navigation. The integration characterization confirms the header readiness transition after every ready Outline change receives `{ decision: 'approved' }` while the failed-or-missing summary remains present.
 - **UI/UX:** The inspected component and focused tests preserve exact layer labels and selected counts, the visible sticky batch footer, collapsed failure summary, `aria-expanded`/`aria-controls`, alert containment, visible focus rings, disabled states, horizontal tab overflow, bounded recovery scrolling, responsive comparison/sidebar classes, and the relevant containment test IDs. The signed-in browser smoke also confirmed the fixed controls remained reachable at the representative production-sized viewport, the Page Beats tab began with an independent zero selection, and no warning or error console entries were emitted.
 - **DOX:** The root `AGENTS.md` active-tab selection contract matches the implementation. The root Child DOX Index confirms no nested `AGENTS.md` exists or is needed for these test/plan-only changes; the root contract remains unchanged.
 
@@ -470,7 +489,7 @@ git commit -m "test: verify pacing selection workflow"
 
 **Pass 3 smoke test:** Focused Writer regressions and the active-tab browser workflow.
 
-**Pass 3 result:** PASS — the required integration characterization passed on its first run, and the focused Writer suite passed 4 files / 29 tests. Focused ESLint passed with no findings. The third-pass ReAct, QA, UI/UX, and DOX audit passed, including the signed-in active-tab browser workflow with unresolved child failures and clean browser warning/error logs.
+**Pass 3 result:** PASS — the required controlled-rerender integration characterization passed on its strengthening run without production changes, proving the Outline readiness transition, persistent failure summary, and separation from `onApply`. The focused Writer suite passed 4 files / 29 tests. Focused ESLint passed with no findings. The third-pass ReAct, QA, UI/UX, and DOX audit passed, including the signed-in active-tab browser workflow with unresolved child failures and clean browser warning/error logs.
 
 ## Pass 4: Final gate, release, and continuity
 
