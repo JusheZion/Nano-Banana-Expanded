@@ -13693,7 +13693,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - A fresh signed-in production tab exposed the new selection, disclosure, approve, and reject controls with no browser warning/error entries; the production endpoint returned HTTP 200.
 
 ### Outstanding issues
-- Ready PR #28 is open and mergeable. Final merge and remote-main confirmation remain pending.
+- None.
 
 ### Risks or caveats
 - Existing Story Review polish opportunities remain outside this focused correction: the diagnostic Pacing Review card still exposes raw JSON, the revision workspace sits below a tall diagnostic section, failure-summary actions are visually similar text links, sidebar microcopy is small, and extremely wide viewports leave substantial surrounding canvas.
@@ -13704,4 +13704,4 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Merge ready PR #28, verify remote `main`, then record the final merge commit.
+- None. PR #28 merged as `81b9a2e331bd7258619a7f723b67c2842e1bd509`, and fetched `origin/main` contains the reviewed branch head.
