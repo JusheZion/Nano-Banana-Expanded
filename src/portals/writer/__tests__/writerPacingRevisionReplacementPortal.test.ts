@@ -87,7 +87,11 @@ describe('WriterPortal single Pacing Review replacement orchestration', () => {
       activeSet,
       confirmArchive: vi.fn(),
       runReview: vi.fn().mockResolvedValue({ ok: true }),
-      archiveSet: vi.fn().mockResolvedValue({ ok: false, error: 'updated_at changed' }),
+      archiveSet: vi.fn().mockResolvedValue({
+        ok: false,
+        kind: 'conflict',
+        error: 'Archive transaction did not confirm success.',
+      }),
       refreshIssue,
     });
 
@@ -99,5 +103,28 @@ describe('WriterPortal single Pacing Review replacement orchestration', () => {
     expect(activeSet).toBe(capturedSet);
     expect(result.kind === 'archive_conflict' && result.error)
       .toBe('The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.');
+  });
+
+  it('preserves actionable operational archive failures instead of calling them conflicts', async () => {
+    const refreshIssue = vi.fn();
+
+    const result = await runPacingReviewReplacement({
+      policy: { kind: 'auto_archive' },
+      activeSet: capturedSet,
+      confirmArchive: vi.fn(),
+      runReview: vi.fn().mockResolvedValue({ ok: true }),
+      archiveSet: vi.fn().mockResolvedValue({
+        ok: false,
+        kind: 'operational',
+        error: 'Authentication is required',
+      }),
+      refreshIssue,
+    });
+
+    expect(result).toEqual({
+      kind: 'archive_failed',
+      error: 'The new Pacing Review was saved, but archiving the previous Revision Set failed: Authentication is required',
+    });
+    expect(refreshIssue).toHaveBeenCalledTimes(1);
   });
 });

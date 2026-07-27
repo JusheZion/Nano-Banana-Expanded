@@ -31,6 +31,7 @@ const SET_ID = '10000000-0000-4000-8000-000000000002';
 const ITEM_ID = '10000000-0000-4000-8000-000000000003';
 const PAGE_ID = '10000000-0000-4000-8000-000000000004';
 const PHYSICAL_PAGE_71_ID = '10000000-0000-4000-8000-000000000071';
+const ISSUE_B_ID = '20000000-0000-4000-8000-000000000001';
 
 const revisionSet: PacingRevisionSet = {
   id: SET_ID,
@@ -70,6 +71,14 @@ const mixedPhysicalVirtualSet: PacingRevisionSet = {
   }],
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe('useWriterPacingRevisionSet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -92,6 +101,101 @@ describe('useWriterPacingRevisionSet', () => {
     await waitFor(() => expect(result.current.historySets).toEqual([archivedSet]));
     expect(result.current.loading).toBe(false);
     expect(result.current.historyLoading).toBe(false);
+  });
+
+  it('resets issue-scoped state immediately when switching issues', async () => {
+    const archivedSet = { ...revisionSet, status: 'archived' as const };
+    mocks.list.mockResolvedValue({ ok: true, sets: [revisionSet] });
+    mocks.listHistory.mockResolvedValue({ ok: true, sets: [archivedSet] });
+    const { result, rerender } = renderHook(
+      ({ issueId }) => useWriterPacingRevisionSet(issueId, []),
+      { initialProps: { issueId: ISSUE_ID } },
+    );
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+    await waitFor(() => expect(result.current.historySets).toHaveLength(1));
+    mocks.list.mockResolvedValueOnce({ ok: false, error: 'Issue A active failed' });
+    mocks.listHistory.mockResolvedValueOnce({ ok: false, error: 'Issue A history failed' });
+    await act(async () => {
+      await Promise.all([result.current.refresh(), result.current.refreshHistory()]);
+    });
+    expect(result.current.error).toBe('Issue A active failed');
+    expect(result.current.historyError).toBe('Issue A history failed');
+
+    const activeB = deferred<Awaited<ReturnType<typeof mocks.list>>>();
+    const historyB = deferred<Awaited<ReturnType<typeof mocks.listHistory>>>();
+    mocks.list.mockReturnValueOnce(activeB.promise);
+    mocks.listHistory.mockReturnValueOnce(historyB.promise);
+    rerender({ issueId: ISSUE_B_ID });
+
+    expect(result.current.activeSet).toBeNull();
+    expect(result.current.historySets).toEqual([]);
+    expect(result.current.selectedHistorySet).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.historyError).toBeNull();
+  });
+
+  it('ignores late issue-A active/history results and finally updates while issue B loads', async () => {
+    const activeA = deferred<{ ok: true; sets: PacingRevisionSet[] }>();
+    const historyA = deferred<{ ok: false; error: string }>();
+    const activeB = deferred<{ ok: true; sets: PacingRevisionSet[] }>();
+    const historyB = deferred<{ ok: true; sets: PacingRevisionSet[] }>();
+    mocks.list
+      .mockReturnValueOnce(activeA.promise)
+      .mockReturnValueOnce(activeB.promise);
+    mocks.listHistory
+      .mockReturnValueOnce(historyA.promise)
+      .mockReturnValueOnce(historyB.promise);
+    const issueBSet = { ...revisionSet, issue_id: ISSUE_B_ID };
+    const issueBHistory = { ...issueBSet, status: 'archived' as const };
+    const { result, rerender } = renderHook(
+      ({ issueId }) => useWriterPacingRevisionSet(issueId, []),
+      { initialProps: { issueId: ISSUE_ID } },
+    );
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith(ISSUE_ID));
+
+    rerender({ issueId: ISSUE_B_ID });
+    await waitFor(() => expect(mocks.list).toHaveBeenCalledWith(ISSUE_B_ID));
+    activeA.resolve({ ok: true, sets: [revisionSet] });
+    historyA.resolve({ ok: false, error: 'Issue A history failed' });
+    await act(async () => { await Promise.all([activeA.promise, historyA.promise]); });
+
+    expect(result.current.activeSet).toBeNull();
+    expect(result.current.historySets).toEqual([]);
+    expect(result.current.error).toBeNull();
+    expect(result.current.historyError).toBeNull();
+    expect(result.current.loading).toBe(true);
+    expect(result.current.historyLoading).toBe(true);
+
+    activeB.resolve({ ok: true, sets: [issueBSet] });
+    historyB.resolve({ ok: true, sets: [issueBHistory] });
+    await act(async () => { await Promise.all([activeB.promise, historyB.promise]); });
+
+    expect(result.current.activeSet).toEqual(issueBSet);
+    expect(result.current.historySets).toEqual([issueBHistory]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.historyLoading).toBe(false);
+  });
+
+  it('does not archive an issue-A set while issue B is selected', async () => {
+    mocks.list.mockResolvedValue({ ok: true, sets: [revisionSet] });
+    const { result, rerender } = renderHook(
+      ({ issueId }) => useWriterPacingRevisionSet(issueId, []),
+      { initialProps: { issueId: ISSUE_ID } },
+    );
+    await waitFor(() => expect(result.current.activeSet?.issue_id).toBe(ISSUE_ID));
+
+    mocks.list.mockResolvedValue({ ok: true, sets: [] });
+    rerender({ issueId: ISSUE_B_ID });
+    let archiveResult: Awaited<ReturnType<typeof result.current.archiveActive>> | undefined;
+    await act(async () => {
+      archiveResult = await result.current.archiveActive(revisionSet);
+    });
+
+    expect(archiveResult).toEqual({
+      ok: false,
+      error: 'This Pacing Revision Set belongs to a different issue.',
+    });
+    expect(mocks.archive).not.toHaveBeenCalled();
   });
 
   it('preserves active state when history loading fails and exposes a retry', async () => {

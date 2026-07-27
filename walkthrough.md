@@ -14358,6 +14358,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Routed both single Pacing Review controls through one orchestration. The prior set is archived only after AI succeeds; cancellation or AI failure leaves it untouched.
 - Preserved the saved new diagnosis and prior active set when guarded archive conflicts, with the stable split-success message required by the design.
 - Corrected the post-review order to guarded archive before issue refresh and replaced source inspection with executable orchestration coverage.
+- Hardened issue switching so late active/history responses, errors, and loading completions from issue A cannot overwrite issue B, and neither the hook nor Portal can archive a cross-issue stale set.
+- Classified guarded archive conflicts separately from operational archive failures and made the unfinished-set confirmation explicit about decisions/edits moving to Revision history.
 
 ### Files touched
 - `src/portals/writer/writerPacingRevisionLifecycle.ts`
@@ -14366,6 +14368,8 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `src/portals/writer/__tests__/writerPacingRevisionLifecycle.test.ts`
 - `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
 - `src/portals/writer/__tests__/writerPacingRevisionReplacementPortal.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
 - `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
 - `walkthrough.md`
 
@@ -14373,6 +14377,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Active and archived-history requests start independently when the selected issue changes. A history failure does not clear the active Revision Set and exposes `refreshHistory`.
 - Successful guarded archive optimistically moves the captured set to archived history, then refreshes active and history queries. Any guard/API failure leaves active state unchanged and returns the detail to the Portal.
 - The Portal suppresses the hook-level API detail for automatic replacement conflicts and renders exactly `The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.`
+- Operational authentication, network, or RPC archive failures instead preserve their actionable reason in `The new Pacing Review was saved, but archiving the previous Revision Set failed: …`.
 - `ready` and `partially_ready` require one browser confirmation before AI. `applied` and `failed` archive automatically after success. Active `generating`, `applying`, or hook page generation blocks before AI.
 - Root `AGENTS.md` was intentionally unchanged: Pass 2 implements the durable archive/replacement contract already recorded for Pass 1 and does not add a new DOX boundary or rule.
 
@@ -14381,6 +14386,9 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Initial GREEN: 3 focused files / 26 tests passed.
 - Specification-review RED: 4 behavioral orchestration tests failed because the executable helper was absent; a follow-up hook test failed because conflict detail was also surfaced separately.
 - Corrected GREEN: 3 focused files / 29 tests passed.
+- Quality-review RED: 4 files ran with 9 expected failures and 45 passing tests for stale cross-issue state/archive, missing archive classification, stale Portal policy input, and incomplete confirmation copy.
+- Quality-review GREEN: 4 focused files / 54 tests passed.
+- `npx tsc -p tsconfig.app.json --pretty false` passed.
 - Focused ESLint completed with 0 errors.
 
 ### Outstanding issues

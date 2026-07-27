@@ -103,6 +103,7 @@ import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTrea
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import {
+  getPacingRevisionActiveSetForIssue,
   getPacingRevisionReplacementPolicy,
   runPacingReviewReplacement,
 } from '@/portals/writer/writerPacingRevisionLifecycle';
@@ -2961,7 +2962,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const runPacingFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
     setPacingError(null);
-    const revisionSetBeforeReview = pacingRevisionActiveSet;
+    const revisionSetBeforeReview = getPacingRevisionActiveSetForIssue(
+      pacingRevisionActiveSet,
+      selectedIssueId,
+    );
     const replacementPolicy = getPacingRevisionReplacementPolicy({
       status: revisionSetBeforeReview?.status ?? null,
       generating: pacingRevisionGenerating,
@@ -2989,7 +2993,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pushHistory('pacing review saved');
       return;
     }
-    if (result.kind === 'archive_conflict') {
+    if (result.kind === 'archive_conflict' || result.kind === 'archive_failed') {
       pushHistory('pacing review saved');
       setPacingError(result.error);
       pushHistory(`error: ${result.error}`);

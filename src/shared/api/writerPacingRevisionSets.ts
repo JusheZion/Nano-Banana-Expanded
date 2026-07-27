@@ -10,6 +10,7 @@ import {
 } from '@/shared/writer/pacingRevisionSchemas';
 
 type ApiFailure = { ok: false; error: string };
+type ArchiveFailure = ApiFailure & { kind?: 'conflict' | 'operational' };
 type SetsResult = { ok: true; sets: PacingRevisionSet[] } | ApiFailure;
 type SetResult = { ok: true; set: PacingRevisionSet } | ApiFailure;
 type ChangeResult = { ok: true; change: PacingRevisionChange } | ApiFailure;
@@ -78,26 +79,32 @@ export async function archiveWriterPacingRevisionSet(input: {
   setId: string;
   expectedStatus: ArchiveEligibleStatus;
   expectedUpdatedAt: string;
-}): Promise<{ ok: true } | ApiFailure> {
+}): Promise<{ ok: true } | ArchiveFailure> {
   if (!ARCHIVE_ELIGIBLE_STATUSES.includes(input.expectedStatus)) {
     return { ok: false, error: 'This Pacing Revision Set status is not eligible for archive.' };
   }
   if (!input.expectedUpdatedAt) {
     return { ok: false, error: 'The Pacing Revision Set updated_at value is required for archive.' };
   }
-  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ...unavailable(), kind: 'operational' };
+  }
   try {
     const { data, error } = await supabase.rpc('archive_writer_pacing_revision_set', {
       p_set_id: input.setId,
       p_expected_status: input.expectedStatus,
       p_expected_updated_at: input.expectedUpdatedAt,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, kind: 'operational', error: error.message };
     return data === true
       ? { ok: true }
-      : { ok: false, error: 'Archive transaction did not confirm success.' };
+      : {
+          ok: false,
+          kind: 'conflict',
+          error: 'Archive transaction did not confirm success.',
+        };
   } catch (error) {
-    return { ok: false, error: message(error) };
+    return { ok: false, kind: 'operational', error: message(error) };
   }
 }
 

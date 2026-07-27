@@ -218,6 +218,20 @@ and surfaces exactly the stable split-success sentence without API detail. A
 Portal-owned-message hook path suppresses the separate archive API error while
 retaining the guarded failure result.
 
+**Pass 2 quality-review correction:** Issue switches now synchronously clear
+issue-scoped active/history/selection/error state, and request-generation guards
+ignore late active/history results and loading completions from the prior issue.
+Archive revalidates both the current issue and live active-set identity, while
+WriterPortal filters cross-issue sets before policy evaluation. Guarded RPC
+non-confirmation is classified as a replacement conflict and keeps the exact
+split-success sentence; authentication, network, and RPC failures retain their
+actionable reason in a distinct saved-review/archive-failed message. The unfinished
+set confirmation now states exactly that unfinished decisions or edits move to
+Revision history only if the new review succeeds. The corrected focused gate passes
+4 files / 54 tests; focused ESLint passes with 0 errors and only 3 pre-existing
+WriterPortal warnings. Targeted app TypeScript validation and `git diff --check`
+also pass.
+
 ## Pass 3: Simple Workflow history and manual archive
 
 **Objective:** Make archived versions discoverable and safely readable in both workflow modes.

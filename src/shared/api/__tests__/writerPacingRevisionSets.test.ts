@@ -169,12 +169,43 @@ describe('writer pacing revision persistence', () => {
     });
   });
 
+  it('classifies a false guarded archive result as a conflict', async () => {
+    mocks.rpc.mockResolvedValue({ data: false, error: null });
+
+    await expect(archiveWriterPacingRevisionSet({
+      setId: SET_ID,
+      expectedStatus: 'applied',
+      expectedUpdatedAt: UPDATED_AT,
+    })).resolves.toEqual({
+      ok: false,
+      kind: 'conflict',
+      error: 'Archive transaction did not confirm success.',
+    });
+  });
+
+  it('classifies archive RPC errors as operational failures', async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Authentication is required' },
+    });
+
+    await expect(archiveWriterPacingRevisionSet({
+      setId: SET_ID,
+      expectedStatus: 'applied',
+      expectedUpdatedAt: UPDATED_AT,
+    })).resolves.toEqual({
+      ok: false,
+      kind: 'operational',
+      error: 'Authentication is required',
+    });
+  });
+
   it('fails before the archive RPC when the expected status is ineligible', async () => {
     await expect(archiveWriterPacingRevisionSet({
       setId: SET_ID,
       expectedStatus: 'applying',
       expectedUpdatedAt: UPDATED_AT,
-    } as Parameters<typeof archiveWriterPacingRevisionSet>[0])).resolves.toEqual({
+    } as unknown as Parameters<typeof archiveWriterPacingRevisionSet>[0])).resolves.toEqual({
       ok: false,
       error: expect.stringMatching(/not eligible/i),
     });

@@ -14,6 +14,7 @@ type PacingReviewReplacementResult =
   | { kind: 'blocked'; error: string }
   | { kind: 'review_failed'; error: string }
   | { kind: 'archive_conflict'; error: typeof PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE }
+  | { kind: 'archive_failed'; error: string }
   | { kind: 'success' };
 
 export async function runPacingReviewReplacement<TSet>(input: {
@@ -21,7 +22,9 @@ export async function runPacingReviewReplacement<TSet>(input: {
   activeSet: TSet | null;
   confirmArchive: (message: string) => boolean;
   runReview: () => Promise<{ ok: true } | { ok: false; error: string }>;
-  archiveSet: (set: TSet) => Promise<{ ok: true } | { ok: false; error: string }>;
+  archiveSet: (set: TSet) => Promise<
+    { ok: true } | { ok: false; kind?: 'conflict' | 'operational'; error: string }
+  >;
   refreshIssue: () => Promise<void>;
 }): Promise<PacingReviewReplacementResult> {
   if (input.policy.kind === 'blocked') {
@@ -49,6 +52,12 @@ export async function runPacingReviewReplacement<TSet>(input: {
     const archiveResult = await input.archiveSet(input.activeSet);
     if (!archiveResult.ok) {
       await input.refreshIssue();
+      if (archiveResult.kind !== 'conflict') {
+        return {
+          kind: 'archive_failed',
+          error: `The new Pacing Review was saved, but archiving the previous Revision Set failed: ${archiveResult.error}`,
+        };
+      }
       return {
         kind: 'archive_conflict',
         error: PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE,
@@ -58,6 +67,13 @@ export async function runPacingReviewReplacement<TSet>(input: {
 
   await input.refreshIssue();
   return { kind: 'success' };
+}
+
+export function getPacingRevisionActiveSetForIssue<TSet extends { issue_id: string }>(
+  activeSet: TSet | null,
+  issueId: string | null,
+): TSet | null {
+  return activeSet?.issue_id === issueId ? activeSet : null;
 }
 
 export function getPacingRevisionReplacementPolicy(input: {
@@ -86,7 +102,7 @@ export function getPacingRevisionReplacementPolicy(input: {
   if (input.status === 'ready' || input.status === 'partially_ready') {
     return {
       kind: 'confirm_archive',
-      message: 'This Revision Set still has unfinished work. Archive it only if the new Pacing Review succeeds?',
+      message: 'This Revision Set has unfinished decisions or edits. If the new Pacing Review succeeds, they will move to Revision history. Continue?',
     };
   }
   if (input.status === 'applied' || input.status === 'failed') {

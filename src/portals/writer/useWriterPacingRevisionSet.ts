@@ -64,15 +64,46 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stopRef = useRef(false);
+  const [stateIssueId, setStateIssueId] = useState(issueId);
+  const issueVersionRef = useRef(0);
+  const currentIssueIdRef = useRef(issueId);
+  const activeSetRef = useRef<PacingRevisionSet | null>(null);
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  currentIssueIdRef.current = issueId;
+
+  const activeSetForIssue = activeSet?.issue_id === issueId ? activeSet : null;
+  const historySetsForIssue = historySets.filter((set) => set.issue_id === issueId);
+  const selectedHistorySetForIssue =
+    selectedHistorySet?.issue_id === issueId ? selectedHistorySet : null;
+  activeSetRef.current = activeSetForIssue;
+
+  if (stateIssueId !== issueId) {
+    issueVersionRef.current += 1;
+    setStateIssueId(issueId);
+    setActiveSet(null);
+    setHistorySets([]);
+    setSelectedHistorySet(null);
+    setLoading(false);
+    setHistoryLoading(false);
+    setHistoryError(null);
+    setGenerating(false);
+    setError(null);
+    stopRef.current = true;
+  }
 
   const refresh = useCallback(async (setId?: string) => {
     if (!issueId) { setActiveSet(null); return; }
+    const requestIssueId = issueId;
+    const requestVersion = issueVersionRef.current;
     setLoading(true);
     const result = setId
       ? await getWriterPacingRevisionSet(setId)
       : await listWriterPacingRevisionSets(issueId);
+    if (
+      currentIssueIdRef.current !== requestIssueId
+      || issueVersionRef.current !== requestVersion
+    ) return;
     setLoading(false);
     if (!result.ok) { setError(result.error); return; }
     setError(null);
@@ -85,8 +116,14 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       setHistoryError(null);
       return;
     }
+    const requestIssueId = issueId;
+    const requestVersion = issueVersionRef.current;
     setHistoryLoading(true);
     const result = await listWriterPacingRevisionSetHistory(issueId);
+    if (
+      currentIssueIdRef.current !== requestIssueId
+      || issueVersionRef.current !== requestVersion
+    ) return;
     setHistoryLoading(false);
     if (!result.ok) {
       setHistoryError(result.error);
@@ -182,9 +219,9 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
   }, [refresh]);
 
   const generatePages = useCallback(async (retryTargets?: PacingRevisionRetryTarget[]) => {
-    if (!activeSet) return;
-    await generatePagesForSet(activeSet, retryTargets);
-  }, [activeSet, generatePagesForSet]);
+    if (!activeSetForIssue) return;
+    await generatePagesForSet(activeSetForIssue, retryTargets);
+  }, [activeSetForIssue, generatePagesForSet]);
 
   const create = useCallback(async () => {
     if (!issueId) return;
@@ -220,7 +257,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       result.change.layer === 'beats'
       && Object.prototype.hasOwnProperty.call(patch, 'edited_candidate')
     ) {
-      await refresh(activeSet?.id);
+      await refresh(activeSetForIssue?.id);
       return;
     }
     setActiveSet((current) => current ? {
@@ -230,23 +267,34 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
         changes: item.changes.map((change) => change.id === changeId ? result.change : change),
       })),
     } : current);
-  }, [activeSet?.id, refresh]);
+  }, [activeSetForIssue?.id, refresh]);
 
   const discard = useCallback(async () => {
-    if (!activeSet) return;
-    const result = await discardWriterPacingRevisionSet(activeSet.id);
+    if (!activeSetForIssue) return;
+    const result = await discardWriterPacingRevisionSet(activeSetForIssue.id);
     if (!result.ok) { setError(result.error); return; }
     setActiveSet(null);
-  }, [activeSet]);
+  }, [activeSetForIssue]);
 
   const archiveActive = useCallback(async (
     expectedSet?: PacingRevisionSet,
     options: { surfaceError?: boolean } = {},
-  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+  ): Promise<
+    { ok: true } | { ok: false; kind?: 'conflict' | 'operational'; error: string }
+  > => {
     const surfaceError = options.surfaceError ?? true;
-    const setToArchive = expectedSet ?? activeSet;
+    const setToArchive = expectedSet ?? activeSetRef.current;
     if (!setToArchive) {
       const archiveError = 'There is no active Pacing Revision Set to archive.';
+      if (surfaceError) setError(archiveError);
+      return { ok: false, error: archiveError };
+    }
+    if (
+      !currentIssueIdRef.current
+      || setToArchive.issue_id !== currentIssueIdRef.current
+      || activeSetRef.current?.id !== setToArchive.id
+    ) {
+      const archiveError = 'This Pacing Revision Set belongs to a different issue.';
       if (surfaceError) setError(archiveError);
       return { ok: false, error: archiveError };
     }
@@ -277,17 +325,17 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     ]);
     await Promise.all([refresh(), refreshHistory()]);
     return { ok: true };
-  }, [activeSet, refresh, refreshHistory]);
+  }, [refresh, refreshHistory]);
 
   const hasPendingCandidates = useMemo(
-    () => missingLayersByPage(activeSet).size > 0,
-    [activeSet],
+    () => missingLayersByPage(activeSetForIssue).size > 0,
+    [activeSetForIssue],
   );
 
   return {
-    activeSet,
-    historySets,
-    selectedHistorySet,
+    activeSet: activeSetForIssue,
+    historySets: historySetsForIssue,
+    selectedHistorySet: selectedHistorySetForIssue,
     loading,
     historyLoading,
     historyError,
