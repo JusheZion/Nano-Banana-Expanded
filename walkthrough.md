@@ -14350,6 +14350,168 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision history and manual archive Pass 3 - 2026-07-27
+
+### What changed
+- Added a compact `Revision history (N)` disclosure to both Simple and Advanced Story Review.
+- Added keyboard-native loading, empty, error/retry, archived-version selection, and Back-to-current interactions.
+- Added a confirmed `Archive revision set` action for eligible active sets. Its confirmation and success copy state that archiving does not change the live Outline, Page Beats, or Dialogue.
+- Reused the Pacing revision comparison workspace for archived records while making `archived` a terminal read-only state with no Apply, Edit, Approve, Reject, Retry, selection, or batch controls.
+- Added clear archived status/date metadata and distinct `Archived current` / `Archived proposal` comparison labels.
+- Persisted the exact prior status and archive timestamp atomically with the archive transition, then ordered history by that durable archive timestamp.
+- Tailored confirmation copy for unfinished versus applied sets, including the loss of the local Undo affordance for archived applied sets and the continuing official version-history restoration path.
+- Added focus movement into the archived heading and restoration to the history disclosure on Back.
+- Routed both actual Story Review render paths through the tested `WriterPacingRevisionHistoryLayout`.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionHistory.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `package.json`
+- `package-lock.json`
+- `AGENTS.md`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The history surface uses native `details`/`summary` and native buttons so disclosure, view, retry, and return actions work by keyboard without custom key handling.
+- Testing Library `user-event` drives focus behavior through real click interactions; the archived heading is programmatically focusable and Back restores focus to the remounted native summary.
+- Manual archive delegates to the owner-scoped guarded hook introduced in Pass 2; the UI does not directly mutate live story content.
+- History entries wrap at narrow widths and expose Created, Archived, and Previous status metadata with machine-readable timestamps where available.
+- The same extracted layout is integrated into both duplicated Story Review render paths, and the active workspace is hidden while an archived version is selected.
+
+### Verification
+- RED: the history test failed because the component did not exist, and the archived workspace test failed because archived sets still exposed active controls and labels.
+- Focused GREEN: 2 files / 31 tests — PASS.
+- Final corrected Pass 3 smoke: 8 files / 105 tests — PASS.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+- Three-pass audit — PASS with no P0/P1 finding.
+
+### Outstanding issues
+- Batch Pacing Review replacement consistency remains Pass 4 work.
+- Local signed-in and production browser QA remain part of the final integration/release pass.
+
+### Risks or caveats
+- Archived history remains intentionally read-only. Restoring official story content continues through Outline version history rather than from this comparison surface.
+
+### Operator follow-up
+- None for Pass 3.
+
+### Next steps
+- Implement Pass 4 batch replacement preflight, per-issue guarded archive, and partial-success reporting before final hosted QA and deployment.
+
+## Pacing Revision history replacement orchestration Pass 2 - 2026-07-27
+
+### What changed
+- Added a pure replacement policy for no active set, automatic terminal-set archive, confirmed unfinished-set archive, and blocked applying/generating states.
+- Extended the Pacing Revision hook with independently loaded active/history state, recoverable history errors, history selection, and a guarded archive action that captures the expected set status and version.
+- Routed both single Pacing Review controls through one orchestration. The prior set is archived only after AI succeeds; cancellation or AI failure leaves it untouched.
+- Preserved the saved new diagnosis and prior active set when guarded archive conflicts, with the stable split-success message required by the design.
+- Corrected the post-review order to guarded archive before issue refresh and replaced source inspection with executable orchestration coverage.
+- Hardened issue switching so late active/history responses, errors, and loading completions from issue A cannot overwrite issue B, and neither the hook nor Portal can archive a cross-issue stale set.
+- Classified guarded archive conflicts separately from operational archive failures and made the unfinished-set confirmation explicit about decisions/edits moving to Revision history.
+- Closed remaining async races with frozen issue/page operation contexts, post-await target validation, and independent latest-request sequencing for active and history refreshes.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionLifecycle.ts`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionLifecycle.test.ts`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionReplacementPortal.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Active and archived-history requests start independently when the selected issue changes. A history failure does not clear the active Revision Set and exposes `refreshHistory`.
+- Successful guarded archive optimistically moves the captured set to archived history, then refreshes active and history queries. Any guard/API failure leaves active state unchanged and returns the detail to the Portal.
+- The Portal suppresses the hook-level API detail for automatic replacement conflicts and renders exactly `The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.`
+- Operational authentication, network, or RPC archive failures instead preserve their actionable reason in `The new Pacing Review was saved, but archiving the previous Revision Set failed: …`.
+- Late create/generation/update/discard/archive completions from a prior issue cannot publish state into the newly selected issue. Page generation keeps the page identities captured at operation start.
+- Same-issue active/history refresh overlap is last-request-wins for data, errors, and loading indicators.
+- `ready` and `partially_ready` require one browser confirmation before AI. `applied` and `failed` archive automatically after success. Active `generating`, `applying`, or hook page generation blocks before AI.
+- Root `AGENTS.md` was intentionally unchanged: Pass 2 implements the durable archive/replacement contract already recorded for Pass 1 and does not add a new DOX boundary or rule.
+
+### Verification
+- RED: 3 focused files ran with 7 expected failures and 11 passing existing tests for the missing policy, hook state/actions, and Portal orchestration.
+- Initial GREEN: 3 focused files / 26 tests passed.
+- Specification-review RED: 4 behavioral orchestration tests failed because the executable helper was absent; a follow-up hook test failed because conflict detail was also surfaced separately.
+- Corrected GREEN: 3 focused files / 29 tests passed.
+- Quality-review RED: 4 files ran with 9 expected failures and 45 passing tests for stale cross-issue state/archive, missing archive classification, stale Portal policy input, and incomplete confirmation copy.
+- Quality-review GREEN: 4 focused files / 54 tests passed.
+- `npx tsc -p tsconfig.app.json --pretty false` passed.
+- Async-lifecycle re-review RED: 2 files ran with 7 expected failures and 29 passing tests.
+- Async-lifecycle corrected GREEN: 4 focused files / 61 tests passed.
+- Focused ESLint completed with 0 errors.
+
+### Outstanding issues
+- History disclosure/read-only UI remains Pass 3.
+- Batch Pacing Review replacement remains Pass 4.
+
+### Risks or caveats
+- No hosted database migration, browser QA, or deployment was performed in this pass.
+
+### Operator follow-up
+- None for Pass 2.
+
+### Next steps
+- Implement Pass 3 read-only Revision history UI without exposing mutation controls.
+
+## Pacing Revision archive persistence lifecycle - 2026-07-27
+
+### What changed
+- Added `archived` as a durable Pacing Revision Set status.
+- Split active and archived-history reads: active results exclude both archived and discarded sets, while history returns only archived sets newest first.
+- Added a guarded archive API and authenticated owner-scoped database RPC that requires an eligible exact status plus exact `updated_at`.
+- The archive transaction updates only the Revision Set status and leaves official story content, Revision Items, Child Changes, and recovery metadata untouched.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Eligible source states are limited to `ready`, `partially_ready`, `applied`, and `failed`.
+- The client rejects an ineligible status or missing timestamp before invoking Supabase.
+- The RPC requires authentication, joins the set through issue and series ownership, locks the target set row, rechecks exact status/time guards, and verifies exactly one affected row.
+
+### Verification
+- RED: 3 files failed for the absent archived schema value, active/history/API behavior, and migration.
+- Focused GREEN: 3 files / 27 tests passed.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- The migration has not been executed against local or hosted PostgreSQL.
+- UI, hook orchestration, and Portal history work remain intentionally deferred to later passes.
+
+### Risks or caveats
+- Static migration-contract coverage cannot replace a real PostgreSQL transaction smoke.
+
+### Operator follow-up
+- Apply and validate the migration through the approved Supabase release workflow in the deployment pass.
+
+### Next steps
+- Continue with Pass 2 replacement policy and hook orchestration without mutating live story content during archive.
+
 ## Pacing Revision legacy applied-snapshot Undo recovery - 2026-07-27
 
 ### What changed
@@ -14532,3 +14694,286 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
+
+## Pacing Revision archive immutability and truthful history safety copy - 2026-07-27
+
+### What changed
+- Enforced archived Revision Set immutability at the database boundary for sets, Revision Items, and Child Changes, including service-role writes.
+- Kept the guarded archive transaction functional through a transaction-local authorization marker while rejecting direct archived inserts and all later archived mutations.
+- Added client and Edge Function archived-state preflights and required affected parent/item/set writes to succeed before generation reports success.
+- Split unfinished, failed, and applied archive confirmations. Applied-set copy now states that local `Undo applied set` is removed, Outline version history can restore only an Outline version, and prior Page Beats, Dialogue, and pacing-created pages are not recoverable through Undo.
+- Humanized archived prior-status labels, gave each history View action a distinct accessible name, and proved both actual Simple and Advanced WriterPortal branches mount the shared history layout with the correct workflow value.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPacingRevisionHistory.tsx`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionReplacementPortal.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Database triggers are `SECURITY DEFINER` and cover set/item/change `INSERT`, `UPDATE`, and `DELETE`; child guards lock the parent set before allowing a write so archival cannot race a child mutation.
+- The archive RPC sets a transaction-local exact set ID before performing the sole allowed terminal-to-archived transition. Subsequent writes remain blocked.
+- The client passes the known set status to direct mutation APIs for immediate rejection; database triggers remain the authoritative protection against stale or privileged callers.
+
+### Verification
+- Focused correction gate: PASS, 5 files / 49 tests.
+- Broader Pacing regression: PASS, 21 files / 237 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not yet been deployed in this pass.
+- Signed-in browser and production smoke remain part of the later deployment pass.
+
+### Risks or caveats
+- Static migration tests validate the trigger contract; hosted PostgreSQL execution remains required before release.
+
+### Operator follow-up
+- Deploy the migration before the matching Edge Function/frontend bundle so archived data is protected at the database boundary throughout rollout.
+
+### Next steps
+- Continue with batch lifecycle work, final regression/audits, signed-in QA, and live deployment.
+
+## Pacing Revision page-preview generation lease - 2026-07-27
+
+### What changed
+- Added an owner-scoped database generation lease that atomically changes an exact eligible Revision Set version to `generating` before page-preview AI or persistence begins.
+- Made archive and preview acquisition lock and compare the same parent row, so only one can win. Archive is ineligible while generation is active, and a second preview is rejected.
+- Required final page-preview state to publish through a matching lease release only after candidate and Revision Item persistence succeeds with exact affected-row checks.
+- Added failure recovery that returns the set to `partially_ready`, `failed`, or its prior editable status where appropriate. Expired two-minute leases can be recovered safely but require a fresh preview retry.
+- Added parent aggregate triggers so every Revision Item or Child Change insert, update, or delete locks and advances the Revision Set `updated_at`, invalidating stale archive guards.
+- Extended strict client schemas for the durable lease metadata.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Acquisition requires the exact prior `ready`, `partially_ready`, or `failed` status plus `updated_at` and a caller-generated lease UUID.
+- Child and Item triggers serialize on the parent row and touch its aggregate timestamp. Lease release keys on the durable lease UUID instead of the timestamp because legitimate child persistence advances the timestamp while generation is active.
+- Direct lease-field transitions are guarded by transaction-local acquire/release markers; ordinary parent timestamp touches can continue without weakening the lease.
+- Candidate upserts must return every requested change, Item updates must affect exactly one row, and lease release must return `true` before the Edge Function reports nominal success.
+
+### Verification
+- RED: 2 files / 5 expected contract failures for missing acquisition, release, aggregate touch, second-preview blocking, and persistence ordering.
+- Focused archive/lease gate: PASS, 5 files / 56 tests.
+- Focused Edge/persistence gate: PASS, 5 files / 32 tests.
+- Broader Pacing regression: PASS, 21 files / 245 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function are not deployed yet.
+- Hosted PostgreSQL execution and signed-in concurrent preview/archive smoke remain for the deployment pass.
+
+### Risks or caveats
+- A force-terminated request remains `generating` until its two-minute lease expires; the next preview request recovers it and asks the user/client to retry rather than joining uncertain prior work.
+
+### Operator follow-up
+- Deploy the database migration before the matching Edge Function and frontend so lease RPCs and aggregate triggers exist before the new page-preview path invokes them.
+
+### Next steps
+- Continue with final audits, hosted concurrency smoke, and live deployment.
+
+## Pacing Revision transactional page-preview fencing - 2026-07-27
+
+### What changed
+- Replaced separate candidate, Revision Item, and parent-state writes with one owner-scoped `SECURITY DEFINER` page-preview commit transaction.
+- The transaction locks the parent and validates the exact unexpired lease before any write, validates the Item belongs to the set and the one-page candidate payload, upserts the Child Change, updates the Item, publishes progress/failure state, sets the final status, and clears the lease atomically.
+- Refactored `writer-tools` to generate candidates in memory and invoke the transactional commit once; nominal success now requires the RPC to return `success: true`.
+- Blocked ordinary Revision Item and Child Change mutations while the parent is `generating` unless the transaction-local write marker matches the exact lease.
+- Hardened every lease metadata/status transition against direct owner or service-role writes and disallowed `generating` records without complete lease metadata.
+- Preserved Beats-to-Dialogue invalidation inside the fenced transaction while preventing its intermediate aggregate update from prematurely leaving `generating`.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Stale/foreign/expired leases return before the transaction-local child-write marker or any Child Change mutation.
+- The A-expiry/recovery-B-acquire fence is lease-ID based: stale A cannot commit or release B’s lease, while B can commit all page-preview state atomically.
+- Failure/preflight paths use the fenced owner-scoped lease-release transaction and do not write children.
+- The commit RPC accepts exactly one candidate row, preserving the one-page-per-call contract and existing retry queue semantics.
+
+### Verification
+- RED: 2 files / 4 expected failures for missing transactional commit, stale-request fencing, generating edit locks, and lease tamper guards.
+- Transactional DB/Edge gate: PASS, 4 files / 31 tests.
+- Focused archive/fencing gate: PASS, 5 files / 60 tests.
+- Broader Pacing regression: PASS, 21 files / 249 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not been deployed.
+- Hosted PostgreSQL execution and signed-in A/B lease concurrency smoke remain for the deployment pass.
+
+### Risks or caveats
+- Static transaction-contract tests prove lock/fence/write ordering, while hosted PostgreSQL remains the final runtime proof of trigger/RPC integration.
+
+### Operator follow-up
+- Deploy the migration before `writer-tools`; the Edge Function now depends on the transactional commit RPC.
+
+### Next steps
+- Complete hosted migration/function deployment and the signed-in concurrency smoke.
+
+## Pacing Revision lease duration alignment - 2026-07-27
+
+### What changed
+- Increased the page-preview generation lease from two minutes to four minutes so one supported request can complete two 75-second Gemini attempts plus prompt construction and transactional persistence overhead.
+- Centralized the lease interval as a named SQL constant beside the acquisition transaction.
+- Added a migration contract test that protects the retry-time budget and the exact expiry boundary: commit remains valid at expiry, while recovery begins only after expiry.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The four-minute lease provides 90 seconds beyond the two model-attempt timeouts.
+- Lease fencing remains unchanged: only the exact owner-scoped lease may commit, and a recovered/replaced lease rejects the stale request before mutation.
+
+### Verification
+- RED: the migration contract failed while the lease remained two minutes.
+- Focused migration contract: PASS, 1 file / 13 tests.
+- Transactional DB/Edge gate: PASS, 4 files / 32 tests.
+- Focused archive/fencing gate: PASS, 5 files / 61 tests.
+- Broader Pacing regression: PASS, 21 files / 250 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function have not been deployed.
+- Hosted PostgreSQL execution and signed-in concurrency smoke remain for the deployment pass.
+
+### Risks or caveats
+- The duration is deliberately tied to the current two-attempt, 75-second model timeout contract and must be revisited if that request budget changes.
+
+### Operator follow-up
+- Deploy the migration before `writer-tools`.
+
+### Next steps
+- Complete the focused and broader Pacing regression gates, then proceed to hosted release verification.
+
+## Pacing Review batch replacement consistency - 2026-07-27
+
+### What changed
+- Added a dedicated batch replacement orchestrator that preflights every selected issue before the first Pacing Review request.
+- Added one clear confirmation for all selected issues whose active Revision Sets contain unfinished decisions or edits.
+- Applying and actively generating/leased sets are skipped with visible issue-specific reasons.
+- Each successful Pacing Review archives only its own captured prior set through the exact status and `updated_at` guard.
+- AI, archive, preflight, and refresh failures are contained to their issue, preserve the prior set where applicable, remain visible, and do not cancel later eligible issues.
+- Updated both Arc Review batch entry points through their shared Portal handler without changing the one-review-request-per-issue contract.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionBatch.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatch.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatchPortal.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Preflight captures the prior set for each issue once. Archive runs only after that issue's new AI review succeeds and uses the captured set ID, eligible status, and timestamp rather than selected-issue hook state.
+- The batch confirmation explicitly says successful reviews move prior sets to Revision history while failed reviews preserve them.
+- Selected-issue active/history state refreshes only through the issue-scoped hook; stale issue responses remain fenced by the existing hook request/version guards.
+- Canon Check batch behavior remains outside this change.
+
+### Verification
+- RED: the focused tests failed for the absent orchestrator and Portal wiring; an additional exception-containment test reproduced a preflight rejection canceling the batch.
+- Pass 4 focused smoke: PASS, 3 files / 17 tests.
+- Broader Pacing regression: PASS, 23 files / 257 tests.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `npm run lint`: PASS with 0 errors; focused changed-file lint has only 3 pre-existing WriterPortal warnings.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- Migration, Edge Function, frontend deployment, signed-in browser QA, and production smoke remain in Pass 5.
+
+### Risks or caveats
+- Non-selected issues have no mounted active/history hook state; their data is loaded fresh when selected. Series issue data refreshes after every attempted review outcome.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Run the consolidated release gate, final ReAct/QA/UI/UX/DOX/code audits, signed-in browser QA, deploy the migration/Edge Function/frontend, and smoke the production replacement/history flow.
+
+## Pacing batch saved-count and accessible status correction - 2026-07-27
+
+### What changed
+- Separated `reviewSaved` truth from archive, refresh, and skip/attention outcome types.
+- Corrected batch completion summaries so a successfully saved review remains counted when archiving or post-review refresh needs attention.
+- Added one shared Pacing status layout to Simple and Advanced Story Review.
+- Pacing batch progress now announces `Pacing X/Y` through a polite live `role="status"`, while batch summaries and existing `pacingError` render through `role="alert"`.
+- Preserved the existing single-review and Revision Set Apply error surfaces.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingBatchStatus.tsx`
+- `src/portals/writer/writerPacingRevisionBatch.ts`
+- `src/portals/writer/__tests__/WriterPacingBatchStatus.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionBatch.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatchPortal.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Attention and saved totals are intentionally independent: archive conflicts/failures and post-review refresh failures can increment both.
+- A failed AI review or skipped preflight never increments the saved-review total.
+- The shared status layout prevents Simple and Advanced Story Review from drifting in progress or alert semantics.
+
+### Verification
+- RED: batch summary was absent and the extracted status layout did not exist.
+- Corrected focused smoke: PASS, 4 files / 22 tests.
+- Broader Pacing regression: PASS, 24 files / 262 tests.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `npm run lint`: PASS with 0 errors and 71 pre-existing warnings.
+- Focused changed-file ESLint: PASS with 0 errors and 3 pre-existing WriterPortal warnings.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- Deployment and signed-in browser/production QA remain in Pass 5.
+
+### Risks or caveats
+- None specific to this correction.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Continue directly to the final consolidated release, browser QA, deployment, and production smoke pass.

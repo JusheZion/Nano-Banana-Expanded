@@ -88,11 +88,17 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
       join(process.cwd(), 'supabase/migrations/20260726000000_writer_pacing_revision_beats_invalidation.sql'),
       'utf8',
     );
+    const archiveMigrationSource = readFileSync(
+      join(process.cwd(), 'supabase/migrations/20260727030000_writer_pacing_revision_archive.sql'),
+      'utf8',
+    );
     const branchStart = indexSource.indexOf("parsedReq.data.mode === 'pacing_revision_page_preview'");
     const branchEnd = indexSource.indexOf("parsedReq.data.mode === 'outline_treatment_preview'", branchStart);
     const previewBranch = indexSource.slice(branchStart, branchEnd);
 
-    expect(previewBranch).toContain(".upsert(changeRows, { onConflict: 'item_id,layer,target_key' })");
+    expect(previewBranch).toContain("'commit_writer_pacing_revision_page_preview'");
+    expect(previewBranch).toContain('p_change_rows: changeRows');
+    expect(archiveMigrationSource).toMatch(/insert into public\.writer_pacing_revision_changes[\s\S]*on conflict \(item_id, layer, target_key\) do update/i);
     expect(triggerSource).toMatch(/BEFORE UPDATE OF ai_proposal, edited_candidate/);
     expect(triggerSource).toMatch(/new\.layer = 'beats'/);
     expect(triggerSource).toMatch(/new\.id = ANY\(dependency_ids\)/);
@@ -100,5 +106,6 @@ describe('generateValidatedPacingRevisionPageCandidate', () => {
     expect(triggerSource).toMatch(/decision = 'pending'/);
     expect(triggerSource).toMatch(/completed_page <> to_jsonb\(new\.page_number\)/);
     expect(triggerSource).toMatch(/status = 'partially_ready'/);
+    expect(archiveMigrationSource).toMatch(/when revision_set\.status = 'generating' then 'generating'[\s\S]*else 'partially_ready'/i);
   });
 });

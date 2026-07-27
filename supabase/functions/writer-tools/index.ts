@@ -1724,7 +1724,7 @@ Deno.serve(async (req) => {
       }
       const { data: revisionSet, error: setError } = await supabase
         .from('writer_pacing_revision_sets')
-        .select('id, issue_id, status, pacing_review_json, proposed_outline_json, progress_json, failure_ledger')
+        .select('id, issue_id, status, pacing_review_json, proposed_outline_json, progress_json, failure_ledger, updated_at')
         .eq('id', revision_set_id)
         .maybeSingle();
       if (setError || !revisionSet) {
@@ -1733,7 +1733,23 @@ Deno.serve(async (req) => {
           { status: 404, headers: corsHeaders },
         );
       }
-      if (['applied', 'discarded', 'applying'].includes(revisionSet.status)) {
+      if (revisionSet.status === 'generating') {
+        const { data: staleLeaseRecovered, error: staleLeaseError } = await supabase.rpc(
+          'recover_stale_writer_pacing_revision_generation_lease',
+          { p_set_id: revision_set_id },
+        );
+        return Response.json(
+          {
+            success: false,
+            error: staleLeaseRecovered === true
+              ? 'An expired page-preview lease was recovered; retry the page preview'
+              : 'Another page preview is already running for this Revision Set',
+            details: staleLeaseError?.message,
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      if (['applied', 'discarded', 'applying', 'archived', 'generating'].includes(revisionSet.status)) {
         return Response.json(
           { success: false, error: 'Revision Set is not editable' },
           { status: 409, headers: corsHeaders },
@@ -1787,6 +1803,47 @@ Deno.serve(async (req) => {
         }
         existingChanges = (data ?? []) as PacingRevisionPreviewChange[];
       }
+      const generationLeaseId = crypto.randomUUID();
+      const { data: leaseAcquired, error: leaseError } = await supabase.rpc(
+        'acquire_writer_pacing_revision_generation_lease',
+        {
+          p_set_id: revision_set_id,
+          p_expected_status: revisionSet.status,
+          p_expected_updated_at: revisionSet.updated_at,
+          p_lease_id: generationLeaseId,
+        },
+      );
+      if (leaseError || leaseAcquired !== true) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Page preview could not acquire the Revision Set generation lease',
+            details: leaseError?.message ?? 'The Revision Set changed or another preview started.',
+          },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const releaseGenerationLease = async (
+        finalStatus: 'ready' | 'partially_ready' | 'failed',
+        progressJson: unknown = null,
+        failureLedger: unknown = null,
+      ): Promise<string | null> => {
+        const { data: released, error: releaseError } = await supabase.rpc(
+          'release_writer_pacing_revision_generation_lease',
+          {
+            p_set_id: revision_set_id,
+            p_lease_id: generationLeaseId,
+            p_final_status: finalStatus,
+            p_progress_json: progressJson,
+            p_failure_ledger: failureLedger,
+          },
+        );
+        if (releaseError || released !== true) {
+          return releaseError?.message ?? 'Failed to release Revision Set generation lease';
+        }
+        return null;
+      };
+      const previousEditableStatus = revisionSet.status as 'ready' | 'partially_ready' | 'failed';
       let flowResult;
       try {
         let promptContextPromise: Promise<{
@@ -1843,31 +1900,25 @@ Deno.serve(async (req) => {
             });
           },
           parseResponse: (value) => pacingRegenerationPreviewResultSchema.parse(value),
-          persistChanges: async (changeRows) => {
-            const { data, error } = await supabase
-              .from('writer_pacing_revision_changes')
-              .upsert(changeRows, { onConflict: 'item_id,layer,target_key' })
-              .select('*');
-            if (error) {
-              const persistenceError = new Error(error.message);
-              persistenceError.name = 'PacingRevisionPersistenceError';
-              throw persistenceError;
-            }
-            return data ?? changeRows;
-          },
+          persistChanges: async (changeRows) => changeRows,
         });
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        if (error instanceof Error && error.name === 'PacingRevisionPersistenceError') {
-          return Response.json(
-            { success: false, error: 'Failed to save page candidates', details: reason },
-            { status: 500, headers: corsHeaders },
-          );
-        }
         const preflightFailure = /^(Exactly one page child layer|Requested |Resolved physical page|Affected Revision Item|No Revision Item|Selected page layer|Virtual Page Beats|Page Beats candidate is required before Dialogue)/.test(reason);
         if (preflightFailure) {
+          const releaseFailure = await releaseGenerationLease(
+            previousEditableStatus,
+            revisionSet.progress_json,
+            revisionSet.failure_ledger,
+          );
           return Response.json(
-            { success: false, error: 'Page target is not authorized for this Revision Set', details: reason },
+            {
+              success: false,
+              error: releaseFailure
+                ? 'Page target failed and the generation lease could not be released'
+                : 'Page target is not authorized for this Revision Set',
+              details: releaseFailure ? `${reason}; ${releaseFailure}` : reason,
+            },
             { status: 409, headers: corsHeaders },
           );
         }
@@ -1893,22 +1944,31 @@ Deno.serve(async (req) => {
             ? [{ page_number, item_id: item?.id, layer: 'dialogue' as const, reason }]
             : []),
         ];
-        await supabase
-          .from('writer_pacing_revision_sets')
-          .update({
-            status: 'partially_ready',
-            failure_ledger: projectPacingRevisionFailureLedger({
-              ledger: ledger as PacingRevisionFailure[],
-              pageNumber: page_number,
-              requestedLayers,
-              readyLayers: [
-                ...(layerIsReady('beats') ? ['beats' as const] : []),
-                ...(layerIsReady('dialogue') ? ['dialogue' as const] : []),
-              ],
-              newFailures: requestedFailures,
-            }),
-          })
-          .eq('id', revision_set_id);
+        const nextFailureLedger = projectPacingRevisionFailureLedger({
+          ledger: ledger as PacingRevisionFailure[],
+          pageNumber: page_number,
+          requestedLayers,
+          readyLayers: [
+            ...(layerIsReady('beats') ? ['beats' as const] : []),
+            ...(layerIsReady('dialogue') ? ['dialogue' as const] : []),
+          ],
+          newFailures: requestedFailures,
+        });
+        const releaseFailure = await releaseGenerationLease(
+          'partially_ready',
+          revisionSet.progress_json,
+          nextFailureLedger,
+        );
+        if (releaseFailure) {
+          return Response.json(
+            {
+              success: false,
+              error: 'Failed to record page candidate failure and release the generation lease',
+              details: releaseFailure,
+            },
+            { status: 409, headers: corsHeaders },
+          );
+        }
         return Response.json(
           { success: false, error: 'Page candidate failed', details: reason },
           { status: 422, headers: corsHeaders },
@@ -1922,10 +1982,6 @@ Deno.serve(async (req) => {
         pageHasReadyBeats,
         pageHasReadyDialogue,
       } = flowResult;
-      await supabase
-        .from('writer_pacing_revision_items')
-        .update({ generation_status: pageHasReadyBeats && pageHasReadyDialogue ? 'ready' : 'pending' })
-        .eq('id', item.id);
       const progress = asJsonObject(revisionSet.progress_json);
       const priorCompletedPages = (Array.isArray(progress.completed_pages) ? progress.completed_pages : [])
         .filter((value): value is number => typeof value === 'number');
@@ -1946,18 +2002,37 @@ Deno.serve(async (req) => {
           ...(pageHasReadyDialogue ? ['dialogue' as const] : []),
         ],
       });
-      await supabase
-        .from('writer_pacing_revision_sets')
-        .update({
-          status: completedPages.length >= totalPages && failureLedger.length === 0 ? 'ready' : 'partially_ready',
-          progress_json: {
-            ...progress,
-            completed_pages: completedPages,
-            current_page: null,
+      const finalStatus = completedPages.length >= totalPages && failureLedger.length === 0
+        ? 'ready'
+        : 'partially_ready';
+      const nextProgress = {
+          ...progress,
+          completed_pages: completedPages,
+          current_page: null,
+      };
+      const { data: commitResult, error: commitError } = await supabase.rpc(
+        'commit_writer_pacing_revision_page_preview',
+        {
+          p_set_id: revision_set_id,
+          p_lease_id: generationLeaseId,
+          p_change_rows: changeRows,
+          p_item_id: item.id,
+          p_item_generation_status: pageHasReadyBeats && pageHasReadyDialogue ? 'ready' : 'pending',
+          p_final_status: finalStatus,
+          p_progress_json: nextProgress,
+          p_failure_ledger: failureLedger,
+        },
+      );
+      if (commitError || commitResult?.success !== true) {
+        return Response.json(
+          {
+            success: false,
+            error: 'Failed to commit page candidates',
+            details: commitError?.message ?? commitResult?.reason ?? 'The generation lease changed.',
           },
-          failure_ledger: failureLedger,
-        })
-        .eq('id', revision_set_id);
+          { status: 409, headers: corsHeaders },
+        );
+      }
       return Response.json(
         {
           success: true,
@@ -1966,7 +2041,7 @@ Deno.serve(async (req) => {
           page_id: target.pageId,
           data: {
             page_number: target.pageNumber,
-            changes: persistedChanges ?? changeRows,
+            changes: commitResult.changes ?? persistedChanges ?? changeRows,
           },
         },
         { headers: corsHeaders },

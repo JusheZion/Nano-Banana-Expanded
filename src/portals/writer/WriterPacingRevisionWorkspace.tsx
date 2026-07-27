@@ -152,7 +152,10 @@ export function WriterPacingRevisionWorkspace({
     layer: Extract<PacingRevisionLayer, 'beats' | 'dialogue'>;
   } | null>(null);
   const failureRegionId = 'pacing-failed-layer-details';
-  const terminal = revisionSet.status === 'applied' || revisionSet.status === 'discarded';
+  const archived = revisionSet.status === 'archived';
+  const terminal = revisionSet.status === 'applied'
+    || revisionSet.status === 'archived'
+    || revisionSet.status === 'discarded';
 
   const visibleItems = revisionSet.items.filter((item) =>
     item.changes.some((change) => change.layer === layer)
@@ -351,14 +354,20 @@ export function WriterPacingRevisionWorkspace({
           {revisionSet.status === 'applied' && (
             <span role="status" aria-live="polite" className="sr-only">{applyLabel}</span>
           )}
-          <button
-            type="button"
-            disabled={busy || terminal || approvedEligibleCount === 0}
-            onClick={() => void onApply()}
-            className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {applying ? 'Applying…' : applyLabel}
-          </button>
+          {archived ? (
+            <span className="border border-white/30 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/80">
+              Archived · read-only
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={busy || terminal || approvedEligibleCount === 0}
+              onClick={() => void onApply()}
+              className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {applying ? 'Applying…' : applyLabel}
+            </button>
+          )}
         </div>
       </header>
 
@@ -583,14 +592,20 @@ export function WriterPacingRevisionWorkspace({
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2" data-testid="revision-comparison-panels">
                 <article className="min-w-0 border-t-4 border-slate-500 bg-slate-100 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                    {activeChange.generation_status === 'applied' ? 'Before this revision' : 'Current live'}
+                    {archived
+                      ? 'Archived current'
+                      : activeChange.generation_status === 'applied'
+                        ? 'Before this revision'
+                        : 'Current live'}
                   </p>
                   <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-800">{readableValue(activeChange.layer, activeChange.current_value)}</pre>
                 </article>
                 <article className="min-w-0 border-t-4 border-amber-500 bg-amber-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
-                      {activeChange.generation_status === 'applied'
+                      {archived
+                        ? 'Archived proposal'
+                        : activeChange.generation_status === 'applied'
                         ? 'Applied revision'
                         : activeChange.decision === 'rejected'
                           ? 'Rejected proposal'
