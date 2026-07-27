@@ -199,10 +199,21 @@ export async function undoWriterPacingRevisionSet(
     const { data, error } = await supabase.rpc('undo_writer_pacing_revision_apply', {
       p_set_id: setId,
     });
-    if (error) return { ok: false, error: error.message };
-    return data === true
+    if (!error) {
+      return data === true
+        ? { ok: true }
+        : { ok: false, error: 'Undo transaction did not confirm success.' };
+    }
+    if (error.message !== 'Applied recovery snapshot is invalid') {
+      return { ok: false, error: error.message };
+    }
+    const legacy = await supabase.rpc('undo_legacy_writer_pacing_revision_apply', {
+      p_set_id: setId,
+    });
+    if (legacy.error) return { ok: false, error: legacy.error.message };
+    return legacy.data === true
       ? { ok: true }
-      : { ok: false, error: 'Undo transaction did not confirm success.' };
+      : { ok: false, error: 'Legacy Undo transaction did not confirm success.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }
