@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const sql = readFileSync(resolve(
   process.cwd(),
-  'supabase/migrations/20260727010000_writer_pacing_revision_legacy_undo.sql',
+  'supabase/migrations/20260727020000_tighten_writer_pacing_revision_legacy_undo.sql',
 ), 'utf8');
 
 describe('Pacing Revision legacy Undo migration', () => {
@@ -15,8 +15,9 @@ describe('Pacing Revision legacy Undo migration', () => {
     expect(sql).toMatch(/series\.owner_id = auth\.uid\(\)/);
     expect(sql).toMatch(/revision_set\.status = 'applied'/);
     expect(sql).toMatch(/for update of revision_set/);
-    expect(sql).toMatch(/v_snapshot \? 'plannedOutlineId'/);
-    expect(sql).toMatch(/v_snapshot \? 'createdPages'/);
+    expect(sql).toMatch(/array_agg\(snapshot_key order by snapshot_key\)/);
+    expect(sql).toMatch(/array\[\s*'appliedIds',\s*'appliedOutlineId',\s*'beats',\s*'dialogue',\s*'outline',\s*'outlineApplied'\s*\]::text\[\]/);
+    expect(sql).toMatch(/jsonb_typeof\(v_snapshot->'outline'\) <> 'object'/);
     expect(sql).toMatch(/raise exception 'Snapshot is not an eligible legacy applied snapshot'/);
   });
 

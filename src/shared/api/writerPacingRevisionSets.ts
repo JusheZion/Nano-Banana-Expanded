@@ -204,7 +204,7 @@ export async function undoWriterPacingRevisionSet(
         ? { ok: true }
         : { ok: false, error: 'Undo transaction did not confirm success.' };
     }
-    if (!error.message.includes('Applied recovery snapshot is invalid')) {
+    if (error.message !== 'Applied recovery snapshot is invalid') {
       return { ok: false, error: error.message };
     }
     const legacy = await supabase.rpc('undo_legacy_writer_pacing_revision_apply', {

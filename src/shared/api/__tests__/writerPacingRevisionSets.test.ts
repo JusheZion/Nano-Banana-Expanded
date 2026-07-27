@@ -238,6 +238,21 @@ describe('writer pacing revision persistence', () => {
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
+  it('requires the exact legacy-invalid error before attempting compatibility recovery', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Undo failed: Applied recovery snapshot is invalid; retry' },
+    });
+
+    await expect(undoWriterPacingRevisionSet(SET_ID))
+      .resolves.toEqual({
+        ok: false,
+        error: 'Undo failed: Applied recovery snapshot is invalid; retry',
+      });
+
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed when a transactional RPC rejects the transition', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'state changed' } });
 
