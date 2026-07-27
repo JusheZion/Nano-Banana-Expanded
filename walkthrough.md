@@ -13795,3 +13795,41 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue to Pass 3 only after the corrected Pass 2 specification review is approved.
+
+## Pacing Revision deterministic affected-page ownership - 2026-07-27
+
+### What changed
+- Replaced single-result-page ownership with deterministic source-versus-proposal assignment comparison.
+- Moves now own every changed page from the original through proposed position.
+- Combines and mid-outline additions own every actually shifted later page, including newly introduced future pages.
+- Exact edits remain page-local, and append-only 71-to-85 expansion retains contiguous future-page ownership.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Global changed pages are identified by comparing the source beat assigned to each page with the final deterministic manifest entry.
+- Operation-specific ranges then assign only changed pages to the accepted Revision Item; model `affected_page_numbers` remain non-authoritative.
+- Overlapping structural impacts continue through the existing deterministic item merge.
+
+### Verification
+- RED: move page 2→4 reported only page 4; combine reported only page 2; mid-outline add reported only page 3.
+- GREEN: 5 focused server files and 50 tests passed.
+- Targeted production-module TypeScript and focused prompt lint passed.
+- `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deployment or live data mutation occurred in this correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue only after Pass 2 re-review approval.

@@ -193,8 +193,36 @@ export function buildPacingRevisionOutlinePreview(
       .filter((beat) => typeof beat.treatment_beat_id === 'string')
       .map((beat) => [String(beat.treatment_beat_id), beat]),
   );
-  const manifestById = new Map(
-    patch.manifest.entries.map((entry) => [entry.result_beat_id, entry]),
+  type ManifestEntry = {
+    result_beat_id: string;
+    source_beat_ids: string[];
+    change_type: string;
+    original_pages: number[];
+    proposed_page: number;
+  };
+  const manifestEntries: ManifestEntry[] = patch.manifest.entries.flatMap((entry) => {
+    const proposedPage = entry.proposed_page;
+    const originalPages = entry.original_pages;
+    const changeType = entry.change_type;
+    if (
+      !Number.isInteger(proposedPage)
+      || !Array.isArray(originalPages)
+      || typeof changeType !== 'string'
+    ) {
+      return [];
+    }
+    return [{
+      result_beat_id: entry.result_beat_id,
+      source_beat_ids: entry.source_beat_ids,
+      change_type: changeType,
+      original_pages: originalPages.filter(
+        (page): page is number => Number.isInteger(page),
+      ),
+      proposed_page: Number(proposedPage),
+    }];
+  });
+  const manifestById = new Map<string, ManifestEntry>(
+    manifestEntries.map((entry) => [entry.result_beat_id, entry] as const),
   );
   const outlineChanges: PacingOutlineChildChange[] = operations.flatMap((operation) => {
     if (!acceptedOperationIds.has(operation.operation_id)) return [];
@@ -213,12 +241,47 @@ export function buildPacingRevisionOutlinePreview(
       reason: operation.reason?.trim() || 'Pacing revision.',
     }];
   });
+  const sourceIdByPage = new Map<number, string>(
+    input.sourceBeats.map((beat) => [beat.page_target ?? beat.ordinal, beat.id] as const),
+  );
+  const manifestEntryByPage = new Map<number, ManifestEntry>(
+    manifestEntries.map((entry) => [entry.proposed_page, entry] as const),
+  );
+  const lastComparedPage = Math.max(
+    0,
+    ...sourceIdByPage.keys(),
+    ...manifestEntryByPage.keys(),
+  );
+  const changedPages = new Set<number>();
+  for (let pageNumber = 1; pageNumber <= lastComparedPage; pageNumber += 1) {
+    const sourceId = sourceIdByPage.get(pageNumber);
+    const proposed = manifestEntryByPage.get(pageNumber);
+    const preservesAssignment = sourceId !== undefined
+      && proposed?.change_type === 'unchanged'
+      && proposed.source_beat_ids.length === 1
+      && proposed.source_beat_ids[0] === sourceId;
+    if (!preservesAssignment && (sourceId !== undefined || proposed !== undefined)) {
+      changedPages.add(pageNumber);
+    }
+  }
   const acceptedPagesByItemId = new Map<string, number[]>();
-  for (const change of outlineChanges) {
-    if (change.page_number === null) continue;
-    const pages = acceptedPagesByItemId.get(change.item_id) ?? [];
-    pages.push(change.page_number);
-    acceptedPagesByItemId.set(change.item_id, pages);
+  for (const operation of operations) {
+    if (!acceptedOperationIds.has(operation.operation_id)) continue;
+    const manifest = manifestById.get(operation.operation_id);
+    if (!manifest) continue;
+    const originalPages = manifest.original_pages;
+    const proposedPage = manifest.proposed_page;
+    const firstOriginalPage = originalPages.length > 0 ? Math.min(...originalPages) : proposedPage;
+    const lastOriginalPage = originalPages.length > 0 ? Math.max(...originalPages) : proposedPage;
+    const rangeStart = Math.min(firstOriginalPage, proposedPage);
+    const rangeEnd = operation.operation === 'edit' || operation.operation === 'move'
+      ? Math.max(lastOriginalPage, proposedPage)
+      : lastComparedPage;
+    const pages = acceptedPagesByItemId.get(operation.item_id) ?? [];
+    for (let pageNumber = rangeStart; pageNumber <= rangeEnd; pageNumber += 1) {
+      if (changedPages.has(pageNumber)) pages.push(pageNumber);
+    }
+    acceptedPagesByItemId.set(operation.item_id, pages);
   }
   const backedItems = normalized.items.flatMap((item): PacingRevisionItemPlan[] => {
     const acceptedPages = uniquePages(acceptedPagesByItemId.get(item.item_id) ?? []);

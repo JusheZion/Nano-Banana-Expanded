@@ -25,6 +25,20 @@ const input = {
   protectedTerms: [],
 };
 
+const structuralSourceBeats = Array.from({ length: 4 }, (_, index) => ({
+  id: `structural-${index + 1}`,
+  ordinal: index + 1,
+  page_target: index + 1,
+  text: `Structural event ${index + 1} reaches outcome ${index + 1}.`,
+}));
+const structuralInput = {
+  treatmentMode: 'structure' as const,
+  sourcePageCount: 4,
+  allowedPageRange: { min: 3, max: 5 },
+  sourceBeats: structuralSourceBeats,
+  protectedTerms: [],
+};
+
 describe('pacing revision outline planning', () => {
   it('retains all 70 source beats when the model returns only eight edits', () => {
     const operations = Array.from({ length: 8 }, (_, index) => {
@@ -155,6 +169,154 @@ describe('pacing revision outline planning', () => {
       expect.objectContaining({
         item_id: 'item-future',
         page_number: 71,
+      }),
+    ]);
+  });
+
+  it('derives every changed page when a source beat moves from page 2 to page 4', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-move',
+        title: 'Delay the second event',
+        rationale: 'Let the other beats land first.',
+        affected_page_numbers: [4],
+      }],
+      operations: [{
+        item_id: 'item-move',
+        operation_id: 'move-2-to-4',
+        operation: 'move',
+        source_beat_ids: ['structural-2'],
+        anchor_source_beat_id: 'structural-4',
+        placement: 'after',
+        reason: 'Delay event 2 until after event 4.',
+      }],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-move',
+        affected_page_numbers: [2, 3, 4],
+      }),
+    ]);
+  });
+
+  it('derives the changed combine page and every later shifted source page', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-combine',
+        title: 'Combine the middle turn',
+        rationale: 'Remove a redundant transition.',
+        affected_page_numbers: [2],
+      }],
+      operations: [{
+        item_id: 'item-combine',
+        operation_id: 'combine-2-3',
+        operation: 'combine',
+        source_beat_ids: ['structural-2', 'structural-3'],
+        reason: 'Combine the related middle events.',
+        summary: 'Structural events 2 and 3 reach their outcomes in one escalating turn.',
+      }],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-combine',
+        affected_page_numbers: [2, 3, 4],
+      }),
+    ]);
+  });
+
+  it('derives a mid-outline insertion page and every later shifted or future page', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-add',
+        title: 'Add connective escalation',
+        rationale: 'Bridge the middle turns.',
+        affected_page_numbers: [3],
+      }],
+      operations: [{
+        item_id: 'item-add',
+        operation_id: 'add-after-2',
+        operation: 'add',
+        source_beat_ids: [],
+        anchor_source_beat_id: 'structural-2',
+        placement: 'after',
+        reason: 'Add the missing connective event.',
+        summary: 'A new complication forces the third event onto a later page.',
+      }],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-add',
+        affected_page_numbers: [3, 4, 5],
+      }),
+    ]);
+  });
+
+  it('preserves one-page ownership for a wording edit', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-edit',
+        title: 'Strengthen page 2',
+        rationale: 'Clarify the consequence.',
+        affected_page_numbers: [99],
+      }],
+      operations: [{
+        item_id: 'item-edit',
+        operation_id: 'edit-page-2',
+        operation: 'edit',
+        source_beat_ids: ['structural-2'],
+        reason: 'Clarify event 2.',
+        summary: 'Structural event 2 reaches outcome 2 and immediately costs the hero an ally.',
+      }],
+    }, structuralInput);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-edit',
+        affected_page_numbers: [2],
+      }),
+    ]);
+  });
+
+  it('preserves contiguous future ownership for an append-only 71-to-85 expansion', () => {
+    const expansionSourceBeats = Array.from({ length: 71 }, (_, index) => ({
+      id: `expansion-${index + 1}`,
+      ordinal: index + 1,
+      page_target: index + 1,
+      text: `Expansion event ${index + 1} reaches outcome ${index + 1}.`,
+    }));
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-expansion',
+        title: 'Expand the ending',
+        rationale: 'Give the denouement fourteen pages.',
+        affected_page_numbers: [72],
+      }],
+      operations: Array.from({ length: 14 }, (_, index) => ({
+        item_id: 'item-expansion',
+        operation_id: `append-${index + 72}`,
+        operation: 'add' as const,
+        source_beat_ids: [],
+        anchor_source_beat_id: 'expansion-71',
+        placement: 'after' as const,
+        reason: `Add ending beat ${index + 72}.`,
+        summary: `The ending develops consequence ${index + 72} before the final choice.`,
+      })),
+    }, {
+      treatmentMode: 'structure',
+      sourcePageCount: 71,
+      allowedPageRange: { min: 71, max: 85 },
+      sourceBeats: expansionSourceBeats,
+      protectedTerms: [],
+    });
+
+    expect(result.patch.proposal.page_beats).toHaveLength(85);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-expansion',
+        affected_page_numbers: Array.from({ length: 14 }, (_, index) => index + 72),
       }),
     ]);
   });
