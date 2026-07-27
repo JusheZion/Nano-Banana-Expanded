@@ -653,9 +653,9 @@ Use concise conventional commits, push `codex/pacing-revision-virtual-pages`, op
 
 ### Pass 4 — Hosted recovery
 
-- [ ] Deploy migration and frontend.
-- [ ] Verify production exposes the compatibility RPC.
+- [x] Deploy migration and frontend.
+- [x] Verify the hosted migration ledger and current production bundle.
 - [ ] Retry the reported stuck set and confirm it reopens without unrelated live-content mutation.
 - [ ] Commit, push, review, merge, and record immutable deployment state.
 
-**Result:** Pending hosted verification.
+**Result:** Migration `20260727010000` is aligned locally/remotely and Cloudflare version `5ff8d019-58f7-4805-a21b-987ec68b6342` serves the tested `index-CVDkQu8b.js` bundle with a clean signed-in QA console. The exact stuck set belongs to a different signed-in browser/account session, so its one-click recovery remains the required representative confirmation.
