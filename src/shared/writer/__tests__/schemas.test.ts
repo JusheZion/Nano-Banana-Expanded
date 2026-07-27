@@ -63,22 +63,70 @@ describe('writerToolsRequestSchema', () => {
     expect(writerToolsOutlineTreatmentPreviewRequestSchema.parse(treatmentRequest).source_beats).toHaveLength(1);
   });
 
-  it('requires exactly one Pacing Revision child layer per page request', () => {
-    const base = {
+  it('accepts physical and virtual Pacing Revision page targets', () => {
+    const physicalRequest = {
       mode: 'pacing_revision_page_preview' as const,
       revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
       page_id: '550e8400-e29b-41d4-a716-446655440001',
-    };
-    expect(writerToolsPacingRevisionPagePreviewRequestSchema.parse({
-      ...base,
+      page_number: 71,
       include_beats: true,
       include_dialogue: false,
-    })).toMatchObject({ include_beats: true, include_dialogue: false });
-    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse(base).success).toBe(false);
+    };
+    const virtualRequest = {
+      ...physicalRequest,
+      page_id: null,
+      page_number: 72,
+    };
+
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse(physicalRequest).success).toBe(true);
+    expect(writerToolsRequestSchema.safeParse(virtualRequest).success).toBe(true);
+  });
+
+  it('requires a bounded integer page number for Pacing Revision page targets', () => {
+    const virtualRequest = {
+      mode: 'pacing_revision_page_preview' as const,
+      revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
+      page_id: null,
+      page_number: 72,
+      include_beats: true,
+      include_dialogue: false,
+    };
+
     expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
-      ...base,
+      ...virtualRequest,
+      page_number: 0,
+    }).success).toBe(false);
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
+      ...virtualRequest,
+      page_number: 201,
+    }).success).toBe(false);
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
+      ...virtualRequest,
+      page_number: 71.5,
+    }).success).toBe(false);
+    const { page_number: _pageNumber, ...missingPageNumber } = virtualRequest;
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse(missingPageNumber).success).toBe(false);
+  });
+
+  it('requires exactly one Pacing Revision child layer per page request', () => {
+    const virtualRequest = {
+      mode: 'pacing_revision_page_preview' as const,
+      revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
+      page_id: null,
+      page_number: 72,
+      include_beats: true,
+      include_dialogue: false,
+    };
+
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
+      ...virtualRequest,
       include_beats: true,
       include_dialogue: true,
+    }).success).toBe(false);
+    expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse({
+      ...virtualRequest,
+      include_beats: false,
+      include_dialogue: false,
     }).success).toBe(false);
   });
 

@@ -53,7 +53,7 @@
 - Exactly one child layer remains mandatory.
 - API invocation retains the 90-second client timeout.
 
-- [ ] **Step 1: Add RED schema and API tests**
+- [x] **Step 1: Add RED schema and API tests**
 
 Add physical and virtual fixtures to `src/shared/writer/__tests__/schemas.test.ts` and `src/shared/api/__tests__/writerTools.test.ts`:
 
@@ -74,7 +74,7 @@ expect(writerToolsRequestSchema.safeParse({
 }).success).toBe(false);
 ```
 
-- [ ] **Step 2: Run focused tests and confirm failure**
+- [x] **Step 2: Run focused tests and confirm failure**
 
 Run:
 
@@ -84,7 +84,7 @@ npx vitest run src/shared/writer/__tests__/schemas.test.ts src/shared/api/__test
 
 Expected: FAIL because `page_number` is rejected and `page_id` cannot be null.
 
-- [ ] **Step 3: Update mirrored contracts**
+- [x] **Step 3: Update mirrored contracts**
 
 Use the same strict shape in `src/shared/writer/schemas.ts` and `supabase/functions/_shared/writerSchemas.ts`:
 
@@ -103,11 +103,11 @@ export const writerToolsPacingRevisionPagePreviewRequestSchema = z.object({
 
 Update `WriterToolsPacingRevisionPagePreviewPayload` to match.
 
-- [ ] **Step 4: Run Pass 1 smoke**
+- [x] **Step 4: Run Pass 1 smoke**
 
 Run the two schema/API test files. Expected: both files pass.
 
-- [ ] **Step 5: Commit Pass 1**
+- [x] **Step 5: Commit Pass 1**
 
 ```bash
 git add src/shared/writer/schemas.ts src/shared/writer/types.ts supabase/functions/_shared/writerSchemas.ts src/shared/writer/__tests__/schemas.test.ts src/shared/api/__tests__/writerTools.test.ts docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md
@@ -116,7 +116,7 @@ git commit -m "feat: define virtual pacing page requests"
 
 **Pass 1 smoke test:** Request schema/API tests only.
 
-**Pass 1 result:** Pending.
+**Pass 1 result:** Complete. RED failed on the new physical request because the strict schema did not accept `page_number`; GREEN passed both focused files (47 tests). Client and Edge schemas now accept UUID-backed physical targets and null-ID virtual targets with required integer page numbers from 1 through 200, still reject equal include flags, and API coverage confirms the 90-second timeout for both target kinds.
 
 ## Pass 2: Outline target enforcement and virtual hosted preview
 

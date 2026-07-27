@@ -200,7 +200,8 @@ export const writerToolsPacingRevisionOutlinePreviewRequestSchema = z.object({
 export const writerToolsPacingRevisionPagePreviewRequestSchema = z.object({
   mode: z.literal('pacing_revision_page_preview'),
   revision_set_id: z.string().uuid(),
-  page_id: z.string().uuid(),
+  page_id: z.string().uuid().nullable(),
+  page_number: z.number().int().min(1).max(200),
   include_beats: z.boolean(),
   include_dialogue: z.boolean(),
 }).strict().refine((request) => request.include_beats !== request.include_dialogue, {

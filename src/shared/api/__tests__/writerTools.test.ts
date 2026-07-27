@@ -129,13 +129,28 @@ describe('invokeWriterTools token refresh behavior', () => {
     );
   });
 
-  it('bounds the one-page pacing revision invocation', async () => {
+  it.each([
+    {
+      target: 'physical',
+      pageId: '550e8400-e29b-41d4-a716-446655440001',
+      pageNumber: 71,
+    },
+    {
+      target: 'virtual',
+      pageId: null,
+      pageNumber: 72,
+    },
+  ])('bounds the one-page pacing revision invocation for a $target target', async ({
+    pageId,
+    pageNumber,
+  }) => {
     const now = Math.floor(Date.now() / 1000);
     const freshToken = makeJwt({ role: 'authenticated', exp: now + 3600 });
     const body: WriterToolsRequest = {
       mode: 'pacing_revision_page_preview',
       revision_set_id: '550e8400-e29b-41d4-a716-446655440000',
-      page_id: '550e8400-e29b-41d4-a716-446655440001',
+      page_id: pageId,
+      page_number: pageNumber,
       include_beats: true,
       include_dialogue: false,
     };
