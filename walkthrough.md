@@ -13693,7 +13693,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - A fresh signed-in production tab exposed the new selection, disclosure, approve, and reject controls with no browser warning/error entries; the production endpoint returned HTTP 200.
 
 ### Outstanding issues
-- Branch publication, pull-request creation, and merge are pending this continuity commit.
+- Ready PR #28 is open and mergeable. Final merge and remote-main confirmation remain pending.
 
 ### Risks or caveats
 - Existing Story Review polish opportunities remain outside this focused correction: the diagnostic Pacing Review card still exposes raw JSON, the revision workspace sits below a tall diagnostic section, failure-summary actions are visually similar text links, sidebar microcopy is small, and extremely wide viewports leave substantial surrounding canvas.
@@ -13704,4 +13704,4 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - None.
 
 ### Next steps
-- Push `codex/pacing-revision-selection-ux`, create the reviewed pull request, merge it after checks pass, then record the final merge commit.
+- Merge ready PR #28, verify remote `main`, then record the final merge commit.

@@ -548,13 +548,15 @@ Confirm the root `AGENTS.md` contract matches the shipped behavior. No child `AG
 
 DOX result: PASS — the root active-tab selection contract matches the implementation, the Child DOX Index remains accurate, and no new durable folder boundary or child `AGENTS.md` is needed.
 
-- [ ] **Step 5: Commit and push**
+- [x] **Step 5: Commit and push**
 
 ```bash
 git add AGENTS.md walkthrough.md docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md
 git commit -m "docs: record pacing selection UX release"
 git push -u origin codex/pacing-revision-selection-ux
 ```
+
+Publication result: PASS — the clean branch was pushed to `origin/codex/pacing-revision-selection-ux`, and ready PR #28 was opened against `main`. GitHub reports the branch mergeable; the Supabase Preview check was skipped because this frontend-only branch has no Supabase deployment delta.
 
 - [x] **Step 6: Review, deploy, and verify**
 
