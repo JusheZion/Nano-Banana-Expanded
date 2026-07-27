@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterPacingRevisionWorkspace } from '../WriterPacingRevisionWorkspace';
@@ -81,6 +81,54 @@ describe('WriterPacingRevisionWorkspace', () => {
     fireEvent.click(screen.getByLabelText(/Select Strengthen the opening outline change/));
     fireEvent.click(screen.getByRole('button', { name: /Approve selected/ }));
     expect(onChange).toHaveBeenCalledWith(expect.any(String), { decision: 'approved' });
+  });
+
+  it('scopes select all, clear, counts, and batch decisions to the active tab', async () => {
+    const revisionSet = fixture();
+    const firstOutline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    revisionSet.items[0]!.changes.push({
+      ...firstOutline,
+      id: crypto.randomUUID(),
+      target_key: 'outline:second-turn',
+      reason: 'Strengthen the second turn.',
+      ai_proposal: { proposed_beat: { summary: 'The second door opens.' } },
+    });
+    const outlineIds = revisionSet.items.flatMap((item) => item.changes)
+      .filter((change) => change.layer === 'outline')
+      .map((change) => change.id);
+    const beatsId = revisionSet.items.flatMap((item) => item.changes)
+      .find((change) => change.layer === 'beats')!.id;
+    const onChange = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={onChange}
+        onApply={vi.fn()}
+      />,
+    );
+
+    const selectAllOutline = screen.getByRole('button', { name: 'Select all in Live Outline' });
+    expect(selectAllOutline.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(selectAllOutline);
+    expect(screen.getByRole('button', { name: 'Approve selected (2)' }).hasAttribute('disabled')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Live Outline selection' }));
+    expect(screen.getByRole('button', { name: 'Approve selected (0)' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
+
+    fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
+    expect(screen.getByRole('button', { name: 'Approve selected (0)' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all in Page Beats' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve selected (1)' }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+    expect(onChange).toHaveBeenCalledWith(beatsId, { decision: 'approved' });
+    for (const outlineId of outlineIds) {
+      expect(onChange).not.toHaveBeenCalledWith(outlineId, { decision: 'approved' });
+    }
+    fireEvent.click(screen.getByRole('tab', { name: /Live Outline/ }));
+    expect(screen.getByRole('button', { name: 'Approve selected (2)' }).hasAttribute('disabled')).toBe(false);
   });
 
   it('navigates dependencies and retries individual or batched failed layers', () => {

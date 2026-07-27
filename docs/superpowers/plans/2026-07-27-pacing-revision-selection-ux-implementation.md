@@ -36,7 +36,7 @@
 - Hidden selections from another tab are never included in the current tab's batch decision or count.
 - Outline selection and approval remain enabled while Page Beats or Dialogue candidates are missing.
 
-- [ ] **Step 1: Add a failing active-tab selection regression**
+- [x] **Step 1: Add a failing active-tab selection regression**
 
 Extend the fixture with a second ready Outline change and retain the ready Page Beats change. Add a test that selects all Outline changes, switches to Page Beats, selects its change, and proves `Approve selected` calls `onChange` only for the active Page Beats ID.
 
@@ -80,7 +80,7 @@ it('scopes select all, clear, counts, and batch decisions to the active tab', as
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -90,7 +90,7 @@ npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.t
 
 Expected: FAIL because `Select all in Live Outline` is absent and batch eligibility still spans all layers.
 
-- [ ] **Step 3: Derive active-layer eligibility and selection state**
+- [x] **Step 3: Derive active-layer eligibility and selection state**
 
 In `WriterPacingRevisionWorkspace.tsx`, replace global batch eligibility with active-layer derivations:
 
@@ -124,7 +124,7 @@ const clearActiveLayerSelection = () => {
 
 Keep `batchDecision` based on the new `selectedEligible`, so its `Promise.all` contains only active-tab ready changes.
 
-- [ ] **Step 4: Add the active-tab selection toolbar**
+- [x] **Step 4: Add the active-tab selection toolbar**
 
 Place this toolbar between the `Revision items` heading and the scrolling `<ol>`:
 
@@ -149,7 +149,7 @@ Place this toolbar between the `Revision items` heading and the scrolling `<ol>`
 </div>
 ```
 
-- [ ] **Step 5: Run the focused test and verify GREEN**
+- [x] **Step 5: Run the focused test and verify GREEN**
 
 Run:
 
@@ -159,7 +159,7 @@ npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.t
 
 Expected: the component test file passes.
 
-- [ ] **Step 6: Commit Pass 1**
+- [x] **Step 6: Commit Pass 1**
 
 ```bash
 git add src/portals/writer/WriterPacingRevisionWorkspace.tsx src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md
@@ -168,7 +168,7 @@ git commit -m "fix: scope pacing batch selection by tab"
 
 **Pass 1 smoke test:** Run the component test file only. Do not proceed until it passes.
 
-**Pass 1 result:** Record the test-file and individual-test counts after execution.
+**Pass 1 result:** PASS — focused smoke test completed with 1 test file and 6 individual tests passing. The regression first failed with 1 failed and 5 passing tests because the active-tab select-all control was absent.
 
 ## Pass 2: Persistent batch actions and compact failure disclosure
 

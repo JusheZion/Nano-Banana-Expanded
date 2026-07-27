@@ -124,9 +124,13 @@ export function WriterPacingRevisionWorkspace({
   const activeChange = allChanges.find((change) => change.id === activeChangeId && change.layer === layer)
     ?? visibleItems[0]?.changes.find((change) => change.layer === layer)
     ?? null;
-  const selectedEligible = allChanges.filter((change) =>
-    selectedIds.has(change.id) && change.generation_status === 'ready'
+  const activeLayerLabel = LAYERS.find((entry) => entry.id === layer)?.label ?? 'current tab';
+  const activeLayerEligible = allChanges.filter((change) =>
+    change.layer === layer && change.generation_status === 'ready'
   );
+  const selectedEligible = activeLayerEligible.filter((change) => selectedIds.has(change.id));
+  const allActiveEligibleSelected = activeLayerEligible.length > 0
+    && activeLayerEligible.every((change) => selectedIds.has(change.id));
   const pendingCount = allChanges.filter((change) => change.decision === 'pending').length;
   const approvedEligibleCount = approvedPacingRevisionChanges(revisionSet).length;
   const failureRows = useMemo(() => {
@@ -191,9 +195,32 @@ export function WriterPacingRevisionWorkspace({
     setActiveChangeId(first?.id ?? null);
   };
 
+  const selectAllActiveLayer = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const change of activeLayerEligible) next.add(change.id);
+      return next;
+    });
+  };
+
+  const clearActiveLayerSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const change of allChanges) {
+        if (change.layer === layer) next.delete(change.id);
+      }
+      return next;
+    });
+  };
+
   const batchDecision = async (decision: 'approved' | 'rejected') => {
     await Promise.all(selectedEligible.map((change) => onChange(change.id, { decision })));
-    setSelectedIds(new Set());
+    const actedOnIds = new Set(selectedEligible.map((change) => change.id));
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const changeId of actedOnIds) next.delete(changeId);
+      return next;
+    });
   };
 
   return (
@@ -276,6 +303,24 @@ export function WriterPacingRevisionWorkspace({
           <div className="flex items-center justify-between px-4 py-3">
             <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Revision items</span>
             <span className="text-[10px] font-bold text-slate-500">{visibleItems.length}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-300/70 px-3 py-2">
+            <button
+              type="button"
+              disabled={busy || activeLayerEligible.length === 0 || allActiveEligibleSelected}
+              onClick={selectAllActiveLayer}
+              className="text-[10px] font-black text-slate-700 underline underline-offset-2 transition-colors hover:text-amber-800 active:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Select all in {activeLayerLabel}
+            </button>
+            <button
+              type="button"
+              disabled={busy || selectedEligible.length === 0}
+              onClick={clearActiveLayerSelection}
+              className="text-[10px] font-black text-slate-600 underline underline-offset-2 transition-colors hover:text-slate-950 active:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear {activeLayerLabel} selection
+            </button>
           </div>
           <ol className="max-h-60 overflow-y-auto lg:max-h-[470px]">
             {visibleItems.map((item) => (
