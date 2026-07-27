@@ -106,7 +106,8 @@ describe('writerToolsRequestSchema', () => {
       ...virtualRequest,
       page_number: 71.5,
     }).success).toBe(false);
-    const { page_number: _pageNumber, ...missingPageNumber } = virtualRequest;
+    const missingPageNumber: Partial<typeof virtualRequest> = { ...virtualRequest };
+    delete missingPageNumber.page_number;
     expect(writerToolsPacingRevisionPagePreviewRequestSchema.safeParse(missingPageNumber).success).toBe(false);
   });
 
