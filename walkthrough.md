@@ -14350,6 +14350,59 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision virtual-page release - 2026-07-27
+
+### What changed
+- Completed and released the preview-first Pacing Revision workflow that can expand an approved Outline beyond the current physical page count without creating live pages during preview.
+- Future Page Beats and Dialogue candidates remain virtual until explicit Apply; Apply creates the exact contiguous pages, verifies persisted Outline/Beats/Dialogue content under database locks, and marks the Revision Set applied only after the transaction proves the complete target state.
+- Replaced client-sequenced Undo with an owner-scoped transaction that restores prior existing content, deletes only the exact created pages and applied outline, and reopens the exact Revision Set changes atomically.
+- Updated the workspace to show current remaining/ready/applied counts, hide resolved dependency warnings, keep failed Beats/Dialogue from blocking Outline approval, identify comparison pages/layers, and provide physical or virtual page navigation.
+- Deployed the database transaction migration, `writer-tools` v110, and the tested frontend bundle to production.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- related Pacing, persistence, migration, and workspace tests
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Virtual children use `page_id: null`, a deterministic `page_number`, and `virtual-page:N` preview identity. The server accepts them only when the accepted Outline impact deterministically owns that future page.
+- Apply preassigns and persists cleanup UUIDs before insertion, reloads authoritative issue/outline/page state, rejects gaps or collisions, and delegates final exact-state completion to an authenticated transaction.
+- Beats regeneration uses the existing database trigger to stale its dependent Dialogue candidate and remove completed progress before regeneration.
+- Production application commit: `c1e21f3`. Cloudflare version: `0fe36432-dcad-4dbe-bd9a-00f9deb93b04`.
+
+### Verification
+- Full Vitest: PASS, 141 test files / 977 tests.
+- Full ESLint: PASS, 0 errors / 71 existing warnings.
+- `npm run build`: PASS.
+- `git diff --check`: PASS.
+- Final independent code review: APPROVED with no remaining Critical or Important release blocker.
+- Supabase migration list: local/remote `20260727000000` aligned.
+- Supabase Function: `writer-tools` ACTIVE v110.
+- Local signed-in browser: truthful layer counts, comparison context, physical page navigation, and clean console verified.
+- Fresh signed-in production browser: current three-layer status labels and non-blocking layer-failure messaging verified; console returned no warnings or errors.
+
+### Outstanding issues
+- The dedicated QA account contains a 70-page non-expanding Revision Set, not a safe representative 71→85 set. A destructive hosted 71→85 Apply/Undo replay was therefore not fabricated against unrelated story data.
+
+### Risks or caveats
+- The production mutation contract is covered by focused, migration, persistence, concurrency, compensation, and full-regression tests, but the user's exact 71→85 story remains the first representative live expansion after refresh.
+
+### Operator follow-up
+- Refresh production, reopen the user's Pacing Revision Set, and confirm the future pages appear in Page Beats and Dialogue before applying. If the old 71-page projection is cached, regenerate only the affected Revision Set layers; do not recreate the story.
+
+### Next steps
+- Merge PR #30, confirm production remains live, and use the user's actual 71→85 set as the representative production confirmation.
+
 ## Pacing Revision transactional Undo and Dialogue invalidation closure - 2026-07-27
 
 ### What changed

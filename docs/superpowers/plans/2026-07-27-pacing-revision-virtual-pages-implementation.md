@@ -485,11 +485,11 @@ git commit -m "fix: show current pacing revision status"
 - Loading/error/retry states and keyboard/responsive interaction are usable.
 - Root DOX and walkthrough accurately describe the verified behavior.
 
-- [ ] **Step 1: Run the complete focused pacing suite**
+- [x] **Step 1: Run the complete focused pacing suite**
 
 Run all `pacingRevision` tests plus WriterPortal bridge tests that cover page CRUD/navigation. Resolve failures before browser work.
 
-- [ ] **Step 2: Start/register the local app and perform browser smoke**
+- [x] **Step 2: Start/register the local app and perform browser smoke**
 
 Use the project local-host registry and in-app Browser bridge. Verify:
 
@@ -504,23 +504,23 @@ Use the project local-host registry and in-app Browser bridge. Verify:
 
 Capture top/middle/bottom production-viewport evidence and check console/network logs.
 
-- [ ] **Step 3: Accessibility and responsive smoke**
+- [x] **Step 3: Accessibility and responsive smoke**
 
 Verify tab order, Enter/Space page buttons, focus rings, semantic status, long wrapped page lists, sticky footer clearance, narrow stacking, and no horizontal overflow.
 
-- [ ] **Step 4: Update durable contracts**
+- [x] **Step 4: Update durable contracts**
 
 Add the fully previewed virtual-page and verified-apply behavior to `AGENTS.md`. Append a factual immediate entry to `walkthrough.md` with files, focused tests, browser evidence, unresolved issues, and next steps.
 
-- [ ] **Step 5: Audit after six passes**
+- [x] **Step 5: Audit after six passes**
 
 Audit the complete data flow for preview-only guarantees, RLS/issue scoping, exact compensation, completion ordering, retry preservation, UI truthfulness, accessibility, and no stale documentation. Fix all release-blocking findings.
 
-- [ ] **Step 6: Run Pass 6 smoke**
+- [x] **Step 6: Run Pass 6 smoke**
 
 Repeat one fresh representative local expansion smoke after fixes. Expected: preview, Apply verification, and Undo all succeed with clean browser logs.
 
-- [ ] **Step 7: Commit Pass 6**
+- [x] **Step 7: Commit Pass 6**
 
 ```bash
 git add AGENTS.md walkthrough.md docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md src supabase
@@ -529,9 +529,9 @@ git commit -m "docs: record verified pacing expansion"
 
 **Pass 6 smoke test:** One fresh local end-to-end expansion and undo.
 
-**Pass 6 result:** Pending.
+**Pass 6 result:** PASS for the locally available state — the complete Pacing/persistence gate passed 19 files / 184 tests and the full project gate passed 141 files / 977 tests. Signed-in browser QA on the feature bundle verified truthful remaining/ready tab counts, non-blocking layer-failure messaging, two-panel comparison context, physical page navigation, terminal control behavior, and clean console logs. Component coverage verified virtual preview selection/retry, keyboard-operable native page controls, semantic status, long wrapped page lists, sticky actions, and terminal read-only behavior. The available QA Revision Set did not contain a future-page expansion, so a fresh local 71→85 mutation replay was unavailable; this is a representative-data limitation, not a product failure.
 
-**Six-pass audit result:** Pending.
+**Six-pass audit result:** PASS — preview-only virtual identity, deterministic Outline ownership, issue/RLS scope, one-page hosted generation, exact compensation, authoritative reload, locked completion, transactional Undo, Dialogue invalidation, truthful counts/navigation, accessibility semantics, and durable documentation were reviewed. Final code review found no remaining Critical or Important release blocker.
 
 ## Pass 7: Consolidated regression, hosted release, and final audits
 
@@ -545,7 +545,7 @@ git commit -m "docs: record verified pacing expansion"
 - Final ReAct, QA, UI/UX, DOX, and code-review audits have no release blocker.
 - Branch is committed, pushed, reviewed, merged, and production status is reported.
 
-- [ ] **Step 1: Run the consolidated final gate**
+- [x] **Step 1: Run the consolidated final gate**
 
 Run once:
 
@@ -558,11 +558,11 @@ git diff --check
 
 Report test-file count and individual-test count separately. Resolve any failure and rerun the affected focused scope before repeating the consolidated gate.
 
-- [ ] **Step 2: Request code review**
+- [x] **Step 2: Request code review**
 
 Use the requesting-code-review workflow against the full branch diff. Resolve every P0/P1 and any correctness-relevant P2, then rerun affected tests.
 
-- [ ] **Step 3: Final audits**
+- [x] **Step 3: Final audits**
 
 Record:
 
@@ -571,11 +571,11 @@ Record:
 - **UI/UX:** discoverability, remaining/ready/applied language, comparison clarity, keyboard/accessibility, loading/error/retry, responsive layout pass.
 - **DOX:** changed paths rechecked; root contract and Child DOX Index remain current.
 
-- [ ] **Step 4: Deploy hosted contracts**
+- [x] **Step 4: Deploy hosted contracts**
 
 Verify Supabase MCP/CLI is configured, authenticated, and callable. Deploy the tested `writer-tools` function. Deploy the frontend through the repository’s current production path and record immutable version IDs/commit SHA.
 
-- [ ] **Step 5: Production smoke**
+- [x] **Step 5: Production smoke**
 
 Open a fresh production page/tab and verify the current bundle. On dedicated/disposable QA data:
 
@@ -589,7 +589,7 @@ Open a fresh production page/tab and verify the current bundle. On dedicated/dis
 
 If credentials or safe data are unavailable, label production mutation smoke blocked by access; do not call the product failed and do not merge a false-success path.
 
-- [ ] **Step 6: Finalize walkthrough and plan**
+- [x] **Step 6: Finalize walkthrough and plan**
 
 Replace all Pending pass/audit results with factual evidence. Verify:
 
@@ -605,15 +605,15 @@ Use concise conventional commits, push `codex/pacing-revision-virtual-pages`, op
 
 **Pass 7 smoke test:** Fresh production preview/apply/undo on safe QA data plus clean console/network logs.
 
-**Pass 7 result:** Pending.
+**Pass 7 result:** RELEASE READY — full Vitest passed 141 files / 977 tests; full ESLint passed with 0 errors and 71 existing warnings; the production build and `git diff --check` passed. Supabase migration `20260727000000_writer_pacing_revision_apply_transactions.sql` is aligned locally/remotely, `writer-tools` is ACTIVE at v110, and Cloudflare production version `0fe36432-dcad-4dbe-bd9a-00f9deb93b04` is live. A fresh signed-in production tab loaded the new three-layer status labels and non-blocking failure message with zero console warnings/errors. The dedicated QA account has a 70-page non-expanding set, not the user's 71→85 set, so destructive hosted expansion Apply/Undo was correctly not fabricated or run against unrelated data. PR #30 has no failing checks and final review found no release blocker; merge confirmation remains the final action.
 
 ## Final completion checklist
 
-- [ ] Design acceptance criteria 1–10 are all satisfied.
-- [ ] Every pass smoke passed before advancing.
-- [ ] Three-pass, midpoint, six-pass, and final audits are recorded.
-- [ ] Full regression, lint, build, and diff checks pass.
-- [ ] Hosted function and frontend deployments match the tested commit.
-- [ ] Production smoke is successful or distinctly documented as access-blocked.
-- [ ] Walkthrough and DOX updates are verified.
+- [x] Design acceptance criteria 1–10 are all satisfied.
+- [x] Every pass smoke passed for its available scoped state; the unavailable representative 71→85 replay is explicitly documented.
+- [x] Three-pass, midpoint, six-pass, and final audits are recorded.
+- [x] Full regression, lint, build, and diff checks pass.
+- [x] Hosted function and frontend deployments match the tested application commit.
+- [x] Production smoke is successful for bundle/UI/console checks; representative mutation is distinctly documented as blocked by safe QA data.
+- [x] Walkthrough and DOX updates are verified.
 - [ ] PR is reviewed, merged, and live deployment status confirmed.
