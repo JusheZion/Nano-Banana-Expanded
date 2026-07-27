@@ -118,11 +118,6 @@ export async function discardWriterPacingRevisionSet(setId: string): Promise<{ o
   }
 }
 
-function exactIds(rows: Array<{ id: string }> | null, expectedIds: string[]): boolean {
-  const ids = new Set((rows ?? []).map((row) => row.id));
-  return ids.size === expectedIds.length && expectedIds.every((id) => ids.has(id));
-}
-
 export async function beginWriterPacingRevisionApply(
   setId: string,
   snapshot: unknown,
@@ -180,43 +175,15 @@ export async function completeWriterPacingRevisionSet(
     if (expectedIds.length === 0) {
       return { ok: false, error: 'No approved changes were provided for completion.' };
     }
-    const now = new Date().toISOString();
-    const { data: changedRows, error: changesError } = await supabase
-      .from('writer_pacing_revision_changes')
-      .update({ generation_status: 'applied', applied_at: now })
-      .in('id', expectedIds)
-      .eq('generation_status', 'ready')
-      .select('id');
-    if (changesError) return { ok: false, error: changesError.message };
-    if (!exactIds(changedRows, expectedIds)) {
-      return { ok: false, error: 'Completion did not mark every approved change as applied.' };
-    }
-    const { data: setRows, error: setError } = await supabase
-      .from('writer_pacing_revision_sets')
-      .update({ status: 'applied', apply_snapshot: snapshot, recovery_status: null })
-      .eq('id', setId)
-      .eq('status', 'applying')
-      .select('id');
-    if (setError || setRows?.length !== 1) {
-      const { data: rollbackRows, error: rollbackError } = await supabase
-        .from('writer_pacing_revision_changes')
-        .update({ generation_status: 'ready', applied_at: null })
-        .in('id', expectedIds)
-        .eq('generation_status', 'applied')
-        .select('id');
-      const completionError = setError?.message ?? 'Completion did not update the applying Revision Set.';
-      if (rollbackError || !exactIds(rollbackRows, expectedIds)) {
-        return {
-          ok: false,
-          error: `${completionError} Rollback did not restore every change to ready.`,
-        };
-      }
-      return {
-        ok: false,
-        error: completionError,
-      };
-    }
-    return { ok: true };
+    const { data, error } = await supabase.rpc('complete_writer_pacing_revision_apply', {
+      p_set_id: setId,
+      p_change_ids: expectedIds,
+      p_snapshot: snapshot,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data === true
+      ? { ok: true }
+      : { ok: false, error: 'Completion transaction did not confirm success.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }
@@ -232,38 +199,42 @@ export async function reopenWriterPacingRevisionSetAfterUndo(
     if (expectedIds.length === 0) {
       return { ok: false, error: 'No applied changes were provided for Undo.' };
     }
-    const { data: setRows, error: setError } = await supabase
-      .from('writer_pacing_revision_sets')
-      .update({ status: 'ready', recovery_status: 'undone' })
-      .eq('id', setId)
-      .eq('status', 'applied')
-      .select('id');
-    if (setError) return { ok: false, error: setError.message };
-    if (setRows?.length !== 1) {
-      return { ok: false, error: 'Undo did not reopen the applied Revision Set.' };
-    }
-    const { data: changedRows, error: changesError } = await supabase
-      .from('writer_pacing_revision_changes')
-      .update({ generation_status: 'ready', applied_at: null })
-      .in('id', expectedIds)
-      .eq('generation_status', 'applied')
-      .select('id');
-    if (!changesError && exactIds(changedRows, expectedIds)) return { ok: true };
+    const { data, error } = await supabase.rpc('reopen_writer_pacing_revision_after_undo', {
+      p_set_id: setId,
+      p_change_ids: expectedIds,
+    });
+    if (error) return { ok: false, error: error.message };
+    return data === true
+      ? { ok: true }
+      : { ok: false, error: 'Undo transaction did not confirm success.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}
 
-    const { data: compensationRows, error: compensationError } = await supabase
+export async function recoverWriterPacingRevisionApply(
+  setId: string,
+  snapshot: unknown,
+  detail: string,
+  cleanupComplete: boolean,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const normalizedDetail = detail.trim().slice(0, 500) || 'cleanup status unavailable';
+    const { data, error } = await supabase
       .from('writer_pacing_revision_sets')
-      .update({ status: 'applied', recovery_status: null })
+      .update({
+        status: cleanupComplete ? 'ready' : 'applying',
+        apply_snapshot: snapshot,
+        recovery_status: `${cleanupComplete ? 'recovered' : 'recovery_required'}: ${normalizedDetail}`,
+      })
       .eq('id', setId)
-      .eq('status', 'ready')
+      .eq('status', 'applying')
       .select('id');
-    const reopenError = changesError?.message ?? 'Undo did not reopen every applied change.';
-    if (compensationError || compensationRows?.length !== 1) {
-      return {
-        ok: false,
-        error: `${reopenError} Set compensation back to applied failed.`,
-      };
-    }
-    return { ok: false, error: reopenError };
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the Apply recovery state.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }

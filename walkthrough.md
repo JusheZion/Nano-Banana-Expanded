@@ -14039,3 +14039,51 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue to Pass 5 only after this corrected Pass 4 review is approved.
+
+## Pacing Revision Apply crash-safe atomicity correction - 2026-07-27
+
+### What changed
+- Reloaded the persisted Revision Set and issue record alongside the latest outline and pages before Apply; lock enforcement now derives from fresh issue notes.
+- Preassigned the outline UUID and every possible new page UUID, persisted the full cleanup plan before the first insert, and passed those IDs into outline/page creation.
+- Made exact planned-outline cleanup idempotent when interruption occurs before an insert is confirmed.
+- Added verified abort recovery: complete cleanup returns the set to retryable `ready` with visible detail, while incomplete cleanup remains `applying` with `recovery_required` detail.
+- Replaced client-side multi-table completion and Undo reopen sequences with authenticated owner-scoped PostgreSQL transactions that validate exact change membership, status, and row counts.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomOutlineCreate.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomOutlineDeleteExact.test.ts`
+- `src/shared/api/__tests__/arcsWriterRoomPageCreate.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The durable `applying` snapshot now contains all cleanup identities before any remote mutation, removing the response-to-snapshot crash window.
+- Recovery first reloads the set and only compensates a still-`applying` attempt, avoiding cleanup after a completion transaction may already have committed.
+- Completion and reopen functions use `SECURITY INVOKER`, explicit `auth.uid()` ownership, RLS-compatible writes, status locks, exact child membership, and exception-driven transaction rollback.
+
+### Verification
+- Focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts src/shared/api/__tests__/arcsWriterRoomOutlineCreate.test.ts src/shared/api/__tests__/arcsWriterRoomOutlineDeleteExact.test.ts src/shared/api/__tests__/arcsWriterRoomPageCreate.test.ts` — PASS, 7 files / 53 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The new migration has not been applied to hosted Supabase in this pass.
+- Browser and hosted Apply/Undo interruption smoke remain scheduled for later integration/release work.
+- Pass 5 truthful workspace status and navigation remain pending.
+
+### Risks or caveats
+- Continuing Apply on a set left `applying` by a hard process termination invokes cleanup from the persisted snapshot before retry; this pass intentionally does not add a separate Pass 5 recovery control.
+
+### Operator follow-up
+- Apply migration `20260727000000_writer_pacing_revision_apply_transactions.sql` before exercising completion or Undo against a hosted environment.
+
+### Next steps
+- Re-review the corrected Pass 4 diff, then continue to Pass 5 only after approval.

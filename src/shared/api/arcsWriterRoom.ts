@@ -325,6 +325,26 @@ export async function listWriterIssues(seriesId: string): Promise<WriterIssueRow
   })) as WriterIssueRow[];
 }
 
+/** Reload one issue directly so lock notes are authoritative at mutation time. */
+export async function getWriterIssue(issueId: string): Promise<WriterIssueRow | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from('writer_issues')
+    .select('id, series_id, issue_number, title, status, synopsis, notes, created_at, deleted_at')
+    .eq('id', issueId)
+    .maybeSingle();
+  if (error || !data) {
+    if (error) console.warn('[arcsWriterRoom] getWriterIssue', error.message);
+    return null;
+  }
+  return {
+    ...data,
+    notes: data.notes && typeof data.notes === 'object' && !Array.isArray(data.notes)
+      ? data.notes as Record<string, unknown>
+      : {},
+  } as WriterIssueRow;
+}
+
 /** List series that the signed-in owner has moved to Recoverable Trash. */
 export async function listTrashedWriterSeries(): Promise<WriterSeriesRow[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
@@ -399,6 +419,7 @@ export async function listWriterPages(issueId: string): Promise<WriterPageRow[]>
 
 /** Insert a page row for an issue (next page_number must be unique for that issue). */
 export async function createWriterPage(input: {
+  id?: string;
   issue_id: string;
   page_number: number;
 }): Promise<WriterPageRow | null> {
@@ -406,6 +427,7 @@ export async function createWriterPage(input: {
   const { data, error } = await supabase
     .from('writer_pages')
     .insert({
+      ...(input.id ? { id: input.id } : {}),
       issue_id: input.issue_id,
       page_number: input.page_number,
     })
@@ -539,6 +561,7 @@ export async function listWriterOutlinesForIssue(issueId: string): Promise<Write
 
 /** Inserts a new immutable outline version after reading the current latest version. */
 export async function createWriterOutlineVersion(input: {
+  outlineId?: string;
   issueId: string;
   outlineJson: Record<string, unknown>;
   sourceMode: WriterOutlineSourceMode;
@@ -578,6 +601,7 @@ export async function createWriterOutlineVersion(input: {
     const { data, error } = await supabase
       .from('writer_issue_outlines')
       .insert({
+        ...(input.outlineId ? { id: input.outlineId } : {}),
         issue_id: input.issueId,
         version: nextVersion,
         outline_json: input.outlineJson,
@@ -602,6 +626,7 @@ export async function createWriterOutlineVersion(input: {
 export async function deleteWriterOutlineById(input: {
   issueId: string;
   outlineId: string;
+  allowMissing?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseConfigured() || !supabase) return { ok: false, error: 'Supabase not configured' };
   try {
@@ -616,6 +641,7 @@ export async function deleteWriterOutlineById(input: {
       return { ok: false, error: error.message };
     }
     const deletedRows = (data ?? []) as Array<{ id: string }>;
+    if (input.allowMissing && deletedRows.length === 0) return { ok: true };
     if (deletedRows.length !== 1 || deletedRows[0]?.id !== input.outlineId) {
       const message = 'Exact outline row was not returned after deletion';
       console.warn('[arcsWriterRoom] deleteWriterOutlineById', message);

@@ -12,8 +12,8 @@ type ApplyWriters = {
   beginApply?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
   persistSnapshot?: (snapshot: PacingRevisionApplySnapshot) => Promise<void>;
   buildOutline: (approvedOutlineChanges: PacingRevisionChange[]) => Promise<unknown>;
-  writeOutline: (outline: unknown) => Promise<void>;
-  createPage: (pageNumber: number) => Promise<PacingRevisionCreatedPage>;
+  writeOutline: (outline: unknown, plannedOutlineId: string | null) => Promise<void>;
+  createPage: (pageNumber: number, plannedPageId: string) => Promise<PacingRevisionCreatedPage>;
   deletePages: (pageIds: string[]) => Promise<void>;
   writeBeats: (pageId: string, value: unknown) => Promise<void>;
   writeDialogue: (pageId: string, value: string | null) => Promise<void>;
@@ -21,6 +21,7 @@ type ApplyWriters = {
 
 export type PacingRevisionApplySnapshot = {
   outline: unknown;
+  plannedOutlineId: string | null;
   beats: Array<{ pageId: string; value: unknown }>;
   dialogue: Array<{ pageId: string; value: string | null }>;
   createdPages: PacingRevisionCreatedPage[];
@@ -28,6 +29,47 @@ export type PacingRevisionApplySnapshot = {
   targetPageCount: number;
   appliedIds: string[];
 };
+
+export function pacingRevisionApplySnapshotFromUnknown(
+  value: unknown,
+): PacingRevisionApplySnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    !Array.isArray(record.beats)
+    || !Array.isArray(record.dialogue)
+    || !Array.isArray(record.createdPages)
+    || !Array.isArray(record.appliedIds)
+    || !Number.isInteger(record.sourcePageCount)
+    || !Number.isInteger(record.targetPageCount)
+    || !record.createdPages.every((page) => {
+      if (!page || typeof page !== 'object' || Array.isArray(page)) return false;
+      const created = page as Record<string, unknown>;
+      return typeof created.pageId === 'string'
+        && created.pageId.length > 0
+        && Number.isInteger(created.pageNumber);
+    })
+    || !record.appliedIds.every((id) => typeof id === 'string')
+    || !(
+      record.plannedOutlineId == null
+      || typeof record.plannedOutlineId === 'string'
+    )
+  ) {
+    return null;
+  }
+  return {
+    outline: record.outline,
+    plannedOutlineId: typeof record.plannedOutlineId === 'string'
+      ? record.plannedOutlineId
+      : null,
+    beats: record.beats as PacingRevisionApplySnapshot['beats'],
+    dialogue: record.dialogue as PacingRevisionApplySnapshot['dialogue'],
+    createdPages: record.createdPages as PacingRevisionCreatedPage[],
+    sourcePageCount: record.sourcePageCount as number,
+    targetPageCount: record.targetPageCount as number,
+    appliedIds: record.appliedIds as string[],
+  };
+}
 
 export function pacingRevisionFingerprintKey(change: PacingRevisionChange): string {
   return `${change.layer}:${change.target_key}`;
@@ -47,17 +89,21 @@ function copySnapshot(snapshot: PacingRevisionApplySnapshot): PacingRevisionAppl
   };
 }
 
-export async function loadPacingRevisionApplyAuthority<TOutline, TPage>(readers: {
+export async function loadPacingRevisionApplyAuthority<TSet, TIssue, TOutline, TPage>(readers: {
+  loadSet: () => Promise<TSet>;
+  loadIssue: () => Promise<TIssue>;
   loadOutlines: () => Promise<TOutline[]>;
   loadPages: () => Promise<TPage[]>;
-}): Promise<{ latestOutline: TOutline; pages: TPage[] }> {
-  const [outlines, pages] = await Promise.all([
+}): Promise<{ set: TSet; issue: TIssue; latestOutline: TOutline; pages: TPage[] }> {
+  const [set, issue, outlines, pages] = await Promise.all([
+    readers.loadSet(),
+    readers.loadIssue(),
     readers.loadOutlines(),
     readers.loadPages(),
   ]);
   const latestOutline = outlines[0];
   if (!latestOutline) throw new Error('A current saved outline is required before Apply.');
-  return { latestOutline, pages };
+  return { set, issue, latestOutline, pages };
 }
 
 export async function applyPacingRevisionSet(args: {
@@ -204,13 +250,17 @@ export async function applyPacingRevisionSet(args: {
   }
   const snapshot: PacingRevisionApplySnapshot = {
     outline: args.set.source_outline_json,
+    plannedOutlineId: outlineChanges.length > 0 ? crypto.randomUUID() : null,
     beats: beatsChanges.flatMap((change) => change.page_id
       ? [{ pageId: change.page_id, value: change.current_value }]
       : []),
     dialogue: dialogueChanges.flatMap((change) => change.page_id
       ? [{ pageId: change.page_id, value: typeof change.current_value === 'string' ? change.current_value : null }]
       : []),
-    createdPages: [],
+    createdPages: createdPageNumbers.map((pageNumber) => ({
+      pageId: crypto.randomUUID(),
+      pageNumber,
+    })),
     sourcePageCount: args.existingPages.length,
     targetPageCount,
     appliedIds: approved.map((change) => change.id),
@@ -224,19 +274,18 @@ export async function applyPacingRevisionSet(args: {
   await args.writers.beginApply(copySnapshot(snapshot));
   try {
     if (outlineChanges.length) {
-      await args.writers.writeOutline(targetOutline);
+      await args.writers.writeOutline(targetOutline, snapshot.plannedOutlineId);
       outlineWritten = true;
       await args.writers.persistSnapshot(copySnapshot(snapshot));
     }
     for (const pageNumber of createdPageNumbers) {
-      const created = await args.writers.createPage(pageNumber);
-      if (created?.pageId) {
-        snapshot.createdPages.push(created);
-        await args.writers.persistSnapshot(copySnapshot(snapshot));
-      }
+      const planned = snapshot.createdPages.find((page) => page.pageNumber === pageNumber);
+      if (!planned) throw new Error(`Created page ${pageNumber} is missing its planned identity.`);
+      const created = await args.writers.createPage(pageNumber, planned.pageId);
       if (
         !created?.pageId
         || created.pageNumber !== pageNumber
+        || created.pageId !== planned.pageId
         || createdByPageNumber.has(pageNumber)
         || [...createdByPageNumber.values()].includes(created.pageId)
       ) {
@@ -287,7 +336,7 @@ export async function applyPacingRevisionSet(args: {
     }
     if (outlineWritten) {
       try {
-        await args.writers.writeOutline(snapshot.outline);
+        await args.writers.writeOutline(snapshot.outline, snapshot.plannedOutlineId);
       } catch (recoveryError) {
         recoveryErrors.push(errorMessage(recoveryError));
       }
@@ -336,7 +385,7 @@ export async function undoPacingRevisionApply(
     }
   }
   try {
-    await writers.writeOutline(snapshot.outline);
+    await writers.writeOutline(snapshot.outline, snapshot.plannedOutlineId);
   } catch (error) {
     recoveryErrors.push(errorMessage(error));
   }

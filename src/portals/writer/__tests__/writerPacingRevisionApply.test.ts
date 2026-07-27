@@ -3,6 +3,7 @@ import type { PacingRevisionChange, PacingRevisionSet } from '@/shared/writer/pa
 import {
   applyPacingRevisionSet,
   loadPacingRevisionApplyAuthority,
+  pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
   type PacingRevisionApplySnapshot,
   undoPacingRevisionApply,
@@ -111,19 +112,47 @@ function lifecycle() {
 }
 
 describe('applyPacingRevisionSet', () => {
+  it('parses persisted cleanup plans and rejects incomplete crash snapshots', () => {
+    const valid = {
+      outline: {},
+      plannedOutlineId: crypto.randomUUID(),
+      beats: [],
+      dialogue: [],
+      createdPages: [{ pageId: crypto.randomUUID(), pageNumber: 2 }],
+      sourcePageCount: 1,
+      targetPageCount: 2,
+      appliedIds: [crypto.randomUUID()],
+    };
+    expect(pacingRevisionApplySnapshotFromUnknown(valid)).toEqual(valid);
+    expect(pacingRevisionApplySnapshotFromUnknown({
+      ...valid,
+      createdPages: [{ pageNumber: 2 }],
+    })).toBeNull();
+  });
+
   it('loads authoritative outline and pages instead of accepting cached state', async () => {
+    const freshSet = { id: 'fresh-set' };
+    const freshIssue = { id: 'fresh-issue', notes: { writer_locks: {} } };
     const freshOutline = { id: 'fresh-outline', outline_json: { page_beats: [] } };
     const freshPages = [{ id: 'fresh-page', page_number: 1 }];
+    const loadSet = vi.fn().mockResolvedValue(freshSet);
+    const loadIssue = vi.fn().mockResolvedValue(freshIssue);
     const loadOutlines = vi.fn().mockResolvedValue([freshOutline]);
     const loadPages = vi.fn().mockResolvedValue(freshPages);
 
     await expect(loadPacingRevisionApplyAuthority({
+      loadSet,
+      loadIssue,
       loadOutlines,
       loadPages,
     })).resolves.toEqual({
+      set: freshSet,
+      issue: freshIssue,
       latestOutline: freshOutline,
       pages: freshPages,
     });
+    expect(loadSet).toHaveBeenCalledOnce();
+    expect(loadIssue).toHaveBeenCalledOnce();
     expect(loadOutlines).toHaveBeenCalledOnce();
     expect(loadPages).toHaveBeenCalledOnce();
   });
@@ -131,46 +160,56 @@ describe('applyPacingRevisionSet', () => {
   it('creates virtual pages in order, maps returned IDs, and snapshots exact created rows', async () => {
     const { set, changes } = virtualFixture();
     const calls: string[] = [];
+    let plannedSnapshot: PacingRevisionApplySnapshot | null = null;
     const result = await applyPacingRevisionSet({
       set,
       existingPages: [{ pageId: 'physical-1', pageNumber: 1 }],
       currentFingerprints: fingerprints(changes),
       lockedTargetKeys: new Set(),
       writers: {
-        beginApply: async () => { calls.push('begin'); },
+        beginApply: async (snapshot) => {
+          plannedSnapshot = snapshot;
+          calls.push('begin');
+          expect(snapshot.plannedOutlineId).toMatch(/^[0-9a-f-]{36}$/);
+          expect(snapshot.createdPages.map((page) => page.pageNumber)).toEqual([2, 3]);
+        },
         persistSnapshot: async (snapshot) => {
           calls.push(`snapshot:${snapshot.createdPages.map((page) => page.pageNumber).join(',')}`);
         },
         buildOutline: async () => builtOutline(3),
-        writeOutline: async () => { calls.push('outline'); },
-        createPage: async (pageNumber) => {
+        writeOutline: async (_outline, outlineId) => {
+          calls.push('outline');
+          expect(outlineId).toBe(plannedSnapshot?.plannedOutlineId);
+        },
+        createPage: async (pageNumber, pageId) => {
           calls.push(`create:${pageNumber}`);
-          return { pageId: `created-${pageNumber}`, pageNumber };
+          expect(pageId).toBe(plannedSnapshot?.createdPages
+            .find((page) => page.pageNumber === pageNumber)?.pageId);
+          return { pageId, pageNumber };
         },
         deletePages: async () => { calls.push('delete'); },
         writeBeats: async (pageId) => { calls.push(`beats:${pageId}`); },
         writeDialogue: async (pageId) => { calls.push(`dialogue:${pageId}`); },
       },
     });
+    const createdIds = result.snapshot.createdPages.map((page) => page.pageId);
     expect(calls).toEqual([
       'begin',
       'outline',
-      'snapshot:',
-      'create:2',
-      'snapshot:2',
-      'create:3',
       'snapshot:2,3',
-      'beats:created-2',
-      'beats:created-3',
-      'dialogue:created-2',
-      'dialogue:created-3',
+      'create:2',
+      'create:3',
+      `beats:${createdIds[0]}`,
+      `beats:${createdIds[1]}`,
+      `dialogue:${createdIds[0]}`,
+      `dialogue:${createdIds[1]}`,
     ]);
     expect(result.snapshot).toMatchObject({
       sourcePageCount: 1,
       targetPageCount: 3,
       createdPages: [
-        { pageId: 'created-2', pageNumber: 2 },
-        { pageId: 'created-3', pageNumber: 3 },
+        { pageId: expect.stringMatching(/^[0-9a-f-]{36}$/), pageNumber: 2 },
+        { pageId: expect.stringMatching(/^[0-9a-f-]{36}$/), pageNumber: 3 },
       ],
       beats: [],
       dialogue: [],
@@ -322,6 +361,7 @@ describe('applyPacingRevisionSet', () => {
   it('deletes only exact created rows and restores the outline after a content failure', async () => {
     const { set, changes } = virtualFixture();
     const calls: string[] = [];
+    let plannedIds: string[] = [];
     await expect(applyPacingRevisionSet({
       set,
       existingPages: [{ pageId: 'physical-1', pageNumber: 1 }],
@@ -329,9 +369,10 @@ describe('applyPacingRevisionSet', () => {
       lockedTargetKeys: new Set(),
       writers: {
         ...lifecycle(),
+        beginApply: async (snapshot) => { plannedIds = snapshot.createdPages.map((page) => page.pageId); },
         buildOutline: async () => builtOutline(3),
         writeOutline: async (value) => { calls.push(value === set.source_outline_json ? 'restore-outline' : 'outline'); },
-        createPage: async (pageNumber) => ({ pageId: `created-${pageNumber}`, pageNumber }),
+        createPage: async (pageNumber, pageId) => ({ pageId, pageNumber }),
         deletePages: async (pageIds) => { calls.push(`delete:${pageIds.join(',')}`); },
         writeBeats: async (_pageId, value) => {
           if (JSON.stringify(value).includes('Action 3')) throw new Error('Beats write failed');
@@ -341,13 +382,40 @@ describe('applyPacingRevisionSet', () => {
     })).rejects.toThrow('Beats write failed');
     expect(calls).toEqual([
       'outline',
-      'delete:created-2,created-3',
+      `delete:${plannedIds.join(',')}`,
       'restore-outline',
     ]);
   });
 
   it('deletes a partially created prefix when page creation fails', async () => {
     const { set, changes } = virtualFixture();
+    const deletePages = vi.fn();
+    let plannedIds: string[] = [];
+    await expect(applyPacingRevisionSet({
+      set,
+      existingPages: [{ pageId: 'physical-1', pageNumber: 1 }],
+      currentFingerprints: fingerprints(changes),
+      lockedTargetKeys: new Set(),
+      writers: {
+        ...lifecycle(),
+        beginApply: async (snapshot) => { plannedIds = snapshot.createdPages.map((page) => page.pageId); },
+        buildOutline: async () => builtOutline(3),
+        writeOutline: vi.fn(),
+        createPage: async (pageNumber, pageId) => {
+          if (pageNumber === 3) throw new Error('Create failed');
+          return { pageId, pageNumber };
+        },
+        deletePages,
+        writeBeats: vi.fn(),
+        writeDialogue: vi.fn(),
+      },
+    })).rejects.toThrow('Create failed');
+    expect(deletePages).toHaveBeenCalledWith(plannedIds);
+  });
+
+  it('persists every cleanup identity before the first insert can fail', async () => {
+    const { set, changes } = virtualFixture();
+    let durableSnapshot: PacingRevisionApplySnapshot | null = null;
     const deletePages = vi.fn();
     await expect(applyPacingRevisionSet({
       set,
@@ -356,18 +424,30 @@ describe('applyPacingRevisionSet', () => {
       lockedTargetKeys: new Set(),
       writers: {
         ...lifecycle(),
+        beginApply: async (snapshot) => { durableSnapshot = snapshot; },
         buildOutline: async () => builtOutline(3),
         writeOutline: vi.fn(),
-        createPage: async (pageNumber) => {
-          if (pageNumber === 3) throw new Error('Create failed');
-          return { pageId: 'created-2', pageNumber };
-        },
+        createPage: async () => { throw new Error('Connection ended before insert response'); },
         deletePages,
         writeBeats: vi.fn(),
         writeDialogue: vi.fn(),
       },
-    })).rejects.toThrow('Create failed');
-    expect(deletePages).toHaveBeenCalledWith(['created-2']);
+    })).rejects.toThrow(/connection ended/i);
+
+    expect(durableSnapshot).not.toBeNull();
+    expect(deletePages).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+      ]),
+    );
+    expect(durableSnapshot).toMatchObject({
+      plannedOutlineId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      createdPages: [
+        { pageNumber: 2, pageId: expect.any(String) },
+        { pageNumber: 3, pageId: expect.any(String) },
+      ],
+    });
   });
 
   it('surfaces compensation failure without losing the original apply error', async () => {
@@ -381,7 +461,7 @@ describe('applyPacingRevisionSet', () => {
         ...lifecycle(),
         buildOutline: async () => builtOutline(2),
         writeOutline: vi.fn(),
-        createPage: async () => ({ pageId: 'created-2', pageNumber: 2 }),
+        createPage: async (_pageNumber, pageId) => ({ pageId, pageNumber: 2 }),
         deletePages: async () => { throw new Error('Delete cleanup failed'); },
         writeBeats: async () => { throw new Error('Beats write failed'); },
         writeDialogue: vi.fn(),
@@ -396,6 +476,7 @@ describe('applyPacingRevisionSet', () => {
     existingBeats.dependency_ids = [changes[0]!.id];
     set.items[0]!.changes = [changes[0]!, existingBeats, ...changes.slice(1)];
     const deletePages = vi.fn();
+    let plannedIds: string[] = [];
     await expect(applyPacingRevisionSet({
       set,
       existingPages: [{ pageId: existingBeats.page_id!, pageNumber: 1 }],
@@ -403,20 +484,21 @@ describe('applyPacingRevisionSet', () => {
       lockedTargetKeys: new Set(),
       writers: {
         ...lifecycle(),
+        beginApply: async (snapshot) => { plannedIds = snapshot.createdPages.map((page) => page.pageId); },
         buildOutline: async () => builtOutline(2),
         writeOutline: vi.fn(),
-        createPage: async () => ({ pageId: 'created-2', pageNumber: 2 }),
+        createPage: async (_pageNumber, pageId) => ({ pageId, pageNumber: 2 }),
         deletePages,
         writeBeats: async (pageId, value) => {
           if (pageId === existingBeats.page_id && value === existingBeats.current_value) {
             throw new Error('Existing Beats restore failed');
           }
-          if (pageId === 'created-2') throw new Error('Created Beats write failed');
+          if (pageId !== existingBeats.page_id) throw new Error('Created Beats write failed');
         },
         writeDialogue: vi.fn(),
       },
     })).rejects.toThrow(/Created Beats write failed.*Existing Beats restore failed/i);
-    expect(deletePages).toHaveBeenCalledWith(['created-2']);
+    expect(deletePages).toHaveBeenCalledWith(plannedIds);
   });
 
   it('applies outline, beats, then dialogue and returns an undo snapshot', async () => {
@@ -501,6 +583,7 @@ describe('applyPacingRevisionSet', () => {
     const writeDialogue = vi.fn();
     await undoPacingRevisionApply({
       outline: 'old',
+      plannedOutlineId: null,
       beats: [{ pageId: 'page', value: { panels: [] } }],
       dialogue: [{ pageId: 'page', value: 'OLD' }],
       createdPages: [{ pageId: 'created', pageNumber: 2 }],
@@ -513,7 +596,7 @@ describe('applyPacingRevisionSet', () => {
       writeDialogue,
       deletePages: vi.fn(),
     });
-    expect(writeOutline).toHaveBeenCalledWith('old');
+    expect(writeOutline).toHaveBeenCalledWith('old', null);
     expect(writeBeats).toHaveBeenCalledWith('page', { panels: [] });
     expect(writeDialogue).toHaveBeenCalledWith('page', 'OLD');
   });
@@ -521,6 +604,7 @@ describe('applyPacingRevisionSet', () => {
   it('does not hide an undo delete failure', async () => {
     await expect(undoPacingRevisionApply({
       outline: 'old',
+      plannedOutlineId: null,
       beats: [],
       dialogue: [],
       createdPages: [{ pageId: 'created', pageNumber: 2 }],
@@ -539,6 +623,7 @@ describe('applyPacingRevisionSet', () => {
     const calls: string[] = [];
     await expect(undoPacingRevisionApply({
       outline: 'old',
+      plannedOutlineId: null,
       beats: [{ pageId: 'existing', value: { panels: [] } }],
       dialogue: [{ pageId: 'existing', value: 'OLD' }],
       createdPages: [{ pageId: 'created', pageNumber: 2 }],
