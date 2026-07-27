@@ -153,4 +153,17 @@ describe('writerPacingRevisionModel', () => {
       rejected: 1,
     });
   });
+
+  it('counts only pending ready changes as remaining', () => {
+    const pendingReady = change({ layer: 'beats', generation_status: 'ready' });
+    const unavailableStatuses = ['pending', 'failed', 'stale', 'locked'] as const;
+    const unavailable = unavailableStatuses.map((generationStatus) =>
+      change({ layer: 'beats', generation_status: generationStatus })
+    );
+
+    expect(pacingRevisionLayerSummary(
+      setWith([pendingReady, ...unavailable]),
+      'beats',
+    ).remaining).toBe(1);
+  });
 });

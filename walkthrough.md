@@ -14309,3 +14309,43 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with Pass 6 integrated local QA.
+
+## Pacing Revision applied-page and status semantics correction - 2026-07-27
+
+### What changed
+- Treated an applied child change with `page_id: null` and a persisted `page_number` as a created physical page for context and external Writer navigation.
+- Restricted layer `remaining` counts to pending changes whose generation status is exactly `ready`; pending failed, stale, locked, or not-yet-generated rows no longer inflate actionable progress.
+- Standardized the applied primary action label as `All approved changes applied`.
+- Added one polite semantic `status` announcement to the applied success text and to an unapplied virtual-preview badge without duplicating visible copy.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/writerPacingRevisionModel.ts`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionModel.test.ts`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The proposal row retains `page_id: null` as immutable preview provenance after Apply; `generation_status: applied` is the lifecycle evidence that its `page_number` now identifies a physical page.
+- The terminal status text remains the disabled primary button's accessible name while its single nested status node supplies the live announcement.
+
+### Verification
+- RED: 4 focused failures reproduced the ready-count, applied label, semantic status, and applied virtual-navigation gaps.
+- Focused GREEN: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx` — PASS, 2 files / 32 tests.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 35 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` and targeted walkthrough presence check — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this focused lifecycle correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA after the consolidated focused gate.

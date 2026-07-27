@@ -81,7 +81,7 @@ export function pacingRevisionLayerSummary(
   const changes = all.filter((change) => change.layer === layer);
   return {
     remaining: changes.filter((change) =>
-      change.decision === 'pending' && change.generation_status !== 'applied'
+      change.decision === 'pending' && change.generation_status === 'ready'
     ).length,
     ready: changes.filter((change) =>
       change.decision === 'approved'

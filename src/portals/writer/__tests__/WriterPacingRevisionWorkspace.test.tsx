@@ -416,7 +416,10 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByText('Before this revision')).toBeTruthy();
     expect(screen.getByText('Applied revision')).toBeTruthy();
     expect(screen.getByText('Applied')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Revision applied' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'All approved changes applied' }).hasAttribute('disabled')).toBe(true);
+    const appliedStatus = screen.getAllByRole('status');
+    expect(appliedStatus).toHaveLength(1);
+    expect(appliedStatus[0]!.textContent).toBe('All approved changes applied');
     expect(screen.queryByRole('button', { name: 'Edit suggestion' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve change' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -517,6 +520,10 @@ describe('WriterPacingRevisionWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open virtual page 2 Page Beats preview' }));
     expect(screen.getByText('Page 2 · Page Beats')).toBeTruthy();
     expect(screen.getByText('Virtual page · will be created on Apply')).toBeTruthy();
+    const virtualStatus = screen.getAllByRole('status');
+    expect(virtualStatus).toHaveLength(1);
+    expect(virtualStatus[0]!.textContent).toBe('Virtual page · will be created on Apply');
+    expect(screen.getAllByText('Virtual page · will be created on Apply')).toHaveLength(1);
     expect(onNavigateToPage).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open virtual page 3 Page Beats preview' }));
@@ -524,6 +531,40 @@ describe('WriterPacingRevisionWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Page Beats for virtual page 3' }));
     expect(onRetryFailed).toHaveBeenCalledWith([{ page: 3, layer: 'beats' }]);
     expect(onNavigateToPage).not.toHaveBeenCalled();
+  });
+
+  it('navigates an applied virtual change as its created physical page', () => {
+    const revisionSet = fixture();
+    const item = revisionSet.items[0]!;
+    const beats = item.changes.find((change) => change.layer === 'beats')!;
+    item.affected_page_numbers = [1, 2];
+    item.changes.push({
+      ...beats,
+      id: crypto.randomUUID(),
+      target_key: 'virtual-page:2',
+      page_id: null,
+      page_number: 2,
+      decision: 'approved',
+      generation_status: 'applied',
+      reason: 'Applied bridge page.',
+    });
+    revisionSet.status = 'applied';
+    const onNavigateToPage = vi.fn();
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onNavigateToPage={onNavigateToPage}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open page 2 in Page Beats' }));
+
+    expect(onNavigateToPage).toHaveBeenCalledWith(2, 'beats');
+    expect(screen.queryByText('Virtual page · will be created on Apply')).toBeNull();
   });
 
   it('passes the failed layer when navigating physical failures and keeps virtual failures local', () => {

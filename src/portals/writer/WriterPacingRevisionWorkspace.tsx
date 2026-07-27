@@ -237,7 +237,7 @@ export function WriterPacingRevisionWorkspace({
   const allApprovedChangesApplied = approvedChanges.length > 0
     && approvedChanges.every((change) => change.generation_status === 'applied');
   const applyLabel = revisionSet.status === 'applied'
-    ? 'Revision applied'
+    ? 'All approved changes applied'
     : allApprovedChangesApplied
       ? 'All approved changes applied'
       : revisionSet.status === 'discarded'
@@ -271,6 +271,7 @@ export function WriterPacingRevisionWorkspace({
     ),
   ) => {
     const pageChanges = item?.changes.filter((change) => change.page_number === pageNumber) ?? [];
+    if (pageChanges.some((change) => change.generation_status === 'applied')) return false;
     if (pageChanges.some((change) => change.page_id === null)) return true;
     if (pageChanges.some((change) => typeof change.page_id === 'string')) return false;
     if (!item?.changes.some((change) => change.page_id === null)) return false;
@@ -352,7 +353,11 @@ export function WriterPacingRevisionWorkspace({
           onClick={() => void onApply()}
           className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {applying ? 'Applying…' : applyLabel}
+          {revisionSet.status === 'applied'
+            ? <span role="status" aria-live="polite">{applyLabel}</span>
+            : applying
+              ? 'Applying…'
+              : applyLabel}
         </button>
       </header>
 
@@ -561,8 +566,15 @@ export function WriterPacingRevisionWorkspace({
                     ? `Affected pages ${revisionSet.items.find((item) => item.id === activeChange.item_id)?.affected_page_numbers.join(', ') ?? 'unavailable'} · Live Outline`
                     : `Page ${activeChange.page_number ?? 'unavailable'} · ${activeChange.layer === 'beats' ? 'Page Beats' : 'Dialogue'}`}
                 </span>
-                {activeChange.page_id === null && activeChange.layer !== 'outline' && (
-                  <span className="bg-teal-100 px-2 py-1 text-[10px] uppercase tracking-wide text-teal-900">
+                {activeChange.page_id === null
+                  && activeChange.layer !== 'outline'
+                  && activeChange.generation_status !== 'applied'
+                  && (
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="bg-teal-100 px-2 py-1 text-[10px] uppercase tracking-wide text-teal-900"
+                  >
                     Virtual page · will be created on Apply
                   </span>
                 )}
