@@ -13731,7 +13731,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Virtual targets require a null request ID, a bounded unoccupied number above the physical maximum, contiguous proposed pages from the physical maximum through the request, and saved proposed-outline presence; they use `virtual-page:<number>`.
 - The model sees an ephemeral UUID for response echo validation, but persistence derives identity from the resolved target and forces virtual `page_id` and current values to null.
 - Virtual Dialogue still requires ready effective virtual Page Beats and depends on that Beats change. Existing auth/RLS, one-layer selection, locked-state rejection, malformed-output retry, progress, and failure-ledger behavior remain intact.
-- The DOX pass left `AGENTS.md` unchanged because the root contract already records preview-first Pacing Revision generation, dependency order, one-page hosted requests, and no automatic promotion; this pass did not alter ownership or repository structure.
+- Follow-up specification review added the missing root DOX contract for fully previewed virtual pages, saved-proposal authority, null live IDs during preview, exact Outline/Beats dependencies, and read-back-verified Apply.
 
 ### Verification
 - TDD RED runs failed for the missing resolver/target helpers, missing handler wiring, virtual persistence identity, in-range null-ID authorization, and the old contraction-capable lower bound.
@@ -13752,3 +13752,46 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Execute Pass 3 mixed physical/virtual client queueing after the Pass 2 commit.
+
+## Pacing Revision hosted-preview specification hardening - 2026-07-27
+
+### What changed
+- Removed model-only Revision Item page ownership: persisted item/page relationships now derive exclusively from accepted deterministic Outline changes.
+- Required virtual Page Beats to carry a non-empty applicable Outline dependency for the exact item/page and rejected virtual Dialogue whose effective Beats are not backed by that dependency.
+- Extracted an executable hosted-preview flow used by the Edge handler for target resolution, ownership, ephemeral model identity, effective Beats, candidate validation, and Revision Change persistence.
+- Added the durable fully-previewed virtual-page and verified-Apply contract to root DOX.
+
+### Files touched
+- `AGENTS.md`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.ts`
+- `supabase/functions/writer-tools/pacingRevisionPrompt.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.ts`
+- `supabase/functions/writer-tools/pacingRevisionPagePreviewFlow.test.ts`
+- `supabase/functions/writer-tools/pacingRevisionPageCandidate.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Physical page preview preserves its prior UUID/current-value behavior and may continue without virtual-only Outline dependency requirements.
+- Virtual prompt UUIDs remain ephemeral model echo identities. Persisted virtual children retain the real page number, `page_id: null`, `virtual-page:<number>`, and null current values.
+- The executable flow exposes no live-page mutation path; the handler only reads `writer_pages` during preview and persists candidates to `writer_pacing_revision_changes`.
+
+### Verification
+- Focused RED tests reproduced unsupported model ownership and the missing executable hosted-flow seam.
+- Corrected focused gate: 5 server files and 45 tests passed.
+- Targeted production-module TypeScript check passed.
+- Focused ESLint completed with 0 errors and the same 3 pre-existing explicit-`any` warnings.
+- `git diff --check` passed before commit closeout.
+
+### Outstanding issues
+- Apply/read-back/compensation implementation remains scheduled for Pass 4.
+
+### Risks or caveats
+- No hosted deploy or live production mutation was performed in this review-fix pass.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue to Pass 3 only after the corrected Pass 2 specification review is approved.

@@ -38,22 +38,22 @@ import {
   pacingRevisionAllowedPageRange,
 } from './pacingRevisionPrompt.ts';
 import {
-  buildPacingRevisionPageChangeRow,
   persistPacingRevisionOutlinePreview,
   projectPacingRevisionFailureLedger,
   type PacingRevisionChildLayer,
   type PacingRevisionFailure,
 } from './pacingRevisionPersistence.ts';
 import {
-  generateValidatedPacingRevisionPageCandidate,
   pacingRevisionPageResponseSchema,
 } from './pacingRevisionPageCandidate.ts';
 import {
-  buildPacingRevisionPromptPage,
-  proposedOutlinePageNumbers,
-  resolvePacingRevisionPageTarget,
   type PacingRevisionPhysicalPage,
 } from './pacingRevisionPageTarget.ts';
+import {
+  executePacingRevisionPagePreviewFlow,
+  type PacingRevisionPreviewChange,
+  type PacingRevisionPreviewItem,
+} from './pacingRevisionPagePreviewFlow.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseAdmin = any;
@@ -1757,34 +1757,10 @@ Deno.serve(async (req) => {
           { status: 500, headers: corsHeaders },
         );
       }
-      let target;
-      try {
-        target = resolvePacingRevisionPageTarget({
-          requestedPageId: page_id,
-          requestedPageNumber: page_number,
-          physicalPages: (physicalPages ?? []) as PacingRevisionPhysicalPage[],
-          proposedPageNumbers: proposedOutlinePageNumbers(revisionSet.proposed_outline_json),
-        });
-      } catch (error) {
-        return Response.json(
-          {
-            success: false,
-            error: 'Page target is not authorized for this Revision Set',
-            details: error instanceof Error ? error.message : String(error),
-          },
-          { status: 409, headers: corsHeaders },
-        );
-      }
-      const basePromptPage = buildPacingRevisionPromptPage(
-        target,
-        (physicalPages ?? []) as PacingRevisionPhysicalPage[],
-        crypto.randomUUID(),
-      );
       const { data: itemRows, error: itemError } = await supabase
         .from('writer_pacing_revision_items')
         .select('id, affected_page_numbers, generation_status')
         .eq('revision_set_id', revision_set_id)
-        .contains('affected_page_numbers', [target.pageNumber])
         .order('position', { ascending: true });
       if (itemError) {
         return Response.json(
@@ -1792,104 +1768,68 @@ Deno.serve(async (req) => {
           { status: 500, headers: corsHeaders },
         );
       }
-      const item = (itemRows ?? []).find((candidate: { generation_status: string }) =>
-        candidate.generation_status !== 'locked'
-      );
-      if (!item) {
-        return Response.json(
-          {
-            success: false,
-            error: (itemRows ?? []).length ? 'Affected Revision Item is locked' : 'No Revision Item owns this page',
-          },
-          { status: 409, headers: corsHeaders },
-        );
-      }
-      type ExistingPageChange = {
-        id: string;
-        layer: string;
-        target_key: string;
-        generation_status: string;
-        ai_proposal: unknown;
-        edited_candidate: unknown;
-      };
       const requestedLayers: PacingRevisionChildLayer[] = [
         ...(includeBeats ? ['beats' as const] : []),
         ...(includeDialogue ? ['dialogue' as const] : []),
       ];
-      const { data: existingChanges, error: existingChangesError } = await supabase
-        .from('writer_pacing_revision_changes')
-        .select('id, layer, target_key, generation_status, ai_proposal, edited_candidate')
-        .eq('item_id', item.id);
-      if (existingChangesError) {
-        return Response.json(
-          { success: false, error: 'Failed to load existing page candidates', details: existingChangesError.message },
-          { status: 500, headers: corsHeaders },
-        );
+      let existingChanges: PacingRevisionPreviewChange[] = [];
+      const itemIds = (itemRows ?? []).map((item: { id: string }) => item.id);
+      if (itemIds.length > 0) {
+        const { data, error } = await supabase
+          .from('writer_pacing_revision_changes')
+          .select('id, item_id, layer, target_key, page_number, generation_status, decision, ai_proposal, edited_candidate, dependency_ids')
+          .in('item_id', itemIds);
+        if (error) {
+          return Response.json(
+            { success: false, error: 'Failed to load existing page candidates', details: error.message },
+            { status: 500, headers: corsHeaders },
+          );
+        }
+        existingChanges = (data ?? []) as PacingRevisionPreviewChange[];
       }
-      const existingPageChange = (layer: PacingRevisionChildLayer) =>
-        (existingChanges ?? []).find((entry: ExistingPageChange) =>
-          entry.layer === layer && entry.target_key === target.targetKey
-        ) as ExistingPageChange | undefined;
-      const beatsChange = existingPageChange('beats');
-      const dialogueChange = existingPageChange('dialogue');
-      const beatsUnlocked = beatsChange?.generation_status !== 'locked';
-      const dialogueUnlocked = dialogueChange?.generation_status !== 'locked';
-      if ((includeBeats && !beatsUnlocked) || (includeDialogue && !dialogueUnlocked)) {
-        return Response.json(
-          { success: false, error: 'Selected page layer is locked' },
-          { status: 409, headers: corsHeaders },
-        );
-      }
-      let pageHasReadyBeats = Boolean(
-        beatsChange && ['ready', 'applied'].includes(beatsChange.generation_status)
-      );
-      let pageHasReadyDialogue = Boolean(
-        dialogueChange && ['ready', 'applied'].includes(dialogueChange.generation_status)
-      );
-      const effectiveBeatsCandidate = beatsChange?.edited_candidate ?? beatsChange?.ai_proposal;
-      if (includeDialogue && !includeBeats && (!pageHasReadyBeats || effectiveBeatsCandidate == null)) {
-        return Response.json(
-          {
-            success: false,
-            error: 'Page Beats candidate is required before Dialogue',
-            details: 'Generate or restore the Page Beats child change, then retry Dialogue.',
-          },
-          { status: 409, headers: corsHeaders },
-        );
-      }
-      const promptPage = includeDialogue && !includeBeats
-        ? { ...basePromptPage, beats_json: effectiveBeatsCandidate }
-        : basePromptPage;
-      const sid = issue.series_id;
-      const [castRes, locRes, bibleRes, loreDigest] = await Promise.all([
-        supabase.from('writer_cast').select('*').eq('series_id', sid),
-        supabase.from('writer_locations').select('*').eq('series_id', sid),
-        supabase.from('writer_style_bibles').select('*').eq('series_id', sid),
-        fetchLoreCardsDigest(supabase, sid),
-      ]);
-      const prompt = buildPacingRegenerationPreviewUserPrompt({
-        issue,
-        pages: [promptPage],
-        latestOutline: revisionSet.proposed_outline_json,
-        pacingReview: revisionSet.pacing_review_json,
-        includeBeats,
-        includeDialogue,
-        cast: castRes.data ?? [],
-        locations: locRes.data ?? [],
-        styleBibles: bibleRes.data ?? [],
-        loreCardsDigest: loreDigest,
-        productionDefaults: resolveProductionDefaultsPayload(issue),
-      });
-      let candidate: {
-        page_id: string;
-        page_number: number;
-        reason?: string;
-        proposed_beats_json?: unknown;
-        proposed_script_text?: string;
-      };
+      let flowResult;
       try {
-        candidate = await generateValidatedPacingRevisionPageCandidate(
-          (temperature) => callGeminiJson({
+        let promptContextPromise: Promise<{
+          cast: unknown[];
+          locations: unknown[];
+          styleBibles: unknown[];
+          loreCardsDigest: string;
+        }> | null = null;
+        flowResult = await executePacingRevisionPagePreviewFlow({
+          requestedPageId: page_id,
+          requestedPageNumber: page_number,
+          physicalPages: (physicalPages ?? []) as PacingRevisionPhysicalPage[],
+          proposedOutline: revisionSet.proposed_outline_json,
+          itemRows: (itemRows ?? []) as PacingRevisionPreviewItem[],
+          existingChanges,
+          includeBeats,
+          includeDialogue,
+          createPromptPageId: () => crypto.randomUUID(),
+          hashValue: (value) => sha256Hex(JSON.stringify(value)),
+          generate: async (promptPage, temperature) => {
+            promptContextPromise ??= Promise.all([
+              supabase.from('writer_cast').select('*').eq('series_id', issue.series_id),
+              supabase.from('writer_locations').select('*').eq('series_id', issue.series_id),
+              supabase.from('writer_style_bibles').select('*').eq('series_id', issue.series_id),
+              fetchLoreCardsDigest(supabase, issue.series_id),
+            ]).then(([castRes, locRes, bibleRes, loreCardsDigest]) => ({
+              cast: castRes.data ?? [],
+              locations: locRes.data ?? [],
+              styleBibles: bibleRes.data ?? [],
+              loreCardsDigest,
+            }));
+            const promptContext = await promptContextPromise;
+            const prompt = buildPacingRegenerationPreviewUserPrompt({
+              issue,
+              pages: [promptPage],
+              latestOutline: revisionSet.proposed_outline_json,
+              pacingReview: revisionSet.pacing_review_json,
+              includeBeats,
+              includeDialogue,
+              ...promptContext,
+              productionDefaults: resolveProductionDefaultsPayload(issue),
+            });
+            return callGeminiJson({
             system: [
               'You are a comics editor generating one preview-only pacing revision page.',
               'Output valid JSON only. Never modify saved content.',
@@ -1900,34 +1840,57 @@ Deno.serve(async (req) => {
             temperature,
             responseSchema: pacingRevisionPageResponseSchema(includeBeats, includeDialogue),
             requestTimeoutMs: 75_000,
-          }),
-          (value) => {
-            const parsed = pacingRegenerationPreviewResultSchema.parse(value);
-            if (parsed.pages.length !== 1) throw new Error('Exactly one page candidate is required');
-            const onlyPage = parsed.pages[0]!;
-            if (onlyPage.page_id !== promptPage.id || onlyPage.page_number !== target.pageNumber) {
-              throw new Error('Page candidate does not match the requested page');
-            }
-            if (includeBeats && !onlyPage.proposed_beats_json) {
-              throw new Error('Page Beats candidate is required');
-            }
-            if (includeDialogue && !onlyPage.proposed_script_text?.trim()) {
-              throw new Error('Dialogue candidate is required');
-            }
-            return onlyPage;
+            });
           },
-        );
+          parseResponse: (value) => pacingRegenerationPreviewResultSchema.parse(value),
+          persistChanges: async (changeRows) => {
+            const { data, error } = await supabase
+              .from('writer_pacing_revision_changes')
+              .upsert(changeRows, { onConflict: 'item_id,layer,target_key' })
+              .select('*');
+            if (error) {
+              const persistenceError = new Error(error.message);
+              persistenceError.name = 'PacingRevisionPersistenceError';
+              throw persistenceError;
+            }
+            return data ?? changeRows;
+          },
+        });
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
+        if (error instanceof Error && error.name === 'PacingRevisionPersistenceError') {
+          return Response.json(
+            { success: false, error: 'Failed to save page candidates', details: reason },
+            { status: 500, headers: corsHeaders },
+          );
+        }
+        const preflightFailure = /^(Exactly one page child layer|Requested |Resolved physical page|Affected Revision Item|No Revision Item|Selected page layer|Virtual Page Beats|Page Beats candidate is required before Dialogue)/.test(reason);
+        if (preflightFailure) {
+          return Response.json(
+            { success: false, error: 'Page target is not authorized for this Revision Set', details: reason },
+            { status: 409, headers: corsHeaders },
+          );
+        }
+        const item = (itemRows ?? []).find((candidate: PacingRevisionPreviewItem) =>
+          candidate.affected_page_numbers.includes(page_number)
+          && candidate.generation_status !== 'locked'
+        ) as PacingRevisionPreviewItem | undefined;
+        const targetKey = page_id ? `page:${page_id}` : `virtual-page:${page_number}`;
+        const selectedChanges = existingChanges.filter((change) => change.item_id === item?.id);
+        const layerIsReady = (layer: PacingRevisionChildLayer) => selectedChanges.some((change) =>
+          change.layer === layer
+          && change.target_key === targetKey
+          && ['ready', 'applied'].includes(change.generation_status)
+        );
         const ledger = Array.isArray(revisionSet.failure_ledger)
           ? revisionSet.failure_ledger
           : [];
         const requestedFailures = [
           ...(includeBeats
-            ? [{ page_number: target.pageNumber, item_id: item.id, layer: 'beats' as const, reason }]
+            ? [{ page_number, item_id: item?.id, layer: 'beats' as const, reason }]
             : []),
           ...(includeDialogue
-            ? [{ page_number: target.pageNumber, item_id: item.id, layer: 'dialogue' as const, reason }]
+            ? [{ page_number, item_id: item?.id, layer: 'dialogue' as const, reason }]
             : []),
         ];
         await supabase
@@ -1936,11 +1899,11 @@ Deno.serve(async (req) => {
             status: 'partially_ready',
             failure_ledger: projectPacingRevisionFailureLedger({
               ledger: ledger as PacingRevisionFailure[],
-              pageNumber: target.pageNumber,
+              pageNumber: page_number,
               requestedLayers,
               readyLayers: [
-                ...(pageHasReadyBeats ? ['beats' as const] : []),
-                ...(pageHasReadyDialogue ? ['dialogue' as const] : []),
+                ...(layerIsReady('beats') ? ['beats' as const] : []),
+                ...(layerIsReady('dialogue') ? ['dialogue' as const] : []),
               ],
               newFailures: requestedFailures,
             }),
@@ -1951,56 +1914,14 @@ Deno.serve(async (req) => {
           { status: 422, headers: corsHeaders },
         );
       }
-      const outlineDependencyIds = (existingChanges ?? [])
-        .filter((entry: { layer: string }) => entry.layer === 'outline')
-        .map((entry: { id: string }) => entry.id);
-      const now = new Date().toISOString();
-      const changeRows: Array<Record<string, unknown>> = [];
-      let beatsChangeId: string | null = beatsChange?.id ?? null;
-      if (includeBeats && beatsUnlocked && candidate.proposed_beats_json) {
-        beatsChangeId = beatsChange?.id ?? crypto.randomUUID();
-        pageHasReadyBeats = true;
-        pageHasReadyDialogue = false;
-        const currentValue = target.kind === 'virtual' ? null : basePromptPage.beats_json;
-        changeRows.push(buildPacingRevisionPageChangeRow({
-          id: beatsChangeId,
-          itemId: item.id,
-          layer: 'beats',
-          target,
-          currentValue,
-          aiProposal: candidate.proposed_beats_json,
-          dependencyIds: outlineDependencyIds,
-          reason: candidate.reason?.trim() || 'Pacing-aligned Page Beats revision.',
-          sourceFingerprint: await sha256Hex(JSON.stringify(currentValue)),
-          now,
-        }));
-      }
-      if (includeDialogue && dialogueUnlocked && candidate.proposed_script_text) {
-        pageHasReadyDialogue = true;
-        const currentValue = target.kind === 'virtual' ? null : basePromptPage.script_text;
-        changeRows.push(buildPacingRevisionPageChangeRow({
-          id: dialogueChange?.id ?? crypto.randomUUID(),
-          itemId: item.id,
-          layer: 'dialogue',
-          target,
-          currentValue,
-          aiProposal: candidate.proposed_script_text,
-          dependencyIds: beatsChangeId ? [beatsChangeId] : outlineDependencyIds,
-          reason: candidate.reason?.trim() || 'Pacing-aligned Dialogue revision.',
-          sourceFingerprint: await sha256Hex(JSON.stringify(currentValue)),
-          now,
-        }));
-      }
-      const { data: persistedChanges, error: changesError } = await supabase
-        .from('writer_pacing_revision_changes')
-        .upsert(changeRows, { onConflict: 'item_id,layer,target_key' })
-        .select('*');
-      if (changesError) {
-        return Response.json(
-          { success: false, error: 'Failed to save page candidates', details: changesError.message },
-          { status: 500, headers: corsHeaders },
-        );
-      }
+      const {
+        target,
+        item,
+        persistedChanges,
+        changeRows,
+        pageHasReadyBeats,
+        pageHasReadyDialogue,
+      } = flowResult;
       await supabase
         .from('writer_pacing_revision_items')
         .update({ generation_status: pageHasReadyBeats && pageHasReadyDialogue ? 'ready' : 'pending' })

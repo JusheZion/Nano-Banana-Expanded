@@ -213,11 +213,30 @@ export function buildPacingRevisionOutlinePreview(
       reason: operation.reason?.trim() || 'Pacing revision.',
     }];
   });
+  const acceptedPagesByItemId = new Map<string, number[]>();
+  for (const change of outlineChanges) {
+    if (change.page_number === null) continue;
+    const pages = acceptedPagesByItemId.get(change.item_id) ?? [];
+    pages.push(change.page_number);
+    acceptedPagesByItemId.set(change.item_id, pages);
+  }
+  const backedItems = normalized.items.flatMap((item): PacingRevisionItemPlan[] => {
+    const acceptedPages = uniquePages(acceptedPagesByItemId.get(item.item_id) ?? []);
+    return acceptedPages.length > 0
+      ? [{ ...item, affected_page_numbers: acceptedPages }]
+      : [];
+  });
+  const backed = mergeOverlappingItems(backedItems);
+  const backedItemIds = new Set(backed.items.map((item) => item.item_id));
+  const backedOutlineChanges = outlineChanges.flatMap((change): PacingOutlineChildChange[] => {
+    const itemId = backed.itemIdMap.get(change.item_id);
+    return itemId && backedItemIds.has(itemId) ? [{ ...change, item_id: itemId }] : [];
+  });
 
   return {
-    items: normalized.items,
+    items: backed.items,
     operations,
     patch,
-    outlineChanges,
+    outlineChanges: backedOutlineChanges,
   };
 }

@@ -55,7 +55,7 @@ describe('pacing revision outline planning', () => {
     expect(result.outlineChanges).toHaveLength(8);
   });
 
-  it('merges overlapping item ownership before deriving child changes', () => {
+  it('does not persist overlapping model ownership claims without accepted changes', () => {
     const result = buildPacingRevisionOutlinePreview({
       items: [
         {
@@ -74,11 +74,89 @@ describe('pacing revision outline planning', () => {
       operations: [],
     }, input);
 
-    expect(result.items).toEqual([expect.objectContaining({
-      item_id: 'item-a',
-      affected_page_numbers: [10, 11, 12],
-      title: 'Delay reveal / Tighten negotiation',
-    })]);
+    expect(result.items).toEqual([]);
+  });
+
+  it('drops model item pages that have no accepted deterministic Outline change', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [
+        {
+          item_id: 'item-backed',
+          title: 'Strengthen the opening',
+          rationale: 'Land the consequence.',
+          affected_page_numbers: [199],
+        },
+        {
+          item_id: 'item-unbacked',
+          title: 'Invent a future page',
+          rationale: 'Attempt unsupported ownership.',
+          affected_page_numbers: [72],
+        },
+      ],
+      operations: [
+        {
+          item_id: 'item-backed',
+          operation_id: 'accepted-edit',
+          operation: 'edit',
+          source_beat_ids: ['source-1'],
+          reason: 'Make the first consequence arrive earlier.',
+          summary: 'Story event 1 reaches outcome 1, forcing an immediate costly response.',
+        },
+        {
+          item_id: 'item-unbacked',
+          operation_id: 'rejected-edit',
+          operation: 'edit',
+          source_beat_ids: ['missing-source'],
+          reason: 'This must not authorize page 72.',
+          summary: 'Unsupported future event.',
+        },
+      ],
+    }, input);
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-backed',
+        affected_page_numbers: [1],
+      }),
+    ]);
+    expect(result.outlineChanges.map((change) => change.item_id)).toEqual(['item-backed']);
+  });
+
+  it('derives a future item page from an accepted deterministic add instead of model claims', () => {
+    const result = buildPacingRevisionOutlinePreview({
+      items: [{
+        item_id: 'item-future',
+        title: 'Add a denouement',
+        rationale: 'Give the ending room.',
+        affected_page_numbers: [199],
+      }],
+      operations: [{
+        item_id: 'item-future',
+        operation_id: 'accepted-add',
+        operation: 'add',
+        source_beat_ids: [],
+        anchor_source_beat_id: 'source-70',
+        placement: 'after',
+        reason: 'Add one connective ending beat.',
+        summary: 'The survivors absorb the final cost before choosing what comes next.',
+      }],
+    }, {
+      ...input,
+      allowedPageRange: { min: 70, max: 71 },
+    });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        item_id: 'item-future',
+        affected_page_numbers: [71],
+      }),
+    ]);
+    expect(result.outlineChanges).toEqual([
+      expect.objectContaining({
+        item_id: 'item-future',
+        page_number: 71,
+      }),
+    ]);
   });
 
   it('rejects invalid and cosmetic operations without losing source beats', () => {
