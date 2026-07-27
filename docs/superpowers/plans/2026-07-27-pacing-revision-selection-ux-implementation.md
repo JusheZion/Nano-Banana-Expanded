@@ -181,7 +181,7 @@ git commit -m "fix: scope pacing batch selection by tab"
 - Retry-all remains available while collapsed.
 - The Live Outline tab explicitly explains that child failures do not block Outline approval.
 
-- [ ] **Step 1: Add failing disclosure and visibility tests**
+- [x] **Step 1: Add failing disclosure and visibility tests**
 
 Add tests with these assertions:
 
@@ -217,7 +217,7 @@ it('keeps batch actions in a persistent sidebar footer', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -227,7 +227,7 @@ npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.t
 
 Expected: FAIL because the ledger always renders and the footer/list test IDs and sticky structure are absent.
 
-- [ ] **Step 3: Add accessible failure disclosure state**
+- [x] **Step 3: Add accessible failure disclosure state**
 
 Add state and render a concise summary:
 
@@ -310,7 +310,7 @@ const failureRegionId = 'pacing-failed-layer-details';
 </div>
 ```
 
-- [ ] **Step 4: Restructure the sidebar into fixed controls and a scrolling list**
+- [x] **Step 4: Restructure the sidebar into fixed controls and a scrolling list**
 
 Replace the opening `nav` tag with:
 
@@ -337,7 +337,7 @@ Apply these exact attribute replacements:
 >
 ```
 
-- [ ] **Step 5: Run the focused test and verify GREEN**
+- [x] **Step 5: Run the focused test and verify GREEN**
 
 Run:
 
@@ -360,7 +360,7 @@ Start the registered local frontend in this worktree using the project host regi
 
 Record the URL, port, viewport, and browser-console result.
 
-- [ ] **Step 7: Commit Pass 2**
+- [x] **Step 7: Commit Pass 2**
 
 ```bash
 git add src/portals/writer/WriterPacingRevisionWorkspace.tsx src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md
@@ -369,7 +369,7 @@ git commit -m "fix: keep pacing review actions visible"
 
 **Pass 2 smoke test:** Component tests plus the focused local browser workflow.
 
-**Pass 2 result:** Record automated and visual results before continuing.
+**Pass 2 result:** AUTOMATED PASS — focused smoke completed with 1 test file and 9 individual tests passing. RED first produced 5 expected failures and 4 passes because the disclosure, Outline independence message, and persistent sidebar structure were absent. Browser QA is intentionally deferred to the controller after this code-review-ready commit; Step 6 remains open until that visual smoke is recorded.
 
 ## Pass 3: Integration behavior and audit
 

@@ -131,6 +131,68 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Approve selected (2)' }).hasAttribute('disabled')).toBe(false);
   });
 
+  it('excludes non-ready active-tab changes from select all and batch counts', () => {
+    const revisionSet = fixture();
+    const firstOutline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    const staleOutline = {
+      ...firstOutline,
+      id: crypto.randomUUID(),
+      target_key: 'outline:stale-turn',
+      reason: 'Regenerate the stale turn.',
+      generation_status: 'stale' as const,
+    };
+    revisionSet.items[0]!.changes.push(staleOutline);
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all in Live Outline' }));
+
+    expect(screen.getByRole('button', { name: 'Approve selected (1)' })).toBeTruthy();
+    const outlineCheckboxes = screen.getAllByRole('checkbox', {
+      name: 'Select Strengthen the opening outline change',
+    });
+    expect(outlineCheckboxes).toHaveLength(2);
+    expect(outlineCheckboxes[1]!.hasAttribute('disabled')).toBe(true);
+    expect((outlineCheckboxes[1] as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('collapses failure details without hiding recovery or Outline independence', () => {
+    const onRetryFailed = vi.fn();
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={fixture()}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onRetryFailed={onRetryFailed}
+      />,
+    );
+
+    expect(screen.getByText('Page Beats and Dialogue failures do not prevent Outline approval.')).toBeTruthy();
+    const disclosure = screen.getByRole('button', { name: 'Show failed layers' });
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('pacing-recovery-list')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry all failed layers' }));
+    expect(onRetryFailed).toHaveBeenCalled();
+
+    fireEvent.click(disclosure);
+    expect(screen.getByTestId('pacing-recovery-list')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide failed layers' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps batch actions in a persistent sidebar footer', () => {
+    render(<WriterPacingRevisionWorkspace revisionSet={fixture()} onChange={vi.fn()} onApply={vi.fn()} />);
+    expect(screen.getByTestId('pacing-batch-footer').className).toContain('sticky');
+    expect(screen.getByTestId('pacing-batch-footer').className).toContain('bottom-0');
+    expect(screen.getByTestId('pacing-revision-item-list').className).toContain('overflow-y-auto');
+  });
+
   it('navigates dependencies and retries individual or batched failed layers', () => {
     const onRetryFailed = vi.fn();
     const onNavigateToPage = vi.fn();
@@ -139,6 +201,7 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByRole('note').textContent).toContain('depends on 1 earlier change');
     fireEvent.click(screen.getByRole('button', { name: 'Go to dependency' }));
     expect(screen.getByRole('tab', { name: /Live Outline/ }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Show failed layers' }));
     expect(screen.getByTestId('pacing-recovery-list').className).toContain('max-h-80');
     fireEvent.click(screen.getByRole('button', { name: 'Retry all failed layers' }));
     expect(onRetryFailed).toHaveBeenCalledWith([
@@ -160,6 +223,7 @@ describe('WriterPacingRevisionWorkspace', () => {
     const onRetryFailed = vi.fn();
     render(<WriterPacingRevisionWorkspace revisionSet={legacySet} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Show failed layers' }));
     expect(screen.queryByRole('button', { name: 'Retry Page Beats for page 1' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 1' }));
     expect(onRetryFailed).toHaveBeenCalledWith([{ page: 1, layer: 'dialogue' }]);
@@ -171,6 +235,7 @@ describe('WriterPacingRevisionWorkspace', () => {
     const onRetryFailed = vi.fn();
     render(<WriterPacingRevisionWorkspace revisionSet={incompleteSet} onChange={vi.fn()} onApply={vi.fn()} onRetryFailed={onRetryFailed} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Show failed layers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Retry Dialogue for page 1' }));
     expect(onRetryFailed).toHaveBeenCalledWith([{ page: 1, layer: 'dialogue' }]);
     expect(screen.getByText('Candidate has not been generated yet.')).toBeTruthy();
