@@ -14349,3 +14349,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
+
+## Pacing Revision independent applied status region - 2026-07-27
+
+### What changed
+- Moved the applied-success live region out of the disabled primary action into an independent sibling.
+- Kept the visible button label exactly `All approved changes applied` and made the standalone polite status screen-reader-only, avoiding duplicate visible copy.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The status and action share one wrapper but neither contains the other; the disabled button therefore retains native button semantics without owning the live region.
+- Unapplied virtual previews continue to use their own visible `status` badge, and no state renders duplicate applied status regions.
+
+### Verification
+- RED: the focused workspace case failed because the applied status was nested inside the disabled action.
+- Focused GREEN: `npx vitest run src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx` — PASS, 1 file / 25 tests.
+- Final focused gate: 3 files / 35 tests — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` and targeted walkthrough presence check — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this semantic-structure correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA after the consolidated focused gate.

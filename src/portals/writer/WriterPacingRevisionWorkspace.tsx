@@ -347,18 +347,19 @@ export function WriterPacingRevisionWorkspace({
           <h2 id="pacing-revision-title" className="mt-1 font-serif text-2xl font-semibold">Pacing revision workspace</h2>
           <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed or missing layers</p>
         </div>
-        <button
-          type="button"
-          disabled={busy || terminal || approvedEligibleCount === 0}
-          onClick={() => void onApply()}
-          className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {revisionSet.status === 'applied'
-            ? <span role="status" aria-live="polite">{applyLabel}</span>
-            : applying
-              ? 'Applying…'
-              : applyLabel}
-        </button>
+        <div>
+          {revisionSet.status === 'applied' && (
+            <span role="status" aria-live="polite" className="sr-only">{applyLabel}</span>
+          )}
+          <button
+            type="button"
+            disabled={busy || terminal || approvedEligibleCount === 0}
+            onClick={() => void onApply()}
+            className="bg-amber-300 px-5 py-2.5 text-xs font-black text-slate-950 transition hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {applying ? 'Applying…' : applyLabel}
+          </button>
+        </div>
       </header>
 
       <div className="flex overflow-x-auto border-b border-slate-300 bg-white" role="tablist" aria-label="Revision layers">

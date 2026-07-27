@@ -416,10 +416,13 @@ describe('WriterPacingRevisionWorkspace', () => {
     expect(screen.getByText('Before this revision')).toBeTruthy();
     expect(screen.getByText('Applied revision')).toBeTruthy();
     expect(screen.getByText('Applied')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'All approved changes applied' }).hasAttribute('disabled')).toBe(true);
+    const appliedAction = screen.getByRole('button', { name: 'All approved changes applied' });
+    expect(appliedAction.hasAttribute('disabled')).toBe(true);
     const appliedStatus = screen.getAllByRole('status');
     expect(appliedStatus).toHaveLength(1);
     expect(appliedStatus[0]!.textContent).toBe('All approved changes applied');
+    expect(appliedAction.contains(appliedStatus[0]!)).toBe(false);
+    expect(appliedAction.parentElement).toBe(appliedStatus[0]!.parentElement);
     expect(screen.queryByRole('button', { name: 'Edit suggestion' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Approve change' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
