@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PacingRevisionChange } from '@/shared/writer/pacingRevisionSchemas';
-import { verifyPacingRevisionApply } from '../writerPacingRevisionApplyVerification';
+import {
+  verifyPacingRevisionApply,
+  verifyPacingRevisionUndoRecovery,
+} from '../writerPacingRevisionApplyVerification';
 
 const SOURCE_COUNT = 71;
 const TARGET_COUNT = 85;
@@ -110,5 +113,38 @@ describe('verifyPacingRevisionApply', () => {
       ok: false,
       error: expect.stringMatching(expected),
     });
+  });
+});
+
+describe('verifyPacingRevisionUndoRecovery', () => {
+  it('requires restored existing content plus created-page and applied-outline absence', () => {
+    const snapshot = {
+      outline: { page_beats: [{ page_target: 1 }] },
+      plannedOutlineId: '10000000-0000-4000-8000-000000000001',
+      outlineApplied: true,
+      appliedOutlineId: '10000000-0000-4000-8000-000000000001',
+      beats: [{ pageId: '10000000-0000-4000-8000-000000000002', value: { panels: [] } }],
+      dialogue: [{ pageId: '10000000-0000-4000-8000-000000000002', value: 'OLD' }],
+      createdPages: [{ pageId: '10000000-0000-4000-8000-000000000003', pageNumber: 2 }],
+      sourcePageCount: 1,
+      targetPageCount: 2,
+      appliedIds: ['10000000-0000-4000-8000-000000000004'],
+    };
+    const page = {
+      id: snapshot.beats[0]!.pageId,
+      page_number: 1,
+      beats_json: { panels: [] },
+      script_text: 'OLD',
+    };
+    expect(verifyPacingRevisionUndoRecovery({
+      freshPages: [page],
+      freshOutlines: [{ id: 'source', outline_json: snapshot.outline }],
+      snapshot,
+    })).toEqual({ ok: true });
+    expect(verifyPacingRevisionUndoRecovery({
+      freshPages: [{ ...page, script_text: 'CHANGED' }],
+      freshOutlines: [{ id: 'source', outline_json: snapshot.outline }],
+      snapshot,
+    })).toEqual({ ok: false, error: expect.stringMatching(/Dialogue/i) });
   });
 });

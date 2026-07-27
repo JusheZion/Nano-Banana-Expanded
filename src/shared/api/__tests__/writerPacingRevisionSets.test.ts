@@ -39,6 +39,13 @@ const snapshot = {
   targetPageCount: 2,
   appliedIds: [CHANGE_ID],
 };
+const expectation = {
+  issue_id: ISSUE_ID,
+  outline_id: '10000000-0000-4000-8000-000000000005',
+  outline_json: {},
+  target_page_count: 2,
+  pages: [],
+};
 
 function updateChain(result: { data: unknown[] | null; error: { message: string } | null }) {
   const chain = {
@@ -175,12 +182,14 @@ describe('writer pacing revision persistence', () => {
       SET_ID,
       [CHANGE_ID],
       snapshot,
+      expectation,
     )).resolves.toEqual({ ok: true });
 
     expect(mocks.rpc).toHaveBeenCalledWith('complete_writer_pacing_revision_apply', {
       p_set_id: SET_ID,
       p_change_ids: [CHANGE_ID],
       p_snapshot: snapshot,
+      p_expectation: expectation,
     });
   });
 
@@ -197,7 +206,7 @@ describe('writer pacing revision persistence', () => {
   it('fails closed when a transactional RPC rejects the transition', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'state changed' } });
 
-    await expect(completeWriterPacingRevisionSet(SET_ID, [CHANGE_ID], snapshot)).resolves.toEqual({
+    await expect(completeWriterPacingRevisionSet(SET_ID, [CHANGE_ID], snapshot, expectation)).resolves.toEqual({
       ok: false,
       error: 'state changed',
     });

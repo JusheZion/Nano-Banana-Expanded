@@ -27,6 +27,7 @@ import {
   deleteLatestWriterOutline,
   deleteWriterLoreCard,
   deleteWriterPages,
+  deleteWriterPagesExact,
   ensureWriterPagesToCount,
   getNextWriterIssueNumber,
   getWriterIssue,
@@ -34,6 +35,7 @@ import {
   listWriterOutlinesForIssue,
   listWriterOutlinesForIssueResult,
   listWriterPages,
+  listWriterPagesResult,
   listWriterLoreCards,
   listWriterSeries,
   listWriterShotPlansForIssue,
@@ -47,7 +49,9 @@ import {
   updateWriterIssue,
   updateWriterIssueOutlineJson,
   updateWriterPageBeatsJson,
+  updateWriterPageBeatsJsonExact,
   updateWriterPageScriptText,
+  updateWriterPageScriptTextExact,
   updateWriterSeries,
   updateWriterLoreCard,
   updateWriterVideoShotPlanJson,
@@ -208,17 +212,19 @@ import { buildWriterRegenerationScope, type WriterRegenerationScope } from '@/po
 import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStorySnapshots';
 import {
   applyPacingRevisionSet,
+  buildPacingRevisionCompletionExpectation,
   loadPacingRevisionApplyAuthority,
   PacingRevisionCompletionResolutionError,
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
   resolvePacingRevisionCompletionFailure,
   undoPacingRevisionApply,
-  type PacingRevisionApplySnapshot,
+  validatePacingRevisionUndoAuthority,
 } from '@/portals/writer/writerPacingRevisionApply';
 import {
   verifyPacingRevisionApply,
   verifyPacingRevisionCreatedPagesAbsent,
+  verifyPacingRevisionUndoRecovery,
 } from '@/portals/writer/writerPacingRevisionApplyVerification';
 import {
   buildPacingRevisionOutlineFromApprovedChanges,
@@ -3490,7 +3496,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           return loaded;
         },
         loadOutlines: () => listWriterOutlinesForIssue(selectedIssueId),
-        loadPages: () => listWriterPages(selectedIssueId),
+        loadPages: async () => {
+          const loaded = await listWriterPagesResult(selectedIssueId);
+          if (!loaded.ok) throw new Error(loaded.error);
+          return loaded.rows;
+        },
       });
       if (authoritativeSet.issue_id !== authoritativeIssue.id) {
         throw new Error('The Revision Set no longer belongs to the selected issue.');
@@ -3546,7 +3556,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             const begun = await beginWriterPacingRevisionApply(authoritativeSet.id, {
               ...snapshot,
               outlineApplied: false,
-              appliedOutlineId: snapshot.plannedOutlineId,
+              appliedOutlineId: null,
             });
             if (!begun.ok) throw new Error(begun.error);
           },
@@ -3597,23 +3607,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             return { pageId: row.id, pageNumber: row.page_number };
           },
           deletePages: async (pageIds) => {
-            if (!await deleteWriterPages(pageIds)) {
-              throw new Error('Could not remove pages created by this Apply attempt.');
-            }
+            const deleted = await deleteWriterPagesExact(
+              selectedIssueId,
+              pageIds,
+              { allowMissing: true },
+            );
+            if (!deleted.ok) throw new Error(deleted.error);
           },
           writeBeats: async (pageId, value) => {
-            const ok = await updateWriterPageBeatsJson(
+            const saved = await updateWriterPageBeatsJsonExact(
               pageId,
               value && typeof value === 'object' && !Array.isArray(value)
                 ? value as Record<string, unknown>
                 : null,
             );
-            if (!ok) throw new Error(`Could not save Page Beats for ${pageId}.`);
+            if (!saved.ok) throw new Error(saved.error);
           },
           writeDialogue: async (pageId, value) => {
-            if (!await updateWriterPageScriptText(pageId, value)) {
-              throw new Error(`Could not save Dialogue for ${pageId}.`);
-            }
+            const saved = await updateWriterPageScriptTextExact(pageId, value);
+            if (!saved.ok) throw new Error(saved.error);
           },
         },
       });
@@ -3630,28 +3642,36 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             createdOutlineId = null;
           },
           writeBeats: async (pageId, value) => {
-            if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
-              throw new Error(`Could not restore Page Beats for ${pageId}.`);
-            }
+            const restored = await updateWriterPageBeatsJsonExact(
+              pageId,
+              value as Record<string, unknown> | null,
+            );
+            if (!restored.ok) throw new Error(restored.error);
           },
           writeDialogue: async (pageId, value) => {
-            if (!await updateWriterPageScriptText(pageId, value)) {
-              throw new Error(`Could not restore Dialogue for ${pageId}.`);
-            }
+            const restored = await updateWriterPageScriptTextExact(pageId, value);
+            if (!restored.ok) throw new Error(restored.error);
           },
           deletePages: async (pageIds) => {
-            if (!await deleteWriterPages(pageIds)) {
-              throw new Error('Could not remove pages created by this Apply attempt.');
-            }
+            const deleted = await deleteWriterPagesExact(
+              selectedIssueId,
+              pageIds,
+              { allowMissing: true },
+            );
+            if (!deleted.ok) throw new Error(deleted.error);
           },
         });
+        const cleanupPages = await listWriterPagesResult(selectedIssueId);
+        if (!cleanupPages.ok) throw new Error(cleanupPages.error);
         const cleanupVerification = verifyPacingRevisionCreatedPagesAbsent({
-          freshPages: await listWriterPages(selectedIssueId),
+          freshPages: cleanupPages.rows,
           createdPages: result.snapshot.createdPages,
         });
         if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
       };
-      const freshPages = await listWriterPages(selectedIssueId);
+      const freshPageResult = await listWriterPagesResult(selectedIssueId);
+      if (!freshPageResult.ok) throw new Error(freshPageResult.error);
+      const freshPages = freshPageResult.rows;
       const verification = verifyPacingRevisionApply({
         sourcePageCount: result.snapshot.sourcePageCount,
         targetPageCount: result.snapshot.targetPageCount,
@@ -3668,10 +3688,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         outlineApplied: Boolean(createdOutline),
         appliedOutlineId: createdOutlineId,
       };
+      const completionExpectation = buildPacingRevisionCompletionExpectation({
+        issueId: selectedIssueId,
+        outlineId: createdOutlineId ?? authoritativeOutline.id,
+        outlineJson: createdOutline ? result.targetOutline : authoritativeOutline.outline_json,
+        targetPageCount: result.snapshot.targetPageCount,
+        createdPages: result.snapshot.createdPages,
+        approvedChanges: result.approvedChanges,
+      });
       const completed = await completeWriterPacingRevisionSet(
         authoritativeSet.id,
         result.appliedIds,
         durableSnapshot,
+        completionExpectation,
       );
       if (!completed.ok) {
         try {
@@ -3683,11 +3712,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               return persisted.set.status;
             },
             verifyCommitted: async () => {
-              const committedPages = await listWriterPages(selectedIssueId);
+              const committedPageResult = await listWriterPagesResult(selectedIssueId);
+              if (!committedPageResult.ok) {
+                return { ok: false, error: committedPageResult.error };
+              }
               return verifyPacingRevisionApply({
                 sourcePageCount: result.snapshot.sourcePageCount,
                 targetPageCount: result.snapshot.targetPageCount,
-                freshPages: committedPages,
+                freshPages: committedPageResult.rows,
                 createdPages: result.snapshot.createdPages,
                 approvedChanges: result.approvedChanges,
               });
@@ -3738,36 +3770,39 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                 if (!deleted.ok) throw new Error(deleted.error);
               },
               writeBeats: async (pageId, value) => {
-                if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
-                  throw new Error(`Could not restore Page Beats for ${pageId}.`);
-                }
+                const restored = await updateWriterPageBeatsJsonExact(
+                  pageId,
+                  value as Record<string, unknown> | null,
+                );
+                if (!restored.ok) throw new Error(restored.error);
               },
               writeDialogue: async (pageId, value) => {
-                if (!await updateWriterPageScriptText(pageId, value)) {
-                  throw new Error(`Could not restore Dialogue for ${pageId}.`);
-                }
+                const restored = await updateWriterPageScriptTextExact(pageId, value);
+                if (!restored.ok) throw new Error(restored.error);
               },
               deletePages: async (pageIds) => {
-                if (!await deleteWriterPages(pageIds)) {
-                  throw new Error('Could not remove planned Apply pages.');
-                }
+                const deleted = await deleteWriterPagesExact(
+                  selectedIssueId,
+                  pageIds,
+                  { allowMissing: true },
+                );
+                if (!deleted.ok) throw new Error(deleted.error);
               },
             });
-            const [freshPages, freshOutlines] = await Promise.all([
-              listWriterPages(selectedIssueId),
-              listWriterOutlinesForIssue(selectedIssueId),
+            const [freshPageResult, freshOutlineResult] = await Promise.all([
+              listWriterPagesResult(selectedIssueId),
+              listWriterOutlinesForIssueResult(selectedIssueId),
             ]);
-            const pageCleanup = verifyPacingRevisionCreatedPagesAbsent({
+            if (!freshPageResult.ok) throw new Error(freshPageResult.error);
+            if (!freshOutlineResult.ok) throw new Error(freshOutlineResult.error);
+            const freshPages = freshPageResult.rows;
+            const freshOutlines = freshOutlineResult.rows;
+            const recoveryVerification = verifyPacingRevisionUndoRecovery({
               freshPages,
-              createdPages: recoverySnapshot.createdPages,
+              freshOutlines,
+              snapshot: recoverySnapshot,
             });
-            const outlineStillExists = recoverySnapshot.plannedOutlineId != null
-              && freshOutlines.some((outline) => outline.id === recoverySnapshot.plannedOutlineId);
-            if (!pageCleanup.ok || outlineStillExists) {
-              throw new Error(pageCleanup.ok
-                ? 'The planned outline still exists after cleanup.'
-                : pageCleanup.error);
-            }
+            if (!recoveryVerification.ok) throw new Error(recoveryVerification.error);
             const recovered = await recoverWriterPacingRevisionApply(
               applyingSetId,
               recoverySnapshot,
@@ -3803,56 +3838,74 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ]);
 
   const undoPacingRevision = useCallback(async () => {
-    const revisionSet = pacingRevision.activeSet;
-    if (!revisionSet?.apply_snapshot || !selectedIssueId) return;
-    const snapshot = revisionSet.apply_snapshot as PacingRevisionApplySnapshot & {
-      outlineApplied?: boolean;
-    };
-    const createdPages = Array.isArray(snapshot.createdPages) ? snapshot.createdPages : [];
+    const cachedSet = pacingRevision.activeSet;
+    if (!cachedSet?.apply_snapshot || !selectedIssueId) return;
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     try {
-      const latest = (await listWriterOutlinesForIssue(selectedIssueId))[0] ?? null;
+      const [setResult, issue, pageResult, outlineResult] = await Promise.all([
+        getWriterPacingRevisionSet(cachedSet.id),
+        getWriterIssue(selectedIssueId),
+        listWriterPagesResult(selectedIssueId),
+        listWriterOutlinesForIssueResult(selectedIssueId),
+      ]);
+      if (!setResult.ok) throw new Error(setResult.error);
+      if (!issue) throw new Error('The issue could not be reloaded before Undo.');
+      if (!pageResult.ok) throw new Error(pageResult.error);
+      if (!outlineResult.ok) throw new Error(outlineResult.error);
+      const authority = validatePacingRevisionUndoAuthority({
+        set: setResult.set,
+        issueId: issue.id,
+        freshPages: pageResult.rows,
+        freshOutlines: outlineResult.rows,
+      });
+      if (!authority.ok) throw new Error(authority.error);
+      const snapshot = authority.snapshot;
       await undoPacingRevisionApply(snapshot, {
-        writeOutline: async (outline) => {
+        writeOutline: async () => {
           if (!snapshot.outlineApplied) return;
-          const saved = await createWriterOutlineVersion({
+          const deleted = await deleteWriterOutlineById({
             issueId: selectedIssueId,
-            outlineJson: outline as Record<string, unknown>,
-            sourceMode: 'pacing_revision',
-            expectedPreviousId: latest?.id ?? null,
+            outlineId: snapshot.plannedOutlineId!,
           });
-          if (!saved.ok) throw new Error(saved.error);
+          if (!deleted.ok) throw new Error(deleted.error);
         },
         writeBeats: async (pageId, value) => {
-          if (!await updateWriterPageBeatsJson(pageId, value as Record<string, unknown> | null)) {
-            throw new Error(`Could not restore Page Beats for ${pageId}.`);
-          }
+          const restored = await updateWriterPageBeatsJsonExact(
+            pageId,
+            value as Record<string, unknown> | null,
+          );
+          if (!restored.ok) throw new Error(restored.error);
         },
         writeDialogue: async (pageId, value) => {
-          if (!await updateWriterPageScriptText(pageId, value)) {
-            throw new Error(`Could not restore Dialogue for ${pageId}.`);
-          }
+          const restored = await updateWriterPageScriptTextExact(pageId, value);
+          if (!restored.ok) throw new Error(restored.error);
         },
         deletePages: async (pageIds) => {
-          if (!await deleteWriterPages(pageIds)) {
-            throw new Error('Could not remove pages created by this Revision Set.');
-          }
+          const deleted = await deleteWriterPagesExact(selectedIssueId, pageIds);
+          if (!deleted.ok) throw new Error(deleted.error);
         },
       });
-      const cleanupVerification = verifyPacingRevisionCreatedPagesAbsent({
-        freshPages: await listWriterPages(selectedIssueId),
-        createdPages,
+      const [restoredPages, restoredOutlines] = await Promise.all([
+        listWriterPagesResult(selectedIssueId),
+        listWriterOutlinesForIssueResult(selectedIssueId),
+      ]);
+      if (!restoredPages.ok) throw new Error(restoredPages.error);
+      if (!restoredOutlines.ok) throw new Error(restoredOutlines.error);
+      const cleanupVerification = verifyPacingRevisionUndoRecovery({
+        freshPages: restoredPages.rows,
+        freshOutlines: restoredOutlines.rows,
+        snapshot,
       });
       if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
       const reopened = await reopenWriterPacingRevisionSetAfterUndo(
-        revisionSet.id,
+        setResult.set.id,
         snapshot.appliedIds,
       );
       if (!reopened.ok) throw new Error(reopened.error);
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
-      await pacingRevision.refresh(revisionSet.id);
+      await pacingRevision.refresh(setResult.set.id);
       pushHistory('undid pacing Revision Set');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not undo the Revision Set.';

@@ -1,4 +1,5 @@
 import type { PacingRevisionChange } from '@/shared/writer/pacingRevisionSchemas';
+import type { PacingRevisionApplySnapshot } from './writerPacingRevisionApply';
 import { effectivePacingRevisionCandidate } from './writerPacingRevisionModel';
 
 export type PacingRevisionCreatedPage = {
@@ -104,4 +105,42 @@ export function verifyPacingRevisionCreatedPagesAbsent(args: {
   return remaining
     ? { ok: false, error: `Created page ${remaining.pageNumber} still exists after cleanup.` }
     : { ok: true };
+}
+
+export function verifyPacingRevisionUndoRecovery(args: {
+  freshPages: PacingRevisionPersistedPage[];
+  freshOutlines: Array<{ id: string; outline_json: unknown }>;
+  snapshot: PacingRevisionApplySnapshot;
+}): PacingRevisionApplyVerification {
+  const absence = verifyPacingRevisionCreatedPagesAbsent({
+    freshPages: args.freshPages,
+    createdPages: args.snapshot.createdPages,
+  });
+  if (!absence.ok) return absence;
+  const pagesById = new Map(args.freshPages.map((page) => [page.id, page]));
+  for (const prior of args.snapshot.beats) {
+    const page = pagesById.get(prior.pageId);
+    if (!page || !equalValue(page.beats_json, prior.value)) {
+      return { ok: false, error: `Restored Page Beats could not be verified for ${prior.pageId}.` };
+    }
+  }
+  for (const prior of args.snapshot.dialogue) {
+    const page = pagesById.get(prior.pageId);
+    if (!page || page.script_text !== prior.value) {
+      return { ok: false, error: `Restored Dialogue could not be verified for ${prior.pageId}.` };
+    }
+  }
+  if (
+    args.snapshot.plannedOutlineId
+    && args.freshOutlines.some((outline) => outline.id === args.snapshot.plannedOutlineId)
+  ) {
+    return { ok: false, error: 'The applied outline still exists after recovery.' };
+  }
+  if (
+    args.snapshot.plannedOutlineId
+    && !equalValue(args.freshOutlines[0]?.outline_json, args.snapshot.outline)
+  ) {
+    return { ok: false, error: 'The restored source outline could not be verified.' };
+  }
+  return { ok: true };
 }

@@ -14121,3 +14121,43 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Proceed only after final Pass 4 review approval.
+
+## Pacing Revision Apply/Undo integrity closure - 2026-07-27
+
+### What changed
+- Normal Undo now strictly parses the persisted applied snapshot and binds it to freshly reloaded set, issue, changes, pages, created rows, and latest outline before writes.
+- Added result-bearing page reads and exact returned-row checks for Page Beats, Dialogue, and page deletion in the Apply/recovery/Undo path.
+- Abort and Undo now verify restored existing content plus exact created-page and planned-outline absence before state transitions.
+- Extended atomic completion with locked database-side validation of expected outline identity/JSON, target page count, page identities/numbers, and approved candidate values.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/arcsWriterRoom.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/arcsWriterRoomPageExactResults.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 integrity gate — PASS, 8 files / 75 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The updated transaction migration remains local and requires hosted deployment and smoke.
+
+### Risks or caveats
+- The short completion transaction uses a table-level write-conflicting lock on writer pages/outlines to close insert/update races; keep the transaction bounded and monitor contention during hosted verification.
+
+### Operator follow-up
+- Deploy the updated migration before hosted 71→85 Apply/Undo verification.
+
+### Next steps
+- Proceed only after final integrity review approval.

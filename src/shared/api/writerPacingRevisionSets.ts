@@ -168,6 +168,7 @@ export async function completeWriterPacingRevisionSet(
   setId: string,
   appliedChangeIds: string[],
   snapshot: unknown,
+  expectation: unknown,
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
@@ -179,6 +180,7 @@ export async function completeWriterPacingRevisionSet(
       p_set_id: setId,
       p_change_ids: expectedIds,
       p_snapshot: snapshot,
+      p_expectation: expectation,
     });
     if (error) return { ok: false, error: error.message };
     return data === true

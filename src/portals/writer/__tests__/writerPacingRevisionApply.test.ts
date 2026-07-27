@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PacingRevisionChange, PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
 import {
   applyPacingRevisionSet,
+  buildPacingRevisionCompletionExpectation,
   loadPacingRevisionApplyAuthority,
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
   resolvePacingRevisionCompletionFailure,
+  validatePacingRevisionUndoAuthority,
   type PacingRevisionApplySnapshot,
   undoPacingRevisionApply,
 } from '../writerPacingRevisionApply';
@@ -166,6 +168,11 @@ describe('applyPacingRevisionSet', () => {
       ...value,
       plannedOutlineId: null,
     })],
+    ['inconsistent applied outline identity', (value: Record<string, unknown>) => ({
+      ...value,
+      outlineApplied: true,
+      appliedOutlineId: crypto.randomUUID(),
+    })],
     ['duplicate applied IDs', (value: Record<string, unknown>) => {
       const duplicateId = crypto.randomUUID();
       return { ...value, appliedIds: [duplicateId, duplicateId] };
@@ -243,6 +250,40 @@ describe('applyPacingRevisionSet', () => {
       compensate: committedCompensate,
     })).rejects.toThrow(/committed.*verification failed.*recovery required/i);
     expect(committedCompensate).not.toHaveBeenCalled();
+  });
+
+  it('binds Undo to the fresh applied set, issue, pages, changes, and latest outline', () => {
+    const { set } = fixture();
+    const outlineId = crypto.randomUUID();
+    const existingPageId = set.items[0]!.changes.find((change) => change.layer === 'beats')!.page_id!;
+    set.status = 'applied';
+    for (const change of set.items[0]!.changes) change.generation_status = 'applied';
+    set.apply_snapshot = {
+      outline: set.source_outline_json,
+      plannedOutlineId: outlineId,
+      outlineApplied: true,
+      appliedOutlineId: outlineId,
+      beats: [{ pageId: existingPageId, value: { panels: [] } }],
+      dialogue: [{ pageId: existingPageId, value: 'OLD' }],
+      createdPages: [],
+      sourcePageCount: 1,
+      targetPageCount: 1,
+      appliedIds: set.items[0]!.changes.map((change) => change.id),
+    };
+
+    expect(validatePacingRevisionUndoAuthority({
+      set,
+      issueId: set.issue_id,
+      freshPages: [{ id: existingPageId, page_number: 1 }],
+      freshOutlines: [{ id: outlineId }],
+    })).toEqual({ ok: true, snapshot: set.apply_snapshot });
+
+    expect(validatePacingRevisionUndoAuthority({
+      set: { ...set, apply_snapshot: { ...set.apply_snapshot as object, appliedIds: ['tampered'] } },
+      issueId: set.issue_id,
+      freshPages: [{ id: existingPageId, page_number: 1 }],
+      freshOutlines: [{ id: outlineId }],
+    })).toEqual({ ok: false, error: expect.stringMatching(/snapshot is invalid/i) });
   });
 
   it('loads authoritative outline and pages instead of accepting cached state', async () => {
@@ -329,6 +370,24 @@ describe('applyPacingRevisionSet', () => {
       beats: [],
       dialogue: [],
     });
+  });
+
+  it('builds exact database completion expectations from approved candidates', () => {
+    const { changes } = virtualFixture([2]);
+    const pageId = crypto.randomUUID();
+    expect(buildPacingRevisionCompletionExpectation({
+      issueId: crypto.randomUUID(),
+      outlineId: crypto.randomUUID(),
+      outlineJson: builtOutline(2),
+      targetPageCount: 2,
+      createdPages: [{ pageId, pageNumber: 2 }],
+      approvedChanges: changes,
+    }).pages).toEqual([{
+      id: pageId,
+      page_number: 2,
+      beats_json: { panels: [{ action: 'Action 2' }] },
+      script_text: 'DIALOGUE 2',
+    }]);
   });
 
   it('rejects gaps in existing physical pages before beginning Apply', async () => {

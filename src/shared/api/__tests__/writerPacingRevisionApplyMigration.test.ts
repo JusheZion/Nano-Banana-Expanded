@@ -20,4 +20,19 @@ describe('Pacing Revision Apply transaction migration', () => {
     expect(sql).toMatch(/grant execute .* to authenticated/gi);
     expect(sql).toMatch(/revoke all .* from public/gi);
   });
+
+  it('locks and revalidates target identity/content before status mutation', () => {
+    const lockIndex = sql.indexOf('from public.writer_pages page\n  where page.issue_id = v_issue_id\n  for update');
+    const contentGuardIndex = sql.indexOf('Target page content changed before completion');
+    const statusMutationIndex = sql.indexOf('update public.writer_pacing_revision_changes change');
+    expect(lockIndex).toBeGreaterThan(0);
+    expect(sql).toMatch(/lock table public\.writer_pages, public\.writer_issue_outlines in share row exclusive mode/);
+    expect(contentGuardIndex).toBeGreaterThan(lockIndex);
+    expect(statusMutationIndex).toBeGreaterThan(contentGuardIndex);
+    expect(sql).toMatch(/Target outline changed before completion/);
+    expect(sql).toMatch(/Target page count changed before completion/);
+    expect(sql).toMatch(/Completion expectation does not match approved candidates/);
+    expect(sql).toMatch(/Completion snapshot does not match expected live identities/);
+    expect(sql).toMatch(/change\.decision = 'approved'/);
+  });
 });
