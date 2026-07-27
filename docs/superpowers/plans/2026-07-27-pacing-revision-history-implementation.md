@@ -325,8 +325,8 @@ failed from unfinished confirmation copy, accurately explains the loss of local
 Undo after archiving an applied set, humanizes prior statuses, gives each View
 action a distinct accessible name, and proves both actual WriterPortal workflow
 branches mount the shared layout with the correct workflow value. The focused
-correction gate passes 5 files / 49 tests and the broader Pacing regression passes
-21 files / 237 tests. The production build, targeted TypeScript compilation,
+correction gate passes 5 files / 56 tests and the broader Pacing regression passes
+21 files / 245 tests. The production build, targeted TypeScript compilation,
 focused ESLint with 0 errors and 2 existing Edge Function warnings, and
 `git diff --check` pass.
 
@@ -340,7 +340,12 @@ re-audit also verified durable archive provenance, status-specific safety copy,
 focus entry/restoration, actual extracted-layout mounting in both workflow paths,
 and defense-in-depth immutability at database, Edge Function, and client
 boundaries. Archived data cannot be changed even through service-role writes, and
-failed writes cannot be reported as successful.
+failed writes cannot be reported as successful. The final P1 correction also
+serializes page preview against archive with an exact parent generation lease:
+acquisition and archive lock the same aggregate row, `generating` blocks archive
+and second previews, every Child Change/Item mutation advances the parent
+`updated_at`, only the matching lease can publish final aggregate state, and an
+expired lease can be recovered to an editable state before a fresh retry.
 
 ## Pass 4: Batch consistency and recovery edges
 

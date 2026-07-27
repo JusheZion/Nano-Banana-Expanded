@@ -49,7 +49,7 @@ describe('Pacing Revision archive migration', () => {
     expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_set_mutation\(\)/i);
     expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_item_mutation\(\)/i);
     expect(sql).toMatch(/create or replace function public\.guard_archived_pacing_revision_change_mutation\(\)/i);
-    expect(sql.match(/security definer/gi)).toHaveLength(3);
+    expect(sql.match(/security definer/gi)).toHaveLength(4);
     expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_sets/i);
     expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_items/i);
     expect(sql).toMatch(/before insert or update or delete on public\.writer_pacing_revision_changes/i);
@@ -60,5 +60,45 @@ describe('Pacing Revision archive migration', () => {
     expect(sql).toMatch(/v_revision_set_status = 'archived'/i);
     expect(sql.match(/for update(?: of revision_set)?/gi)?.length).toBeGreaterThanOrEqual(5);
     expect(sql).not.toMatch(/disable trigger/i);
+  });
+
+  it('serializes page-preview lease acquisition against archive and concurrent previews', () => {
+    expect(sql).toMatch(/writer_pacing_revision_sets_generation_lease_check[\s\S]*status = 'generating'[\s\S]*generation_lease_previous_status in\s*\(\s*'ready',\s*'partially_ready',\s*'failed'\s*\)/i);
+    expect(sql).toMatch(/create or replace function public\.acquire_writer_pacing_revision_generation_lease/i);
+    expect(sql).toMatch(/p_expected_status text[\s\S]*p_expected_updated_at timestamptz[\s\S]*p_lease_id uuid/i);
+    expect(sql).toMatch(/p_expected_status not in\s*\(\s*'ready',\s*'partially_ready',\s*'failed'\s*\)/i);
+    expect(sql).toMatch(/revision_set\.status = p_expected_status[\s\S]*revision_set\.updated_at = p_expected_updated_at[\s\S]*for update of revision_set/i);
+    expect(sql).toMatch(/set status = 'generating',[\s\S]*generation_lease_id = p_lease_id,[\s\S]*generation_lease_previous_status = p_expected_status/i);
+    expect(sql).toMatch(/generation_lease_expires_at = clock_timestamp\(\) \+ interval '2 minutes'/i);
+    expect(sql).toMatch(/get diagnostics v_affected_count = row_count[\s\S]*return v_affected_count = 1/i);
+    expect(sql).toMatch(/grant execute on function public\.acquire_writer_pacing_revision_generation_lease\(uuid, text, timestamptz, uuid\) to authenticated/i);
+    expect(sql).toMatch(/archive_writer_pacing_revision_set[\s\S]*revision_set\.status in\s*\(\s*'ready',\s*'partially_ready',\s*'applied',\s*'failed'\s*\)/i);
+  });
+
+  it('releases only the matching generation lease into an explicit final state', () => {
+    expect(sql).toMatch(/create or replace function public\.release_writer_pacing_revision_generation_lease/i);
+    expect(sql).toMatch(/p_lease_id uuid[\s\S]*p_final_status text[\s\S]*p_progress_json jsonb[\s\S]*p_failure_ledger jsonb/i);
+    expect(sql).toMatch(/p_final_status not in\s*\(\s*'ready',\s*'partially_ready',\s*'failed'\s*\)/i);
+    expect(sql).toMatch(/revision_set\.status = 'generating'[\s\S]*revision_set\.generation_lease_id = p_lease_id[\s\S]*for update of revision_set/i);
+    expect(sql).toMatch(/set status = p_final_status,[\s\S]*generation_lease_id = null,[\s\S]*generation_lease_previous_status = null,[\s\S]*progress_json = coalesce\(p_progress_json, revision_set\.progress_json\),[\s\S]*failure_ledger = coalesce\(p_failure_ledger, revision_set\.failure_ledger\)/i);
+    expect(sql).toMatch(/grant execute on function public\.release_writer_pacing_revision_generation_lease\(uuid, uuid, text, jsonb, jsonb\) to authenticated/i);
+  });
+
+  it('recovers only an expired owner-scoped lease and clears all lease metadata', () => {
+    expect(sql).toMatch(/create or replace function public\.recover_stale_writer_pacing_revision_generation_lease/i);
+    expect(sql).toMatch(/generation_lease_expires_at < clock_timestamp\(\)[\s\S]*series\.owner_id = auth\.uid\(\)[\s\S]*for update of revision_set/i);
+    expect(sql).toMatch(/when v_previous_status in\s*\(\s*'ready',\s*'partially_ready',\s*'failed'\s*\)[\s\S]*else 'partially_ready'/i);
+    expect(sql).toMatch(/generation_lease_id = null,[\s\S]*generation_lease_previous_status = null,[\s\S]*generation_lease_expires_at = null/i);
+    expect(sql).toMatch(/grant execute on function public\.recover_stale_writer_pacing_revision_generation_lease\(uuid\) to authenticated/i);
+  });
+
+  it('advances the parent aggregate guard for every direct item or child mutation', () => {
+    expect(sql).toMatch(/create or replace function public\.set_writer_pacing_revision_updated_at\(\)[\s\S]*new\.updated_at = clock_timestamp\(\)/i);
+    expect(sql).toMatch(/create or replace function public\.touch_writer_pacing_revision_parent\(\)/i);
+    expect(sql).toMatch(/after insert or update or delete on public\.writer_pacing_revision_items/i);
+    expect(sql).toMatch(/after insert or update or delete on public\.writer_pacing_revision_changes/i);
+    expect(sql).toMatch(/update public\.writer_pacing_revision_sets[\s\S]*set updated_at = clock_timestamp\(\)/i);
+    expect(sql).toMatch(/old\.revision_set_id[\s\S]*new\.revision_set_id/i);
+    expect(sql).toMatch(/old\.item_id[\s\S]*new\.item_id/i);
   });
 });

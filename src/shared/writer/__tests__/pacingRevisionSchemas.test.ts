@@ -37,6 +37,26 @@ describe('pacing revision schemas', () => {
     expect(parsed.archived_at).toBe('2026-07-27T15:45:00.000Z');
   });
 
+  it('parses the durable page-preview generation lease metadata', () => {
+    const parsed = pacingRevisionSetSchema.parse({
+      id: SET_ID,
+      issue_id: ISSUE_ID,
+      status: 'generating',
+      pacing_review_json: {},
+      source_outline_json: {},
+      proposed_outline_json: {},
+      source_fingerprint: 'source',
+      progress_json: { total_pages: 1, completed_pages: [], current_page: 1, stopped: false },
+      failure_ledger: [],
+      generation_lease_id: '10000000-0000-4000-8000-000000000005',
+      generation_lease_previous_status: 'partially_ready',
+      generation_lease_expires_at: '2026-07-27T16:02:00.000Z',
+      items: [],
+    });
+
+    expect(parsed.generation_lease_previous_status).toBe('partially_ready');
+  });
+
   it('preserves current, AI, and edited candidate states independently', () => {
     const parsed = pacingRevisionChangeSchema.parse({
       id: CHANGE_ID,

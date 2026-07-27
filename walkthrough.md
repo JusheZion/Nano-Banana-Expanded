@@ -14745,3 +14745,53 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue with batch lifecycle work, final regression/audits, signed-in QA, and live deployment.
+
+## Pacing Revision page-preview generation lease - 2026-07-27
+
+### What changed
+- Added an owner-scoped database generation lease that atomically changes an exact eligible Revision Set version to `generating` before page-preview AI or persistence begins.
+- Made archive and preview acquisition lock and compare the same parent row, so only one can win. Archive is ineligible while generation is active, and a second preview is rejected.
+- Required final page-preview state to publish through a matching lease release only after candidate and Revision Item persistence succeeds with exact affected-row checks.
+- Added failure recovery that returns the set to `partially_ready`, `failed`, or its prior editable status where appropriate. Expired two-minute leases can be recovered safely but require a fresh preview retry.
+- Added parent aggregate triggers so every Revision Item or Child Change insert, update, or delete locks and advances the Revision Set `updated_at`, invalidating stale archive guards.
+- Extended strict client schemas for the durable lease metadata.
+
+### Files touched
+- `AGENTS.md`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionArchivedImmutability.test.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Acquisition requires the exact prior `ready`, `partially_ready`, or `failed` status plus `updated_at` and a caller-generated lease UUID.
+- Child and Item triggers serialize on the parent row and touch its aggregate timestamp. Lease release keys on the durable lease UUID instead of the timestamp because legitimate child persistence advances the timestamp while generation is active.
+- Direct lease-field transitions are guarded by transaction-local acquire/release markers; ordinary parent timestamp touches can continue without weakening the lease.
+- Candidate upserts must return every requested change, Item updates must affect exactly one row, and lease release must return `true` before the Edge Function reports nominal success.
+
+### Verification
+- RED: 2 files / 5 expected contract failures for missing acquisition, release, aggregate touch, second-preview blocking, and persistence ordering.
+- Focused archive/lease gate: PASS, 5 files / 56 tests.
+- Focused Edge/persistence gate: PASS, 5 files / 32 tests.
+- Broader Pacing regression: PASS, 21 files / 245 tests.
+- `npx tsc -p tsconfig.app.json --pretty false`: PASS.
+- Focused ESLint: PASS with 0 errors and 2 existing `writer-tools` warnings.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- The updated migration and Edge Function are not deployed yet.
+- Hosted PostgreSQL execution and signed-in concurrent preview/archive smoke remain for the deployment pass.
+
+### Risks or caveats
+- A force-terminated request remains `generating` until its two-minute lease expires; the next preview request recovers it and asks the user/client to retry rather than joining uncertain prior work.
+
+### Operator follow-up
+- Deploy the database migration before the matching Edge Function and frontend so lease RPCs and aggregate triggers exist before the new page-preview path invokes them.
+
+### Next steps
+- Continue with final audits, hosted concurrency smoke, and live deployment.
