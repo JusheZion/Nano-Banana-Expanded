@@ -584,4 +584,85 @@ describe('WriterPacingRevisionWorkspace', () => {
     );
     expect(screen.getByRole('button', { name: 'Approve selected (0)' }).hasAttribute('disabled')).toBe(true);
   });
+
+  it('keeps rejected changes read-only before the Revision Set becomes terminal', () => {
+    const revisionSet = fixture();
+    const outline = revisionSet.items[0]!.changes.find((change) => change.layer === 'outline')!;
+    outline.decision = 'rejected';
+    outline.edited_candidate = {
+      proposed_beat: { summary: 'The rejected author edit.' },
+    };
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Rejected proposal')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Edit suggestion' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reset to AI proposal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Decide later' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve change' })).toBeNull();
+  });
+
+  it.each(['applied', 'discarded'] as const)(
+    'removes selection and batch decision chrome from a %s Revision Set',
+    (status) => {
+      const revisionSet = fixture();
+      revisionSet.status = status;
+      if (status === 'applied') {
+        revisionSet.items[0]!.changes[0]!.decision = 'approved';
+        revisionSet.items[0]!.changes[0]!.generation_status = 'applied';
+      }
+
+      render(
+        <WriterPacingRevisionWorkspace
+          revisionSet={revisionSet}
+          onChange={vi.fn()}
+          onApply={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: 'Select all in Live Outline' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Clear Live Outline selection' })).toBeNull();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(screen.queryByTestId('pacing-batch-footer')).toBeNull();
+    },
+  );
+
+  it('exits a missing virtual preview when a same-layer sidebar change is selected', () => {
+    const revisionSet = fixture();
+    const item = revisionSet.items[0]!;
+    const beats = item.changes.find((change) => change.layer === 'beats')!;
+    item.affected_page_numbers = [1, 2];
+    item.changes.push({
+      ...beats,
+      id: crypto.randomUUID(),
+      target_key: 'virtual-page:2:outline-only',
+      page_id: null,
+      page_number: 3,
+      reason: 'Authorize future page inference.',
+    });
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: /Page Beats/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open virtual page 2 Page Beats preview' }));
+    expect(screen.getByText('Page 2 Page Beats preview has not been generated yet.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Make the visual turn immediate/ }));
+    expect(screen.queryByText('Page 2 Page Beats preview has not been generated yet.')).toBeNull();
+    expect(screen.getByText('Page 1 · Page Beats')).toBeTruthy();
+    expect(screen.getByText(/She opens the door\./)).toBeTruthy();
+  });
 });

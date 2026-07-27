@@ -162,6 +162,9 @@ export function WriterPacingRevisionWorkspace({
     : allChanges.find((change) => change.id === activeChangeId && change.layer === layer)
       ?? visibleItems[0]?.changes.find((change) => change.layer === layer)
       ?? null;
+  const activeChangeReadOnly = terminal
+    || activeChange?.generation_status === 'applied'
+    || activeChange?.decision === 'rejected';
   const activeLayerLabel = LAYERS.find((entry) => entry.id === layer)?.label ?? 'current tab';
   const activeLayerEligible = terminal
     ? []
@@ -443,7 +446,7 @@ export function WriterPacingRevisionWorkspace({
             <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Revision items</span>
             <span className="text-[10px] font-bold text-slate-500">{visibleItems.length}</span>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-300/70 px-3 py-2">
+          {!terminal && <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-300/70 px-3 py-2">
             <button
               type="button"
               disabled={busy || activeLayerEligible.length === 0 || allActiveEligibleSelected}
@@ -460,7 +463,7 @@ export function WriterPacingRevisionWorkspace({
             >
               Clear {activeLayerLabel} selection
             </button>
-          </div>
+          </div>}
           <ol data-testid="pacing-revision-item-list" className="max-h-60 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
             {visibleItems.map((item) => (
               <li key={item.id}>
@@ -490,7 +493,7 @@ export function WriterPacingRevisionWorkspace({
                 </div>
                 {item.changes.filter((change) => change.layer === layer).map((change) => (
                   <div key={change.id} className={`flex items-start gap-2 px-3 py-2 ${activeChange?.id === change.id ? 'bg-white' : 'hover:bg-white/55'}`}>
-                    <input
+                    {!terminal && <input
                       type="checkbox"
                       aria-label={`Select ${item.title} ${layer} change`}
                       checked={selectedIds.has(change.id)}
@@ -502,10 +505,14 @@ export function WriterPacingRevisionWorkspace({
                         setSelectedIds(next);
                       }}
                       className="mt-1 accent-amber-600"
-                    />
+                    />}
                     <button
                       type="button"
-                      onClick={() => { setActiveChangeId(change.id); setEditing(false); }}
+                      onClick={() => {
+                        setActiveChangeId(change.id);
+                        setEditing(false);
+                        setMissingPreview(null);
+                      }}
                       className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
                     >
                       <span className="block truncate text-xs font-bold">{change.reason}</span>
@@ -516,10 +523,10 @@ export function WriterPacingRevisionWorkspace({
               </li>
             ))}
           </ol>
-          <div data-testid="pacing-batch-footer" className="sticky bottom-0 z-10 flex shrink-0 gap-2 border-t border-slate-300 bg-[#e7e0d2] p-3 shadow-[0_-8px_16px_-16px_rgba(15,23,42,0.8)]">
+          {!terminal && <div data-testid="pacing-batch-footer" className="sticky bottom-0 z-10 flex shrink-0 gap-2 border-t border-slate-300 bg-[#e7e0d2] p-3 shadow-[0_-8px_16px_-16px_rgba(15,23,42,0.8)]">
             <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('approved')} className="flex-1 bg-emerald-700 px-2 py-2 text-[10px] font-black text-white transition-colors hover:bg-emerald-600 active:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-900 disabled:cursor-not-allowed disabled:opacity-40">Approve selected ({selectedEligible.length})</button>
             <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('rejected')} className="flex-1 bg-slate-700 px-2 py-2 text-[10px] font-black text-white transition-colors hover:bg-slate-600 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Reject selected ({selectedEligible.length})</button>
-          </div>
+          </div>}
         </nav>
 
         <main className="min-w-0 bg-white/65 p-4 md:p-6">
@@ -580,7 +587,7 @@ export function WriterPacingRevisionWorkspace({
                               ? 'AI proposal'
                               : 'Edited candidate'}
                     </p>
-                    {!terminal && activeChange.generation_status !== 'applied' && <button
+                    {!activeChangeReadOnly && <button
                       type="button"
                       onClick={() => {
                         setDraft(editableValue(activeChange));
@@ -591,7 +598,7 @@ export function WriterPacingRevisionWorkspace({
                       Edit suggestion
                     </button>}
                   </div>
-                  {editing ? (
+                  {editing && !activeChangeReadOnly ? (
                     <div className="mt-3">
                       <label className="sr-only" htmlFor={`pacing-edit-${activeChange.id}`}>Edit suggested change</label>
                       <textarea id={`pacing-edit-${activeChange.id}`} value={draft} onChange={(event) => setDraft(event.target.value)} className="min-h-44 w-full resize-y border border-amber-300 bg-white p-3 text-sm leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600" />
@@ -603,12 +610,12 @@ export function WriterPacingRevisionWorkspace({
                   ) : (
                     <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-900">{readableValue(activeChange.layer, effectivePacingRevisionCandidate(activeChange))}</pre>
                   )}
-                  {activeChange.edited_candidate != null && !editing && !terminal && activeChange.generation_status !== 'applied' && (
+                  {activeChange.edited_candidate != null && !editing && !activeChangeReadOnly && (
                     <button type="button" onClick={() => void onChange(activeChange.id, { edited_candidate: null })} className="mt-3 text-xs font-black text-amber-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">Reset to AI proposal</button>
                   )}
                 </article>
               </div>
-              {!terminal && activeChange.generation_status !== 'applied' && <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-4">
+              {!activeChangeReadOnly && <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-4">
                 <button type="button" aria-pressed={activeChange.decision === 'rejected'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'rejected' })} className={`px-4 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40 ${activeChange.decision === 'rejected' ? 'bg-red-100 ring-1 ring-red-300' : ''}`}>Reject</button>
                 <button type="button" aria-pressed={activeChange.decision === 'pending'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'pending' })} className={`px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-600 disabled:opacity-40 ${activeChange.decision === 'pending' ? 'bg-slate-200 ring-1 ring-slate-300' : ''}`}>Decide later</button>
                 <button type="button" aria-pressed={activeChange.decision === 'approved'} disabled={busy} onClick={() => void onChange(activeChange.id, { decision: 'approved' })} className={`bg-emerald-700 px-5 py-2 text-xs font-black text-white hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-950 disabled:opacity-40 ${activeChange.decision === 'approved' ? 'ring-2 ring-emerald-950 ring-offset-2' : ''}`}>Approve change</button>

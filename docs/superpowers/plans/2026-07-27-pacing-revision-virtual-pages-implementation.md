@@ -465,6 +465,8 @@ git commit -m "fix: show current pacing revision status"
 
 **Pass 5 result:** PASS — layer tabs now report pending-decision remaining, dependency-valid approved ready, and applied counts while excluding rejected history. Missing dependencies fail closed, resolved banners disappear, applied/discarded sets are read-only, failure actions are suppressed after terminal completion, and selected IDs are pruned when candidates stop being actionable. Comparison and sidebar language reflects approved/rejected/applied lifecycle state. Every review identifies its page/layer; wrapped native page controls route physical Outline/Page Beats/Dialogue to the mapped Writer workspace, while virtual pages select their local preview or expose a direct layer retry without dead external navigation. The existing two-panel comparison, dense sidebar, and sticky batch footer remain intact.
 
+**Pass 5 specification-review correction:** PASS — four focused RED cases exposed rejected changes that still offered editing/decision actions, terminal sets that retained disabled selection chrome, and same-layer sidebar selection that could not leave a missing virtual preview. Rejected rows are now read-only as soon as rejected, applied/discarded sets omit select-all, clear, checkbox, and batch-decision controls entirely, and every normal sidebar selection clears the local missing-preview state. The corrected focused gate passes 3 files / 33 tests; focused ESLint reports 0 errors and the same 3 pre-existing `WriterPortal` warnings, and `git diff --check` passes.
+
 ## Pass 6: Integrated local QA and contract documentation
 
 **Objective:** Exercise the complete preview→review→apply→undo workflow and record the durable contract.

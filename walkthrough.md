@@ -14273,3 +14273,39 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Run Pass 6 integrated local QA across preview, review, Apply, and Undo before hosted release work.
+
+## Pacing Revision terminal-state specification correction - 2026-07-27
+
+### What changed
+- Made every rejected change read-only immediately, including nonterminal Revision Sets, while preserving the `Rejected proposal` comparison label.
+- Removed selection controls, row checkboxes, and the sticky batch-decision footer entirely from applied and discarded sets instead of showing disabled editing chrome.
+- Cleared a local missing-virtual-preview state whenever a normal same-layer sidebar change is selected.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Terminal workspaces retain the layer tabs, item navigation, context strip, and two-panel comparison, but omit controls that imply further review decisions.
+- Nonterminal rejected rows remain visible for audit and comparison without edit, reset, or decision actions.
+- The existing sidebar button is the exit path from a local missing-preview state; no new navigation surface was added.
+
+### Verification
+- RED: 4 focused cases failed on the three reviewed gaps.
+- Final focused gate: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionModel.test.ts src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx src/portals/writer/__tests__/WriterSearchableMenu.test.tsx` — PASS, 3 files / 33 tests.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+
+### Outstanding issues
+- Integrated browser QA remains in Pass 6.
+
+### Risks or caveats
+- None for this focused lifecycle correction.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue with Pass 6 integrated local QA.
