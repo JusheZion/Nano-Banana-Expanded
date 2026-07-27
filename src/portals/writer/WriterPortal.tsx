@@ -209,8 +209,10 @@ import { mergeWriterStorySnapshotIntoNotes } from '@/portals/writer/writerStoryS
 import {
   applyPacingRevisionSet,
   loadPacingRevisionApplyAuthority,
+  PacingRevisionCompletionResolutionError,
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
+  resolvePacingRevisionCompletionFailure,
   undoPacingRevisionApply,
   type PacingRevisionApplySnapshot,
 } from '@/portals/writer/writerPacingRevisionApply';
@@ -3469,6 +3471,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     let createdOutline: WriterIssueOutlineRow | null = null;
     let createdOutlineId: string | null = null;
     let applyingSetId: string | null = null;
+    let completionCleanupBlocked = false;
     try {
       const {
         set: authoritativeSet,
@@ -3671,8 +3674,31 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         durableSnapshot,
       );
       if (!completed.ok) {
-        await compensateApply();
-        throw new Error(completed.error);
+        try {
+          await resolvePacingRevisionCompletionFailure({
+            completionError: completed.error,
+            loadPersistedStatus: async () => {
+              const persisted = await getWriterPacingRevisionSet(authoritativeSet.id);
+              if (!persisted.ok) throw new Error(persisted.error);
+              return persisted.set.status;
+            },
+            verifyCommitted: async () => {
+              const committedPages = await listWriterPages(selectedIssueId);
+              return verifyPacingRevisionApply({
+                sourcePageCount: result.snapshot.sourcePageCount,
+                targetPageCount: result.snapshot.targetPageCount,
+                freshPages: committedPages,
+                createdPages: result.snapshot.createdPages,
+                approvedChanges: result.approvedChanges,
+              });
+            },
+            compensate: compensateApply,
+          });
+        } catch (resolutionError) {
+          completionCleanupBlocked = resolutionError instanceof PacingRevisionCompletionResolutionError
+            && !resolutionError.cleanupAllowed;
+          throw resolutionError;
+        }
       }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
@@ -3680,7 +3706,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       pushHistory(`applied pacing Revision Set (${result.appliedIds.length} change(s))`);
     } catch (error) {
       let message = error instanceof Error ? error.message : 'Could not apply the Revision Set.';
-      if (applyingSetId) {
+      if (applyingSetId && !completionCleanupBlocked) {
         const persisted = await getWriterPacingRevisionSet(applyingSetId);
         if (persisted.ok && persisted.set.status === 'applying') {
           const recoverySnapshot = pacingRevisionApplySnapshotFromUnknown(

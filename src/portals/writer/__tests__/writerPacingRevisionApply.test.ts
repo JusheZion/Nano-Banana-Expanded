@@ -5,6 +5,7 @@ import {
   loadPacingRevisionApplyAuthority,
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
+  resolvePacingRevisionCompletionFailure,
   type PacingRevisionApplySnapshot,
   undoPacingRevisionApply,
 } from '../writerPacingRevisionApply';
@@ -128,6 +129,120 @@ describe('applyPacingRevisionSet', () => {
       ...valid,
       createdPages: [{ pageNumber: 2 }],
     })).toBeNull();
+  });
+
+  it.each([
+    ['non-UUID planned outline', (value: Record<string, unknown>) => ({ ...value, plannedOutlineId: 'outline-2' })],
+    ['non-UUID planned page', (value: Record<string, unknown>) => ({
+      ...value,
+      createdPages: [{ pageId: 'page-2', pageNumber: 2 }],
+    })],
+    ['duplicate planned page IDs', (value: Record<string, unknown>) => {
+      const duplicateId = crypto.randomUUID();
+      return {
+        ...value,
+        targetPageCount: 3,
+        createdPages: [
+          { pageId: duplicateId, pageNumber: 2 },
+          { pageId: duplicateId, pageNumber: 3 },
+        ],
+      };
+    }],
+    ['duplicate planned page numbers', (value: Record<string, unknown>) => ({
+      ...value,
+      targetPageCount: 3,
+      createdPages: [
+        { pageId: crypto.randomUUID(), pageNumber: 2 },
+        { pageId: crypto.randomUUID(), pageNumber: 2 },
+      ],
+    })],
+    ['out-of-range target', (value: Record<string, unknown>) => ({ ...value, targetPageCount: 201 })],
+    ['target below source', (value: Record<string, unknown>) => ({ ...value, targetPageCount: 0 })],
+    ['noncontiguous planned range', (value: Record<string, unknown>) => ({
+      ...value,
+      createdPages: [{ pageId: crypto.randomUUID(), pageNumber: 3 }],
+    })],
+    ['missing planned outline for expansion', (value: Record<string, unknown>) => ({
+      ...value,
+      plannedOutlineId: null,
+    })],
+    ['duplicate applied IDs', (value: Record<string, unknown>) => {
+      const duplicateId = crypto.randomUUID();
+      return { ...value, appliedIds: [duplicateId, duplicateId] };
+    }],
+    ['non-UUID prior-content page', (value: Record<string, unknown>) => ({
+      ...value,
+      beats: [{ pageId: 'page-1', value: null }],
+    })],
+  ])('fails closed for a corrupt snapshot with %s', (_label, tamper) => {
+    const valid = {
+      outline: {},
+      plannedOutlineId: crypto.randomUUID(),
+      beats: [],
+      dialogue: [],
+      createdPages: [{ pageId: crypto.randomUUID(), pageNumber: 2 }],
+      sourcePageCount: 1,
+      targetPageCount: 2,
+      appliedIds: [crypto.randomUUID()],
+    };
+    expect(pacingRevisionApplySnapshotFromUnknown(tamper(valid))).toBeNull();
+  });
+
+  it('treats a lost completion response as committed only after fresh verification', async () => {
+    const compensate = vi.fn();
+    const verifyCommitted = vi.fn().mockResolvedValue({ ok: true });
+
+    await expect(resolvePacingRevisionCompletionFailure({
+      completionError: 'network response lost',
+      loadPersistedStatus: async () => 'applied',
+      verifyCommitted,
+      compensate,
+    })).resolves.toBe('committed');
+
+    expect(verifyCommitted).toHaveBeenCalledOnce();
+    expect(compensate).not.toHaveBeenCalled();
+  });
+
+  it('does not compensate when completion state cannot be read', async () => {
+    const compensate = vi.fn();
+    await expect(resolvePacingRevisionCompletionFailure({
+      completionError: 'network response lost',
+      loadPersistedStatus: async () => { throw new Error('read unavailable'); },
+      verifyCommitted: vi.fn(),
+      compensate,
+    })).rejects.toThrow(/unreadable.*recovery required/i);
+    expect(compensate).not.toHaveBeenCalled();
+  });
+
+  it('compensates only when completion is confirmed still applying', async () => {
+    const compensate = vi.fn().mockResolvedValue(undefined);
+    await expect(resolvePacingRevisionCompletionFailure({
+      completionError: 'completion failed',
+      loadPersistedStatus: async () => 'applying',
+      verifyCommitted: vi.fn(),
+      compensate,
+    })).rejects.toThrow('completion failed');
+    expect(compensate).toHaveBeenCalledOnce();
+  });
+
+  it('does not compensate an unknown completion state or an unverified commit', async () => {
+    const unknownCompensate = vi.fn();
+    await expect(resolvePacingRevisionCompletionFailure({
+      completionError: 'completion failed',
+      loadPersistedStatus: async () => 'ready',
+      verifyCommitted: vi.fn(),
+      compensate: unknownCompensate,
+    })).rejects.toThrow(/recovery required.*no cleanup/i);
+    expect(unknownCompensate).not.toHaveBeenCalled();
+
+    const committedCompensate = vi.fn();
+    await expect(resolvePacingRevisionCompletionFailure({
+      completionError: 'completion failed',
+      loadPersistedStatus: async () => 'applied',
+      verifyCommitted: async () => ({ ok: false, error: 'content mismatch' }),
+      compensate: committedCompensate,
+    })).rejects.toThrow(/committed.*verification failed.*recovery required/i);
+    expect(committedCompensate).not.toHaveBeenCalled();
   });
 
   it('loads authoritative outline and pages instead of accepting cached state', async () => {

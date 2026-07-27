@@ -35,6 +35,7 @@ export function pacingRevisionApplySnapshotFromUnknown(
 ): PacingRevisionApplySnapshot | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (
     !Array.isArray(record.beats)
     || !Array.isArray(record.dialogue)
@@ -42,32 +43,71 @@ export function pacingRevisionApplySnapshotFromUnknown(
     || !Array.isArray(record.appliedIds)
     || !Number.isInteger(record.sourcePageCount)
     || !Number.isInteger(record.targetPageCount)
-    || !record.createdPages.every((page) => {
-      if (!page || typeof page !== 'object' || Array.isArray(page)) return false;
-      const created = page as Record<string, unknown>;
-      return typeof created.pageId === 'string'
-        && created.pageId.length > 0
-        && Number.isInteger(created.pageNumber);
-    })
-    || !record.appliedIds.every((id) => typeof id === 'string')
+    || !Object.prototype.hasOwnProperty.call(record, 'plannedOutlineId')
+  ) {
+    return null;
+  }
+  const sourcePageCount = record.sourcePageCount as number;
+  const targetPageCount = record.targetPageCount as number;
+  const plannedOutlineId = record.plannedOutlineId;
+  if (
+    sourcePageCount < 0
+    || sourcePageCount > 200
+    || targetPageCount < sourcePageCount
+    || targetPageCount > 200
     || !(
-      record.plannedOutlineId == null
-      || typeof record.plannedOutlineId === 'string'
+      plannedOutlineId === null
+      || (typeof plannedOutlineId === 'string' && uuidPattern.test(plannedOutlineId))
     )
+    || (targetPageCount > sourcePageCount && plannedOutlineId === null)
+  ) {
+    return null;
+  }
+  const createdPages = record.createdPages as Array<Record<string, unknown>>;
+  if (
+    createdPages.length !== targetPageCount - sourcePageCount
+    || !createdPages.every((created, index) =>
+      created
+      && typeof created === 'object'
+      && !Array.isArray(created)
+      && typeof created.pageId === 'string'
+      && uuidPattern.test(created.pageId)
+      && created.pageNumber === sourcePageCount + index + 1
+    )
+    || new Set(createdPages.map((created) => created.pageId)).size !== createdPages.length
+    || new Set(createdPages.map((created) => created.pageNumber)).size !== createdPages.length
+  ) {
+    return null;
+  }
+  const priorContentEntryIsValid = (entry: unknown): boolean => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const prior = entry as Record<string, unknown>;
+    return typeof prior.pageId === 'string' && uuidPattern.test(prior.pageId);
+  };
+  const appliedIds = record.appliedIds as unknown[];
+  if (!record.beats.every(priorContentEntryIsValid) || !record.dialogue.every(priorContentEntryIsValid)) {
+    return null;
+  }
+  const beatsPageIds = record.beats.map((entry) => (entry as Record<string, unknown>).pageId);
+  const dialoguePageIds = record.dialogue.map((entry) => (entry as Record<string, unknown>).pageId);
+  if (
+    new Set(beatsPageIds).size !== beatsPageIds.length
+    || new Set(dialoguePageIds).size !== dialoguePageIds.length
+    || appliedIds.length === 0
+    || !appliedIds.every((id) => typeof id === 'string' && uuidPattern.test(id))
+    || new Set(appliedIds).size !== appliedIds.length
   ) {
     return null;
   }
   return {
     outline: record.outline,
-    plannedOutlineId: typeof record.plannedOutlineId === 'string'
-      ? record.plannedOutlineId
-      : null,
+    plannedOutlineId,
     beats: record.beats as PacingRevisionApplySnapshot['beats'],
     dialogue: record.dialogue as PacingRevisionApplySnapshot['dialogue'],
-    createdPages: record.createdPages as PacingRevisionCreatedPage[],
-    sourcePageCount: record.sourcePageCount as number,
-    targetPageCount: record.targetPageCount as number,
-    appliedIds: record.appliedIds as string[],
+    createdPages: createdPages as PacingRevisionCreatedPage[],
+    sourcePageCount,
+    targetPageCount,
+    appliedIds: appliedIds as string[],
   };
 }
 
@@ -77,6 +117,64 @@ export function pacingRevisionFingerprintKey(change: PacingRevisionChange): stri
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+export class PacingRevisionCompletionResolutionError extends Error {
+  readonly cleanupAllowed: boolean;
+
+  constructor(
+    message: string,
+    cleanupAllowed: boolean,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'PacingRevisionCompletionResolutionError';
+    this.cleanupAllowed = cleanupAllowed;
+  }
+}
+
+export async function resolvePacingRevisionCompletionFailure(args: {
+  completionError: string;
+  loadPersistedStatus: () => Promise<string>;
+  verifyCommitted: () => Promise<{ ok: boolean; error?: string }>;
+  compensate: () => Promise<void>;
+}): Promise<'committed'> {
+  let status: string;
+  try {
+    status = await args.loadPersistedStatus();
+  } catch (error) {
+    throw new PacingRevisionCompletionResolutionError(
+      `${args.completionError} Completion state is unreadable; recovery required. No cleanup was attempted. ${errorMessage(error)}`,
+      false,
+      { cause: error },
+    );
+  }
+  if (status === 'applied') {
+    const verification = await args.verifyCommitted();
+    if (!verification.ok) {
+      throw new PacingRevisionCompletionResolutionError(
+        `${args.completionError} Completion committed, but fresh verification failed; recovery required. ${verification.error ?? ''}`.trim(),
+        false,
+      );
+    }
+    return 'committed';
+  }
+  if (status === 'applying') {
+    try {
+      await args.compensate();
+    } catch (error) {
+      throw new PacingRevisionCompletionResolutionError(
+        `${args.completionError} Recovery also failed: ${errorMessage(error)}`,
+        true,
+        { cause: error },
+      );
+    }
+    throw new PacingRevisionCompletionResolutionError(args.completionError, true);
+  }
+  throw new PacingRevisionCompletionResolutionError(
+    `${args.completionError} Completion state is ${status || 'unknown'}; recovery required. No cleanup was attempted.`,
+    false,
+  );
 }
 
 function copySnapshot(snapshot: PacingRevisionApplySnapshot): PacingRevisionApplySnapshot {

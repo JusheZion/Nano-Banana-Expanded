@@ -14087,3 +14087,37 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Re-review the corrected Pass 4 diff, then continue to Pass 5 only after approval.
+
+## Pacing Revision Apply final release blockers - 2026-07-27
+
+### What changed
+- Resolved ambiguous completion responses from freshly persisted set state before any compensation.
+- Treat a persisted `applied` state as committed success only after fresh content verification; compensate only a confirmed `applying` state.
+- Block cleanup and surface recovery-required detail when completion state is unreadable, unexpected, or committed content cannot be verified.
+- Hardened persisted recovery snapshot parsing with canonical UUID, uniqueness, bounded-count, exact contiguous-range, outline-plan, and applied-ID invariants before destructive cleanup.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- RED tests reproduced lost-response-after-commit compensation risk and acceptance of tampered recovery ledgers.
+- Focused Pass 4 gate — PASS, 7 files / 67 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- The transactional migration remains local and is not deployed in this pass.
+- Hosted Apply/Undo verification remains pending.
+
+### Risks or caveats
+- Unknown completion state intentionally leaves live content untouched for operator recovery.
+
+### Operator follow-up
+- Apply the pending migration before hosted completion/Undo verification.
+
+### Next steps
+- Proceed only after final Pass 4 review approval.
