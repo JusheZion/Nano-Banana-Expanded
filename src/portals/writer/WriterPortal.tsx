@@ -100,6 +100,7 @@ import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterS
 import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
 import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
+import { WriterPacingRevisionHistory } from '@/portals/writer/WriterPacingRevisionHistory';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import {
@@ -982,6 +983,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const [pacingError, setPacingError] = useState<string | null>(null);
   const [pacingApplyBusy, setPacingApplyBusy] = useState(false);
   const [pacingApplyError, setPacingApplyError] = useState<string | null>(null);
+  const [pacingArchiveStatus, setPacingArchiveStatus] = useState<string | null>(null);
   const [pacingPreviewBusy, setPacingPreviewBusy] = useState(false);
   const [pacingPreviewError, setPacingPreviewError] = useState<string | null>(null);
   const [pacingPreviewPages, setPacingPreviewPages] = useState<PacingRegenerationPreviewPage[]>([]);
@@ -2587,6 +2589,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     archiveActive: archiveActivePacingRevision,
     generating: pacingRevisionGenerating,
   } = pacingRevision;
+  useEffect(() => {
+    setPacingArchiveStatus(null);
+  }, [selectedIssueId]);
   const navigateToPacingRevisionPage = useCallback((
     pageNumber: number,
     layer: PacingRevisionLayer,
@@ -2962,6 +2967,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const runPacingFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
     setPacingError(null);
+    setPacingArchiveStatus(null);
     const revisionSetBeforeReview = getPacingRevisionActiveSetForIssue(
       pacingRevisionActiveSet,
       selectedIssueId,
@@ -3929,6 +3935,30 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setPacingApplyBusy(false);
     }
   }, [pacingRevision, pushHistory, refreshPagesForIssue, selectedIssueId]);
+
+  const archivePacingRevision = useCallback(async (
+    revisionSet: NonNullable<typeof pacingRevision.activeSet>,
+  ) => {
+    setPacingApplyBusy(true);
+    setPacingApplyError(null);
+    setPacingArchiveStatus(null);
+    try {
+      const result = await pacingRevision.archiveActive(revisionSet);
+      if (!result.ok) return;
+      setPacingArchiveStatus(
+        'Revision Set moved to Revision history. Live story content was not changed.',
+      );
+      pushHistory('archived pacing Revision Set');
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'The Revision Set could not be archived.';
+      setPacingApplyError(message);
+      pushHistory(`error: pacing Revision Set archive — ${message}`);
+    } finally {
+      setPacingApplyBusy(false);
+    }
+  }, [pacingRevision, pushHistory]);
 
   const runLibraryDeleteSelectedPages = useCallback(async () => {
     if (!selectedIssueId || selectedPageIdsForBatch.length === 0) return;
@@ -8016,7 +8046,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
         </div>
       )}
-      {pacingRevision.activeSet && (
+      {pacingArchiveStatus && (
+        <div role="status" className="border-l-4 border-emerald-600 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-950">
+          {pacingArchiveStatus}
+        </div>
+      )}
+      <WriterPacingRevisionHistory
+        workflow="Simple"
+        activeSet={pacingRevision.activeSet}
+        historySets={pacingRevision.historySets}
+        selectedSet={pacingRevision.selectedHistorySet}
+        loading={pacingRevision.historyLoading}
+        error={pacingRevision.historyError}
+        archiveBusy={pacingRevision.generating || pacingApplyBusy}
+        onRetry={pacingRevision.refreshHistory}
+        onSelect={pacingRevision.selectHistory}
+        onClose={pacingRevision.closeHistory}
+        onArchive={archivePacingRevision}
+      />
+      {pacingRevision.activeSet && !pacingRevision.selectedHistorySet && (
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-bold text-slate-700">
@@ -11681,7 +11729,25 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
                       </div>
                     )}
-                    {pacingRevision.activeSet && (
+                    {pacingArchiveStatus && (
+                      <div role="status" className="border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-950">
+                        {pacingArchiveStatus}
+                      </div>
+                    )}
+                    <WriterPacingRevisionHistory
+                      workflow="Advanced"
+                      activeSet={pacingRevision.activeSet}
+                      historySets={pacingRevision.historySets}
+                      selectedSet={pacingRevision.selectedHistorySet}
+                      loading={pacingRevision.historyLoading}
+                      error={pacingRevision.historyError}
+                      archiveBusy={pacingRevision.generating || pacingApplyBusy}
+                      onRetry={pacingRevision.refreshHistory}
+                      onSelect={pacingRevision.selectHistory}
+                      onClose={pacingRevision.closeHistory}
+                      onArchive={archivePacingRevision}
+                    />
+                    {pacingRevision.activeSet && !pacingRevision.selectedHistorySet && (
                       <section className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <p className="text-xs font-bold text-slate-700">

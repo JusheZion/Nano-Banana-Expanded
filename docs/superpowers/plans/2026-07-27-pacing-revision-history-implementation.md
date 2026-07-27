@@ -257,21 +257,21 @@ WriterPortal warnings, and `git diff --check` pass.
 - Archived selection is explicitly read-only and exposes no mutation controls.
 - History works by keyboard and at narrow widths.
 
-- [ ] **Step 1: Write RED component tests**
+- [x] **Step 1: Write RED component tests**
 
 Cover disclosure count, newest-first entries, View/Back interactions, archive confirmation callback, loading/error/retry, wrapped metadata, and semantic archived status.
 
-- [ ] **Step 2: Write RED workspace terminal tests**
+- [x] **Step 2: Write RED workspace terminal tests**
 
 Render an archived set and assert absence of select-all, checkboxes, Edit, Approve, Reject, Retry, Apply, Undo, and batch controls.
 
-- [ ] **Step 3: Run Pass 3 RED**
+- [x] **Step 3: Run Pass 3 RED**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx
 ```
 
-- [ ] **Step 4: Implement `WriterPacingRevisionHistory`**
+- [x] **Step 4: Implement `WriterPacingRevisionHistory`**
 
 Use native `<details>`, `<summary>`, and buttons. The selected-history shell renders:
 
@@ -281,23 +281,23 @@ Use native `<details>`, `<summary>`, and buttons. The selected-history shell ren
 
 and delegates comparison rendering to the existing workspace.
 
-- [ ] **Step 5: Implement archived workspace semantics**
+- [x] **Step 5: Implement archived workspace semantics**
 
 Treat `archived` as terminal/read-only and use `Archived proposal`/`Archived current` language without mutation actions.
 
-- [ ] **Step 6: Integrate both Story Review layouts**
+- [x] **Step 6: Integrate both Story Review layouts**
 
 Place the history disclosure beside the active/new review lifecycle in both duplicated Simple and Advanced render paths. Add a confirmed manual archive action and keep active/new diagnosis visible when history closes.
 
-- [ ] **Step 7: Run Pass 3 smoke**
+- [x] **Step 7: Run Pass 3 smoke**
 
 Run history, workspace, hook, and Portal UI tests. Expected: all pass.
 
-- [ ] **Step 8: Three-pass audit**
+- [x] **Step 8: Three-pass audit**
 
 Audit lifecycle truthfulness, no live mutation, confirmation copy, stale-state guards, read-only control suppression, loading/error/retry, keyboard/focus, responsive wrapping, and duplicated Simple/Advanced consistency. Fix all P0/P1 issues.
 
-- [ ] **Step 9: Commit Pass 3**
+- [x] **Step 9: Commit Pass 3**
 
 ```bash
 git add src/portals/writer/WriterPacingRevisionHistory.tsx src/portals/writer/WriterPacingRevisionWorkspace.tsx src/portals/writer/WriterPortal.tsx src/portals/writer/__tests__
@@ -306,9 +306,24 @@ git commit -m "feat: show pacing revision history"
 
 **Pass 3 smoke test:** History/workspace UI and accessibility only.
 
-**Pass 3 result:** Pending.
+**Pass 3 result:** PASS — TDD RED failed for the missing history component and
+missing archived terminal semantics. GREEN adds the native keyboard-operable
+`Revision history (N)` disclosure to both Simple and Advanced Story Review,
+loading/error/retry/empty states, newest-first archived entries, an explicitly
+read-only archived comparison view with Back navigation, and a confirmed manual
+archive action whose copy states that live Outline, Page Beats, and Dialogue remain
+unchanged. Successful manual archive refreshes active/history state through the
+existing guarded hook and reports a visible success status. The focused smoke gate
+passes 5 files / 68 tests; the production build, targeted TypeScript compilation,
+focused ESLint with 0 errors and 3 pre-existing WriterPortal warnings, and
+`git diff --check` pass.
 
-**Three-pass audit result:** Pending.
+**Three-pass audit result:** PASS — audited lifecycle truthfulness, metadata-only
+archive messaging, confirmation copy, Pass 2 stale-state guards, archived control
+suppression, loading/error/retry and empty states, native details/summary keyboard
+access, responsive wrapping, and matching Simple/Advanced placement. No P0/P1
+issue remains. Archive status is cleared on issue switches and before a new pacing
+review so a prior success message cannot describe newer work.
 
 ## Pass 4: Batch consistency and recovery edges
 

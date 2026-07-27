@@ -678,6 +678,30 @@ describe('WriterPacingRevisionWorkspace', () => {
     },
   );
 
+  it('renders an archived Revision Set as read-only without mutation controls', () => {
+    const revisionSet = fixture();
+    revisionSet.status = 'archived';
+
+    render(
+      <WriterPacingRevisionWorkspace
+        revisionSet={revisionSet}
+        onChange={vi.fn()}
+        onApply={vi.fn()}
+        onRetryFailed={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Archived current')).toBeTruthy();
+    expect(screen.getByText('Archived proposal')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Apply approved changes/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Retry/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Select all/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Approve/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Reject/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Edit/i })).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
   it('exits a missing virtual preview when a same-layer sidebar change is selected', () => {
     const revisionSet = fixture();
     const item = revisionSet.items[0]!;

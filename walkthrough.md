@@ -14350,6 +14350,52 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision history and manual archive Pass 3 - 2026-07-27
+
+### What changed
+- Added a compact `Revision history (N)` disclosure to both Simple and Advanced Story Review.
+- Added keyboard-native loading, empty, error/retry, archived-version selection, and Back-to-current interactions.
+- Added a confirmed `Archive revision set` action for eligible active sets. Its confirmation and success copy state that archiving does not change the live Outline, Page Beats, or Dialogue.
+- Reused the Pacing revision comparison workspace for archived records while making `archived` a terminal read-only state with no Apply, Edit, Approve, Reject, Retry, selection, or batch controls.
+- Added clear archived status/date metadata and distinct `Archived current` / `Archived proposal` comparison labels.
+
+### Files touched
+- `src/portals/writer/WriterPacingRevisionHistory.tsx`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The history surface uses native `details`/`summary` and native buttons so disclosure, view, retry, and return actions work by keyboard without custom key handling.
+- Manual archive delegates to the owner-scoped guarded hook introduced in Pass 2; the UI does not directly mutate live story content.
+- History entries wrap at narrow widths and expose semantic archived status plus machine-readable timestamps where available.
+- The same component is integrated into both duplicated Story Review render paths, and the active workspace is hidden while an archived version is selected.
+
+### Verification
+- RED: the history test failed because the component did not exist, and the archived workspace test failed because archived sets still exposed active controls and labels.
+- Focused GREEN: 2 files / 31 tests — PASS.
+- Pass 3 smoke: 5 files / 68 tests — PASS.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- `git diff --check` — PASS.
+- Three-pass audit — PASS with no P0/P1 finding.
+
+### Outstanding issues
+- Batch Pacing Review replacement consistency remains Pass 4 work.
+- Local signed-in and production browser QA remain part of the final integration/release pass.
+
+### Risks or caveats
+- Archived history remains intentionally read-only. Restoring official story content continues through Outline version history rather than from this comparison surface.
+
+### Operator follow-up
+- None for Pass 3.
+
+### Next steps
+- Implement Pass 4 batch replacement preflight, per-issue guarded archive, and partial-success reporting before final hosted QA and deployment.
+
 ## Pacing Revision history replacement orchestration Pass 2 - 2026-07-27
 
 ### What changed
