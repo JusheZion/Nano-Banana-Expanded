@@ -200,7 +200,7 @@ git commit -m "feat: replace stale pacing revision sets"
 
 **Pass 2 result:** PASS — RED reproduced the missing lifecycle module, five absent
 hook history/archive behaviors, and both Portal replacement-orchestration gaps.
-GREEN passes 3 focused files / 26 tests. Applied/failed sets archive only after a
+GREEN passes 3 focused files / 29 tests. Applied/failed sets archive only after a
 successful new review; unfinished sets require one confirmation; applying or
 generating sets block before AI. Guard conflicts preserve the prior active set and
 the refreshed saved diagnosis while surfacing the stable split-success sentence.
@@ -208,6 +208,15 @@ Active/history initial loads remain independent, successful archive refreshes bo
 collections, and history failure retains active state with a retry. Focused ESLint
 passes with 0 errors. Pass 3 history UI and Pass 4 batch orchestration remain
 untouched; no deployment was performed.
+
+**Pass 2 specification-review correction:** Executable orchestration coverage
+replaced the source-text-only ordering assertions. The shared single-review helper
+now proves confirmation cancellation invokes neither AI nor archive, AI failure
+never archives, and AI success performs guarded archive before issue refresh.
+Archive conflict still refreshes the saved diagnosis, preserves the old active set,
+and surfaces exactly the stable split-success sentence without API detail. A
+Portal-owned-message hook path suppresses the separate archive API error while
+retaining the guarded failure result.
 
 ## Pass 3: Simple Workflow history and manual archive
 

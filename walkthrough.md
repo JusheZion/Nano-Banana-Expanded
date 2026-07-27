@@ -14357,6 +14357,7 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Extended the Pacing Revision hook with independently loaded active/history state, recoverable history errors, history selection, and a guarded archive action that captures the expected set status and version.
 - Routed both single Pacing Review controls through one orchestration. The prior set is archived only after AI succeeds; cancellation or AI failure leaves it untouched.
 - Preserved the saved new diagnosis and prior active set when guarded archive conflicts, with the stable split-success message required by the design.
+- Corrected the post-review order to guarded archive before issue refresh and replaced source inspection with executable orchestration coverage.
 
 ### Files touched
 - `src/portals/writer/writerPacingRevisionLifecycle.ts`
@@ -14371,12 +14372,15 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Implementation notes
 - Active and archived-history requests start independently when the selected issue changes. A history failure does not clear the active Revision Set and exposes `refreshHistory`.
 - Successful guarded archive optimistically moves the captured set to archived history, then refreshes active and history queries. Any guard/API failure leaves active state unchanged and returns the detail to the Portal.
+- The Portal suppresses the hook-level API detail for automatic replacement conflicts and renders exactly `The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.`
 - `ready` and `partially_ready` require one browser confirmation before AI. `applied` and `failed` archive automatically after success. Active `generating`, `applying`, or hook page generation blocks before AI.
 - Root `AGENTS.md` was intentionally unchanged: Pass 2 implements the durable archive/replacement contract already recorded for Pass 1 and does not add a new DOX boundary or rule.
 
 ### Verification
 - RED: 3 focused files ran with 7 expected failures and 11 passing existing tests for the missing policy, hook state/actions, and Portal orchestration.
-- GREEN: 3 focused files / 26 tests passed.
+- Initial GREEN: 3 focused files / 26 tests passed.
+- Specification-review RED: 4 behavioral orchestration tests failed because the executable helper was absent; a follow-up hook test failed because conflict detail was also surfaced separately.
+- Corrected GREEN: 3 focused files / 29 tests passed.
 - Focused ESLint completed with 0 errors.
 
 ### Outstanding issues

@@ -241,21 +241,23 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
 
   const archiveActive = useCallback(async (
     expectedSet?: PacingRevisionSet,
+    options: { surfaceError?: boolean } = {},
   ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const surfaceError = options.surfaceError ?? true;
     const setToArchive = expectedSet ?? activeSet;
     if (!setToArchive) {
       const archiveError = 'There is no active Pacing Revision Set to archive.';
-      setError(archiveError);
+      if (surfaceError) setError(archiveError);
       return { ok: false, error: archiveError };
     }
     if (!['ready', 'partially_ready', 'applied', 'failed'].includes(setToArchive.status)) {
       const archiveError = 'This Pacing Revision Set cannot be archived in its current state.';
-      setError(archiveError);
+      if (surfaceError) setError(archiveError);
       return { ok: false, error: archiveError };
     }
     if (!setToArchive.updated_at) {
       const archiveError = 'This Pacing Revision Set is missing the version needed for a safe archive.';
-      setError(archiveError);
+      if (surfaceError) setError(archiveError);
       return { ok: false, error: archiveError };
     }
     const result = await archiveWriterPacingRevisionSet({
@@ -264,7 +266,7 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
       expectedUpdatedAt: setToArchive.updated_at,
     });
     if (!result.ok) {
-      setError(result.error);
+      if (surfaceError) setError(result.error);
       return result;
     }
     setError(null);

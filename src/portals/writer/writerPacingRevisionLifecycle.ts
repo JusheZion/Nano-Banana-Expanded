@@ -6,6 +6,60 @@ export type PacingRevisionReplacementPolicy =
   | { kind: 'confirm_archive'; message: string }
   | { kind: 'blocked'; message: string };
 
+export const PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE =
+  'The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.';
+
+type PacingReviewReplacementResult =
+  | { kind: 'cancelled' }
+  | { kind: 'blocked'; error: string }
+  | { kind: 'review_failed'; error: string }
+  | { kind: 'archive_conflict'; error: typeof PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE }
+  | { kind: 'success' };
+
+export async function runPacingReviewReplacement<TSet>(input: {
+  policy: PacingRevisionReplacementPolicy;
+  activeSet: TSet | null;
+  confirmArchive: (message: string) => boolean;
+  runReview: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  archiveSet: (set: TSet) => Promise<{ ok: true } | { ok: false; error: string }>;
+  refreshIssue: () => Promise<void>;
+}): Promise<PacingReviewReplacementResult> {
+  if (input.policy.kind === 'blocked') {
+    return { kind: 'blocked', error: input.policy.message };
+  }
+  if (
+    input.policy.kind === 'confirm_archive'
+    && !input.confirmArchive(input.policy.message)
+  ) {
+    return { kind: 'cancelled' };
+  }
+
+  const reviewResult = await input.runReview();
+  if (!reviewResult.ok) {
+    return { kind: 'review_failed', error: reviewResult.error };
+  }
+
+  if (
+    input.activeSet
+    && (
+      input.policy.kind === 'auto_archive'
+      || input.policy.kind === 'confirm_archive'
+    )
+  ) {
+    const archiveResult = await input.archiveSet(input.activeSet);
+    if (!archiveResult.ok) {
+      await input.refreshIssue();
+      return {
+        kind: 'archive_conflict',
+        error: PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE,
+      };
+    }
+  }
+
+  await input.refreshIssue();
+  return { kind: 'success' };
+}
+
 export function getPacingRevisionReplacementPolicy(input: {
   status: PacingRevisionSet['status'] | null;
   generating: boolean;

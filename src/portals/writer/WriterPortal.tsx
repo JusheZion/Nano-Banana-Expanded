@@ -102,7 +102,10 @@ import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportW
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
-import { getPacingRevisionReplacementPolicy } from '@/portals/writer/writerPacingRevisionLifecycle';
+import {
+  getPacingRevisionReplacementPolicy,
+  runPacingReviewReplacement,
+} from '@/portals/writer/writerPacingRevisionLifecycle';
 import type { PacingRevisionLayer } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
@@ -2963,46 +2966,39 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       status: revisionSetBeforeReview?.status ?? null,
       generating: pacingRevisionGenerating,
     });
-    if (replacementPolicy.kind === 'blocked') {
-      setPacingError(replacementPolicy.message);
-      pushHistory(`error: ${replacementPolicy.message}`);
+    setPacingLoading(true);
+    const result = await runPacingReviewReplacement({
+      policy: replacementPolicy,
+      activeSet: revisionSetBeforeReview,
+      confirmArchive: (message) => window.confirm(message),
+      runReview: async () => {
+        const res = await invokeWriterTools({
+          mode: 'pacing_review',
+          issue_id: selectedIssueId,
+          target_page_count: targetPageCount,
+        });
+        return res.success
+          ? { ok: true }
+          : { ok: false, error: toolErrorMessage(res) };
+      },
+      archiveSet: (set) => archiveActivePacingRevision(set, { surfaceError: false }),
+      refreshIssue: refreshIssuesForSeries,
+    });
+    setPacingLoading(false);
+    if (result.kind === 'success') {
+      pushHistory('pacing review saved');
       return;
     }
-    if (
-      replacementPolicy.kind === 'confirm_archive'
-      && !window.confirm(replacementPolicy.message)
-    ) return;
-
-    setPacingLoading(true);
-    const res = await invokeWriterTools({
-      mode: 'pacing_review',
-      issue_id: selectedIssueId,
-      target_page_count: targetPageCount,
-    });
-    if (res.success) {
+    if (result.kind === 'archive_conflict') {
       pushHistory('pacing review saved');
-      await refreshIssuesForSeries();
-      if (
-        revisionSetBeforeReview
-        && (
-          replacementPolicy.kind === 'auto_archive'
-          || replacementPolicy.kind === 'confirm_archive'
-        )
-      ) {
-        const archiveResult = await archiveActivePacingRevision(revisionSetBeforeReview);
-        if (!archiveResult.ok) {
-          const splitSuccessMessage = 'The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.';
-          const message = `${splitSuccessMessage} ${archiveResult.error}`;
-          setPacingError(message);
-          pushHistory(`error: ${message}`);
-        }
-      }
-    } else {
-      const msg = toolErrorMessage(res);
-      setPacingError(msg);
-      pushHistory(`error: ${msg}`);
+      setPacingError(result.error);
+      pushHistory(`error: ${result.error}`);
+      return;
     }
-    setPacingLoading(false);
+    if (result.kind === 'review_failed' || result.kind === 'blocked') {
+      setPacingError(result.error);
+      pushHistory(`error: ${result.error}`);
+    }
   }, [
     pacingRevisionActiveSet,
     archiveActivePacingRevision,

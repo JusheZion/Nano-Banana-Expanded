@@ -168,6 +168,23 @@ describe('useWriterPacingRevisionSet', () => {
     expect(result.current.error).toBe('Revision Set changed');
   });
 
+  it('returns archive detail without surfacing a second hook error when the Portal owns the message', async () => {
+    const appliedSet = { ...revisionSet, status: 'applied' as const };
+    mocks.list.mockResolvedValue({ ok: true, sets: [appliedSet] });
+    mocks.archive.mockResolvedValue({ ok: false, error: 'updated_at changed' });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.activeSet?.status).toBe('applied'));
+
+    let archiveResult: Awaited<ReturnType<typeof result.current.archiveActive>> | undefined;
+    await act(async () => {
+      archiveResult = await result.current.archiveActive(appliedSet, { surfaceError: false });
+    });
+
+    expect(archiveResult).toEqual({ ok: false, error: 'updated_at changed' });
+    expect(result.current.activeSet).toEqual(appliedSet);
+    expect(result.current.error).toBeNull();
+  });
+
   it('creates the outline preview then runs Page Beats and Dialogue as separate requests', async () => {
     mocks.invoke
       .mockResolvedValueOnce({ success: true, mode: 'pacing_revision_outline_preview', data: revisionSet })
