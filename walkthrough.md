@@ -13655,3 +13655,53 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Execute the approved plan using the selected implementation workflow.
+
+## Pacing Revision active-tab selection and recovery UX - 2026-07-27
+
+### What changed
+- Added tab-scoped `Select all` and `Clear` controls for Live Outline, Page Beats, and Dialogue review changes.
+- Kept `Approve selected` and `Reject selected` visible in a fixed sidebar footer while Revision Items scroll independently.
+- Collapsed failed or missing child-layer details by default while retaining retry-all, individual retry, and page navigation.
+- Added explicit guidance that Page Beats and Dialogue failures do not prevent independent Outline approval.
+- Hardened busy, focus, disabled, alert, and disclosure behavior and added controlled integration coverage for the readiness transition.
+
+### Files touched
+- `AGENTS.md`
+- `docs/superpowers/specs/2026-07-26-pacing-revision-selection-ux-design.md`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-selection-ux-implementation.md`
+- `src/portals/writer/WriterPacingRevisionWorkspace.tsx`
+- `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- Batch eligibility, counts, and decisions derive only from ready changes in the active layer tab; selections stored on another tab cannot be acted on invisibly.
+- Batch decisions clear only the IDs that were actually processed. Individual edit, approve, reject, retry, dependency, and explicit apply callbacks are unchanged.
+- Failure details are outside the assertive alert subtree and render in a bounded scroll region only when expanded.
+- The implementation is frontend-only. Supabase, Edge Functions, migrations, schemas, persistence, and official-content application order are unchanged.
+
+### Verification
+- Pass 1 component smoke: 1 test file and 6 tests passed after the initial missing-control failure.
+- Pass 2 component smoke: 1 test file and 11 tests passed after accessibility corrections.
+- Pass 3 focused Writer smoke: 4 test files and 29 tests passed; the controlled rerender proves the header readiness transition while three child failures remain and `onApply` stays untouched.
+- Signed-in local QA exercised Live Outline `Select all` -> `Clear` -> `Select all` -> `Approve selected`, restored `0 pending · 3 ready to apply · 52 failed or missing layers`, and confirmed Page Beats opened with an independent zero selection.
+- Consolidated gate: 134 test files and 847 individual tests passed.
+- `npm run lint`: 0 errors and 71 existing repository warnings.
+- `npm run build`: passed with the existing WriterPortal and ComicPortal large-chunk advisories.
+- `git diff --check` and the branch-range diff check passed.
+- Independent Pass 1, Pass 2, Pass 3, and final whole-branch reviews completed with no remaining findings.
+- Cloudflare deployed frontend version `eae0523c-92a8-45fb-b2fa-12fe5494551f` to `https://asset-reference-comics-studio.onyxzion.workers.dev`.
+- A fresh signed-in production tab exposed the new selection, disclosure, approve, and reject controls with no browser warning/error entries; the production endpoint returned HTTP 200.
+
+### Outstanding issues
+- Branch publication, pull-request creation, and merge are pending this continuity commit.
+
+### Risks or caveats
+- Existing Story Review polish opportunities remain outside this focused correction: the diagnostic Pacing Review card still exposes raw JSON, the revision workspace sits below a tall diagnostic section, failure-summary actions are visually similar text links, sidebar microcopy is small, and extremely wide viewports leave substantial surrounding canvas.
+- The preserved QA Revision Set still has 52 intentionally unresolved Page Beats and Dialogue layers for pages 45-70.
+- Rollback requires only reverting the frontend selection/disclosure commits; no data migration or persistence cleanup is required.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Push `codex/pacing-revision-selection-ux`, create the reviewed pull request, merge it after checks pass, then record the final merge commit.

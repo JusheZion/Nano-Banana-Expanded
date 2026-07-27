@@ -502,7 +502,7 @@ git commit -m "test: verify pacing selection workflow"
 - The production bundle exposes the new controls and disclosure behavior.
 - The branch is committed, pushed, reviewed, merged, and the production endpoint is healthy.
 
-- [ ] **Step 1: Run the consolidated regression gate once**
+- [x] **Step 1: Run the consolidated regression gate once**
 
 ```bash
 npm test
@@ -518,7 +518,9 @@ Expected:
 - production build succeeds, with existing chunk advisories reported;
 - `git diff --check` succeeds.
 
-- [ ] **Step 2: Run final audits**
+Final gate result: PASS — `npm test` passed 134 test files and 847 individual tests. `npm run lint` completed with 0 errors and 71 existing repository warnings. `npm run build` succeeded with the existing WriterPortal and ComicPortal large-chunk advisories. `git diff --check` and `git diff --check origin/main...HEAD` both passed.
+
+- [x] **Step 2: Run final audits**
 
 Record:
 
@@ -528,13 +530,23 @@ Record:
 - unchanged Supabase/Edge contracts;
 - rollback readiness.
 
-- [ ] **Step 3: Update continuity records**
+Final audit result:
+
+- **ReAct:** selection remains local and reversible, decisions cross the component boundary through `onChange`, and promotion remains isolated behind the explicit `Apply approved changes` action.
+- **QA:** active-tab eligibility prevents hidden cross-tab decisions; busy and non-ready items cannot be selected; failed child layers remain recoverable and do not block an independent Outline decision. The final whole-branch reviewer found no Critical, Important, or Minor issues.
+- **UI/UX:** the workspace remains a dense, purposeful creative review tool rather than a generic dashboard. The top five remaining visual concerns are pre-existing and outside this focused correction: raw JSON in the diagnostic Pacing Review card, the workspace's position below a tall diagnostic section, low visual differentiation between the two failure-summary text actions, very small sidebar microcopy, and unused surrounding canvas at extremely wide viewports. None obscures or overlaps the new controls at the tested viewport. The correction materially improves the relevant hierarchy by collapsing the ledger, fixing the review footer in place, preserving two-panel comparison, and making active-tab batch scope explicit.
+- **Accessibility:** controls use native buttons and checkboxes, accessible names, visible focus rings, disabled states, `aria-expanded`/`aria-controls`, a bounded scroll region, and an alert that excludes the expanded recovery list from repeated assertive announcements.
+- **Contracts and rollback:** Supabase, Edge, schema, and persistence contracts are unchanged. Reverting the frontend commits restores the prior UI without data migration or persistence cleanup.
+
+- [x] **Step 3: Update continuity records**
 
 Append actual implementation, files, test counts, browser evidence, risks, deployment, and merge status to `walkthrough.md`. Check every completed plan step and record each pass smoke result.
 
-- [ ] **Step 4: Complete the DOX pass**
+- [x] **Step 4: Complete the DOX pass**
 
 Confirm the root `AGENTS.md` contract matches the shipped behavior. No child `AGENTS.md` is needed because the change does not create a new domain boundary.
+
+DOX result: PASS — the root active-tab selection contract matches the implementation, the Child DOX Index remains accurate, and no new durable folder boundary or child `AGENTS.md` is needed.
 
 - [ ] **Step 5: Commit and push**
 
@@ -544,7 +556,7 @@ git commit -m "docs: record pacing selection UX release"
 git push -u origin codex/pacing-revision-selection-ux
 ```
 
-- [ ] **Step 6: Review, deploy, and verify**
+- [x] **Step 6: Review, deploy, and verify**
 
 Create or update a pull request with actual verification evidence. Deploy with:
 
@@ -560,6 +572,8 @@ Open a fresh production tab and verify:
 - visible `Approve selected` and `Reject selected`;
 - clean browser warnings/errors;
 - production HTTP 200.
+
+Release result: PASS — the final reviewer approved the branch without findings. Cloudflare deployed version `eae0523c-92a8-45fb-b2fa-12fe5494551f` to `https://asset-reference-comics-studio.onyxzion.workers.dev`. A fresh signed-in production tab showed `Select all in Live Outline`, `Clear Live Outline selection`, `Show failed layers`, `Approve selected (0)`, and `Reject selected (0)`. Browser warning/error logs were empty, the page title was `ARCS Expanded`, and the endpoint returned HTTP 200.
 
 - [ ] **Step 7: Merge only after every gate passes**
 
