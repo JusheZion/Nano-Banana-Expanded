@@ -7,6 +7,7 @@ import {
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
   resolvePacingRevisionCompletionFailure,
+  resolvePacingRevisionReopenFailure,
   validatePacingRevisionUndoAuthority,
   type PacingRevisionApplySnapshot,
   undoPacingRevisionApply,
@@ -274,16 +275,115 @@ describe('applyPacingRevisionSet', () => {
     expect(validatePacingRevisionUndoAuthority({
       set,
       issueId: set.issue_id,
-      freshPages: [{ id: existingPageId, page_number: 1 }],
+      freshPages: [{
+        id: existingPageId,
+        page_number: 1,
+        beats_json: { panels: [{ action: 'new' }] },
+        script_text: 'NEW',
+      }],
       freshOutlines: [{ id: outlineId }],
     })).toEqual({ ok: true, snapshot: set.apply_snapshot });
 
     expect(validatePacingRevisionUndoAuthority({
       set: { ...set, apply_snapshot: { ...set.apply_snapshot as object, appliedIds: ['tampered'] } },
       issueId: set.issue_id,
-      freshPages: [{ id: existingPageId, page_number: 1 }],
+      freshPages: [{
+        id: existingPageId,
+        page_number: 1,
+        beats_json: { panels: [{ action: 'new' }] },
+        script_text: 'NEW',
+      }],
       freshOutlines: [{ id: outlineId }],
     })).toEqual({ ok: false, error: expect.stringMatching(/snapshot is invalid/i) });
+  });
+
+  it('blocks Undo before writes when physical or created applied content was edited', () => {
+    const { set, changes } = virtualFixture([2]);
+    const outlineId = crypto.randomUUID();
+    const createdPageId = crypto.randomUUID();
+    set.status = 'applied';
+    for (const change of changes) change.generation_status = 'applied';
+    set.apply_snapshot = {
+      outline: set.source_outline_json,
+      plannedOutlineId: outlineId,
+      outlineApplied: true,
+      appliedOutlineId: outlineId,
+      beats: [],
+      dialogue: [],
+      createdPages: [{ pageId: createdPageId, pageNumber: 2 }],
+      sourcePageCount: 1,
+      targetPageCount: 2,
+      appliedIds: changes.map((change) => change.id),
+    };
+    const basePages = [
+      { id: crypto.randomUUID(), page_number: 1, beats_json: null, script_text: null },
+      {
+        id: createdPageId,
+        page_number: 2,
+        beats_json: { panels: [{ action: 'Action 2' }] },
+        script_text: 'DIALOGUE 2',
+      },
+    ];
+    expect(validatePacingRevisionUndoAuthority({
+      set,
+      issueId: set.issue_id,
+      freshPages: [{ ...basePages[0]! }, { ...basePages[1]!, script_text: 'POST-APPLY EDIT' }],
+      freshOutlines: [{ id: outlineId }],
+    })).toEqual({ ok: false, error: expect.stringMatching(/changed after Apply/i) });
+
+    const physical = fixture();
+    const physicalOutlineId = crypto.randomUUID();
+    const physicalPageId = physical.beats.page_id!;
+    physical.set.status = 'applied';
+    for (const change of physical.set.items[0]!.changes) change.generation_status = 'applied';
+    physical.set.apply_snapshot = {
+      outline: physical.set.source_outline_json,
+      plannedOutlineId: physicalOutlineId,
+      outlineApplied: true,
+      appliedOutlineId: physicalOutlineId,
+      beats: [{ pageId: physicalPageId, value: physical.beats.current_value }],
+      dialogue: [{ pageId: physicalPageId, value: physical.dialogue.current_value as string }],
+      createdPages: [],
+      sourcePageCount: 1,
+      targetPageCount: 1,
+      appliedIds: physical.set.items[0]!.changes.map((change) => change.id),
+    };
+    expect(validatePacingRevisionUndoAuthority({
+      set: physical.set,
+      issueId: physical.set.issue_id,
+      freshPages: [{
+        id: physicalPageId,
+        page_number: 1,
+        beats_json: { panels: [{ action: 'POST-APPLY EDIT' }] },
+        script_text: 'NEW',
+      }],
+      freshOutlines: [{ id: physicalOutlineId }],
+    })).toEqual({ ok: false, error: expect.stringMatching(/changed after Apply/i) });
+  });
+
+  it('resolves reopen ambiguity without additional destructive writes', async () => {
+    const markRecoveryRequired = vi.fn().mockResolvedValue({ ok: true });
+    await expect(resolvePacingRevisionReopenFailure({
+      reopenError: 'response lost',
+      loadPersistedStatus: async () => 'ready',
+      markRecoveryRequired,
+    })).resolves.toBe('committed');
+    expect(markRecoveryRequired).not.toHaveBeenCalled();
+
+    await expect(resolvePacingRevisionReopenFailure({
+      reopenError: 'reopen rejected',
+      loadPersistedStatus: async () => 'applied',
+      markRecoveryRequired,
+    })).rejects.toThrow(/remains applied.*recovery required/i);
+    expect(markRecoveryRequired).toHaveBeenCalledOnce();
+
+    markRecoveryRequired.mockClear();
+    await expect(resolvePacingRevisionReopenFailure({
+      reopenError: 'read failed',
+      loadPersistedStatus: async () => { throw new Error('offline'); },
+      markRecoveryRequired,
+    })).rejects.toThrow(/unreadable.*no further mutation/i);
+    expect(markRecoveryRequired).not.toHaveBeenCalled();
   });
 
   it('loads authoritative outline and pages instead of accepting cached state', async () => {

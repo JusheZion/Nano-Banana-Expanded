@@ -30,9 +30,19 @@ describe('Pacing Revision Apply transaction migration', () => {
     expect(contentGuardIndex).toBeGreaterThan(lockIndex);
     expect(statusMutationIndex).toBeGreaterThan(contentGuardIndex);
     expect(sql).toMatch(/Target outline changed before completion/);
-    expect(sql).toMatch(/Target page count changed before completion/);
+    expect(sql).toMatch(/Target page-number set changed before completion/);
     expect(sql).toMatch(/Completion expectation does not match approved candidates/);
     expect(sql).toMatch(/Completion snapshot does not match expected live identities/);
     expect(sql).toMatch(/change\.decision = 'approved'/);
+  });
+
+  it('rejects a same-count gap plus out-of-range replacement before completion', () => {
+    expect(sql).toMatch(/count\(distinct page\.page_number\)/);
+    expect(sql).toMatch(/v_min_page_number <> 1/);
+    expect(sql).toMatch(/v_max_page_number <> \(p_expectation->>'target_page_count'\)::integer/);
+    expect(sql).toMatch(/from generate_series/);
+    expect(sql).toMatch(/page\.page_number > \(p_expectation->>'target_page_count'\)::integer/);
+    expect(sql.indexOf('Target page-number set changed before completion'))
+      .toBeLessThan(sql.indexOf('update public.writer_pacing_revision_changes change'));
   });
 });

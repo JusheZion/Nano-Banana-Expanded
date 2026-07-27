@@ -241,3 +241,26 @@ export async function recoverWriterPacingRevisionApply(
     return { ok: false, error: message(error) };
   }
 }
+
+export async function markWriterPacingRevisionRecoveryRequired(
+  setId: string,
+  expectedStatus: 'applied' | 'applying',
+  detail: string,
+): Promise<{ ok: true } | ApiFailure> {
+  if (!isSupabaseConfigured() || !supabase) return unavailable();
+  try {
+    const normalizedDetail = detail.trim().slice(0, 500) || 'recovery required';
+    const { data, error } = await supabase
+      .from('writer_pacing_revision_sets')
+      .update({ recovery_status: `recovery_required: ${normalizedDetail}` })
+      .eq('id', setId)
+      .eq('status', expectedStatus)
+      .select('id');
+    if (error) return { ok: false, error: error.message };
+    return data?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Could not persist the recovery-required state.' };
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+}

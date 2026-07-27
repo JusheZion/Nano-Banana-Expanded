@@ -67,6 +67,7 @@ import {
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   getWriterPacingRevisionSet,
+  markWriterPacingRevisionRecoveryRequired,
   recoverWriterPacingRevisionApply,
   reopenWriterPacingRevisionSetAfterUndo,
   updateWriterPacingRevisionApplySnapshot,
@@ -218,6 +219,7 @@ import {
   pacingRevisionApplySnapshotFromUnknown,
   pacingRevisionFingerprintKey,
   resolvePacingRevisionCompletionFailure,
+  resolvePacingRevisionReopenFailure,
   undoPacingRevisionApply,
   validatePacingRevisionUndoAuthority,
 } from '@/portals/writer/writerPacingRevisionApply';
@@ -3902,7 +3904,21 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         setResult.set.id,
         snapshot.appliedIds,
       );
-      if (!reopened.ok) throw new Error(reopened.error);
+      if (!reopened.ok) {
+        await resolvePacingRevisionReopenFailure({
+          reopenError: reopened.error,
+          loadPersistedStatus: async () => {
+            const persisted = await getWriterPacingRevisionSet(setResult.set.id);
+            if (!persisted.ok) throw new Error(persisted.error);
+            return persisted.set.status;
+          },
+          markRecoveryRequired: (detail) => markWriterPacingRevisionRecoveryRequired(
+            setResult.set.id,
+            'applied',
+            detail,
+          ),
+        });
+      }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
       await refreshPagesForIssue();
       await pacingRevision.refresh(setResult.set.id);

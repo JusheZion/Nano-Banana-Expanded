@@ -183,7 +183,12 @@ export function buildPacingRevisionCompletionExpectation(args: {
 export function validatePacingRevisionUndoAuthority(args: {
   set: PacingRevisionSet;
   issueId: string;
-  freshPages: Array<{ id: string; page_number: number }>;
+  freshPages: Array<{
+    id: string;
+    page_number: number;
+    beats_json: unknown;
+    script_text: string | null;
+  }>;
   freshOutlines: Array<{ id: string }>;
 }): { ok: true; snapshot: PacingRevisionApplySnapshot } | { ok: false; error: string } {
   if (args.set.status !== 'applied' || args.set.issue_id !== args.issueId) {
@@ -203,6 +208,7 @@ export function validatePacingRevisionUndoAuthority(args: {
     return { ok: false, error: 'The applied change ledger no longer matches the Revision Set.' };
   }
   const pagesById = new Map(args.freshPages.map((page) => [page.id, page]));
+  const createdByNumber = new Map(snapshot.createdPages.map((page) => [page.pageNumber, page.pageId]));
   const expectedPriorBeats = appliedChanges.filter((change) => change.layer === 'beats' && change.page_id);
   const expectedPriorDialogue = appliedChanges.filter((change) => change.layer === 'dialogue' && change.page_id);
   if (
@@ -243,6 +249,32 @@ export function validatePacingRevisionUndoAuthority(args: {
   ) {
     return { ok: false, error: 'The created-page ledger no longer matches the applied changes.' };
   }
+  const stableValue = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`;
+    if (value && typeof value === 'object') {
+      return `{${Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => `${JSON.stringify(key)}:${stableValue(entry)}`)
+        .join(',')}}`;
+    }
+    return JSON.stringify(value);
+  };
+  for (const change of appliedChanges) {
+    if (change.layer === 'outline' || change.page_number == null) continue;
+    const pageId = change.page_id ?? createdByNumber.get(change.page_number);
+    const page = pageId ? pagesById.get(pageId) : null;
+    const candidate = effectivePacingRevisionCandidate(change);
+    if (
+      !page
+      || (change.layer === 'beats' && stableValue(page.beats_json) !== stableValue(candidate))
+      || (change.layer === 'dialogue' && page.script_text !== candidate)
+    ) {
+      return {
+        ok: false,
+        error: `Page ${change.page_number} changed after Apply; Undo is blocked to preserve the newer edit.`,
+      };
+    }
+  }
   if (snapshot.outlineApplied) {
     if (
       !snapshot.appliedOutlineId
@@ -273,6 +305,35 @@ export class PacingRevisionCompletionResolutionError extends Error {
     this.name = 'PacingRevisionCompletionResolutionError';
     this.cleanupAllowed = cleanupAllowed;
   }
+}
+
+export async function resolvePacingRevisionReopenFailure(args: {
+  reopenError: string;
+  loadPersistedStatus: () => Promise<string>;
+  markRecoveryRequired: (detail: string) => Promise<{ ok: boolean; error?: string }>;
+}): Promise<'committed'> {
+  let status: string;
+  try {
+    status = await args.loadPersistedStatus();
+  } catch (error) {
+    throw new Error(
+      `${args.reopenError} Reopen state is unreadable; recovery required. No further mutation was attempted. ${errorMessage(error)}`,
+      { cause: error },
+    );
+  }
+  if (status === 'ready') return 'committed';
+  if (status === 'applied') {
+    const detail = `${args.reopenError} Live Undo completed, but the Revision Set remains applied.`;
+    const marked = await args.markRecoveryRequired(detail);
+    throw new Error(
+      marked.ok
+        ? `${detail} Recovery required; no further mutation was attempted.`
+        : `${detail} Recovery state could not be recorded: ${marked.error ?? 'unknown error'}`,
+    );
+  }
+  throw new Error(
+    `${args.reopenError} Reopen state is ${status || 'unknown'}; recovery required. No further mutation was attempted.`,
+  );
 }
 
 export async function resolvePacingRevisionCompletionFailure(args: {

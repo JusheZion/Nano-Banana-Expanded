@@ -19,6 +19,9 @@ declare
   v_latest_outline_id uuid;
   v_latest_outline_json jsonb;
   v_page_expectation jsonb;
+  v_distinct_page_count integer;
+  v_min_page_number integer;
+  v_max_page_number integer;
 begin
   if auth.uid() is null then
     raise exception 'Authentication is required';
@@ -135,12 +138,53 @@ begin
   where page.issue_id = v_issue_id
   for update;
 
-  select count(*)
-  into v_affected_count
+  select
+    count(*),
+    count(distinct page.page_number),
+    min(page.page_number),
+    max(page.page_number)
+  into
+    v_affected_count,
+    v_distinct_page_count,
+    v_min_page_number,
+    v_max_page_number
   from public.writer_pages page
   where page.issue_id = v_issue_id;
-  if v_affected_count <> (p_expectation->>'target_page_count')::integer then
-    raise exception 'Target page count changed before completion';
+  if (
+    (p_expectation->>'target_page_count')::integer = 0
+    and v_affected_count <> 0
+  ) or (
+    (p_expectation->>'target_page_count')::integer > 0
+    and (
+      v_affected_count <> (p_expectation->>'target_page_count')::integer
+      or v_distinct_page_count <> (p_expectation->>'target_page_count')::integer
+      or v_min_page_number <> 1
+      or v_max_page_number <> (p_expectation->>'target_page_count')::integer
+      or exists (
+        select 1
+        from generate_series(
+          1,
+          (p_expectation->>'target_page_count')::integer
+        ) expected_number
+        where not exists (
+          select 1
+          from public.writer_pages page
+          where page.issue_id = v_issue_id
+            and page.page_number = expected_number
+        )
+      )
+      or exists (
+        select 1
+        from public.writer_pages page
+        where page.issue_id = v_issue_id
+          and (
+            page.page_number < 1
+            or page.page_number > (p_expectation->>'target_page_count')::integer
+          )
+      )
+    )
+  ) then
+    raise exception 'Target page-number set changed before completion';
   end if;
 
   select outline.id, outline.outline_json

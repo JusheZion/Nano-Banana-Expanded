@@ -20,6 +20,7 @@ import {
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   listWriterPacingRevisionSets,
+  markWriterPacingRevisionRecoveryRequired,
   reopenWriterPacingRevisionSetAfterUndo,
   recoverWriterPacingRevisionApply,
   updateWriterPacingRevisionApplySnapshot,
@@ -243,5 +244,22 @@ describe('writer pacing revision persistence', () => {
       apply_snapshot: snapshot,
       recovery_status: 'recovery_required: page cleanup failed',
     });
+  });
+
+  it('marks an ambiguous applied Undo as recovery required without changing status', async () => {
+    const chain = updateChain({ data: [{ id: SET_ID }], error: null });
+    const update = vi.fn().mockReturnValue(chain);
+    mocks.from.mockReturnValue({ update });
+
+    await expect(markWriterPacingRevisionRecoveryRequired(
+      SET_ID,
+      'applied',
+      'reopen response lost',
+    )).resolves.toEqual({ ok: true });
+
+    expect(update).toHaveBeenCalledWith({
+      recovery_status: 'recovery_required: reopen response lost',
+    });
+    expect(chain.eq).toHaveBeenCalledWith('status', 'applied');
   });
 });

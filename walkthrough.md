@@ -14161,3 +14161,38 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Proceed only after final integrity review approval.
+
+## Pacing Revision exact page set and Undo continuity - 2026-07-27
+
+### What changed
+- Completion now validates the exact distinct contiguous page-number set `1..target` under lock, rejecting same-count gap/out-of-range substitutions.
+- Undo preflight now compares live physical and created-page Page Beats/Dialogue against authoritative applied candidates; newer edits block Undo before mutation.
+- Added persisted-state reopen ambiguity handling: `ready` confirms success, `applied` records recovery-required detail, and unreadable/unknown state performs no further mutation.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionApplyMigration.test.ts`
+- `supabase/migrations/20260727000000_writer_pacing_revision_apply_transactions.sql`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Verification
+- Focused Pass 4 gate — PASS, 8 files / 79 tests.
+- `npm run build` — PASS.
+
+### Outstanding issues
+- Updated migration deployment and hosted 71→85 Apply/Undo smoke remain pending.
+
+### Risks or caveats
+- A reopen failure after live Undo deliberately leaves the set `applied` with explicit recovery-required detail rather than attempting another content mutation.
+
+### Operator follow-up
+- Deploy the updated migration before hosted validation.
+
+### Next steps
+- Proceed only after final review approval.
