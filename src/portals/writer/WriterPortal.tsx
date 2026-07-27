@@ -208,6 +208,10 @@ import {
   type PacingRevisionApplySnapshot,
 } from '@/portals/writer/writerPacingRevisionApply';
 import {
+  verifyPacingRevisionApply,
+  verifyPacingRevisionCreatedPagesAbsent,
+} from '@/portals/writer/writerPacingRevisionApplyVerification';
+import {
   buildPacingRevisionOutlineFromApprovedChanges,
   fingerprintPacingRevisionValue,
 } from '@/portals/writer/writerPacingRevisionOutline';
@@ -3490,6 +3494,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
       const result = await applyPacingRevisionSet({
         set: revisionSet,
+        existingPages: sortedPages.map((page) => ({
+          pageId: page.id,
+          pageNumber: page.page_number,
+        })),
         currentFingerprints,
         lockedTargetKeys,
         writers: {
@@ -3519,6 +3527,19 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             createdOutline = saved.row;
             createdOutlineId = saved.row.id;
           },
+          createPage: async (pageNumber) => {
+            const row = await createWriterPage({
+              issue_id: selectedIssueId,
+              page_number: pageNumber,
+            });
+            if (!row) throw new Error(`Could not create page ${pageNumber}.`);
+            return { pageId: row.id, pageNumber: row.page_number };
+          },
+          deletePages: async (pageIds) => {
+            if (!await deleteWriterPages(pageIds)) {
+              throw new Error('Could not remove pages created by this Apply attempt.');
+            }
+          },
           writeBeats: async (pageId, value) => {
             const ok = await updateWriterPageBeatsJson(
               pageId,
@@ -3535,18 +3556,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           },
         },
       });
-      const durableSnapshot = {
-        ...result.snapshot,
-        appliedIds: result.appliedIds,
-        outlineApplied: Boolean(createdOutline),
-        appliedOutlineId: createdOutlineId,
-      };
-      const completed = await completeWriterPacingRevisionSet(
-        revisionSet.id,
-        result.appliedIds,
-        durableSnapshot,
-      );
-      if (!completed.ok) {
+      const compensateApply = async () => {
         await undoPacingRevisionApply(result.snapshot, {
           writeOutline: async () => {
             if (!createdOutline) return;
@@ -3568,7 +3578,42 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
               throw new Error(`Could not restore Dialogue for ${pageId}.`);
             }
           },
+          deletePages: async (pageIds) => {
+            if (!await deleteWriterPages(pageIds)) {
+              throw new Error('Could not remove pages created by this Apply attempt.');
+            }
+          },
         });
+        const cleanupVerification = verifyPacingRevisionCreatedPagesAbsent({
+          freshPages: await listWriterPages(selectedIssueId),
+          createdPages: result.snapshot.createdPages,
+        });
+        if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
+      };
+      const freshPages = await listWriterPages(selectedIssueId);
+      const verification = verifyPacingRevisionApply({
+        sourcePageCount: result.snapshot.sourcePageCount,
+        targetPageCount: result.snapshot.targetPageCount,
+        freshPages,
+        createdPages: result.snapshot.createdPages,
+        approvedChanges: result.approvedChanges,
+      });
+      if (!verification.ok) {
+        await compensateApply();
+        throw new Error(verification.error);
+      }
+      const durableSnapshot = {
+        ...result.snapshot,
+        outlineApplied: Boolean(createdOutline),
+        appliedOutlineId: createdOutlineId,
+      };
+      const completed = await completeWriterPacingRevisionSet(
+        revisionSet.id,
+        result.appliedIds,
+        durableSnapshot,
+      );
+      if (!completed.ok) {
+        await compensateApply();
         throw new Error(completed.error);
       }
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));
@@ -3596,9 +3641,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     const revisionSet = pacingRevision.activeSet;
     if (!revisionSet?.apply_snapshot || !selectedIssueId) return;
     const snapshot = revisionSet.apply_snapshot as PacingRevisionApplySnapshot & {
-      appliedIds?: string[];
       outlineApplied?: boolean;
     };
+    const createdPages = Array.isArray(snapshot.createdPages) ? snapshot.createdPages : [];
     setPacingApplyBusy(true);
     setPacingApplyError(null);
     try {
@@ -3624,10 +3669,20 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             throw new Error(`Could not restore Dialogue for ${pageId}.`);
           }
         },
+        deletePages: async (pageIds) => {
+          if (!await deleteWriterPages(pageIds)) {
+            throw new Error('Could not remove pages created by this Revision Set.');
+          }
+        },
       });
+      const cleanupVerification = verifyPacingRevisionCreatedPagesAbsent({
+        freshPages: await listWriterPages(selectedIssueId),
+        createdPages,
+      });
+      if (!cleanupVerification.ok) throw new Error(cleanupVerification.error);
       const reopened = await reopenWriterPacingRevisionSetAfterUndo(
         revisionSet.id,
-        snapshot.appliedIds ?? [],
+        snapshot.appliedIds,
       );
       if (!reopened.ok) throw new Error(reopened.error);
       setOutlines(await listWriterOutlinesForIssue(selectedIssueId));

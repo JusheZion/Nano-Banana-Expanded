@@ -314,7 +314,7 @@ git commit -m "feat: queue virtual pacing previews"
 - Verification catches missing/duplicate pages and content mismatches.
 - Undo deletes exact created rows before reopening the set.
 
-- [ ] **Step 1: Add RED apply and verification tests**
+- [x] **Step 1: Add RED apply and verification tests**
 
 Extend `writerPacingRevisionApply.test.ts` for:
 
@@ -327,7 +327,7 @@ Extend `writerPacingRevisionApply.test.ts` for:
 
 Create `writerPacingRevisionApplyVerification.test.ts` proving correct 71→85 verification and failures for missing page 79, duplicate numbering, wrong created ID, Beats mismatch, and Dialogue mismatch.
 
-- [ ] **Step 2: Run apply tests and confirm failure**
+- [x] **Step 2: Run apply tests and confirm failure**
 
 Run:
 
@@ -337,7 +337,7 @@ npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts sr
 
 Expected: FAIL because virtual creation, mapping, and verification do not exist.
 
-- [ ] **Step 3: Implement apply preflight and snapshot**
+- [x] **Step 3: Implement apply preflight and snapshot**
 
 Extend `ApplyWriters`:
 
@@ -348,27 +348,27 @@ deletePages: (pageIds: string[]) => Promise<void>;
 
 Extend `PacingRevisionApplySnapshot` with exact `createdPages`. Validate complete virtual units, contiguous future numbers, collision-free existing page numbers, resolved dependencies, and the built approved outline before the first writer call.
 
-- [ ] **Step 4: Implement mutation and reverse compensation**
+- [x] **Step 4: Implement mutation and reverse compensation**
 
 Write Outline → create rows → Beats → Dialogue. Resolve child targets through `change.page_id ?? createdByPageNumber.get(change.page_number)`. On failure, restore existing content, delete exact created IDs, and roll back the created Outline while preserving the original error.
 
-- [ ] **Step 5: Implement pure read-back verification**
+- [x] **Step 5: Implement pure read-back verification**
 
 `verifyPacingRevisionApply` accepts the target outline, fresh pages, created mapping, and approved changes. It returns success only when the target page-number set and approved candidate values exactly match persisted rows.
 
-- [ ] **Step 6: Wire WriterPortal completion and Undo**
+- [x] **Step 6: Wire WriterPortal completion and Undo**
 
 Use `createWriterPage` directly, never `ensureWriterPagesToCount`. After apply writes, call `listWriterPages`, run verification, and only then call `completeWriterPacingRevisionSet`. Undo restores prior content and deletes `snapshot.createdPages` by exact IDs; verify deletion before reopening.
 
-- [ ] **Step 7: Run Pass 4 smoke**
+- [x] **Step 7: Run Pass 4 smoke**
 
 Run apply, verification, and persistence API tests. Expected: all pass.
 
-- [ ] **Step 8: Midpoint QA audit**
+- [x] **Step 8: Midpoint QA audit**
 
 Review the changed code for false-success paths, unverified zero-row updates, cleanup ordering, concurrent page collisions, incomplete virtual units, stale/locked targets, and recovery messaging. Fix all P0/P1 findings before proceeding.
 
-- [ ] **Step 9: Commit Pass 4**
+- [x] **Step 9: Commit Pass 4**
 
 ```bash
 git add src/portals/writer/writerPacingRevisionApply.ts src/portals/writer/writerPacingRevisionApplyVerification.ts src/portals/writer/WriterPortal.tsx src/shared/api/writerPacingRevisionSets.ts src/portals/writer/__tests__ src/shared/api/__tests__/writerPacingRevisionSets.test.ts docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md
@@ -377,9 +377,9 @@ git commit -m "fix: verify pacing expansion apply"
 
 **Pass 4 smoke test:** Apply, verification, and Revision Set persistence tests only.
 
-**Pass 4 result:** Pending.
+**Pass 4 result:** PASS — RED coverage reproduced missing virtual creation/mapping, incomplete and dependency-invalid virtual units, physical/virtual identity collisions, non-sequential targets, creation/content compensation gaps, missing read-back verification, zero-row completion, and Undo deletion failures. Apply now builds and validates the approved outline before mutation; verifies stale fingerprints, locks, dependency identity, physical ID/number identity, sequential target numbering, collision-free contiguous creation, and one complete approved Outline/Beats/Dialogue unit per future page; then writes Outline → exact ascending `createWriterPage` rows → Beats → Dialogue. The snapshot records only prior existing-page content plus exact created IDs/numbers, source/target counts, and applied IDs. `WriterPortal` reads fresh issue pages and verifies the complete number set, exact created mapping, and every approved persisted Beats/Dialogue candidate before completion. Verification or completion failure restores existing content, deletes the exact created rows, rolls back the created outline, verifies created-row absence, and leaves the set unapplied. Undo restores existing state, deletes and verifies exact created-row absence, and only then reopens the set. Existing-only legacy snapshots remain undoable. The focused smoke passes 3 files / 27 tests; the production build passes; focused ESLint reports 0 errors and 3 pre-existing `WriterPortal` warnings.
 
-**Midpoint QA audit result:** Pending.
+**Midpoint QA audit result:** PASS after corrections — false-success completion is downstream of fresh read-back; physical and virtual identity checks fail closed; the database completion/reopen helpers verify every requested change ID and the single set row instead of accepting zero-row updates; unique page creation collisions compensate the exact created prefix; cleanup preserves the original apply error while surfacing recovery failures; legacy existing-only Undo does not require a created-page ledger. Mutation order, reverse cleanup, stale/locked target checks, incomplete virtual-unit rejection, and user-visible recovery messages were reviewed with no remaining P0/P1 finding. Root DOX remains unchanged because its existing verified-Apply contract already describes this behavior; no migration or Pass 5 UI work was introduced.
 
 ## Pass 5: Truthful workspace status and page navigation
 

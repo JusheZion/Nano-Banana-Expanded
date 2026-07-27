@@ -16,7 +16,9 @@ vi.mock('@/shared/lib/supabase', () => ({
 }));
 
 import {
+  completeWriterPacingRevisionSet,
   listWriterPacingRevisionSets,
+  reopenWriterPacingRevisionSetAfterUndo,
   updateWriterPacingRevisionChange,
 } from '../writerPacingRevisionSets';
 
@@ -97,5 +99,45 @@ describe('writer pacing revision persistence', () => {
       change: expect.objectContaining({ id: CHANGE_ID, decision: 'approved' }),
     });
     expect(mocks.update).toHaveBeenCalledWith({ decision: 'approved' });
+  });
+
+  it('fails closed when completion updates zero approved changes', async () => {
+    const selectUpdated = vi.fn().mockResolvedValue({ data: [], error: null });
+    const inIds = vi.fn().mockReturnValue({ select: selectUpdated });
+    const updateChanges = vi.fn().mockReturnValue({ in: inIds });
+    const updateSet = vi.fn();
+    mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_changes'
+      ? { update: updateChanges }
+      : { update: updateSet });
+
+    const result = await completeWriterPacingRevisionSet(
+      SET_ID,
+      [CHANGE_ID],
+      { createdPages: [] },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringMatching(/did not mark every approved change/i),
+    });
+    expect(updateSet).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when Undo reopens zero applied changes', async () => {
+    const selectUpdated = vi.fn().mockResolvedValue({ data: [], error: null });
+    const inIds = vi.fn().mockReturnValue({ select: selectUpdated });
+    const updateChanges = vi.fn().mockReturnValue({ in: inIds });
+    const updateSet = vi.fn();
+    mocks.from.mockImplementation((table: string) => table === 'writer_pacing_revision_changes'
+      ? { update: updateChanges }
+      : { update: updateSet });
+
+    const result = await reopenWriterPacingRevisionSetAfterUndo(SET_ID, [CHANGE_ID]);
+
+    expect(result).toEqual({
+      ok: false,
+      error: expect.stringMatching(/did not reopen every applied change/i),
+    });
+    expect(updateSet).not.toHaveBeenCalled();
   });
 });

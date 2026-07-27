@@ -13945,3 +13945,51 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Begin Pass 4 with RED Apply tests for complete virtual units, ascending creation, read-back verification, compensation, and Undo.
+
+## Pacing Revision atomic expansion Apply and verified Undo - 2026-07-27
+
+### What changed
+- Added fail-closed preflight for complete approved virtual Outline, Page Beats, and Dialogue units, exact physical identity, dependencies, fingerprints, locks, collisions, and sequential target pages.
+- Apply now creates only the exact future rows in ascending order with `createWriterPage`, maps candidates through the returned row IDs, and compensates the exact created IDs on any later failure.
+- Added pure read-back verification for the complete target page-number set, exact created mapping, and persisted approved Page Beats and Dialogue candidates.
+- Moved Revision Set completion behind fresh read-back verification; verification or completion failure restores existing content and outline state, deletes created rows, verifies their absence, and leaves the set unapplied.
+- Extended the durable snapshot with exact created pages, source/target page counts, and applied change IDs. Undo restores existing data, deletes and verifies the exact recorded rows, and only then reopens the set.
+- Hardened completion and reopen persistence against silent zero-row updates.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionApply.ts`
+- `src/portals/writer/writerPacingRevisionApplyVerification.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApply.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-virtual-pages-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- The built approved outline is validated before the first live write and establishes the exact future creation range.
+- Snapshots retain prior content only for existing pages; newly created content is removed by exact row deletion instead of being restored.
+- Cleanup failures retain the original Apply error and add explicit recovery-failure detail.
+- Existing-only legacy snapshots remain undoable without a created-page ledger.
+- `AGENTS.md` was intentionally unchanged because the root DOX already specifies fully previewed virtual pages, verified Apply, exact compensation, and exact Undo.
+
+### Verification
+- TDD RED reproduced virtual mapping, incomplete dependency units, collisions, physical identity mismatch, malformed target numbering, creation/content cleanup, read-back mismatch, persistence zero-row, and Undo deletion gaps.
+- Pass 4 focused smoke: `npx vitest run src/portals/writer/__tests__/writerPacingRevisionApply.test.ts src/portals/writer/__tests__/writerPacingRevisionApplyVerification.test.ts src/shared/api/__tests__/writerPacingRevisionSets.test.ts` — PASS, 3 files / 27 tests.
+- `npm run build` — PASS.
+- Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
+- Midpoint QA audit found and corrected fail-open physical identity, non-sequential target, zero-row persistence, cleanup-message, and legacy Undo cases.
+
+### Outstanding issues
+- Pass 5 truthful workspace status and page navigation remain pending.
+- Local browser and hosted expansion Apply/Undo smoke remain scheduled for Passes 6–7.
+
+### Risks or caveats
+- No migration, hosted deployment, browser mutation smoke, or Pass 5 UI behavior was included in this pass.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Begin Pass 5 with RED status, blocker-lifecycle, comparison-context, and physical/virtual navigation tests.

@@ -125,22 +125,35 @@ export async function completeWriterPacingRevisionSet(
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
+    const expectedIds = [...new Set(appliedChangeIds)];
+    if (expectedIds.length === 0) {
+      return { ok: false, error: 'No approved changes were provided for completion.' };
+    }
     const now = new Date().toISOString();
-    const { error: changesError } = await supabase
+    const { data: changedRows, error: changesError } = await supabase
       .from('writer_pacing_revision_changes')
       .update({ generation_status: 'applied', applied_at: now })
-      .in('id', appliedChangeIds);
+      .in('id', expectedIds)
+      .select('id');
     if (changesError) return { ok: false, error: changesError.message };
-    const { error: setError } = await supabase
+    const changedIds = new Set((changedRows ?? []).map((row) => row.id));
+    if (changedIds.size !== expectedIds.length || expectedIds.some((id) => !changedIds.has(id))) {
+      return { ok: false, error: 'Completion did not mark every approved change as applied.' };
+    }
+    const { data: setRows, error: setError } = await supabase
       .from('writer_pacing_revision_sets')
       .update({ status: 'applied', apply_snapshot: snapshot, recovery_status: null })
-      .eq('id', setId);
-    if (setError) {
+      .eq('id', setId)
+      .select('id');
+    if (setError || setRows?.length !== 1) {
       await supabase
         .from('writer_pacing_revision_changes')
         .update({ generation_status: 'ready', applied_at: null })
-        .in('id', appliedChangeIds);
-      return { ok: false, error: setError.message };
+        .in('id', expectedIds);
+      return {
+        ok: false,
+        error: setError?.message ?? 'Completion did not update the Revision Set.',
+      };
     }
     return { ok: true };
   } catch (error) {
@@ -154,16 +167,29 @@ export async function reopenWriterPacingRevisionSetAfterUndo(
 ): Promise<{ ok: true } | ApiFailure> {
   if (!isSupabaseConfigured() || !supabase) return unavailable();
   try {
-    const { error: changesError } = await supabase
+    const expectedIds = [...new Set(appliedChangeIds)];
+    if (expectedIds.length === 0) {
+      return { ok: false, error: 'No applied changes were provided for Undo.' };
+    }
+    const { data: changedRows, error: changesError } = await supabase
       .from('writer_pacing_revision_changes')
       .update({ generation_status: 'ready', applied_at: null })
-      .in('id', appliedChangeIds);
+      .in('id', expectedIds)
+      .select('id');
     if (changesError) return { ok: false, error: changesError.message };
-    const { error: setError } = await supabase
+    const changedIds = new Set((changedRows ?? []).map((row) => row.id));
+    if (changedIds.size !== expectedIds.length || expectedIds.some((id) => !changedIds.has(id))) {
+      return { ok: false, error: 'Undo did not reopen every applied change.' };
+    }
+    const { data: setRows, error: setError } = await supabase
       .from('writer_pacing_revision_sets')
       .update({ status: 'ready', recovery_status: 'undone' })
-      .eq('id', setId);
-    return setError ? { ok: false, error: setError.message } : { ok: true };
+      .eq('id', setId)
+      .select('id');
+    if (setError) return { ok: false, error: setError.message };
+    return setRows?.length === 1
+      ? { ok: true }
+      : { ok: false, error: 'Undo did not reopen the Revision Set.' };
   } catch (error) {
     return { ok: false, error: message(error) };
   }
