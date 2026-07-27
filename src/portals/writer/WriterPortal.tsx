@@ -64,9 +64,11 @@ import {
 } from '@/shared/api/arcsWriterRoom';
 import { invokeWriterTools } from '@/shared/api/writerTools';
 import {
+  archiveWriterPacingRevisionSet,
   beginWriterPacingRevisionApply,
   completeWriterPacingRevisionSet,
   getWriterPacingRevisionSet,
+  listWriterPacingRevisionSets,
   recoverWriterPacingRevisionApply,
   undoWriterPacingRevisionSet,
   updateWriterPacingRevisionApplySnapshot,
@@ -108,6 +110,7 @@ import {
   getPacingRevisionReplacementPolicy,
   runPacingReviewReplacement,
 } from '@/portals/writer/writerPacingRevisionLifecycle';
+import { runPacingReviewBatch } from '@/portals/writer/writerPacingRevisionBatch';
 import type { PacingRevisionLayer } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
@@ -3043,29 +3046,114 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       setArcBatchBusy(true);
       setArcBatchMode(mode);
       try {
+        if (mode === 'pacing_review') {
+          const batchIssues = arcBatchIssueIdsOrdered.map((issueId) => {
+            const issue = sortedIssuesForArc.find((candidate) => candidate.id === issueId);
+            return {
+              issueId,
+              label: `Issue #${issue?.issue_number ?? '?'}`,
+              generating: issueId === selectedIssueId && pacingRevisionGenerating,
+            };
+          });
+          const result = await runPacingReviewBatch({
+            issues: batchIssues,
+            loadActiveSet: async (issueId) => {
+              const loaded = await listWriterPacingRevisionSets(issueId);
+              return loaded.ok
+                ? { ok: true, set: loaded.sets[0] ?? null }
+                : loaded;
+            },
+            confirmArchive: (message) => window.confirm(message),
+            runReview: async (issueId) => {
+              const response = await invokeWriterTools({
+                mode: 'pacing_review',
+                issue_id: issueId,
+                target_page_count: targetPageCount,
+              });
+              return response.success
+                ? { ok: true }
+                : { ok: false, error: toolErrorMessage(response) };
+            },
+            archiveSet: async (_issueId, revisionSet) => {
+              if (
+                revisionSet.status !== 'ready'
+                && revisionSet.status !== 'partially_ready'
+                && revisionSet.status !== 'applied'
+                && revisionSet.status !== 'failed'
+              ) {
+                return {
+                  ok: false,
+                  kind: 'conflict',
+                  error: 'The Revision Set status changed before archive.',
+                };
+              }
+              if (!revisionSet.updated_at) {
+                return {
+                  ok: false,
+                  kind: 'conflict',
+                  error: 'The Revision Set timestamp changed before archive.',
+                };
+              }
+              return archiveWriterPacingRevisionSet({
+                setId: revisionSet.id,
+                expectedStatus: revisionSet.status,
+                expectedUpdatedAt: revisionSet.updated_at,
+              });
+            },
+            refreshIssueState: async (issueId) => {
+              await refreshIssuesForSeries();
+              if (issueId === selectedIssueId) {
+                await Promise.all([
+                  pacingRevision.refresh(),
+                  pacingRevision.refreshHistory(),
+                ]);
+              }
+            },
+            onIssueStart: (_issue, index, total) => {
+              setArcBatchLabel(`${index + 1}/${total}`);
+            },
+          });
+          if (result.kind === 'cancelled') {
+            pushHistory('Pacing batch cancelled; no reviews were run');
+            return;
+          }
+          const problems = result.outcomes.filter(
+            ({ kind }) => kind !== 'success',
+          );
+          for (const outcome of result.outcomes) {
+            pushHistory(
+              `${outcome.kind === 'success' ? 'pacing review' : 'pacing review issue'} — ${outcome.label}: ${outcome.message}`,
+            );
+          }
+          setPacingError(problems.length > 0
+            ? problems.map(({ label, message }) => `${label}: ${message}`).join(' ')
+            : null);
+          const succeeded = result.outcomes.filter(({ kind }) => kind === 'success').length;
+          const skippedOrFailed = result.outcomes.length - succeeded;
+          pushHistory(
+            `Pacing batch complete (${succeeded} saved${skippedOrFailed ? `, ${skippedOrFailed} skipped or needs attention` : ''})`,
+          );
+          return;
+        }
+
         for (let i = 0; i < arcBatchIssueIdsOrdered.length; i++) {
           setArcBatchLabel(`${i + 1}/${arcBatchIssueIdsOrdered.length}`);
           const id = arcBatchIssueIdsOrdered[i]!;
-          const res = await invokeWriterTools(
-            mode === 'pacing_review'
-              ? { mode: 'pacing_review', issue_id: id, target_page_count: targetPageCount }
-              : { mode, issue_id: id },
-          );
+          const res = await invokeWriterTools({ mode, issue_id: id });
           if (!res.success) {
             const msg = toolErrorMessage(res);
-            if (mode === 'pacing_review') setPacingError(msg);
-            else setCanonError(msg);
+            setCanonError(msg);
             pushHistory(`error: ${mode} batch — ${msg}`);
             return;
           }
           const iss = sortedIssuesForArc.find((x) => x.id === id);
           pushHistory(
-            `${mode === 'pacing_review' ? 'pacing review' : 'canon check'} saved — issue #${iss?.issue_number ?? '?'}`,
+            `canon check saved — issue #${iss?.issue_number ?? '?'}`,
           );
         }
         await refreshIssuesForSeries();
         pushHistory(
-          `${mode === 'pacing_review' ? 'Pacing' : 'Canon'} batch complete (${arcBatchIssueIdsOrdered.length} issue(s))`,
+          `Canon batch complete (${arcBatchIssueIdsOrdered.length} issue(s))`,
         );
       } finally {
         setArcBatchBusy(false);
@@ -3073,7 +3161,17 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         setArcBatchMode(null);
       }
     },
-    [arcBatchIssueIdsOrdered, supabaseOk, sortedIssuesForArc, refreshIssuesForSeries, pushHistory, targetPageCount],
+    [
+      arcBatchIssueIdsOrdered,
+      pacingRevision,
+      pacingRevisionGenerating,
+      pushHistory,
+      refreshIssuesForSeries,
+      selectedIssueId,
+      sortedIssuesForArc,
+      supabaseOk,
+      targetPageCount,
+    ],
   );
 
   const runOutlineGenerate = useCallback(

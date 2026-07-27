@@ -14886,3 +14886,48 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Complete the focused and broader Pacing regression gates, then proceed to hosted release verification.
+
+## Pacing Review batch replacement consistency - 2026-07-27
+
+### What changed
+- Added a dedicated batch replacement orchestrator that preflights every selected issue before the first Pacing Review request.
+- Added one clear confirmation for all selected issues whose active Revision Sets contain unfinished decisions or edits.
+- Applying and actively generating/leased sets are skipped with visible issue-specific reasons.
+- Each successful Pacing Review archives only its own captured prior set through the exact status and `updated_at` guard.
+- AI, archive, preflight, and refresh failures are contained to their issue, preserve the prior set where applicable, remain visible, and do not cancel later eligible issues.
+- Updated both Arc Review batch entry points through their shared Portal handler without changing the one-review-request-per-issue contract.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/writerPacingRevisionBatch.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatch.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatchPortal.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Preflight captures the prior set for each issue once. Archive runs only after that issue's new AI review succeeds and uses the captured set ID, eligible status, and timestamp rather than selected-issue hook state.
+- The batch confirmation explicitly says successful reviews move prior sets to Revision history while failed reviews preserve them.
+- Selected-issue active/history state refreshes only through the issue-scoped hook; stale issue responses remain fenced by the existing hook request/version guards.
+- Canon Check batch behavior remains outside this change.
+
+### Verification
+- RED: the focused tests failed for the absent orchestrator and Portal wiring; an additional exception-containment test reproduced a preflight rejection canceling the batch.
+- Pass 4 focused smoke: PASS, 3 files / 17 tests.
+- Broader Pacing regression: PASS, 23 files / 257 tests.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `npm run lint`: PASS with 0 errors; focused changed-file lint has only 3 pre-existing WriterPortal warnings.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- Migration, Edge Function, frontend deployment, signed-in browser QA, and production smoke remain in Pass 5.
+
+### Risks or caveats
+- Non-selected issues have no mounted active/history hook state; their data is loaded fresh when selected. Series issue data refreshes after every attempted review outcome.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Run the consolidated release gate, final ReAct/QA/UI/UX/DOX/code audits, signed-in browser QA, deploy the migration/Edge Function/frontend, and smoke the production replacement/history flow.

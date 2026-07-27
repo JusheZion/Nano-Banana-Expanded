@@ -370,19 +370,19 @@ after expiry, preventing an equality-boundary race.
 - Each successful issue archives only its own expected prior set.
 - AI or archive failure on one issue does not discard another issue’s success.
 
-- [ ] **Step 1: Add RED batch lifecycle tests**
+- [x] **Step 1: Add RED batch lifecycle tests**
 
 Cover mixed terminal/unfinished/applying issues, confirmation cancel, per-issue AI failure, archive conflict, and partial success.
 
-- [ ] **Step 2: Implement batch preflight and per-issue archive**
+- [x] **Step 2: Implement batch preflight and per-issue archive**
 
 Load each issue’s active set before the first invocation. Confirm once for unfinished sets. Preserve current ordered queue and history messages; append skipped/conflicted issue summaries.
 
-- [ ] **Step 3: Run Pass 4 smoke**
+- [x] **Step 3: Run Pass 4 smoke**
 
 Run batch orchestration and lifecycle tests only. Expected: all pass.
 
-- [ ] **Step 4: Commit Pass 4**
+- [x] **Step 4: Commit Pass 4**
 
 ```bash
 git add src/portals/writer/WriterPortal.tsx src/portals/writer/writerPacingRevisionLifecycle.ts src/portals/writer/__tests__
@@ -391,7 +391,19 @@ git commit -m "fix: preserve pacing batch replacement state"
 
 **Pass 4 smoke test:** Batch replacement and partial-success recovery only.
 
-**Pass 4 result:** Pending.
+**Pass 4 result:** PASS — TDD RED failed first for the absent batch orchestrator
+and absent Portal wiring. GREEN preflights every selected issue before the first AI
+call, presents one confirmation for all unfinished eligible sets, skips applying or
+generating sets with issue-specific reasons, and executes at most one Pacing Review
+request per eligible issue. Each successful review archives only its captured prior
+set through the exact status/`updated_at` guard. Review, archive, preflight, and
+refresh failures remain visible and do not cancel later issues; confirmation cancel
+runs neither AI nor archive. The selected issue's active/history hook and series
+issue data refresh after its outcome without allowing cross-issue hook state.
+Focused smoke passes 3 files / 17 tests. Broader Pacing regression passes 23 files /
+257 tests; the production build, full ESLint with 0 errors, focused ESLint with only
+3 pre-existing WriterPortal warnings, and `git diff --check` pass. No migration,
+Edge Function, frontend deployment, or Pass 5 work was performed.
 
 ## Pass 5: Integrated QA, release, and final audits
 
