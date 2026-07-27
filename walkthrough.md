@@ -14358,6 +14358,10 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - Added a confirmed `Archive revision set` action for eligible active sets. Its confirmation and success copy state that archiving does not change the live Outline, Page Beats, or Dialogue.
 - Reused the Pacing revision comparison workspace for archived records while making `archived` a terminal read-only state with no Apply, Edit, Approve, Reject, Retry, selection, or batch controls.
 - Added clear archived status/date metadata and distinct `Archived current` / `Archived proposal` comparison labels.
+- Persisted the exact prior status and archive timestamp atomically with the archive transition, then ordered history by that durable archive timestamp.
+- Tailored confirmation copy for unfinished versus applied sets, including the loss of the local Undo affordance for archived applied sets and the continuing official version-history restoration path.
+- Added focus movement into the archived heading and restoration to the history disclosure on Back.
+- Routed both actual Story Review render paths through the tested `WriterPacingRevisionHistoryLayout`.
 
 ### Files touched
 - `src/portals/writer/WriterPacingRevisionHistory.tsx`
@@ -14365,19 +14369,30 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 - `src/portals/writer/WriterPortal.tsx`
 - `src/portals/writer/__tests__/WriterPacingRevisionHistory.test.tsx`
 - `src/portals/writer/__tests__/WriterPacingRevisionWorkspace.test.tsx`
+- `src/shared/writer/pacingRevisionSchemas.ts`
+- `src/shared/writer/__tests__/pacingRevisionSchemas.test.ts`
+- `src/shared/api/writerPacingRevisionSets.ts`
+- `src/shared/api/__tests__/writerPacingRevisionSets.test.ts`
+- `src/shared/api/__tests__/writerPacingRevisionArchiveMigration.test.ts`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `supabase/migrations/20260727030000_writer_pacing_revision_archive.sql`
+- `package.json`
+- `package-lock.json`
+- `AGENTS.md`
 - `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
 - `walkthrough.md`
 
 ### Implementation notes
 - The history surface uses native `details`/`summary` and native buttons so disclosure, view, retry, and return actions work by keyboard without custom key handling.
+- Testing Library `user-event` drives focus behavior through real click interactions; the archived heading is programmatically focusable and Back restores focus to the remounted native summary.
 - Manual archive delegates to the owner-scoped guarded hook introduced in Pass 2; the UI does not directly mutate live story content.
-- History entries wrap at narrow widths and expose semantic archived status plus machine-readable timestamps where available.
-- The same component is integrated into both duplicated Story Review render paths, and the active workspace is hidden while an archived version is selected.
+- History entries wrap at narrow widths and expose Created, Archived, and Previous status metadata with machine-readable timestamps where available.
+- The same extracted layout is integrated into both duplicated Story Review render paths, and the active workspace is hidden while an archived version is selected.
 
 ### Verification
 - RED: the history test failed because the component did not exist, and the archived workspace test failed because archived sets still exposed active controls and labels.
 - Focused GREEN: 2 files / 31 tests — PASS.
-- Pass 3 smoke: 5 files / 68 tests — PASS.
+- Final corrected Pass 3 smoke: 8 files / 105 tests — PASS.
 - `npm run build` — PASS.
 - Focused ESLint — PASS with 0 errors and 3 pre-existing `WriterPortal` warnings.
 - `git diff --check` — PASS.

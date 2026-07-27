@@ -10,6 +10,9 @@ const sql = readFileSync(resolve(
 describe('Pacing Revision archive migration', () => {
   it('adds archived to the durable status constraint', () => {
     expect(sql).toMatch(/check\s*\(\s*status in\s*\([\s\S]*'archived'[\s\S]*\)\s*\)/i);
+    expect(sql).toMatch(/add column if not exists archived_from_status text/i);
+    expect(sql).toMatch(/add column if not exists archived_at timestamptz/i);
+    expect(sql).toMatch(/status = 'archived'[\s\S]*archived_from_status in\s*\(\s*'ready',\s*'partially_ready',\s*'applied',\s*'failed'\s*\)[\s\S]*archived_at is not null/i);
   });
 
   it('uses an authenticated owner-scoped invoker function and locks the set row', () => {
@@ -32,7 +35,7 @@ describe('Pacing Revision archive migration', () => {
   });
 
   it('updates only the set status and exposes the RPC only to authenticated users', () => {
-    expect(sql).toMatch(/update public\.writer_pacing_revision_sets\s+revision_set\s+set status = 'archived'/i);
+    expect(sql).toMatch(/update public\.writer_pacing_revision_sets\s+revision_set\s+set archived_from_status = revision_set\.status,\s*archived_at = now\(\),\s*status = 'archived'/i);
     expect(sql).toMatch(/revoke all on function public\.archive_writer_pacing_revision_set\(uuid, text, timestamptz\) from public/i);
     expect(sql).toMatch(/grant execute on function public\.archive_writer_pacing_revision_set\(uuid, text, timestamptz\) to authenticated/i);
 

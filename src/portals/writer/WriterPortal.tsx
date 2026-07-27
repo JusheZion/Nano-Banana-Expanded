@@ -100,7 +100,7 @@ import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterS
 import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
 import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
-import { WriterPacingRevisionHistory } from '@/portals/writer/WriterPacingRevisionHistory';
+import { WriterPacingRevisionHistoryLayout } from '@/portals/writer/WriterPacingRevisionHistory';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import {
@@ -8046,12 +8046,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
           <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
         </div>
       )}
-      {pacingArchiveStatus && (
-        <div role="status" className="border-l-4 border-emerald-600 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-950">
-          {pacingArchiveStatus}
-        </div>
-      )}
-      <WriterPacingRevisionHistory
+      <WriterPacingRevisionHistoryLayout
         workflow="Simple"
         activeSet={pacingRevision.activeSet}
         historySets={pacingRevision.historySets}
@@ -8063,48 +8058,50 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         onSelect={pacingRevision.selectHistory}
         onClose={pacingRevision.closeHistory}
         onArchive={archivePacingRevision}
-      />
-      {pacingRevision.activeSet && !pacingRevision.selectedHistorySet && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs font-bold text-slate-700">
-              Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {!pacingRevision.generating && pacingRevision.hasPendingCandidates && (
-                <button type="button" disabled={pacingApplyBusy} onClick={() => void pacingRevision.generatePages()} className="border border-teal-700 bg-teal-50 px-3 py-2 text-xs font-black text-teal-950 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-40">
-                  Continue generating candidates
-                </button>
-              )}
-              {pacingRevision.generating && (
-                <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
-                  Stop after current page
-                </button>
-              )}
-              {pacingRevision.activeSet.status === 'applied' && pacingRevision.activeSet.apply_snapshot != null && (
-                <button type="button" disabled={pacingApplyBusy} onClick={() => void undoPacingRevision()} className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:opacity-40">
-                  Undo applied set
-                </button>
-              )}
-              {pacingRevision.activeSet.status !== 'applied' && (
-                <button type="button" disabled={pacingRevision.generating || pacingApplyBusy} onClick={() => void pacingRevision.discard()} className="px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40">
-                  Discard set
-                </button>
-              )}
+        archiveStatus={pacingArchiveStatus}
+      >
+        {pacingRevision.activeSet && (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-bold text-slate-700">
+                Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {!pacingRevision.generating && pacingRevision.hasPendingCandidates && (
+                  <button type="button" disabled={pacingApplyBusy} onClick={() => void pacingRevision.generatePages()} className="border border-teal-700 bg-teal-50 px-3 py-2 text-xs font-black text-teal-950 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-40">
+                    Continue generating candidates
+                  </button>
+                )}
+                {pacingRevision.generating && (
+                  <button type="button" onClick={pacingRevision.stopAfterCurrentPage} className="px-3 py-2 text-xs font-black text-slate-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700">
+                    Stop after current page
+                  </button>
+                )}
+                {pacingRevision.activeSet.status === 'applied' && pacingRevision.activeSet.apply_snapshot != null && (
+                  <button type="button" disabled={pacingApplyBusy} onClick={() => void undoPacingRevision()} className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:opacity-40">
+                    Undo applied set
+                  </button>
+                )}
+                {pacingRevision.activeSet.status !== 'applied' && (
+                  <button type="button" disabled={pacingRevision.generating || pacingApplyBusy} onClick={() => void pacingRevision.discard()} className="px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-40">
+                    Discard set
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          <WriterPacingRevisionWorkspace
-            revisionSet={pacingRevision.activeSet}
-            busy={pacingRevision.generating || pacingApplyBusy}
-            applying={pacingApplyBusy}
+            <WriterPacingRevisionWorkspace
+              revisionSet={pacingRevision.activeSet}
+              busy={pacingRevision.generating || pacingApplyBusy}
+              applying={pacingApplyBusy}
             advanced={!writerFocusedMode}
             onChange={pacingRevision.updateChange}
             onApply={applyPacingRevision}
             onRetryFailed={pacingRevision.retryFailed}
             onNavigateToPage={navigateToPacingRevisionPage}
-          />
-        </section>
-      )}
+            />
+          </section>
+        )}
+      </WriterPacingRevisionHistoryLayout>
 
       <section className={`${WRITER_GLASS_CARD} p-6`}>
         <h3 className="font-serif text-2xl font-semibold text-slate-950">Readiness Summary</h3>
@@ -11729,12 +11726,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                         <strong>Revision Set needs attention.</strong> {pacingApplyError ?? pacingRevision.error}
                       </div>
                     )}
-                    {pacingArchiveStatus && (
-                      <div role="status" className="border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-950">
-                        {pacingArchiveStatus}
-                      </div>
-                    )}
-                    <WriterPacingRevisionHistory
+                    <WriterPacingRevisionHistoryLayout
                       workflow="Advanced"
                       activeSet={pacingRevision.activeSet}
                       historySets={pacingRevision.historySets}
@@ -11746,9 +11738,10 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       onSelect={pacingRevision.selectHistory}
                       onClose={pacingRevision.closeHistory}
                       onArchive={archivePacingRevision}
-                    />
-                    {pacingRevision.activeSet && !pacingRevision.selectedHistorySet && (
-                      <section className="space-y-3">
+                      archiveStatus={pacingArchiveStatus}
+                    >
+                      {pacingRevision.activeSet && (
+                        <section className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <p className="text-xs font-bold text-slate-700">
                             Revision Set saved · {pacingRevision.activeSet.status.replaceAll('_', ' ')}
@@ -11785,8 +11778,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           onRetryFailed={pacingRevision.retryFailed}
                           onNavigateToPage={navigateToPacingRevisionPage}
                         />
-                      </section>
-                    )}
+                        </section>
+                      )}
+                    </WriterPacingRevisionHistoryLayout>
                     <div className="space-y-3 rounded-xl border border-black/10 bg-black/[0.03] p-4">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-black/50">Canon check</p>
                       <button

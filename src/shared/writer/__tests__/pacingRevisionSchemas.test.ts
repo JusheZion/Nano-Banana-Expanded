@@ -16,6 +16,27 @@ describe('pacing revision schemas', () => {
     expect(pacingRevisionSetStatusSchema.parse('archived')).toBe('archived');
   });
 
+  it('preserves durable archive provenance on archived sets', () => {
+    const parsed = pacingRevisionSetSchema.parse({
+      id: SET_ID,
+      issue_id: ISSUE_ID,
+      status: 'archived',
+      archived_from_status: 'applied',
+      archived_at: '2026-07-27T15:45:00.000Z',
+      created_at: '2026-07-26T14:30:00.000Z',
+      pacing_review_json: {},
+      source_outline_json: {},
+      proposed_outline_json: {},
+      source_fingerprint: 'source',
+      progress_json: { total_pages: 0, completed_pages: [], current_page: null, stopped: false },
+      failure_ledger: [],
+      items: [],
+    });
+
+    expect(parsed.archived_from_status).toBe('applied');
+    expect(parsed.archived_at).toBe('2026-07-27T15:45:00.000Z');
+  });
+
   it('preserves current, AI, and edited candidate states independently', () => {
     const parsed = pacingRevisionChangeSchema.parse({
       id: CHANGE_ID,

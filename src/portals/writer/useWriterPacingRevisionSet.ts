@@ -422,7 +422,13 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     setError(null);
     setActiveSet((current) => current?.id === setToArchive.id ? null : current);
     setHistorySets((current) => [
-      { ...setToArchive, status: 'archived' },
+      {
+        ...setToArchive,
+        status: 'archived',
+        archived_from_status: setToArchive.status as
+          'ready' | 'partially_ready' | 'applied' | 'failed',
+        archived_at: new Date().toISOString(),
+      },
       ...current.filter((set) => set.id !== setToArchive.id),
     ]);
     await Promise.all([refresh(), refreshHistory()]);

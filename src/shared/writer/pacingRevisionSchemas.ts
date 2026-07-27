@@ -20,6 +20,12 @@ export const pacingRevisionSetStatusSchema = z.enum([
   'archived',
   'discarded',
 ]);
+export const pacingRevisionArchivedFromStatusSchema = z.enum([
+  'ready',
+  'partially_ready',
+  'applied',
+  'failed',
+]);
 
 export const pacingRevisionFailureSchema = z.object({
   page_number: z.number().int().positive().max(500),
@@ -83,6 +89,8 @@ export const pacingRevisionSetSchema = z.object({
   failure_ledger: z.array(pacingRevisionFailureSchema).max(500),
   apply_snapshot: z.unknown().nullable().optional(),
   recovery_status: z.string().nullable().optional(),
+  archived_from_status: pacingRevisionArchivedFromStatusSchema.nullable().optional(),
+  archived_at: z.string().nullable().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   items: z.array(pacingRevisionItemSchema).max(100).default([]),

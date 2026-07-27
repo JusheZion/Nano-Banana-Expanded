@@ -1,6 +1,10 @@
 -- Preserve prior Pacing Revision Sets as owner-scoped, read-only history.
 
 alter table public.writer_pacing_revision_sets
+  add column if not exists archived_from_status text,
+  add column if not exists archived_at timestamptz;
+
+alter table public.writer_pacing_revision_sets
   drop constraint if exists writer_pacing_revision_sets_status_check;
 
 alter table public.writer_pacing_revision_sets
@@ -14,6 +18,24 @@ alter table public.writer_pacing_revision_sets
       'failed',
       'archived',
       'discarded'
+    )
+  );
+
+alter table public.writer_pacing_revision_sets
+  drop constraint if exists writer_pacing_revision_sets_archive_metadata_check;
+
+alter table public.writer_pacing_revision_sets
+  add constraint writer_pacing_revision_sets_archive_metadata_check check (
+    (
+      status = 'archived'
+      and archived_from_status in ('ready', 'partially_ready', 'applied', 'failed')
+      and archived_at is not null
+    )
+    or
+    (
+      status <> 'archived'
+      and archived_from_status is null
+      and archived_at is null
     )
   );
 
@@ -56,7 +78,9 @@ begin
   end if;
 
   update public.writer_pacing_revision_sets revision_set
-  set status = 'archived'
+  set archived_from_status = revision_set.status,
+      archived_at = now(),
+      status = 'archived'
   where revision_set.id = p_set_id
     and revision_set.status = p_expected_status
     and revision_set.updated_at = p_expected_updated_at;

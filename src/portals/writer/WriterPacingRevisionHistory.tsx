@@ -1,3 +1,4 @@
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterPacingRevisionWorkspace } from './WriterPacingRevisionWorkspace';
 
@@ -15,11 +16,12 @@ type Props = {
   onArchive?: (set: PacingRevisionSet) => Promise<void> | void;
 };
 
-const ARCHIVE_CONFIRMATION =
-  'Move this Revision Set to Revision history? This does not change the live outline, Page Beats, or Dialogue.';
+const UNFINISHED_ARCHIVE_CONFIRMATION =
+  'Move this unfinished Revision Set to Revision history? Its unfinished decisions and edits will become read-only. The live outline, Page Beats, and Dialogue will not change.';
+const APPLIED_ARCHIVE_CONFIRMATION =
+  'Move this applied Revision Set to Revision history? “Undo applied set” will no longer be available here; restore official content through version history instead. The live outline, Page Beats, and Dialogue will not change.';
 
-function archivedDate(set: PacingRevisionSet): string {
-  const value = set.updated_at ?? set.created_at;
+function formatDate(value: string | null | undefined): string {
   if (!value) return 'date unavailable';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'date unavailable';
@@ -27,6 +29,12 @@ function archivedDate(set: PacingRevisionSet): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
+}
+
+function archiveConfirmation(set: PacingRevisionSet): string {
+  return set.status === 'applied'
+    ? APPLIED_ARCHIVE_CONFIRMATION
+    : UNFINISHED_ARCHIVE_CONFIRMATION;
 }
 
 function canArchive(set: PacingRevisionSet | null | undefined): set is PacingRevisionSet {
@@ -46,6 +54,19 @@ export function WriterPacingRevisionHistory({
   onClose,
   onArchive,
 }: Props) {
+  const archivedHeadingRef = useRef<HTMLHeadingElement>(null);
+  const historySummaryRef = useRef<HTMLElement>(null);
+  const restoreHistoryFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (selectedSet) {
+      archivedHeadingRef.current?.focus();
+    } else if (restoreHistoryFocusRef.current) {
+      restoreHistoryFocusRef.current = false;
+      historySummaryRef.current?.focus();
+    }
+  }, [selectedSet]);
+
   if (selectedSet) {
     return (
       <section
@@ -56,7 +77,9 @@ export function WriterPacingRevisionHistory({
         <div className="flex flex-wrap items-center justify-between gap-3 border-l-4 border-slate-700 bg-slate-100 px-4 py-3">
           <div className="min-w-0">
             <h3
+              ref={archivedHeadingRef}
               id={`pacing-archive-title-${workflow.toLowerCase()}`}
+              tabIndex={-1}
               className="font-serif text-lg font-semibold text-slate-950"
             >
               Archived Pacing Revision Set
@@ -66,12 +89,17 @@ export function WriterPacingRevisionHistory({
             </p>
             <p className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-slate-600">
               <span className="font-black uppercase tracking-wide">Archived</span>
-              <span>Archived on {archivedDate(selectedSet)}</span>
+              <span>Created on <time dateTime={selectedSet.created_at}>{formatDate(selectedSet.created_at)}</time></span>
+              <span>Archived on <time dateTime={selectedSet.archived_at ?? undefined}>{formatDate(selectedSet.archived_at)}</time></span>
+              <span>Previous status: {selectedSet.archived_from_status ?? 'unavailable'}</span>
             </p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              restoreHistoryFocusRef.current = true;
+              onClose();
+            }}
             className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700"
           >
             Back to current revision set
@@ -97,7 +125,7 @@ export function WriterPacingRevisionHistory({
           type="button"
           disabled={archiveBusy}
           onClick={() => {
-            if (!window.confirm(ARCHIVE_CONFIRMATION)) return;
+            if (!window.confirm(archiveConfirmation(activeSet))) return;
             void onArchive(activeSet);
           }}
           className="border border-slate-400 bg-white px-3 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -106,7 +134,10 @@ export function WriterPacingRevisionHistory({
         </button>
       )}
       <details className="min-w-[min(100%,18rem)] max-w-full border border-slate-300 bg-white">
-        <summary className="cursor-pointer px-3 py-2 text-xs font-black text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-600">
+        <summary
+          ref={historySummaryRef}
+          className="cursor-pointer px-3 py-2 text-xs font-black text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-600"
+        >
           Revision history ({historySets.length})
         </summary>
         <div className="border-t border-slate-200 p-3">
@@ -134,7 +165,9 @@ export function WriterPacingRevisionHistory({
                 >
                   <span className="min-w-0 break-words text-[11px] text-slate-600">
                     <strong className="mr-2 uppercase tracking-wide text-slate-800">Archived</strong>
-                    <time dateTime={set.updated_at ?? set.created_at}>{archivedDate(set)}</time>
+                    <span className="mr-2">Created <time dateTime={set.created_at}>{formatDate(set.created_at)}</time></span>
+                    <span className="mr-2">Archived <time dateTime={set.archived_at ?? undefined}>{formatDate(set.archived_at)}</time></span>
+                    <span>Previous status: {set.archived_from_status ?? 'unavailable'}</span>
                   </span>
                   <button
                     type="button"
@@ -149,6 +182,33 @@ export function WriterPacingRevisionHistory({
           )}
         </div>
       </details>
+    </div>
+  );
+}
+
+type LayoutProps = Props & {
+  archiveStatus?: string | null;
+  children?: ReactNode;
+};
+
+export function WriterPacingRevisionHistoryLayout({
+  archiveStatus,
+  children,
+  ...historyProps
+}: LayoutProps) {
+  const workflowId = historyProps.workflow.toLowerCase();
+  return (
+    <div
+      className="space-y-3"
+      data-testid={`pacing-revision-history-layout-${workflowId}`}
+    >
+      {archiveStatus && (
+        <div role="status" className="border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-950">
+          {archiveStatus}
+        </div>
+      )}
+      <WriterPacingRevisionHistory {...historyProps} />
+      {!historyProps.selectedSet && children}
     </div>
   );
 }

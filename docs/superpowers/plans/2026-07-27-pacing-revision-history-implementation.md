@@ -313,17 +313,24 @@ loading/error/retry/empty states, newest-first archived entries, an explicitly
 read-only archived comparison view with Back navigation, and a confirmed manual
 archive action whose copy states that live Outline, Page Beats, and Dialogue remain
 unchanged. Successful manual archive refreshes active/history state through the
-existing guarded hook and reports a visible success status. The focused smoke gate
-passes 5 files / 68 tests; the production build, targeted TypeScript compilation,
-focused ESLint with 0 errors and 3 pre-existing WriterPortal warnings, and
-`git diff --check` pass.
+existing guarded hook and reports a visible success status. Review corrections
+atomically preserve `archived_from_status` and `archived_at`, order and label
+history by the archive timestamp, tailor confirmation to unfinished versus applied
+sets, move focus into the archived view and back to the disclosure, and route both
+actual Story Review paths through one tested extracted layout. The final focused
+smoke gate passes 8 files / 105 tests; the production build, targeted TypeScript
+compilation, focused ESLint with 0 errors and 3 pre-existing WriterPortal warnings,
+and `git diff --check` pass.
 
 **Three-pass audit result:** PASS — audited lifecycle truthfulness, metadata-only
 archive messaging, confirmation copy, Pass 2 stale-state guards, archived control
 suppression, loading/error/retry and empty states, native details/summary keyboard
 access, responsive wrapping, and matching Simple/Advanced placement. No P0/P1
 issue remains. Archive status is cleared on issue switches and before a new pacing
-review so a prior success message cannot describe newer work.
+review so a prior success message cannot describe newer work. The correction
+re-audit also verified durable archive provenance, status-specific safety copy,
+focus entry/restoration, and actual extracted-layout mounting in both workflow
+paths.
 
 ## Pass 4: Batch consistency and recovery edges
 

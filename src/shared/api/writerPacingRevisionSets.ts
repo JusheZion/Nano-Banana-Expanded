@@ -67,7 +67,7 @@ export async function listWriterPacingRevisionSetHistory(issueId: string): Promi
       .select(SET_SELECT)
       .eq('issue_id', issueId)
       .eq('status', 'archived')
-      .order('created_at', { ascending: false });
+      .order('archived_at', { ascending: false });
     if (error) return { ok: false, error: error.message };
     return { ok: true, sets: (data ?? []).map((row) => pacingRevisionSetSchema.parse(row)) };
   } catch (error) {

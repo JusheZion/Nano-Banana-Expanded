@@ -137,7 +137,12 @@ describe('writer pacing revision persistence', () => {
   });
 
   it('lists archived history only and newest first', async () => {
-    const archivedRow = { ...setRow, status: 'archived' };
+    const archivedRow = {
+      ...setRow,
+      status: 'archived',
+      archived_from_status: 'applied',
+      archived_at: '2026-07-27T15:45:00.000Z',
+    };
     const chain = {
       eq: vi.fn(),
       order: vi.fn().mockResolvedValue({ data: [archivedRow], error: null }),
@@ -147,12 +152,17 @@ describe('writer pacing revision persistence', () => {
 
     await expect(listWriterPacingRevisionSetHistory(ISSUE_ID)).resolves.toEqual({
       ok: true,
-      sets: [expect.objectContaining({ id: SET_ID, status: 'archived' })],
+      sets: [expect.objectContaining({
+        id: SET_ID,
+        status: 'archived',
+        archived_from_status: 'applied',
+        archived_at: '2026-07-27T15:45:00.000Z',
+      })],
     });
 
     expect(chain.eq).toHaveBeenNthCalledWith(1, 'issue_id', ISSUE_ID);
     expect(chain.eq).toHaveBeenNthCalledWith(2, 'status', 'archived');
-    expect(chain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(chain.order).toHaveBeenCalledWith('archived_at', { ascending: false });
   });
 
   it('archives an eligible set through the exact guarded RPC arguments', async () => {
