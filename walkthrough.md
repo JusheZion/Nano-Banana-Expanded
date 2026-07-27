@@ -14931,3 +14931,49 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Run the consolidated release gate, final ReAct/QA/UI/UX/DOX/code audits, signed-in browser QA, deploy the migration/Edge Function/frontend, and smoke the production replacement/history flow.
+
+## Pacing batch saved-count and accessible status correction - 2026-07-27
+
+### What changed
+- Separated `reviewSaved` truth from archive, refresh, and skip/attention outcome types.
+- Corrected batch completion summaries so a successfully saved review remains counted when archiving or post-review refresh needs attention.
+- Added one shared Pacing status layout to Simple and Advanced Story Review.
+- Pacing batch progress now announces `Pacing X/Y` through a polite live `role="status"`, while batch summaries and existing `pacingError` render through `role="alert"`.
+- Preserved the existing single-review and Revision Set Apply error surfaces.
+
+### Files touched
+- `AGENTS.md`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterPacingBatchStatus.tsx`
+- `src/portals/writer/writerPacingRevisionBatch.ts`
+- `src/portals/writer/__tests__/WriterPacingBatchStatus.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionBatch.test.ts`
+- `src/portals/writer/__tests__/writerPacingRevisionBatchPortal.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Attention and saved totals are intentionally independent: archive conflicts/failures and post-review refresh failures can increment both.
+- A failed AI review or skipped preflight never increments the saved-review total.
+- The shared status layout prevents Simple and Advanced Story Review from drifting in progress or alert semantics.
+
+### Verification
+- RED: batch summary was absent and the extracted status layout did not exist.
+- Corrected focused smoke: PASS, 4 files / 22 tests.
+- Broader Pacing regression: PASS, 24 files / 262 tests.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `npm run lint`: PASS with 0 errors and 71 pre-existing warnings.
+- Focused changed-file ESLint: PASS with 0 errors and 3 pre-existing WriterPortal warnings.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- Deployment and signed-in browser/production QA remain in Pass 5.
+
+### Risks or caveats
+- None specific to this correction.
+
+### Operator follow-up
+- None for Pass 4.
+
+### Next steps
+- Continue directly to the final consolidated release, browser QA, deployment, and production smoke pass.

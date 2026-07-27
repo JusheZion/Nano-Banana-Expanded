@@ -16,5 +16,6 @@ describe('WriterPortal batch Pacing Review replacement wiring', () => {
     expect(source).toMatch(/expectedStatus:\s*revisionSet\.status/);
     expect(source).toMatch(/expectedUpdatedAt:\s*revisionSet\.updated_at/);
     expect(source).toMatch(/for \(const outcome of result\.outcomes\)/);
+    expect(source.match(/<WriterPacingBatchStatus/g)).toHaveLength(2);
   });
 });

@@ -103,6 +103,7 @@ import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteRev
 import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterPacingRevisionHistoryLayout } from '@/portals/writer/WriterPacingRevisionHistory';
+import { WriterPacingBatchStatus } from '@/portals/writer/WriterPacingBatchStatus';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import {
@@ -3126,13 +3127,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             );
           }
           setPacingError(problems.length > 0
-            ? problems.map(({ label, message }) => `${label}: ${message}`).join(' ')
+            ? [
+                result.summary.message,
+                ...problems.map(({ label, message }) => `${label}: ${message}`),
+              ].join('\n')
             : null);
-          const succeeded = result.outcomes.filter(({ kind }) => kind === 'success').length;
-          const skippedOrFailed = result.outcomes.length - succeeded;
-          pushHistory(
-            `Pacing batch complete (${succeeded} saved${skippedOrFailed ? `, ${skippedOrFailed} skipped or needs attention` : ''})`,
-          );
+          pushHistory(`Pacing batch complete — ${result.summary.message}`);
           return;
         }
 
@@ -8094,6 +8094,14 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
             <button type="button" disabled={!supabaseOk || arcBatchIssueIdsOrdered.length === 0 || arcBatchBusy || pacingLoading || canonLoading} onClick={() => void runArcToolBatch('canon_check')} className="rounded-lg border-2 border-amber-700/70 bg-white/25 px-5 py-2.5 text-xs font-black text-amber-900 disabled:opacity-45">Run canon on selected ({arcBatchIssueIdsOrdered.length})</button>
           </div>
         </div>
+        <div className="mt-4 space-y-3">
+          <WriterPacingBatchStatus
+            batchBusy={arcBatchBusy}
+            batchMode={arcBatchMode}
+            batchLabel={arcBatchLabel}
+            error={pacingError}
+          />
+        </div>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -11497,6 +11505,12 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                           Check issues, then run pacing or canon once per selected row (in issue order). Results save on
                           each issue; use Library to focus an issue and read combined output below.
                         </p>
+                        <WriterPacingBatchStatus
+                          batchBusy={arcBatchBusy}
+                          batchMode={arcBatchMode}
+                          batchLabel={arcBatchLabel}
+                          error={pacingError}
+                        />
                       </div>
                     )}
                     {!selectedIssueId && (
@@ -11789,9 +11803,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       >
                         {pacingLoading ? 'Analyzing…' : 'Run pacing review'}
                       </button>
-                      {pacingError && (
-                        <p className="text-xs text-red-800 bg-red-100/80 rounded-lg px-3 py-2">{pacingError}</p>
-                      )}
                       {pacingSaved?.result ? (
                         <>
                           <p className="text-[10px] text-black/45">

@@ -180,6 +180,50 @@ describe('runPacingReviewBatch', () => {
     ]);
   });
 
+  it('counts saved reviews separately from archive and refresh attention', async () => {
+    const result = await runPacingReviewBatch({
+      issues: [
+        { issueId: 'issue-1', label: 'Issue #1' },
+        { issueId: 'issue-2', label: 'Issue #2' },
+        { issueId: 'issue-3', label: 'Issue #3' },
+        { issueId: 'issue-4', label: 'Issue #4' },
+      ],
+      loadActiveSet: async (issueId) => ({
+        ok: true,
+        set: issueId === 'issue-4'
+          ? set(issueId, 'applying')
+          : set(issueId, 'applied'),
+      }),
+      confirmArchive: () => true,
+      runReview: async (issueId) => issueId === 'issue-3'
+        ? { ok: false, error: 'AI timed out' }
+        : { ok: true },
+      archiveSet: async (issueId) => issueId === 'issue-2'
+        ? { ok: false, kind: 'conflict', error: 'changed' }
+        : { ok: true },
+      refreshIssueState: async (issueId) => {
+        if (issueId === 'issue-1') throw new Error('refresh failed');
+      },
+    });
+
+    expect(result.kind).toBe('complete');
+    expect(result.kind === 'complete' && result.summary).toEqual({
+      reviewsSaved: 2,
+      attentionCount: 4,
+      message: '2 Pacing Reviews saved. 4 items were skipped or need attention.',
+    });
+    expect(result.outcomes.map(({ issueId, kind, reviewSaved }) => [
+      issueId,
+      kind,
+      reviewSaved,
+    ])).toEqual([
+      ['issue-1', 'refresh_failed', true],
+      ['issue-2', 'archive_conflict', true],
+      ['issue-3', 'review_failed', false],
+      ['issue-4', 'skipped', false],
+    ]);
+  });
+
   it('skips a preflight load failure and still runs later eligible issues', async () => {
     const runReview = vi.fn<(issueId: string) => Promise<{ ok: true }>>(async () => ({
       ok: true,
@@ -205,12 +249,14 @@ describe('runPacingReviewBatch', () => {
       {
         issueId: 'issue-1',
         label: 'Issue #1',
+        reviewSaved: false,
         kind: 'skipped',
         message: 'Could not check the current Revision Set: Revision Set unavailable',
       },
       {
         issueId: 'issue-2',
         label: 'Issue #2',
+        reviewSaved: true,
         kind: 'success',
         message: 'Pacing Review saved.',
       },

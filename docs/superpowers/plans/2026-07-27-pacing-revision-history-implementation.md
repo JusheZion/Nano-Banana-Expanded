@@ -405,6 +405,18 @@ Focused smoke passes 3 files / 17 tests. Broader Pacing regression passes 23 fil
 3 pre-existing WriterPortal warnings, and `git diff --check` pass. No migration,
 Edge Function, frontend deployment, or Pass 5 work was performed.
 
+**Pass 4 review correction:** Batch outcomes now carry independent review-saved
+truth, so a saved review with archive conflict/failure or post-review refresh
+failure still contributes to the saved total while also contributing to attention.
+The completion message reports saved reviews and attention/skipped items separately
+and includes per-issue reasons. A shared behavior-tested status layout is mounted in
+both Simple and Advanced Story Review: Pacing batch progress is a polite live
+`role="status"` announcement and `pacingError`, including mixed batch summaries,
+is a visible `role="alert"` without removing single-review or Apply errors.
+Corrected focused smoke passes 4 files / 22 tests; broader Pacing regression passes
+24 files / 262 tests. TypeScript/production build, full lint with 0 errors, focused
+lint with only 3 pre-existing WriterPortal warnings, and `git diff --check` pass.
+
 ## Pass 5: Integrated QA, release, and final audits
 
 **Objective:** Verify the complete replacement/history workflow and release the tested state.

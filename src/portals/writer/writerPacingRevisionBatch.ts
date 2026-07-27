@@ -15,6 +15,7 @@ export type PacingReviewBatchIssue = {
 export type PacingReviewBatchOutcome = {
   issueId: string;
   label: string;
+  reviewSaved: boolean;
   kind:
     | 'success'
     | 'review_failed'
@@ -27,7 +28,15 @@ export type PacingReviewBatchOutcome = {
 
 export type PacingReviewBatchResult =
   | { kind: 'cancelled'; outcomes: [] }
-  | { kind: 'complete'; outcomes: PacingReviewBatchOutcome[] };
+  | {
+      kind: 'complete';
+      outcomes: PacingReviewBatchOutcome[];
+      summary: {
+        reviewsSaved: number;
+        attentionCount: number;
+        message: string;
+      };
+    };
 
 type ActiveSetResult<TSet extends BatchSet> =
   | { ok: true; set: TSet | null }
@@ -50,6 +59,20 @@ function unfinishedConfirmation(count: number): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function summarize(outcomes: PacingReviewBatchOutcome[]) {
+  const reviewsSaved = outcomes.filter(({ reviewSaved }) => reviewSaved).length;
+  const attentionCount = outcomes.filter(({ kind }) => kind !== 'success').length;
+  const savedLabel = `${reviewsSaved} Pacing Review${reviewsSaved === 1 ? '' : 's'} saved.`;
+  const attentionLabel = attentionCount === 1
+    ? '1 item was skipped or needs attention.'
+    : `${attentionCount} items were skipped or need attention.`;
+  return {
+    reviewsSaved,
+    attentionCount,
+    message: `${savedLabel} ${attentionLabel}`,
+  };
 }
 
 export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
@@ -117,6 +140,7 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
       outcomes.push({
         issueId: issue.issueId,
         label: issue.label,
+        reviewSaved: false,
         kind: 'skipped',
         message: `Could not check the current Revision Set: ${loadError}`,
       });
@@ -126,6 +150,7 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
       outcomes.push({
         issueId: issue.issueId,
         label: issue.label,
+        reviewSaved: false,
         kind: 'skipped',
         message: policy.message,
       });
@@ -145,6 +170,7 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
       await recordWithRefresh({
         issueId: issue.issueId,
         label: issue.label,
+        reviewSaved: false,
         kind: 'review_failed',
         message: `Pacing Review failed; previous Revision Set preserved: ${reviewResult.error}`,
       });
@@ -169,6 +195,7 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
         await recordWithRefresh({
           issueId: issue.issueId,
           label: issue.label,
+          reviewSaved: true,
           kind: archiveResult.kind === 'conflict' ? 'archive_conflict' : 'archive_failed',
           message: archiveResult.kind === 'conflict'
             ? PACING_REVIEW_ARCHIVE_CONFLICT_MESSAGE
@@ -179,6 +206,7 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
       await recordWithRefresh({
         issueId: issue.issueId,
         label: issue.label,
+        reviewSaved: true,
         kind: 'success',
         message: 'New Pacing Review saved; previous Revision Set moved to Revision history.',
       });
@@ -188,10 +216,11 @@ export async function runPacingReviewBatch<TSet extends BatchSet>(input: {
     await recordWithRefresh({
       issueId: issue.issueId,
       label: issue.label,
+      reviewSaved: true,
       kind: 'success',
       message: 'Pacing Review saved.',
     });
   }
 
-  return { kind: 'complete', outcomes };
+  return { kind: 'complete', outcomes, summary: summarize(outcomes) };
 }
