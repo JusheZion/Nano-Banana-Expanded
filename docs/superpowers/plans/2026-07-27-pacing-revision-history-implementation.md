@@ -428,11 +428,11 @@ lint with only 3 pre-existing WriterPortal warnings, and `git diff --check` pass
 - Archived history is readable and mutation-free.
 - Full regression, lint, build, migration, browser QA, code review, merge, and deployment pass.
 
-- [ ] **Step 1: Run consolidated focused gate**
+- [x] **Step 1: Run consolidated focused gate**
 
 Run all Pacing Revision model/API/hook/workspace/history/Portal/migration tests. Report files and tests separately.
 
-- [ ] **Step 2: Run full regression gate**
+- [x] **Step 2: Run full regression gate**
 
 ```bash
 npm run test -- --run
@@ -441,11 +441,11 @@ npm run build
 git diff --check
 ```
 
-- [ ] **Step 3: Local signed-in browser QA**
+- [x] **Step 3: Signed-in browser QA**
 
 Verify applied replacement, unfinished cancel and confirm, manual archive, history View/Back, new Create Revision Set, keyboard focus, narrow viewport, and clean console/network. Capture representative top/middle/bottom evidence.
 
-- [ ] **Step 4: Final audits**
+- [x] **Step 4: Final audits**
 
 - **ReAct:** no observation/action ambiguity or silent replacement.
 - **QA:** status concurrency, AI failure, archive failure, partial batch success, and rollback boundaries.
@@ -453,32 +453,46 @@ Verify applied replacement, unfinished cancel and confirm, manual archive, histo
 - **DOX:** changed paths and durable contracts current.
 - **Code review:** no unresolved Critical/Important finding.
 
-- [ ] **Step 5: Update durable records**
+- [x] **Step 5: Update durable records**
 
 Update `AGENTS.md`, this plan, and `walkthrough.md`; verify targeted section presence and `git diff --check`.
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
 Push `codex/pacing-revision-history`, open a complete PR, and wait for checks.
 
-- [ ] **Step 7: Deploy and smoke production**
+- [x] **Step 7: Deploy and smoke production**
 
 Deploy migration, frontend, and any changed Edge Function. Record migration/version IDs. In a fresh signed-in production tab, confirm the current bundle and one safe archive/history lifecycle with clean logs.
 
-- [ ] **Step 8: Merge**
+- [x] **Step 8: Merge**
 
 Merge only after review/checks and hosted smoke pass. Confirm production remains live.
 
 **Pass 5 smoke test:** Fresh signed-in production archive/history replacement plus clean console/network.
 
-**Pass 5 result:** Pending.
+**Pass 5 result:** PASS — the consolidated full gate passed 150 test files /
+1,071 tests, full ESLint with 0 errors and 71 existing warnings, the production
+build, and `git diff --check 9016910...HEAD`. Independent final review approved
+the corrected branch. Migration
+`20260727030000_writer_pacing_revision_archive.sql` was applied to linked ARCS
+Supabase project `vxclogwiytxjolisnakd`, `writer-tools` version 112 is ACTIVE,
+and Cloudflare frontend version `2896a65d-75c2-49ae-b287-24cfefd9743d` is live.
+Signed-in production QA on the 70-page representative issue verified confirmed
+manual archive, unchanged live page count, history metadata, read-only archived
+workspace, View/Back focus restoration, fresh Revision Set creation, safe
+stop-after-current-page behavior, and the exact automatic replacement path:
+confirmed new Pacing Review archived the prior active set only after success,
+advanced history from one to two entries, and restored `Create Revision Set`.
+Production console warnings/errors were empty. PR #32 was reviewed and merged
+to `main` as `24b00440fe1bf2d761b7de02aef7dac4147a650d`.
 
 ## Final completion checklist
 
-- [ ] Design requirements are implemented without hard deletion.
-- [ ] Every pass smoke passes before the next pass.
-- [ ] Three-pass and final audits are recorded.
-- [ ] Full tests, lint, build, and diff checks pass.
-- [ ] Migration and production bundle match the tested commit.
-- [ ] Walkthrough and DOX updates are verified.
-- [ ] PR is reviewed, merged, and production status confirmed.
+- [x] Design requirements are implemented without hard deletion.
+- [x] Every pass smoke passes before the next pass.
+- [x] Three-pass and final audits are recorded.
+- [x] Full tests, lint, build, and diff checks pass.
+- [x] Migration and production bundle match the tested commit.
+- [x] Walkthrough and DOX updates are verified.
+- [x] PR is reviewed, merged, and production status confirmed.
