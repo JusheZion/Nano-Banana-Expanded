@@ -117,6 +117,8 @@ export function WriterPacingRevisionWorkspace({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [showFailures, setShowFailures] = useState(false);
+  const failureRegionId = 'pacing-failed-layer-details';
 
   const visibleItems = revisionSet.items.filter((item) =>
     item.changes.some((change) => change.layer === layer)
@@ -124,9 +126,13 @@ export function WriterPacingRevisionWorkspace({
   const activeChange = allChanges.find((change) => change.id === activeChangeId && change.layer === layer)
     ?? visibleItems[0]?.changes.find((change) => change.layer === layer)
     ?? null;
-  const selectedEligible = allChanges.filter((change) =>
-    selectedIds.has(change.id) && change.generation_status === 'ready'
+  const activeLayerLabel = LAYERS.find((entry) => entry.id === layer)?.label ?? 'current tab';
+  const activeLayerEligible = allChanges.filter((change) =>
+    change.layer === layer && change.generation_status === 'ready'
   );
+  const selectedEligible = activeLayerEligible.filter((change) => selectedIds.has(change.id));
+  const allActiveEligibleSelected = activeLayerEligible.length > 0
+    && activeLayerEligible.every((change) => selectedIds.has(change.id));
   const pendingCount = allChanges.filter((change) => change.decision === 'pending').length;
   const approvedEligibleCount = approvedPacingRevisionChanges(revisionSet).length;
   const failureRows = useMemo(() => {
@@ -191,9 +197,32 @@ export function WriterPacingRevisionWorkspace({
     setActiveChangeId(first?.id ?? null);
   };
 
+  const selectAllActiveLayer = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const change of activeLayerEligible) next.add(change.id);
+      return next;
+    });
+  };
+
+  const clearActiveLayerSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const change of allChanges) {
+        if (change.layer === layer) next.delete(change.id);
+      }
+      return next;
+    });
+  };
+
   const batchDecision = async (decision: 'approved' | 'rejected') => {
     await Promise.all(selectedEligible.map((change) => onChange(change.id, { decision })));
-    setSelectedIds(new Set());
+    const actedOnIds = new Set(selectedEligible.map((change) => change.id));
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const changeId of actedOnIds) next.delete(changeId);
+      return next;
+    });
   };
 
   return (
@@ -202,7 +231,7 @@ export function WriterPacingRevisionWorkspace({
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Story Review · Revision Set</p>
           <h2 id="pacing-revision-title" className="mt-1 font-serif text-2xl font-semibold">Pacing revision workspace</h2>
-          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed layers</p>
+          <p aria-live="polite" className="mt-1 text-xs text-white/65">{pendingCount} pending · {approvedEligibleCount} ready to apply · {failureRows.length} failed or missing layers</p>
         </div>
         <button
           type="button"
@@ -237,47 +266,92 @@ export function WriterPacingRevisionWorkspace({
       </div>
 
       {failureRows.length > 0 && (
-        <div role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <strong>Some pages need attention.</strong>
-            {onRetryFailed && (
-              <button type="button" disabled={busy} onClick={() => void onRetryFailed(failureRows.map(({ page, layer }) => ({ page, layer })))} className="font-black underline decoration-2 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
-                Retry all failed layers
+        <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs text-red-900">
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <strong>{failureRows.length} failed or missing layers need attention.</strong>
+              {layer === 'outline' && (
+                <p className="mt-1">Page Beats and Dialogue failures do not prevent Outline approval.</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                aria-expanded={showFailures}
+                aria-controls={failureRegionId}
+                onClick={() => setShowFailures((current) => !current)}
+                className="font-black underline decoration-2 underline-offset-2 transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+              >
+                {showFailures ? 'Hide failed layers' : 'Show failed layers'}
               </button>
-            )}
+              {onRetryFailed && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRetryFailed(failureRows.map(({ page, layer: failedLayer }) => ({ page, layer: failedLayer })))}
+                  className="font-black underline decoration-2 underline-offset-2 transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Retry all failed layers
+                </button>
+              )}
+            </div>
           </div>
-          <ul data-testid="pacing-recovery-list" className="mt-3 max-h-80 space-y-2 overflow-y-auto overscroll-contain pr-2">
-            {failureRows.map((failure) => {
-              const layerLabel = failure.layer === 'beats' ? 'Page Beats' : 'Dialogue';
-              return (
-              <li key={`${failure.page}:${failure.layer}`} className="flex flex-wrap items-center justify-between gap-3 border-t border-red-200 pt-2">
-                <span><strong>Page {failure.page} · {layerLabel}:</strong> {failure.reason}</span>
-                <span className="flex gap-3">
-                  {onNavigateToPage && (
-                    <button type="button" disabled={busy} aria-label={`Open page ${failure.page} for ${layerLabel}`} onClick={() => void onNavigateToPage(failure.page)} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
-                      Open page {failure.page}
-                    </button>
-                  )}
-                  {onRetryFailed && (
-                    <button type="button" disabled={busy} aria-label={`Retry ${layerLabel} for page ${failure.page}`} onClick={() => void onRetryFailed([{ page: failure.page, layer: failure.layer }])} className="font-black underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-40">
-                      Retry {layerLabel}
-                    </button>
-                  )}
-                </span>
-              </li>
-              );
-            })}
-          </ul>
+          {showFailures && (
+            <ul
+              id={failureRegionId}
+              data-testid="pacing-recovery-list"
+              className="mt-3 max-h-80 space-y-2 overflow-y-auto overscroll-contain pr-2"
+            >
+              {failureRows.map((failure) => {
+                const layerLabel = failure.layer === 'beats' ? 'Page Beats' : 'Dialogue';
+                return (
+                  <li key={`${failure.page}:${failure.layer}`} className="flex flex-wrap items-center justify-between gap-3 border-t border-red-200 pt-2">
+                    <span><strong>Page {failure.page} · {layerLabel}:</strong> {failure.reason}</span>
+                    <span className="flex gap-3">
+                      {onNavigateToPage && (
+                        <button type="button" disabled={busy} aria-label={`Open page ${failure.page} for ${layerLabel}`} onClick={() => void onNavigateToPage(failure.page)} className="font-black underline transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-not-allowed disabled:opacity-40">
+                          Open page {failure.page}
+                        </button>
+                      )}
+                      {onRetryFailed && (
+                        <button type="button" disabled={busy} aria-label={`Retry ${layerLabel} for page ${failure.page}`} onClick={() => void onRetryFailed([{ page: failure.page, layer: failure.layer }])} className="font-black underline transition-colors hover:text-red-700 active:text-red-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:cursor-not-allowed disabled:opacity-40">
+                          Retry {layerLabel}
+                        </button>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 
       <div className="grid min-h-[520px] grid-cols-[minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <nav aria-label="Revision items" className="min-w-0 border-b border-slate-300 bg-[#e7e0d2] lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between px-4 py-3">
+        <nav aria-label="Revision items" className="flex min-w-0 flex-col border-b border-slate-300 bg-[#e7e0d2] lg:max-h-[520px] lg:border-b-0 lg:border-r">
+          <div className="flex shrink-0 items-center justify-between px-4 py-3">
             <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Revision items</span>
             <span className="text-[10px] font-bold text-slate-500">{visibleItems.length}</span>
           </div>
-          <ol className="max-h-60 overflow-y-auto lg:max-h-[470px]">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-300/70 px-3 py-2">
+            <button
+              type="button"
+              disabled={busy || activeLayerEligible.length === 0 || allActiveEligibleSelected}
+              onClick={selectAllActiveLayer}
+              className="text-[10px] font-black text-slate-700 underline underline-offset-2 transition-colors hover:text-amber-800 active:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Select all in {activeLayerLabel}
+            </button>
+            <button
+              type="button"
+              disabled={busy || selectedEligible.length === 0}
+              onClick={clearActiveLayerSelection}
+              className="text-[10px] font-black text-slate-600 underline underline-offset-2 transition-colors hover:text-slate-950 active:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear {activeLayerLabel} selection
+            </button>
+          </div>
+          <ol data-testid="pacing-revision-item-list" className="max-h-60 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
             {visibleItems.map((item) => (
               <li key={item.id}>
                 <p className="border-y border-slate-300/70 px-4 py-2 text-[10px] font-black uppercase tracking-wide text-slate-600">
@@ -289,7 +363,7 @@ export function WriterPacingRevisionWorkspace({
                       type="checkbox"
                       aria-label={`Select ${item.title} ${layer} change`}
                       checked={selectedIds.has(change.id)}
-                      disabled={change.generation_status !== 'ready'}
+                      disabled={busy || change.generation_status !== 'ready'}
                       onChange={(event) => {
                         const next = new Set(selectedIds);
                         if (event.target.checked) next.add(change.id);
@@ -311,9 +385,9 @@ export function WriterPacingRevisionWorkspace({
               </li>
             ))}
           </ol>
-          <div className="flex gap-2 border-t border-slate-300 p-3">
-            <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('approved')} className="flex-1 bg-emerald-700 px-2 py-2 text-[10px] font-black text-white hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-900 disabled:opacity-40">Approve selected ({selectedEligible.length})</button>
-            <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('rejected')} className="flex-1 bg-slate-700 px-2 py-2 text-[10px] font-black text-white hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 disabled:opacity-40">Reject selected ({selectedEligible.length})</button>
+          <div data-testid="pacing-batch-footer" className="sticky bottom-0 z-10 flex shrink-0 gap-2 border-t border-slate-300 bg-[#e7e0d2] p-3 shadow-[0_-8px_16px_-16px_rgba(15,23,42,0.8)]">
+            <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('approved')} className="flex-1 bg-emerald-700 px-2 py-2 text-[10px] font-black text-white transition-colors hover:bg-emerald-600 active:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-900 disabled:cursor-not-allowed disabled:opacity-40">Approve selected ({selectedEligible.length})</button>
+            <button type="button" disabled={busy || selectedEligible.length === 0} onClick={() => void batchDecision('rejected')} className="flex-1 bg-slate-700 px-2 py-2 text-[10px] font-black text-white transition-colors hover:bg-slate-600 active:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Reject selected ({selectedEligible.length})</button>
           </div>
         </nav>
 
