@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  archiveWriterPacingRevisionSet,
   discardWriterPacingRevisionSet,
   getWriterPacingRevisionSet,
+  listWriterPacingRevisionSetHistory,
   listWriterPacingRevisionSets,
   updateWriterPacingRevisionChange,
   updateWriterPacingRevisionProgress,
@@ -54,7 +56,11 @@ function missingLayersByPage(set: PacingRevisionSet | null): Map<number, Set<Pac
 
 export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRef[]) {
   const [activeSet, setActiveSet] = useState<PacingRevisionSet | null>(null);
+  const [historySets, setHistorySets] = useState<PacingRevisionSet[]>([]);
+  const [selectedHistorySet, setSelectedHistorySet] = useState<PacingRevisionSet | null>(null);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stopRef = useRef(false);
@@ -73,9 +79,28 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     setActiveSet('set' in result ? result.set : result.sets[0] ?? null);
   }, [issueId]);
 
+  const refreshHistory = useCallback(async () => {
+    if (!issueId) {
+      setHistorySets([]);
+      setHistoryError(null);
+      return;
+    }
+    setHistoryLoading(true);
+    const result = await listWriterPacingRevisionSetHistory(issueId);
+    setHistoryLoading(false);
+    if (!result.ok) {
+      setHistoryError(result.error);
+      return;
+    }
+    setHistoryError(null);
+    setHistorySets(result.sets);
+  }, [issueId]);
+
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void refreshHistory();
+    setSelectedHistorySet(null);
+  }, [refresh, refreshHistory]);
 
   const generatePagesForSet = useCallback(async (
     set: PacingRevisionSet,
@@ -214,6 +239,44 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
     setActiveSet(null);
   }, [activeSet]);
 
+  const archiveActive = useCallback(async (
+    expectedSet?: PacingRevisionSet,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const setToArchive = expectedSet ?? activeSet;
+    if (!setToArchive) {
+      const archiveError = 'There is no active Pacing Revision Set to archive.';
+      setError(archiveError);
+      return { ok: false, error: archiveError };
+    }
+    if (!['ready', 'partially_ready', 'applied', 'failed'].includes(setToArchive.status)) {
+      const archiveError = 'This Pacing Revision Set cannot be archived in its current state.';
+      setError(archiveError);
+      return { ok: false, error: archiveError };
+    }
+    if (!setToArchive.updated_at) {
+      const archiveError = 'This Pacing Revision Set is missing the version needed for a safe archive.';
+      setError(archiveError);
+      return { ok: false, error: archiveError };
+    }
+    const result = await archiveWriterPacingRevisionSet({
+      setId: setToArchive.id,
+      expectedStatus: setToArchive.status as 'ready' | 'partially_ready' | 'applied' | 'failed',
+      expectedUpdatedAt: setToArchive.updated_at,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return result;
+    }
+    setError(null);
+    setActiveSet((current) => current?.id === setToArchive.id ? null : current);
+    setHistorySets((current) => [
+      { ...setToArchive, status: 'archived' },
+      ...current.filter((set) => set.id !== setToArchive.id),
+    ]);
+    await Promise.all([refresh(), refreshHistory()]);
+    return { ok: true };
+  }, [activeSet, refresh, refreshHistory]);
+
   const hasPendingCandidates = useMemo(
     () => missingLayersByPage(activeSet).size > 0,
     [activeSet],
@@ -221,11 +284,19 @@ export function useWriterPacingRevisionSet(issueId: string | null, pages: PageRe
 
   return {
     activeSet,
+    historySets,
+    selectedHistorySet,
     loading,
+    historyLoading,
+    historyError,
     generating,
     error,
     create,
     refresh,
+    refreshHistory,
+    selectHistory: (set: PacingRevisionSet) => { setSelectedHistorySet(set); },
+    closeHistory: () => { setSelectedHistorySet(null); },
+    archiveActive,
     updateChange,
     discard,
     hasPendingCandidates,

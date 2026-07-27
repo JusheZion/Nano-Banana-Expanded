@@ -14350,6 +14350,48 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 ### Next steps
 - Continue with Pass 6 integrated local QA after the consolidated focused gate.
 
+## Pacing Revision history replacement orchestration Pass 2 - 2026-07-27
+
+### What changed
+- Added a pure replacement policy for no active set, automatic terminal-set archive, confirmed unfinished-set archive, and blocked applying/generating states.
+- Extended the Pacing Revision hook with independently loaded active/history state, recoverable history errors, history selection, and a guarded archive action that captures the expected set status and version.
+- Routed both single Pacing Review controls through one orchestration. The prior set is archived only after AI succeeds; cancellation or AI failure leaves it untouched.
+- Preserved the saved new diagnosis and prior active set when guarded archive conflicts, with the stable split-success message required by the design.
+
+### Files touched
+- `src/portals/writer/writerPacingRevisionLifecycle.ts`
+- `src/portals/writer/useWriterPacingRevisionSet.ts`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionLifecycle.test.ts`
+- `src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx`
+- `src/portals/writer/__tests__/writerPacingRevisionReplacementPortal.test.ts`
+- `docs/superpowers/plans/2026-07-27-pacing-revision-history-implementation.md`
+- `walkthrough.md`
+
+### Implementation notes
+- Active and archived-history requests start independently when the selected issue changes. A history failure does not clear the active Revision Set and exposes `refreshHistory`.
+- Successful guarded archive optimistically moves the captured set to archived history, then refreshes active and history queries. Any guard/API failure leaves active state unchanged and returns the detail to the Portal.
+- `ready` and `partially_ready` require one browser confirmation before AI. `applied` and `failed` archive automatically after success. Active `generating`, `applying`, or hook page generation blocks before AI.
+- Root `AGENTS.md` was intentionally unchanged: Pass 2 implements the durable archive/replacement contract already recorded for Pass 1 and does not add a new DOX boundary or rule.
+
+### Verification
+- RED: 3 focused files ran with 7 expected failures and 11 passing existing tests for the missing policy, hook state/actions, and Portal orchestration.
+- GREEN: 3 focused files / 26 tests passed.
+- Focused ESLint completed with 0 errors.
+
+### Outstanding issues
+- History disclosure/read-only UI remains Pass 3.
+- Batch Pacing Review replacement remains Pass 4.
+
+### Risks or caveats
+- No hosted database migration, browser QA, or deployment was performed in this pass.
+
+### Operator follow-up
+- None for Pass 2.
+
+### Next steps
+- Implement Pass 3 read-only Revision history UI without exposing mutation controls.
+
 ## Pacing Revision archive persistence lifecycle - 2026-07-27
 
 ### What changed

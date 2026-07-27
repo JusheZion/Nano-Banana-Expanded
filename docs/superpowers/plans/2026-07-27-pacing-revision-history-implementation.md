@@ -132,7 +132,7 @@ git commit -m "feat: add pacing revision archive lifecycle"
 - Archive conflict preserves the active set and reports the saved-review/failed-archive split.
 - Hook exposes history loading, retry, selected history, and manual archive.
 
-- [ ] **Step 1: Write RED lifecycle policy tests**
+- [x] **Step 1: Write RED lifecycle policy tests**
 
 Define and test:
 
@@ -144,7 +144,7 @@ replacementPolicy({ status: 'failed', generating: false }) // auto_archive
 replacementPolicy({ status: 'ready', generating: true }) // blocked
 ```
 
-- [ ] **Step 2: Write RED hook/orchestration tests**
+- [x] **Step 2: Write RED hook/orchestration tests**
 
 Prove:
 
@@ -155,7 +155,7 @@ Prove:
 5. manual archive requires eligible status and moves the set into history;
 6. history-load error preserves active state and exposes retry.
 
-- [ ] **Step 3: Run Pass 2 RED**
+- [x] **Step 3: Run Pass 2 RED**
 
 ```bash
 npm run test -- --run src/portals/writer/__tests__/writerPacingRevisionLifecycle.test.ts src/portals/writer/__tests__/useWriterPacingRevisionSet.test.tsx
@@ -163,7 +163,7 @@ npm run test -- --run src/portals/writer/__tests__/writerPacingRevisionLifecycle
 
 Expected: failures for missing policy and history/archive hook contract.
 
-- [ ] **Step 4: Implement the pure lifecycle module**
+- [x] **Step 4: Implement the pure lifecycle module**
 
 Export:
 
@@ -177,19 +177,19 @@ export type PacingRevisionReplacementPolicy =
 
 No React, network, or browser dependency belongs in this file.
 
-- [ ] **Step 5: Implement hook history/archive state**
+- [x] **Step 5: Implement hook history/archive state**
 
 Add `historySets`, `historyLoading`, `historyError`, `selectedHistorySet`, `refreshHistory`, `selectHistory`, `closeHistory`, and `archiveActive`. Refresh active and history after successful archive. Preserve active state on every failure.
 
-- [ ] **Step 6: Add single-review orchestration**
+- [x] **Step 6: Add single-review orchestration**
 
 In `WriterPortal`, evaluate policy before AI invocation; use one confirmation for unfinished work; call guarded archive only after `pacing_review` succeeds; refresh issue plus active/history state; and surface the split-success error verbatim.
 
-- [ ] **Step 7: Run Pass 2 smoke**
+- [x] **Step 7: Run Pass 2 smoke**
 
 Run lifecycle/hook tests and the focused Portal orchestration test. Expected: all pass.
 
-- [ ] **Step 8: Commit Pass 2**
+- [x] **Step 8: Commit Pass 2**
 
 ```bash
 git add src/portals/writer/writerPacingRevisionLifecycle.ts src/portals/writer/useWriterPacingRevisionSet.ts src/portals/writer/WriterPortal.tsx src/portals/writer/__tests__
@@ -198,7 +198,16 @@ git commit -m "feat: replace stale pacing revision sets"
 
 **Pass 2 smoke test:** Lifecycle, hook, and single-review orchestration only.
 
-**Pass 2 result:** Pending.
+**Pass 2 result:** PASS — RED reproduced the missing lifecycle module, five absent
+hook history/archive behaviors, and both Portal replacement-orchestration gaps.
+GREEN passes 3 focused files / 26 tests. Applied/failed sets archive only after a
+successful new review; unfinished sets require one confirmation; applying or
+generating sets block before AI. Guard conflicts preserve the prior active set and
+the refreshed saved diagnosis while surfacing the stable split-success sentence.
+Active/history initial loads remain independent, successful archive refreshes both
+collections, and history failure retains active state with a retry. Focused ESLint
+passes with 0 errors. Pass 3 history UI and Pass 4 batch orchestration remain
+untouched; no deployment was performed.
 
 ## Pass 3: Simple Workflow history and manual archive
 

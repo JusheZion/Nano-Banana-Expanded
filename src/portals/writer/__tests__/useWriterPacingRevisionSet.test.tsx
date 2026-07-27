@@ -5,6 +5,8 @@ import type { PacingRevisionSet } from '@/shared/writer/pacingRevisionSchemas';
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   list: vi.fn(),
+  listHistory: vi.fn(),
+  archive: vi.fn(),
   get: vi.fn(),
   update: vi.fn(),
   updateProgress: vi.fn(),
@@ -14,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/shared/api/writerTools', () => ({ invokeWriterTools: mocks.invoke }));
 vi.mock('@/shared/api/writerPacingRevisionSets', () => ({
   listWriterPacingRevisionSets: mocks.list,
+  listWriterPacingRevisionSetHistory: mocks.listHistory,
+  archiveWriterPacingRevisionSet: mocks.archive,
   getWriterPacingRevisionSet: mocks.get,
   updateWriterPacingRevisionChange: mocks.update,
   updateWriterPacingRevisionProgress: mocks.updateProgress,
@@ -38,6 +42,8 @@ const revisionSet: PacingRevisionSet = {
   source_fingerprint: 'source',
   progress_json: { total_pages: 1, completed_pages: [], current_page: null, stopped: false },
   failure_ledger: [],
+  created_at: '2026-07-27T09:00:00.000Z',
+  updated_at: '2026-07-27T10:00:00.000Z',
   items: [{
     id: ITEM_ID,
     revision_set_id: SET_ID,
@@ -68,9 +74,98 @@ describe('useWriterPacingRevisionSet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.list.mockResolvedValue({ ok: true, sets: [] });
+    mocks.listHistory.mockResolvedValue({ ok: true, sets: [] });
+    mocks.archive.mockResolvedValue({ ok: true });
     mocks.get.mockResolvedValue({ ok: true, set: revisionSet });
     mocks.updateProgress.mockResolvedValue({ ok: true, set: revisionSet });
     mocks.discard.mockResolvedValue({ ok: true });
+  });
+
+  it('loads active and history independently on issue change', async () => {
+    const archivedSet = { ...revisionSet, status: 'archived' as const };
+    mocks.list.mockResolvedValue({ ok: true, sets: [revisionSet] });
+    mocks.listHistory.mockResolvedValue({ ok: true, sets: [archivedSet] });
+
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+    await waitFor(() => expect(result.current.historySets).toEqual([archivedSet]));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.historyLoading).toBe(false);
+  });
+
+  it('preserves active state when history loading fails and exposes a retry', async () => {
+    mocks.list.mockResolvedValue({ ok: true, sets: [revisionSet] });
+    mocks.listHistory.mockResolvedValueOnce({ ok: false, error: 'History unavailable' });
+
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+
+    await waitFor(() => expect(result.current.activeSet?.id).toBe(SET_ID));
+    await waitFor(() => expect(result.current.historyError).toBe('History unavailable'));
+
+    mocks.listHistory.mockResolvedValue({ ok: true, sets: [] });
+    await act(async () => { await result.current.refreshHistory(); });
+
+    expect(result.current.activeSet?.id).toBe(SET_ID);
+    expect(result.current.historyError).toBeNull();
+  });
+
+  it('selects and closes an archived history set', async () => {
+    const archivedSet = { ...revisionSet, status: 'archived' as const };
+    mocks.listHistory.mockResolvedValue({ ok: true, sets: [archivedSet] });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.historySets).toHaveLength(1));
+
+    act(() => { result.current.selectHistory(archivedSet); });
+    expect(result.current.selectedHistorySet).toEqual(archivedSet);
+
+    act(() => { result.current.closeHistory(); });
+    expect(result.current.selectedHistorySet).toBeNull();
+  });
+
+  it('guardedly archives the captured active set and moves it into history', async () => {
+    const appliedSet = { ...revisionSet, status: 'applied' as const };
+    const archivedSet = { ...appliedSet, status: 'archived' as const };
+    mocks.list.mockResolvedValueOnce({ ok: true, sets: [appliedSet] })
+      .mockResolvedValue({ ok: true, sets: [] });
+    mocks.listHistory.mockResolvedValueOnce({ ok: true, sets: [] })
+      .mockResolvedValue({ ok: true, sets: [archivedSet] });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.activeSet?.status).toBe('applied'));
+
+    let archiveResult: Awaited<ReturnType<typeof result.current.archiveActive>> | undefined;
+    await act(async () => {
+      archiveResult = await result.current.archiveActive(appliedSet);
+    });
+
+    expect(mocks.archive).toHaveBeenCalledWith({
+      setId: SET_ID,
+      expectedStatus: 'applied',
+      expectedUpdatedAt: '2026-07-27T10:00:00.000Z',
+    });
+    expect(archiveResult).toEqual({ ok: true });
+    expect(result.current.activeSet).toBeNull();
+    expect(result.current.historySets).toContainEqual(expect.objectContaining({
+      id: SET_ID,
+      status: 'archived',
+    }));
+  });
+
+  it('preserves the active set and exposes the archive error when the guard fails', async () => {
+    const appliedSet = { ...revisionSet, status: 'applied' as const };
+    mocks.list.mockResolvedValue({ ok: true, sets: [appliedSet] });
+    mocks.archive.mockResolvedValue({ ok: false, error: 'Revision Set changed' });
+    const { result } = renderHook(() => useWriterPacingRevisionSet(ISSUE_ID, []));
+    await waitFor(() => expect(result.current.activeSet?.status).toBe('applied'));
+
+    let archiveResult: Awaited<ReturnType<typeof result.current.archiveActive>> | undefined;
+    await act(async () => {
+      archiveResult = await result.current.archiveActive(appliedSet);
+    });
+
+    expect(archiveResult).toEqual({ ok: false, error: 'Revision Set changed' });
+    expect(result.current.activeSet).toEqual(appliedSet);
+    expect(result.current.error).toBe('Revision Set changed');
   });
 
   it('creates the outline preview then runs Page Beats and Dialogue as separate requests', async () => {

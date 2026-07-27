@@ -102,6 +102,7 @@ import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportW
 import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
 import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
+import { getPacingRevisionReplacementPolicy } from '@/portals/writer/writerPacingRevisionLifecycle';
 import type { PacingRevisionLayer } from '@/shared/writer/pacingRevisionSchemas';
 import { WriterOutlinePasteSettings } from '@/portals/writer/WriterOutlinePasteSettings';
 import { WriterOutlineSourceEditor } from '@/portals/writer/WriterOutlineSourceEditor';
@@ -2577,6 +2578,11 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
     [pages],
   );
   const pacingRevision = useWriterPacingRevisionSet(selectedIssueId, sortedPages);
+  const {
+    activeSet: pacingRevisionActiveSet,
+    archiveActive: archiveActivePacingRevision,
+    generating: pacingRevisionGenerating,
+  } = pacingRevision;
   const navigateToPacingRevisionPage = useCallback((
     pageNumber: number,
     layer: PacingRevisionLayer,
@@ -2952,22 +2958,60 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   const runPacingFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
     setPacingError(null);
+    const revisionSetBeforeReview = pacingRevisionActiveSet;
+    const replacementPolicy = getPacingRevisionReplacementPolicy({
+      status: revisionSetBeforeReview?.status ?? null,
+      generating: pacingRevisionGenerating,
+    });
+    if (replacementPolicy.kind === 'blocked') {
+      setPacingError(replacementPolicy.message);
+      pushHistory(`error: ${replacementPolicy.message}`);
+      return;
+    }
+    if (
+      replacementPolicy.kind === 'confirm_archive'
+      && !window.confirm(replacementPolicy.message)
+    ) return;
+
     setPacingLoading(true);
     const res = await invokeWriterTools({
       mode: 'pacing_review',
       issue_id: selectedIssueId,
       target_page_count: targetPageCount,
     });
-    setPacingLoading(false);
     if (res.success) {
       pushHistory('pacing review saved');
       await refreshIssuesForSeries();
+      if (
+        revisionSetBeforeReview
+        && (
+          replacementPolicy.kind === 'auto_archive'
+          || replacementPolicy.kind === 'confirm_archive'
+        )
+      ) {
+        const archiveResult = await archiveActivePacingRevision(revisionSetBeforeReview);
+        if (!archiveResult.ok) {
+          const splitSuccessMessage = 'The new Pacing Review was saved, but the previous Revision Set changed before it could be archived.';
+          const message = `${splitSuccessMessage} ${archiveResult.error}`;
+          setPacingError(message);
+          pushHistory(`error: ${message}`);
+        }
+      }
     } else {
       const msg = toolErrorMessage(res);
       setPacingError(msg);
       pushHistory(`error: ${msg}`);
     }
-  }, [selectedIssueId, targetPageCount, refreshIssuesForSeries, pushHistory]);
+    setPacingLoading(false);
+  }, [
+    pacingRevisionActiveSet,
+    archiveActivePacingRevision,
+    pacingRevisionGenerating,
+    selectedIssueId,
+    targetPageCount,
+    refreshIssuesForSeries,
+    pushHistory,
+  ]);
 
   const runCanonFromRibbon = useCallback(async () => {
     if (!selectedIssueId) return;
@@ -11596,25 +11640,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
                       <button
                         type="button"
                         disabled={!supabaseOk || !selectedIssueId || pacingLoading || arcBatchBusy}
-                        onClick={async () => {
-                          if (!selectedIssueId) return;
-                          setPacingError(null);
-                          setPacingLoading(true);
-                          const res = await invokeWriterTools({
-                            mode: 'pacing_review',
-                            issue_id: selectedIssueId,
-                            target_page_count: targetPageCount,
-                          });
-                          setPacingLoading(false);
-                          if (res.success) {
-                            pushHistory('pacing review saved');
-                            await refreshIssuesForSeries();
-                          } else {
-                            const msg = toolErrorMessage(res);
-                            setPacingError(msg);
-                            pushHistory(`error: ${msg}`);
-                          }
-                        }}
+                        onClick={() => void runPacingFromRibbon()}
                         className="rounded-lg px-4 py-2 text-xs font-bold text-black shadow-sm disabled:opacity-45 disabled:pointer-events-none"
                         style={{ background: ACCENT_GOLD_GRADIENT }}
                       >
