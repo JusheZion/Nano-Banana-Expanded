@@ -22,9 +22,6 @@ declare
   v_min_page_number integer;
   v_max_page_number integer;
   v_page_expectation jsonb;
-  v_distinct_page_count integer;
-  v_min_page_number integer;
-  v_max_page_number integer;
 begin
   if auth.uid() is null then
     raise exception 'Authentication is required';
@@ -278,6 +275,9 @@ declare
   v_outline_applied boolean;
   v_latest_outline_id uuid;
   v_latest_outline_json jsonb;
+  v_distinct_page_count integer;
+  v_min_page_number integer;
+  v_max_page_number integer;
 begin
   if auth.uid() is null then
     raise exception 'Authentication is required';

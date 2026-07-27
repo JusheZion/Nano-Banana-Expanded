@@ -51,12 +51,19 @@ describe('Pacing Revision Apply transaction migration', () => {
   it('performs authoritative Undo restoration, cleanup, and reopen in one rollback-safe RPC', () => {
     const undoStart = sql.indexOf('create or replace function public.undo_writer_pacing_revision_apply');
     const undoSql = sql.slice(undoStart);
+    const completionSql = sql.slice(0, undoStart);
     const firstRestore = undoSql.indexOf('update public.writer_pages page');
     const createdDelete = undoSql.indexOf('delete from public.writer_pages page');
     const outlineDelete = undoSql.indexOf('delete from public.writer_issue_outlines outline');
     const reopen = undoSql.indexOf('set status = v_reopen_status');
 
     expect(undoStart).toBeGreaterThan(-1);
+    expect(completionSql.match(/v_distinct_page_count integer;/g)).toHaveLength(1);
+    expect(completionSql.match(/v_min_page_number integer;/g)).toHaveLength(1);
+    expect(completionSql.match(/v_max_page_number integer;/g)).toHaveLength(1);
+    expect(undoSql.match(/v_distinct_page_count integer;/g)).toHaveLength(1);
+    expect(undoSql.match(/v_min_page_number integer;/g)).toHaveLength(1);
+    expect(undoSql.match(/v_max_page_number integer;/g)).toHaveLength(1);
     expect(undoSql).toMatch(/revision_set\.apply_snapshot/);
     expect(undoSql).toMatch(/revision_set\.status = 'applied'/);
     expect(undoSql).toMatch(/for update of revision_set/);
