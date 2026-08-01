@@ -698,10 +698,25 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             draggable={isContentMode}
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
-                                if (isContentMode) {
+                                if (!isContentMode) return;
+                                const nx = e.target.x();
+                                const ny = e.target.y();
+                                // IMG-3: cover/contain position by focus point (0..1), not offset. Writing
+                                // imageOffsetX/Y here (as before) was ignored by those modes, so the image
+                                // snapped back to center after you dragged it. Convert the drag into focus.
+                                if (fillMode === 'cover' || fillMode === 'contain') {
+                                    const iw = (imageObj?.width ?? 0) * imgScaleX;
+                                    const ih = (imageObj?.height ?? 0) * imgScaleY;
+                                    const denomX = bboxWidth - iw;
+                                    const denomY = bboxHeight - ih;
                                     onChange({
-                                        imageOffsetX: e.target.x() - bboxMinX,
-                                        imageOffsetY: e.target.y() - bboxMinY,
+                                        ...(Math.abs(denomX) > 0.001 && { imageFocusX: Math.min(1, Math.max(0, (nx - bboxMinX) / denomX)) }),
+                                        ...(Math.abs(denomY) > 0.001 && { imageFocusY: Math.min(1, Math.max(0, (ny - bboxMinY) / denomY)) }),
+                                    });
+                                } else {
+                                    onChange({
+                                        imageOffsetX: nx - bboxMinX,
+                                        imageOffsetY: ny - bboxMinY,
                                     });
                                 }
                             }}

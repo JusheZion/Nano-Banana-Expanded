@@ -149,13 +149,49 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                                 Upload BG
                             </button>
                             {pageSettings?.backgroundImage && (
-                                <button
-                                    type="button"
-                                    onClick={() => setPageSettings({ backgroundImage: undefined })}
-                                    className="mt-2 w-full px-3 py-1.5 rounded border border-red-500/50 text-red-400 text-xs hover:bg-red-500/10"
-                                >
-                                    Clear background image
-                                </button>
+                                <>
+                                    <label className={`block text-xs uppercase tracking-widest mt-3 mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Fit</label>
+                                    <select
+                                        value={pageSettings?.bgFillMode ?? 'cover'}
+                                        onChange={(e) => setPageSettings({ bgFillMode: e.target.value as 'cover' | 'contain' | 'stretch' | 'center' })}
+                                        aria-label="Background image fit"
+                                        className={`w-full border rounded px-2 py-1.5 text-sm ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit' : 'bg-black/30 border-white/10 text-white'}`}
+                                    >
+                                        <option value="cover">Cover — fill page, no distortion (crops)</option>
+                                        <option value="contain">Contain — whole image fits (may letterbox)</option>
+                                        <option value="center">Center — original size, centered</option>
+                                        <option value="stretch">Stretch — fill exactly (distorts)</option>
+                                    </select>
+                                    {(pageSettings?.bgFillMode ?? 'cover') !== 'stretch' && (
+                                        <div className="mt-2 space-y-2">
+                                            <PrecisionSlider
+                                                min={0} max={1} step={0.05}
+                                                value={pageSettings?.bgFocusX ?? 0.5}
+                                                onChange={(v) => setPageSettings({ bgFocusX: v })}
+                                                label="Horizontal position"
+                                                valueLabel={`${Math.round((pageSettings?.bgFocusX ?? 0.5) * 100)}%`}
+                                                width="100%" showPrecisionButtons={true}
+                                                aria-label="Background horizontal position"
+                                            />
+                                            <PrecisionSlider
+                                                min={0} max={1} step={0.05}
+                                                value={pageSettings?.bgFocusY ?? 0.5}
+                                                onChange={(v) => setPageSettings({ bgFocusY: v })}
+                                                label="Vertical position"
+                                                valueLabel={`${Math.round((pageSettings?.bgFocusY ?? 0.5) * 100)}%`}
+                                                width="100%" showPrecisionButtons={true}
+                                                aria-label="Background vertical position"
+                                            />
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setPageSettings({ backgroundImage: undefined })}
+                                        className="mt-2 w-full px-3 py-1.5 rounded border border-red-500/50 text-red-400 text-xs hover:bg-red-500/10"
+                                    >
+                                        Clear background image
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>

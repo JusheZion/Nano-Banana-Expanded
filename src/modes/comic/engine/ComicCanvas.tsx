@@ -8,7 +8,7 @@ import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { FloatingAsset } from '../components/FloatingAsset';
 import { splitConvexPolygon, pointInPanel } from '../utils/geometry';
-import { getSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
+import { getGutterAwareSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonInstance } from '../../../types/balloon';
 import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 
@@ -29,6 +29,43 @@ const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string,
     );
 };
 
+const PAGE_W = 800;
+const PAGE_H = 1200;
+
+/**
+ * Compute the draw rect (page-local) for a page background image given a fill mode.
+ * Fixes IMG-1: previously the background was hard-stretched to 800x1200 (distorting any
+ * non-page-ratio image) with no way to fit/center/position it.
+ * - cover: fill the page without distortion (may crop), positioned by focus point
+ * - contain: fit the whole image inside the page (may letterbox), positioned by focus
+ * - center: natural size, positioned by focus point (clipped to page)
+ * - stretch: legacy behavior — fill the page exactly (distorts aspect)
+ */
+const computeBackgroundImageRect = (
+    img: HTMLImageElement,
+    mode: 'cover' | 'contain' | 'stretch' | 'center',
+    focusX: number,
+    focusY: number,
+): { x: number; y: number; width: number; height: number } => {
+    const iw = img.naturalWidth || img.width || PAGE_W;
+    const ih = img.naturalHeight || img.height || PAGE_H;
+    if (mode === 'stretch' || iw <= 0 || ih <= 0) {
+        return { x: 0, y: 0, width: PAGE_W, height: PAGE_H };
+    }
+    let scale: number;
+    if (mode === 'cover') scale = Math.max(PAGE_W / iw, PAGE_H / ih);
+    else if (mode === 'contain') scale = Math.min(PAGE_W / iw, PAGE_H / ih);
+    else scale = 1; // center = natural size
+    const width = iw * scale;
+    const height = ih * scale;
+    return {
+        x: (PAGE_W - width) * focusX,
+        y: (PAGE_H - height) * focusY,
+        width,
+        height,
+    };
+};
+
 // Coordinate helper for Multi-Page layout
 const getLayoutPosition = (index: number, mode: 'webtoon' | 'spread') => {
     if (mode === 'spread') {
@@ -46,6 +83,7 @@ export const ComicCanvas: React.FC = () => {
         layoutMode,
         zoomLevel,
         pageSettings,
+        gutterSize,
         selectPage,
         setSelectedElements,
         toggleSelection,
@@ -524,18 +562,37 @@ export const ComicCanvas: React.FC = () => {
                                         stroke={currentPageId === page.id ? "#3B82F6" : "rgba(255, 255, 255, 0.05)"}
                                         strokeWidth={currentPageId === page.id ? 2 : 1}
                                     />
-                                    {bgImage && pageSettings?.backgroundImage && (
-                                        <Image
-                                            key={`bgimg-${page.id}`}
-                                            image={bgImage}
-                                            x={offset.x}
-                                            y={offset.y}
-                                            width={800}
-                                            height={1200}
-                                            opacity={pageSettings?.bgOpacity ?? 1}
-                                            listening={false}
-                                        />
-                                    )}
+                                    {bgImage && pageSettings?.backgroundImage && (() => {
+                                        const rect = computeBackgroundImageRect(
+                                            bgImage,
+                                            pageSettings?.bgFillMode ?? 'cover',
+                                            pageSettings?.bgFocusX ?? 0.5,
+                                            pageSettings?.bgFocusY ?? 0.5,
+                                        );
+                                        // Clip to the page so cover/center overflow doesn't bleed onto other pages.
+                                        return (
+                                            <Group
+                                                key={`bgimg-${page.id}`}
+                                                x={offset.x}
+                                                y={offset.y}
+                                                clipX={0}
+                                                clipY={0}
+                                                clipWidth={800}
+                                                clipHeight={1200}
+                                                listening={false}
+                                            >
+                                                <Image
+                                                    image={bgImage}
+                                                    x={rect.x}
+                                                    y={rect.y}
+                                                    width={rect.width}
+                                                    height={rect.height}
+                                                    opacity={pageSettings?.bgOpacity ?? 1}
+                                                    listening={false}
+                                                />
+                                            </Group>
+                                        );
+                                    })()}
                                 </React.Fragment>
                             );
                         })}
@@ -570,7 +627,11 @@ export const ComicCanvas: React.FC = () => {
                                                         onChange={(newAttrs: Partial<Panel>) => {
                                                             updatePanel(page.id, panel.id, newAttrs);
                                                             if (newAttrs.x !== undefined && newAttrs.y !== undefined) {
-                                                                const { snapLines } = getSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id);
+                                                                // Use the gutter-aware variant so the guide overlay matches the
+                                                                // positions the panel actually snaps to — including page-center,
+                                                                // true page edges, and one-gutter offsets. The plain getSnapLines
+                                                                // only knew sibling edges, so centering/bleed snaps drew no line.
+                                                                const { snapLines } = getGutterAwareSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id, gutterSize);
                                                                 setSnapLines({ lines: snapLines, offset });
                                                             }
                                                         }}
