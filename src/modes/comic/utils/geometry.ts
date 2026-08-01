@@ -94,17 +94,41 @@ export function pointInPanel(
     height: number,
     points: { x: number; y: number }[] | undefined,
     px: number,
-    py: number
+    py: number,
+    centralAngle?: number
 ): boolean {
     if (shapeType === 'rect') {
         return px >= x && px <= x + width && py >= y && py <= y + height;
     }
-    if (shapeType === 'ellipse' || shapeType === 'halfCircle' || shapeType === 'quarterCircle' || shapeType === 'sector') {
+    if (shapeType === 'ellipse') {
         const cx = x + width / 2;
         const cy = y + height / 2;
         const rx = width / 2;
         const ry = height / 2;
         return ((px - cx) ** 2) / (rx * rx) + ((py - cy) ** 2) / (ry * ry) <= 1;
+    }
+    // PAN-7: the circular primitives are radius-min(w,h)-based, not full ellipses — hit-test the
+    // actual visible shape so image drops don't target the empty region beside the wedge/dome.
+    if (shapeType === 'halfCircle') {
+        const r = Math.min(width, height) / 2;
+        const cx = x + width / 2, cy = y + height / 2;
+        // Dome bulges up from the chord at the panel's vertical centre.
+        return (px - cx) ** 2 + (py - cy) ** 2 <= r * r && py <= cy;
+    }
+    if (shapeType === 'quarterCircle') {
+        const r = Math.min(width, height);
+        const lx = px - x, ly = py - y; // quarter disk anchored at the panel's top-left corner
+        return lx >= 0 && ly >= 0 && lx * lx + ly * ly <= r * r;
+    }
+    if (shapeType === 'sector') {
+        const r = Math.min(width, height) / 2;
+        const cx = x + width / 2, cy = y + height / 2;
+        const dx = px - cx, dy = py - cy;
+        if (dx * dx + dy * dy > r * r) return false;
+        let ang = Math.atan2(dy, dx); // 0 = +x, increases downward (Konva y-down)
+        if (ang < 0) ang += Math.PI * 2;
+        const sweep = (Math.max(1, Math.min(360, centralAngle ?? 90)) * Math.PI) / 180;
+        return ang <= sweep;
     }
     if (shapeType === 'polygon' && points && points.length >= 3) {
         const n = points.length;

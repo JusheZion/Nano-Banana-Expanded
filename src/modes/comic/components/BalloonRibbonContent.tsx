@@ -90,8 +90,10 @@ export const BalloonRibbonContent: React.FC<BalloonRibbonContentProps> = (props)
     if (style.secondaryTextStrokeWidth) overrides.secondaryTextStrokeWidth = style.secondaryTextStrokeWidth;
     if (style.text3DExtrusion) overrides.text3DExtrusion = style.text3DExtrusion;
     if (style.text3DExtrusionColor) overrides.text3DExtrusionColor = style.text3DExtrusionColor;
+    // Stagger each new balloon so multiple adds don't stack exactly on top of each other.
+    const stackIndex = currentPage.balloons.length % 8;
     addBalloon(currentPage.id, {
-      x: 400, y: 600, width: 250, height: 150,
+      x: 400 + stackIndex * 28, y: 600 + stackIndex * 28, width: 250, height: 150,
       hasTail: style.hasTail, tailBasePoint: { x: 0, y: 0 }, tailTip: { x: -50, y: 100 },
       styleId: sid,
       text: style.kind === 'shout' && styleId.includes('sound_effect') ? 'BOOM!' : 'Text...',
@@ -109,13 +111,16 @@ export const BalloonRibbonContent: React.FC<BalloonRibbonContentProps> = (props)
     if (!style) return;
     const balloon = currentPage?.balloons.find(b => b.id === props.selectedBalloonId);
     const existingOverrides = (balloon?.overrides || {}) as Record<string, unknown>;
-    const overrides: Record<string, unknown> = {
-      ...existingOverrides,
-      ...(style.cornerRadius != null && { cornerRadius: style.cornerRadius }),
+    // hasTail/tailStyle/cornerRadius are NOT read from overrides — hasTail is a top-level balloon
+    // field, and tailStyle/cornerRadius come from the styleDef (via styleId). Strip any stale copies
+    // from overrides and set hasTail at the top level so switching styles actually adds/removes the tail.
+    const { hasTail: _staleTail, tailStyle: _staleTailStyle, cornerRadius: _staleCorner, ...overrides } = existingOverrides;
+    void _staleTail; void _staleTailStyle; void _staleCorner;
+    updateBalloon(props.currentPageId, props.selectedBalloonId, {
+      styleId: styleId as BalloonStyleId,
       ...(style.hasTail != null && { hasTail: style.hasTail }),
-      ...(style.tailStyle && { tailStyle: style.tailStyle }),
-    };
-    updateBalloon(props.currentPageId, props.selectedBalloonId, { styleId: styleId as BalloonStyleId, overrides });
+      overrides,
+    });
     props.onApplyStyleToSelected?.(styleId as BalloonStyleId);
   };
 

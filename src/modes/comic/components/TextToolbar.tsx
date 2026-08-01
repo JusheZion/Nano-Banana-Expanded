@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import type { BalloonInstance, TextWarpId } from '../../../types/balloon';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
+import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { FontSelect } from './FontSelect';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_BLUE, TEXT_ON_GOLD } from '../theme/Phase12DesignTokens';
@@ -240,6 +241,9 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
     const balloon = selectedBubbleId ? page?.balloons.find(b => b.id === selectedBubbleId) : null;
     const isPlaceholder = !balloon && (variant === 'format-text' || variant === 'format-objects');
     const effectiveBalloon = balloon ?? PLACEHOLDER_BALLOON;
+    // BAL-6: fresh balloons have no fontSize override; fall back to the style's size (not a bare 16)
+    // so the toolbar reflects the text actually rendered.
+    const styleFontSize = BALLOON_STYLES.find(s => s.id === effectiveBalloon.styleId)?.fontSize ?? 16;
     const noOp = () => {};
 
     if (!balloon && !isPlaceholder) return null;
@@ -309,7 +313,7 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
             <Tooltip content="Font size (preset or type any number)">
                 <div className="flex items-center gap-1">
                     <select
-                        value={FONT_SIZE_PRESETS.includes(balloon.overrides?.fontSize ?? 16) ? String(balloon.overrides?.fontSize ?? 16) : FONT_SIZE_OTHER}
+                        value={FONT_SIZE_PRESETS.includes(balloon.overrides?.fontSize ?? styleFontSize) ? String(balloon.overrides?.fontSize ?? styleFontSize) : FONT_SIZE_OTHER}
                         onChange={(e) => {
                             const v = e.target.value;
                             if (v === FONT_SIZE_OTHER) {
@@ -326,12 +330,12 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
                         ))}
                         <option value={FONT_SIZE_OTHER} className="bg-[#1A1A1E] text-white">Other…</option>
                     </select>
-                    {(fontSizeOther || !FONT_SIZE_PRESETS.includes(balloon.overrides?.fontSize ?? 16)) && (
+                    {(fontSizeOther || !FONT_SIZE_PRESETS.includes(balloon.overrides?.fontSize ?? styleFontSize)) && (
                         <input
                             type="number"
                             min={8}
                             max={200}
-                            value={balloon.overrides?.fontSize ?? 16}
+                            value={balloon.overrides?.fontSize ?? styleFontSize}
                             onChange={(e) => handleOverrides({ fontSize: Math.min(200, Math.max(8, parseInt(e.target.value, 10) || 16)) })}
                             className="w-11 h-8 rounded border border-white/[0.08] bg-[#0F0F12] px-1 text-xs text-white text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-[#00D1FF]/60"
                             aria-label="Font size"

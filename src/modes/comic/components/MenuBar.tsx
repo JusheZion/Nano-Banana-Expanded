@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Palette, LayoutGrid as LayoutIcon, Columns, Plus, Scissors, Pencil, ImagePlus, Sparkles, Type, Circle, Box, Waves, Moon, Image as ImageIcon, RefreshCw, ArrowLeftRight, AlignLeft, BoxSelect } from 'lucide-react';
+import { ChevronDown, Palette, LayoutGrid as LayoutIcon, Columns, Plus, Scissors, Pencil, ImagePlus, Sparkles, Type, Circle, Box, Waves, Moon, Image as ImageIcon, RefreshCw, ArrowLeftRight, BoxSelect } from 'lucide-react';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import type { BalloonStyleId } from '../../../types/balloon';
@@ -77,6 +77,9 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     toggleDrawingMode,
     isDrawingMode,
     splitPanel,
+    toggleFlip,
+    bringToFront,
+    sendToBack,
     createGroup,
     ungroup,
     getGroupMembers,
@@ -276,8 +279,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           {item('Import image…', undefined, props.onImportImage)}
           {item('Save', '⌘S', props.onSave)}
           <div className="my-1 border-t border-white/15" />
-          {item('Export as PNG', undefined, props.onExportPng)}
-          {item('Export as PDF', undefined, props.onExportPdf)}
+          {item('Export current page (PNG)', undefined, props.onExportPng)}
+          {item('Export all pages (PDF)', undefined, props.onExportPdf)}
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={() => { props.onThemeClick(); close(); }} className={`${dropdownItemClass} justify-between`} style={dropdownItemStyle}>
             <span>Theme / Studio look</span>
@@ -396,9 +399,8 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Type size={12} /> Font & size</button>
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Palette size={12} /> Color, stroke, outline</button>
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('effects'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Box size={12} /> 3D extrusion</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Waves size={12} /> Warp (arc, wave)</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Padding</button>
-          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><AlignLeft size={12} /> Alignment</button>
+          {/* SYS-7: Warp/Padding/Alignment all opened the same Text Box dialog — collapsed into one honest item. */}
+          <button type="button" onClick={() => { props.onOpenFormatDialog?.('textBox'); props.onActiveMenuChange('text'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Waves size={12} /> Warp, padding &amp; alignment</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1 text-[10px] opacity-70" style={dropdownHeadingStyle}>Ribbon below shows font, color, alignment. Select a balloon to edit.</div>
         </div>
@@ -407,9 +409,15 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
         <div className={`${dropdownPanelClass} min-w-[260px] max-h-[80vh] overflow-y-auto`} style={dropdownPanelStyle}>
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Shape & transform</div>
           <button type="button" onClick={() => { props.onOpenFormatDialog?.('fillLine'); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Shape (Rect / Ellipse)</button>
-          <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
-          <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H / Flip V</button>
-          <button type="button" onClick={() => { props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}>Bring to front / Send to back</button>
+          <button type="button" disabled={!effectivePageIdForSelection || !selectedPanels.length} onClick={() => { if (effectivePageIdForSelection) selectedPanels.forEach(p => splitPanel(effectivePageIdForSelection, p.id, 'horizontal', 0)); props.onActiveMenuChange('objects'); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> Split panel</button>
+          <div className="flex items-center gap-1 px-3 py-1">
+            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => toggleFlip(effectivePageIdForSelection, id, 'horizontal')); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} /> Flip H</button>
+            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => toggleFlip(effectivePageIdForSelection, id, 'vertical')); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}><ArrowLeftRight size={12} className="rotate-90" /> Flip V</button>
+          </div>
+          <div className="flex items-center gap-1 px-3 py-1">
+            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => bringToFront(effectivePageIdForSelection, id)); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Bring to front</button>
+            <button type="button" disabled={!effectivePageIdForSelection || !selectedElementIds.length} onClick={() => { if (effectivePageIdForSelection) selectedElementIds.forEach(id => sendToBack(effectivePageIdForSelection, id)); }} className={`${dropdownItemClass} flex-1`} style={dropdownItemStyle}>Send to back</button>
+          </div>
           <button type="button" onClick={() => { currentPageId && createGroup(currentPageId, selectedElementIds); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || selectedElementIds.length < 2} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Group</button>
           <button type="button" onClick={() => { currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0]); props.onActiveMenuChange('objects'); close(); }} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} className={dropdownItemClass} style={dropdownItemStyle}><BoxSelect size={12} /> Ungroup</button>
           <div className="my-1 border-t border-white/15" />

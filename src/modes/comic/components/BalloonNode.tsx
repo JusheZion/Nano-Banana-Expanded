@@ -1,7 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 'react-konva';
 import { useComicStore, undoPause, undoResume } from '../../../stores/comicStore';
-import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
 import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
@@ -122,7 +121,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         return { fillLinearGradientStartPoint: start, fillLinearGradientEndPoint: end, fillLinearGradientColorStops: colorStops };
     }, [balloon.overrides?.textColorGradient, w, h, textColor]);
 
-    // React to text size changes
+    // React to text size changes. Runs only when the measured inputs change (not every render);
+    // the 2px threshold keeps it from looping when it writes back width/height.
     React.useEffect(() => {
         if (autoSize && textRef.current) {
             const textNode = textRef.current;
@@ -134,7 +134,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 onChange(balloon.id, { width: newW, height: newH });
             }
         }
-    });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoSize, balloon.text, fontSize, fontFamily, fontStyle, fontWeight, padding, w, h]);
 
     // Calculate Warp Path if applicable
     const warpPathData = useMemo(() => {
@@ -176,7 +177,11 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         }
     }, [textWarp, w, h, autoSize, balloon.text, fontSize, fontFamily, balloon.overrides?.textWarpIntensity]);
 
-    const textFontProps = { fontWeight, fontStyle, textDecoration } as const;
+    // Konva Text/TextPath has no `fontWeight` prop — weight is expressed through `fontStyle`
+    // ('bold' / 'italic' / 'bold italic'). Combine the two so the Bold button actually applies.
+    const konvaFontStyle = [fontWeight === 'bold' ? 'bold' : '', fontStyle === 'italic' ? 'italic' : '']
+        .filter(Boolean).join(' ') || 'normal';
+    const textFontProps = { fontStyle: konvaFontStyle, textDecoration } as const;
 
     const textureUrl = balloon.textureId ? getTextureUrl(balloon.textureId) : '';
     const [textureImg] = useImage(textureUrl || '');
@@ -444,8 +449,9 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const renderBody = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
         const props = getRenderProps(pass, false);
 
-        // Fixed cloud outline matching the reference image
-        if (styleDef.id === 'cloud_fluffy' || styleDef.id === 'cloud_fluffy_no_tail') {
+        // Fixed cloud outline matching the reference image. thought_cloud shares the fluffy-cloud
+        // body so it no longer renders as a plain ellipse.
+        if (styleDef.id === 'cloud_fluffy' || styleDef.id === 'cloud_fluffy_no_tail' || styleDef.id === 'thought_cloud') {
             const designW = 2400;
             const designH = 1800;
 
@@ -518,8 +524,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             return <Path data={pathData} {...props} />;
         }
 
-        if (styleDef.id === 'starburst_action' || styleDef.id === 'scream_jagged') {
-            const numSpikes = styleDef.id === 'starburst_action' ? 14 : 24;
+        if (styleDef.id === 'starburst_action' || styleDef.id === 'scream_jagged' || styleDef.id === 'shout_spiky') {
+            const numSpikes = styleDef.id === 'starburst_action' ? 14 : styleDef.id === 'shout_spiky' ? 16 : 24;
             const innerRadiusX = halfW * 0.7;
             const innerRadiusY = halfH * 0.7;
             let pathData = '';
@@ -585,6 +591,22 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                     <Path data={innerPathData} {...innerProps} />
                 </Group>
             );
+        }
+
+        // Radio/phone/electric balloon: an ellipse with a regular sawtooth ("electric") border,
+        // so it reads distinctly from a plain round speech bubble.
+        if (styleDef.id === 'radio_electric') {
+            const teeth = 40;
+            let pathData = '';
+            for (let i = 0; i <= teeth; i++) {
+                const angle = (i * Math.PI * 2) / teeth;
+                const r = i % 2 === 0 ? 1 : 0.85;
+                const x = Math.cos(angle) * halfW * r;
+                const y = Math.sin(angle) * halfH * r;
+                pathData += (i === 0 ? 'M' : 'L') + ` ${x},${y} `;
+            }
+            pathData += 'Z';
+            return <Path data={pathData} {...props} lineJoin="miter" lineCap="butt" />;
         }
 
         if (styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed') {
@@ -673,12 +695,84 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             y: tuckedIntersection.y + ny * (length * 0.4) - py * (curveStrength * flipMultiplier),
         };
 
+        // Spiky/electric tail: a zig-zag lightning shape instead of the smooth curve.
+        if (styleDef.tailStyle === 'spiky') {
+            const mid1 = {
+                x: tuckedIntersection.x + nx * (length * 0.4) + px * baseWidth * 0.9 * flipMultiplier,
+                y: tuckedIntersection.y + ny * (length * 0.4) + py * baseWidth * 0.9 * flipMultiplier,
+            };
+            const mid2 = {
+                x: tuckedIntersection.x + nx * (length * 0.72) - px * baseWidth * 0.9 * flipMultiplier,
+                y: tuckedIntersection.y + ny * (length * 0.72) - py * baseWidth * 0.9 * flipMultiplier,
+            };
+            const spikyPath = `M ${p1.x} ${p1.y} L ${mid1.x} ${mid1.y} L ${localTailTip.x} ${localTailTip.y} L ${mid2.x} ${mid2.y} L ${p2.x} ${p2.y} Z`;
+            return <Path data={spikyPath} {...getRenderProps(pass, true)} lineJoin="miter" lineCap="butt" />;
+        }
+
         const pathData = `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y} ${localTailTip.x} ${localTailTip.y} Q ${cp.x} ${cp.y} ${p2.x} ${p2.y} `;
 
         return <Path data={pathData} {...getRenderProps(pass, true)} />;
     };
 
     const hasTextGlow = false;
+
+    // Multi-line on-canvas text editor (replaces the old single-line window.prompt).
+    // Overlays a textarea aligned to the balloon; Enter commits, Shift+Enter adds a line, Esc cancels.
+    const openTextEditor = () => {
+        const node = groupRef.current;
+        const stage = node?.getStage?.();
+        if (!node || !stage) return;
+        const container = stage.container();
+        const box = container.getBoundingClientRect();
+        const scale = stage.scaleX() || 1;
+        const abs = node.getAbsolutePosition(); // group origin = balloon center
+
+        const ta = document.createElement('textarea');
+        document.body.appendChild(ta);
+        ta.value = balloon.text || '';
+        Object.assign(ta.style, {
+            position: 'absolute',
+            top: `${box.top + window.scrollY + abs.y - halfH * scale}px`,
+            left: `${box.left + window.scrollX + abs.x - halfW * scale}px`,
+            width: `${Math.max(60, w * scale)}px`,
+            height: `${Math.max(40, h * scale)}px`,
+            fontSize: `${fontSize * scale}px`,
+            fontFamily: String(fontFamily),
+            fontStyle: konvaFontStyle.includes('italic') ? 'italic' : 'normal',
+            fontWeight: konvaFontStyle.includes('bold') ? 'bold' : 'normal',
+            textAlign: String(textAlign),
+            color: String(textColor),
+            lineHeight: '1.2',
+            padding: `${padding * scale}px`,
+            margin: '0',
+            border: '2px solid #00D1FF',
+            borderRadius: '4px',
+            outline: 'none',
+            resize: 'none',
+            overflow: 'hidden',
+            background: 'rgba(255,255,255,0.96)',
+            boxSizing: 'border-box',
+            zIndex: '10000',
+        } as CSSStyleDeclaration);
+        ta.focus();
+        ta.select();
+
+        let done = false;
+        const cleanup = () => {
+            ta.removeEventListener('blur', onBlur);
+            ta.removeEventListener('keydown', onKey);
+            if (ta.parentNode) ta.parentNode.removeChild(ta);
+        };
+        const commit = () => { if (done) return; done = true; onChange(balloon.id, { text: ta.value }); cleanup(); };
+        const cancel = () => { if (done) return; done = true; cleanup(); };
+        const onBlur = () => commit();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        };
+        ta.addEventListener('blur', onBlur);
+        ta.addEventListener('keydown', onKey);
+    };
 
     return (
         <React.Fragment>
@@ -699,10 +793,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                     onSelect(balloon.id, e);
                     e.cancelBubble = true;
                 }}
-                onDblClick={() => {
-                    const newText = window.prompt('Edit Bubble Text:', balloon.text);
-                    if (newText !== null) onChange(balloon.id, { text: newText });
-                }}
+                onDblClick={openTextEditor}
+                onDblTap={openTextEditor}
                 onDragStart={() => {
                     undoPause();
                     isFirstBalloonDragMove.current = true;
@@ -763,34 +855,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 {renderBody('base')}
                 {renderTail('base')}
 
-                {/* Interactive tail handle: drag toward character's mouth; body stays in place */}
-                {balloon.hasTail && balloon.isSelected && (
-                    <Circle
-                        ref={tipRef}
-                        x={localTailTip.x}
-                        y={localTailTip.y}
-                        radius={10}
-                        fill={ACCENT_GOLD_SOLID}
-                        stroke="#000"
-                        strokeWidth={1}
-                        draggable
-                        listening
-                        onDragMove={() => {
-                            if (tipRef.current) {
-                                tipRef.current.getLayer()?.batchDraw();
-                            }
-                        }}
-                        onDragEnd={() => {
-                            if (tipRef.current) {
-                                const tx = tipRef.current.x();
-                                const ty = tipRef.current.y();
-                                onChange(balloon.id, { tailTip: { x: tx, y: ty } });
-                            }
-                        }}
-                        onClick={(e) => e.cancelBubble = true}
-                        onTap={(e) => e.cancelBubble = true}
-                    />
-                )}
+                {/* Single interactive tail handle is rendered later (radius 8, live drag update).
+                    The former duplicate here shared the same ref and read the wrong node on drag end. */}
 
                 {textureImg && renderBody('texture')}
                 {textureImg && renderTail('texture')}

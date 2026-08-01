@@ -20,7 +20,6 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         pageSettings,
         setPageSettings,
         currentPageId,
-        addOverlay,
         pages,
         templates,
         saveBlankPanelTemplate,
@@ -230,28 +229,6 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             </div>
                         )}
                     </div>
-                </div>
-
-                <div className="settings-group">
-                    <h3 className={`text-sm font-semibold mb-4 uppercase tracking-wider ${rb ? 'text-inherit' : 'text-white/70'}`}>Overlays</h3>
-                    <p className={`text-xs mb-2 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Floating images above panels. Select on canvas to move/rotate.</p>
-                    <button
-                        type="button"
-                        disabled={!currentPageId}
-                        onClick={() => currentPageId && addOverlay(currentPageId, {
-                            type: 'image',
-                            src: 'https://via.placeholder.com/120',
-                            x: 200,
-                            y: 200,
-                            rotation: 0,
-                            scaleX: 1,
-                            scaleY: 1,
-                            zIndex: 0
-                        })}
-                        className={`w-full px-3 py-2 rounded border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
-                    >
-                        Add overlay (test image)
-                    </button>
                 </div>
 
                 <div>

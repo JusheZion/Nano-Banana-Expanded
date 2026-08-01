@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Group, Image, Text, Transformer } from 'react-konva';
 import useImage from 'use-image';
 import type { OverlayObject } from '../../../stores/comicStore';
+import { useArcsResolvedSrc } from '@/shared/hooks/useArcsResolvedSrc';
 
 const DEFAULT_SIZE = 120;
 const SFX_FONT_SIZE = 48;
@@ -23,7 +24,18 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
 }) => {
     const groupRef = useRef<any>(null);
     const trRef = useRef<any>(null);
-    const [image] = useImage(overlay.src || '', 'anonymous');
+    // IMG-6: resolve ARCS storage paths to signed URLs (matching ComicPanel) so overlays sourced
+    // from generated/library assets actually load instead of rendering blank.
+    const resolvedSrc = useArcsResolvedSrc(overlay.src || '');
+    const [image] = useImage(resolvedSrc || '', 'anonymous');
+
+    // IMG-4: size the overlay to the image's natural aspect (longest edge = DEFAULT_SIZE) instead of
+    // forcing a 120x120 square that squashes non-square art.
+    const naturalW = (image && (image.naturalWidth || image.width)) || DEFAULT_SIZE;
+    const naturalH = (image && (image.naturalHeight || image.height)) || DEFAULT_SIZE;
+    const longestEdge = Math.max(naturalW, naturalH) || DEFAULT_SIZE;
+    const imgW = (naturalW / longestEdge) * DEFAULT_SIZE;
+    const imgH = (naturalH / longestEdge) * DEFAULT_SIZE;
 
     useEffect(() => {
         if (!trRef.current || !groupRef.current) return;
@@ -86,9 +98,9 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
                 ) : (
                     <Image
                         image={image}
-                        width={DEFAULT_SIZE}
-                        height={DEFAULT_SIZE}
-                        offset={{ x: DEFAULT_SIZE / 2, y: DEFAULT_SIZE / 2 }}
+                        width={imgW}
+                        height={imgH}
+                        offset={{ x: imgW / 2, y: imgH / 2 }}
                         listening={!isSelected}
                     />
                 )}
