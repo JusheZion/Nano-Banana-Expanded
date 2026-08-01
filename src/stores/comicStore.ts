@@ -293,7 +293,8 @@ function undoSnapshotSlice(state: ComicState): string {
         colorFavorites: state.colorFavorites,
         colorRecentlyUsed: state.colorRecentlyUsed,
         groupsByPage: state.groupsByPage,
-        selectedElementIds: state.selectedElementIds,
+        // SYS-6: selection is intentionally excluded — including it made every click a new undo step,
+        // so Ctrl+Z reverted the selection instead of the last real edit.
     });
 }
 
@@ -813,14 +814,16 @@ export const useComicStore = create<ComicState>()(
                                 ? {
                                     ...p,
                                     balloons: [...p.balloons, {
+                                        // Defaults first so caller-supplied balloonData can override them;
+                                        // id/type are forced last.
                                         fontFamily: genre.fontFamily,
-                                        ...balloonData,
-                                        id: newId,
-                                        type: 'balloon',
                                         isVisible: true,
                                         isLocked: false,
                                         autoSize: false,
-                                        padding: 20
+                                        padding: 20,
+                                        ...balloonData,
+                                        id: newId,
+                                        type: 'balloon',
                                     }],
                                     layerOrder: [...p.layerOrder, newId]
                                 }

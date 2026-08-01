@@ -7,6 +7,7 @@ import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { FloatingAsset } from '../components/FloatingAsset';
+import { useArcsResolvedSrc } from '@/shared/hooks/useArcsResolvedSrc';
 import { splitConvexPolygon, pointInPanel } from '../utils/geometry';
 import { getGutterAwareSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonInstance } from '../../../types/balloon';
@@ -114,7 +115,10 @@ export const ComicCanvas: React.FC = () => {
         openContextMenu
     } = useComicStore();
 
-    const [bgImage] = useImage(pageSettings?.backgroundImage ?? '', 'anonymous');
+    // IMG-6: resolve ARCS storage paths to signed URLs (matching panels) so a background set from a
+    // generated/library asset actually loads instead of rendering blank.
+    const resolvedBgSrc = useArcsResolvedSrc(pageSettings?.backgroundImage ?? '');
+    const [bgImage] = useImage(resolvedBgSrc ?? '', 'anonymous');
 
     // Local state for drawing
     const isDrawingRef = useRef(false);
@@ -134,6 +138,18 @@ export const ComicCanvas: React.FC = () => {
     if (!pages || pages.length === 0) return <div className="text-white p-4">Loading Comic Engine...</div>;
 
     const stageRef = useRef<any>(null);
+
+    // BAL-7: Konva rasterizes text to canvas immediately, so a balloon added before its web font
+    // finishes loading paints in a fallback font. Force a redraw once fonts are ready / finish loading.
+    useEffect(() => {
+        const fonts = (document as any)?.fonts;
+        if (!fonts) return;
+        let cancelled = false;
+        const redraw = () => { if (!cancelled) stageRef.current?.batchDraw?.(); };
+        fonts.ready?.then?.(redraw);
+        fonts.addEventListener?.('loadingdone', redraw);
+        return () => { cancelled = true; fonts.removeEventListener?.('loadingdone', redraw); };
+    }, []);
 
     const handleStageMouseDown = (e: any) => {
         const stage = e.target.getStage();
@@ -321,18 +337,40 @@ export const ComicCanvas: React.FC = () => {
             const localEnd = { x: end.x - offset.x, y: end.y - offset.y };
 
             page.panels.forEach(panel => {
-                if (panel.shapeType !== 'polygon' || !panel.points || panel.points.length < 3) return;
+                // PAN-5: the knife works on any convex panel. Rect panels (incl. every image panel)
+                // have no `points`, so build a 4-corner polygon for them before splitting.
+                // Ellipse/half/quarter/sector are non-polygonal — skip those.
+                let points = panel.points && panel.points.length >= 3 ? panel.points : null;
+                if (!points) {
+                    if (!panel.shapeType || panel.shapeType === 'rect' || panel.shapeType === 'polygon') {
+                        points = [
+                            { x: 0, y: 0 },
+                            { x: panel.width, y: 0 },
+                            { x: panel.width, y: panel.height },
+                            { x: 0, y: panel.height },
+                        ];
+                    } else {
+                        return;
+                    }
+                }
 
                 const panelLocalStart = { x: localStart.x - panel.x, y: localStart.y - panel.y };
                 const panelLocalEnd = { x: localEnd.x - panel.x, y: localEnd.y - panel.y };
 
-                const splitResult = splitConvexPolygon(panel.points, panelLocalStart, panelLocalEnd);
+                const splitResult = splitConvexPolygon(points, panelLocalStart, panelLocalEnd);
                 if (splitResult) {
                     const [poly1, poly2] = splitResult;
                     removeElement(page.id, panel.id);
-                    const { id, type, ...panelProps } = panel;
-                    addPanel(page.id, { ...panelProps, points: poly1 });
-                    addPanel(page.id, { ...panelProps, points: poly2 });
+                    const { id: _id, type: _type, ...panelProps } = panel;
+                    // PAN-6: recompute each half's width/height from its polygon bbox instead of
+                    // inheriting the parent's full size (which made split halves clamp/jump wrongly).
+                    const bboxSize = (pts: { x: number; y: number }[]) => {
+                        const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+                        return { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+                    };
+                    const b1 = bboxSize(poly1), b2 = bboxSize(poly2);
+                    addPanel(page.id, { ...panelProps, shapeType: 'polygon', points: poly1, width: b1.width, height: b1.height });
+                    addPanel(page.id, { ...panelProps, shapeType: 'polygon', points: poly2, width: b2.width, height: b2.height });
                 }
             });
         });
@@ -501,7 +539,7 @@ export const ComicCanvas: React.FC = () => {
                     const pageLocalY = logicalY - offset.y;
                     const page = pages[pageIndex];
                     const hitPanel = page.panels.find((p: Panel) =>
-                        pointInPanel(p.shapeType, p.x, p.y, p.width, p.height, p.points, pageLocalX, pageLocalY)
+                        pointInPanel(p.shapeType, p.x, p.y, p.width, p.height, p.points, pageLocalX, pageLocalY, p.centralAngle)
                     );
                     if (hitPanel) {
                         updatePanel(page.id, hitPanel.id, { imageUrl: url });
@@ -509,12 +547,14 @@ export const ComicCanvas: React.FC = () => {
                         addOverlay(page.id, {
                             type: 'image',
                             src: url,
-                            x: pageLocalX - 60,
-                            y: pageLocalY - 60,
+                            // IMG-7: the FloatingAsset group origin is the image center (offset applied
+                            // there), so drop at the cursor directly — the old -60 double-offset it.
+                            x: pageLocalX,
+                            y: pageLocalY,
                             rotation: 0,
                             scaleX: 1,
                             scaleY: 1,
-                            zIndex: 0
+                            zIndex: (page.overlays || []).length
                         });
                     }
                 }}
@@ -603,11 +643,21 @@ export const ComicCanvas: React.FC = () => {
                             const offset = getLayoutPosition(i, layoutMode);
                             return (
                                 <Group key={`elements-${page.id}`} name={`page-${page.id}`} x={offset.x} y={offset.y}>
-                                    {/* Z-order: panels first (bottom), then balloons + drawings (above panels), overlays rendered later */}
+                                    {/* SYS-2: single pass in layerOrder so panels/balloons/drawings can be freely
+                                        restacked (LayerTree + Bring-to-Front/Send-to-Back) instead of panels
+                                        always sitting beneath balloons. Any element missing from layerOrder is
+                                        appended so nothing disappears. Overlays still render in a later pass. */}
                                     {(() => {
                                         const order = page.layerOrder || [];
-                                        const panelIds = order.filter(id => page.panels.some(p => p.id === id));
-                                        const nonPanelIds = order.filter(id => !page.panels.some(p => p.id === id));
+                                        const allIds = [
+                                            ...page.panels.map(p => p.id),
+                                            ...((page.drawings || []).map(d => d.id)),
+                                            ...((page.balloons || []).map(b => b.id)),
+                                        ];
+                                        const orderedIds = [
+                                            ...order.filter(id => allIds.includes(id)),
+                                            ...allIds.filter(id => !order.includes(id)),
+                                        ];
                                         const render = (elementId: string) => {
                                             const panel = page.panels.find(p => p.id === elementId);
                                             if (panel) {
@@ -631,7 +681,14 @@ export const ComicCanvas: React.FC = () => {
                                                                 // positions the panel actually snaps to — including page-center,
                                                                 // true page edges, and one-gutter offsets. The plain getSnapLines
                                                                 // only knew sibling edges, so centering/bleed snaps drew no line.
-                                                                const { snapLines } = getGutterAwareSnapLines(newAttrs.x, newAttrs.y, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id, gutterSize);
+                                                                // PAN-8: for polygons whose points don't start at the group origin,
+                                                                // offset by the bbox min so guide lines land on the visible edges.
+                                                                let gx = newAttrs.x, gy = newAttrs.y;
+                                                                if (panel.shapeType === 'polygon' && panel.points && panel.points.length) {
+                                                                    gx += Math.min(...panel.points.map(pt => pt.x));
+                                                                    gy += Math.min(...panel.points.map(pt => pt.y));
+                                                                }
+                                                                const { snapLines } = getGutterAwareSnapLines(gx, gy, panel.width, panel.height, [...page.panels, ...(page.balloons || [])], panel.id, gutterSize);
                                                                 setSnapLines({ lines: snapLines, offset });
                                                             }
                                                         }}
@@ -666,12 +723,7 @@ export const ComicCanvas: React.FC = () => {
                                             }
                                             return null;
                                         };
-                                        return (
-                                            <>
-                                                {panelIds.map(render)}
-                                                {nonPanelIds.map(render)}
-                                            </>
-                                        );
+                                        return <>{orderedIds.map(render)}</>;
                                     })()}
 
                                     {/* Real-time drawing line preview for this specific page */}
@@ -695,7 +747,8 @@ export const ComicCanvas: React.FC = () => {
                             const offset = getLayoutPosition(i, layoutMode);
                             return (
                                 <Group key={`overlay-${page.id}`} x={offset.x} y={offset.y}>
-                                    {(page.overlays || []).map((overlay) => (
+                                    {/* IMG-7: honor overlay zIndex for stacking (was raw array order). */}
+                                    {[...(page.overlays || [])].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map((overlay) => (
                                         <FloatingAsset
                                             key={overlay.id}
                                             overlay={overlay}

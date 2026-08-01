@@ -151,10 +151,11 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
             imgX = bboxMinX;
             imgY = bboxMinY;
         } else if (fillMode === 'center') {
-            imgScaleX = 1;
-            imgScaleY = 1;
-            imgX = bboxMinX + (bboxWidth - imgW) / 2;
-            imgY = bboxMinY + (bboxHeight - imgH) / 2;
+            // IMG-9: honor the zoom slider (was hard-coded to 1, so zoom did nothing in Center mode).
+            imgScaleX = imageZoom;
+            imgScaleY = imageZoom;
+            imgX = bboxMinX + (bboxWidth - imgW * imageZoom) / 2;
+            imgY = bboxMinY + (bboxHeight - imgH * imageZoom) / 2;
         } else if (fillMode === 'decal') {
             imgScaleX = panel.imageScale ?? 1;
             imgScaleY = panel.imageScale ?? 1;
@@ -830,7 +831,11 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 isFirstVertexOrEdgeDrag.current = false;
                             }
                             const newPoints = [...panel.points!];
-                            newPoints[i] = { x: e.target.x(), y: e.target.y() };
+                            // PAN-4: keep the dragged vertex on-page.
+                            newPoints[i] = {
+                                x: Math.max(0, Math.min(800, e.target.x())),
+                                y: Math.max(0, Math.min(1200, e.target.y())),
+                            };
                             onChange({ points: newPoints });
                             undoPause();
                         }}
@@ -887,21 +892,24 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                     undoResume();
                                     isFirstVertexOrEdgeDrag.current = false;
                                 }
-                                const pos = e.target.getStage()?.getPointerPosition();
+                                const rawPos = e.target.getStage()?.getPointerPosition();
                                 const startPos = (e.target as any).getAttr('startPos');
                                 const startPoints = (e.target as any).getAttr('startPoints');
 
-                                if (pos && startPos && startPoints) {
-                                    // Calculate delta relative to the drag start
-                                    const dx = pos.x - startPos.x;
-                                    const dy = pos.y - startPos.y;
+                                if (rawPos && startPos && startPoints) {
+                                    const state = useComicStore.getState();
+                                    // PAN-3: convert screen-space pointer to logical (page) coords so edge
+                                    // dragging tracks the cursor 1:1 at any zoom (was using raw pixels,
+                                    // moving at zoom-x speed and never snapping when zoomed).
+                                    const zoom = state.zoomLevel || 1;
+                                    const pos = { x: rawPos.x / zoom, y: rawPos.y / zoom };
+                                    const start = { x: startPos.x / zoom, y: startPos.y / zoom };
+                                    const dx = pos.x - start.x;
+                                    const dy = pos.y - start.y;
 
                                     // Apply delta to the immutable start points to avoid React state compounding
                                     const newPoints = [...startPoints];
 
-                                    // Edge dragging snaps based on the mouse position (simplified)
-                                    // A more robust way is to snap the line itself, but snapping the pointer gives immediate feedback
-                                    const state = useComicStore.getState();
                                     const currentPage = state.pages.find(p => p.id === state.currentPageId);
                                     if (currentPage) {
                                         const siblings = [...currentPage.panels, ...(currentPage.balloons || [])];
@@ -909,14 +917,24 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                         const result = getVertexSnapLines(pos.x, pos.y, siblings, panel.id, gutter);
                                         onVertexSnap?.(result.snapLines);
                                         onDiagonalGuides?.(result.diagonalGuides);
-                                        const snapDx = result.newX - startPos.x;
-                                        const snapDy = result.newY - startPos.y;
+                                        const snapDx = result.newX - start.x;
+                                        const snapDy = result.newY - start.y;
                                         newPoints[i] = { x: startPoints[i].x + snapDx, y: startPoints[i].y + snapDy };
                                         newPoints[nextIndex] = { x: startPoints[nextIndex].x + snapDx, y: startPoints[nextIndex].y + snapDy };
                                     } else {
                                         newPoints[i] = { x: startPoints[i].x + dx, y: startPoints[i].y + dy };
                                         newPoints[nextIndex] = { x: startPoints[nextIndex].x + dx, y: startPoints[nextIndex].y + dy };
                                     }
+
+                                    // PAN-4: clamp the moved vertices on-page so an edge can't be dragged
+                                    // off the canvas (leaving stale geometry the group clamp can't recover).
+                                    const PAGE_W = 800, PAGE_H = 1200;
+                                    [i, nextIndex].forEach((k) => {
+                                        newPoints[k] = {
+                                            x: Math.max(0, Math.min(PAGE_W, newPoints[k].x)),
+                                            y: Math.max(0, Math.min(PAGE_H, newPoints[k].y)),
+                                        };
+                                    });
 
                                     onChange({ points: newPoints });
                                 }
