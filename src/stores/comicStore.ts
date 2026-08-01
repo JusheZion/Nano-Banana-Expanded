@@ -80,6 +80,11 @@ export interface PageSettings {
     backgroundColor: string;
     backgroundImage?: string;
     bgOpacity: number;
+    /** How the background image fits the page. Defaults to 'cover' (fills without distortion). */
+    bgFillMode?: 'cover' | 'contain' | 'stretch' | 'center';
+    /** Focus point (0..1) used to position the image within the page for cover/contain/center. Default 0.5/0.5. */
+    bgFocusX?: number;
+    bgFocusY?: number;
 }
 
 /** Floating asset on the stage (above panels, no panel clipping). type 'sfx' = stamp text (BOOM, ZAP, etc.) with gold fill + black outline. */
@@ -661,6 +666,20 @@ export const useComicStore = create<ComicState>()(
                     const baseGenre = GENRE_REGISTRY.find(g => g.id === state.currentGenreId) || GENRE_REGISTRY[0];
                     const genre = state.currentGenreId === 'custom' ? state.customGenre : baseGenre;
 
+                    // Clamp the new panel on-page. Toolbar/ribbon "Add Panel" positions at
+                    // lastCanvasPosition.x - width/2, which with no clamp lands panels half off the
+                    // left/top edge (into the dead area beside the page). This is the single choke-point
+                    // every caller flows through, mirroring insertImageIntoWorkspace's clamp.
+                    const PAGE_W = 800, PAGE_H = 1200;
+                    const pw = typeof panelData.width === 'number' && panelData.width > 0 ? panelData.width : 200;
+                    const ph = typeof panelData.height === 'number' && panelData.height > 0 ? panelData.height : 200;
+                    const clampedX = typeof panelData.x === 'number'
+                        ? Math.max(0, Math.min(Math.max(0, PAGE_W - pw), Math.round(panelData.x)))
+                        : panelData.x;
+                    const clampedY = typeof panelData.y === 'number'
+                        ? Math.max(0, Math.min(Math.max(0, PAGE_H - ph), Math.round(panelData.y)))
+                        : panelData.y;
+
                     return {
                         pages: state.pages.map((p: ComicPage) =>
                             p.id === pageId
@@ -670,6 +689,8 @@ export const useComicStore = create<ComicState>()(
                                         ...(genre.textureId !== undefined && { textureId: genre.textureId }),
                                         ...(genre.textureOpacity !== undefined && { textureOpacity: genre.textureOpacity }),
                                         ...panelData,
+                                        x: clampedX,
+                                        y: clampedY,
                                         id: newId,
                                         type: 'panel',
                                         isVisible: true,
@@ -1306,14 +1327,19 @@ export const useComicStore = create<ComicState>()(
                 })),
 
                 serializeProject: () => {
-                    const { pages, projectSettings, gutterSize, pageSettings } = useComicStore.getState();
+                    const { pages, projectSettings, gutterSize, pageSettings, groupsByPage, templates, currentGenreId, customGenre } = useComicStore.getState();
                     const data = {
-                        version: "2.0",
+                        version: "2.1",
                         type: "comic-project",
                         projectSettings,
                         gutterSize,
                         pageSettings,
-                        pages
+                        pages,
+                        // v2.1: preserve grouping, saved templates, and theme so save/load round-trips them
+                        groupsByPage,
+                        templates,
+                        currentGenreId,
+                        customGenre
                     };
                     const json = JSON.stringify(data, null, 2);
                     const blob = new Blob([json], { type: 'application/json' });
@@ -1333,7 +1359,17 @@ export const useComicStore = create<ComicState>()(
                             set({
                                 pages: data.pages,
                                 ...(data.gutterSize != null && { gutterSize: data.gutterSize }),
-                                ...(data.pageSettings != null && { pageSettings: { ...useComicStore.getState().pageSettings, ...data.pageSettings } })
+                                ...(data.pageSettings != null && { pageSettings: { ...useComicStore.getState().pageSettings, ...data.pageSettings } }),
+                                // v2.1: restore grouping/templates/theme. Reset per-project grouping to the
+                                // loaded value (never carry stale groups that reference the old project's IDs).
+                                groupsByPage: data.groupsByPage ?? {},
+                                ...(data.templates != null && { templates: data.templates }),
+                                ...(data.currentGenreId != null && { currentGenreId: data.currentGenreId }),
+                                ...(data.customGenre != null && { customGenre: data.customGenre }),
+                                // Loaded pages have fresh IDs — point the active page at the first one and
+                                // clear any selection left over from the previous project.
+                                currentPageId: data.pages[0]?.id ?? null,
+                                selectedElementIds: []
                             });
                             // New project load must not share undo/redo with previous session
                             undoClear();
@@ -1577,7 +1613,26 @@ export const useComicStore = create<ComicState>()(
                         }
                         return null;
                     },
-                    setItem: (name: string, value: string) => { localStorage.setItem(name, value); },
+                    setItem: (name: string, value: string) => {
+                        try {
+                            localStorage.setItem(name, value);
+                        } catch (err) {
+                            // Almost always QuotaExceededError: persisted state (esp. base64-encoded
+                            // imported images / background) blew the ~5MB localStorage budget. Previously
+                            // this threw and silently killed autosave with no warning -> lost work.
+                            // Keep the app alive and surface a visible warning so the user can export.
+                            console.warn(
+                                '[arcs-comic] Autosave to browser storage failed — storage is full. ' +
+                                'Recent changes are NOT saved locally. Export your project to a file to avoid losing work.',
+                                err
+                            );
+                            try {
+                                window.dispatchEvent(new CustomEvent('arcs:storage-quota-exceeded', {
+                                    detail: { name, approxBytes: value.length }
+                                }));
+                            } catch { /* non-browser env */ }
+                        }
+                    },
                     removeItem: (name: string) => { localStorage.removeItem(name); },
                 })),
                 merge: (persisted, current) => {

@@ -100,7 +100,7 @@ describe('comicStore project serialization', () => {
     expect(serializedBlobs).toHaveLength(1);
     const serialized = JSON.parse(await serializedBlobs[0].text());
     expect(serialized).toMatchObject({
-      version: '2.0',
+      version: '2.1',
       type: 'comic-project',
       pages: [
         {
@@ -196,6 +196,70 @@ describe('comicStore project serialization', () => {
       ],
       layerOrder: ['legacy-panel', 'legacy-balloon'],
     });
+  });
+
+  it('round-trips groups, templates, and theme through save/load (SYS-3/SYS-4)', async () => {
+    const serializedBlobs: Blob[] = [];
+    const NativeBlob = Blob;
+    class CapturingBlob extends NativeBlob {
+      constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options);
+        serializedBlobs.push(this);
+      }
+    }
+    vi.stubGlobal('Blob', CapturingBlob);
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:comic-project'),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    useComicStore.setState({
+      ...useComicStore.getState(),
+      groupsByPage: { 'page-1': [['panel-1', 'balloon-1']] },
+      templates: [{ id: 'tmpl-1', name: 'My Template', panels: [] } as never],
+      currentGenreId: 'noir' as never,
+    });
+
+    useComicStore.getState().serializeProject();
+    const serialized = JSON.parse(await serializedBlobs[0].text());
+    expect(serialized.groupsByPage).toEqual({ 'page-1': [['panel-1', 'balloon-1']] });
+    expect(serialized.templates).toHaveLength(1);
+    expect(serialized.currentGenreId).toBe('noir');
+
+    // Mutate away from the saved state, then load it back.
+    useComicStore.setState({
+      ...useComicStore.getState(),
+      groupsByPage: {},
+      templates: [],
+      currentGenreId: 'none' as never,
+    });
+    useComicStore.getState().loadProject(JSON.stringify(serialized));
+
+    const st = useComicStore.getState();
+    expect(st.groupsByPage).toEqual({ 'page-1': [['panel-1', 'balloon-1']] });
+    expect(st.templates).toHaveLength(1);
+    expect(st.currentGenreId).toBe('noir');
+  });
+
+  it('resets active page and clears selection on load so no stale IDs linger (SYS-5)', () => {
+    useComicStore.setState({
+      ...useComicStore.getState(),
+      currentPageId: 'stale-page',
+      selectedElementIds: ['stale-sel'],
+      groupsByPage: { 'stale-page': [['x', 'y']] },
+    });
+
+    useComicStore.getState().loadProject(JSON.stringify({
+      type: 'comic-project',
+      pages: [{ id: 'fresh-page', panels: [], balloons: [], drawings: [], overlays: [], background: '#fff', layerOrder: [] }],
+    }));
+
+    const st = useComicStore.getState();
+    expect(st.currentPageId).toBe('fresh-page');
+    expect(st.selectedElementIds).toEqual([]);
+    // Loading a project without groups must clear stale grouping, not carry it over.
+    expect(st.groupsByPage).toEqual({});
   });
 
   it('preserves panel image fields when shape and geometry change', () => {

@@ -365,6 +365,19 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                             <PrecisionSlider min={-500} max={500} step={10} value={selectedPanels[0]?.imageOffsetY ?? 0} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageOffsetY: v }))} width={60} showPrecisionButtons={false} showTicks={false} aria-label="Offset Y" />
                         </div>
                     )}
+
+                    {/* IMG-2: reframe controls for cover/contain (previously only 'decal' had any). The
+                        panel render already honors imageScale (zoom) and imageFocusX/Y for these modes. */}
+                    {(selectedPanels[0]?.imageFillMode === 'cover' || selectedPanels[0]?.imageFillMode === 'contain' || !selectedPanels[0]?.imageFillMode) && (
+                        <div className="flex flex-nowrap items-center gap-1 ml-1 shrink-0">
+                            <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }} title="Zoom">Z</span>
+                            <PrecisionSlider min={0.1} max={3} step={0.1} value={selectedPanels[0]?.imageScale ?? 1} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageScale: v }))} width={70} showPrecisionButtons={false} showTicks={false} aria-label="Image zoom" />
+                            <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }} title="Horizontal position">X</span>
+                            <PrecisionSlider min={0} max={1} step={0.05} value={selectedPanels[0]?.imageFocusX ?? 0.5} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageFocusX: v }))} width={60} showPrecisionButtons={false} showTicks={false} aria-label="Image focus X" />
+                            <span className="text-[9px] w-3 shrink-0" style={{ color: RIBBON_MUTED }} title="Vertical position">Y</span>
+                            <PrecisionSlider min={0} max={1} step={0.05} value={selectedPanels[0]?.imageFocusY ?? 0.5} onChange={(v) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageFocusY: v }))} width={60} showPrecisionButtons={false} showTicks={false} aria-label="Image focus Y" />
+                        </div>
+                    )}
                 </div>
             )}
 

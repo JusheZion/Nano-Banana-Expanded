@@ -84,6 +84,14 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
+  /** Shown when autosave to localStorage fails (quota exceeded) so the user knows to export before losing work. */
+  const [storageQuotaExceeded, setStorageQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const onQuota = () => setStorageQuotaExceeded(true);
+    window.addEventListener('arcs:storage-quota-exceeded', onQuota);
+    return () => window.removeEventListener('arcs:storage-quota-exceeded', onQuota);
+  }, []);
 
   const currentPage = pages.find(p => p.id === currentPageId);
   const hasPanelSelected = Boolean(currentPage?.panels.some(p => selectedElementIds.includes(p.id)));
@@ -431,6 +439,26 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
             </button>
           ))}
         </header>
+
+        {storageQuotaExceeded && (
+          <div
+            role="alert"
+            className="shrink-0 px-4 py-2 flex items-center justify-between gap-3 text-sm font-medium"
+            style={{ background: '#7f1d1d', color: '#fff' }}
+          >
+            <span>
+              ⚠ Browser storage is full — your work is no longer auto-saving. Use <strong>Home ▸ Save</strong> to export your project to a file now, then reload to free space.
+            </span>
+            <button
+              type="button"
+              onClick={() => setStorageQuotaExceeded(false)}
+              className="px-2 py-0.5 rounded border border-white/40 hover:bg-white/10 shrink-0"
+              aria-label="Dismiss storage warning"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {isGenreOpen && (
           <div ref={themeDropdownRef} className="fixed left-4 top-10 z-[100]" role="dialog" aria-label="Studio themes">
