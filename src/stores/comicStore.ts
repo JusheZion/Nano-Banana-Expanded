@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { comicIdbStorage } from '../shared/lib/idbComicStorage';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
@@ -1622,40 +1623,10 @@ export const useComicStore = create<ComicState>()(
             }),
             {
                 name: 'arcs-comic',
-                storage: createJSONStorage(() => ({
-                    getItem: (name: string): string | null => {
-                        if (name !== 'arcs-comic') return localStorage.getItem(name);
-                        const current = localStorage.getItem('arcs-comic');
-                        if (current != null && current !== '') return current;
-                        const legacy = localStorage.getItem('nano-banana-comic');
-                        if (legacy != null && legacy !== '') {
-                            localStorage.setItem('arcs-comic', legacy);
-                            return legacy;
-                        }
-                        return null;
-                    },
-                    setItem: (name: string, value: string) => {
-                        try {
-                            localStorage.setItem(name, value);
-                        } catch (err) {
-                            // Almost always QuotaExceededError: persisted state (esp. base64-encoded
-                            // imported images / background) blew the ~5MB localStorage budget. Previously
-                            // this threw and silently killed autosave with no warning -> lost work.
-                            // Keep the app alive and surface a visible warning so the user can export.
-                            console.warn(
-                                '[arcs-comic] Autosave to browser storage failed — storage is full. ' +
-                                'Recent changes are NOT saved locally. Export your project to a file to avoid losing work.',
-                                err
-                            );
-                            try {
-                                window.dispatchEvent(new CustomEvent('arcs:storage-quota-exceeded', {
-                                    detail: { name, approxBytes: value.length }
-                                }));
-                            } catch { /* non-browser env */ }
-                        }
-                    },
-                    removeItem: (name: string) => { localStorage.removeItem(name); },
-                })),
+                // Persist to IndexedDB (hundreds of MB / GB) instead of localStorage (~5MB), so a
+                // single base64 image can no longer fill the quota. Migrates existing localStorage
+                // data on first load and falls back to localStorage where IndexedDB is unavailable.
+                storage: createJSONStorage(() => comicIdbStorage),
                 merge: (persisted, current) => {
                     const p = persisted as Partial<ComicState>;
                     const mergedProject = { ...current.projectSettings, ...p.projectSettings };
