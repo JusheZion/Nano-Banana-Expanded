@@ -110,6 +110,15 @@ export interface ComicPage {
     overlays?: OverlayObject[];
     guidedBalloonSeeds?: GuidedComicBalloonSeed[];
     background: string;
+    /** Per-page background image (data URL or resolvable src). Independent of other pages. */
+    backgroundImage?: string;
+    /** How this page's background image fits. Defaults to 'cover'. */
+    bgFillMode?: 'cover' | 'contain' | 'stretch' | 'center';
+    /** Focus point (0..1) for positioning the background image. Default 0.5/0.5. */
+    bgFocusX?: number;
+    bgFocusY?: number;
+    /** Opacity (0..1) of this page's background image. Default 1. */
+    bgOpacity?: number;
     layerOrder: string[]; // Order of IDs from back to front
     /** When true, gutter snapping is disabled for this page (full-bleed cover). */
     isCover?: boolean;
@@ -254,6 +263,8 @@ interface ComicState {
     setGutterSize: (size: number) => void;
     setPageSettings: (settings: Partial<PageSettings>) => void;
     setPageCover: (pageId: string, isCover: boolean) => void;
+    /** Update a single page's background image + fit settings (per-page, not global). */
+    setPageBackground: (pageId: string, patch: Partial<Pick<ComicPage, 'backgroundImage' | 'bgFillMode' | 'bgFocusX' | 'bgFocusY' | 'bgOpacity'>>) => void;
     addOverlay: (pageId: string, overlay: Omit<OverlayObject, 'id'>) => void;
     updateOverlay: (pageId: string, overlayId: string, updates: Partial<OverlayObject>) => void;
     removeOverlay: (pageId: string, overlayId: string) => void;
@@ -749,6 +760,9 @@ export const useComicStore = create<ComicState>()(
                         width,
                         height,
                         imageUrl,
+                        // Default to 'contain' so an imported image shows in full (aspect preserved,
+                        // never cropped/out-of-scale). Users can switch to cover/etc. per panel.
+                        imageFillMode: 'contain',
                         prompt: options?.sourceLabel,
                         isVisible: true,
                         isLocked: false,
@@ -1292,6 +1306,10 @@ export const useComicStore = create<ComicState>()(
 
                 setPageCover: (pageId: string, isCover: boolean) => set((state: ComicState) => ({
                     pages: state.pages.map(p => p.id === pageId ? { ...p, isCover } : p)
+                })),
+
+                setPageBackground: (pageId, patch) => set((state: ComicState) => ({
+                    pages: state.pages.map(p => p.id === pageId ? { ...p, ...patch } : p)
                 })),
 
                 addOverlay: (pageId: string, overlay: Omit<OverlayObject, 'id'>) => set((state: ComicState) => {

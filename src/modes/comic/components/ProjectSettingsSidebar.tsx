@@ -19,6 +19,7 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         setGutterSize,
         pageSettings,
         setPageSettings,
+        setPageBackground,
         currentPageId,
         pages,
         templates,
@@ -26,11 +27,20 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         applyTemplate
     } = useComicStore();
 
+    const currentPage = pages.find(p => p.id === currentPageId);
+    // Per-page background: prefer this page's own image; fall back to the legacy global one.
+    const pageBgImage = currentPage?.backgroundImage ?? pageSettings?.backgroundImage;
+    const pageBgFillMode = currentPage?.bgFillMode ?? 'cover';
+    const pageBgFocusX = currentPage?.bgFocusX ?? 0.5;
+    const pageBgFocusY = currentPage?.bgFocusY ?? 0.5;
+    const pageBgOpacity = currentPage?.bgOpacity ?? pageSettings?.bgOpacity ?? 1;
+
     const handleUploadBg = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (!file || !currentPageId) return;
         const reader = new FileReader();
-        reader.onload = () => setPageSettings({ backgroundImage: reader.result as string });
+        // Set THIS page's background only (was global before).
+        reader.onload = () => setPageBackground(currentPageId, { backgroundImage: reader.result as string });
         reader.readAsDataURL(file);
         e.target.value = '';
     };
@@ -120,10 +130,10 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                                 min={0}
                                 max={1}
                                 step={0.05}
-                                value={pageSettings?.bgOpacity ?? 1}
-                                onChange={(v) => setPageSettings({ bgOpacity: v })}
+                                value={pageBgOpacity}
+                                onChange={(v) => currentPageId && setPageBackground(currentPageId, { bgOpacity: v })}
                                 label="Background opacity"
-                                valueLabel={`${Math.round((pageSettings?.bgOpacity ?? 1) * 100)}%`}
+                                valueLabel={`${Math.round(pageBgOpacity * 100)}%`}
                                 width="100%"
                                 showTicks={true}
                                 tickCount={5}
@@ -133,6 +143,7 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             />
                         </div>
                         <div>
+                            <p className={`text-[11px] mb-1.5 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Background image applies to <strong>this page only</strong>.</p>
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -142,17 +153,18 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                             />
                             <button
                                 type="button"
+                                disabled={!currentPageId}
                                 onClick={() => fileInputRef.current?.click()}
-                                className={`w-full px-3 py-2 rounded border text-sm transition-colors ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
+                                className={`w-full px-3 py-2 rounded border text-sm transition-colors disabled:opacity-50 ${rb ? 'border-[#002366]/30 text-inherit hover:bg-[#002366]/10' : 'border-white/20 text-white/80 hover:bg-white/10'}`}
                             >
-                                Upload BG
+                                Upload BG for this page
                             </button>
-                            {pageSettings?.backgroundImage && (
+                            {pageBgImage && (
                                 <>
                                     <label className={`block text-xs uppercase tracking-widest mt-3 mb-1 ${rb ? 'text-inherit opacity-70' : 'text-white/50'}`}>Fit</label>
                                     <select
-                                        value={pageSettings?.bgFillMode ?? 'cover'}
-                                        onChange={(e) => setPageSettings({ bgFillMode: e.target.value as 'cover' | 'contain' | 'stretch' | 'center' })}
+                                        value={pageBgFillMode}
+                                        onChange={(e) => currentPageId && setPageBackground(currentPageId, { bgFillMode: e.target.value as 'cover' | 'contain' | 'stretch' | 'center' })}
                                         aria-label="Background image fit"
                                         className={`w-full border rounded px-2 py-1.5 text-sm ${rb ? 'bg-[#002366]/10 border-[#002366]/20 text-inherit' : 'bg-black/30 border-white/10 text-white'}`}
                                     >
@@ -161,23 +173,23 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                                         <option value="center">Center — original size, centered</option>
                                         <option value="stretch">Stretch — fill exactly (distorts)</option>
                                     </select>
-                                    {(pageSettings?.bgFillMode ?? 'cover') !== 'stretch' && (
+                                    {pageBgFillMode !== 'stretch' && (
                                         <div className="mt-2 space-y-2">
                                             <PrecisionSlider
                                                 min={0} max={1} step={0.05}
-                                                value={pageSettings?.bgFocusX ?? 0.5}
-                                                onChange={(v) => setPageSettings({ bgFocusX: v })}
+                                                value={pageBgFocusX}
+                                                onChange={(v) => currentPageId && setPageBackground(currentPageId, { bgFocusX: v })}
                                                 label="Horizontal position"
-                                                valueLabel={`${Math.round((pageSettings?.bgFocusX ?? 0.5) * 100)}%`}
+                                                valueLabel={`${Math.round(pageBgFocusX * 100)}%`}
                                                 width="100%" showPrecisionButtons={true}
                                                 aria-label="Background horizontal position"
                                             />
                                             <PrecisionSlider
                                                 min={0} max={1} step={0.05}
-                                                value={pageSettings?.bgFocusY ?? 0.5}
-                                                onChange={(v) => setPageSettings({ bgFocusY: v })}
+                                                value={pageBgFocusY}
+                                                onChange={(v) => currentPageId && setPageBackground(currentPageId, { bgFocusY: v })}
                                                 label="Vertical position"
-                                                valueLabel={`${Math.round((pageSettings?.bgFocusY ?? 0.5) * 100)}%`}
+                                                valueLabel={`${Math.round(pageBgFocusY * 100)}%`}
                                                 width="100%" showPrecisionButtons={true}
                                                 aria-label="Background vertical position"
                                             />
@@ -185,7 +197,7 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
                                     )}
                                     <button
                                         type="button"
-                                        onClick={() => setPageSettings({ backgroundImage: undefined })}
+                                        onClick={() => currentPageId && setPageBackground(currentPageId, { backgroundImage: undefined })}
                                         className="mt-2 w-full px-3 py-1.5 rounded border border-red-500/50 text-red-400 text-xs hover:bg-red-500/10"
                                     >
                                         Clear background image

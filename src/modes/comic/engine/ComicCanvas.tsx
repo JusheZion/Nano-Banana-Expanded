@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Line, Line as KonvaLine, Group, Image } from 'react-konva';
 import useImage from 'use-image';
 import { jsPDF } from 'jspdf';
-import { useComicStore, type Panel } from '../../../stores/comicStore';
+import { useComicStore, type Panel, type ComicPage } from '../../../stores/comicStore';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
@@ -67,6 +67,37 @@ const computeBackgroundImageRect = (
     };
 };
 
+/**
+ * Renders ONE page's own background image (per-page, not shared across the project).
+ * Falls back to the legacy global background (pageSettings) only when the page has none, so old
+ * saved projects keep working. Its own useImage call means each page can have a different image.
+ */
+const PageBackgroundImage: React.FC<{
+    page: ComicPage;
+    offsetX: number;
+    offsetY: number;
+    fallbackSrc?: string;
+    fallbackFillMode?: 'cover' | 'contain' | 'stretch' | 'center';
+    fallbackOpacity?: number;
+}> = ({ page, offsetX, offsetY, fallbackSrc, fallbackFillMode, fallbackOpacity }) => {
+    const usingOwn = !!page.backgroundImage;
+    const src = page.backgroundImage ?? fallbackSrc ?? '';
+    const resolved = useArcsResolvedSrc(src);
+    const [img] = useImage(resolved ?? '', 'anonymous');
+    if (!src || !img) return null;
+    const fillMode = usingOwn ? (page.bgFillMode ?? 'cover') : (fallbackFillMode ?? 'cover');
+    const focusX = usingOwn ? (page.bgFocusX ?? 0.5) : 0.5;
+    const focusY = usingOwn ? (page.bgFocusY ?? 0.5) : 0.5;
+    const opacity = usingOwn ? (page.bgOpacity ?? 1) : (fallbackOpacity ?? 1);
+    const rect = computeBackgroundImageRect(img, fillMode, focusX, focusY);
+    // Clip to the page so cover/center overflow doesn't bleed onto neighboring pages.
+    return (
+        <Group x={offsetX} y={offsetY} clipX={0} clipY={0} clipWidth={PAGE_W} clipHeight={PAGE_H} listening={false}>
+            <Image image={img} x={rect.x} y={rect.y} width={rect.width} height={rect.height} opacity={opacity} listening={false} />
+        </Group>
+    );
+};
+
 // Coordinate helper for Multi-Page layout
 const getLayoutPosition = (index: number, mode: 'webtoon' | 'spread') => {
     if (mode === 'spread') {
@@ -115,10 +146,6 @@ export const ComicCanvas: React.FC = () => {
         openContextMenu
     } = useComicStore();
 
-    // IMG-6: resolve ARCS storage paths to signed URLs (matching panels) so a background set from a
-    // generated/library asset actually loads instead of rendering blank.
-    const resolvedBgSrc = useArcsResolvedSrc(pageSettings?.backgroundImage ?? '');
-    const [bgImage] = useImage(resolvedBgSrc ?? '', 'anonymous');
 
     // Local state for drawing
     const isDrawingRef = useRef(false);
@@ -602,37 +629,15 @@ export const ComicCanvas: React.FC = () => {
                                         stroke={currentPageId === page.id ? "#3B82F6" : "rgba(255, 255, 255, 0.05)"}
                                         strokeWidth={currentPageId === page.id ? 2 : 1}
                                     />
-                                    {bgImage && pageSettings?.backgroundImage && (() => {
-                                        const rect = computeBackgroundImageRect(
-                                            bgImage,
-                                            pageSettings?.bgFillMode ?? 'cover',
-                                            pageSettings?.bgFocusX ?? 0.5,
-                                            pageSettings?.bgFocusY ?? 0.5,
-                                        );
-                                        // Clip to the page so cover/center overflow doesn't bleed onto other pages.
-                                        return (
-                                            <Group
-                                                key={`bgimg-${page.id}`}
-                                                x={offset.x}
-                                                y={offset.y}
-                                                clipX={0}
-                                                clipY={0}
-                                                clipWidth={800}
-                                                clipHeight={1200}
-                                                listening={false}
-                                            >
-                                                <Image
-                                                    image={bgImage}
-                                                    x={rect.x}
-                                                    y={rect.y}
-                                                    width={rect.width}
-                                                    height={rect.height}
-                                                    opacity={pageSettings?.bgOpacity ?? 1}
-                                                    listening={false}
-                                                />
-                                            </Group>
-                                        );
-                                    })()}
+                                    <PageBackgroundImage
+                                        key={`bgimg-${page.id}`}
+                                        page={page}
+                                        offsetX={offset.x}
+                                        offsetY={offset.y}
+                                        fallbackSrc={pageSettings?.backgroundImage}
+                                        fallbackFillMode={pageSettings?.bgFillMode}
+                                        fallbackOpacity={pageSettings?.bgOpacity}
+                                    />
                                 </React.Fragment>
                             );
                         })}
