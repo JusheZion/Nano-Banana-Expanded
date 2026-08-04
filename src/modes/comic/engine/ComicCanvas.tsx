@@ -165,6 +165,10 @@ export const ComicCanvas: React.FC = () => {
     if (!pages || pages.length === 0) return <div className="text-white p-4">Loading Comic Engine...</div>;
 
     const stageRef = useRef<any>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    // When a canvas click changes the current page we do NOT want to yank the scroll (you're already
+    // looking at that page). This suppresses the next auto-scroll after such interactions.
+    const suppressPageScrollRef = useRef(false);
 
     // BAL-7: Konva rasterizes text to canvas immediately, so a balloon added before its web font
     // finishes loading paints in a fallback font. Force a redraw once fonts are ready / finish loading.
@@ -177,6 +181,23 @@ export const ComicCanvas: React.FC = () => {
         fonts.addEventListener?.('loadingdone', redraw);
         return () => { cancelled = true; fonts.removeEventListener?.('loadingdone', redraw); };
     }, []);
+
+    // Multi-page fix: the canvas view previously never followed the current page, so selecting or
+    // adding page 2+ left you stuck looking at page 1. Scroll the current page into view when it
+    // changes via an explicit action (PageNavigator select / Add Page) — but not when a canvas click
+    // set it (suppressed), so editing panels doesn't jump the view around.
+    useEffect(() => {
+        if (suppressPageScrollRef.current) { suppressPageScrollRef.current = false; return; }
+        const container = scrollContainerRef.current;
+        if (!container || !currentPageId) return;
+        const idx = pages.findIndex(p => p.id === currentPageId);
+        if (idx <= 0) { if (idx === 0) container.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+        const CANVAS_TOP_PADDING = 48; // matches the container's py-12
+        const pageTop = getLayoutPosition(idx, layoutMode).y * zoomLevel;
+        const target = Math.max(0, pageTop + CANVAS_TOP_PADDING - 24);
+        container.scrollTo({ top: target, behavior: 'smooth' });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPageId]);
 
     const handleStageMouseDown = (e: any) => {
         const stage = e.target.getStage();
@@ -192,6 +213,9 @@ export const ComicCanvas: React.FC = () => {
         });
 
         if (targetPage) {
+            // This page change came from a canvas click on a page you're already viewing — don't
+            // auto-scroll it into view (would jump the canvas while you're trying to edit).
+            if (targetPage.id !== currentPageId) suppressPageScrollRef.current = true;
             selectPage(targetPage.id);
             targetPageIdRef.current = targetPage.id;
             const offset = getLayoutPosition(pages.findIndex(p => p.id === targetPage.id), layoutMode);
@@ -547,6 +571,7 @@ export const ComicCanvas: React.FC = () => {
         <div className="w-full h-full flex flex-col bg-transparent">
             {/* Canvas Area — video backdrop for future Infinite Comic Scroll; Asset Bridge: drop image not on panel → overlay */}
             <div
+                ref={scrollContainerRef}
                 className={`flex-1 overflow-auto flex justify-center items-start py-12 relative comic-canvas-container ${isKnifeMode ? 'cursor-crosshair' : isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
                 style={{ background: '#000814' }}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
