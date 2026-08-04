@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { comicIdbStorage } from '../shared/lib/idbComicStorage';
+import { persist } from 'zustand/middleware';
+import { createComicPersistStorage } from '../shared/lib/idbComicStorage';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance } from '../types/balloon';
@@ -288,12 +288,23 @@ interface ComicState {
 
 // --- Explicit undo/redo (replaces zundo/temporal) ---
 const UNDO_MAX = 80;
-let past: string[] = [];
-let future: string[] = [];
+
+// Snapshots hold REFERENCES to the (immutable) state slices — not deep-cloned JSON strings.
+// The store only ever updates immutably (new arrays/objects, verified), so unchanged large data
+// (e.g. base64 page/panel images) is shared across all 80 snapshots instead of duplicated. This
+// avoids both the per-edit JSON.stringify of megabytes and the memory blow-up that made building
+// a page slow down over time.
+type UndoSnapshot = Pick<
+    ComicState,
+    'pages' | 'projectSettings' | 'gutterSize' | 'pageSettings' | 'layoutMode' |
+    'currentGenreId' | 'customGenre' | 'templates' | 'colorFavorites' | 'colorRecentlyUsed' | 'groupsByPage'
+>;
+let past: UndoSnapshot[] = [];
+let future: UndoSnapshot[] = [];
 let undoPaused = false;
 
-function undoSnapshotSlice(state: ComicState): string {
-    return JSON.stringify({
+function undoSnapshotSlice(state: ComicState): UndoSnapshot {
+    return {
         pages: state.pages,
         projectSettings: state.projectSettings,
         gutterSize: state.gutterSize,
@@ -307,18 +318,25 @@ function undoSnapshotSlice(state: ComicState): string {
         groupsByPage: state.groupsByPage,
         // SYS-6: selection is intentionally excluded — including it made every click a new undo step,
         // so Ctrl+Z reverted the selection instead of the last real edit.
-    });
+    };
+}
+
+// Cheap change detection: every immutable update replaces the changed slice's top-level reference,
+// so a shallow reference comparison of the slice keys is sufficient (no stringify).
+function undoSliceChanged(a: UndoSnapshot, b: UndoSnapshot): boolean {
+    const keys = Object.keys(a) as (keyof UndoSnapshot)[];
+    for (const k of keys) if (a[k] !== b[k]) return true;
+    return false;
 }
 
 function undoMiddleware(config: any) {
     return (set: any, get: () => ComicState, store: any) => {
         const wrappedSet = (partial: any) => {
-            // Push only when undo slice actually changes (avoids flushAutoSave filling stack with identical snaps).
-            const snapBefore = undoPaused ? '' : undoSnapshotSlice(get());
+            const snapBefore = undoPaused ? null : undoSnapshotSlice(get());
             const ret = set(partial);
-            if (!undoPaused) {
+            if (!undoPaused && snapBefore) {
                 const snapAfter = undoSnapshotSlice(get());
-                if (snapBefore !== snapAfter) {
+                if (undoSliceChanged(snapBefore, snapAfter)) {
                     past.push(snapBefore);
                     if (past.length > UNDO_MAX) past.shift();
                     future = [];
@@ -344,11 +362,11 @@ export function undoClear(): void {
 export function comicUndo(): void {
     if (past.length === 0) return;
     const current = undoSnapshotSlice(useComicStore.getState());
-    const json = past.pop()!;
+    const snap = past.pop()!;
     future.push(current);
     undoPaused = true;
     try {
-        useComicStore.setState(JSON.parse(json) as Partial<ComicState>);
+        useComicStore.setState(snap as Partial<ComicState>);
     } finally {
         undoPaused = false;
     }
@@ -357,11 +375,11 @@ export function comicUndo(): void {
 export function comicRedo(): void {
     if (future.length === 0) return;
     const current = undoSnapshotSlice(useComicStore.getState());
-    const json = future.pop()!;
+    const snap = future.pop()!;
     past.push(current);
     undoPaused = true;
     try {
-        useComicStore.setState(JSON.parse(json) as Partial<ComicState>);
+        useComicStore.setState(snap as Partial<ComicState>);
     } finally {
         undoPaused = false;
     }
@@ -1623,10 +1641,11 @@ export const useComicStore = create<ComicState>()(
             }),
             {
                 name: 'arcs-comic',
-                // Persist to IndexedDB (hundreds of MB / GB) instead of localStorage (~5MB), so a
-                // single base64 image can no longer fill the quota. Migrates existing localStorage
-                // data on first load and falls back to localStorage where IndexedDB is unavailable.
-                storage: createJSONStorage(() => comicIdbStorage),
+                // Persist to IndexedDB (hundreds of MB / GB) instead of localStorage (~5MB), and
+                // DEBOUNCE the write so dragging with large images no longer re-serializes the whole
+                // project on every mouse-move. Migrates existing localStorage data on first load and
+                // falls back to localStorage where IndexedDB is unavailable.
+                storage: createComicPersistStorage(),
                 merge: (persisted, current) => {
                     const p = persisted as Partial<ComicState>;
                     const mergedProject = { ...current.projectSettings, ...p.projectSettings };

@@ -1,31 +1,29 @@
 /**
- * IndexedDB-backed persistence for the comic store.
+ * IndexedDB-backed, DEBOUNCED persistence for the comic store.
  *
- * Why: the comic project state embeds full-resolution images as base64 data URLs
- * (page backgrounds, imported panel art). localStorage caps at ~5MB, so a SINGLE
- * large image could blow the quota and kill autosave. IndexedDB offers hundreds of
- * MB / GB, all local, no backend — a much better fit.
+ * Why IndexedDB: the project state embeds full-resolution images as base64 data URLs
+ * (page backgrounds, imported panel art). localStorage caps at ~5MB, so a single large
+ * image could blow the quota and kill autosave. IndexedDB offers hundreds of MB / GB.
  *
- * Behavior:
- *  - Reads/writes go to IndexedDB when available.
- *  - On first read, any existing localStorage value is migrated into IndexedDB and
- *    then removed from localStorage (freeing that ~5MB), so no saved work is lost.
- *  - Where IndexedDB is unavailable (e.g. the jsdom test runner), it transparently
- *    falls back to localStorage — same behavior as before.
+ * Why debounced: persist fires a write on EVERY state change, including every mouse-move
+ * during a drag. Serializing + structured-cloning a multi-MB project dozens of times per
+ * second hangs the UI. Instead we stash the latest value and flush (JSON.stringify + write)
+ * once the user goes idle (~SETTLE_MS), plus a hard flush on tab hide so nothing is lost.
+ *
+ * Uses zustand's object-based PersistStorage so the expensive JSON.stringify happens only
+ * at flush time, not on every change. Falls back to localStorage where IndexedDB is
+ * unavailable (e.g. the jsdom test runner).
  */
 
-import type { StateStorage } from 'zustand/middleware';
+import type { PersistStorage, StorageValue } from 'zustand/middleware';
 
 const DB_NAME = 'arcs-comic-db';
 const STORE = 'kv';
 const LEGACY_KEYS = ['nano-banana-comic'];
+const SETTLE_MS = 500;
 
 const idbAvailable = (): boolean => {
-    try {
-        return typeof indexedDB !== 'undefined' && indexedDB !== null;
-    } catch {
-        return false;
-    }
+    try { return typeof indexedDB !== 'undefined' && indexedDB !== null; } catch { return false; }
 };
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -34,9 +32,7 @@ function openDB(): Promise<IDBDatabase> {
         dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, 1);
             req.onupgradeneeded = () => {
-                if (!req.result.objectStoreNames.contains(STORE)) {
-                    req.result.createObjectStore(STORE);
-                }
+                if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
@@ -44,7 +40,6 @@ function openDB(): Promise<IDBDatabase> {
     }
     return dbPromise;
 }
-
 function idbGet(key: string): Promise<string | null> {
     return openDB().then(db => new Promise<string | null>((resolve, reject) => {
         const tx = db.transaction(STORE, 'readonly');
@@ -53,7 +48,6 @@ function idbGet(key: string): Promise<string | null> {
         req.onerror = () => reject(req.error);
     }));
 }
-
 function idbSet(key: string, value: string): Promise<void> {
     return openDB().then(db => new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
@@ -63,7 +57,6 @@ function idbSet(key: string, value: string): Promise<void> {
         tx.onabort = () => reject(tx.error);
     }));
 }
-
 function idbDel(key: string): Promise<void> {
     return openDB().then(db => new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
@@ -73,12 +66,8 @@ function idbDel(key: string): Promise<void> {
     }));
 }
 
-function safeLocalGet(key: string): string | null {
-    try { return localStorage.getItem(key); } catch { return null; }
-}
-function safeLocalRemove(key: string): void {
-    try { localStorage.removeItem(key); } catch { /* ignore */ }
-}
+function safeLocalGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
+function safeLocalRemove(key: string): void { try { localStorage.removeItem(key); } catch { /* ignore */ } }
 
 function emitQuotaWarning(name: string, bytes: number): void {
     console.warn(
@@ -86,58 +75,93 @@ function emitQuotaWarning(name: string, bytes: number): void {
         'Recent changes are NOT saved locally. Export your project to a file to avoid losing work.',
         { name, bytes },
     );
-    try {
-        window.dispatchEvent(new CustomEvent('arcs:storage-quota-exceeded', { detail: { name, approxBytes: bytes } }));
-    } catch { /* non-browser env */ }
+    try { window.dispatchEvent(new CustomEvent('arcs:storage-quota-exceeded', { detail: { name, approxBytes: bytes } })); } catch { /* non-browser */ }
 }
 
-export const comicIdbStorage: StateStorage = {
-    getItem: async (name: string): Promise<string | null> => {
-        if (!idbAvailable()) {
-            // Fallback path: localStorage only (with legacy-key migration).
-            const current = safeLocalGet(name);
-            if (current) return current;
-            for (const legacy of LEGACY_KEYS) {
-                const v = safeLocalGet(legacy);
-                if (v) { try { localStorage.setItem(name, v); } catch { /* ignore */ } return v; }
-            }
-            return null;
-        }
-        try {
-            const fromIdb = await idbGet(name);
-            if (fromIdb) return fromIdb;
-        } catch { /* fall through to migration */ }
-        // One-time migration of any existing localStorage data into IndexedDB.
-        const candidates = [name, ...LEGACY_KEYS];
-        for (const key of candidates) {
-            const v = safeLocalGet(key);
-            if (v) {
-                try { await idbSet(name, v); } catch { /* ignore, still return the value */ }
-                // Free the old localStorage copies now that IndexedDB holds them.
-                safeLocalRemove(name);
-                for (const legacy of LEGACY_KEYS) safeLocalRemove(legacy);
-                return v;
-            }
-        }
+/** Read the raw JSON string for a key: IndexedDB first, else migrate any localStorage copy in. */
+async function readRaw(name: string): Promise<string | null> {
+    if (!idbAvailable()) {
+        const current = safeLocalGet(name);
+        if (current) return current;
+        for (const legacy of LEGACY_KEYS) { const v = safeLocalGet(legacy); if (v) return v; }
         return null;
-    },
-
-    setItem: async (name: string, value: string): Promise<void> => {
-        if (!idbAvailable()) {
-            try { localStorage.setItem(name, value); } catch (err) { emitQuotaWarning(name, value.length); void err; }
-            return;
+    }
+    try { const fromIdb = await idbGet(name); if (fromIdb) return fromIdb; } catch { /* fall through */ }
+    for (const key of [name, ...LEGACY_KEYS]) {
+        const v = safeLocalGet(key);
+        if (v) {
+            try { await idbSet(name, v); } catch { /* still return the value */ }
+            safeLocalRemove(name);
+            for (const legacy of LEGACY_KEYS) safeLocalRemove(legacy);
+            return v;
         }
-        try {
-            await idbSet(name, value);
-        } catch (err) {
-            // IndexedDB has a much larger budget, but a genuinely full disk can still fail.
-            emitQuotaWarning(name, value.length);
-            void err;
-        }
-    },
+    }
+    return null;
+}
 
-    removeItem: async (name: string): Promise<void> => {
-        if (!idbAvailable()) { safeLocalRemove(name); return; }
-        try { await idbDel(name); } catch { /* ignore */ }
-    },
-};
+/** Write the raw JSON string for a key (IndexedDB, else localStorage), surfacing quota failures. */
+async function writeRaw(name: string, json: string): Promise<void> {
+    if (!idbAvailable()) {
+        try { localStorage.setItem(name, json); } catch { emitQuotaWarning(name, json.length); }
+        return;
+    }
+    try { await idbSet(name, json); } catch { emitQuotaWarning(name, json.length); }
+}
+
+// --- Debounced flush state (module-level; one comic store) ---
+let pendingName: string | null = null;
+let pendingValue: unknown = null;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function flushNow(): Promise<void> {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    if (pendingName == null || pendingValue == null) return;
+    const name = pendingName;
+    const value = pendingValue;
+    pendingName = null;
+    pendingValue = null;
+    let json: string;
+    try { json = JSON.stringify(value); } catch { return; }
+    await writeRaw(name, json);
+}
+
+function scheduleFlush(): void {
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = setTimeout(() => { void flushNow(); }, SETTLE_MS);
+}
+
+// Never lose the last change: flush immediately when the tab is hidden/closed.
+if (typeof window !== 'undefined') {
+    const flushSync = () => { void flushNow(); };
+    window.addEventListener('pagehide', flushSync);
+    window.addEventListener('beforeunload', flushSync);
+    if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSync(); });
+    }
+}
+
+/**
+ * Debounced, IndexedDB-backed PersistStorage. Serialization is deferred to flush time so a
+ * drag (many rapid setItem calls) costs almost nothing until the user pauses.
+ */
+export function createComicPersistStorage<S>(): PersistStorage<S> {
+    return {
+        getItem: async (name: string): Promise<StorageValue<S> | null> => {
+            const raw = await readRaw(name);
+            if (!raw) return null;
+            try { return JSON.parse(raw) as StorageValue<S>; } catch { return null; }
+        },
+        setItem: (name: string, value: StorageValue<S>): void => {
+            // Cheap: stash the latest snapshot reference and (re)arm the idle timer. No
+            // stringify/write here — that happens once, at flush.
+            pendingName = name;
+            pendingValue = value;
+            scheduleFlush();
+        },
+        removeItem: async (name: string): Promise<void> => {
+            if (pendingName === name) { pendingValue = null; }
+            if (!idbAvailable()) { safeLocalRemove(name); return; }
+            try { await idbDel(name); } catch { /* ignore */ }
+        },
+    };
+}
