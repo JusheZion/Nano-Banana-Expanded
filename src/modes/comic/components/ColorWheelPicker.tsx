@@ -115,7 +115,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
       setH(deg);
       onChange(hsvToHex(deg, s, v));
     },
-    [cx, hueR, s, v, onChange]
+    [cx, cy, hueR, s, v, onChange]
   );
 
   const handleSVClick = useCallback(

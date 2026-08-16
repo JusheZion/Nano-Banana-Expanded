@@ -15032,3 +15032,48 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Use the new `Create Revision Set` action on the latest saved Pacing Review when ready to generate and approve the next set of proposed changes.
+
+## Weekly bug and refactor check - 2026-08-16
+
+### What changed
+- Fixed an Imageshop stale-closure bug that saved processed Character imports with frozen NPC vault metadata after switching targets.
+- Added an interaction regression covering file selection, target switching, processing, and Character-vault persistence metadata.
+- Moved LayerTree's pure layer-detail resolver and related domain types outside the component, giving its `useMemo` a stable architectural boundary.
+- Replaced two UI `any` escape hatches with the existing `BalloonOverrides` and `Panel.imageFillMode` types.
+- Completed the color picker's hue callback dependency list.
+
+### Files touched
+- `src/portals/storyline/ImageshopImportPanel.tsx`
+- `src/portals/storyline/__tests__/ImageshopImportPanel.test.tsx`
+- `src/modes/comic/components/LayerTree.tsx`
+- `src/modes/comic/components/TextToolbar.tsx`
+- `src/modes/comic/components/ObjectToolbar.tsx`
+- `src/modes/comic/components/ColorWheelPicker.tsx`
+- `walkthrough.md`
+
+### Implementation notes
+- The reproduced failure occurred specifically when the source file was chosen under the default NPC target and the user then switched to Character before processing; both targets share the same generation context, so the omitted dependency left the old target in the processing snapshot.
+- The LayerTree change is an extraction-only refactor; ordering, group membership, labels, and selection behavior are unchanged.
+- The Vite and asset audit confirmed strict TypeScript, `import.meta.env` usage, and the presence of all 59 catalog and hero asset references checked under `public/assets/images`.
+
+### Verification
+- RED regression: focused Imageshop test reproduced `processing.vaultTarget` as `npc` during a Character save.
+- Corrected focused regression: PASS, 1 file / 1 test.
+- `npm run test`: PASS, 151 files / 1,074 tests.
+- `npm run build`: PASS with the existing chunk-size advisory.
+- `npm run lint`: PASS with 0 errors / 67 warnings, reduced from the 72-warning baseline.
+- Repeated targeted ESLint and `npx tsc -b --pretty false` checks: PASS.
+- `git diff --check`: PASS.
+
+### Outstanding issues
+- 67 pre-existing ESLint warnings remain, concentrated in larger legacy Konva/comic rendering surfaces and several backend/test files.
+- Existing production bundle chunk-size advisories remain for WriterPortal and ComicPortal.
+
+### Risks or caveats
+- No live Gemini or Supabase mutation was used; the corrected cross-target save flow was verified with an interaction test and mocked persistence boundary.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Future weekly passes can address BalloonNode and ComicPanel typing/memoization warnings in focused, separately tested slices.

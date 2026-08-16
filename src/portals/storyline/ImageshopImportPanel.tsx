@@ -243,6 +243,7 @@ export function ImageshopImportPanel() {
     importStyleExtra,
     importStylePreset,
     importUserNote,
+    importVaultTarget,
     labContext,
     modelId,
     referenceImageUrls,

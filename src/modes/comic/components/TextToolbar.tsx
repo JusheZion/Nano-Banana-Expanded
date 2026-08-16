@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
-import type { BalloonInstance, TextWarpId } from '../../../types/balloon';
+import type { BalloonInstance, BalloonOverrides, TextWarpId } from '../../../types/balloon';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { BALLOON_STYLES } from '../data/BalloonStyles';
 import { Tooltip } from '@/shared/components/Tooltip';
@@ -43,7 +43,7 @@ type BalloonRowProps = {
     balloon: BalloonInstance & { shadowColor?: string; shadowBlur?: number; shadowOpacity?: number; shadowOffsetX?: number; shadowOffsetY?: number; glowColor?: string; glowBlur?: number; glowSpread?: number; glowOpacity?: number; textureId?: string; textureOpacity?: number };
     currentPageId: string;
     selectedBubbleId: string;
-    onOverrides: (o: Record<string, unknown>) => void;
+    onOverrides: (overrides: Partial<BalloonOverrides>) => void;
     onUpdate: (pageId: string, bubbleId: string, patch: Record<string, unknown>) => void;
 };
 
@@ -248,7 +248,7 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
 
     if (!balloon && !isPlaceholder) return null;
 
-    const handleOverrides = (newOverrides: Record<string, any>) => {
+    const handleOverrides = (newOverrides: Partial<BalloonOverrides>) => {
         if (!balloon) return;
         updateBalloon(currentPageId, bubbleIdStr, {
             overrides: { ...(balloon.overrides || {}), ...newOverrides }
@@ -428,4 +428,3 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
         </div>
     );
 };
-

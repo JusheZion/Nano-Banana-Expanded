@@ -1,6 +1,6 @@
 import React from 'react';
 import { BoxSelect } from 'lucide-react';
-import { useComicStore } from '../../../stores/comicStore';
+import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
 import { PrecisionSlider } from './PrecisionSlider';
@@ -344,7 +344,7 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
                 <div className="flex flex-nowrap items-center gap-2 border-r border-white/20 pr-2 mr-2 shrink-0">
                     <select
                         value={selectedPanels[0]?.imageFillMode || 'cover'}
-                        onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageFillMode: e.target.value as any }))}
+                        onChange={(e) => selectedPanels.forEach(p => updatePanel(effectivePageId, p.id, { imageFillMode: e.target.value as NonNullable<Panel['imageFillMode']> }))}
                         className="text-[10px] font-medium border border-white/20 rounded px-1 min-w-[56px] outline-none cursor-pointer shrink-0 bg-white/10"
                         style={{ color: TEXT_ON_BLUE }}
                         title="Image Fill Mode"

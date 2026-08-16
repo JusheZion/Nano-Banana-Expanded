@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useComicStore } from '../../../stores/comicStore';
+import { useComicStore, type ComicPage } from '../../../stores/comicStore';
 import { Eye, EyeOff, Lock, Unlock, Square, MessageCircle, PenTool, GripVertical, BoxSelect, ChevronDown, ChevronRight } from 'lucide-react';
 import { elementsOverlapOrNear } from '../utils/snapping';
 import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
@@ -21,6 +21,34 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
+
+type LayerDetails = {
+    id: string;
+    name: string;
+    type: 'panel' | 'balloon' | 'drawing';
+};
+
+type LayerItem = {
+    id: string;
+    name: string;
+    type: LayerDetails['type'] | 'group';
+    isLocked: boolean;
+    isVisible: boolean;
+    memberIds?: string[];
+    childrenDetails?: LayerDetails[];
+};
+
+function resolveLayerDetails(page: ComicPage, id: string): LayerDetails | null {
+    const panel = page.panels.find(candidate => candidate.id === id);
+    if (panel) return { id, name: `Panel ${panel.shapeType}`, type: 'panel' };
+    const balloon = page.balloons.find(candidate => candidate.id === id);
+    if (balloon) {
+        const truncatedText = `${balloon.text.substring(0, 10)}${balloon.text.length > 10 ? '...' : ''}`;
+        return { id, name: balloon.text ? `"${truncatedText}"` : 'Balloon', type: 'balloon' };
+    }
+    const drawing = page.drawings?.find(candidate => candidate.id === id);
+    return drawing ? { id, name: 'Drawing Path', type: 'drawing' } : null;
+}
 
 interface LayerItemProps {
     id: string;
@@ -192,18 +220,6 @@ export const LayerTree: React.FC<{
     );
 
     // Build tree: top-level = ungrouped elements + one row per group (frontmost member id = row id)
-    type LayerItem = { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' | 'group'; isLocked: boolean; isVisible: boolean; memberIds?: string[]; childrenDetails?: { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' }[] };
-    const resolveDetails = (page: typeof currentPage, mid: string): { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' } | null => {
-        if (!page) return null;
-        const panel = page.panels.find(p => p.id === mid);
-        if (panel) return { id: mid, name: `Panel ${panel.shapeType}`, type: 'panel' };
-        const balloon = page.balloons.find(b => b.id === mid);
-        if (balloon) return { id: mid, name: balloon.text ? `"${balloon.text.substring(0, 10)}${balloon.text.length > 10 ? '...' : ''}"` : 'Balloon', type: 'balloon' };
-        const drawing = page.drawings?.find(d => d.id === mid);
-        if (drawing) return { id: mid, name: 'Drawing Path', type: 'drawing' };
-        return null;
-    };
-
     const items = useMemo((): LayerItem[] => {
         if (!currentPage || !currentPageId) return [];
 
@@ -217,7 +233,7 @@ export const LayerTree: React.FC<{
             const group = getGroupMembers(currentPageId, id);
             if (group && group.length >= 2) {
                 group.forEach(m => seenInGroup.add(m));
-                const childrenDetails = group.map(mid => resolveDetails(currentPage, mid)).filter((c): c is { id: string; name: string; type: 'panel' | 'balloon' | 'drawing' } => c !== null);
+                const childrenDetails = group.map(mid => resolveLayerDetails(currentPage, mid)).filter((details): details is LayerDetails => details !== null);
                 result.push({
                     id,
                     name: `Group (${group.length})`,
@@ -228,7 +244,7 @@ export const LayerTree: React.FC<{
                     childrenDetails,
                 });
             } else {
-                const details = resolveDetails(currentPage, id);
+                const details = resolveLayerDetails(currentPage, id);
                 if (details) {
                     const panel = currentPage.panels.find(p => p.id === id);
                     const balloon = currentPage.balloons.find(b => b.id === id);
