@@ -9,6 +9,7 @@ import { ACCENT_BLUE_GRADIENT, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens
 import { ASSETS } from './AssetLibrary';
 import type { TextWarpId } from '../../../types/balloon';
 import { PrecisionSlider } from './PrecisionSlider';
+import { useShallow } from 'zustand/react/shallow';
 
 export type FormatDialogTabId = 'fillLine' | 'effects' | 'textBox' | 'sizeProperties';
 
@@ -36,7 +37,25 @@ export const FormatDialog: React.FC<FormatDialogProps> = ({
   balloonId: propBalloonId,
   panelId: propPanelId,
 }) => {
-  const { pages, currentPageId, selectedElementIds, updateBalloon, updatePanel, setPageSettings, addColorToRecentlyUsed } = useComicStore();
+  const {
+    pages,
+    currentPageId,
+    selectedElementIds,
+    updateBalloon,
+    updatePanel,
+    setPageSettings,
+    addColorToRecentlyUsed,
+  } = useComicStore(
+    useShallow((s) => ({
+      pages: s.pages,
+      currentPageId: s.currentPageId,
+      selectedElementIds: s.selectedElementIds,
+      updateBalloon: s.updateBalloon,
+      updatePanel: s.updatePanel,
+      setPageSettings: s.setPageSettings,
+      addColorToRecentlyUsed: s.addColorToRecentlyUsed,
+    })),
+  );
   const [activeTab, setActiveTab] = React.useState<FormatDialogTabId>(initialTab);
   const [dragOffset, setDragOffset] = React.useState({ x: 0, y: 0 });
   const dragRef = React.useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);

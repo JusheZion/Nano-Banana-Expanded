@@ -4,13 +4,44 @@ import { Type, Circle, Square, ClipboardPaste, Plus, MessageCircle, Trash2, Imag
 import { elementsOverlapOrNear } from '../utils/snapping';
 import { ACCENT_GOLD_GRADIENT } from '../theme/Phase12DesignTokens';
 import type { FormatDialogTabId } from './FormatDialog';
+import { useShallow } from 'zustand/react/shallow';
 
 export interface CanvasContextMenuProps {
   onOpenFormatDialog: (tab: FormatDialogTabId, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
 }
 
 export const CanvasContextMenu: React.FC<CanvasContextMenuProps> = ({ onOpenFormatDialog }) => {
-  const { contextMenu, closeContextMenu, pasteClipboard, removeElement, addPanel, addBalloon, updatePanel, pages, currentPageId, selectedElementIds, createGroup, ungroup, getGroupMembers } = useComicStore();
+  const {
+    contextMenu,
+    closeContextMenu,
+    pasteClipboard,
+    removeElement,
+    addPanel,
+    addBalloon,
+    updatePanel,
+    pages,
+    currentPageId,
+    selectedElementIds,
+    createGroup,
+    ungroup,
+    getGroupMembers,
+  } = useComicStore(
+    useShallow((s) => ({
+      contextMenu: s.contextMenu,
+      closeContextMenu: s.closeContextMenu,
+      pasteClipboard: s.pasteClipboard,
+      removeElement: s.removeElement,
+      addPanel: s.addPanel,
+      addBalloon: s.addBalloon,
+      updatePanel: s.updatePanel,
+      pages: s.pages,
+      currentPageId: s.currentPageId,
+      selectedElementIds: s.selectedElementIds,
+      createGroup: s.createGroup,
+      ungroup: s.ungroup,
+      getGroupMembers: s.getGroupMembers,
+    })),
+  );
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

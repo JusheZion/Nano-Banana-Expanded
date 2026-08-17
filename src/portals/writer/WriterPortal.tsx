@@ -2739,18 +2739,15 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       'Idea assist output:',
       cockpitIdeaOutput,
     ].join('\n');
+    // latestOutline / selectedPage / pacingSaved / canonSaved / loreCards / latestShotPlan /
+    // shotsBrief / synopsisHelperParts used to be listed here too, but this body never reads them
+    // directly — it only spreads `cockpitDigestBase`, which is already memoized on exactly those
+    // values. Listing them twice just recomputed this digest on every upstream change without
+    // adding correctness.
   }, [
     cockpitLeftView,
     cockpitMiddleView,
     cockpitRightView,
-    latestOutline,
-    selectedPage,
-    pacingSaved,
-    canonSaved,
-    loreCards,
-    latestShotPlan,
-    shotsBrief,
-    synopsisHelperParts,
     cockpitIdeaPromptDraft,
     cockpitIdeaOutput,
     cockpitDigestBase,
@@ -3244,8 +3241,9 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
       }
     },
     [
+      // `effectiveOutlineTargetPageCount` was listed here but is never read inside this callback
+      // (it is only rendered in the confirm copy), so it churned the callback identity for nothing.
       selectedIssueId,
-      effectiveOutlineTargetPageCount,
       targetPageCount,
       outlineSupplementDraft,
       shotsBrief,

@@ -21,6 +21,7 @@ import {
   TEXT_ON_GOLD,
 } from '../theme/Phase12DesignTokens';
 import { PanelRightOpen } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 
 interface ComicLayoutProps {
   children: React.ReactNode;
@@ -56,7 +57,24 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
     setLayoutMode,
     placePanelAtNextClick,
     placePanelShape,
-  } = useComicStore();
+  } = useComicStore(
+    useShallow((s) => ({
+      pages: s.pages,
+      currentPageId: s.currentPageId,
+      selectedElementIds: s.selectedElementIds,
+      deleteSelected: s.deleteSelected,
+      copySelected: s.copySelected,
+      pasteClipboard: s.pasteClipboard,
+      serializeProject: s.serializeProject,
+      loadProject: s.loadProject,
+      zoomLevel: s.zoomLevel,
+      setZoomLevel: s.setZoomLevel,
+      layoutMode: s.layoutMode,
+      setLayoutMode: s.setLayoutMode,
+      placePanelAtNextClick: s.placePanelAtNextClick,
+      placePanelShape: s.placePanelShape,
+    })),
+  );
 
   // Auto-save project state to localStorage every 30s
   useEffect(() => {

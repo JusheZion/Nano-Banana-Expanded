@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/shared/context/ThemeContext';
 
 interface CopyButtonProps {
@@ -10,17 +10,28 @@ interface CopyButtonProps {
 export const CopyButton: React.FC<CopyButtonProps> = ({ text, labelStyle }) => {
     const [copied, setCopied] = useState(false);
     const { activeTheme } = useTheme();
+    // The reset timer used to be a bare setTimeout: it leaked on unmount, and rapid clicks stacked
+    // timers so an earlier one could clear the "Copied!" flash from a later click.
+    const resetTimerRef = useRef<number | null>(null);
 
-    const handleCopy = async () => {
+    useEffect(() => () => {
+        if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    }, []);
+
+    const handleCopy = useCallback(async () => {
         if (!text) return;
         try {
             await navigator.clipboard.writeText(text);
             setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+            resetTimerRef.current = window.setTimeout(() => {
+                resetTimerRef.current = null;
+                setCopied(false);
+            }, 2000);
         } catch (err) {
             console.error('Failed to copy text: ', err);
         }
-    };
+    }, [text]);
 
     const flashColor = activeTheme === 'crimson' ? '#893741' : activeTheme === 'teal' ? '#37615D' : '#5F368E';
 

@@ -3,6 +3,7 @@ import { Pipette } from 'lucide-react';
 import { useComicStore } from '../../../stores/comicStore';
 import { hexToHsv, hsvToHex } from '../utils/colorUtils';
 import { ACCENT_GOLD_SOLID, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 declare global {
   interface Window {
@@ -55,7 +56,21 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
 }) => {
   const hueRingRef = useRef<HTMLCanvasElement>(null);
   const svRef = useRef<HTMLCanvasElement>(null);
-  const { colorFavorites, colorRecentlyUsed, addColorToFavorites, removeColorFromFavorites, addColorToRecentlyUsed } = useComicStore();
+  const {
+    colorFavorites,
+    colorRecentlyUsed,
+    addColorToFavorites,
+    removeColorFromFavorites,
+    addColorToRecentlyUsed,
+  } = useComicStore(
+    useShallow((s) => ({
+      colorFavorites: s.colorFavorites,
+      colorRecentlyUsed: s.colorRecentlyUsed,
+      addColorToFavorites: s.addColorToFavorites,
+      removeColorFromFavorites: s.removeColorFromFavorites,
+      addColorToRecentlyUsed: s.addColorToRecentlyUsed,
+    })),
+  );
 
   const hv = useMemo(() => hexToHsv(value), [value]);
   const [h, setH] = React.useState(hv.h);

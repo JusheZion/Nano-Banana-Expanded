@@ -9,6 +9,7 @@ import {
   TEXT_ON_GOLD,
   TEXT_ON_BLUE,
 } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 /** Curated balloon styles for ribbon – one per shape type */
 const RIBBON_BALLOON_STYLES: BalloonStyle[] = [
@@ -73,7 +74,21 @@ function IconLabelButton({
 }
 
 export const BalloonRibbonContent: React.FC<BalloonRibbonContentProps> = (props) => {
-  const { addBalloon, addOverlay, updateBalloon, snapBalloonTailToPanelEdge, pages } = useComicStore();
+  const {
+    addBalloon,
+    addOverlay,
+    updateBalloon,
+    snapBalloonTailToPanelEdge,
+    pages,
+  } = useComicStore(
+    useShallow((s) => ({
+      addBalloon: s.addBalloon,
+      addOverlay: s.addOverlay,
+      updateBalloon: s.updateBalloon,
+      snapBalloonTailToPanelEdge: s.snapBalloonTailToPanelEdge,
+      pages: s.pages,
+    })),
+  );
   const currentPage = pages.find(p => p.id === props.currentPageId);
   const selectedBalloon = props.selectedBalloonId ? currentPage?.balloons.find(b => b.id === props.selectedBalloonId) : null;
   const canSnapTail = Boolean(props.currentPageId && props.selectedBalloonId && selectedBalloon?.hasTail && selectedBalloon?.tailTip);

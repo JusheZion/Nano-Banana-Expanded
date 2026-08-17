@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
 import { PrecisionSlider } from './PrecisionSlider';
+import { useShallow } from 'zustand/react/shallow';
 
 interface ProjectSettingsSidebarProps {
     isOpen: boolean;
@@ -24,8 +25,23 @@ export const ProjectSettingsSidebar: React.FC<ProjectSettingsSidebarProps> = ({ 
         pages,
         templates,
         saveBlankPanelTemplate,
-        applyTemplate
-    } = useComicStore();
+        applyTemplate,
+    } = useComicStore(
+        useShallow((s) => ({
+            projectSettings: s.projectSettings,
+            updateProjectSettings: s.updateProjectSettings,
+            gutterSize: s.gutterSize,
+            setGutterSize: s.setGutterSize,
+            pageSettings: s.pageSettings,
+            setPageSettings: s.setPageSettings,
+            setPageBackground: s.setPageBackground,
+            currentPageId: s.currentPageId,
+            pages: s.pages,
+            templates: s.templates,
+            saveBlankPanelTemplate: s.saveBlankPanelTemplate,
+            applyTemplate: s.applyTemplate,
+        })),
+    );
 
     const currentPage = pages.find(p => p.id === currentPageId);
     // Per-page background: prefer this page's own image; fall back to the legacy global one.

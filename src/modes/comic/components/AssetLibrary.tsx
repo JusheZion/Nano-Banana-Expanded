@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { generatePrompt } from '../utils/promptMiddleware';
+import { useShallow } from 'zustand/react/shallow';
 
 export const ASSETS = [
     '/assets/images/Anunnaki Anubis.png',
@@ -68,7 +69,16 @@ export const AssetLibrary: React.FC<AssetLibraryProps> = ({ isOpen, onClose, emb
         projectSettings,
         currentGenreId,
         insertImageIntoWorkspace,
-    } = useComicStore();
+    } = useComicStore(
+        useShallow((s) => ({
+            currentPageId: s.currentPageId,
+            selectedElementIds: s.selectedElementIds,
+            pages: s.pages,
+            projectSettings: s.projectSettings,
+            currentGenreId: s.currentGenreId,
+            insertImageIntoWorkspace: s.insertImageIntoWorkspace,
+        })),
+    );
 
     const handleAssetClick = (assetUrl: string) => {
         insertImageIntoWorkspace(assetUrl, { sourceLabel: assetUrl.split('/').pop() });

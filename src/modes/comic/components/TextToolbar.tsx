@@ -30,6 +30,7 @@ import {
     ChevronDown,
     ChevronRight,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 
 const iconBtn = 'w-8 h-8 flex items-center justify-center rounded-lg border border-white/20 bg-transparent transition-all duration-150 shrink-0 hover:bg-[linear-gradient(45deg,#bf953f_0%,#fcf6ba_45%,#b38728_70%,#fbf5b7_85%,#aa771c_100%)] hover:text-[#000000] hover:border-white/30 active:scale-[0.98] active:shadow-inner';
 const iconBtnActive = 'border-white/30';
@@ -227,7 +228,15 @@ export const TextToolbar: React.FC<TextToolbarProps> = ({
     onTextExpandedChange,
     onShapeExpandedChange,
 }) => {
-    const { pages, updateBalloon } = useComicStore();
+    const {
+        pages,
+        updateBalloon,
+    } = useComicStore(
+        useShallow((s) => ({
+            pages: s.pages,
+            updateBalloon: s.updateBalloon,
+        })),
+    );
     const [internalText, setInternalText] = useState(false);
     const [internalShape, setInternalShape] = useState(false);
     const [fontSizeOther, setFontSizeOther] = useState(false);

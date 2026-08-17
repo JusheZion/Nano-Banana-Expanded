@@ -13,14 +13,32 @@ export const CinematicGallery: React.FC = () => {
     useTheme();
 
     const refreshArchive = useCallback(() => {
-        void getCharactersGroupedByProfile().then(setGrouped);
+        void getCharactersGroupedByProfile()
+            .then(setGrouped)
+            .catch((err: unknown) => {
+                console.error('[CinematicGallery] failed to refresh character archive', err);
+            });
     }, []);
 
     useEffect(() => {
+        // Previously an unguarded .then/.finally: a rejected fetch became an unhandled promise
+        // rejection and an unmount mid-flight set state on a dead component.
+        let cancelled = false;
         setLoading(true);
         getCharactersGroupedByProfile()
-            .then(setGrouped)
-            .finally(() => setLoading(false));
+            .then((next) => {
+                if (!cancelled) setGrouped(next);
+            })
+            .catch((err: unknown) => {
+                console.error('[CinematicGallery] failed to load character archive', err);
+                if (!cancelled) setGrouped({});
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const profileNames = Object.keys(grouped);

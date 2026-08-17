@@ -1,4 +1,6 @@
 import React, { useRef, useMemo } from 'react';
+import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { Transformer, Group, Rect, Ellipse, Path, Text, Circle, TextPath } from 'react-konva';
 import { useComicStore, undoPause, undoResume } from '../../../stores/comicStore';
 import useImage from 'use-image';
@@ -16,7 +18,7 @@ interface BalloonNodeProps {
     balloon: BalloonInstance;
     styleDef: BalloonStyle;
     onChange: (id: string, patch: Partial<BalloonInstance>) => void;
-    onSelect: (id: string, e: any) => void;
+    onSelect: (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
 }
 
 export const BalloonNode: React.FC<BalloonNodeProps> = ({
@@ -25,12 +27,18 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     onChange,
     onSelect,
 }) => {
-    const groupRef = useRef<any>(null);
-    const trRef = useRef<any>(null);
-    const textGroupRef = useRef<any>(null);
-    const textBoxTrRef = useRef<any>(null);
-    const tipRef = useRef<any>(null);
-    const textRef = useRef<any>(null);
+    const groupRef = useRef<Konva.Group | null>(null);
+    const trRef = useRef<Konva.Transformer | null>(null);
+    const textGroupRef = useRef<Konva.Group | null>(null);
+    const textBoxTrRef = useRef<Konva.Transformer | null>(null);
+    const tipRef = useRef<Konva.Circle | null>(null);
+    // Bound to either <Text> or <TextPath> depending on whether the balloon warps its text. Only
+    // width()/height() are read off it, so the common Konva.Node type is enough — and a callback ref
+    // keeps a single ref usable across both element types (React's Ref<T> is invariant).
+    const textRef = useRef<Konva.Node | null>(null);
+    const setTextRef = React.useCallback((node: Konva.Node | null) => {
+        textRef.current = node;
+    }, []);
     const isFirstBalloonDragMove = useRef(true);
 
     const textBoxEditBalloonId = useComicStore((s) => s.textBoxEditBalloonId);
@@ -42,7 +50,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         if (groupRef.current) {
             const group = groupRef.current;
             const origGetClientRect = group.getClientRect.bind(group);
-            group.getClientRect = (config?: any) => {
+            group.getClientRect = (config?: Parameters<Konva.Group['getClientRect']>[0]) => {
                 const glowPass = group.findOne('.glow-pass');
                 const wasVisible = glowPass ? glowPass.visible() : false;
                 if (glowPass && wasVisible) glowPass.visible(false);
@@ -56,14 +64,14 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     React.useEffect(() => {
         if (balloon.isSelected && trRef.current && groupRef.current) {
             trRef.current.nodes([groupRef.current]);
-            trRef.current.getLayer().batchDraw();
+            trRef.current.getLayer()?.batchDraw();
         }
     }, [balloon.isSelected]);
 
     React.useEffect(() => {
         if (textBoxEditMode && textBoxTrRef.current && textGroupRef.current) {
             textBoxTrRef.current.nodes([textGroupRef.current]);
-            textBoxTrRef.current.getLayer().batchDraw();
+            textBoxTrRef.current.getLayer()?.batchDraw();
         }
     }, [textBoxEditMode]);
 
@@ -175,6 +183,11 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             default:
                 return '';
         }
+        // balloon.text / fontSize / fontFamily are deliberate invalidation triggers, not direct
+        // reads: the path is measured off textRef.current, whose size changes when they change. The
+        // linter can't see through the ref and calls them unnecessary — removing them would freeze
+        // the warp path at its first measurement.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [textWarp, w, h, autoSize, balloon.text, fontSize, fontFamily, balloon.overrides?.textWarpIntensity]);
 
     // Konva Text/TextPath has no `fontWeight` prop — weight is expressed through `fontStyle`
@@ -186,8 +199,14 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     const textureUrl = balloon.textureId ? getTextureUrl(balloon.textureId) : '';
     const [textureImg] = useImage(textureUrl || '');
 
-    // Tail geometry
-    const localTailTip = { x: balloon.tailTip.x, y: balloon.tailTip.y };
+    // Tail geometry.
+    // This was a bare object literal, so it got a fresh identity on every render — and because four
+    // downstream useMemo hooks list it as a dependency, all four recomputed on every render and the
+    // memoization did nothing. Memoize on the primitive coordinates so identity is stable.
+    const localTailTip = useMemo(
+        () => ({ x: balloon.tailTip.x, y: balloon.tailTip.y }),
+        [balloon.tailTip.x, balloon.tailTip.y],
+    );
 
     const tailIntersection = useMemo(() => {
         if (!balloon.hasTail) return { x: 0, y: 0 };
@@ -397,7 +416,8 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         pass: 'shadow' | 'glow' | 'base' | 'texture',
         isTail: boolean
     ) => {
-        const baseProps: any = {
+        // Konva shape config, assembled progressively per render pass.
+        const baseProps: Konva.ShapeConfig = {
             listening: pass === 'base',
             perfectDrawEnabled: false,
             opacity: pass === 'texture' ? (balloon.textureOpacity ?? 0.5) : 1,
@@ -822,6 +842,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 }}
                 onTransformEnd={() => {
                     const node = groupRef.current;
+                    if (!node) return;
                     const scaleX = node.scaleX();
                     const scaleY = node.scaleY();
                     node.scaleX(1);
@@ -981,7 +1002,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             />
                         ) : null}
                         <TextPath
-                            ref={textRef}
+                            ref={setTextRef}
                             text={balloon.text}
                             fontFamily={fontFamily}
                             fontSize={fontSize}
@@ -1077,7 +1098,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                             />
                         ) : null}
                         <Text
-                            ref={textRef}
+                            ref={setTextRef}
                             text={balloon.text}
                             fontFamily={fontFamily}
                             fontSize={fontSize}

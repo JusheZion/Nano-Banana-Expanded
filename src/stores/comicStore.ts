@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+import { create, type StateCreator } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { createComicPersistStorage } from '../shared/lib/idbComicStorage';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
-import type { BalloonInstance } from '../types/balloon';
+import type { BalloonInstance, BalloonOverrides } from '../types/balloon';
 import type { GradientSpec } from '../types/gradient';
 import type { GuidedComicBalloonSeed } from '../portals/guided-comic/writersWorkshopBridge';
 import type { GuidedComicLayoutHandoff, GuidedComicLayoutTemplate } from './guidedComicLayoutBridge';
@@ -329,11 +329,24 @@ function undoSliceChanged(a: UndoSnapshot, b: UndoSnapshot): boolean {
     return false;
 }
 
-function undoMiddleware(config: any) {
-    return (set: any, get: () => ComicState, store: any) => {
-        const wrappedSet = (partial: any) => {
+/**
+ * The store is built as `undoMiddleware(persist(...))`, so this middleware sits outside `persist`
+ * and must preserve its mutator signature. Previously `config`, `set` and `partial` were all bare
+ * `any`, which meant a wrong `set(...)` payload anywhere in the store body compiled silently.
+ */
+type ComicStateCreator = StateCreator<ComicState, [], [['zustand/persist', unknown]]>;
+type ComicSetState = Parameters<ComicStateCreator>[0];
+
+function undoMiddleware(config: ComicStateCreator): ComicStateCreator {
+    return (set, get, store) => {
+        // `set` is overloaded (replace?: false | true), which a plain wrapper can't express; the
+        // single cast below is confined to forwarding, and both arguments stay typed.
+        const wrappedSet = ((
+            partial: Parameters<ComicSetState>[0],
+            replace?: Parameters<ComicSetState>[1],
+        ) => {
             const snapBefore = undoPaused ? null : undoSnapshotSlice(get());
-            const ret = set(partial);
+            const ret = (set as (p: typeof partial, r?: typeof replace) => void)(partial, replace);
             if (!undoPaused && snapBefore) {
                 const snapAfter = undoSnapshotSlice(get());
                 if (undoSliceChanged(snapBefore, snapAfter)) {
@@ -343,7 +356,7 @@ function undoMiddleware(config: any) {
                 }
             }
             return ret;
-        };
+        }) as ComicSetState;
         return config(wrappedSet, get, store);
     };
 }
@@ -936,7 +949,7 @@ export const useComicStore = create<ComicState>()(
 
                 syncBalloonStyle: (balloonId: string) => set((state: ComicState) => {
                     let sourceStyleId: string | null = null;
-                    let sourceOverrides: any = null;
+                    let sourceOverrides: BalloonOverrides = {};
 
                     for (const page of state.pages) {
                         const balloon = page.balloons.find(b => b.id === balloonId);

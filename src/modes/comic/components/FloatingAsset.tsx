@@ -1,4 +1,6 @@
 import React, { useRef, useEffect } from 'react';
+import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { Group, Image, Text, Transformer } from 'react-konva';
 import useImage from 'use-image';
 import type { OverlayObject } from '../../../stores/comicStore';
@@ -12,7 +14,7 @@ interface FloatingAssetProps {
     overlay: OverlayObject;
     pageId: string;
     isSelected: boolean;
-    onSelect: (e?: any) => void;
+    onSelect: (e?: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onUpdate: (updates: Partial<OverlayObject>) => void;
 }
 
@@ -22,8 +24,8 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
     onSelect,
     onUpdate
 }) => {
-    const groupRef = useRef<any>(null);
-    const trRef = useRef<any>(null);
+    const groupRef = useRef<Konva.Group | null>(null);
+    const trRef = useRef<Konva.Transformer | null>(null);
     // IMG-6: resolve ARCS storage paths to signed URLs (matching ComicPanel) so overlays sourced
     // from generated/library assets actually load instead of rendering blank.
     const resolvedSrc = useArcsResolvedSrc(overlay.src || '');

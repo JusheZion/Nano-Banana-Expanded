@@ -382,6 +382,23 @@ function isRateLimitResponse(res: Response): boolean {
   return res.status === 429;
 }
 
+/**
+ * The subset of the Gemini generateContent response this module actually reads. The body arrives as
+ * `unknown` from the JSON reader; `asGeminiImageResponse` narrows it once so the call sites below
+ * stop casting through `any` (which also made `data.candidates` throw when the body was literally
+ * `null`).
+ */
+type GeminiImageResponse = {
+  error?: { message?: unknown };
+  candidates?: Array<{
+    content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
+  }>;
+};
+
+function asGeminiImageResponse(body: unknown): GeminiImageResponse {
+  return body && typeof body === 'object' ? (body as GeminiImageResponse) : {};
+}
+
 function parseSafetyBlock(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
   const o = body as Record<string, unknown>;
@@ -527,18 +544,18 @@ export async function generateImage(
         };
       }
 
+      const payload = asGeminiImageResponse(data);
+
       if (!res.ok) {
+        const apiMessage = payload.error?.message;
         const msg =
-          (data as any)?.error?.message && typeof (data as any).error?.message === 'string'
-            ? ((data as any).error.message as string)
+          typeof apiMessage === 'string' && apiMessage
+            ? apiMessage
             : res.statusText || 'Request failed';
         return imageFailure(msg);
       }
 
-      const candidates = (data as any).candidates as
-        | Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }>
-        | undefined;
-      const part = candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      const part = payload.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
       if (part?.inlineData?.data) {
         const mime = part.inlineData.mimeType || 'image/png';
         const dataUrl = `data:${mime};base64,${part.inlineData.data}`;

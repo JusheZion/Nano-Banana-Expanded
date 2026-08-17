@@ -5,6 +5,7 @@ import { BALLOON_STYLES } from '../data/BalloonStyles';
 import type { BalloonStyleId } from '../../../types/balloon';
 import { useComicStore } from '../../../stores/comicStore';
 import { ACCENT_GOLD_GRADIENT, ACCENT_BLUE_GRADIENT, ACCENT_GOLD_LIGHT } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 /** Solid dark blue for menu bar text (gold bar) when not hovered */
 const MENU_BAR_TEXT_BLUE = '#001a4d';
@@ -83,7 +84,30 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     createGroup,
     ungroup,
     getGroupMembers,
-  } = useComicStore();
+  } = useComicStore(
+    useShallow((s) => ({
+      pages: s.pages,
+      currentPageId: s.currentPageId,
+      selectedElementIds: s.selectedElementIds,
+      addPanel: s.addPanel,
+      lastCanvasPosition: s.lastCanvasPosition,
+      addBalloon: s.addBalloon,
+      addOverlay: s.addOverlay,
+      insertImageIntoWorkspace: s.insertImageIntoWorkspace,
+      updatePanel: s.updatePanel,
+      setKnifeMode: s.setKnifeMode,
+      isKnifeMode: s.isKnifeMode,
+      toggleDrawingMode: s.toggleDrawingMode,
+      isDrawingMode: s.isDrawingMode,
+      splitPanel: s.splitPanel,
+      toggleFlip: s.toggleFlip,
+      bringToFront: s.bringToFront,
+      sendToBack: s.sendToBack,
+      createGroup: s.createGroup,
+      ungroup: s.ungroup,
+      getGroupMembers: s.getGroupMembers,
+    })),
+  );
 
   const currentPage = pages.find(p => p.id === currentPageId);
   const groupOfFirst = currentPageId && selectedElementIds[0] ? getGroupMembers(currentPageId, selectedElementIds[0]) : null;

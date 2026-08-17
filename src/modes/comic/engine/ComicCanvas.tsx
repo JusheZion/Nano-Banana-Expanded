@@ -1,4 +1,6 @@
 import React, { useRef, useEffect } from 'react';
+import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { Stage, Layer, Rect, Line, Line as KonvaLine, Group, Image } from 'react-konva';
 import useImage from 'use-image';
 import { jsPDF } from 'jspdf';
@@ -12,6 +14,7 @@ import { splitConvexPolygon, pointInPanel } from '../utils/geometry';
 import { getGutterAwareSnapLines, type SnapLine, type DiagonalGuide } from '../utils/snapping';
 import type { BalloonInstance } from '../../../types/balloon';
 import { ACCENT_GOLD_SOLID } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 // --- Drawing View ---
 const DrawingView = ({ drawing }: { drawing: { points: number[], stroke: string, strokeWidth: number, isVisible?: boolean, isLocked?: boolean } }) => {
@@ -143,8 +146,41 @@ export const ComicCanvas: React.FC = () => {
         removeElement,
 
         // Context menu
-        openContextMenu
-    } = useComicStore();
+        openContextMenu,
+        // Selected with useShallow rather than subscribing to the whole store: a bare
+        // useComicStore() re-renders this component on *every* store write, which during a panel
+        // drag is once per mouse move.
+    } = useComicStore(
+        useShallow((s) => ({
+            pages: s.pages,
+            currentPageId: s.currentPageId,
+            selectedElementIds: s.selectedElementIds,
+            layoutMode: s.layoutMode,
+            zoomLevel: s.zoomLevel,
+            pageSettings: s.pageSettings,
+            gutterSize: s.gutterSize,
+            selectPage: s.selectPage,
+            setSelectedElements: s.setSelectedElements,
+            toggleSelection: s.toggleSelection,
+            clearSelection: s.clearSelection,
+            updatePanel: s.updatePanel,
+            addPanel: s.addPanel,
+            placePanelAtNextClick: s.placePanelAtNextClick,
+            placePanelShape: s.placePanelShape,
+            setPlacePanelAtNextClick: s.setPlacePanelAtNextClick,
+            setLastCanvasPosition: s.setLastCanvasPosition,
+            updateBalloon: s.updateBalloon,
+            addOverlay: s.addOverlay,
+            updateOverlay: s.updateOverlay,
+            isDrawingMode: s.isDrawingMode,
+            brushColor: s.brushColor,
+            brushWidth: s.brushWidth,
+            addDrawing: s.addDrawing,
+            isKnifeMode: s.isKnifeMode,
+            removeElement: s.removeElement,
+            openContextMenu: s.openContextMenu,
+        })),
+    );
 
 
     // Local state for drawing
@@ -162,9 +198,11 @@ export const ComicCanvas: React.FC = () => {
     const [snapLines, setSnapLines] = React.useState<{ lines: SnapLine[], offset: { x: number, y: number } }>({ lines: [], offset: { x: 0, y: 0 } });
     const [diagonalGuides, setDiagonalGuides] = React.useState<{ guides: DiagonalGuide[], offset: { x: number, y: number } }>({ guides: [], offset: { x: 0, y: 0 } });
 
-    if (!pages || pages.length === 0) return <div className="text-white p-4">Loading Comic Engine...</div>;
-
-    const stageRef = useRef<any>(null);
+    // NOTE: the "no pages yet" guard deliberately lives *below* every hook call (just above the
+    // return). An early return here would make the hooks after it conditional, so the transition
+    // pages.length > 0 -> 0 (project load / clear) crashed React with "Rendered fewer hooks than
+    // expected". Do not reintroduce an early return above this point.
+    const stageRef = useRef<Konva.Stage | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     // When a canvas click changes the current page we do NOT want to yank the scroll (you're already
     // looking at that page). This suppresses the next auto-scroll after such interactions.
@@ -173,13 +211,13 @@ export const ComicCanvas: React.FC = () => {
     // BAL-7: Konva rasterizes text to canvas immediately, so a balloon added before its web font
     // finishes loading paints in a fallback font. Force a redraw once fonts are ready / finish loading.
     useEffect(() => {
-        const fonts = (document as any)?.fonts;
+        const fonts: FontFaceSet | undefined = document.fonts;
         if (!fonts) return;
         let cancelled = false;
-        const redraw = () => { if (!cancelled) stageRef.current?.batchDraw?.(); };
-        fonts.ready?.then?.(redraw);
-        fonts.addEventListener?.('loadingdone', redraw);
-        return () => { cancelled = true; fonts.removeEventListener?.('loadingdone', redraw); };
+        const redraw = () => { if (!cancelled) stageRef.current?.batchDraw(); };
+        void fonts.ready.then(redraw);
+        fonts.addEventListener('loadingdone', redraw);
+        return () => { cancelled = true; fonts.removeEventListener('loadingdone', redraw); };
     }, []);
 
     // Multi-page fix: the canvas view previously never followed the current page, so selecting or
@@ -199,9 +237,9 @@ export const ComicCanvas: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPageId]);
 
-    const handleStageMouseDown = (e: any) => {
+    const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
         const stage = e.target.getStage();
-        const rawPos = stage.getPointerPosition();
+        const rawPos = stage?.getPointerPosition();
         if (!rawPos) return;
 
         const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
@@ -283,10 +321,10 @@ export const ComicCanvas: React.FC = () => {
         setSnapLines({ lines: [], offset: { x: 0, y: 0 } });
     };
 
-    const handleStageContextMenu = (e: any) => {
+    const handleStageContextMenu = (e: KonvaEventObject<PointerEvent>) => {
         e.evt?.preventDefault();
-        const stage = e.target.getStage();
-        const rawPos = stage.getPointerPosition();
+        // getStage() is nullable — a detached node would have thrown here before.
+        const rawPos = e.target.getStage()?.getPointerPosition() ?? null;
         const clientX = e.evt?.clientX ?? 0;
         const clientY = e.evt?.clientY ?? 0;
 
@@ -295,7 +333,7 @@ export const ComicCanvas: React.FC = () => {
         let balloonId: string | undefined;
         let panelId: string | undefined;
 
-        let node: any = e.target;
+        let node: Konva.Node | null = e.target;
         while (node) {
             const name = node.name?.() ?? node.attrs?.name;
             if (typeof name === 'string') {
@@ -333,7 +371,7 @@ export const ComicCanvas: React.FC = () => {
             }
         }
         if ((context === 'balloon' || context === 'panel') && !pageId && node) {
-            let p: any = node.getParent?.();
+            let p: Konva.Node | null = node.getParent?.() ?? null;
             while (p) {
                 const n = p.name?.() ?? p.attrs?.name;
                 if (typeof n === 'string' && n.startsWith('page-')) {
@@ -347,9 +385,8 @@ export const ComicCanvas: React.FC = () => {
         openContextMenu({ x: clientX, y: clientY, context, pageId, balloonId, panelId, pageLocalX, pageLocalY });
     };
 
-    const handleStageMouseMove = (e: any) => {
-        const stage = e.target.getStage();
-        const rawPos = stage.getPointerPosition();
+    const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+        const rawPos = e.target.getStage()?.getPointerPosition();
         if (!rawPos) return;
 
         const pos = { x: rawPos.x / zoomLevel, y: rawPos.y / zoomLevel };
@@ -504,68 +541,77 @@ export const ComicCanvas: React.FC = () => {
     const clearExport = useComicStore(state => state.clearExport);
 
     useEffect(() => {
-        if (exportFormat && stageRef.current) {
-            clearSelection();
+        if (!exportFormat || !stageRef.current) return;
+        clearSelection();
 
-            // Allow React to flush the clearSelection before capturing
-            setTimeout(async () => {
-                if (!stageRef.current) return;
+        // Allow React to flush the clearSelection before capturing. The handle is cleared on
+        // cleanup so an unmount / export cancel mid-delay can't fire a capture against a torn-down
+        // stage (previously this timer leaked and kept the whole closure alive).
+        const timer = window.setTimeout(() => {
+            const stage = stageRef.current;
+            if (!stage) return;
 
-                if (exportFormat === 'png') {
-                    // Export just the current page high-res
-                    const currentPageIndex = pages.findIndex(p => p.id === currentPageId);
-                    const idx = currentPageIndex >= 0 ? currentPageIndex : 0;
-                    const offset = getLayoutPosition(idx, layoutMode);
+            if (exportFormat === 'png') {
+                // Export just the current page high-res
+                const currentPageIndex = pages.findIndex(p => p.id === currentPageId);
+                const idx = currentPageIndex >= 0 ? currentPageIndex : 0;
+                const offset = getLayoutPosition(idx, layoutMode);
 
-                    const uri = stageRef.current.toDataURL({
+                const uri = stage.toDataURL({
+                    x: offset.x * zoomLevel,
+                    y: offset.y * zoomLevel,
+                    width: 800 * zoomLevel,
+                    height: 1200 * zoomLevel,
+                    pixelRatio: 3.125 / zoomLevel // ensure pixelRatio counters current zoom to always be precisely 3.125 relative to base 800x1200
+                });
+
+                const link = document.createElement('a');
+                link.download = `ARCS_Page_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = uri;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else if (exportFormat === 'pdf') {
+                // Export all pages into a high-res PDF
+                // 800x1200 pixels -> 8.33" x 12.5" at 300 DPI
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'in',
+                    format: [8.33, 12.5]
+                });
+
+                for (let i = 0; i < pages.length; i++) {
+                    if (i > 0) pdf.addPage([8.33, 12.5], 'portrait');
+
+                    const offset = getLayoutPosition(i, layoutMode);
+                    const uri = stage.toDataURL({
                         x: offset.x * zoomLevel,
                         y: offset.y * zoomLevel,
                         width: 800 * zoomLevel,
                         height: 1200 * zoomLevel,
-                        pixelRatio: 3.125 / zoomLevel // ensure pixelRatio counters current zoom to always be precisely 3.125 relative to base 800x1200
+                        pixelRatio: 3.125 / zoomLevel
                     });
 
-                    const link = document.createElement('a');
-                    link.download = `ARCS_Page_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
-                    link.href = uri;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                } else if (exportFormat === 'pdf') {
-                    // Export all pages into a high-res PDF
-                    // 800x1200 pixels -> 8.33" x 12.5" at 300 DPI
-                    const pdf = new jsPDF({
-                        orientation: 'portrait',
-                        unit: 'in',
-                        format: [8.33, 12.5]
-                    });
-
-                    for (let i = 0; i < pages.length; i++) {
-                        if (i > 0) pdf.addPage([8.33, 12.5], 'portrait');
-
-                        const offset = getLayoutPosition(i, layoutMode);
-                        const uri = stageRef.current.toDataURL({
-                            x: offset.x * zoomLevel,
-                            y: offset.y * zoomLevel,
-                            width: 800 * zoomLevel,
-                            height: 1200 * zoomLevel,
-                            pixelRatio: 3.125 / zoomLevel
-                        });
-
-                        pdf.addImage(uri, 'PNG', 0, 0, 8.33, 12.5);
-                    }
-
-                    pdf.save(`ARCS_ComicBook_${new Date().toISOString().split('T')[0]}.pdf`);
+                    pdf.addImage(uri, 'PNG', 0, 0, 8.33, 12.5);
                 }
-                clearExport();
-            }, 100);
-        }
+
+                pdf.save(`ARCS_ComicBook_${new Date().toISOString().split('T')[0]}.pdf`);
+            }
+            clearExport();
+        }, 100);
+
+        return () => window.clearTimeout(timer);
     }, [exportFormat, pages, currentPageId, layoutMode, zoomLevel, clearExport, clearSelection]);
 
     const stageWidth = layoutMode === 'spread' && pages.length > 1 ? 1600 + 40 : 800 + 40; // padding
     const stageHeight = layoutMode === 'spread'
         ? Math.ceil(pages.length / 2) * 1220
         : Math.max(1, pages.length) * 1220;
+
+    // Every hook above runs unconditionally; only the rendered output is short-circuited here.
+    if (!pages || pages.length === 0) {
+        return <div className="text-white p-4">Loading Comic Engine...</div>;
+    }
 
     return (
         <div className="w-full h-full flex flex-col bg-transparent">
@@ -696,8 +742,8 @@ export const ComicCanvas: React.FC = () => {
                                                         key={panel.id}
                                                         panel={panel}
                                                         isSelected={selectedElementIds.includes(panel.id)}
-                                                        onSelect={(e: any) => {
-                                                            if (e?.evt?.shiftKey) {
+                                                        onSelect={(e) => {
+                                                            if (e?.evt && 'shiftKey' in e.evt && e.evt.shiftKey) {
                                                                 toggleSelection(panel.id);
                                                             } else {
                                                                 setSelectedElements([panel.id]);
@@ -742,8 +788,8 @@ export const ComicCanvas: React.FC = () => {
                                                         key={balloon.id}
                                                         balloon={{ ...balloon, isSelected: selectedElementIds.includes(balloon.id) }}
                                                         styleDef={styleDef}
-                                                        onSelect={(id: string, e: any) => {
-                                                            if (e?.evt?.shiftKey) toggleSelection(id);
+                                                        onSelect={(id, e) => {
+                                                            if (e?.evt && 'shiftKey' in e.evt && e.evt.shiftKey) toggleSelection(id);
                                                             else setSelectedElements([id]);
                                                             selectPage(page.id);
                                                         }}

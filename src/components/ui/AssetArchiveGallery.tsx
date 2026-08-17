@@ -15,10 +15,24 @@ export const AssetArchiveGallery: React.FC = () => {
     useTheme();
 
     useEffect(() => {
+        // Previously an unguarded .then/.finally: a rejected fetch became an unhandled promise
+        // rejection and an unmount mid-flight set state on a dead component.
+        let cancelled = false;
         setLoading(true);
         getAssetsGroupedByCollection()
-            .then(setGrouped)
-            .finally(() => setLoading(false));
+            .then((next) => {
+                if (!cancelled) setGrouped(next);
+            })
+            .catch((err: unknown) => {
+                console.error('[AssetArchiveGallery] failed to load asset archive', err);
+                if (!cancelled) setGrouped({});
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const collectionNames = Object.keys(grouped);

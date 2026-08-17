@@ -62,18 +62,45 @@ export const ArchiveRecallModal: React.FC<ArchiveRecallModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    // Two problems before: (1) no .catch, so a failed fetch was an unhandled rejection and the modal
+    // sat on "no results"; (2) flipping `context` while a request was in flight let the stale
+    // response land after the newer one. The cancelled flag fixes both ordering and unmount writes.
+    let cancelled = false;
     setLoading(true);
+    const settle = () => {
+      if (!cancelled) setLoading(false);
+    };
+    const onError = (err: unknown) => {
+      console.error('[ArchiveRecallModal] failed to load archive', err);
+    };
+
     if (context === 'character') {
-      getCharactersGroupedByProfile()
-        .then(setGroupedCharacters)
-        .finally(() => setLoading(false));
       setGroupedAssets({});
+      getCharactersGroupedByProfile()
+        .then((next) => {
+          if (!cancelled) setGroupedCharacters(next);
+        })
+        .catch((err: unknown) => {
+          onError(err);
+          if (!cancelled) setGroupedCharacters({});
+        })
+        .finally(settle);
     } else {
-      getAssetsGroupedByCollection()
-        .then(setGroupedAssets)
-        .finally(() => setLoading(false));
       setGroupedCharacters({});
+      getAssetsGroupedByCollection()
+        .then((next) => {
+          if (!cancelled) setGroupedAssets(next);
+        })
+        .catch((err: unknown) => {
+          onError(err);
+          if (!cancelled) setGroupedAssets({});
+        })
+        .finally(settle);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, context]);
 
   const accentTextStyle =

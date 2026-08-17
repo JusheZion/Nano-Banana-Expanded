@@ -1,4 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { Group, Rect, Image, Transformer, Line, Circle, Ellipse, Path, Shape } from 'react-konva';
 import useImage from 'use-image';
 import { useComicStore, undoPause, undoResume, type Panel } from '../../../stores/comicStore';
@@ -15,9 +17,9 @@ import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils'
 interface ComicPanelProps {
     panel: Panel;
     isSelected: boolean;
-    onSelect: (e?: any) => void;
+    onSelect: (e?: KonvaEventObject<MouseEvent | TouchEvent>) => void;
     onChange: (patch: Partial<Panel>) => void;
-    onDragEnd?: (e?: any) => void;
+    onDragEnd?: (e?: KonvaEventObject<DragEvent>) => void;
     /** Callback to push diagonal guide lines up to the canvas overlay layer. */
     onDiagonalGuides?: (guides: DiagonalGuide[]) => void;
     /** Callback for H/V vertex snap lines (rendered separately from diagonals). */
@@ -27,9 +29,9 @@ interface ComicPanelProps {
 export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSelect, onChange, onDragEnd, onDiagonalGuides, onVertexSnap }) => {
     const resolvedPanelImageUrl = useArcsResolvedSrc(panel.imageUrl || '');
     const [imageObj] = useImage(resolvedPanelImageUrl || '', 'anonymous');
-    const groupRef = useRef<any>(null);
-    const trRef = useRef<any>(null);
-    const imageRef = useRef<any>(null);
+    const groupRef = useRef<Konva.Group | null>(null);
+    const trRef = useRef<Konva.Transformer | null>(null);
+    const imageRef = useRef<Konva.Image | null>(null);
     const [isContentMode, setIsContentMode] = useState(false);
     const isFirstPanelDragMove = useRef(true);
     const isFirstVertexOrEdgeDrag = useRef(true);
@@ -39,7 +41,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
         if (!groupRef.current) return;
         const group = groupRef.current;
         const origGetClientRect = group.getClientRect.bind(group);
-        group.getClientRect = (config?: any) => {
+        group.getClientRect = (config?: Parameters<Konva.Group['getClientRect']>[0]) => {
             const glowPass = group.findOne('.glow-pass');
             const wasVisible = glowPass ? glowPass.visible() : false;
             if (glowPass && wasVisible) glowPass.visible(false);
@@ -66,11 +68,13 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
             setIsContentMode(false);
             return;
         }
-        if (trRef.current) {
+        const transformer = trRef.current;
+        if (transformer) {
             const target = isContentMode && imageRef.current ? imageRef.current : groupRef.current;
             if (target) {
-                trRef.current.nodes([target]);
-                trRef.current.getLayer().batchDraw();
+                transformer.nodes([target]);
+                // getLayer() is nullable while the transformer is detached — this used to throw.
+                transformer.getLayer()?.batchDraw();
             }
         }
     }, [isSelected, isContentMode]);
@@ -80,7 +84,12 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
         setIsContentMode(prev => !prev);
     }, [isSelected, panel.imageUrl]);
 
-    const isPolygon = panel.shapeType === 'polygon' && panel.points && panel.points.length >= 3;
+    // `panel.points` is optional on Panel, so every polygon branch below used to reach for it with a
+    // non-null assertion (`panel.points!`). Narrow once here instead: `polygonPoints` is non-null
+    // exactly when the panel is a renderable polygon, and `isPolygon` is a real boolean.
+    const polygonPoints =
+        panel.shapeType === 'polygon' && panel.points && panel.points.length >= 3 ? panel.points : null;
+    const isPolygon = polygonPoints !== null;
     const isEllipse = panel.shapeType === 'ellipse';
     const isHalfCircle = panel.shapeType === 'halfCircle';
     const isQuarterCircle = panel.shapeType === 'quarterCircle';
@@ -93,8 +102,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
     let bboxHeight = panel.height;
 
     if (isPolygon) {
-        const xs = panel.points!.map(p => p.x);
-        const ys = panel.points!.map(p => p.y);
+        const xs = polygonPoints.map(p => p.x);
+        const ys = polygonPoints.map(p => p.y);
         bboxMinX = Math.min(...xs);
         bboxMinY = Math.min(...ys);
         bboxWidth = Math.max(...xs) - bboxMinX;
@@ -231,12 +240,12 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
         };
     }, [panel.strokeGradient, panel.strokeColor, panel.width, panel.height]);
 
-    const renderClipPath = (ctx: any) => {
+    const renderClipPath = (ctx: Konva.Context) => {
         ctx.beginPath();
         if (isPolygon) {
-            ctx.moveTo(panel.points![0].x, panel.points![0].y);
-            for (let i = 1; i < panel.points!.length; i++) {
-                ctx.lineTo(panel.points![i].x, panel.points![i].y);
+            ctx.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+            for (let i = 1; i < polygonPoints.length; i++) {
+                ctx.lineTo(polygonPoints[i].x, polygonPoints[i].y);
             }
             ctx.closePath();
         } else if (isEllipse) {
@@ -544,7 +553,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                     <Group listening={false}>
                         {isPolygon ? (
                             <Line
-                                points={panel.points!.flatMap(p => [p.x, p.y])}
+                                points={polygonPoints.flatMap(p => [p.x, p.y])}
                                 closed
                                 fill="#f0f0f0"
                                 shadowColor={panel.shadowColor ?? "black"}
@@ -596,7 +605,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                         <Group name="glow-pass" x={-9000} y={-9000} opacity={panel.glowOpacity} listening={false}>
                             {isPolygon ? (
                                 <Line
-                                    points={panel.points!.flatMap(p => [p.x, p.y])}
+                                    points={polygonPoints.flatMap(p => [p.x, p.y])}
                                     closed
                                     fill={panel.glowColor ?? "#3B82F6"}
                                     stroke={panel.glowColor ?? "#3B82F6"}
@@ -658,7 +667,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 {isPolygon ? (
                     <Group>
                         <Line
-                            points={panel.points!.flatMap(p => [p.x, p.y])}
+                            points={polygonPoints.flatMap(p => [p.x, p.y])}
                             closed
                             {...panelFillProps}
                             listening={true}
@@ -762,7 +771,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 {/* 3. The Front Border Stroke (Unclipped) */}
                 {isPolygon ? (
                     <Line
-                        points={panel.points!.flatMap(p => [p.x, p.y])}
+                        points={polygonPoints.flatMap(p => [p.x, p.y])}
                         closed
                         {...panelStrokeProps}
                         strokeWidth={isSelected ? 6 : 4}
@@ -800,7 +809,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 )}
 
                 {/* 4. Custom Vertex Coordinates (Trapezoid Anchors) */}
-                {isSelected && isPolygon && panel.points!.map((pt, i) => (
+                {isSelected && isPolygon && polygonPoints.map((pt, i) => (
                     <Circle
                         key={`anchor-${i}`}
                         x={pt.x}
@@ -830,7 +839,7 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 undoResume();
                                 isFirstVertexOrEdgeDrag.current = false;
                             }
-                            const newPoints = [...panel.points!];
+                            const newPoints = [...polygonPoints];
                             // PAN-4: keep the dragged vertex on-page.
                             newPoints[i] = {
                                 x: Math.max(0, Math.min(800, e.target.x())),
@@ -864,9 +873,9 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                 ))}
 
                 {/* 5. Edge Dragging (Wall Manipulation) */}
-                {isSelected && isPolygon && panel.points!.map((pt, i) => {
-                    const nextIndex = (i + 1) % panel.points!.length;
-                    const nextPt = panel.points![nextIndex];
+                {isSelected && isPolygon && polygonPoints.map((pt, i) => {
+                    const nextIndex = (i + 1) % polygonPoints.length;
+                    const nextPt = polygonPoints[nextIndex];
                     return (
                         <Line
                             key={`edge-${i}`}
@@ -879,10 +888,10 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 undoPause();
                                 isFirstVertexOrEdgeDrag.current = true;
                                 const pos = e.target.getStage()?.getPointerPosition();
-                                (e.target as any).setAttr('startPos', pos);
-                                (e.target as any).setAttr('startPoints', panel.points);
+                                (e.target as Konva.Node).setAttr('startPos', pos);
+                                (e.target as Konva.Node).setAttr('startPoints', panel.points);
                             }}
-                            dragBoundFunc={function (this: any) {
+                            dragBoundFunc={function (this: Konva.Node) {
                                 // Lock the line visually exactly where its parent group puts it.
                                 return this.parent?.getAbsolutePosition() || { x: 0, y: 0 };
                             }}
@@ -893,8 +902,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                     isFirstVertexOrEdgeDrag.current = false;
                                 }
                                 const rawPos = e.target.getStage()?.getPointerPosition();
-                                const startPos = (e.target as any).getAttr('startPos');
-                                const startPoints = (e.target as any).getAttr('startPoints');
+                                const startPos = (e.target as Konva.Node).getAttr('startPos');
+                                const startPoints = (e.target as Konva.Node).getAttr('startPoints');
 
                                 if (rawPos && startPos && startPoints) {
                                     const state = useComicStore.getState();
@@ -943,8 +952,8 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                             onDragEnd={(e) => {
                                 e.cancelBubble = true;
                                 undoResume();
-                                (e.target as any).setAttr('startPos', null);
-                                (e.target as any).setAttr('startPoints', null);
+                                (e.target as Konva.Node).setAttr('startPos', null);
+                                (e.target as Konva.Node).setAttr('startPoints', null);
                                 onVertexSnap?.([]);
                                 onDiagonalGuides?.([]);
                                 if (onDragEnd) onDragEnd();
@@ -956,13 +965,13 @@ export const ComicPanel: React.FC<ComicPanelProps> = ({ panel, isSelected, onSel
                                 const container = e.target.getStage()?.container();
                                 if (container) container.style.cursor = 'move';
                                 // Optional: make line slightly visible on hover
-                                (e.target as any).stroke('rgba(212, 175, 55, 0.4)');
+                                (e.target as Konva.Line).stroke('rgba(212, 175, 55, 0.4)');
                                 e.target.getLayer()?.batchDraw();
                             }}
                             onMouseLeave={(e) => {
                                 const container = e.target.getStage()?.container();
                                 if (container) container.style.cursor = 'default';
-                                (e.target as any).stroke('transparent');
+                                (e.target as Konva.Line).stroke('transparent');
                                 e.target.getLayer()?.batchDraw();
                             }}
                         />

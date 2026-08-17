@@ -4,6 +4,7 @@ import { useComicStore, type Panel } from '../../../stores/comicStore';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD, TEXT_ON_BLUE } from '../theme/Phase12DesignTokens';
 import { PrecisionSlider } from './PrecisionSlider';
+import { useShallow } from 'zustand/react/shallow';
 
 /** Ribbon: same as TEXT_ON_BLUE for consistency; object toolbar lives in ribbon */
 const RIBBON_MUTED = 'rgba(252,246,186,0.7)';
@@ -56,8 +57,22 @@ export const ObjectToolbar: React.FC<ObjectToolbarProps> = ({ currentPageId, sel
         splitPanel,
         createGroup,
         ungroup,
-        getGroupMembers
-    } = useComicStore();
+        getGroupMembers,
+    } = useComicStore(
+        useShallow((s) => ({
+            bringToFront: s.bringToFront,
+            sendToBack: s.sendToBack,
+            cloneElement: s.cloneElement,
+            removeElement: s.removeElement,
+            toggleFlip: s.toggleFlip,
+            pages: s.pages,
+            updatePanel: s.updatePanel,
+            splitPanel: s.splitPanel,
+            createGroup: s.createGroup,
+            ungroup: s.ungroup,
+            getGroupMembers: s.getGroupMembers,
+        })),
+    );
 
     const selectedPanelEntries = pages.flatMap(p => p.panels.filter(panel => selectedElementIds.includes(panel.id)).map(panel => ({ pageId: p.id, panel })));
     const selectedPanels = selectedPanelEntries.map(x => x.panel);

@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PRIMARY_BG_FLAT } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 type LayerDetails = {
     id: string;
@@ -76,95 +77,90 @@ const SortableLayerItem: React.FC<LayerItemProps> = ({ id, name, type, isLocked,
         transform,
         transition,
         isDragging
-    } = useSortable({ id });
-
-    const style = {
+        } = useSortable({ id });
+        const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
         zIndex: isDragging ? 100 : 1,
-    };
-
-    const getIcon = () => {
+        };
+        const getIcon = () => {
         const c = royalBlue ? '' : type === 'panel' ? ' text-blue-400' : type === 'balloon' ? ' text-green-400' : type === 'group' ? ' text-amber-400' : ' text-purple-400';
         if (type === 'panel') return <Square className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
         if (type === 'balloon') return <MessageCircle className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
         if (type === 'group') return <BoxSelect className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
         return <PenTool className={`w-4 h-4${c}`} style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined} />;
-    };
-
-    return (
+        };
+        return (
         <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            onClick={onSelect}
-            onContextMenu={onContextMenu}
-            className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${
-                royalBlue
-                    ? isSelected ? 'bg-[#002366]/15 border-[#002366]/50' : 'bg-[#002366]/5 border-transparent hover:bg-[#002366]/10'
-                    : isSelected ? 'bg-white/10 border-gold-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'
-            }`}
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        onClick={onSelect}
+        onContextMenu={onContextMenu}
+        className={`flex items-center justify-between p-2 mb-1 rounded-md cursor-pointer border select-none ${
+        royalBlue
+        ? isSelected ? 'bg-[#002366]/15 border-[#002366]/50' : 'bg-[#002366]/5 border-transparent hover:bg-[#002366]/10'
+        : isSelected ? 'bg-white/10 border-gold-500/50' : 'bg-white/5 border-transparent hover:bg-white/10'
+        }`}
         >
-            <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                {/* Drag handle only: listeners not on row so eye/lock clicks are not captured by DnD */}
-                <button
-                    type="button"
-                    className="flex-shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing touch-none"
-                    style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
-                    aria-label="Drag to reorder"
-                    {...listeners}
-                >
-                    <GripVertical className={`w-4 h-4 ${royalBlue ? '' : 'text-white/50'}`} />
-                </button>
-                {type === 'group' && onToggleExpand && (
-                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleExpand(); }} className="flex-shrink-0 p-0.5 rounded hover:bg-white/10" aria-label={isExpanded ? 'Collapse group' : 'Expand group'}>
-                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </button>
-                )}
-                <div className="flex-shrink-0">
-                    {getIcon()}
-                </div>
-                <span className={`text-sm font-medium truncate ${royalBlue ? 'text-inherit' : 'text-white/90'}`}>
-                    {name}
-                </span>
-            </div>
-
-            {type !== 'group' && (
-            <div className="flex items-center gap-1 flex-shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleVisibility(); }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (!isVisible ? 'opacity-50' : '') : 'hover:bg-white/10 ' + (!isVisible ? 'text-white/40' : 'text-white/80')}`}
-                    style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
-                    aria-label={isVisible ? 'Hide layer' : 'Show layer'}
-                >
-                    {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
-                <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleLock(); }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (isLocked ? 'opacity-80' : 'opacity-50') : 'hover:bg-white/10 ' + (isLocked ? 'text-red-400' : 'text-white/40 hover:text-white/80')}`}
-                    style={royalBlue && !isLocked ? { color: PRIMARY_BG_FLAT } : royalBlue && isLocked ? { color: '#002366' } : undefined}
-                    aria-label={isLocked ? 'Unlock layer' : 'Lock layer'}
-                >
-                    {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                </button>
-            </div>
-            )}
+        <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
+        {/* Drag handle only: listeners not on row so eye/lock clicks are not captured by DnD */}
+        <button
+        type="button"
+        className="flex-shrink-0 p-0.5 rounded cursor-grab active:cursor-grabbing touch-none"
+        style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
+        aria-label="Drag to reorder"
+        {...listeners}
+        >
+        <GripVertical className={`w-4 h-4 ${royalBlue ? '' : 'text-white/50'}`} />
+        </button>
+        {type === 'group' && onToggleExpand && (
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleExpand(); }} className="flex-shrink-0 p-0.5 rounded hover:bg-white/10" aria-label={isExpanded ? 'Collapse group' : 'Expand group'}>
+        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+        )}
+        <div className="flex-shrink-0">
+        {getIcon()}
         </div>
-    );
-};
-
-export const LayerTree: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    /** When true, render only inner content for use inside ComicPanelStack (no fixed wrapper, no header). */
-    embedded?: boolean;
-}> = ({ isOpen, onClose, embedded }) => {
-    const {
+        <span className={`text-sm font-medium truncate ${royalBlue ? 'text-inherit' : 'text-white/90'}`}>
+        {name}
+        </span>
+        </div>
+        {type !== 'group' && (
+        <div className="flex items-center gap-1 flex-shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+        <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleVisibility(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (!isVisible ? 'opacity-50' : '') : 'hover:bg-white/10 ' + (!isVisible ? 'text-white/40' : 'text-white/80')}`}
+        style={royalBlue ? { color: PRIMARY_BG_FLAT } : undefined}
+        aria-label={isVisible ? 'Hide layer' : 'Show layer'}
+        >
+        {isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+        </button>
+        <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleLock(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={`p-1.5 rounded transition-colors ${royalBlue ? 'hover:bg-[#002366]/10 ' + (isLocked ? 'opacity-80' : 'opacity-50') : 'hover:bg-white/10 ' + (isLocked ? 'text-red-400' : 'text-white/40 hover:text-white/80')}`}
+        style={royalBlue && !isLocked ? { color: PRIMARY_BG_FLAT } : royalBlue && isLocked ? { color: '#002366' } : undefined}
+        aria-label={isLocked ? 'Unlock layer' : 'Lock layer'}
+        >
+        {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+        </button>
+        </div>
+        )}
+        </div>
+        );
+        };
+        export const LayerTree: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        /** When true, render only inner content for use inside ComicPanelStack (no fixed wrapper, no header). */
+        embedded?: boolean;
+        }> = ({ isOpen, onClose, embedded }) => {
+        const {
         pages,
         currentPageId,
         selectedElementIds,
@@ -176,8 +172,23 @@ export const LayerTree: React.FC<{
         toggleLayerLock,
         createGroup,
         ungroup,
-        getGroupMembers
-    } = useComicStore();
+        getGroupMembers,
+    } = useComicStore(
+        useShallow((s) => ({
+            pages: s.pages,
+            currentPageId: s.currentPageId,
+            selectedElementIds: s.selectedElementIds,
+            setSelectedElements: s.setSelectedElements,
+            toggleSelection: s.toggleSelection,
+            reorderLayer: s.reorderLayer,
+            reorderGroup: s.reorderGroup,
+            toggleLayerVisibility: s.toggleLayerVisibility,
+            toggleLayerLock: s.toggleLayerLock,
+            createGroup: s.createGroup,
+            ungroup: s.ungroup,
+            getGroupMembers: s.getGroupMembers,
+        })),
+    );
 
     const [layerMenu, setLayerMenu] = useState<{ x: number; y: number } | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());

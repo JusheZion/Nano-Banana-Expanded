@@ -2,6 +2,7 @@ import React from 'react';
 import { useComicStore } from '../../../stores/comicStore';
 import { Tooltip } from '@/shared/components/Tooltip';
 import { ACCENT_GOLD_GRADIENT, TEXT_ON_GOLD } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 interface PageNavigatorProps {
     isOpen: boolean;
@@ -21,8 +22,21 @@ export const PageNavigator: React.FC<PageNavigatorProps> = ({ isOpen, onClose, e
         reorderPages,
         setPageCover,
         layoutMode,
-        setLayoutMode
-    } = useComicStore();
+        setLayoutMode,
+    } = useComicStore(
+        useShallow((s) => ({
+            pages: s.pages,
+            currentPageId: s.currentPageId,
+            selectPage: s.selectPage,
+            addPage: s.addPage,
+            duplicatePage: s.duplicatePage,
+            removePage: s.removePage,
+            reorderPages: s.reorderPages,
+            setPageCover: s.setPageCover,
+            layoutMode: s.layoutMode,
+            setLayoutMode: s.setLayoutMode,
+        })),
+    );
 
     if (!isOpen && !embedded) return null;
 

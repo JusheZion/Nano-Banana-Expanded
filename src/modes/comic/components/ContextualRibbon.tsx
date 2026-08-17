@@ -45,6 +45,7 @@ import {
   TEXT_ON_GOLD,
   TEXT_ON_BLUE,
 } from '../theme/Phase12DesignTokens';
+import { useShallow } from 'zustand/react/shallow';
 
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
 
@@ -114,7 +115,31 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     getGroupMembers,
     textBoxEditBalloonId,
     setTextBoxEditBalloonId,
-  } = useComicStore();
+  } = useComicStore(
+    useShallow((s) => ({
+      pages: s.pages,
+      currentPageId: s.currentPageId,
+      selectedElementIds: s.selectedElementIds,
+      addPanel: s.addPanel,
+      addBalloon: s.addBalloon,
+      lastCanvasPosition: s.lastCanvasPosition,
+      updatePanel: s.updatePanel,
+      updateBalloon: s.updateBalloon,
+      setKnifeMode: s.setKnifeMode,
+      isKnifeMode: s.isKnifeMode,
+      toggleDrawingMode: s.toggleDrawingMode,
+      isDrawingMode: s.isDrawingMode,
+      splitPanel: s.splitPanel,
+      bringToFront: s.bringToFront,
+      sendToBack: s.sendToBack,
+      cloneElement: s.cloneElement,
+      createGroup: s.createGroup,
+      ungroup: s.ungroup,
+      getGroupMembers: s.getGroupMembers,
+      textBoxEditBalloonId: s.textBoxEditBalloonId,
+      setTextBoxEditBalloonId: s.setTextBoxEditBalloonId,
+    })),
+  );
 
   const currentPage = pages.find(p => p.id === currentPageId);
   const selectedPanels = currentPage?.panels.filter(p => selectedElementIds.includes(p.id)) || [];
