@@ -8,6 +8,33 @@ const sideOfLine = (A: Point, B: Point, P: Point): number => {
     return (B.x - A.x) * (P.y - A.y) - (B.y - A.y) * (P.x - A.x);
 };
 
+/**
+ * How close a vertex must be to the cut line, in pixels, to count as lying *on* it.
+ *
+ * `sideOfLine` returns a cross product whose magnitude scales with both the polygon size and the
+ * length of the cut, so it can't be compared against a fixed tolerance directly. Dividing by the
+ * cut length turns it into a perpendicular distance, which can.
+ */
+const ON_LINE_EPSILON_PX = 1e-9;
+
+/** Signed perpendicular distance from P to the infinite line through A and B, or null if A === B. */
+const signedDistanceToLine = (A: Point, B: Point, P: Point): number | null => {
+    const lineLength = Math.hypot(B.x - A.x, B.y - A.y);
+    if (lineLength < 1e-12) return null; // degenerate cut: not a line at all
+    return sideOfLine(A, B, P) / lineLength;
+};
+
+/** Counts points that are distinct to within a pixel-ish tolerance. */
+const distinctPointCount = (points: Point[]): number => {
+    const kept: Point[] = [];
+    for (const p of points) {
+        if (!kept.some((q) => Math.abs(q.x - p.x) < 1e-9 && Math.abs(q.y - p.y) < 1e-9)) {
+            kept.push(p);
+        }
+    }
+    return kept.length;
+};
+
 // Calculates the intersection point between line strictly defined by A->B and segment C->D
 // Note: Bounding box lines are treated as infinite for the split plane, but we only intersect segments.
 const getIntersection = (A: Point, B: Point, C: Point, D: Point): Point | null => {
@@ -56,18 +83,28 @@ export const splitConvexPolygon = (points: Point[], lineStart: Point, lineEnd: P
         const current = points[i];
         const next = points[(i + 1) % points.length];
 
-        const sideCurrent = sideOfLine(lineStart, lineEnd, current);
-        const sideNext = sideOfLine(lineStart, lineEnd, next);
+        const distCurrent = signedDistanceToLine(lineStart, lineEnd, current);
+        const distNext = signedDistanceToLine(lineStart, lineEnd, next);
+        if (distCurrent === null || distNext === null) return null; // degenerate cut
 
-        // Add current point to the respective polygon based on which side of the line it falls
-        if (sideCurrent >= 0) {
+        const sideCurrent = Math.abs(distCurrent) <= ON_LINE_EPSILON_PX ? 0 : Math.sign(distCurrent);
+        const sideNext = Math.abs(distNext) <= ON_LINE_EPSILON_PX ? 0 : Math.sign(distNext);
+
+        // A vertex lying ON the cut belongs to BOTH halves — it is a corner of each. Filing it into
+        // one side only is what made a corner-to-corner cut fail: the far side was left holding a
+        // single vertex, below the three-point minimum, so the whole split was rejected.
+        if (sideCurrent === 0) {
+            poly1.push(current);
+            poly2.push(current);
+        } else if (sideCurrent > 0) {
             poly1.push(current);
         } else {
             poly2.push(current);
         }
 
-        // If the edge crosses the line, calculate intersection
-        if ((sideCurrent > 0 && sideNext < 0) || (sideCurrent < 0 && sideNext > 0)) {
+        // Only a strict sign change crosses the line mid-edge and needs a new shared point. When an
+        // endpoint sits on the line, that vertex is already the crossing and is already in both.
+        if (sideCurrent * sideNext < 0) {
             const intersection = getIntersection(lineStart, lineEnd, current, next);
             if (intersection) {
                 // The intersection point belongs to both resulting polygons
@@ -77,8 +114,10 @@ export const splitConvexPolygon = (points: Point[], lineStart: Point, lineEnd: P
         }
     }
 
-    // A valid split must result in two polygons each having at least 3 points
-    if (poly1.length >= 3 && poly2.length >= 3) {
+    // A valid split needs two real polygons. Count DISTINCT points: a cut that merely grazes an
+    // edge leaves one side holding just the two shared vertices of that edge, which is a line, not
+    // a shape, and must still be rejected.
+    if (distinctPointCount(poly1) >= 3 && distinctPointCount(poly2) >= 3) {
         return [poly1, poly2];
     }
 

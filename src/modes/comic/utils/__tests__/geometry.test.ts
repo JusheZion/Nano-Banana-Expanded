@@ -64,15 +64,45 @@ describe('splitConvexPolygon', () => {
     });
 
     /**
-     * Known edge case, pinned so a future change to the splitter is a decision rather than a
-     * surprise. A cut passing exactly through two opposite corners returns null instead of two
-     * triangles: vertices lying *on* the cut line are assigned to one side only (`side >= 0`), and
-     * the intersection test requires a strict sign change, so the far side never reaches the
-     * three-point minimum. Freehand knife strokes essentially never land exactly on a corner, so
-     * this has no practical effect today — but a programmatic corner-to-corner split would no-op.
+     * This used to return null. A vertex lying exactly on the cut was filed into one half only, so
+     * a corner-to-corner cut left the far half holding a single point — below the three-point
+     * minimum — and the split was rejected. On-line vertices now belong to both halves, since they
+     * are genuinely a corner of each. Matters for any programmatic split (a "Split diagonally"
+     * command computes exact corner coordinates); freehand strokes never landed here.
      */
-    it('no-ops on an exact corner-to-corner cut (documented edge case)', () => {
-        expect(splitConvexPolygon(SQUARE, { x: -10, y: -10 }, { x: 110, y: 110 })).toBeNull();
+    it('splits exactly corner to corner into two triangles', () => {
+        const [a, b] = splitConvexPolygon(SQUARE, { x: -10, y: -10 }, { x: 110, y: 110 })!;
+        expect(a).toHaveLength(3);
+        expect(b).toHaveLength(3);
+        expect(area(a)).toBeCloseTo(5000, 6);
+        expect(area(b)).toBeCloseTo(5000, 6);
+        expect(area(a) + area(b)).toBeCloseTo(area(SQUARE), 6);
+    });
+
+    it('splits corner to corner on the other diagonal too', () => {
+        const [a, b] = splitConvexPolygon(SQUARE, { x: 110, y: -10 }, { x: -10, y: 110 })!;
+        expect(area(a)).toBeCloseTo(5000, 6);
+        expect(area(b)).toBeCloseTo(5000, 6);
+    });
+
+    it('splits from a corner to the midpoint of the opposite edge', () => {
+        // One vertex on the line, one edge crossed — the mixed case.
+        const [a, b] = splitConvexPolygon(SQUARE, { x: 0, y: 0 }, { x: 100, y: 50 })!;
+        expect(area(a) + area(b)).toBeCloseTo(area(SQUARE), 6);
+        expect(area(a)).toBeGreaterThan(0);
+        expect(area(b)).toBeGreaterThan(0);
+    });
+
+    it('rejects a degenerate cut whose two points are identical', () => {
+        expect(splitConvexPolygon(SQUARE, { x: 50, y: 50 }, { x: 50, y: 50 })).toBeNull();
+    });
+
+    it('is unaffected by the scale of the polygon or the cut', () => {
+        // The on-line test is a true perpendicular distance, so it must not drift with magnitude.
+        const big: Point[] = SQUARE.map((p) => ({ x: p.x * 1000, y: p.y * 1000 }));
+        const [a, b] = splitConvexPolygon(big, { x: -1, y: -1 }, { x: 100001, y: 100001 })!;
+        expect(a).toHaveLength(3);
+        expect(b).toHaveLength(3);
     });
 
     it('conserves total area for an off-centre cut', () => {

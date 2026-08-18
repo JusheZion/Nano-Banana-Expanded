@@ -468,7 +468,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <div className="flex flex-col items-center gap-0.5 shrink-0">
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 text-center w-full" style={{ color: TEXT_ON_BLUE }}>Balloons</span>
             <div className="flex items-center gap-1.5">
-              {(['speech_round', 'speech_rounded_rectangle', 'thought_cloud'] as const).map((styleId) => {
+              {(['speech_round', 'speech_rounded_rectangle', 'cloud_fluffy'] as const).map((styleId) => {
                 const style = BALLOON_STYLES.find(s => s.id === styleId);
                 const label = style?.label ?? styleId;
                 return (

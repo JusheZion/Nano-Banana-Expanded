@@ -5,7 +5,7 @@ import { Stage, Layer, Rect, Line, Line as KonvaLine, Group, Image } from 'react
 import useImage from 'use-image';
 import { jsPDF } from 'jspdf';
 import { useComicStore, type Panel, type ComicPage } from '../../../stores/comicStore';
-import { BALLOON_STYLES } from '../data/BalloonStyles';
+import { resolveBalloonStyle } from '../data/BalloonStyles';
 import { BalloonNode } from '../components/BalloonNode';
 import { ComicPanel } from '../components/ComicPanel';
 import { FloatingAsset } from '../components/FloatingAsset';
@@ -781,8 +781,9 @@ export const ComicCanvas: React.FC = () => {
                                             if (drawing) return <DrawingView key={drawing.id} drawing={drawing} />;
                                             const balloon = page.balloons?.find(b => b.id === elementId);
                                             if (balloon) {
-                                                const styleDef = BALLOON_STYLES.find(s => s.id === balloon.styleId);
-                                                if (!styleDef) return null;
+                                                // Never `return null` on an unknown id — that made the
+                                                // balloon disappear from the page with no error.
+                                                const styleDef = resolveBalloonStyle(balloon.styleId);
                                                 return (
                                                     <BalloonNode
                                                         key={balloon.id}

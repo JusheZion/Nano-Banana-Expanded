@@ -8,6 +8,10 @@ import {
     SLANTED_BOX_BODY,
     starburstBody,
 } from './balloonGeometry';
+import { resolveBalloonStyleId } from './balloonStyleMigration';
+
+/** Used when a balloon references a style that no longer exists. */
+export const FALLBACK_BALLOON_STYLE_ID = 'speech_round';
 
 export const BALLOON_STYLES: BalloonStyle[] = [
     {
@@ -179,23 +183,6 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         tailStyle: 'straight'
     },
     {
-        id: 'thought_cloud',
-        body: CLOUD_BODY,
-        tailAttachment: 'separate',
-        label: 'Thought Cloud',
-        kind: 'thought',
-        fill: '#ffffff',
-        stroke: '#000000',
-        strokeWidth: 2,
-        fontFamily: '"Comic Sans MS", "Comic Neue", cursive',
-        fontSize: 20,
-        textColor: '#000000',
-        hasTail: true,
-        // Trailing bubbles, the standard thought-balloon convention. This was 'curved', but the
-        // tail never drew at all, so no existing artwork depends on the old value.
-        tailStyle: 'bubbles'
-    },
-    {
         id: 'whisper_dashed',
         body: ELLIPSE_BODY,
         tailAttachment: 'merged-ellipse',
@@ -270,3 +257,30 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         tailStyle: 'straight'
     }
 ];
+
+/**
+ * Resolves a balloon's `styleId` to a style that can actually be rendered.
+ *
+ * Call sites used to do `BALLOON_STYLES.find(...)` and bail on undefined — in ComicCanvas that
+ * meant `return null`, so a balloon carrying an unknown style id silently vanished from the page
+ * with no error. Since `styleId` is baked into every saved comic, that turned any typo or retired
+ * id into apparently-lost artwork.
+ *
+ * Retired ids are re-mapped first (see balloonStyleMigration), and anything still unrecognised
+ * falls back to a plain round speech balloon so the text stays visible and editable.
+ */
+export function resolveBalloonStyle(styleId: string): BalloonStyle {
+    const resolvedId = resolveBalloonStyleId(styleId);
+    const style = BALLOON_STYLES.find((s) => s.id === resolvedId);
+    if (style) return style;
+
+    if (import.meta.env.DEV) {
+        console.warn(
+            `[comic] Unknown balloon styleId "${styleId}"; falling back to "${FALLBACK_BALLOON_STYLE_ID}". ` +
+                'If this id was retired, add it to RETIRED_BALLOON_STYLE_IDS.',
+        );
+    }
+    const fallback = BALLOON_STYLES.find((s) => s.id === FALLBACK_BALLOON_STYLE_ID);
+    if (!fallback) throw new Error('BALLOON_STYLES is missing its fallback style');
+    return fallback;
+}

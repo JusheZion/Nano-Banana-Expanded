@@ -16,7 +16,7 @@ const RIBBON_BALLOON_STYLES: BalloonStyle[] = [
   'cloud_fluffy',
   'speech_rounded_rectangle',
   'radio_electric',
-  'thought_cloud',
+  'cloud_fluffy_no_tail',
   'speech_round',
 ].map(id => BALLOON_STYLES.find(s => s.id === id)).filter((s): s is BalloonStyle => Boolean(s));
 

@@ -8,7 +8,6 @@ export type TextWarpId = 'none' | 'arcUp' | 'arcDown' | 'wave' | 'circle' | 'arc
 export type BalloonStyleId =
     | 'speech_round'
     | 'speech_rounded_rectangle'
-    | 'thought_cloud'
     | 'shout_spiky'
     | 'narration_box'
     | 'whisper_dashed'

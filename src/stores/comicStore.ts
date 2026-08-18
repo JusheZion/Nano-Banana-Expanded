@@ -1,6 +1,7 @@
 import { create, type StateCreator } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { createComicPersistStorage } from '../shared/lib/idbComicStorage';
+import { migrateBalloonStyleIds } from '../modes/comic/data/balloonStyleMigration';
 import { GENRE_REGISTRY } from '../modes/comic/data/GenreRegistry';
 import type { Genre, GenreId } from '../modes/comic/data/GenreRegistry';
 import type { BalloonInstance, BalloonOverrides } from '../types/balloon';
@@ -1410,7 +1411,8 @@ export const useComicStore = create<ComicState>()(
                         if (data.type === 'comic-project' && data.pages) {
                             useComicStore.getState().updateProjectSettings(data.projectSettings || {});
                             set({
-                                pages: data.pages,
+                                // Exported project files are the other way stale style ids get in.
+                                pages: migrateBalloonStyleIds(data.pages),
                                 ...(data.gutterSize != null && { gutterSize: data.gutterSize }),
                                 ...(data.pageSettings != null && { pageSettings: { ...useComicStore.getState().pageSettings, ...data.pageSettings } }),
                                 // v2.1: restore grouping/templates/theme. Reset per-project grouping to the
@@ -1666,6 +1668,9 @@ export const useComicStore = create<ComicState>()(
                     return {
                         ...current,
                         ...p,
+                        // Autosaved comics can reference balloon styles that have since been retired.
+                        // Re-map them on the way in; a no-op (same array reference) when nothing is stale.
+                        ...(p.pages && { pages: migrateBalloonStyleIds(p.pages) }),
                         projectSettings: mergedProject,
                     } as ComicState;
                 },
