@@ -6,12 +6,22 @@ import { useComicStore, undoPause, undoResume } from '../../../stores/comicStore
 import useImage from 'use-image';
 import { getTextureUrl } from '../data/TextureRegistry';
 import { toKonvaColorStops, linearGradientPoints } from '../utils/gradientUtils';
+import {
+    CLOUD_BALLOON_PATH,
+    CLOUD_BALLOON_TICKS_PATH,
+    CLOUD_DESIGN_HEIGHT,
+    CLOUD_DESIGN_WIDTH,
+} from '../data/balloonGeometry';
+import {
+    buildBubbleTail,
+    buildCurvedTailPath,
+    buildSpikyTailPath,
+    buildStraightTailPath,
+    buildTailFrame,
+} from '../data/balloonTailGeometry';
 import type { BalloonInstance, BalloonStyle, TextBoxTransform } from '../../../types/balloon';
 
-// Hand-tuned cloud speech balloon outline, centered at 0,0
-const CLOUD_BALLOON_PATH = "M384.986 894.426C353.731 658.567 514.663 441.357 744.437 409.274 837.544 396.274 932.208 415.708 1013.28 464.466 1099.19 298.239 1299.94 235.064 1461.67 323.361 1489.95 338.801 1515.9 358.37 1538.72 381.458 1605.63 243.668 1768.6 187.688 1902.73 256.422 1939.85 275.446 1972.23 302.959 1997.39 336.848 2105.23 206.543 2295.79 190.447 2423.02 300.897 2476.49 347.319 2512.53 411.347 2524.96 482.004 2701.66 531.495 2805.9 718.963 2757.78 900.724 2753.74 916.005 2748.66 930.977 2742.6 945.532 2884.31 1134.92 2849.62 1406.38 2665.11 1551.84 2607.68 1597.13 2539.84 1626.44 2468.15 1636.97 2466.56 1840.72 2304.23 2004.58 2105.59 2002.94 2039.22 2002.4 1974.3 1983.03 1918 1946.97 1850.81 2175.41 1616.45 2304.53 1394.54 2235.36 1301.54 2206.38 1221.19 2145.08 1167.19 2061.92 939.983 2202.61 645.079 2126.93 508.501 1892.88 506.78 1889.93 505.089 1886.96 503.428 1883.98 354.731 1901.85 220.041 1792.92 202.588 1640.68 193.286 1559.53 219.378 1478.31 273.912 1418.67 145.162 1340.85 101.913 1170.05 177.311 1037.18 220.81 960.524 297.101 909.848 382.724 900.736Z";
 
-const CLOUD_BALLOON_TICKS_PATH = "M434.292 1448.15C379.327 1452.57 324.367 1439.53 276.793 1410.77M573.255 1857.2C551.152 1866.23 527.983 1872.25 504.346 1875.09M1167.04 2053.75C1150.41 2028.15 1136.49 2000.79 1125.51 1972.14M1934.85 1850.26C1932.4 1880.62 1926.84 1910.64 1918.27 1939.8M2264.5 1297C2389.13 1359.27 2467.77 1489.46 2466.66 1631.65M2741.33 940.574C2721.15 988.992 2690.34 1031.94 2651.31 1066.06M2525.33 474.969C2528.77 494.521 2530.36 514.368 2530.08 534.232M1950.45 405.841C1962.18 378.5 1977.71 353.043 1996.57 330.263M1519.14 441.859C1523.92 419.265 1531.42 397.37 1541.47 376.678M1012.96 463.995C1042.3 481.637 1069.44 502.872 1093.78 527.232M399.1 960.975C392.697 939.214 387.981 916.967 384.996 894.442";
 
 
 interface BalloonNodeProps {
@@ -227,9 +237,13 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         return { x: ix, y: iy };
     }, [localTailTip, halfW, halfH, balloon.hasTail]);
 
-    // Unified body+tail path for ellipse styles: one continuous outline so tail and bubble blend with no notch
-    const ellipseOnlyIds = ['cloud_fluffy', 'cloud_fluffy_no_tail', 'speech_rounded_rectangle', 'narration_box', 'box_slanted', 'starburst_action', 'scream_jagged', 'double_burst'];
-    const isEllipseStyle = styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed' || !ellipseOnlyIds.includes(styleDef.id);
+    // Unified body+tail path for ellipse styles: one continuous outline so tail and bubble blend
+    // with no notch.
+    //
+    // This was previously gated on `!ellipseOnlyIds.includes(styleDef.id)` — an inverted list whose
+    // name said the opposite of what it held, and whose default (not listed => treat as ellipse)
+    // silently captured styles that draw a custom body. Now the style states its attachment mode.
+    const isEllipseStyle = styleDef.tailAttachment === 'merged-ellipse';
     const unifiedEllipseTailPath = useMemo(() => {
         if (!balloon.hasTail || !isEllipseStyle) return null;
         const dx = localTailTip.x - tailIntersection.x;
@@ -257,7 +271,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
     }, [balloon.hasTail, isEllipseStyle, localTailTip, tailIntersection, halfW, halfH, balloon.overrides?.tailFlip]);
 
     // Unified body+tail path for rounded-rect (Modern Square / narration): tail base on boundary, one continuous outline
-    const isRoundedRectStyle = styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box';
+    const isRoundedRectStyle = styleDef.tailAttachment === 'merged-rounded-rect';
     const cornerR = Math.min(styleDef.cornerRadius ?? 0, halfW - 1, halfH - 1);
     const roundedRectTailIntersection = useMemo(() => {
         if (!balloon.hasTail || !isRoundedRectStyle || cornerR < 0) return null;
@@ -457,7 +471,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
             Object.assign(baseProps, bodyFillProps);
             baseProps.stroke = stroke;
             baseProps.strokeWidth = strokeWidth;
-            baseProps.dash = (!isTail && styleDef.id === 'whisper_dashed') ? [5, 5] : undefined;
+            baseProps.dash = !isTail ? styleDef.bodyDash : undefined;
         } else if (pass === 'texture') {
             baseProps.fillPatternImage = textureImg;
             baseProps.fillPatternRepeat = 'repeat';
@@ -466,272 +480,149 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
         return baseProps;
     };
 
+    /**
+     * Draws the balloon outline from `styleDef.body`. This used to be a chain of
+     * `if (styleDef.id === ...)` branches; the geometry now lives with the style (see
+     * data/balloonGeometry.ts) so there are no style ids in here at all.
+     *
+     * For the two merged tail modes the "body" is really the body+tail path built above, so the
+     * outline joins the tail seamlessly and `renderTail` stands down.
+     */
     const renderBody = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
         const props = getRenderProps(pass, false);
+        const metrics = { halfW, halfH };
 
-        // Fixed cloud outline matching the reference image. thought_cloud shares the fluffy-cloud
-        // body so it no longer renders as a plain ellipse.
-        if (styleDef.id === 'cloud_fluffy' || styleDef.id === 'cloud_fluffy_no_tail' || styleDef.id === 'thought_cloud') {
-            const designW = 2400;
-            const designH = 1800;
+        const mergedPath =
+            styleDef.tailAttachment === 'merged-rounded-rect'
+                ? unifiedRoundedRectTailPath
+                : styleDef.tailAttachment === 'merged-ellipse'
+                  ? unifiedEllipseTailPath
+                  : null;
+        if (mergedPath) {
+            return <Path data={mergedPath} {...props} lineJoin="round" lineCap="round" />;
+        }
 
-            const scaleX = w / designW;
-            const scaleY = h / designH;
-            const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+        switch (styleDef.body.shape) {
+            case 'cloud': {
+                const scaleX = w / CLOUD_DESIGN_WIDTH;
+                const scaleY = h / CLOUD_DESIGN_HEIGHT;
+                const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+                // Compensate for down-scaling so the visual stroke stays the intended weight.
+                const bodyStrokeWidth = (strokeWidth || 1) / avgScale;
+                const cloudTransform = {
+                    x: 0,
+                    y: 0,
+                    offsetX: CLOUD_DESIGN_WIDTH / 2,
+                    offsetY: CLOUD_DESIGN_HEIGHT / 2,
+                    scaleX,
+                    scaleY,
+                    stroke,
+                    strokeWidth: bodyStrokeWidth,
+                    lineJoin: 'round' as const,
+                    lineCap: 'round' as const,
+                };
+                return (
+                    <Group>
+                        <Path {...props} data={CLOUD_BALLOON_PATH} {...cloudTransform} />
+                        {pass === 'base' && (
+                            <Path
+                                listening={false}
+                                perfectDrawEnabled={false}
+                                data={CLOUD_BALLOON_TICKS_PATH}
+                                {...cloudTransform}
+                            />
+                        )}
+                    </Group>
+                );
+            }
 
-            // Compensate for down-scaling so visual stroke looks thicker
-            const bodyStrokeWidth = (strokeWidth || 1) / avgScale;
-
-            return (
-                <Group>
-                    <Path
+            case 'roundedRect':
+                return (
+                    <Rect
+                        x={-halfW}
+                        y={-halfH}
+                        width={w}
+                        height={h}
+                        cornerRadius={styleDef.cornerRadius || 0}
                         {...props}
-                        data={CLOUD_BALLOON_PATH}
-                        x={0}
-                        y={0}
-                        offsetX={designW / 2}
-                        offsetY={designH / 2}
-                        scaleX={scaleX}
-                        scaleY={scaleY}
-                        stroke={stroke}
-                        strokeWidth={bodyStrokeWidth}
-                        lineJoin="round"
-                        lineCap="round"
                     />
-                    {pass === 'base' && (
-                        <Path
-                            listening={false}
-                            perfectDrawEnabled={false}
-                            data={CLOUD_BALLOON_TICKS_PATH}
-                            x={0}
-                            y={0}
-                            offsetX={designW / 2}
-                            offsetY={designH / 2}
-                            scaleX={scaleX}
-                            scaleY={scaleY}
-                            stroke={stroke}
-                            strokeWidth={bodyStrokeWidth}
-                            lineCap="round"
-                            lineJoin="round"
-                        />
-                    )}
-                </Group>
-            );
-        }
+                );
 
-
-
-
-        if (styleDef.id === 'speech_rounded_rectangle' || styleDef.id === 'narration_box') {
-            if (unifiedRoundedRectTailPath) {
-                return <Path data={unifiedRoundedRectTailPath} {...props} lineJoin="round" lineCap="round" />;
+            case 'path': {
+                const { build, lineJoin, lineCap } = styleDef.body;
+                return <Path data={build(metrics)} {...props} lineJoin={lineJoin} lineCap={lineCap} />;
             }
-            return (
-                <Rect
-                    x={-halfW}
-                    y={-halfH}
-                    width={w}
-                    height={h}
-                    cornerRadius={styleDef.cornerRadius || 0}
-                    {...props}
-                />
-            );
-        }
 
-        if (styleDef.id === 'box_slanted') {
-            const slantOffset = h * 0.15;
-            const pathData = `M ${-halfW + slantOffset},${-halfH} L ${halfW},${-halfH} L ${halfW - slantOffset},${halfH} L ${-halfW},${halfH} Z`;
-            return <Path data={pathData} {...props} />;
-        }
-
-        if (styleDef.id === 'starburst_action' || styleDef.id === 'scream_jagged' || styleDef.id === 'shout_spiky') {
-            const numSpikes = styleDef.id === 'starburst_action' ? 14 : styleDef.id === 'shout_spiky' ? 16 : 24;
-            const innerRadiusX = halfW * 0.7;
-            const innerRadiusY = halfH * 0.7;
-            let pathData = '';
-
-            for (let i = 0; i < numSpikes * 2; i++) {
-                const angle = (i * Math.PI * 2) / (numSpikes * 2);
-                let rx = i % 2 === 0 ? halfW : innerRadiusX;
-                let ry = i % 2 === 0 ? halfH : innerRadiusY;
-
-                if (styleDef.id === 'scream_jagged' && i % 2 !== 0) {
-                    rx *= 0.8 + Math.random() * 0.4;
-                    ry *= 0.8 + Math.random() * 0.4;
+            case 'layeredPath': {
+                const { outer, inner } = styleDef.body.build(metrics);
+                if (pass !== 'base') {
+                    return <Path data={outer} {...props} />;
                 }
-
-                const x = Math.cos(angle) * rx;
-                const y = Math.sin(angle) * ry;
-                if (i === 0) pathData += `M ${x},${y} `;
-                else pathData += `L ${x},${y} `;
+                return (
+                    <Group>
+                        <Path data={outer} {...props} fill={props.stroke} />
+                        <Path data={inner} {...props} stroke="transparent" strokeWidth={0} />
+                    </Group>
+                );
             }
 
-            pathData += 'Z';
-            return <Path data={pathData} {...props} />;
+            case 'ellipse':
+            default:
+                return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
         }
-
-        if (styleDef.id === 'double_burst') {
-            const numSpikes = 18;
-
-            const generateBurst = (
-                rxOuter: number,
-                ryOuter: number,
-                rxInner: number,
-                ryInner: number,
-                rotationOffset: number = 0
-            ) => {
-                let d = '';
-                for (let i = 0; i < numSpikes * 2; i++) {
-                    const baseAngle = (i * Math.PI * 2) / (numSpikes * 2);
-                    const angle = baseAngle + rotationOffset;
-                    const rx = i % 2 === 0 ? rxOuter : rxInner;
-                    const ry = i % 2 === 0 ? ryOuter : ryInner;
-                    const x = Math.cos(angle) * rx;
-                    const y = Math.sin(angle) * ry;
-                    if (i === 0) d += `M ${x},${y} `;
-                    else d += `L ${x},${y} `;
-                }
-                return d + 'Z';
-            };
-
-            const outerPathData = generateBurst(halfW, halfH, halfW * 0.75, halfH * 0.75, 0);
-            const innerRotation = (Math.PI * 2) / (numSpikes * 4);
-            const innerPathData = generateBurst(halfW * 0.8, halfH * 0.8, halfW * 0.55, halfH * 0.55, innerRotation);
-
-            if (pass !== 'base') {
-                return <Path data={outerPathData} {...props} />;
-            }
-
-            const outerProps = { ...props, fill: props.stroke };
-            const innerProps = { ...props, fill: props.fill, stroke: 'transparent', strokeWidth: 0 };
-
-            return (
-                <Group>
-                    <Path data={outerPathData} {...outerProps} />
-                    <Path data={innerPathData} {...innerProps} />
-                </Group>
-            );
-        }
-
-        // Radio/phone/electric balloon: an ellipse with a regular sawtooth ("electric") border,
-        // so it reads distinctly from a plain round speech bubble.
-        if (styleDef.id === 'radio_electric') {
-            const teeth = 40;
-            let pathData = '';
-            for (let i = 0; i <= teeth; i++) {
-                const angle = (i * Math.PI * 2) / teeth;
-                const r = i % 2 === 0 ? 1 : 0.85;
-                const x = Math.cos(angle) * halfW * r;
-                const y = Math.sin(angle) * halfH * r;
-                pathData += (i === 0 ? 'M' : 'L') + ` ${x},${y} `;
-            }
-            pathData += 'Z';
-            return <Path data={pathData} {...props} lineJoin="miter" lineCap="butt" />;
-        }
-
-        if (styleDef.id === 'speech_round' || styleDef.id === 'whisper_dashed') {
-            if (unifiedEllipseTailPath) {
-                return <Path data={unifiedEllipseTailPath} {...props} lineJoin="round" lineCap="round" />;
-            }
-            return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
-        }
-
-        if (unifiedEllipseTailPath) {
-            return <Path data={unifiedEllipseTailPath} {...props} lineJoin="round" lineCap="round" />;
-        }
-        return <Ellipse x={0} y={0} radiusX={halfW} radiusY={halfH} {...props} />;
     };
 
+    /**
+     * Draws the tail as its own shape, for styles whose outline does not already contain it.
+     *
+     * The bail-out condition used to be "is there a merged path available?", which was wrong: a
+     * merged path gets *computed* for any ellipse-ish style, including ones whose custom body never
+     * rendered it. Thought Cloud, Radio/Electric and Spiky Shout therefore drew no tail at all.
+     * It now asks the style directly, so body and tail can never disagree.
+     */
     const renderTail = (pass: 'shadow' | 'glow' | 'base' | 'texture') => {
         if (!balloon.hasTail) return null;
-        if (unifiedEllipseTailPath || unifiedRoundedRectTailPath) return null;
+        if (styleDef.tailAttachment !== 'separate') return null;
 
-        const baseWidth = Math.min(w, h) * 0.1;
-        const dx = localTailTip.x - tailIntersection.x;
-        const dy = localTailTip.y - tailIntersection.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        if (length < 2) return null;
+        const frame = buildTailFrame({
+            intersection: tailIntersection,
+            tip: localTailTip,
+            width: w,
+            height: h,
+            strokeWidth: Number(strokeWidth),
+            flipped: balloon.overrides?.tailFlip ?? false,
+        });
+        if (!frame) return null;
 
-        if (styleDef.tailStyle === 'bubbles') {
-            const props = getRenderProps(pass, true);
-            const r1 = baseWidth * 0.8;
-            const r2 = baseWidth * 0.5;
-            const r3 = baseWidth * 0.3;
+        const props = getRenderProps(pass, true);
 
-            return (
-                <Group>
-                    <Ellipse
-                        x={tailIntersection.x + dx * 0.18}
-                        y={tailIntersection.y + dy * 0.18}
-                        radiusX={r1}
-                        radiusY={r1}
-                        {...props}
-                    />
-                    <Ellipse
-                        x={tailIntersection.x + dx * 0.32}
-                        y={tailIntersection.y + dy * 0.32}
-                        radiusX={r2}
-                        radiusY={r2}
-                        {...props}
-                    />
-                    <Ellipse
-                        x={tailIntersection.x + dx * 0.46}
-                        y={tailIntersection.y + dy * 0.46}
-                        radiusX={r3}
-                        radiusY={r3}
-                        {...props}
-                    />
-                </Group>
-            );
+        switch (styleDef.tailStyle) {
+            case 'bubbles':
+                return (
+                    <Group>
+                        {buildBubbleTail(frame, tailIntersection).map((bubble, i) => (
+                            <Ellipse
+                                key={i}
+                                x={bubble.x}
+                                y={bubble.y}
+                                radiusX={bubble.radius}
+                                radiusY={bubble.radius}
+                                {...props}
+                            />
+                        ))}
+                    </Group>
+                );
+
+            case 'spiky':
+                return <Path data={buildSpikyTailPath(frame)} {...props} lineJoin="miter" lineCap="butt" />;
+
+            case 'straight':
+                return <Path data={buildStraightTailPath(frame)} {...props} lineJoin="miter" lineCap="butt" />;
+
+            case 'curved':
+            default:
+                return <Path data={buildCurvedTailPath(frame)} {...props} />;
         }
-
-        const nx = dx / length;
-        const ny = dy / length;
-        const px = -ny;
-        const py = nx;
-        const actualStrokeWidth = Number(strokeWidth) || 2;
-        const tuckOffset = Math.max(1, actualStrokeWidth / 2);
-
-        const tuckedIntersection = {
-            x: tailIntersection.x - nx * tuckOffset,
-            y: tailIntersection.y - ny * tuckOffset,
-        };
-
-        const p1 = {
-            x: tuckedIntersection.x + px * baseWidth,
-            y: tuckedIntersection.y + py * baseWidth,
-        };
-        const p2 = {
-            x: tuckedIntersection.x - px * baseWidth,
-            y: tuckedIntersection.y - py * baseWidth,
-        };
-
-        const curveStrength = length * 0.5;
-        const isFlipped = balloon.overrides?.tailFlip ?? false;
-        const flipMultiplier = isFlipped ? -1 : 1;
-
-        const cp = {
-            x: tuckedIntersection.x + nx * (length * 0.4) - px * (curveStrength * flipMultiplier),
-            y: tuckedIntersection.y + ny * (length * 0.4) - py * (curveStrength * flipMultiplier),
-        };
-
-        // Spiky/electric tail: a zig-zag lightning shape instead of the smooth curve.
-        if (styleDef.tailStyle === 'spiky') {
-            const mid1 = {
-                x: tuckedIntersection.x + nx * (length * 0.4) + px * baseWidth * 0.9 * flipMultiplier,
-                y: tuckedIntersection.y + ny * (length * 0.4) + py * baseWidth * 0.9 * flipMultiplier,
-            };
-            const mid2 = {
-                x: tuckedIntersection.x + nx * (length * 0.72) - px * baseWidth * 0.9 * flipMultiplier,
-                y: tuckedIntersection.y + ny * (length * 0.72) - py * baseWidth * 0.9 * flipMultiplier,
-            };
-            const spikyPath = `M ${p1.x} ${p1.y} L ${mid1.x} ${mid1.y} L ${localTailTip.x} ${localTailTip.y} L ${mid2.x} ${mid2.y} L ${p2.x} ${p2.y} Z`;
-            return <Path data={spikyPath} {...getRenderProps(pass, true)} lineJoin="miter" lineCap="butt" />;
-        }
-
-        const pathData = `M ${p1.x} ${p1.y} Q ${cp.x} ${cp.y} ${localTailTip.x} ${localTailTip.y} Q ${cp.x} ${cp.y} ${p2.x} ${p2.y} `;
-
-        return <Path data={pathData} {...getRenderProps(pass, true)} />;
     };
 
     const hasTextGlow = false;

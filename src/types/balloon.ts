@@ -1,3 +1,5 @@
+import type { BalloonBodySpec, TailAttachment } from '../modes/comic/data/balloonGeometry';
+
 export type BalloonKind = 'speech' | 'thought' | 'shout' | 'narration';
 
 /** Office-style text warp / WordArt transform profiles */
@@ -21,6 +23,8 @@ export type BalloonStyleId =
     | 'double_burst'
     | 'floating_text';
 
+export type TailStyle = 'straight' | 'curved' | 'spiky' | 'bubbles';
+
 export interface BalloonStyle {
     id: BalloonStyleId;
     label: string;
@@ -34,7 +38,20 @@ export interface BalloonStyle {
     textColor: string;
 
     hasTail: boolean;
-    tailStyle: 'straight' | 'curved' | 'spiky' | 'bubbles';
+    tailStyle: TailStyle;
+
+    /**
+     * Outline geometry. Required: a style without one used to fall through to a generic ellipse,
+     * which rendered plausibly and so hid the mistake. See data/balloonGeometry.ts.
+     */
+    body: BalloonBodySpec;
+    /**
+     * Whether the tail is baked into the body outline or drawn as its own shape. Required for the
+     * same reason — mismatching this is what left three styles with `hasTail: true` and no tail.
+     */
+    tailAttachment: TailAttachment;
+    /** Dash pattern for the body stroke, e.g. [5, 5] for whisper balloons. */
+    bodyDash?: number[];
 
     cornerRadius?: number;
     spikiness?: number;

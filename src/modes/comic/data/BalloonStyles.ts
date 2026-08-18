@@ -1,8 +1,19 @@
 import type { BalloonStyle } from '../../../types/balloon';
+import {
+    CLOUD_BODY,
+    DOUBLE_BURST_BODY,
+    ELECTRIC_RIM_BODY,
+    ELLIPSE_BODY,
+    ROUNDED_RECT_BODY,
+    SLANTED_BOX_BODY,
+    starburstBody,
+} from './balloonGeometry';
 
 export const BALLOON_STYLES: BalloonStyle[] = [
     {
         id: 'starburst_action',
+        body: starburstBody({ spikes: 14 }),
+        tailAttachment: 'separate',
         label: 'Action Starburst',
         kind: 'shout',
         fill: '#ffffff',
@@ -16,6 +27,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'double_burst',
+        body: DOUBLE_BURST_BODY,
+        tailAttachment: 'separate',
         label: 'Double Burst',
         kind: 'shout',
         fill: '#ffffff',
@@ -29,6 +42,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'cloud_fluffy',
+        body: CLOUD_BODY,
+        tailAttachment: 'separate',
         label: 'Fluffy Cloud',
         kind: 'thought',
         fill: '#ffffff',
@@ -42,6 +57,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'cloud_fluffy_no_tail',
+        body: CLOUD_BODY,
+        tailAttachment: 'separate',
         label: 'Fluffy Cloud (No Tail)',
         kind: 'thought',
         fill: '#ffffff',
@@ -55,6 +72,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'scream_jagged',
+        body: starburstBody({ spikes: 24, jagged: true }),
+        tailAttachment: 'separate',
         label: 'Jagged Scream',
         kind: 'shout',
         fill: '#ffffff',
@@ -68,6 +87,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'speech_rounded_rectangle',
+        body: ROUNDED_RECT_BODY,
+        tailAttachment: 'merged-rounded-rect',
         label: 'Modern Square',
         kind: 'speech',
         fill: '#ffffff',
@@ -82,6 +103,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'narration_box',
+        body: ROUNDED_RECT_BODY,
+        tailAttachment: 'merged-rounded-rect',
         label: 'Narration Box',
         kind: 'narration',
         fill: '#ffffcc',
@@ -95,6 +118,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'radio_electric',
+        body: ELECTRIC_RIM_BODY,
+        tailAttachment: 'separate',
         label: 'Radio/Phone',
         kind: 'speech',
         fill: '#ffffff',
@@ -108,6 +133,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'speech_round',
+        body: ELLIPSE_BODY,
+        tailAttachment: 'merged-ellipse',
         label: 'Round Speech',
         kind: 'speech',
         fill: '#ffffff',
@@ -122,6 +149,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'shout_spiky',
+        body: starburstBody({ spikes: 16 }),
+        tailAttachment: 'separate',
         label: 'Shout',
         kind: 'shout',
         fill: '#ffffff',
@@ -136,6 +165,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'box_slanted',
+        body: SLANTED_BOX_BODY,
+        tailAttachment: 'separate',
         label: 'Slanted Box',
         kind: 'narration',
         fill: '#eeeeee',
@@ -149,6 +180,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'thought_cloud',
+        body: CLOUD_BODY,
+        tailAttachment: 'separate',
         label: 'Thought Cloud',
         kind: 'thought',
         fill: '#ffffff',
@@ -158,10 +191,15 @@ export const BALLOON_STYLES: BalloonStyle[] = [
         fontSize: 20,
         textColor: '#000000',
         hasTail: true,
-        tailStyle: 'curved'
+        // Trailing bubbles, the standard thought-balloon convention. This was 'curved', but the
+        // tail never drew at all, so no existing artwork depends on the old value.
+        tailStyle: 'bubbles'
     },
     {
         id: 'whisper_dashed',
+        body: ELLIPSE_BODY,
+        tailAttachment: 'merged-ellipse',
+        bodyDash: [5, 5],
         label: 'Whisper',
         kind: 'speech',
         fill: '#ffffff',
@@ -176,6 +214,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'sound_effect_action',
+        body: ELLIPSE_BODY,
+        tailAttachment: 'merged-ellipse',
         label: 'SFX: Action',
         kind: 'shout',
         fill: 'transparent',
@@ -194,6 +234,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'sound_effect_impact',
+        body: ELLIPSE_BODY,
+        tailAttachment: 'merged-ellipse',
         label: 'SFX: Impact',
         kind: 'shout',
         fill: 'transparent',
@@ -214,6 +256,8 @@ export const BALLOON_STYLES: BalloonStyle[] = [
     },
     {
         id: 'floating_text',
+        body: ELLIPSE_BODY,
+        tailAttachment: 'merged-ellipse',
         label: 'Text Box',
         kind: 'narration',
         fill: 'transparent',
