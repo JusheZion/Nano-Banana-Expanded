@@ -76,7 +76,27 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
   const [h, setH] = React.useState(hv.h);
   const [s, setS] = React.useState(hv.s);
   const [v, setV] = React.useState(hv.v);
+
+  /**
+   * The last hex this picker emitted, so we can tell our own echo from a genuine external change.
+   *
+   * Hex is a lossy round-trip for HSV: every shade of grey is hue 0, and black is saturation 0 too.
+   * Without this guard, sliding saturation down to white emitted `#ffffff`, the parent echoed it
+   * back, and the effect below re-derived hue 0 — snapping the ring from wherever you were round to
+   * red. Sliding back up then gave red instead of the colour you started from.
+   */
+  const lastEmittedRef = useRef<string | null>(null);
+
+  const emit = useCallback(
+    (hex: string) => {
+      lastEmittedRef.current = hex;
+      onChange(hex);
+    },
+    [onChange],
+  );
+
   React.useEffect(() => {
+    if (lastEmittedRef.current === value) return; // our own value coming back; keep h/s/v intact
     const next = hexToHsv(value);
     setH(next.h);
     setS(next.s);
@@ -113,41 +133,60 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     drawSVSquare(ctx, h, 0, 0, size);
   }, [h]);
 
+  /**
+   * Converts a pointer event into the canvas's LOGICAL coordinate space (0..PICKER_SIZE).
+   *
+   * The old code multiplied by `canvas.width / rect.width`, which is the device-pixel ratio — but
+   * then compared the result against `cx`/`cy`/`PICKER_SIZE`, which are logical units. On any HiDPI
+   * display (dpr 2) that doubled every offset: most of the hue ring became unclickable, because the
+   * inflated distance failed the `dist > hueR` test, and the saturation/value square saturated at
+   * its halfway point so its right and bottom halves did nothing. Dividing by `rect.width` instead
+   * normalises against however the canvas is actually laid out, at any zoom or pixel ratio.
+   */
+  const toLogicalPoint = (
+    canvas: HTMLCanvasElement,
+    e: React.MouseEvent<HTMLCanvasElement>,
+  ): { x: number; y: number } | null => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * PICKER_SIZE,
+      y: ((e.clientY - rect.top) / rect.height) * PICKER_SIZE,
+    };
+  };
+
   const handleHueClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = hueRingRef.current;
       if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const px = (e.clientX - rect.left) * scaleX - cx;
-      const py = (e.clientY - rect.top) * scaleY - cy;
+      const point = toLogicalPoint(canvas, e);
+      if (!point) return;
+      const px = point.x - cx;
+      const py = point.y - cy;
       const dist = Math.sqrt(px * px + py * py);
       if (dist > hueR) return;
       const angle = Math.atan2(py, px);
       let deg = (angle * 180) / Math.PI + 90;
       if (deg < 0) deg += 360;
       setH(deg);
-      onChange(hsvToHex(deg, s, v));
+      emit(hsvToHex(deg, s, v));
     },
-    [cx, cy, hueR, s, v, onChange]
+    [cx, cy, hueR, s, v, emit]
   );
 
   const handleSVClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = svRef.current;
       if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scale = canvas.width / rect.width;
-      const px = (e.clientX - rect.left) * scale;
-      const py = (e.clientY - rect.top) * scale;
-      const ns = Math.max(0, Math.min(1, px / PICKER_SIZE));
-      const nv = Math.max(0, Math.min(1, 1 - py / PICKER_SIZE));
+      const point = toLogicalPoint(canvas, e);
+      if (!point) return;
+      const ns = Math.max(0, Math.min(1, point.x / PICKER_SIZE));
+      const nv = Math.max(0, Math.min(1, 1 - point.y / PICKER_SIZE));
       setS(ns);
       setV(nv);
-      onChange(hsvToHex(h, ns, nv));
+      emit(hsvToHex(h, ns, nv));
     },
-    [h, onChange]
+    [h, emit]
   );
 
   const currentHex = useMemo(() => hsvToHex(h, s, v), [h, s, v]);

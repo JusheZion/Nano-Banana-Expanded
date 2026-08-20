@@ -26,6 +26,11 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function roundToStep(value: number, step: number, min: number, max: number): number {
+  // A non-finite input (an unparseable field, or step 0) would otherwise sail through clamp() as
+  // NaN and land in the store, where it becomes a NaN width/opacity that Konva silently refuses to
+  // draw and JSON serialises as null.
+  if (!Number.isFinite(value)) return clamp(min, min, max);
+  if (!Number.isFinite(step) || step <= 0) return clamp(value, min, max);
   const n = Math.round((value - min) / step) * step + min;
   return clamp(n, min, max);
 }
@@ -52,6 +57,7 @@ export const PrecisionSlider: React.FC<PrecisionSliderProps> = ({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const v = parseFloat(e.target.value);
+      if (!Number.isFinite(v)) return;
       const next = snapToTick ? roundToStep(v, step, min, max) : clamp(v, min, max);
       onChange(next);
     },
@@ -61,6 +67,7 @@ export const PrecisionSlider: React.FC<PrecisionSliderProps> = ({
   const handleBlur = useCallback(
     (e: React.FocusEvent<HTMLInputElement>) => {
       const v = parseFloat((e.target as HTMLInputElement).value);
+      if (!Number.isFinite(v)) return;
       if (snapToTick) {
         const next = roundToStep(v, step, min, max);
         if (next !== value) onChange(next);

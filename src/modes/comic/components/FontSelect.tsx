@@ -26,7 +26,19 @@ export const FontSelect: React.FC<FontSelectProps> = ({
 }) => {
   const current = value || 'Bangers';
   const known = isKnownFontFamily(current);
-  const selectValue = known ? current : (allowCustom ? '__custom' : current);
+
+  /**
+   * Sticky "Custom…" mode.
+   *
+   * Choosing Custom… used to `return` without changing anything, so React re-rendered the select
+   * back to the known font and the freeform input — which only appeared when the current font was
+   * NOT known — never showed. There was no way to reach a custom font from a known one at all.
+   * Latching the choice here shows the input so the user can type, and clears the moment they pick
+   * a real font from the list.
+   */
+  const [customMode, setCustomMode] = React.useState(false);
+  const showCustomInput = allowCustom && (!known || customMode);
+  const selectValue = showCustomInput ? '__custom' : current;
 
   return (
     <div className={compact ? 'flex items-center gap-1.5 min-w-0' : 'flex flex-col gap-1'}>
@@ -34,7 +46,11 @@ export const FontSelect: React.FC<FontSelectProps> = ({
         value={selectValue}
         onChange={(e) => {
           const next = e.target.value;
-          if (allowCustom && next === '__custom') return;
+          if (allowCustom && next === '__custom') {
+            setCustomMode(true);
+            return;
+          }
+          setCustomMode(false);
           onChange(next);
         }}
         className={
@@ -60,7 +76,7 @@ export const FontSelect: React.FC<FontSelectProps> = ({
         )}
       </select>
 
-      {allowCustom && !known && (
+      {showCustomInput && (
         <input
           type="text"
           value={current}

@@ -171,8 +171,17 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid firing shortcuts when actively typing in an input
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      // Don't hijack keys while the user is editing text or working a form control.
+      //
+      // This used to check only INPUT and TEXTAREA, which left SELECT out — and the ribbon is full
+      // of them (font family, font size, layout). Focusing the font-size dropdown with a balloon
+      // selected and pressing Backspace deleted the balloon. contentEditable was missed for the
+      // same reason.
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) return;
+
+      const hasSelection = !!currentPageId && selectedElementIds.length > 0;
 
       // Undo / Redo — call comicUndo/comicRedo directly so this effect deps stay constant
       // (adding undo/redo callbacks to the deps array changed its length across HMR/renders and broke React).
@@ -186,26 +195,31 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
         return;
       }
 
-      // Copy
+      // Copy / Cut only swallow the browser's own shortcut when there is something to act on;
+      // otherwise preventDefault blocked ordinary text copying everywhere outside an input.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        if (!hasSelection) return;
         e.preventDefault();
         copySelected();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        if (!hasSelection) return;
+        e.preventDefault();
+        copySelected();
+        deleteSelected();
+        return;
       }
 
       // Paste
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         e.preventDefault();
         pasteClipboard();
+        return;
       }
 
-      // Cut
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
-        e.preventDefault();
-        copySelected();
-        deleteSelected();
-      }
-
-      if (!currentPageId || selectedElementIds.length === 0) return;
+      if (!hasSelection) return;
 
       // Delete / Backspace
       if (e.key === 'Delete' || e.key === 'Backspace') {
