@@ -59,7 +59,10 @@ export const FloatingAsset: React.FC<FloatingAssetProps> = ({
                 rotation={overlay.rotation}
                 scaleX={overlay.scaleX}
                 scaleY={overlay.scaleY}
-                draggable
+                // Matches how panels and balloons treat these flags: absent means visible/unlocked.
+                visible={overlay.isVisible !== false}
+                draggable={overlay.isLocked !== true}
+                listening={overlay.isLocked !== true}
                 onClick={onSelect}
                 onTap={onSelect}
                 onDragEnd={(e) => {

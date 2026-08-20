@@ -102,6 +102,9 @@ export interface OverlayObject {
     scaleX: number;
     scaleY: number;
     zIndex: number;
+    /** Layer-tree flags, matching Panel/Balloon/Drawing. Absent means visible and unlocked. */
+    isLocked?: boolean;
+    isVisible?: boolean;
 }
 
 export interface ComicPage {
@@ -160,7 +163,7 @@ interface ComicState {
     layoutMode: 'webtoon' | 'spread';
     zoomLevel: number;
     selectedElementIds: string[];
-    clipboard: (Panel | BalloonInstance | Drawing)[];
+    clipboard: (Panel | BalloonInstance | Drawing | OverlayObject)[];
     mode: 'layout' | 'content' | 'lettering';
     exportFormat: 'png' | 'pdf' | null;
     /** Right-click context menu on canvas */
@@ -373,17 +376,31 @@ export function undoClear(): void {
     future = [];
 }
 
+/**
+ * Applies a snapshot without letting it become a new history entry.
+ *
+ * Restores the PREVIOUS pause state rather than forcing `false`. Forcing it was a real bug: a drag
+ * pauses undo capture for its whole duration (see undoPause callers in ComicPanel/BalloonNode), so
+ * pressing Ctrl+Z mid-drag used to resume capture behind the drag's back. Every remaining mousemove
+ * then recorded a full history entry, blowing past UNDO_MAX and evicting all genuine history — so
+ * after the drag, Ctrl+Z stepped back one mouse-move at a time instead of one edit at a time.
+ */
+function applyHistorySnapshot(snap: UndoSnapshot): void {
+    const wasPaused = undoPaused;
+    undoPaused = true;
+    try {
+        useComicStore.setState(snap as Partial<ComicState>);
+    } finally {
+        undoPaused = wasPaused;
+    }
+}
+
 export function comicUndo(): void {
     if (past.length === 0) return;
     const current = undoSnapshotSlice(useComicStore.getState());
     const snap = past.pop()!;
     future.push(current);
-    undoPaused = true;
-    try {
-        useComicStore.setState(snap as Partial<ComicState>);
-    } finally {
-        undoPaused = false;
-    }
+    applyHistorySnapshot(snap);
 }
 
 export function comicRedo(): void {
@@ -391,12 +408,79 @@ export function comicRedo(): void {
     const current = undoSnapshotSlice(useComicStore.getState());
     const snap = future.pop()!;
     past.push(current);
-    undoPaused = true;
-    try {
-        useComicStore.setState(snap as Partial<ComicState>);
-    } finally {
-        undoPaused = false;
+    applyHistorySnapshot(snap);
+}
+
+/** Test seam: lets the suite assert history depth without reaching into module state. */
+export function comicHistoryDepth(): { past: number; future: number } {
+    return { past: past.length, future: future.length };
+}
+
+/**
+ * Every element id that currently exists on a page, across all four element collections.
+ *
+ * `drawings` and `overlays` are read defensively: the type declares `drawings` as required, but
+ * project files exported by older versions omit it, and `loadProject` feeds parsed JSON straight
+ * into state without normalising. Several actions already used `?.` for exactly this reason while
+ * others did not — the inconsistent ones would throw on such a file.
+ */
+function pageElementIds(page: ComicPage): Set<string> {
+    const ids = new Set<string>();
+    for (const panel of page.panels ?? []) ids.add(panel.id);
+    for (const balloon of page.balloons ?? []) ids.add(balloon.id);
+    for (const drawing of page.drawings ?? []) ids.add(drawing.id);
+    for (const overlay of page.overlays ?? []) ids.add(overlay.id);
+    return ids;
+}
+
+/**
+ * Drops selection entries and group members that point at elements (or pages) that no longer exist.
+ *
+ * Actions that destroy elements each used to handle this themselves, inconsistently:
+ * `removeElement` pruned groups but `deleteSelected` did not; `removePage` leaked its page's groups
+ * entirely; `applyTemplate` and `splitPanel` destroyed panel ids while leaving them selected and
+ * still listed as group members. The result was "ghost" ids that the toolbar, layer tree and group
+ * commands would happily operate on.
+ *
+ * Returns the ORIGINAL references when nothing needed pruning, so a no-op cannot register as an
+ * undo step (the history middleware compares slice references).
+ */
+function reconcileElementReferences(
+    pages: ComicPage[],
+    selectedElementIds: string[],
+    groupsByPage: Record<string, string[][]>,
+): { selectedElementIds: string[]; groupsByPage: Record<string, string[][]> } {
+    const idsByPage = new Map<string, Set<string>>();
+    for (const page of pages) idsByPage.set(page.id, pageElementIds(page));
+
+    const liveIds = new Set<string>();
+    for (const ids of idsByPage.values()) for (const id of ids) liveIds.add(id);
+
+    const nextSelected = selectedElementIds.filter((id) => liveIds.has(id));
+
+    let groupsChanged = false;
+    const nextGroups: Record<string, string[][]> = {};
+    for (const [pageId, groups] of Object.entries(groupsByPage)) {
+        const pageIds = idsByPage.get(pageId);
+        if (!pageIds) {
+            // The page itself is gone; drop its groups rather than leaking them forever.
+            groupsChanged = true;
+            continue;
+        }
+        // A group needs at least two surviving members to still be a group.
+        const kept = groups
+            .map((group) => group.filter((id) => pageIds.has(id)))
+            .filter((group) => group.length >= 2);
+        if (kept.length !== groups.length || kept.some((g, i) => g.length !== groups[i]?.length)) {
+            groupsChanged = true;
+        }
+        nextGroups[pageId] = kept;
     }
+
+    return {
+        selectedElementIds: nextSelected.length === selectedElementIds.length ? selectedElementIds : nextSelected,
+        groupsByPage: groupsChanged ? nextGroups : groupsByPage,
+    };
 }
 
 const COMIC_PAGE_WIDTH = 800;
@@ -657,8 +741,18 @@ export const useComicStore = create<ComicState>()(
                 removePage: (id: string) => set((state: ComicState) => {
                     if (state.pages.length <= 1) return state; // Prevent removing last page
                     const filtered = state.pages.filter(p => p.id !== id);
+                    if (filtered.length === state.pages.length) return state;
+                    // The deleted page's groups used to be left in groupsByPage forever, and its
+                    // elements stayed in the selection as unreachable ghosts.
+                    const { selectedElementIds, groupsByPage } = reconcileElementReferences(
+                        filtered,
+                        state.selectedElementIds,
+                        state.groupsByPage,
+                    );
                     return {
                         pages: filtered,
+                        groupsByPage,
+                        selectedElementIds,
                         currentPageId: state.currentPageId === id ? filtered[0].id : state.currentPageId
                     };
                 }),
@@ -670,8 +764,8 @@ export const useComicStore = create<ComicState>()(
                     const idMap = new Map<string, string>();
                     const newPanels = pageToDup.panels.map(p => { const newId = crypto.randomUUID(); idMap.set(p.id, newId); return { ...p, id: newId }; });
                     const newBalloons = pageToDup.balloons.map(b => { const newId = crypto.randomUUID(); idMap.set(b.id, newId); return { ...b, id: newId }; });
-                    const newDrawings = pageToDup.drawings.map(d => { const newId = crypto.randomUUID(); idMap.set(d.id, newId); return { ...d, id: newId }; });
-                    const newOverlays = (pageToDup.overlays || []).map(o => ({ ...o, id: crypto.randomUUID() }));
+                    const newDrawings = (pageToDup.drawings ?? []).map(d => { const newId = crypto.randomUUID(); idMap.set(d.id, newId); return { ...d, id: newId }; });
+                    const newOverlays = (pageToDup.overlays ?? []).map(o => { const newId = crypto.randomUUID(); idMap.set(o.id, newId); return { ...o, id: newId }; });
 
                     const newPage: ComicPage = {
                         ...pageToDup,
@@ -689,7 +783,14 @@ export const useComicStore = create<ComicState>()(
                     const oldGroups = state.groupsByPage[id] || [];
                     const newGroups = oldGroups.map(g => g.map(eid => idMap.get(eid)).filter((id): id is string => id !== undefined)).filter(g => g.length >= 2);
                     const nextGroupsByPage = { ...state.groupsByPage, [newPage.id]: newGroups };
-                    return { pages: newPages, currentPageId: newPage.id, groupsByPage: nextGroupsByPage };
+                    // The view jumps to the duplicate, so a selection pointing at the source page's
+                    // elements would leave the toolbar acting on things you can no longer see.
+                    return {
+                        pages: newPages,
+                        currentPageId: newPage.id,
+                        groupsByPage: nextGroupsByPage,
+                        selectedElementIds: [],
+                    };
                 }),
 
                 reorderPages: (activeId: string, overId: string) => set((state: ComicState) => {
@@ -1004,33 +1105,39 @@ export const useComicStore = create<ComicState>()(
                     const page = state.pages.find(p => p.id === state.currentPageId);
                     if (!page) return state;
 
-                    const copied: (Panel | BalloonInstance | Drawing)[] = [];
+                    const copied: (Panel | BalloonInstance | Drawing | OverlayObject)[] = [];
 
                     state.selectedElementIds.forEach(id => {
                         const panel = page.panels.find(p => p.id === id);
                         if (panel) copied.push(panel);
                         const balloon = page.balloons.find(b => b.id === id);
                         if (balloon) copied.push(balloon);
-                        const drawing = page.drawings.find(d => d.id === id);
+                        const drawing = (page.drawings ?? []).find(d => d.id === id);
                         if (drawing) copied.push(drawing);
+                        // Overlays were skipped entirely, so copying a floating asset or SFX put
+                        // nothing on the clipboard and the subsequent paste did nothing.
+                        const overlay = (page.overlays ?? []).find(o => o.id === id);
+                        if (overlay) copied.push(overlay);
                     });
 
+                    if (copied.length === 0) return state;
                     return { clipboard: copied };
                 }),
 
                 deleteSelected: () => set((state: ComicState) => {
                     if (!state.currentPageId || state.selectedElementIds.length === 0) return state;
-                    return {
-                        pages: state.pages.map((p: ComicPage) => p.id === state.currentPageId ? {
-                            ...p,
-                            panels: p.panels.filter(panel => !state.selectedElementIds.includes(panel.id)),
-                            balloons: p.balloons.filter(balloon => !state.selectedElementIds.includes(balloon.id)),
-                            drawings: p.drawings?.filter(x => !state.selectedElementIds.includes(x.id)) || [],
-                            overlays: (p.overlays || []).filter(o => !state.selectedElementIds.includes(o.id)),
-                            layerOrder: p.layerOrder.filter(id => !state.selectedElementIds.includes(id))
-                        } : p),
-                        selectedElementIds: []
-                    };
+                    const pages = state.pages.map((p: ComicPage) => p.id === state.currentPageId ? {
+                        ...p,
+                        panels: p.panels.filter(panel => !state.selectedElementIds.includes(panel.id)),
+                        balloons: p.balloons.filter(balloon => !state.selectedElementIds.includes(balloon.id)),
+                        drawings: (p.drawings ?? []).filter(x => !state.selectedElementIds.includes(x.id)),
+                        overlays: (p.overlays ?? []).filter(o => !state.selectedElementIds.includes(o.id)),
+                        layerOrder: p.layerOrder.filter(id => !state.selectedElementIds.includes(id))
+                    } : p);
+                    // Deleting a grouped selection used to leave the group behind, still listing the
+                    // ids it just destroyed.
+                    const { groupsByPage } = reconcileElementReferences(pages, [], state.groupsByPage);
+                    return { pages, groupsByPage, selectedElementIds: [] };
                 }),
 
                 pasteClipboard: () => set((state: ComicState) => {
@@ -1043,26 +1150,46 @@ export const useComicStore = create<ComicState>()(
 
                         const newPanels = [...p.panels];
                         const newBalloons = [...p.balloons];
-                        const newDrawings = [...(p.drawings || [])];
+                        const newDrawings = [...(p.drawings ?? [])];
+                        const newOverlays = [...(p.overlays ?? [])];
                         const newLayerOrder = [...p.layerOrder];
+
+                        /** Pasted copies are nudged so they don't land invisibly on the original. */
+                        const PASTE_OFFSET = 20;
 
                         state.clipboard.forEach(item => {
                             const newId = crypto.randomUUID();
                             newIds.push(newId);
 
                             if (item.type === 'panel') {
-                                newPanels.push({ ...item, id: newId, x: item.x + 20, y: item.y + 20 } as Panel);
+                                newPanels.push({ ...item, id: newId, x: item.x + PASTE_OFFSET, y: item.y + PASTE_OFFSET } as Panel);
+                                newLayerOrder.push(newId);
                             } else if (item.type === 'balloon') {
-                                newBalloons.push({ ...item, id: newId, x: item.x + 20, y: item.y + 20 } as BalloonInstance);
+                                newBalloons.push({ ...item, id: newId, x: item.x + PASTE_OFFSET, y: item.y + PASTE_OFFSET } as BalloonInstance);
+                                newLayerOrder.push(newId);
                             } else if (item.type === 'drawing') {
-                                newDrawings.push({ ...item, id: newId });
+                                // Drawings carry a flat [x, y, x, y, ...] point list rather than an
+                                // origin, so they need shifting point-by-point. Without this the
+                                // copy landed exactly on the original and looked like a no-op.
+                                newDrawings.push({
+                                    ...item,
+                                    id: newId,
+                                    points: item.points.map((coord) => coord + PASTE_OFFSET),
+                                });
+                                newLayerOrder.push(newId);
+                            } else {
+                                // Overlays render from their own zIndex-sorted list, not layerOrder.
+                                newOverlays.push({
+                                    ...item,
+                                    id: newId,
+                                    x: item.x + PASTE_OFFSET,
+                                    y: item.y + PASTE_OFFSET,
+                                    zIndex: newOverlays.length,
+                                });
                             }
-
-                            // Push into layer order rendering top
-                            newLayerOrder.push(newId);
                         });
 
-                        return { ...p, panels: newPanels, balloons: newBalloons, drawings: newDrawings, layerOrder: newLayerOrder };
+                        return { ...p, panels: newPanels, balloons: newBalloons, drawings: newDrawings, overlays: newOverlays, layerOrder: newLayerOrder };
                     });
 
                     return { pages: newPages, selectedElementIds: newIds };
@@ -1150,20 +1277,25 @@ export const useComicStore = create<ComicState>()(
                     const page = state.pages.find(p => p.id === pageId);
                     if (!page) return state;
 
-                    const pageGroups = (state.groupsByPage[pageId] || []).map(g => g.filter(id => id !== elementId)).filter(g => g.length >= 2);
-                    const nextGroupsByPage = { ...state.groupsByPage, [pageId]: pageGroups };
+                    const pages = state.pages.map((p: ComicPage) => p.id === pageId ? {
+                        ...p,
+                        panels: p.panels.filter(panel => panel.id !== elementId),
+                        balloons: p.balloons.filter(balloon => balloon.id !== elementId),
+                        drawings: (p.drawings ?? []).filter(x => x.id !== elementId),
+                        // Overlays (floating assets and SFX) were missing here, so the toolbar's
+                        // Delete button — which routes every selected id through removeElement —
+                        // silently did nothing to them, while the Delete *key* (deleteSelected)
+                        // removed them fine. Same command, two paths, two results.
+                        overlays: (p.overlays ?? []).filter(o => o.id !== elementId),
+                        layerOrder: p.layerOrder.filter(id => id !== elementId)
+                    } : p);
 
-                    return {
-                        pages: state.pages.map((p: ComicPage) => p.id === pageId ? {
-                            ...p,
-                            panels: p.panels.filter(panel => panel.id !== elementId),
-                            balloons: p.balloons.filter(balloon => balloon.id !== elementId),
-                            drawings: p.drawings?.filter(x => x.id !== elementId) || [],
-                            layerOrder: p.layerOrder.filter(id => id !== elementId)
-                        } : p),
-                        groupsByPage: nextGroupsByPage,
-                        selectedElementIds: state.selectedElementIds.filter(id => id !== elementId)
-                    };
+                    const { selectedElementIds, groupsByPage } = reconcileElementReferences(
+                        pages,
+                        state.selectedElementIds,
+                        state.groupsByPage,
+                    );
+                    return { pages, groupsByPage, selectedElementIds };
                 }),
 
                 triggerExport: (format: 'png' | 'pdf') => set({ exportFormat: format }),
@@ -1270,33 +1402,34 @@ export const useComicStore = create<ComicState>()(
                     };
                 }),
 
-                toggleLayerVisibility: (pageId: string, elementId: string) => set((state: ComicState) => {
-                    return {
-                        pages: state.pages.map((p: ComicPage) => {
-                            if (p.id !== pageId) return p;
-                            return {
-                                ...p,
-                                panels: p.panels.map(panel => panel.id === elementId ? { ...panel, isVisible: panel.isVisible === false ? true : false } : panel),
-                                balloons: p.balloons.map(balloon => balloon.id === elementId ? { ...balloon, isVisible: balloon.isVisible === false ? true : false } : balloon),
-                                drawings: p.drawings.map(drawing => drawing.id === elementId ? { ...drawing, isVisible: drawing.isVisible === false ? true : false } : drawing),
-                            }
-                        })
-                    }
-                }),
+                // Both toggles now cover overlays (floating assets and SFX), which previously could
+                // not be hidden or locked from the layer tree at all, and read `drawings`
+                // defensively so a project file that predates that field cannot throw.
+                toggleLayerVisibility: (pageId: string, elementId: string) => set((state: ComicState) => ({
+                    pages: state.pages.map((p: ComicPage) => {
+                        if (p.id !== pageId) return p;
+                        return {
+                            ...p,
+                            panels: p.panels.map(panel => panel.id === elementId ? { ...panel, isVisible: panel.isVisible === false } : panel),
+                            balloons: p.balloons.map(balloon => balloon.id === elementId ? { ...balloon, isVisible: balloon.isVisible === false } : balloon),
+                            drawings: (p.drawings ?? []).map(drawing => drawing.id === elementId ? { ...drawing, isVisible: drawing.isVisible === false } : drawing),
+                            overlays: (p.overlays ?? []).map(overlay => overlay.id === elementId ? { ...overlay, isVisible: overlay.isVisible === false } : overlay),
+                        };
+                    })
+                })),
 
-                toggleLayerLock: (pageId: string, elementId: string) => set((state: ComicState) => {
-                    return {
-                        pages: state.pages.map((p: ComicPage) => {
-                            if (p.id !== pageId) return p;
-                            return {
-                                ...p,
-                                panels: p.panels.map(panel => panel.id === elementId ? { ...panel, isLocked: !panel.isLocked } : panel),
-                                balloons: p.balloons.map(balloon => balloon.id === elementId ? { ...balloon, isLocked: !balloon.isLocked } : balloon),
-                                drawings: p.drawings.map(drawing => drawing.id === elementId ? { ...drawing, isLocked: !drawing.isLocked } : drawing),
-                            }
-                        })
-                    }
-                }),
+                toggleLayerLock: (pageId: string, elementId: string) => set((state: ComicState) => ({
+                    pages: state.pages.map((p: ComicPage) => {
+                        if (p.id !== pageId) return p;
+                        return {
+                            ...p,
+                            panels: p.panels.map(panel => panel.id === elementId ? { ...panel, isLocked: !panel.isLocked } : panel),
+                            balloons: p.balloons.map(balloon => balloon.id === elementId ? { ...balloon, isLocked: !balloon.isLocked } : balloon),
+                            drawings: (p.drawings ?? []).map(drawing => drawing.id === elementId ? { ...drawing, isLocked: !drawing.isLocked } : drawing),
+                            overlays: (p.overlays ?? []).map(overlay => overlay.id === elementId ? { ...overlay, isLocked: !overlay.isLocked } : overlay),
+                        };
+                    })
+                })),
 
                 createGroup: (pageId: string, elementIds: string[]) => set((state: ComicState) => {
                     if (elementIds.length < 2) return state;
@@ -1545,13 +1678,19 @@ export const useComicStore = create<ComicState>()(
                     }));
                     const newPanelIds = newPanels.map(p => p.id);
                     const otherOrder = (page.layerOrder || []).filter(id => !page.panels.some(p => p.id === id));
-                    return {
-                        pages: state.pages.map((p: ComicPage) =>
-                            p.id === pageId
-                                ? { ...p, panels: newPanels, layerOrder: [...newPanelIds, ...otherOrder] }
-                                : p
-                        )
-                    };
+                    const pages = state.pages.map((p: ComicPage) =>
+                        p.id === pageId
+                            ? { ...p, panels: newPanels, layerOrder: [...newPanelIds, ...otherOrder] }
+                            : p
+                    );
+                    // Applying a template replaces every panel on the page, so any selection or
+                    // group still naming the old panel ids is pointing at elements that are gone.
+                    const { selectedElementIds, groupsByPage } = reconcileElementReferences(
+                        pages,
+                        state.selectedElementIds,
+                        state.groupsByPage,
+                    );
+                    return { pages, groupsByPage, selectedElementIds };
                 }),
 
                 flushAutoSave: () => set((state: ComicState) => ({ ...state, _autoSaveTick: Date.now() })),
@@ -1645,13 +1784,19 @@ export const useComicStore = create<ComicState>()(
 
                     const newLayerOrder = page.layerOrder.flatMap(id => id === panelId ? [panelA.id, panelB.id] : [id]);
 
-                    return {
-                        pages: state.pages.map((p: ComicPage) =>
-                            p.id === pageId
-                                ? { ...p, panels: newPanels, layerOrder: newLayerOrder }
-                                : p
-                        )
-                    };
+                    const pages = state.pages.map((p: ComicPage) =>
+                        p.id === pageId
+                            ? { ...p, panels: newPanels, layerOrder: newLayerOrder }
+                            : p
+                    );
+                    // The source panel's id no longer exists — it became panelA and panelB. Leaving
+                    // it selected (or in a group) left the toolbar pointed at a destroyed element.
+                    const { selectedElementIds, groupsByPage } = reconcileElementReferences(
+                        pages,
+                        state.selectedElementIds,
+                        state.groupsByPage,
+                    );
+                    return { pages, groupsByPage, selectedElementIds };
                 })
             }),
             {
