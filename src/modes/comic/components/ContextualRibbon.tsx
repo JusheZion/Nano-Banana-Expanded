@@ -46,6 +46,8 @@ import {
   TEXT_ON_BLUE,
 } from '../theme/Phase12DesignTokens';
 import { useShallow } from 'zustand/react/shallow';
+import { RibbonButton, RIBBON_BUTTON_CLASS } from './RibbonButton';
+import type { ComicDocumentCommands, ComicViewportControls } from './comicCommands';
 
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/150';
 
@@ -70,22 +72,8 @@ export interface ContextualRibbonProps {
   balloonShapeExpanded: boolean;
   onBalloonTextExpandedChange: (v: boolean) => void;
   onBalloonShapeExpandedChange: (v: boolean) => void;
-  /** For View ribbon */
-  zoomLevel: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onZoomReset: () => void;
-  onZoomFit: () => void;
-  layoutMode: 'webtoon' | 'spread';
-  onLayoutModeChange: (mode: 'webtoon' | 'spread') => void;
-  onSave: () => void;
-  onExportPng: () => void;
-  onExportPdf: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onCut: () => void;
-  onCopy: () => void;
-  onPaste: () => void;
+  commands: ComicDocumentCommands;
+  viewport: ComicViewportControls;
   /** Open Format dialog with optional tab and target (context-aware for Color button) */
   onOpenFormatDialog?: (tab: FormatDialogTabId, pageId?: string | null, balloonId?: string | null, panelId?: string | null) => void;
   /** Optional: switch active menu from ribbon (e.g. Format → Text/Objects) */
@@ -178,15 +166,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
     showObjectsRibbon ||
     showHomeRibbon;
 
-  const ribbonBtnBase = 'rounded-lg border border-white/20 flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 min-w-[2.5rem] transition-all duration-150 shrink-0 hover:bg-[linear-gradient(45deg,#bf953f_0%,#fcf6ba_45%,#b38728_70%,#fbf5b7_85%,#aa771c_100%)] hover:text-[#000000] hover:border-white/30 active:scale-[0.98] active:shadow-inner';
   const ribbonBtnStyle = (active?: boolean) =>
     active ? { background: ACCENT_GOLD_GRADIENT, color: TEXT_ON_GOLD } : { background: 'transparent', color: TEXT_ON_BLUE };
-  const RibbonButton = ({ label, icon, active, onClick, onMouseDown, disabled, title }: { label: string; icon: React.ReactNode; active?: boolean; onClick: () => void; onMouseDown?: (e: React.MouseEvent) => void; disabled?: boolean; title: string }) => (
-    <button type="button" title={title} onClick={onClick} onMouseDown={onMouseDown} disabled={disabled} className={ribbonBtnBase} style={ribbonBtnStyle(active)} aria-pressed={active}>
-      {icon}
-      <span className="text-[9px] font-medium uppercase tracking-wide leading-tight">{label}</span>
-    </button>
-  );
 
   // When unpinned and no context: show only a slim bar with thumbtack to pin
   if (!ribbonVisible) {
@@ -201,7 +182,7 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <button
             type="button"
             onClick={props.onRibbonPinToggle}
-            className={`${ribbonBtnBase} flex-row min-w-0 py-1 px-2`}
+            className={`${RIBBON_BUTTON_CLASS} flex-row min-w-0 py-1 px-2`}
             style={{ background: 'transparent', color: TEXT_ON_BLUE }}
             aria-pressed={false}
           >
@@ -357,15 +338,15 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
 
       {showViewRibbon && (
         <div className="flex items-center gap-2 shrink-0">
-          <RibbonButton label="Zoom out" icon={<ZoomOut size={16} />} onClick={props.onZoomOut} title="Zoom out" />
+          <RibbonButton label="Zoom out" icon={<ZoomOut size={16} />} onClick={props.viewport.zoomOut} title="Zoom out" />
           <Tooltip content="Zoom level">
-            <button type="button" onClick={props.onZoomReset} className={`${ribbonBtnBase} min-w-[2.5rem]`} style={ribbonBtnStyle()}>{Math.round(props.zoomLevel * 100)}%</button>
+            <button type="button" onClick={props.viewport.zoomReset} className={`${RIBBON_BUTTON_CLASS} min-w-[2.5rem]`} style={ribbonBtnStyle()}>{Math.round(props.viewport.zoomLevel * 100)}%</button>
           </Tooltip>
-          <RibbonButton label="Zoom in" icon={<ZoomIn size={16} />} onClick={props.onZoomIn} title="Zoom in" />
-          <RibbonButton label="Fit" icon={<Maximize2 size={16} />} onClick={props.onZoomFit} title="Fit to screen" />
+          <RibbonButton label="Zoom in" icon={<ZoomIn size={16} />} onClick={props.viewport.zoomIn} title="Zoom in" />
+          <RibbonButton label="Fit" icon={<Maximize2 size={16} />} onClick={props.viewport.zoomFit} title="Fit to screen" />
           <div className="h-5 w-px bg-white/20 shrink-0" />
-          <RibbonButton label="Webtoon" icon={<LayoutGrid size={16} />} active={props.layoutMode === 'webtoon'} onClick={() => props.onLayoutModeChange('webtoon')} title="Webtoon" />
-          <RibbonButton label="Spread" icon={<Columns size={16} />} active={props.layoutMode === 'spread'} onClick={() => props.onLayoutModeChange('spread')} title="Spread" />
+          <RibbonButton label="Webtoon" icon={<LayoutGrid size={16} />} active={props.viewport.layoutMode === 'webtoon'} onClick={() => props.viewport.setLayoutMode('webtoon')} title="Webtoon" />
+          <RibbonButton label="Spread" icon={<Columns size={16} />} active={props.viewport.layoutMode === 'spread'} onClick={() => props.viewport.setLayoutMode('spread')} title="Spread" />
         </div>
       )}
 
@@ -374,17 +355,17 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <div className="flex flex-col items-center gap-0.5 shrink-0">
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 text-center w-full" style={{ color: TEXT_ON_BLUE }}>Revise</span>
             <div className="flex items-center gap-1.5">
-              <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
-              <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
+              <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.commands.undo} title="Undo" />
+              <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.commands.redo} title="Redo" />
             </div>
           </div>
           {RIBBON_DIVIDER}
           <div className="flex flex-col items-center gap-0.5 shrink-0">
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 text-center w-full" style={{ color: TEXT_ON_BLUE }}>Clipboard</span>
             <div className="flex items-center gap-1.5">
-              <RibbonButton label="Copy" icon={<Copy size={16} />} onClick={props.onCopy} title="Copy" />
-              <RibbonButton label="Cut" icon={<Scissors size={16} />} onClick={props.onCut} title="Cut" />
-              <RibbonButton label="Paste" icon={<Clipboard size={16} />} onClick={props.onPaste} title="Paste" />
+              <RibbonButton label="Copy" icon={<Copy size={16} />} onClick={props.commands.copy} title="Copy" />
+              <RibbonButton label="Cut" icon={<Scissors size={16} />} onClick={props.commands.cut} title="Cut" />
+              <RibbonButton label="Paste" icon={<Clipboard size={16} />} onClick={props.commands.paste} title="Paste" />
             </div>
           </div>
           {RIBBON_DIVIDER}
@@ -422,13 +403,13 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
                     {[10, 12, 14, 16, 18, 20, 24, 28, 32, 36].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                   <Tooltip content="Bold">
-                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontWeight: (selectedBalloons[0].overrides?.fontWeight === 'bold' ? 'normal' : 'bold') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontWeight === 'bold')}><Bold size={16} /></button>
+                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontWeight: (selectedBalloons[0].overrides?.fontWeight === 'bold' ? 'normal' : 'bold') } })} className={RIBBON_BUTTON_CLASS} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontWeight === 'bold')}><Bold size={16} /></button>
                   </Tooltip>
                   <Tooltip content="Italic">
-                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontStyle: (selectedBalloons[0].overrides?.fontStyle === 'italic' ? 'normal' : 'italic') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontStyle === 'italic')}><Italic size={16} /></button>
+                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), fontStyle: (selectedBalloons[0].overrides?.fontStyle === 'italic' ? 'normal' : 'italic') } })} className={RIBBON_BUTTON_CLASS} style={ribbonBtnStyle(selectedBalloons[0].overrides?.fontStyle === 'italic')}><Italic size={16} /></button>
                   </Tooltip>
                   <Tooltip content="Underline">
-                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), textDecoration: (selectedBalloons[0].overrides?.textDecoration === 'underline' ? 'none' : 'underline') } })} className={ribbonBtnBase} style={ribbonBtnStyle(selectedBalloons[0].overrides?.textDecoration === 'underline')}><Underline size={16} /></button>
+                    <button type="button" onClick={() => updateBalloon(currentPageId, selectedBalloons[0].id, { overrides: { ...(selectedBalloons[0].overrides || {}), textDecoration: (selectedBalloons[0].overrides?.textDecoration === 'underline' ? 'none' : 'underline') } })} className={RIBBON_BUTTON_CLASS} style={ribbonBtnStyle(selectedBalloons[0].overrides?.textDecoration === 'underline')}><Underline size={16} /></button>
                   </Tooltip>
                 </>
               ) : (
@@ -509,9 +490,9 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
           <div className="flex flex-col items-center gap-0.5 shrink-0">
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 text-center w-full" style={{ color: TEXT_ON_BLUE }}>Project</span>
             <div className="flex items-center gap-1.5">
-              <RibbonButton label="Save" icon={<Save size={16} />} onClick={props.onSave} title="Save" />
-              <RibbonButton label="PNG" icon={<ImageIcon size={16} />} onClick={props.onExportPng} title="Export PNG" />
-              <RibbonButton label="PDF" icon={<FileDown size={16} />} onClick={props.onExportPdf} title="Export PDF" />
+              <RibbonButton label="Save" icon={<Save size={16} />} onClick={props.commands.save} title="Save" />
+              <RibbonButton label="PNG" icon={<ImageIcon size={16} />} onClick={props.commands.exportPng} title="Export PNG" />
+              <RibbonButton label="PDF" icon={<FileDown size={16} />} onClick={props.commands.exportPdf} title="Export PDF" />
             </div>
           </div>
         </>
@@ -519,8 +500,8 @@ export const ContextualRibbon: React.FC<ContextualRibbonProps> = (props) => {
 
       {showEditRibbon && (
         <div className="flex items-center gap-2 shrink-0">
-          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.onUndo} title="Undo" />
-          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.onRedo} title="Redo" />
+          <RibbonButton label="Undo" icon={<Undo2 size={16} />} onClick={props.commands.undo} title="Undo" />
+          <RibbonButton label="Redo" icon={<Redo2 size={16} />} onClick={props.commands.redo} title="Redo" />
           <div className="h-5 w-px bg-white/20 shrink-0" />
           <RibbonButton label="Group" icon={<BoxSelect size={16} />} onClick={() => currentPageId && createGroup(currentPageId, selectedElementIds)} disabled={!currentPageId || selectedElementIds.length < 2} title="Group selected (2+ elements)" />
           <RibbonButton label="Ungroup" icon={<BoxSelect size={16} />} onClick={() => currentPageId && selectedElementIds[0] && ungroup(currentPageId, selectedElementIds[0])} disabled={!currentPageId || !selectedElementIds.length || !isSelectionOneGroup} title="Ungroup selection" />

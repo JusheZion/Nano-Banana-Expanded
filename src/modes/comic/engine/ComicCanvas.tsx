@@ -234,8 +234,7 @@ export const ComicCanvas: React.FC = () => {
         const pageTop = getLayoutPosition(idx, layoutMode).y * zoomLevel;
         const target = Math.max(0, pageTop + CANVAS_TOP_PADDING - 24);
         container.scrollTo({ top: target, behavior: 'smooth' });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPageId]);
+    }, [currentPageId, layoutMode, pages, zoomLevel]);
 
     const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
         const stage = e.target.getStage();

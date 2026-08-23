@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import {
   canonCheckResultSchema,
   draftDialogueResultSchema,
@@ -55,8 +55,7 @@ import {
   type PacingRevisionPreviewItem,
 } from './pacingRevisionPagePreviewFlow.ts';
 
-// deno-lint-ignore no-explicit-any
-type SupabaseAdmin = any;
+type SupabaseAdmin = SupabaseClient;
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -1069,7 +1068,9 @@ async function executeSinglePageBeats(
   ]);
   const system =
     'You are a comics writer\'s room assistant. Output only valid JSON. No markdown fences. Each panel beat must be a clear visual direction.';
-  const priorPagesDigest = buildPagesDigest((priorPagesRes.data as any[]) ?? []);
+  const priorPagesDigest = buildPagesDigest(
+    (priorPagesRes.data as Array<{ page_number: number; beats_json: unknown; script_text: string | null }>) ?? [],
+  );
   const visualReferences = readIssueVisualReferences(issueRow.notes);
   const visualReferenceDigest = buildIssueVisualReferenceDigest(visualReferences);
   const visualReferenceImages = await fetchVisualReferenceImageParts(supabase, visualReferences);

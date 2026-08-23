@@ -14,6 +14,9 @@ describe('persistPacingRevisionOutlinePreview', () => {
       tables.push(table);
       return {
         insert: vi.fn(async () => ({ error: null })),
+        update: vi.fn(() => ({
+          eq: vi.fn(async () => ({ error: null })),
+        })),
       };
     });
 

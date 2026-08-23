@@ -79,6 +79,8 @@ import {
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { resolveArcsGenerationsDisplayUrl } from '@/shared/lib/arcsGenerationsUrls';
+import { readBlobAsDataUrl } from '@/shared/utils/blobDataUrl';
+import { Chip, ChipWithOptionalRemove, MultiChip, SectionAddToLibrary } from '@/portals/character-studio/CharacterTagControls';
 
 /** Gradient gold text (match Comics Studio); use with style for background. */
 const goldTextStyle: React.CSSProperties = {
@@ -87,150 +89,6 @@ const goldTextStyle: React.CSSProperties = {
   backgroundClip: 'text',
   color: 'transparent',
 };
-
-const chipInactive =
-  'bg-white/5 border border-white/20 hover:border-amber-500/50';
-
-function Chip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group px-3 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 border ${active ? 'text-black hover:text-emerald-400 border-amber-600/80 shadow-[0_0_10px_rgba(191,149,63,0.4)]' : chipInactive}`}
-      style={active ? { background: ACCENT_GOLD_GRADIENT } : undefined}
-    >
-      {active ? (
-        label
-      ) : (
-        <span className="inline-block" style={goldTextStyle}>
-          {label}
-        </span>
-      )}
-    </button>
-  );
-}
-
-/** Chip with optional remove button for custom (library) tags only */
-function ChipWithOptionalRemove({
-  label,
-  active,
-  onClick,
-  isCustom,
-  onRemove,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  isCustom: boolean;
-  onRemove?: () => void;
-}) {
-  return (
-    <span className={isCustom ? 'inline-flex items-center gap-0.5' : undefined}>
-      <Chip label={label} active={active} onClick={onClick} />
-      {isCustom && onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          className="p-0.5 rounded text-white/70 hover:text-white hover:bg-white/20 text-xs leading-none"
-          aria-label="Remove custom tag"
-        >
-          ×
-        </button>
-      )}
-    </span>
-  );
-}
-
-function MultiChip({
-  options,
-  selected,
-  onToggle,
-  libraryOptions,
-  onRemoveLibrary,
-}: {
-  options: readonly string[];
-  selected: string[];
-  onToggle: (value: string) => void;
-  libraryOptions?: readonly string[];
-  onRemoveLibrary?: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <ChipWithOptionalRemove
-          key={opt}
-          label={opt}
-          active={selected.includes(opt)}
-          onClick={() => onToggle(opt)}
-          isCustom={!!libraryOptions?.includes(opt)}
-          onRemove={libraryOptions?.includes(opt) ? () => onRemoveLibrary?.(opt) : undefined}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** One dropdown (category) + input + Save as Tag per section */
-function SectionAddToLibrary({
-  categories,
-  onSave,
-}: {
-  categories: { id: string; label: string }[];
-  onSave: (categoryId: string, value: string) => void;
-}) {
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
-  const [input, setInput] = useState('');
-  const handleSave = () => {
-    if (input.trim() && categoryId) {
-      onSave(categoryId, input.trim());
-      setInput('');
-    }
-  };
-  return (
-    <div className="flex gap-2 mt-2 flex-wrap items-center">
-      <select
-        value={categoryId}
-        onChange={(e) => setCategoryId(e.target.value)}
-        className="bg-black/40 text-white border border-white/20 rounded px-2 py-1.5 text-xs min-w-0 flex-1 basis-24"
-      >
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>{c.label}</option>
-        ))}
-      </select>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          handleSave();
-        }}
-        placeholder="Add custom..."
-        className="flex-1 min-w-0 bg-black/40 text-white placeholder-white/40 px-2 py-1.5 rounded text-xs border border-white/10"
-      />
-      <button
-        type="button"
-        onClick={handleSave}
-        className="px-3 py-2 rounded-lg text-black text-xs font-bold border border-amber-600/50"
-        style={{ background: ACCENT_GOLD_GRADIENT }}
-      >
-        Save as Tag
-      </button>
-    </div>
-  );
-}
 
 export const CharacterStudio: React.FC = () => {
   const { setTheme } = useTheme();
@@ -974,16 +832,21 @@ export const CharacterStudio: React.FC = () => {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const slotIndex = uploadSlotIndexRef.current;
                 if (slotIndex == null) return;
-                const url = URL.createObjectURL(file);
-                store.setReferenceImageAt(slotIndex, url);
-                store.setCurrentLiveImageUrl(url);
-                uploadSlotIndexRef.current = null;
-                e.target.value = '';
+                try {
+                  const url = await readBlobAsDataUrl(file);
+                  store.setReferenceImageAt(slotIndex, url);
+                  store.setCurrentLiveImageUrl(url);
+                } catch {
+                  store.setGenerationStatus('error', 'Could not read the uploaded image.');
+                } finally {
+                  uploadSlotIndexRef.current = null;
+                  e.target.value = '';
+                }
               }}
             />
             <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1.5">
@@ -1014,7 +877,7 @@ export const CharacterStudio: React.FC = () => {
                         for (const type of item.types) {
                           if (type.startsWith('image/')) {
                             const blob = await item.getType(type);
-                            const url = URL.createObjectURL(blob);
+                            const url = await readBlobAsDataUrl(blob);
                             const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
                             const firstEmpty = slots.findIndex((u) => !u);
                             if (firstEmpty >= 0) {

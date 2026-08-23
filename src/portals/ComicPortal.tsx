@@ -1,8 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { ComicEditor } from '@/modes/comic/pages/ComicEditor';
-import { GuidedComicFlow } from '@/portals/guided-comic/GuidedComicFlow';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import type { GuidedComicStepId } from '@/portals/guided-comic/GuidedComicFlow';
 import type { Portal } from '@/shared/portals';
+
+const ComicEditor = lazy(() => import('@/modes/comic/pages/ComicEditor').then((module) => ({ default: module.ComicEditor })));
+const GuidedComicFlow = lazy(() => import('@/portals/guided-comic/GuidedComicFlow').then((module) => ({ default: module.GuidedComicFlow })));
+
+const ComicWorkspaceFallback = () => (
+  <div className="flex min-h-[40vh] items-center justify-center text-white/60">Loading comic workspace…</div>
+);
 
 type ComicPortalProps = {
   onNavigatePortal: (portal: Portal) => void;
@@ -30,14 +35,20 @@ export const ComicPortal: React.FC<ComicPortalProps> = ({ onNavigatePortal, adva
   };
 
   if (showAdvancedStudio) {
-    return <ComicEditor onOpenGuidedWorkflowStep={openGuidedStep} />;
+    return (
+      <Suspense fallback={<ComicWorkspaceFallback />}>
+        <ComicEditor onOpenGuidedWorkflowStep={openGuidedStep} />
+      </Suspense>
+    );
   }
 
   return (
-    <GuidedComicFlow
-      onNavigatePortal={onNavigatePortal}
-      onOpenAdvancedStudio={() => setShowAdvancedStudio(true)}
-      requestedStepId={requestedGuidedStepId}
-    />
+    <Suspense fallback={<ComicWorkspaceFallback />}>
+      <GuidedComicFlow
+        onNavigatePortal={onNavigatePortal}
+        onOpenAdvancedStudio={() => setShowAdvancedStudio(true)}
+        requestedStepId={requestedGuidedStepId}
+      />
+    </Suspense>
   );
 };

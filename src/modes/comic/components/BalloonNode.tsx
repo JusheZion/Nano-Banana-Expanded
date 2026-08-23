@@ -152,8 +152,7 @@ export const BalloonNode: React.FC<BalloonNodeProps> = ({
                 onChange(balloon.id, { width: newW, height: newH });
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoSize, balloon.text, fontSize, fontFamily, fontStyle, fontWeight, padding, w, h]);
+    }, [autoSize, balloon.id, balloon.text, fontSize, fontFamily, fontStyle, fontWeight, onChange, padding, w, h]);
 
     // Calculate Warp Path if applicable
     const warpPathData = useMemo(() => {

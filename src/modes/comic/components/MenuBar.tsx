@@ -6,6 +6,7 @@ import type { BalloonStyleId } from '../../../types/balloon';
 import { useComicStore } from '../../../stores/comicStore';
 import { ACCENT_GOLD_GRADIENT, ACCENT_BLUE_GRADIENT, ACCENT_GOLD_LIGHT } from '../theme/Phase12DesignTokens';
 import { useShallow } from 'zustand/react/shallow';
+import type { ComicDocumentCommands, ComicViewportControls } from './comicCommands';
 
 /** Solid dark blue for menu bar text (gold bar) when not hovered */
 const MENU_BAR_TEXT_BLUE = '#001a4d';
@@ -22,23 +23,8 @@ export interface MenuBarProps {
   onActiveMenuChange: (id: MenuId) => void;
   themeLabel: string;
   onThemeClick: () => void;
-  onSave: () => void;
-  onLoad: () => void;
-  onImportImage: () => void;
-  onExportPng: () => void;
-  onExportPdf: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onCut: () => void;
-  onCopy: () => void;
-  onPaste: () => void;
-  zoomLevel: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onZoomReset: () => void;
-  onZoomFit: () => void;
-  layoutMode: 'webtoon' | 'spread';
-  onLayoutModeChange: (mode: 'webtoon' | 'spread') => void;
+  commands: ComicDocumentCommands;
+  viewport: ComicViewportControls;
   /** Panel selected: enable Insert Image, Split submenu */
   hasPanelSelected: boolean;
   /** Open the Format dialog with the given tab (from Text / Objects menu items) */
@@ -299,12 +285,12 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
     <div ref={barRef} className="flex items-stretch h-full">
       {menuWithDropdown('home', 'Home', null, (
         <div className={dropdownPanelClass} style={dropdownPanelStyle}>
-          {item('Open…', '⌘O', props.onLoad)}
-          {item('Import image…', undefined, props.onImportImage)}
-          {item('Save', '⌘S', props.onSave)}
+          {item('Open…', '⌘O', props.commands.load)}
+          {item('Import image…', undefined, props.commands.importImage)}
+          {item('Save', '⌘S', props.commands.save)}
           <div className="my-1 border-t border-white/15" />
-          {item('Export current page (PNG)', undefined, props.onExportPng)}
-          {item('Export all pages (PDF)', undefined, props.onExportPdf)}
+          {item('Export current page (PNG)', undefined, props.commands.exportPng)}
+          {item('Export all pages (PDF)', undefined, props.commands.exportPdf)}
           <div className="my-1 border-t border-white/15" />
           <button type="button" onClick={() => { props.onThemeClick(); close(); }} className={`${dropdownItemClass} justify-between`} style={dropdownItemStyle}>
             <span>Theme / Studio look</span>
@@ -318,7 +304,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           {/* onMouseDown so action runs before mousedown-outside closes dropdown (same as Insert Image) */}
           <button
             type="button"
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onUndo(); close(); }}
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.commands.undo(); close(); }}
             className="w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-4 rounded transition-all duration-150 text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.99]"
           >
             <span>Undo</span>
@@ -326,33 +312,33 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           </button>
           <button
             type="button"
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.onRedo(); close(); }}
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); props.commands.redo(); close(); }}
             className="w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-4 rounded transition-all duration-150 text-[#001a4d] hover:bg-[#002366] hover:text-[#fcf6ba] active:scale-[0.99]"
           >
             <span>Redo</span>
             <span className="text-[10px] opacity-70 font-mono">⌘⇧Z</span>
           </button>
           <div className="my-1 border-t border-white/15" />
-          {item('Cut', '⌘X', props.onCut)}
-          {item('Copy', '⌘C', props.onCopy)}
-          {item('Paste', '⌘V', props.onPaste)}
+          {item('Cut', '⌘X', props.commands.cut)}
+          {item('Copy', '⌘C', props.commands.copy)}
+          {item('Paste', '⌘V', props.commands.paste)}
         </div>
       ))}
       {menuWithDropdown('view', 'View', null, (
         <div className={`${dropdownPanelClass} min-w-[220px]`} style={dropdownPanelStyle}>
-          {item('Zoom In', undefined, props.onZoomIn)}
-          {item('Zoom Out', undefined, props.onZoomOut)}
-          {item('Reset 100%', undefined, props.onZoomReset)}
-          {item('Fit to screen', undefined, props.onZoomFit)}
+          {item('Zoom In', undefined, props.viewport.zoomIn)}
+          {item('Zoom Out', undefined, props.viewport.zoomOut)}
+          {item('Reset 100%', undefined, props.viewport.zoomReset)}
+          {item('Fit to screen', undefined, props.viewport.zoomFit)}
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Layout</div>
-          <button type="button" onClick={() => { props.onLayoutModeChange('webtoon'); close(); }} className={dropdownItemClass} style={{ ...dropdownItemStyle, background: props.layoutMode === 'webtoon' ? 'rgba(0,35,102,0.4)' : undefined }}>
+          <button type="button" onClick={() => { props.viewport.setLayoutMode('webtoon'); close(); }} className={dropdownItemClass} style={{ ...dropdownItemStyle, background: props.viewport.layoutMode === 'webtoon' ? 'rgba(0,35,102,0.4)' : undefined }}>
             <LayoutIcon size={12} /> Webtoon
           </button>
-          <button type="button" onClick={() => { props.onLayoutModeChange('spread'); close(); }} className={dropdownItemClass} style={{ ...dropdownItemStyle, background: props.layoutMode === 'spread' ? 'rgba(0,35,102,0.4)' : undefined }}>
+          <button type="button" onClick={() => { props.viewport.setLayoutMode('spread'); close(); }} className={dropdownItemClass} style={{ ...dropdownItemStyle, background: props.viewport.layoutMode === 'spread' ? 'rgba(0,35,102,0.4)' : undefined }}>
             <Columns size={12} /> Spread
           </button>
-          <div className="px-3 pt-1 text-[10px] opacity-60" style={dropdownHeadingStyle}>{Math.round(props.zoomLevel * 100)}%</div>
+          <div className="px-3 pt-1 text-[10px] opacity-60" style={dropdownHeadingStyle}>{Math.round(props.viewport.zoomLevel * 100)}%</div>
         </div>
       ))}
       {menuWithDropdown('panel', 'Panel', null, (
@@ -375,7 +361,7 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
           <button type="button" onClick={() => { toggleDrawingMode(!isDrawingMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Pencil size={12} /> {isDrawingMode ? 'Exit Draw' : 'Draw'}</button>
           <button type="button" onClick={() => { setKnifeMode(!isKnifeMode); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><Scissors size={12} /> {isKnifeMode ? 'Exit Knife' : 'Knife (split by line)'}</button>
           <button type="button" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleInsertImage(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Insert stored image</button>
-          <button type="button" onClick={() => { props.onImportImage(); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Import image…</button>
+          <button type="button" onClick={() => { props.commands.importImage(); close(); }} className={dropdownItemClass} style={dropdownItemStyle}><ImagePlus size={12} /> Import image…</button>
           <div className="my-1 border-t border-white/15" />
           <div className="px-3 py-1.5 text-[10px] font-bold uppercase opacity-70" style={dropdownHeadingStyle}>Split selected panel</div>
           <button type="button" onClick={() => handleSplit('horizontal', 0)} className={dropdownItemClass} style={dropdownItemStyle}>Horizontal (row)</button>

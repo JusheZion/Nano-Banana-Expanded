@@ -5,6 +5,7 @@ import { useAssetStudioStore } from '@/stores/assetStudioStore';
 import { getSlotLabel } from '@/shared/constants/referenceSlots';
 import { ArcsStorageImg } from '@/components/ui/ArcsStorageImg';
 import { goldTextStyle } from './assetStudioShared';
+import { readBlobAsDataUrl } from '@/shared/utils/blobDataUrl';
 
 type Props = {
   uploadInputRef: React.RefObject<HTMLInputElement | null>;
@@ -40,16 +41,21 @@ export const AssetStudioReferencesPanel: React.FC<Props> = ({
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
           if (!file) return;
           const slotIndex = uploadSlotIndexRef.current;
           if (slotIndex == null) return;
-          const url = URL.createObjectURL(file);
-          store.setReferenceImageAt(slotIndex, url);
-          store.setCurrentLiveImageUrl(url);
-          uploadSlotIndexRef.current = null;
-          e.target.value = '';
+          try {
+            const url = await readBlobAsDataUrl(file);
+            store.setReferenceImageAt(slotIndex, url);
+            store.setCurrentLiveImageUrl(url);
+          } catch {
+            store.setGenerationStatus('error', 'Could not read the uploaded image.');
+          } finally {
+            uploadSlotIndexRef.current = null;
+            e.target.value = '';
+          }
         }}
       />
       <div className="rounded-lg border border-amber-500/30 bg-black/35 px-2 py-2 mb-2 shrink-0 flex flex-wrap items-center gap-2">
@@ -148,7 +154,7 @@ export const AssetStudioReferencesPanel: React.FC<Props> = ({
                     for (const type of item.types) {
                       if (type.startsWith('image/')) {
                         const blob = await item.getType(type);
-                        const url = URL.createObjectURL(blob);
+                        const url = await readBlobAsDataUrl(blob);
                         const slots = Array.from({ length: 14 }, (_, i) => store.referenceImageUrls[i]);
                         const firstEmpty = slots.findIndex((u) => !u);
                         if (firstEmpty >= 0) {

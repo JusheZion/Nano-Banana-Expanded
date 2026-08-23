@@ -1,7 +1,15 @@
 import type { PacingRevisionPageTarget } from './pacingRevisionPageTarget.ts';
 
-// deno-lint-ignore no-explicit-any
-type SupabaseClient = any;
+type PersistenceResult = PromiseLike<{ error: { message: string } | null }>;
+
+export interface PacingRevisionPersistenceClient {
+  from(table: string): {
+    insert(values: Record<string, unknown> | Array<Record<string, unknown>>): PersistenceResult;
+    update(values: Record<string, unknown>): {
+      eq(column: string, value: unknown): PersistenceResult;
+    };
+  };
+}
 
 export type PacingRevisionPersistenceResult =
   | { ok: true }
@@ -87,7 +95,7 @@ export function projectPacingRevisionFailureLedger({
 }
 
 export async function persistPacingRevisionOutlinePreview(
-  supabase: SupabaseClient,
+  supabase: PacingRevisionPersistenceClient,
   setRow: Record<string, unknown>,
   itemRows: Array<Record<string, unknown>>,
   changeRows: Array<Record<string, unknown>>,

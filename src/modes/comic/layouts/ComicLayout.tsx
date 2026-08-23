@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useComicStore, comicUndo, comicRedo } from '../../../stores/comicStore';
 import { GENRE_REGISTRY } from '../data/GenreRegistry';
 import { TEXTURE_REGISTRY } from '../data/TextureRegistry';
@@ -405,6 +405,44 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
   ];
   const activeDockContent = dockTabs.find(t => t.id === activeDockTab)?.children;
 
+  const openProjectFile = useCallback(() => fileInputRef.current?.click(), []);
+  const openImageFile = useCallback(() => imageInputRef.current?.click(), []);
+  const exportPng = useCallback(() => triggerExport('png'), [triggerExport]);
+  const exportPdf = useCallback(() => triggerExport('pdf'), [triggerExport]);
+  const cutSelection = useCallback(() => {
+    copySelected();
+    deleteSelected();
+  }, [copySelected, deleteSelected]);
+  const zoomIn = useCallback(() => setZoomLevel((level: number) => Math.min(3, level + 0.1)), [setZoomLevel]);
+  const zoomOut = useCallback(() => setZoomLevel((level: number) => Math.max(0.1, level - 0.1)), [setZoomLevel]);
+  const zoomReset = useCallback(() => setZoomLevel(1), [setZoomLevel]);
+  const zoomFit = useCallback(() => {
+    const viewportWidth = window.innerWidth - (isDockOpen ? 320 : 0);
+    const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
+    setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
+  }, [isDockOpen, layoutMode, pages.length, setZoomLevel]);
+  const documentCommands = useMemo(() => ({
+    save: serializeProject,
+    load: openProjectFile,
+    importImage: openImageFile,
+    exportPng,
+    exportPdf,
+    undo,
+    redo,
+    cut: cutSelection,
+    copy: copySelected,
+    paste: pasteClipboard,
+  }), [copySelected, cutSelection, exportPdf, exportPng, openImageFile, openProjectFile, pasteClipboard, redo, serializeProject, undo]);
+  const viewportControls = useMemo(() => ({
+    zoomLevel,
+    zoomIn,
+    zoomOut,
+    zoomReset,
+    zoomFit,
+    layoutMode,
+    setLayoutMode,
+  }), [layoutMode, setLayoutMode, zoomFit, zoomIn, zoomLevel, zoomOut, zoomReset]);
+
   return (
     <div
       className="comic-layout flex h-screen text-white relative overflow-hidden min-h-0"
@@ -418,27 +456,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
             onActiveMenuChange={handleActiveMenuChange}
             themeLabel={currentGenre.id === 'custom' ? 'Theme' : currentGenre.label}
             onThemeClick={() => setIsGenreOpen(!isGenreOpen)}
-            onSave={serializeProject}
-            onLoad={() => fileInputRef.current?.click()}
-            onImportImage={() => imageInputRef.current?.click()}
-            onExportPng={() => triggerExport('png')}
-            onExportPdf={() => triggerExport('pdf')}
-            onUndo={undo}
-            onRedo={redo}
-            onCut={() => { copySelected(); deleteSelected(); }}
-            onCopy={copySelected}
-            onPaste={pasteClipboard}
-            zoomLevel={zoomLevel}
-            onZoomIn={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
-            onZoomOut={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
-            onZoomReset={() => setZoomLevel(1)}
-            onZoomFit={() => {
-              const viewportWidth = window.innerWidth - (isDockOpen ? 320 : 0);
-              const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
-              setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
-            }}
-            layoutMode={layoutMode}
-            onLayoutModeChange={setLayoutMode}
+            commands={documentCommands}
+            viewport={viewportControls}
             hasPanelSelected={hasPanelSelected}
             onOpenFormatDialog={openFormatDialog}
             guidedWorkflowSteps={guidedWorkflowSteps}
@@ -533,25 +552,8 @@ export const ComicLayout: React.FC<ComicLayoutProps> = ({
           balloonShapeExpanded={balloonShapeExpanded}
           onBalloonTextExpandedChange={setBalloonTextExpanded}
           onBalloonShapeExpandedChange={setBalloonShapeExpanded}
-          zoomLevel={zoomLevel}
-          onZoomIn={() => setZoomLevel((z: number) => Math.min(3, z + 0.1))}
-          onZoomOut={() => setZoomLevel((z: number) => Math.max(0.1, z - 0.1))}
-          onZoomReset={() => setZoomLevel(1)}
-          onZoomFit={() => {
-            const viewportWidth = window.innerWidth - (isDockOpen ? 320 : 0);
-            const targetWidth = layoutMode === 'spread' && pages.length > 1 ? 1640 : 840;
-            setZoomLevel(Math.min(1.5, Math.max(0.2, viewportWidth / targetWidth)));
-          }}
-          layoutMode={layoutMode}
-          onLayoutModeChange={setLayoutMode}
-          onSave={serializeProject}
-          onExportPng={() => triggerExport('png')}
-          onExportPdf={() => triggerExport('pdf')}
-          onUndo={undo}
-          onRedo={redo}
-          onCut={() => { copySelected(); deleteSelected(); }}
-          onCopy={copySelected}
-          onPaste={pasteClipboard}
+          commands={documentCommands}
+          viewport={viewportControls}
           onOpenFormatDialog={openFormatDialog}
           onActiveMenuChange={handleActiveMenuChange}
         />

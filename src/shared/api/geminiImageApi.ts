@@ -415,7 +415,7 @@ function parseSafetyBlock(body: unknown): boolean {
 export async function generateImage(
   options: GenerateImageOptions
 ): Promise<GenerateImageResult> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     return imageFailure('Missing VITE_GEMINI_API_KEY');
   }

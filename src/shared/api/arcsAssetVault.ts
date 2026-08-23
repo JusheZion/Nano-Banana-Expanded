@@ -117,9 +117,10 @@ export async function updateAssetThumbnailFocus(args: {
   id: string;
   focus: ThumbnailFocus;
 }): Promise<MutOk> {
-  if (await assetVaultUsesSupabase()) {
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
     // Mirror character behavior: patch metadata_tags.archive_thumbnail.
-    const { data: row, error: fetchErr } = await supabase!
+    const { data: row, error: fetchErr } = await client
       .from('assets')
       .select('metadata_tags')
       .eq('id', args.id)
@@ -137,7 +138,7 @@ export async function updateAssetThumbnailFocus(args: {
       y: args.focus.y,
       scale: args.focus.scale,
     };
-    const { error } = await supabase!
+    const { error } = await client
       .from('assets')
       .update({ metadata_tags: prev })
       .eq('id', args.id);
@@ -151,10 +152,10 @@ export async function updateAssetThumbnailFocus(args: {
 
 type MutOk = { ok: true } | { ok: false; error: string };
 
-async function assetVaultUsesSupabase(): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+async function getAuthenticatedAssetVaultClient(): Promise<NonNullable<typeof supabase> | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
   const { data: sessionData } = await supabase.auth.getSession();
-  return sessionData.session != null;
+  return sessionData.session ? supabase : null;
 }
 
 export async function renameVaultAssetCollection(
@@ -166,8 +167,9 @@ export async function renameVaultAssetCollection(
   if (fromK === toK) return { ok: true };
   const newCol = toK === UNNAMED_KEY ? null : toK;
 
-  if (await assetVaultUsesSupabase()) {
-    const base = supabase!.from('assets').update({ collection_name: newCol });
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
+    const base = client.from('assets').update({ collection_name: newCol });
     const { error } =
       fromK === UNNAMED_KEY
         ? await base.is('collection_name', null)
@@ -186,8 +188,9 @@ export async function moveVaultAssetToCollection(args: {
   const dest = normalizeCollectionKey(args.targetCollectionDisplay);
   const col = dest === UNNAMED_KEY ? null : dest;
 
-  if (await assetVaultUsesSupabase()) {
-    const { error } = await supabase!
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
+    const { error } = await client
       .from('assets')
       .update({ collection_name: col })
       .eq('id', args.id);
@@ -205,8 +208,9 @@ export async function updateVaultAssetNames(args: {
   const assetName = args.assetName?.trim() || null;
   const displayName = assetName;
 
-  if (await assetVaultUsesSupabase()) {
-    const { error } = await supabase!
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
+    const { error } = await client
       .from('assets')
       .update({ asset_name: assetName, name: displayName })
       .eq('id', args.id);
@@ -218,8 +222,9 @@ export async function updateVaultAssetNames(args: {
 }
 
 export async function deleteVaultAsset(id: string): Promise<MutOk> {
-  if (await assetVaultUsesSupabase()) {
-    const { error } = await supabase!.from('assets').delete().eq('id', id);
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
+    const { error } = await client.from('assets').delete().eq('id', id);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   }
@@ -229,8 +234,9 @@ export async function deleteVaultAsset(id: string): Promise<MutOk> {
 
 export async function deleteVaultAssetCollection(collectionDisplay: string): Promise<MutOk> {
   const key = normalizeCollectionKey(collectionDisplay);
-  if (await assetVaultUsesSupabase()) {
-    const base = supabase!.from('assets').delete();
+  const client = await getAuthenticatedAssetVaultClient();
+  if (client) {
+    const base = client.from('assets').delete();
     const { error } =
       key === UNNAMED_KEY
         ? await base.is('collection_name', null)

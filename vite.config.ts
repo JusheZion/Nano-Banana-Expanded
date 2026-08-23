@@ -17,6 +17,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.split(path.sep).join('/');
+          if (normalizedId.includes('/node_modules/konva/') || normalizedId.includes('/node_modules/react-konva/')) return 'comic-renderer';
+          if (normalizedId.includes('/node_modules/jspdf/')) return 'pdf-export';
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     host: '0.0.0.0',

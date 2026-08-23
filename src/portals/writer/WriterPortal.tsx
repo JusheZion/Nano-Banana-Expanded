@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -80,16 +80,14 @@ import { VaultImageWithFallback } from '@/components/ui/VaultImageWithFallback';
 import { shotPlanJsonToCsv } from '@/portals/writer/shotPlanCsv';
 import { WriterShotStoryboardStrip } from '@/portals/writer/WriterShotStoryboardStrip';
 import { WriterContextMenu } from '@/portals/writer/WriterContextMenu';
+import { WriterSearchableMenu, type WriterMenuOption } from '@/portals/writer/WriterSearchableMenu';
+
+export { WriterSearchableMenu } from '@/portals/writer/WriterSearchableMenu';
 import {
-  WriterRecordActionsMenu,
-  WriterRenameDialog,
-  WriterTrashConfirmDialog,
-  WriterTrashPanel,
   type WriterRecordKind,
   type WriterTrashRecord,
 } from '@/portals/writer/WriterRecordManagement';
 import { WriterHighlightedText } from '@/portals/writer/WriterHighlightedText';
-import { WriterHelpModal } from '@/portals/writer/WriterHelpModal';
 import {
   WriterHelpCategoryBody,
   WriterSectionTip,
@@ -99,12 +97,6 @@ import {
 } from '@/portals/writer/writerHelpRegistry';
 import { WriterRibbon, type WriterRibbonMenuId } from '@/portals/writer/WriterRibbon';
 import { WriterStudioDock, type WriterDockTabId } from '@/portals/writer/WriterStudioDock';
-import { WriterOutlinePasteReview } from '@/portals/writer/WriterOutlinePasteReview';
-import { WriterOutlineImportWizard } from '@/portals/writer/WriterOutlineImportWizard';
-import { WriterOutlineTreatmentReview } from '@/portals/writer/WriterOutlineTreatmentReview';
-import { WriterPacingRevisionHistoryLayout } from '@/portals/writer/WriterPacingRevisionHistory';
-import { WriterPacingBatchStatus } from '@/portals/writer/WriterPacingBatchStatus';
-import { WriterPacingRevisionWorkspace } from '@/portals/writer/WriterPacingRevisionWorkspace';
 import { useWriterPacingRevisionSet } from '@/portals/writer/useWriterPacingRevisionSet';
 import {
   getPacingRevisionActiveSetForIssue,
@@ -308,6 +300,18 @@ import {
   WRITER_PAGE_BEATS_ISSUE_MAX,
 } from '@/shared/writer/schemas';
 import type { PageBeatsJson } from '@/shared/writer/types';
+
+const WriterRecordActionsMenu = React.lazy(() => import('@/portals/writer/WriterRecordManagement').then((module) => ({ default: module.WriterRecordActionsMenu })));
+const WriterRenameDialog = React.lazy(() => import('@/portals/writer/WriterRecordManagement').then((module) => ({ default: module.WriterRenameDialog })));
+const WriterTrashConfirmDialog = React.lazy(() => import('@/portals/writer/WriterRecordManagement').then((module) => ({ default: module.WriterTrashConfirmDialog })));
+const WriterTrashPanel = React.lazy(() => import('@/portals/writer/WriterRecordManagement').then((module) => ({ default: module.WriterTrashPanel })));
+const WriterHelpModal = React.lazy(() => import('@/portals/writer/WriterHelpModal').then((module) => ({ default: module.WriterHelpModal })));
+const WriterOutlinePasteReview = React.lazy(() => import('@/portals/writer/WriterOutlinePasteReview').then((module) => ({ default: module.WriterOutlinePasteReview })));
+const WriterOutlineImportWizard = React.lazy(() => import('@/portals/writer/WriterOutlineImportWizard').then((module) => ({ default: module.WriterOutlineImportWizard })));
+const WriterOutlineTreatmentReview = React.lazy(() => import('@/portals/writer/WriterOutlineTreatmentReview').then((module) => ({ default: module.WriterOutlineTreatmentReview })));
+const WriterPacingRevisionHistoryLayout = React.lazy(() => import('@/portals/writer/WriterPacingRevisionHistory').then((module) => ({ default: module.WriterPacingRevisionHistoryLayout })));
+const WriterPacingBatchStatus = React.lazy(() => import('@/portals/writer/WriterPacingBatchStatus').then((module) => ({ default: module.WriterPacingBatchStatus })));
+const WriterPacingRevisionWorkspace = React.lazy(() => import('@/portals/writer/WriterPacingRevisionWorkspace').then((module) => ({ default: module.WriterPacingRevisionWorkspace })));
 
 export function getPacingRevisionNavigationTab(
   layer: PacingRevisionLayer,
@@ -659,13 +663,6 @@ type WriterLastWorkspace = {
   tabId: WriterWorkspaceTabId;
 };
 
-type WriterMenuOption = {
-  id: string;
-  label: string;
-  meta?: string;
-  searchText?: string;
-};
-
 function compactWriterMenuMeta(raw: string | null | undefined, cap = 86): string | undefined {
   const text = raw?.replace(/\s+/g, ' ').trim();
   if (!text) return undefined;
@@ -706,178 +703,6 @@ function readWriterReviewedComparisons(): string[] {
   } catch {
     return [];
   }
-}
-
-export function WriterSearchableMenu({
-  label,
-  value,
-  onChange,
-  options,
-  disabled = false,
-  placeholder,
-  ariaLabel,
-}: {
-  label: string;
-  value: string | null;
-  onChange: (next: string | null) => void;
-  options: WriterMenuOption[];
-  disabled?: boolean;
-  placeholder: string;
-  ariaLabel: string;
-}) {
-  const selected = options.find((option) => option.id === value) ?? null;
-  const [query, setQuery] = useState(selected?.label ?? '');
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const listboxId = useId();
-
-  useEffect(() => {
-    setQuery(selected?.label ?? '');
-  }, [selected?.label]);
-
-  useEffect(
-    () => () => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-    },
-    [],
-  );
-
-  const filteredOptions = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle || selected?.label === query) return options.slice(0, 12);
-    return options
-      .filter((option) => `${option.label} ${option.meta ?? ''} ${option.searchText ?? ''}`.toLowerCase().includes(needle))
-      .slice(0, 12);
-  }, [options, query, selected?.label]);
-
-  const pick = useCallback(
-    (option: WriterMenuOption | null) => {
-      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-      onChange(option?.id ?? null);
-      setQuery(option?.label ?? '');
-      setOpen(false);
-      setActiveIndex(-1);
-    },
-    [onChange],
-  );
-
-  return (
-    <label className="relative flex min-w-0 flex-col gap-1 text-[10px] font-black uppercase tracking-wide text-black/65">
-      {label}
-      <input
-        type="text"
-        role="combobox"
-        aria-label={ariaLabel}
-        aria-expanded={open && !disabled}
-        aria-controls={listboxId}
-        aria-autocomplete="list"
-        aria-activedescendant={
-          open && activeIndex >= 0 && activeIndex < filteredOptions.length
-            ? `${listboxId}-option-${activeIndex}`
-            : undefined
-        }
-        disabled={disabled}
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setOpen(true);
-          setActiveIndex(-1);
-          if (!event.target.value.trim()) onChange(null);
-        }}
-        onFocus={() => {
-          if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-          setOpen(true);
-        }}
-        onBlur={() => {
-          blurTimerRef.current = setTimeout(() => {
-            setOpen(false);
-            setActiveIndex(-1);
-            setQuery(selected?.label ?? '');
-          }, 160);
-        }}
-        onKeyDown={(event) => {
-          if (disabled) return;
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            setOpen(false);
-            setActiveIndex(-1);
-            setQuery(selected?.label ?? '');
-            return;
-          }
-          if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            setOpen(true);
-            setActiveIndex((index) =>
-              filteredOptions.length === 0 ? -1 : (index + 1) % filteredOptions.length,
-            );
-            return;
-          }
-          if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            setOpen(true);
-            setActiveIndex((index) =>
-              filteredOptions.length === 0 ? -1 : index <= 0 ? filteredOptions.length - 1 : index - 1,
-            );
-            return;
-          }
-          if (event.key === 'Enter' && open && activeIndex >= 0 && activeIndex < filteredOptions.length) {
-            event.preventDefault();
-            pick(filteredOptions[activeIndex]!);
-          }
-        }}
-        placeholder={placeholder}
-        className="min-w-0 rounded-md border border-black/15 bg-white px-2 py-1.5 text-xs font-semibold normal-case tracking-normal text-black placeholder:text-black/35 disabled:opacity-45"
-      />
-      {open && !disabled ? (
-        <div className="absolute left-0 right-0 top-full z-[90] mt-1 max-h-48 overflow-y-auto rounded-lg border border-black/15 bg-white py-1 text-left shadow-xl">
-          {value ? (
-            <button
-              type="button"
-              className="flex min-h-11 w-full px-2.5 py-2 text-left text-[11px] font-bold normal-case tracking-normal text-black/65 hover:bg-black/5 sm:min-h-9"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                pick(null);
-              }}
-            >
-              Clear selection
-            </button>
-          ) : null}
-          <div id={listboxId} role="listbox" aria-label={`${label} options`}>
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option, index) => (
-              <button
-                key={option.id}
-                id={`${listboxId}-option-${index}`}
-                type="button"
-                role="option"
-                aria-label={option.meta ? `${option.label}: ${option.meta}` : option.label}
-                aria-selected={option.id === value}
-                className={`flex min-h-11 w-full flex-col justify-center px-2.5 py-1.5 text-left normal-case tracking-normal hover:bg-amber-50 sm:min-h-9 ${
-                  index === activeIndex ? 'bg-amber-100' : ''
-                }`}
-                onMouseEnter={() => setActiveIndex(index)}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  pick(option);
-                }}
-              >
-                <span className="truncate text-xs font-black text-black">{option.label}</span>
-                {option.meta ? (
-                  <span className="truncate text-[10px] font-semibold text-black/60">{option.meta}</span>
-                ) : null}
-              </button>
-              ))
-            ) : (
-              <p role="status" className="px-2.5 py-2 text-[11px] font-semibold normal-case tracking-normal text-black/65">
-                No matches.
-              </p>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </label>
-  );
 }
 
 function getWriterCharacterReferenceLabel(item: VaultCharacterItem, album: VaultCharacterAlbum): string {
@@ -8282,6 +8107,7 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
   ];
 
   return (
+    <React.Suspense fallback={<div className="flex min-h-[40vh] items-center justify-center text-black/55">Loading writing tool…</div>}>
     <div
       className="writer-motion-root flex-1 min-h-0 flex flex-col text-sm overflow-hidden"
       data-writer-portal-motion={portalMotionVisit.mode}
@@ -12808,5 +12634,6 @@ export const WriterPortal: React.FC<WriterPortalProps> = ({ onRequestPortalsWiki
         />
       </div>
     </div>
+    </React.Suspense>
   );
 };

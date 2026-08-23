@@ -102,7 +102,7 @@ export interface GenerateGeminiTextOptions {
 export async function generateGeminiText(
   options: GenerateGeminiTextOptions
 ): Promise<GenerateGeminiTextResult> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: 'Missing VITE_GEMINI_API_KEY' };
   }
@@ -212,7 +212,7 @@ export interface GenerateGeminiTextFromImageOptions {
 export async function generateGeminiTextFromImage(
   options: GenerateGeminiTextFromImageOptions
 ): Promise<GenerateGeminiTextResult> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     return { ok: false, error: 'Missing VITE_GEMINI_API_KEY' };
   }

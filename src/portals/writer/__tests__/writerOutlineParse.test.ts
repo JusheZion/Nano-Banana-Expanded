@@ -27,7 +27,7 @@ describe('parseOutlineText round-trip', () => {
     expect(parsed.page_beats).toEqual(outline.page_beats);
     // merge preserves unknown top-level fields
     const merged = { ...outline, ...parsed };
-    expect((merged as any).extra_field).toEqual({ keep: 'me' });
+    expect(merged.extra_field).toEqual({ keep: 'me' });
     // text is stable through a second pass
     expect(formatOutlineAsText(merged)).toBe(text);
   });

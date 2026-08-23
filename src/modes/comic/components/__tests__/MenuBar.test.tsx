@@ -12,23 +12,27 @@ function renderMenuBar(onImportImage = vi.fn()) {
       onActiveMenuChange={vi.fn()}
       themeLabel="Theme"
       onThemeClick={vi.fn()}
-      onSave={vi.fn()}
-      onLoad={vi.fn()}
-      onImportImage={onImportImage}
-      onExportPng={vi.fn()}
-      onExportPdf={vi.fn()}
-      onUndo={vi.fn()}
-      onRedo={vi.fn()}
-      onCut={vi.fn()}
-      onCopy={vi.fn()}
-      onPaste={vi.fn()}
-      zoomLevel={1}
-      onZoomIn={vi.fn()}
-      onZoomOut={vi.fn()}
-      onZoomReset={vi.fn()}
-      onZoomFit={vi.fn()}
-      layoutMode="webtoon"
-      onLayoutModeChange={vi.fn()}
+      commands={{
+        save: vi.fn(),
+        load: vi.fn(),
+        importImage: onImportImage,
+        exportPng: vi.fn(),
+        exportPdf: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
+        cut: vi.fn(),
+        copy: vi.fn(),
+        paste: vi.fn(),
+      }}
+      viewport={{
+        zoomLevel: 1,
+        zoomIn: vi.fn(),
+        zoomOut: vi.fn(),
+        zoomReset: vi.fn(),
+        zoomFit: vi.fn(),
+        layoutMode: 'webtoon',
+        setLayoutMode: vi.fn(),
+      }}
       hasPanelSelected={false}
     />,
   );

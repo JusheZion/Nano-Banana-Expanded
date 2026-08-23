@@ -15077,3 +15077,72 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Future weekly passes can address BalloonNode and ComicPanel typing/memoization warnings in focused, separately tested slices.
+
+## Complete weekly bug and architecture refactor - 2026-08-23
+
+### What changed
+- Completed the previously deferred ARCS audit backlog on `refactor/arcs-audit-2026-08` rather than treating a green suite as completion.
+- Removed all executable unsafe `any` usage and all ESLint warnings, including the Writer Edge persistence client and its test adapter.
+- Replaced twelve vault-client non-null assertions with authenticated client getters that narrow configuration, client availability, and session state together.
+- Corrected stale React effect dependencies in comic page scrolling and balloon autosizing.
+- Replaced lifecycle-bound Character and Asset reference object URLs with durable data URLs, eliminating retained blob memory and dead persisted references.
+- Extracted reusable Character tag controls, Imageshop handoff/navigation UI, Guided progress controls, Writer searchable menus, and a shared comic ribbon button.
+- Collapsed duplicated comic command props into memoized document-command and viewport-control interfaces shared by `MenuBar` and `ContextualRibbon`.
+- Split Guided Comic, Advanced Comic, the Konva canvas, and optional Writer review/history/dialog workspaces at runtime module seams. The production build no longer emits oversized-chunk or circular-chunk warnings.
+- Preserved the audit branch's earlier fixes for conditional hooks, async races, timer cleanup, balloon geometry/tails, ghost references, overlay behavior, drag undo, HiDPI color picking, custom fonts, and keyboard shortcut guards.
+
+### Files touched
+- `src/modes/comic/components/BalloonNode.tsx`
+- `src/modes/comic/components/ContextualRibbon.tsx`
+- `src/modes/comic/components/MenuBar.tsx`
+- `src/modes/comic/components/RibbonButton.tsx`
+- `src/modes/comic/components/comicCommands.ts`
+- `src/modes/comic/engine/ComicCanvas.tsx`
+- `src/modes/comic/layouts/ComicLayout.tsx`
+- `src/modes/comic/pages/ComicEditor.tsx`
+- `src/portals/CharacterStudio.tsx`
+- `src/portals/ComicPortal.tsx`
+- `src/portals/asset-studio/AssetStudioReferencesPanel.tsx`
+- `src/portals/character-studio/CharacterTagControls.tsx`
+- `src/portals/guided-comic/GuidedComicFlow.tsx`
+- `src/portals/guided-comic/GuidedProgressButton.tsx`
+- `src/portals/storyline/GenericImageLabPanel.tsx`
+- `src/portals/storyline/components/ImageshopNavigation.tsx`
+- `src/portals/writer/WriterPortal.tsx`
+- `src/portals/writer/WriterSearchableMenu.tsx`
+- `src/shared/api/arcsAssetVault.ts`
+- `src/shared/api/arcsVault.ts`
+- `src/shared/api/geminiImageApi.ts`
+- `src/shared/api/geminiTextApi.ts`
+- `src/shared/utils/blobDataUrl.ts`
+- `supabase/functions/writer-tools/index.ts`
+- `supabase/functions/writer-tools/pacingRevisionPersistence.ts`
+- `vite.config.ts`
+- `docs/plans/arcs-refactor-roadmap.md`
+- Related focused tests under the same source areas.
+
+### Implementation notes
+- The pacing persistence seam deliberately exposes only `insert` and `update(...).eq(...)`; using the full Supabase client type made the test adapter depend on the entire PostgREST builder.
+- Lazy loading follows product seams, not arbitrary file-size cuts: Guided and Advanced Comic are mutually exclusive workspaces, the canvas is an on-demand renderer, and Writer review/history/dialog tools are optional surfaces.
+- The four large portal bodies remain orchestration modules. Presentational and reusable behavior moved out; stateful slices were not converted into wide prop sacks merely to reduce line counts.
+- Vite environment reads now use the declared `ImportMetaEnv` types directly. Catalog, hero, manifest, and icon paths were checked against `public/`.
+
+### Verification
+- `npm run lint`: PASS, 0 errors / 0 warnings.
+- `npx tsc -b --pretty false`: PASS.
+- `npm run test`: PASS, 160 files / 1,285 tests.
+- `npm run build`: PASS, 2,633 modules transformed, no chunk-size or circular-chunk warning.
+- Focused Writer type/persistence tests: PASS, 2 files / 12 tests.
+- `git diff --check`: PASS for agent-owned changes; the only reported whitespace is in the user-owned `AGENTS.md` edit and was not modified.
+
+### Outstanding issues
+- None identified by this weekly audit.
+
+### Risks or caveats
+- The local worktree also contains user-owned changes in `.claude/launch.json`, `AGENTS.md`, `supabase/functions/tsconfig.tsbuildinfo`, and two `.superpowers/brainstorm/` folders. They are intentionally excluded from the audit commit.
+
+### Operator follow-up
+- None.
+
+### Next steps
+- Continue future refactoring only when a cohesive state-and-behavior slice emerges; do not reopen the completed audit backlog as a generic deferral list.

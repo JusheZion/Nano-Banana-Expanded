@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { ComicLayout } from '../layouts/ComicLayout';
-import { ComicCanvas } from '../engine/ComicCanvas';
 import { useComicStore } from '@/stores/comicStore';
 import { useGuidedComicLayoutBridge } from '@/stores/guidedComicLayoutBridge';
 import type { GuidedComicStepId } from '@/portals/guided-comic/GuidedComicFlow';
+
+const ComicCanvas = lazy(() => import('../engine/ComicCanvas').then((module) => ({ default: module.ComicCanvas })));
 
 type ComicEditorProps = {
     onOpenGuidedWorkflowStep?: (stepId: GuidedComicStepId) => void;
@@ -38,7 +39,9 @@ export const ComicEditor: React.FC<ComicEditorProps> = ({ onOpenGuidedWorkflowSt
                     : undefined
             }
         >
-            <ComicCanvas />
+            <Suspense fallback={<div className="flex h-full min-h-[40vh] items-center justify-center text-white/60">Loading canvas…</div>}>
+                <ComicCanvas />
+            </Suspense>
         </ComicLayout>
     );
 };

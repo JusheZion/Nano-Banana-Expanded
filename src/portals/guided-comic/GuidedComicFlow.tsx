@@ -66,6 +66,7 @@ import { usePromptLibraryBridge } from '@/stores/promptLibraryBridge';
 import type { ImageshopGenerationProvenance } from '@/portals/storyline/imageshopPagePanelQueue';
 import { useGuidedComicLayoutBridge, type GuidedComicLayoutPanelImage } from '@/stores/guidedComicLayoutBridge';
 import { useWriterWorkshopBridge } from '@/stores/writerWorkshopBridge';
+import { GuidedProgressButton } from '@/portals/guided-comic/GuidedProgressButton';
 import {
   createGuidedComicStarterLayoutWithExistingMetadata,
   getGuidedComicActivePanelCount,
@@ -768,63 +769,6 @@ export const GUIDED_VISUAL_REFERENCE_EMPTY_LABELS = {
   location: 'No refs selected.',
   npc: 'No refs selected.',
 } as const;
-
-function formatGuidedProgressElapsed(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-function useGuidedProgressElapsed(active: boolean): number {
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    if (!active) {
-      setSeconds(0);
-      return undefined;
-    }
-
-    setSeconds(0);
-    const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
-    return () => window.clearInterval(interval);
-  }, [active]);
-
-  return seconds;
-}
-
-type GuidedProgressButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  isLoading: boolean;
-  loadingLabel: string;
-  idleLabel: string;
-  icon?: React.ReactNode;
-};
-
-function GuidedProgressButton({
-  isLoading,
-  loadingLabel,
-  idleLabel,
-  icon,
-  className = '',
-  children,
-  ...buttonProps
-}: GuidedProgressButtonProps) {
-  const elapsedSeconds = useGuidedProgressElapsed(isLoading);
-  const label = isLoading ? `${loadingLabel} ${formatGuidedProgressElapsed(elapsedSeconds)}` : idleLabel;
-
-  return (
-    <button
-      {...buttonProps}
-      aria-busy={isLoading || undefined}
-      className={`guided-progress-button ${className}`}
-      data-loading={isLoading ? 'true' : 'false'}
-    >
-      <span className="guided-progress-button__content inline-flex min-w-0 items-center justify-center gap-2">
-        {icon}
-        <span className="min-w-0">{children ?? label}</span>
-      </span>
-    </button>
-  );
-}
 
 const STEPS: GuidedComicStep[] = [
   {

@@ -2,9 +2,30 @@
 
 Written 2026-08-17, after the audit pass on branch `refactor/arcs-audit-2026-08` (commit `ce31f9d`).
 
-**Current health:** `tsc -b` clean · ESLint 0 errors / 4 warnings · 1074 tests across 151 files passing.
-The codebase is in good shape. Nothing below is on fire; this is a priority order for the next few
-sessions, not a list of emergencies.
+**Current health (2026-08-23):** `tsc -b` clean · ESLint 0 errors / 0 warnings · 1285 tests across
+160 files passing · production build has no oversized-chunk warnings.
+
+## 2026-08-23 completion update
+
+The weekly full-debug/refactor pass completed the actionable backlog recorded here:
+
+- §2a and §2b were completed by the six existing audit-branch commits: balloon geometry is
+  registry-driven and the engine now has geometry, snapping, migration, and rendering coverage.
+- §2c is complete: `RibbonButton` is reusable, and `MenuBar` plus `ContextualRibbon` consume the
+  same memoized document-command and viewport-control interfaces instead of threading individual
+  callbacks.
+- §2d has completed its safe decomposition pass. Reusable tag controls, Imageshop navigation,
+  Guided progress UI, and Writer searchable menus now live in focused modules. Optional Writer
+  workspaces and the Guided/Advanced Comic workspaces are demand-loaded. The remaining portal
+  bodies retain orchestration state whose extraction would create broad prop sacks rather than
+  deeper modules; future feature work should move a complete state-and-behavior slice when a new
+  cohesive seam appears.
+- §2e is complete. Authenticated vault mutations now obtain a narrowed client and contain no
+  non-null Supabase assertions.
+- The four lint warnings in the old appendix are gone, and the executable TypeScript scan contains
+  no unsafe `any` usage.
+
+The sections below remain as historical rationale and extension guidance, not an open audit queue.
 
 ---
 
@@ -203,7 +224,7 @@ without fear.
 
 ~2–3 hours, and it makes everything after it cheaper.
 
-### 2c. Collapse toolbar prop-threading and button duplication — MEDIUM value, LOW risk
+### 2c. Collapse toolbar prop-threading and button duplication — COMPLETED 2026-08-23
 
 `MenuBarProps` has 25 members, almost all `() => void` callbacks threaded from `ComicLayout`. And the
 buttons themselves are heavily duplicated — `ObjectToolbar.tsx` alone repeats the
@@ -222,7 +243,7 @@ Two independent, easily-reverted improvements:
 
 Do this if toolbar work is going to be a recurring theme. ~2 hours.
 
-### 2d. Decompose the four monoliths — HIGH value, HIGH risk
+### 2d. Decompose the four monoliths — COMPLETED SAFE-SEAM PASS 2026-08-23
 
 | File | Lines |
 | --- | --- |
@@ -252,7 +273,7 @@ commit from anything that moves code.
 
 Budget: a session per file, minimum. `WriterPortal` is several.
 
-### 2e. Replace the `supabase!` assertions — LOW value, LOW risk
+### 2e. Replace the `supabase!` assertions — COMPLETED 2026-08-23
 
 12 sites across `arcsVault.ts`, `arcsAssetVault.ts` and `arcsArchive.ts` do
 `supabase!.from('characters')…`, guarded by an `async` configuration check that TypeScript can't
@@ -264,7 +285,7 @@ Worth doing when you're next in those files; not worth a dedicated session.
 
 ---
 
-## Part 3 — Suggested order
+## Part 3 — Original suggested order (completed audit history)
 
 | # | Task | Effort | Risk | Why here |
 | --- | --- | --- | --- | --- |
@@ -282,14 +303,13 @@ to "trivial, with a test proving it." If you only do one thing from this documen
 
 ---
 
-## Appendix — remaining lint warnings
+## Appendix — resolved lint warnings
 
-Four, all deliberate, none in app code:
+The four warnings recorded on 2026-08-17 were removed on 2026-08-23:
 
-- `supabase/functions/writer-tools/index.ts` ×2 and `pacingRevisionPersistence.ts` ×1 — Deno edge
-  functions using `type SupabaseClient = any` because the client types aren't available under the
-  app's tsconfig. They already carry explicit `deno-lint-ignore` comments.
-- `src/portals/writer/__tests__/writerOutlineParse.test.ts` — one `any` in a test fixture.
+- The Edge entry uses the imported Supabase client type; pacing persistence exposes a narrow query
+  interface that both the real client and tests satisfy.
+- The Writer outline test reads the inferred passthrough field directly.
 
 `react-hooks/rules-of-hooks` is now `'error'` and must stay that way; it was disabled, and that is
 what hid the `ComicCanvas` crash.

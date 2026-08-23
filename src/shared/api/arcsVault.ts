@@ -226,10 +226,10 @@ export function setVaultMergeConfirmSkipped(skip: boolean): void {
 
 type VaultMutOk = { ok: true } | { ok: false; error: string };
 
-async function characterVaultUsesSupabase(): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+async function getAuthenticatedCharacterVaultClient(): Promise<NonNullable<typeof supabase> | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
   const { data: sessionData } = await supabase.auth.getSession();
-  return sessionData.session != null;
+  return sessionData.session ? supabase : null;
 }
 
 /** Rename an entire profile (all rows). */
@@ -242,8 +242,9 @@ export async function renameVaultCharacterProfile(
   if (fromK === toK) return { ok: true };
   const newProfile = toK === UNNAMED_KEY ? null : toK;
 
-  if (await characterVaultUsesSupabase()) {
-    const base = supabase!.from('characters').update({ profile_name: newProfile });
+  const client = await getAuthenticatedCharacterVaultClient();
+  if (client) {
+    const base = client.from('characters').update({ profile_name: newProfile });
     const { error } =
       fromK === UNNAMED_KEY
         ? await base.is('profile_name', null)
@@ -271,8 +272,9 @@ export async function moveVaultCharacterToProfile(args: {
   const dest = normalizeProfileKey(args.targetProfileDisplay);
   const profileNameVal = dest === UNNAMED_KEY ? null : dest;
 
-  if (await characterVaultUsesSupabase()) {
-    const { error } = await supabase!.from('characters').update({
+  const client = await getAuthenticatedCharacterVaultClient();
+  if (client) {
+    const { error } = await client.from('characters').update({
       profile_name: profileNameVal,
       is_profile_cover: false,
     }).eq('id', args.id);
@@ -291,8 +293,9 @@ export async function updateVaultCharacterCastName(
   castName: string | null
 ): Promise<VaultMutOk> {
   const val = castName?.trim() || null;
-  if (await characterVaultUsesSupabase()) {
-    const { error } = await supabase!
+  const client = await getAuthenticatedCharacterVaultClient();
+  if (client) {
+    const { error } = await client
       .from('characters')
       .update({ cast_name: val })
       .eq('id', id);
@@ -304,8 +307,9 @@ export async function updateVaultCharacterCastName(
 }
 
 export async function deleteVaultCharacter(id: string): Promise<VaultMutOk> {
-  if (await characterVaultUsesSupabase()) {
-    const { error } = await supabase!.from('characters').delete().eq('id', id);
+  const client = await getAuthenticatedCharacterVaultClient();
+  if (client) {
+    const { error } = await client.from('characters').delete().eq('id', id);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   }
@@ -317,8 +321,9 @@ export async function deleteVaultCharacterProfile(
   profileDisplay: string
 ): Promise<VaultMutOk> {
   const key = normalizeProfileKey(profileDisplay);
-  if (await characterVaultUsesSupabase()) {
-    const base = supabase!.from('characters').delete();
+  const client = await getAuthenticatedCharacterVaultClient();
+  if (client) {
+    const base = client.from('characters').delete();
     const { error } =
       key === UNNAMED_KEY
         ? await base.is('profile_name', null)
@@ -340,4 +345,3 @@ export async function listCharacterProfileKeys(): Promise<string[]> {
   const albums = await getCharacterAlbums();
   return albums.map((a) => a.profileName);
 }
-
