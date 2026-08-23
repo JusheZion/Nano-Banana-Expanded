@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BookMarked,
   Building2,
+  Compass,
   Image as ImageIcon,
   Library,
   MessageCircle,
@@ -126,6 +127,16 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     accentHex: '#1d78c8',
     Icon: Sparkles,
     cardImageUrl: 'https://www.mortalkombatwarehouse.com/mk12/renders/ekk/K1_KitanaRenders_Action-pose.png',
+  },
+  {
+    portal: 'codex',
+    theme: 'obsidian',
+    navLabel: 'Codex Studio',
+    cardTitle: 'Codex Studio',
+    cardSubtitle: 'Compose lore plates and character dossiers from the sigil library',
+    accentHex: '#d8b45a',
+    Icon: Compass,
+    cardImageUrl: '/assets/images/Astral%20Flow%20Manipulating%20Spacetime%20&%20Multiverses.png',
   },
 ];
 

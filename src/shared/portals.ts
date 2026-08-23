@@ -12,4 +12,5 @@ export type Portal =
   | 'prompts'
   | 'writer'
   | 'wiki'
-  | 'lore';
+  | 'lore'
+  | 'codex';

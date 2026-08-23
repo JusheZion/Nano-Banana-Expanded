@@ -3,6 +3,7 @@ import {
   Home,
   LogIn,
   BookMarked,
+  Compass,
   Menu,
   X,
   ChevronLeft,
@@ -483,6 +484,15 @@ export const AppShell: React.FC<AppShellProps> = ({
                   >
                     <LoreIcon className="w-5 h-5 shrink-0" aria-hidden />
                     Kitana Lore Dossier
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-1 w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-white/10"
+                    onClick={() => handleNavClick('codex')}
+                    style={{ color: activePortal === 'codex' ? ACCENT_GOLD_SOLID : '#fff' }}
+                  >
+                    <Compass className="w-5 h-5 shrink-0" aria-hidden />
+                    Codex Studio
                   </button>
                   {supabaseConfigured && ready && user ? (
                     <button

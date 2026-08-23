@@ -15146,3 +15146,129 @@ Cursor does not auto-update these files; update them (or ask the agent to) as yo
 
 ### Next steps
 - Continue future refactoring only when a cohesive state-and-behavior slice emerges; do not reopen the completed audit backlog as a generic deferral list.
+
+## Codex Studio portal - Phases 0-5 - 2026-08-23
+
+### What changed
+
+Added **Codex Studio**, a ninth portal for composing lore plates and character
+dossiers from a hand-drawn sigil library. Delivers the Codex Studio Plan phases
+P0 through P5 in one pass.
+
+- **P0** — ported 182 hand-drawn SVG marks out of a published design artifact and
+  into a typed, searchable registry under version control.
+- **P1** — new portal shell registered in the catalog, with a categorised,
+  searchable palette; clicking a mark places it on the plate.
+- **P2** — typography controls the comic text object never had (letter-spacing,
+  line-height, weight/italic, case) plus shadow, glow, opacity and blur.
+- **P3** — sigils render through Konva as adaptive-resolution SVG images, tinted
+  by resolving `currentColor`, so one mark serves every palette and stays crisp
+  when scaled.
+- **P4** — three plate templates, localStorage-backed documents (save, list,
+  reopen, delete), PNG export and multi-page PDF export.
+- **P5** — chart objects: radar, bar meters, segmented pips and radial dial, all
+  live (editing a value redraws the geometry).
+
+**Key architecture decision:** Codex Studio has its own store, object model and
+Konva stage rather than extending `modes/comic`. The original plan called for
+reusing the comic object model, but that would have put codex work on the
+Comic Portal's critical path. Keeping them separate means codex changes cannot
+regress comic behaviour, and matches the stated goal of keeping the feature
+extractable into its own repo later. Shared vocabulary (`GradientSpec`) is
+imported from the comic mode rather than duplicated.
+
+### Files touched
+
+Added:
+- `src/modes/codex/data/sigilTypes.ts`
+- `src/modes/codex/data/SigilRegistry.ts`
+- `src/modes/codex/data/sigils/{spectrum,geometry,hermetic,science,interface,ornament}.ts`
+- `src/modes/codex/data/plateTemplates.ts`
+- `src/modes/codex/types/codexObjects.ts`
+- `src/modes/codex/engine/CodexCanvas.tsx`
+- `src/modes/codex/components/{SigilPalette,SigilGlyph,PropertiesPanel}.tsx`
+- `src/modes/codex/components/nodes/{SigilNode,TextNode,FrameNode,ChartNode}.tsx`
+- `src/modes/codex/utils/{sigilRaster,nodeEffects,chartGeometry,codexPersistence,codexExport}.ts`
+- `src/modes/codex/data/__tests__/SigilRegistry.test.ts`
+- `src/modes/codex/utils/__tests__/{chartGeometry,sigilRaster}.test.ts`
+- `src/stores/codexStore.ts`
+- `src/portals/CodexStudio.tsx`
+
+Modified:
+- `src/shared/portals.ts` — added `'codex'` to the `Portal` union.
+- `src/shared/portalCatalog.ts` — catalog entry (Compass icon, obsidian theme).
+- `src/App.tsx` — lazy import, render branch, theme mapping.
+- `src/components/layout/AppShell.tsx` — Codex entry in the mobile "More" sheet,
+  which is hardcoded rather than catalog-driven.
+
+### Implementation notes
+
+- **Sigil rendering**: the library uses the full SVG vocabulary (groups, nested
+  opacity, rotate transforms, `<text>`, `fill-rule` knockouts). Translating each
+  mark into Konva primitives would have meant reimplementing an SVG renderer, so
+  marks become SVG data-URIs drawn by `Konva.Image`. Source resolution is
+  quantised to powers of two (`rasterSizeFor`) so resizing does not thrash the
+  image cache while still rendering above display size.
+- **Tinting**: `currentColor` is substituted at data-URI build time. 180 of 182
+  marks are fully tintable; two carry a `var(--sigil-bg)` background knockout
+  and report `tintable: false`.
+- **Effects**: glow and shadow both map to Konva's single shadow slot, so glow
+  wins when both are set — the panel says so rather than failing silently. Blur
+  requires `node.cache()`, kept in step with the model by `applyBlurCache`.
+- **Charts**: geometry is pure functions in `chartGeometry.ts`, unit-tested
+  without mounting a canvas.
+- **Persistence** is localStorage, not Supabase. Canon lives in Obsidian and the
+  vault-access question is unsettled, so committing to a remote storage story
+  now would pre-empt that decision. `codexPersistence.ts` is the seam.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS, 0 errors.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS, clean.
+- `npx vitest run` — PASS, **163 files / 1320 tests**, no regressions.
+  35 of those are new Codex tests.
+- `npm run build` — PASS, built in 5.95s. `CodexStudio` chunk 117.37 kB (28.21 kB gzip).
+- **Live browser QA** at `localhost:5173`, desktop 1440x900:
+  - Portal opens from the sidebar; palette lists all 182 marks across 6 categories.
+  - Placed three marks from the palette; all rendered on the plate.
+  - Applied the Hero template — title, tracked labels, bracketed portrait frame
+    and radar chart all render as designed.
+  - Selected the chart, set AXIS ONE to 15 in Properties; the radar polygon
+    collapsed at that vertex, confirming charts are live objects.
+  - Saved; verified `codex.documents.v1` index plus the document body in
+    localStorage, with the edited value and `schemaVersion: 1` round-tripping.
+  - Layers panel lists all 10 objects with visibility/lock/reorder controls.
+  - **Zero console errors** across the whole session.
+
+### Outstanding issues
+
+- Two bugs found and fixed during the pass, both caught by tests rather than by
+  inspection: `clampAxisValue` returned 0 for `Infinity` because
+  `Number.isFinite` rejects it (should clamp to max); and section names carried
+  undecoded HTML entities from the source plates.
+- PDF export switches plates and waits 120ms per plate before capturing. It works,
+  but it is a timing assumption rather than a render-complete signal.
+
+### Risks or caveats
+
+- PDF pages are rasterised, so exported PDF text is not selectable. Accepted
+  trade for a single composition path; noted in `codexExport.ts`.
+- Blur caches the node to a bitmap, so a blurred object re-rasterises on every
+  change. The only effect with a performance cost.
+- 50 CSS-based library elements (gradient grounds, badges, stat-bar styles,
+  dividers) were **not** ported — they are template fragments rather than SVG
+  marks and belong with the template work, not the sigil registry.
+- Codex Studio is deliberately **not** in `PROTECTED_PORTALS`, so it is reachable
+  without auth like the wiki and lore portals. Revisit if plates should be gated.
+
+### Operator follow-up
+
+- Decide vault access before canon binding (P6): snapshot import, File System
+  Access API, or vault→Supabase sync. `portals/writer/obsidianLoreImport.ts`
+  reads uploaded `File` objects and cannot watch a folder.
+
+### Next steps
+
+- P6 canon binding, once vault access is settled.
+- Port the 50 CSS-based library elements as template fragments.
+- Replace the PDF export timing assumption with a render-complete signal.
