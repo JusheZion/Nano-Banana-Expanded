@@ -15272,3 +15272,71 @@ Modified:
 - P6 canon binding, once vault access is settled.
 - Port the 50 CSS-based library elements as template fragments.
 - Replace the PDF export timing assumption with a render-complete signal.
+
+## Codex Studio auth gate - 2026-08-25
+
+### What changed
+
+Codex Studio now requires sign-in, matching the other creative portals. Operator
+decision; it shipped ungated in `b8ac40c` alongside the wiki and lore portals.
+
+### Files touched
+
+Modified:
+- `src/shared/auth/protectedPortals.ts` — added `'codex'` to `PROTECTED_PORTALS`.
+- `src/App.tsx` — wrapped the `codex` render branch in `<ProtectedPortalGate>`.
+- `src/shared/auth/__tests__/protectedPortals.test.ts` — extended the intentional
+  inventory to include `codex`.
+
+Added:
+- `src/shared/auth/__tests__/protectedPortalWiring.test.ts`
+
+### Implementation notes
+
+Membership in `PROTECTED_PORTALS` does not gate anything on its own. `App.tsx`
+gates by wrapping each portal's render branch in `<ProtectedPortalGate>`, and
+`isProtectedPortal` is consulted at exactly one call site (the `home` branch).
+Adding a portal to the set without wrapping its branch leaves it publicly
+reachable while every test and the source read as if it were protected — which
+is what nearly happened here.
+
+`protectedPortalWiring.test.ts` closes that gap: it reads `src/App.tsx` and
+asserts every member of `PROTECTED_PORTALS` has its render branch wrapped, and
+that the public portals (`wiki`, `lore`) do not. Source-reading tests are an
+established pattern in this repo (see the writer pacing/migration tests). The
+test was confirmed to fail when the wrapper is removed, not merely to pass.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS, 0 errors.
+- `npx eslint src/App.tsx src/shared/auth` — PASS, clean.
+- `npx vitest run` — PASS, **164 files / 1329 tests** (was 163/1320; +1 file,
+  +9 tests). No regressions.
+- Negative check: removing `<ProtectedPortalGate>` from the codex branch fails
+  `wraps codex in ProtectedPortalGate`. Restored after.
+- **Live browser QA** at `localhost:5173`, signed out: clicking Codex Studio in
+  the sidebar renders "Sign in to continue" instead of the composer. Zero
+  console errors.
+
+### Outstanding issues
+
+- Pre-existing and unrelated: at viewport heights around 720px the sidebar nav
+  overflows and the last two entries (`Lore Dossier`, `Codex Studio`) fall
+  outside the scroll area — they are in the DOM but not reachable without
+  resizing. Affects `lore` equally; not introduced by this change and not fixed
+  here.
+
+### Risks or caveats
+
+- Codex documents are stored in `localStorage`, which is not scoped to the
+  signed-in account. Gating controls access to the portal, not to data already
+  saved in a shared browser profile.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Port the 50 CSS-based library elements as template fragments.
+- P6 canon binding via the File System Access API (operator decision, 2026-08-25).

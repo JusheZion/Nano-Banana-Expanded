@@ -198,9 +198,11 @@ function App() {
         </Suspense>
       )}
       {activePortal === 'codex' && (
-        <Suspense fallback={<PortalFallback />}>
-          <CodexStudio />
-        </Suspense>
+        <ProtectedPortalGate>
+          <Suspense fallback={<PortalFallback />}>
+            <CodexStudio />
+          </Suspense>
+        </ProtectedPortalGate>
       )}
     </AppShell>
   );

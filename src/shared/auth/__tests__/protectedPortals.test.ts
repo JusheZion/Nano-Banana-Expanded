@@ -9,7 +9,7 @@ describe('protected portals', () => {
   });
 
   it('protects creative workspace portals', () => {
-    const protectedPortals: Portal[] = ['studio', 'reference', 'prompts', 'lab', 'comic', 'assets', 'writer'];
+    const protectedPortals: Portal[] = ['studio', 'reference', 'prompts', 'lab', 'comic', 'codex', 'assets', 'writer'];
     protectedPortals.forEach((portal) => {
       expect(isProtectedPortal(portal)).toBe(true);
     });
@@ -18,6 +18,7 @@ describe('protected portals', () => {
   it('covers every current non-public portal intentionally', () => {
     expect(Array.from(PROTECTED_PORTALS).sort()).toEqual([
       'assets',
+      'codex',
       'comic',
       'lab',
       'prompts',
