@@ -1,0 +1,177 @@
+/**
+ * Meters — the stat readouts. These are the fragments that gained the most in
+ * translation: the CSS originals were fixed-width bars, whereas these are live
+ * chart objects, so editing a value redraws the geometry.
+ */
+import {
+  fChart,
+  fRule,
+  fText,
+  HAIRLINE,
+  INK,
+  INK_BRIGHT,
+  INK_DIM,
+  type FragmentDef,
+} from '../fragmentTypes';
+
+export const METER_FRAGMENTS: FragmentDef[] = [
+  {
+    id: 'meter-labelled-bar',
+    name: 'Labelled Bar',
+    category: 'meter',
+    section: 'Bars',
+    width: 400,
+    height: 54,
+    tags: ['bar', 'stat', 'single'],
+    build: (x, y) => [
+      fText({ x, y, width: 400, text: 'attribute', fontSize: 11, fill: INK_DIM, letterSpacing: 3.5, uppercase: true, name: 'Bar label' }),
+      fChart({ x, y: y + 20, width: 400, height: 34, chartKind: 'bars', axes: [{ label: '', value: 72 }], showLabels: false, name: 'Labelled bar' }),
+    ],
+  },
+  {
+    id: 'meter-stacked-bars',
+    name: 'Stacked Meters',
+    category: 'meter',
+    section: 'Bars',
+    width: 400,
+    height: 170,
+    tags: ['bars', 'group', 'stats'],
+    build: (x, y) => [
+      fChart({
+        x,
+        y,
+        width: 400,
+        height: 170,
+        chartKind: 'bars',
+        axes: [
+          { label: 'Compression', value: 82 },
+          { label: 'Wave Precision', value: 64 },
+          { label: 'Refraction', value: 91 },
+          { label: 'Resonance', value: 47 },
+        ],
+        name: 'Stacked meters',
+      }),
+    ],
+  },
+  {
+    id: 'meter-twin-compare',
+    name: 'Twin Compare Bars',
+    category: 'meter',
+    section: 'Bars',
+    width: 400,
+    height: 108,
+    tags: ['compare', 'opposition', 'twoven'],
+    build: (x, y) => [
+      fText({ x, y, width: 190, text: 'kaleid', fontSize: 11, fill: INK, letterSpacing: 3, uppercase: true, name: 'Left label' }),
+      fText({ x: x + 210, y, width: 190, text: 'solfa', fontSize: 11, fill: INK_DIM, align: 'right', letterSpacing: 3, uppercase: true, name: 'Right label' }),
+      fChart({ x, y: y + 22, width: 190, height: 80, chartKind: 'bars', axes: [{ label: 'A', value: 78 }, { label: 'B', value: 54 }], stroke: INK, name: 'Left bars' }),
+      fChart({ x: x + 210, y: y + 22, width: 190, height: 80, chartKind: 'bars', axes: [{ label: 'A', value: 61 }, { label: 'B', value: 83 }], stroke: INK_DIM, fill: HAIRLINE, name: 'Right bars' }),
+    ],
+  },
+  {
+    id: 'meter-threshold-bar',
+    name: 'Threshold Bar',
+    category: 'meter',
+    section: 'Bars',
+    width: 400,
+    height: 68,
+    tags: ['threshold', 'limit', 'bar'],
+    build: (x, y) => [
+      fText({ x, y, width: 400, text: 'output ceiling', fontSize: 11, fill: INK_DIM, letterSpacing: 3.5, uppercase: true, name: 'Threshold label' }),
+      fChart({ x, y: y + 20, width: 400, height: 30, chartKind: 'bars', axes: [{ label: '', value: 88 }], showLabels: false, stroke: INK_BRIGHT, name: 'Threshold bar' }),
+      fRule({ x: x + 300, y: y + 16, width: 1.5, stroke: INK_BRIGHT, name: 'Threshold mark' }),
+      fText({ x: x + 260, y: y + 52, width: 84, text: 'limit', fontSize: 9, fill: INK_BRIGHT, align: 'center', letterSpacing: 2, uppercase: true, name: 'Threshold caption' }),
+    ],
+  },
+  {
+    id: 'meter-segmented-pips',
+    name: 'Segmented Pips',
+    category: 'meter',
+    section: 'Discrete',
+    width: 360,
+    height: 120,
+    tags: ['pips', 'segments', 'discrete'],
+    build: (x, y) => [
+      fChart({
+        x,
+        y,
+        width: 360,
+        height: 120,
+        chartKind: 'pips',
+        segments: 10,
+        axes: [
+          { label: 'Reach', value: 70 },
+          { label: 'Control', value: 40 },
+          { label: 'Recovery', value: 90 },
+        ],
+        name: 'Segmented pips',
+      }),
+    ],
+  },
+  {
+    id: 'meter-radial-dial',
+    name: 'Radial Dial',
+    category: 'meter',
+    section: 'Discrete',
+    width: 180,
+    height: 180,
+    tags: ['dial', 'gauge', 'radial'],
+    build: (x, y) => [
+      fChart({ x, y, width: 180, height: 180, chartKind: 'dial', axes: [{ label: 'Output', value: 76 }], name: 'Radial dial' }),
+    ],
+  },
+  {
+    id: 'meter-mini-radar',
+    name: 'Mini Radar',
+    category: 'meter',
+    section: 'Radial',
+    width: 260,
+    height: 260,
+    tags: ['radar', 'spider', 'stats'],
+    build: (x, y) => [
+      fChart({
+        x,
+        y,
+        width: 260,
+        height: 260,
+        chartKind: 'radial',
+        fontSize: 9,
+        axes: [
+          { label: 'PWR', value: 82 },
+          { label: 'SPD', value: 55 },
+          { label: 'DEF', value: 70 },
+          { label: 'RES', value: 44 },
+          { label: 'INT', value: 93 },
+        ],
+        name: 'Mini radar',
+      }),
+    ],
+  },
+  {
+    id: 'meter-spectrum',
+    name: 'Spectrum Meter',
+    category: 'meter',
+    section: 'Radial',
+    width: 400,
+    height: 96,
+    tags: ['spectrum', 'range', 'band'],
+    build: (x, y) => [
+      fText({ x, y, width: 400, text: 'spectrum reach', fontSize: 11, fill: INK_DIM, letterSpacing: 3.5, uppercase: true, name: 'Spectrum label' }),
+      fChart({
+        x,
+        y: y + 20,
+        width: 400,
+        height: 56,
+        chartKind: 'pips',
+        segments: 12,
+        showValues: false,
+        axes: [
+          { label: 'Light', value: 88 },
+          { label: 'Sound', value: 52 },
+        ],
+        name: 'Spectrum meter',
+      }),
+      fRule({ x, y: y + 84, width: 400, stroke: HAIRLINE, name: 'Spectrum baseline' }),
+    ],
+  },
+];

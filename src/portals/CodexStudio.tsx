@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
+import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
 import { PropertiesPanel } from '@/modes/codex/components/PropertiesPanel';
 import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
@@ -28,6 +29,7 @@ export function CodexStudio() {
   const selectedIds = useCodexStore((s) => s.selectedIds);
   const setActivePlate = useCodexStore((s) => s.setActivePlate);
   const addObject = useCodexStore((s) => s.addObject);
+  const addObjects = useCodexStore((s) => s.addObjects);
   const addPlate = useCodexStore((s) => s.addPlate);
   const removePlate = useCodexStore((s) => s.removePlate);
   const updatePlate = useCodexStore((s) => s.updatePlate);
@@ -41,6 +43,8 @@ export function CodexStudio() {
   const select = useCodexStore((s) => s.select);
 
   const [tab, setTab] = useState<DockTab>('sigils');
+  /** Which half of the library the Insert tab is showing. */
+  const [insertMode, setInsertMode] = useState<'marks' | 'fragments'>('marks');
   const [zoom, setZoom] = useState(0.55);
   const [saved, setSaved] = useState<CodexDocumentSummary[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -90,6 +94,23 @@ export function CodexStudio() {
       x: (plate?.width ?? 1040) / 2 - size / 2,
       y: (plate?.height ?? 1400) / 3,
     }),
+    [plate],
+  );
+
+  /**
+   * Fragments carry their own footprint, so centre the whole group rather than
+   * a square. Grounds are plate-sized and land at the origin.
+   */
+  const placeFragment = useCallback(
+    (w: number, h: number) => {
+      const pw = plate?.width ?? 1040;
+      const ph = plate?.height ?? 1400;
+      if (w >= pw && h >= ph) return { x: 0, y: 0 };
+      return {
+        x: Math.max(0, Math.round(pw / 2 - w / 2)),
+        y: Math.max(0, Math.round(ph / 2 - h / 2)),
+      };
+    },
     [plate],
   );
 
@@ -178,7 +199,7 @@ export function CodexStudio() {
         <aside className="flex w-[310px] shrink-0 flex-col border-r border-white/10 bg-black/25">
           <nav className="flex shrink-0 border-b border-white/10" role="tablist">
             {([
-              ['sigils', 'Sigils', Sparkles],
+              ['sigils', 'Insert', Sparkles],
               ['properties', 'Properties', Type],
               ['layers', 'Layers', Layers],
               ['documents', 'Files', FilePlus2],
@@ -203,10 +224,45 @@ export function CodexStudio() {
 
           <div className="min-h-0 flex-1 overflow-hidden">
             {tab === 'sigils' && (
-              <SigilPalette
-                tint={CODEX_INK}
-                onPlace={(sigil) => addObject(makeSigilObject(sigil.id, { ...placeCentre(96), size: 96, name: sigil.name }))}
-              />
+              <div className="flex h-full flex-col">
+                <div className="flex shrink-0 gap-1 border-b border-white/10 p-2" role="group" aria-label="Library half">
+                  {(['marks', 'fragments'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={insertMode === mode}
+                      onClick={() => setInsertMode(mode)}
+                      className={[
+                        'flex-1 rounded-md px-2 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors focus:outline-none focus:ring-1 focus:ring-white/40',
+                        insertMode === mode
+                          ? 'bg-white/15 text-white'
+                          : 'text-white/45 hover:bg-white/[0.06] hover:text-white/80',
+                      ].join(' ')}
+                    >
+                      {mode === 'marks' ? 'Marks' : 'Fragments'}
+                    </button>
+                  ))}
+                </div>
+                <div className="min-h-0 flex-1">
+                  {insertMode === 'marks' ? (
+                    <SigilPalette
+                      tint={CODEX_INK}
+                      onPlace={(sigil) =>
+                        addObject(makeSigilObject(sigil.id, { ...placeCentre(96), size: 96, name: sigil.name }))
+                      }
+                    />
+                  ) : (
+                    <FragmentPalette
+                      tint={CODEX_INK}
+                      onPlace={(fragment) => {
+                        const origin = placeFragment(fragment.width, fragment.height);
+                        addObjects(fragment.build(origin.x, origin.y));
+                        flash(`Placed ${fragment.name}.`);
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
             )}
             {tab === 'properties' && (
               <div className="h-full overflow-y-auto"><PropertiesPanel selected={selected} /></div>

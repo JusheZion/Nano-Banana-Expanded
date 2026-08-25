@@ -1,6 +1,7 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { CodexFrameObject } from '../../types/codexObjects';
 import { nodeEffectProps } from '../../utils/nodeEffects';
+import { gradientProps } from '../../utils/codexGradient';
 
 interface FrameNodeProps {
   object: CodexFrameObject;
@@ -17,6 +18,11 @@ const TICK = 16;
  */
 export function FrameNode({ object, onSelect, onChange, registerRef }: FrameNodeProps) {
   const { width: w, height: h, stroke, strokeWidth, cornerRadius, variant } = object;
+
+  // Gradients win over the flat colour when present; `null` means "no gradient",
+  // so the flat fill/stroke below still applies.
+  const fillGrad = gradientProps(object.fillGradient, w, h, 'fill');
+  const strokeGrad = gradientProps(object.strokeGradient, w, h, 'stroke');
 
   return (
     <Group
@@ -55,10 +61,12 @@ export function FrameNode({ object, onSelect, onChange, registerRef }: FrameNode
         width={w}
         height={h}
         cornerRadius={cornerRadius}
-        fill={object.fill}
-        stroke={variant === 'bracketed' ? undefined : stroke}
+        fill={fillGrad ? undefined : object.fill}
+        stroke={variant === 'bracketed' || strokeGrad ? undefined : stroke}
         strokeWidth={variant === 'bracketed' ? 0 : strokeWidth}
         dash={variant === 'dashed' ? [8, 6] : undefined}
+        {...fillGrad}
+        {...(variant === 'bracketed' ? {} : strokeGrad)}
       />
 
       {variant === 'double' && (

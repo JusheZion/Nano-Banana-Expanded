@@ -1,0 +1,193 @@
+/**
+ * Panels — the framed containers the dossier plates are built from, including
+ * the fictional-interface HUD readouts from the library's Interface plate.
+ *
+ * Each lands as an editable group: the frame, and whatever labels or furniture
+ * the original carried. Resize the frame and the labels stay independent, which
+ * is what a flattened image could not offer.
+ */
+import {
+  fFrame,
+  fRule,
+  fSigil,
+  fText,
+  grad,
+  HAIRLINE,
+  INK,
+  INK_BRIGHT,
+  INK_DIM,
+  PANEL_FILL,
+  type FragmentDef,
+} from '../fragmentTypes';
+
+export const PANEL_FRAGMENTS: FragmentDef[] = [
+  {
+    id: 'panel-bracketed',
+    name: 'Bracketed Panel',
+    category: 'panel',
+    section: 'Containers',
+    width: 420,
+    height: 260,
+    tags: ['frame', 'corner', 'ticks'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 420, height: 260, variant: 'bracketed', stroke: INK, strokeWidth: 2, name: 'Bracketed Panel' }),
+    ],
+  },
+  {
+    id: 'panel-double-rule',
+    name: 'Double-Rule Panel',
+    category: 'panel',
+    section: 'Containers',
+    width: 420,
+    height: 260,
+    tags: ['frame', 'double', 'formal'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 420, height: 260, variant: 'double', stroke: INK, strokeWidth: 1.5, name: 'Double-Rule Panel' }),
+    ],
+  },
+  {
+    id: 'panel-lit-edge',
+    name: 'Lit-Edge Panel',
+    category: 'panel',
+    section: 'Containers',
+    width: 420,
+    height: 200,
+    tags: ['frame', 'lit', 'accent'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 420, height: 200, variant: 'litEdge', stroke: INK_BRIGHT, strokeWidth: 2, name: 'Lit-Edge Panel' }),
+    ],
+  },
+  {
+    id: 'panel-inset-card',
+    name: 'Inset Card',
+    category: 'panel',
+    section: 'Containers',
+    width: 360,
+    height: 180,
+    tags: ['card', 'fill', 'hairline'],
+    build: (x, y) => [
+      fFrame({
+        x,
+        y,
+        width: 360,
+        height: 180,
+        variant: 'plain',
+        stroke: HAIRLINE,
+        strokeWidth: 1,
+        cornerRadius: 3,
+        fill: PANEL_FILL,
+        name: 'Inset Card',
+      }),
+    ],
+  },
+  {
+    id: 'panel-dashed-placeholder',
+    name: 'Dashed Placeholder',
+    category: 'panel',
+    section: 'Containers',
+    width: 320,
+    height: 320,
+    tags: ['placeholder', 'dashed', 'art'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 320, height: 320, variant: 'dashed', stroke: HAIRLINE, strokeWidth: 1.5, name: 'Art Placeholder' }),
+      fText({
+        x,
+        y: y + 150,
+        width: 320,
+        text: 'artwork',
+        fontSize: 12,
+        fill: HAIRLINE,
+        align: 'center',
+        letterSpacing: 4,
+        uppercase: true,
+        name: 'Placeholder label',
+      }),
+    ],
+  },
+  {
+    id: 'panel-header-bar',
+    name: 'Header-Bar Panel',
+    category: 'panel',
+    section: 'Titled',
+    width: 460,
+    height: 280,
+    tags: ['header', 'title', 'section'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 460, height: 280, variant: 'plain', stroke: HAIRLINE, strokeWidth: 1, fill: PANEL_FILL, name: 'Panel body' }),
+      fFrame({
+        x,
+        y,
+        width: 460,
+        height: 34,
+        variant: 'plain',
+        strokeWidth: 0,
+        stroke: 'transparent',
+        fillGradient: grad(0, [0, '#2a2136'], [1, '#171327']),
+        name: 'Header bar',
+      }),
+      fText({ x: x + 14, y: y + 10, width: 432, text: 'section title', fontSize: 13, fill: INK, letterSpacing: 3.5, uppercase: true, name: 'Header label' }),
+      fRule({ x, y: y + 34, width: 460, stroke: INK_DIM, name: 'Header rule' }),
+    ],
+  },
+  {
+    id: 'panel-portrait-frame',
+    name: 'Portrait Frame',
+    category: 'panel',
+    section: 'Titled',
+    width: 380,
+    height: 520,
+    tags: ['portrait', 'hero', 'caption'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 380, height: 470, variant: 'bracketed', stroke: INK, strokeWidth: 2, name: 'Portrait frame' }),
+      fFrame({ x: x + 10, y: y + 10, width: 360, height: 450, variant: 'plain', stroke: HAIRLINE, strokeWidth: 1, name: 'Portrait inner' }),
+      fRule({ x: x + 90, y: y + 486, width: 200, stroke: INK_DIM, name: 'Caption rule' }),
+      fText({ x, y: y + 494, width: 380, text: 'name · epithet', fontSize: 12, fill: INK_DIM, align: 'center', letterSpacing: 3, uppercase: true, name: 'Caption' }),
+    ],
+  },
+  {
+    id: 'panel-caption-box',
+    name: 'Caption Box',
+    category: 'panel',
+    section: 'Titled',
+    width: 340,
+    height: 92,
+    tags: ['caption', 'note', 'quote'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 340, height: 92, variant: 'plain', stroke: HAIRLINE, strokeWidth: 1, fill: PANEL_FILL, name: 'Caption box' }),
+      fFrame({ x, y, width: 3, height: 92, variant: 'plain', strokeWidth: 0, stroke: 'transparent', fill: INK, name: 'Caption spine' }),
+      fText({ x: x + 16, y: y + 16, width: 308, text: 'Caption or aside copy sits here, two lines deep.', fontSize: 13, fontFamily: 'EB Garamond', fill: '#c9c2d8', lineHeight: 1.5, name: 'Caption copy' }),
+    ],
+  },
+  {
+    id: 'panel-side-rail',
+    name: 'Side Rail',
+    category: 'panel',
+    section: 'Interface',
+    width: 54,
+    height: 400,
+    tags: ['rail', 'ticks', 'hud', 'margin'],
+    build: (x, y) => [
+      fFrame({ x: x + 26, y, width: 1.5, height: 400, variant: 'plain', strokeWidth: 0, stroke: 'transparent', fillGradient: grad(90, [0, INK, 0], [0.5, INK, 1], [1, INK, 0]), name: 'Rail spine' }),
+      ...[0, 0.25, 0.5, 0.75, 1].map((t, i) =>
+        fRule({ x: x + 14, y: y + Math.round(t * 396), width: 26, stroke: i % 2 === 0 ? INK : INK_DIM, name: `Rail tick ${i + 1}` }),
+      ),
+    ],
+  },
+  {
+    id: 'panel-hud-readout',
+    name: 'HUD Readout',
+    category: 'panel',
+    section: 'Interface',
+    width: 300,
+    height: 150,
+    tags: ['hud', 'interface', 'reticle', 'fui'],
+    build: (x, y) => [
+      fFrame({ x, y, width: 300, height: 150, variant: 'bracketed', stroke: INK_BRIGHT, strokeWidth: 1.5, name: 'HUD frame' }),
+      fSigil({ x: x + 16, y: y + 40, size: 70, sigilId: 'interface-targeting-reticle', tint: INK_BRIGHT, opacity: 0.9, name: 'Reticle' }),
+      fText({ x: x + 100, y: y + 30, width: 186, text: 'readout', fontSize: 11, fill: INK_DIM, letterSpacing: 4, uppercase: true, name: 'Readout label' }),
+      fText({ x: x + 100, y: y + 52, width: 186, text: '00.00', fontSize: 30, fill: INK_BRIGHT, letterSpacing: 2, name: 'Readout value' }),
+      fRule({ x: x + 100, y: y + 96, width: 186, stroke: HAIRLINE, name: 'Readout rule' }),
+      fText({ x: x + 100, y: y + 104, width: 186, text: 'status nominal', fontSize: 10, fill: INK_DIM, letterSpacing: 2, uppercase: true, name: 'Readout status' }),
+    ],
+  },
+];

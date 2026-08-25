@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from 'react-konva';
+import { gradientProps } from '../utils/codexGradient';
 import useImage from 'use-image';
 import { useCodexStore } from '@/stores/codexStore';
 import type {
@@ -81,7 +82,15 @@ export function CodexCanvas({ plate, scale, stageRef }: CodexCanvasProps) {
       style={{ background: plate.background }}
     >
       <Layer>
-        <Rect x={0} y={0} width={plate.width} height={plate.height} fill={plate.background} />
+        <Rect
+          x={0}
+          y={0}
+          width={plate.width}
+          height={plate.height}
+          {...(gradientProps(plate.backgroundGradient, plate.width, plate.height, 'fill') ?? {
+            fill: plate.background,
+          })}
+        />
 
         {plate.objects.map((object) => (
           <CodexObjectNode

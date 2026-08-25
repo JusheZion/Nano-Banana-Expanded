@@ -1,6 +1,7 @@
 import { Text as KonvaText } from 'react-konva';
 import type { CodexTextObject } from '../../types/codexObjects';
 import { nodeEffectProps } from '../../utils/nodeEffects';
+import { gradientProps } from '../../utils/codexGradient';
 
 interface TextNodeProps {
   object: CodexTextObject;
@@ -18,6 +19,15 @@ export function TextNode({ object, onSelect, onChange, registerRef }: TextNodePr
   const value =
     object.textTransform === 'uppercase' ? object.text.toUpperCase() : object.text;
 
+  // Konva measures a text gradient against the shape box, so size it from the
+  // declared width and the laid-out height rather than the glyph extents.
+  const grad = gradientProps(
+    object.gradient,
+    object.width,
+    Math.max(object.height, object.fontSize * object.lineHeight),
+    'fill',
+  );
+
   return (
     <KonvaText
       ref={registerRef as never}
@@ -32,7 +42,8 @@ export function TextNode({ object, onSelect, onChange, registerRef }: TextNodePr
       visible={object.visible}
       listening={!object.locked}
       draggable={!object.locked}
-      fill={object.fill}
+      fill={grad ? undefined : object.fill}
+      {...grad}
       fontFamily={object.fontFamily}
       fontSize={object.fontSize}
       fontStyle={object.fontStyle}

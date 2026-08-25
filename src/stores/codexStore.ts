@@ -65,6 +65,8 @@ interface CodexState {
 
   // objects
   addObject: (object: CodexObject, plateId?: string) => void;
+  /** Places a group as one undo step, so a fragment is not 12 separate undos. */
+  addObjects: (objects: CodexObject[], plateId?: string) => void;
   updateObject: (id: string, patch: Partial<CodexObject>) => void;
   updateObjects: (ids: string[], patch: Partial<CodexObject>) => void;
   removeObjects: (ids: string[]) => void;
@@ -168,6 +170,16 @@ export const useCodexStore = create<CodexState>((set, get) => {
         if (plate) plate.objects.push(object);
       });
       set({ selectedIds: [object.id] });
+    },
+
+    addObjects: (objects, plateId) => {
+      if (objects.length === 0) return;
+      const targetId = plateId ?? get().activePlateId;
+      commit((doc) => {
+        const plate = activePlate(doc, targetId);
+        if (plate) plate.objects.push(...objects);
+      });
+      set({ selectedIds: objects.map((o) => o.id) });
     },
 
     updateObject: (id, patch) => get().updateObjects([id], patch),

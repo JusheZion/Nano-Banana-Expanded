@@ -15340,3 +15340,106 @@ test was confirmed to fail when the wrapper is removed, not merely to pass.
 
 - Port the 50 CSS-based library elements as template fragments.
 - P6 canon binding via the File System Access API (operator decision, 2026-08-25).
+
+## Codex Studio fragments + gradient rendering - 2026-08-25
+
+### What changed
+
+Ported the composed half of the plate library — the ~50 CSS-based elements that
+did not fit the sigil registry — as **fragments**: named groups of codex objects
+that land on the plate fully editable. Adds a Marks/Fragments switch to the
+Insert tab.
+
+Porting them surfaced a prerequisite: **gradients were declared but never
+rendered**, so the whole Grounds category would have come out blank.
+
+### Files touched
+
+Added:
+- `src/modes/codex/utils/codexGradient.ts`
+- `src/modes/codex/utils/__tests__/codexGradient.test.ts`
+- `src/modes/codex/data/fragmentTypes.ts`
+- `src/modes/codex/data/FragmentRegistry.ts`
+- `src/modes/codex/data/fragments/{grounds,panels,badges,bullets,meters,dividers}.ts`
+- `src/modes/codex/data/__tests__/FragmentRegistry.test.ts`
+- `src/modes/codex/components/{FragmentPalette,FragmentPreview}.tsx`
+
+Modified:
+- `src/stores/codexStore.ts` — `addObjects`, so a fragment is one undo step.
+- `src/modes/codex/components/nodes/FrameNode.tsx` — fill and stroke gradients.
+- `src/modes/codex/components/nodes/TextNode.tsx` — text gradients.
+- `src/modes/codex/engine/CodexCanvas.tsx` — plate background gradients.
+- `src/portals/CodexStudio.tsx` — Marks/Fragments switch; `placeFragment`.
+
+### Implementation notes
+
+- **Gradients were dead fields.** `CodexFrameObject.fillGradient`,
+  `strokeGradient`, `CodexTextObject.gradient` and `CodexPlate.backgroundGradient`
+  were all in the model as shipped in `b8ac40c`, but nothing read them — a grep
+  for each name found only the type declaration. `codexGradient.ts` is now the
+  single place that mapping lives. Geometry conventions were copied from
+  `modes/comic/components/BalloonNode.tsx` rather than invented, so a gradient
+  authored in either mode reads the same: linear by angle (0 = right, 90 = down),
+  radial centre and radius as **fractions** of the box, and `rect` degrading to
+  corner-to-corner linear because Konva has no rect gradient.
+- **Never both fill and gradient.** Konva picks its fill source by
+  `fillPriority`, which defaults to `color`, so a shape carrying both can
+  silently ignore the gradient. Every call site now sets one or the other, and
+  both a unit test and a registry test assert it.
+- **Fragments are groups, not images.** Each `FragmentDef.build(x, y)` mints
+  fresh object ids and returns a small array. `addObjects` commits the group as
+  a single undo entry and selects it, so a fragment is one undo, not twelve.
+- **This is a translation, not a copy.** The originals were CSS, and the local
+  artboards were lost when the scratchpad was cleared, so fragments are rebuilt
+  in the committed codex palette (`CODEX_INK`, `INK_DIM`, `HAIRLINE`,
+  `PANEL_FILL`). Features with no Konva equivalent — repeating gradients,
+  backdrop blur, pseudo-element layering — are re-expressed with plate
+  primitives. Visual sign-off is the operator's.
+- **Meters gained from the port**: the CSS originals were fixed-width bars;
+  these are live chart objects, so editing a value redraws the geometry.
+- **Previews are DOM, not Konva.** The palette can show fifty tiles at once;
+  fifty Konva stages would mean fifty canvases for thumbnails nobody edits.
+  Sigils render as real marks, everything else as scaled blocks.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS, 0 errors.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS.
+- `npx vitest run` — PASS, **166 files / 1359 tests** (was 164/1329; +2 files,
+  +30 tests).
+- `npm run build` — PASS in 6.11s. `CodexStudio` chunk 117.37 → 144.81 kB
+  (28.21 → 34.46 kB gzip).
+- Three bugs caught by the new tests rather than by inspection:
+  - `meter-threshold-bar` understated its own height (caption overflowed).
+  - `divider-diamond` stretched a square 10×10 mark across a 460px rule; it is
+    now a rule with the mark centred on it.
+  - `divider-hairline` / `divider-fade` overstated their height.
+- **Live browser QA is outstanding** — Codex Studio is now behind the auth gate
+  and the QA browser has no Supabase session. Signing in is the operator's to
+  do; the fragment palette has not yet been exercised in the running app.
+
+### Outstanding issues
+
+- Live QA of the fragment palette, per above.
+- `src/types/gradient.ts` and `src/modes/comic/types/gradient.ts` are near
+  duplicate declarations of the same shapes (`GradientPoint` vs `Point`). Both
+  pre-date this work and are structurally compatible; left alone rather than
+  widening scope into unrelated cleanup.
+
+### Risks or caveats
+
+- Grounds are plate-sized frames placed at the origin. They sit *on* the plate
+  rather than replacing `plate.background`, so a ground will cover objects
+  already placed unless it is sent to the back.
+- The `Parchment` ground is a light treatment on a dark-plate palette; its
+  companion ink colours are exported as `PARCHMENT_INK` but nothing applies
+  them automatically.
+
+### Operator follow-up
+
+- Sign in on the running app so the fragment palette can be smoke-tested.
+- Visual sign-off on the 50 fragments — they are rebuilt, not pixel-copied.
+
+### Next steps
+
+- P6 canon binding via the File System Access API (operator decision, 2026-08-25).
