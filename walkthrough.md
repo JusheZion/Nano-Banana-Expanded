@@ -15513,3 +15513,66 @@ Modified:
 ### Next steps
 
 - P6 canon binding via the File System Access API.
+
+## Codex Studio live QA + placement cascade - 2026-08-25
+
+### What changed
+
+Completed the live QA that was outstanding on the fragment work, and fixed the
+one defect it surfaced: **every insertion landed on the same pixel**, so placing
+several fragments (or marks) in a row buried them in an exact stack.
+
+`placeCentre` and `placeFragment` now share a cascade counter — successive
+placements step 28px down and right, wrapping after 8 so they never march off
+the plate. `placeFragment` also clamps to the plate bounds, and plate-sized
+grounds still land at the origin rather than cascading.
+
+### Files touched
+
+Modified:
+- `src/portals/CodexStudio.tsx` — `CASCADE_STEP` / `CASCADE_WRAP`, `cascade()`,
+  applied in both placement helpers.
+
+### Verification
+
+- `npx vitest run` — PASS, 166 files / 1366 tests.
+- `npm run build` — PASS in 6.93s. `CodexStudio` 145.44 kB (34.68 kB gzip).
+- **Live browser QA**, signed in as the demo account at `localhost:5173`,
+  1440x1100:
+  - Fragments palette lists 50 across all six categories; grounds and panels
+    preview correctly as scaled DOM.
+  - Placed Bracketed Panel, Mini Radar, Chapter Break, Rank Pill and Sigil
+    Bullet: 9 objects, all on the stage, visible, correctly positioned.
+  - **Group undo confirmed**: one undo removed exactly the 2 objects of the
+    Sigil Bullet, not one object.
+  - **Cascade confirmed**: three Inset Cards landed at x 340 / 368 / 396.
+  - **Gradients confirmed end to end**: the Twin Split ground renders its
+    diagonal on the plate. This path was dead before `1b5f551`.
+  - Save → full page reload → reopen restored all 10 objects, `schemaVersion: 1`,
+    cascade positions and `fillGradient` intact.
+  - **Zero console errors** throughout.
+
+### Outstanding issues
+
+- PNG and PDF export were not exercised — they trigger downloads, which is the
+  operator's to run rather than something to fire unattended.
+- Sidebar nav overflows below roughly 1000px viewport height, putting
+  `Lore Dossier` and `Codex Studio` outside the scroll area. Pre-existing, not
+  introduced here.
+
+### Risks or caveats
+
+- Grounds are plate-sized and land at the origin *above* existing objects, so
+  placing one after laying out a plate covers the work until it is sent to the
+  back. Confirmed visually during QA. Whether grounds should instead write
+  `plate.backgroundGradient` is an open design question for the operator.
+
+### Operator follow-up
+
+- Visual sign-off on the 50 fragments; they are rebuilt, not pixel-copied.
+- Decide whether grounds should replace the plate background rather than sit on
+  the plate.
+
+### Next steps
+
+- P6 canon binding via the File System Access API.

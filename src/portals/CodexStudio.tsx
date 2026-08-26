@@ -23,6 +23,10 @@ import {
 
 type DockTab = 'sigils' | 'properties' | 'layers' | 'documents';
 
+/** Cascade geometry for successive insertions. */
+const CASCADE_STEP = 28;
+const CASCADE_WRAP = 8;
+
 export function CodexStudio() {
   const doc = useCodexStore((s) => s.doc);
   const activePlateId = useCodexStore((s) => s.activePlateId);
@@ -89,12 +93,27 @@ export function CodexStudio() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, duplicateObjects, removeObjects, selectedIds]);
 
+  /**
+   * Successive placements step down and right instead of landing on the same
+   * pixel, so inserting several things in a row does not bury them in a stack.
+   * Wraps after a few steps rather than marching off the plate.
+   */
+  const placeSeq = useRef(0);
+  const cascade = useCallback(() => {
+    const step = placeSeq.current % CASCADE_WRAP;
+    placeSeq.current += 1;
+    return step * CASCADE_STEP;
+  }, []);
+
   const placeCentre = useCallback(
-    (size: number) => ({
-      x: (plate?.width ?? 1040) / 2 - size / 2,
-      y: (plate?.height ?? 1400) / 3,
-    }),
-    [plate],
+    (size: number) => {
+      const offset = cascade();
+      return {
+        x: (plate?.width ?? 1040) / 2 - size / 2 + offset,
+        y: (plate?.height ?? 1400) / 3 + offset,
+      };
+    },
+    [plate, cascade],
   );
 
   /**
@@ -106,12 +125,13 @@ export function CodexStudio() {
       const pw = plate?.width ?? 1040;
       const ph = plate?.height ?? 1400;
       if (w >= pw && h >= ph) return { x: 0, y: 0 };
+      const offset = cascade();
       return {
-        x: Math.max(0, Math.round(pw / 2 - w / 2)),
-        y: Math.max(0, Math.round(ph / 2 - h / 2)),
+        x: Math.max(0, Math.min(pw - w, Math.round(pw / 2 - w / 2) + offset)),
+        y: Math.max(0, Math.min(ph - h, Math.round(ph / 2 - h / 2) + offset)),
       };
     },
-    [plate],
+    [plate, cascade],
   );
 
   const handleSave = () => {
