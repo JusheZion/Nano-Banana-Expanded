@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildSigilSvg, rasterSizeFor, sigilDataUri } from '../sigilRaster';
-import { getSigil } from '../../data/SigilRegistry';
+import { buildSigilSvg, rasterSizeFor, sigilDataUri, sigilStrokeWidth } from '../sigilRaster';
+import { ALL_SIGILS, getSigil } from '../../data/SigilRegistry';
 
 const sigil = getSigil('spectrum-compression-core')!;
 
@@ -65,5 +65,48 @@ describe('sigilDataUri', () => {
     expect(uri).not.toContain('"');
     expect(uri).not.toContain('<');
     expect(uri).not.toContain('#');
+  });
+});
+
+describe('sigilStrokeWidth', () => {
+  it('scales the weight to the mark’s own coordinate system', () => {
+    expect(sigilStrokeWidth('0 0 24 24')).toBe(1.5);
+    expect(sigilStrokeWidth('0 0 96 96')).toBe(6);
+  });
+
+  it('weights a wide rule mark against its shorter axis', () => {
+    expect(sigilStrokeWidth('0 0 360 20')).toBe(1.25);
+  });
+
+  it('falls back rather than emitting NaN for an unparseable viewBox', () => {
+    expect(sigilStrokeWidth('nonsense')).toBe(1.5);
+    expect(sigilStrokeWidth('0 0 0 0')).toBe(1.5);
+  });
+
+  it('never returns a non-positive weight for any mark in the library', () => {
+    for (const sigil of ALL_SIGILS) {
+      expect(sigilStrokeWidth(sigil.viewBox), sigil.id).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('root presentation', () => {
+  it('sets the root fill/stroke the marks were authored against', () => {
+    const svg = buildSigilSvg(sigil, '#ff0000');
+    expect(svg).toContain('fill="none"');
+    expect(svg).toContain('stroke="#ff0000"');
+    expect(svg).toContain('stroke-linecap="round"');
+  });
+
+  it('resolves currentColor in the root attributes too, not just the body', () => {
+    const svg = buildSigilSvg(sigil, '#ff0000');
+    const root = svg.slice(0, svg.indexOf('>'));
+    expect(root).not.toContain('currentColor');
+  });
+
+  it('leaves a mark’s own fill attribute to win over the inherited one', () => {
+    const filled = { ...sigil, markup: '<circle fill="currentColor" r="4" />' };
+    const svg = buildSigilSvg(filled, '#00ff00');
+    expect(svg).toContain('<circle fill="#00ff00"');
   });
 });

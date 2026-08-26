@@ -24,6 +24,42 @@ export function rasterSizeFor(displaySize: number, pixelRatio = 2): number {
 }
 
 /**
+ * Presentation defaults the marks are drawn against.
+ *
+ * The library is line art: 175 of the 182 marks carry paths with no `fill` or
+ * `stroke` attribute, because they were authored inside an `<svg>` that set
+ * those at the root. That root was dropped when the marks were ported, so SVG's
+ * initial values applied instead — `fill: black`, `stroke: none` — and the
+ * marks rendered as black silhouettes rather than tinted outlines.
+ *
+ * Restoring the root presentation fixes them without touching the data: an
+ * element's own attribute still wins, so the 42 marks that set
+ * `fill="currentColor"` are unaffected.
+ */
+export const SIGIL_STROKE_DIVISOR = 16;
+
+/**
+ * Stroke weight scaled to the mark's own coordinate system, so a 96-unit mark
+ * is not drawn hairline-thin next to a 24-unit one. Uses the shorter axis:
+ * wide rule marks (360x20) should weight against their height.
+ */
+export function sigilStrokeWidth(viewBox: string): number {
+  const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+  const w = parts[2];
+  const h = parts[3];
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return 1.5;
+  return Math.min(w, h) / SIGIL_STROKE_DIVISOR;
+}
+
+/** Root attributes shared by both render paths, as an attribute string. */
+export function sigilRootAttrs(sigil: SigilDef): string {
+  return (
+    `fill="none" stroke="currentColor" stroke-width="${sigilStrokeWidth(sigil.viewBox)}" ` +
+    'stroke-linecap="round" stroke-linejoin="round"'
+  );
+}
+
+/**
  * Resolve the mark's colour tokens and wrap it in a standalone SVG document.
  * `currentColor` becomes the tint; `var(--sigil-bg)` becomes the knockout
  * colour (transparent by default, which reads correctly over a plate).
@@ -38,9 +74,11 @@ export function buildSigilSvg(
     .replace(/var\(--sigil-bg\)/g, background)
     .replace(/currentColor/g, tint);
 
+  const root = sigilRootAttrs(sigil).replace(/currentColor/g, tint);
+
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${sigil.viewBox}" ` +
-    `width="${size}" height="${size}">${body}</svg>`
+    `width="${size}" height="${size}" ${root}>${body}</svg>`
   );
 }
 

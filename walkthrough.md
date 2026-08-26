@@ -15443,3 +15443,73 @@ Modified:
 ### Next steps
 
 - P6 canon binding via the File System Access API (operator decision, 2026-08-25).
+
+## Codex sigils rendered black - root presentation fix - 2026-08-25
+
+### What changed
+
+Operator reported most sigils rendering black and near-invisible on the dark
+plate ground, and asked for a brighter default tint. The default tint was not
+the cause: it was already `CODEX_INK` (`#d8b45a`, gold). Changing it would have
+had no effect on the affected marks.
+
+**175 of the 182 marks carry paths with no `fill` or `stroke` attribute.** They
+are line art, authored inside an `<svg>` that set those at the root. That root
+was dropped when the marks were ported into the registry in `b8ac40c`, so SVG's
+initial values applied instead — `fill: black`, `stroke: none` — and the marks
+rendered as black silhouettes rather than tinted outlines.
+
+### Files touched
+
+Modified:
+- `src/modes/codex/utils/sigilRaster.ts` — `sigilStrokeWidth`, `sigilRootAttrs`;
+  `buildSigilSvg` now emits the root presentation.
+- `src/modes/codex/components/SigilGlyph.tsx` — same presentation on the DOM path.
+- `src/modes/codex/utils/__tests__/sigilRaster.test.ts` — +7 tests.
+
+### Implementation notes
+
+- The fix restores the root presentation rather than editing 175 data entries:
+  `fill="none" stroke="currentColor" stroke-width=… stroke-linecap="round"
+  stroke-linejoin="round"`. An element's own attribute still wins, so the 42
+  marks that set `fill="currentColor"` are unaffected and stay filled.
+- Both render paths had to change together — Konva goes through
+  `buildSigilSvg`, the palette through `SigilGlyph`. `sigilStrokeWidth` is
+  shared so the two cannot drift.
+- Stroke weight scales to each mark's own coordinate system (shorter viewBox
+  axis ÷ 16), because the library is not uniformly 24×24: it spans `0 0 10 10`
+  to `0 0 360 20`. A fixed weight would have been hairline on the large marks
+  and heavy on the small ones. Wide rule marks weight against their height.
+- `buildSigilSvg` resolves `currentColor` in the root attributes as well as the
+  body, so the tint reaches the stroke.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex` — PASS.
+- `npx vitest run` — PASS, **166 files / 1366 tests** (+7).
+- **Visual check**: generated a contact sheet of all 182 marks through the real
+  `buildSigilSvg`, served it from the dev server and screenshotted it. Every
+  mark renders as gold line art on the plate ground; no black silhouettes. The
+  sheet was a throwaway — it is not committed.
+
+### Outstanding issues
+
+- Live QA of the fragment palette is still outstanding; the QA browser has no
+  Supabase session.
+
+### Risks or caveats
+
+- Any mark genuinely intended as an unfilled-attribute silhouette would now
+  render as an outline. None were found — the 42 filled marks all declare
+  `fill="currentColor"` explicitly.
+
+### Operator follow-up
+
+- Decide whether the default tint should stay `CODEX_INK` gold now the marks
+  render correctly, or move to a neon accent. Per-object tint already exists in
+  the Properties panel.
+
+### Next steps
+
+- P6 canon binding via the File System Access API.

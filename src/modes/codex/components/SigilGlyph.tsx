@@ -1,4 +1,5 @@
 import type { SigilDef } from '../data/SigilRegistry';
+import { sigilStrokeWidth } from '../utils/sigilRaster';
 
 interface SigilGlyphProps {
   sigil: SigilDef;
@@ -34,6 +35,13 @@ export function SigilGlyph({
       className={className}
       role="img"
       aria-label={sigil.name}
+      // The marks are line art authored against a styled root; without these
+      // the attribute-less paths fall back to SVG's initial fill: black.
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={sigilStrokeWidth(sigil.viewBox)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       style={
         {
           color,
