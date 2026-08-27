@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildSigilSvg, rasterSizeFor, sigilDataUri, sigilStrokeWidth } from '../sigilRaster';
+import {
+  buildSigilSvg,
+  densityFactor,
+  rasterSizeFor,
+  sigilDataUri,
+  sigilStrokeWidth,
+  strokeWidthForViewBox,
+} from '../sigilRaster';
 import { ALL_SIGILS, getSigil } from '../../data/SigilRegistry';
 
 const sigil = getSigil('spectrum-compression-core')!;
@@ -42,13 +49,13 @@ describe('buildSigilSvg', () => {
 
   it('resolves the background knockout token', () => {
     const knockout = { ...sigil, markup: '<rect fill="var(--sigil-bg)" />' };
-    const svg = buildSigilSvg(knockout, '#fff', '#000');
+    const svg = buildSigilSvg(knockout, { tint: '#fff', background: '#000' });
     expect(svg).toContain('#000');
     expect(svg).not.toContain('var(--sigil-bg)');
   });
 
   it('leaves no unresolved colour tokens for any mark in the library', () => {
-    const svg = buildSigilSvg(sigil, '#123456', '#654321');
+    const svg = buildSigilSvg(sigil, { tint: '#123456', background: '#654321' });
     expect(svg).not.toMatch(/var\(--/);
   });
 });
@@ -68,25 +75,62 @@ describe('sigilDataUri', () => {
   });
 });
 
-describe('sigilStrokeWidth', () => {
+describe('strokeWidthForViewBox', () => {
   it('scales the weight to the mark’s own coordinate system', () => {
-    expect(sigilStrokeWidth('0 0 24 24')).toBe(1.5);
-    expect(sigilStrokeWidth('0 0 96 96')).toBe(6);
+    expect(strokeWidthForViewBox('0 0 24 24')).toBe(1.5);
+    expect(strokeWidthForViewBox('0 0 96 96')).toBe(6);
   });
 
   it('weights a wide rule mark against its shorter axis', () => {
-    expect(sigilStrokeWidth('0 0 360 20')).toBe(1.25);
+    expect(strokeWidthForViewBox('0 0 360 20')).toBe(1.25);
   });
 
   it('falls back rather than emitting NaN for an unparseable viewBox', () => {
-    expect(sigilStrokeWidth('nonsense')).toBe(1.5);
-    expect(sigilStrokeWidth('0 0 0 0')).toBe(1.5);
+    expect(strokeWidthForViewBox('nonsense')).toBe(1.5);
+    expect(strokeWidthForViewBox('0 0 0 0')).toBe(1.5);
+  });
+});
+
+describe('densityFactor', () => {
+  it('leaves a sparse mark at full weight', () => {
+    expect(densityFactor('<path/><path/>')).toBe(1);
+  });
+
+  it('thins a crowded mark so adjacent strokes cannot merge', () => {
+    const crowded = '<circle/>'.repeat(20);
+    expect(densityFactor(crowded)).toBeLessThan(1);
+  });
+
+  it('thins monotonically as a mark gets denser', () => {
+    const at = (n: number) => densityFactor('<circle/>'.repeat(n));
+    expect(at(3)).toBeGreaterThanOrEqual(at(9));
+    expect(at(9)).toBeGreaterThan(at(20));
+  });
+});
+
+describe('sigilStrokeWidth', () => {
+  it('draws the Flower of Life finer than a single-stroke mark in the same box', () => {
+    const dense = getSigil('geometry-flower-of-life')!;
+    const sparse = getSigil('ornament-sparkle')!;
+    expect(dense.viewBox).toBe(sparse.viewBox); // same coordinate system
+    expect(sigilStrokeWidth(dense)).toBeLessThan(sigilStrokeWidth(sparse));
+  });
+
+  it('applies the caller scale', () => {
+    const s = getSigil('ornament-sparkle')!;
+    expect(sigilStrokeWidth(s, 2)).toBeCloseTo(sigilStrokeWidth(s) * 2, 5);
   });
 
   it('never returns a non-positive weight for any mark in the library', () => {
     for (const sigil of ALL_SIGILS) {
-      expect(sigilStrokeWidth(sigil.viewBox), sigil.id).toBeGreaterThan(0);
+      expect(sigilStrokeWidth(sigil), sigil.id).toBeGreaterThan(0);
     }
+  });
+
+  it('ignores a nonsensical scale rather than vanishing the mark', () => {
+    const s = getSigil('ornament-sparkle')!;
+    expect(sigilStrokeWidth(s, 0)).toBeGreaterThan(0);
+    expect(sigilStrokeWidth(s, Number.NaN)).toBeGreaterThan(0);
   });
 });
 

@@ -9,12 +9,18 @@ import {
   type SigilDef,
 } from '../data/SigilRegistry';
 import { SigilGlyph } from './SigilGlyph';
+import type { SigilAppearance } from '../utils/sigilRaster';
 
 interface SigilPaletteProps {
   /** Fired when a mark is chosen — the portal places it on the plate. */
   onPlace: (sigil: SigilDef) => void;
   /** Tint applied to previews so the palette reads against the current plate. */
   tint?: string;
+  /**
+   * Paint used for previews. When set, the palette shows each mark exactly as
+   * it will land on the plate, relief and gradient included.
+   */
+  appearance?: SigilAppearance;
 }
 
 type CategoryFilter = SigilCategory | 'all';
@@ -23,7 +29,7 @@ type CategoryFilter = SigilCategory | 'all';
  * The insert menu: every mark in the library, grouped by category and
  * searchable by name, section or tag. Clicking a mark places it.
  */
-export function SigilPalette({ onPlace, tint = '#d8b45a' }: SigilPaletteProps) {
+export function SigilPalette({ onPlace, tint = '#d8b45a', appearance }: SigilPaletteProps) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('all');
 
@@ -106,10 +112,10 @@ export function SigilPalette({ onPlace, tint = '#d8b45a' }: SigilPaletteProps) {
                 <h3 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/40">
                   {label}
                 </h3>
-                <SigilGrid sigils={sigils} onPlace={onPlace} tint={tint} />
+                <SigilGrid sigils={sigils} onPlace={onPlace} tint={tint} appearance={appearance} />
               </section>
             ))
-          : <SigilGrid sigils={results} onPlace={onPlace} tint={tint} />}
+          : <SigilGrid sigils={results} onPlace={onPlace} tint={tint} appearance={appearance} />}
       </div>
 
       <div className="shrink-0 border-t border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-white/35">
@@ -123,10 +129,12 @@ function SigilGrid({
   sigils,
   onPlace,
   tint,
+  appearance,
 }: {
   sigils: SigilDef[];
   onPlace: (sigil: SigilDef) => void;
   tint: string;
+  appearance?: SigilAppearance;
 }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
@@ -139,7 +147,7 @@ function SigilGrid({
           aria-label={`Place ${sigil.name}`}
           className="group flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.03] p-1.5 transition-colors hover:border-white/30 hover:bg-white/[0.08] focus:outline-none focus:ring-1 focus:ring-white/50"
         >
-          <SigilGlyph sigil={sigil} size={26} color={tint} />
+          <SigilGlyph sigil={sigil} size={26} color={tint} appearance={appearance} />
           <span className="line-clamp-2 text-center text-[8.5px] leading-tight text-white/45 group-hover:text-white/70">
             {sigil.name}
           </span>

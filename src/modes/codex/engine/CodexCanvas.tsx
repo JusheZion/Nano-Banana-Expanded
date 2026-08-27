@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type Konva from 'konva';
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from 'react-konva';
 import { gradientProps } from '../utils/codexGradient';
+import { plateTextureDataUri } from '../data/plateTextures';
 import useImage from 'use-image';
 import { useCodexStore } from '@/stores/codexStore';
 import type {
@@ -91,6 +92,7 @@ export function CodexCanvas({ plate, scale, stageRef }: CodexCanvasProps) {
             fill: plate.background,
           })}
         />
+        <PlateTextureLayer plate={plate} />
 
         {plate.objects.map((object) => (
           <CodexObjectNode
@@ -224,6 +226,33 @@ function PlateImageNode({
         });
       }}
       {...nodeEffectProps(object)}
+    />
+  );
+}
+
+/**
+ * The plate's printed surface. Sits above the colour/gradient and below every
+ * object. Rendered as its own component so the texture raster is memoised and
+ * a missing or still-loading texture simply draws nothing.
+ */
+function PlateTextureLayer({ plate }: { plate: CodexPlate }) {
+  const uri = useMemo(
+    () =>
+      plate.backgroundTexture
+        ? plateTextureDataUri(plate.backgroundTexture, plate.width, plate.height)
+        : null,
+    [plate.backgroundTexture, plate.width, plate.height],
+  );
+  const [image] = useImage(uri ?? '');
+  if (!uri || !image) return null;
+  return (
+    <KonvaImage
+      image={image}
+      x={0}
+      y={0}
+      width={plate.width}
+      height={plate.height}
+      listening={false}
     />
   );
 }

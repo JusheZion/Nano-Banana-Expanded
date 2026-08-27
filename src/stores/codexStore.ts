@@ -10,6 +10,10 @@ import {
   type CodexObject,
   type CodexPlate,
 } from '@/modes/codex/types/codexObjects';
+import {
+  DEFAULT_SIGIL_FINISH_ID,
+  getSigilFinish,
+} from '@/modes/codex/data/sigilFinishes';
 
 const HISTORY_LIMIT = 60;
 
@@ -40,6 +44,16 @@ export function createDocument(title = 'Untitled Codex'): CodexDocument {
   };
 }
 
+const FINISH_KEY = 'codex.sigilFinish.v1';
+
+function readStoredFinish(): string {
+  try {
+    return localStorage.getItem(FINISH_KEY) ?? DEFAULT_SIGIL_FINISH_ID;
+  } catch {
+    return DEFAULT_SIGIL_FINISH_ID;
+  }
+}
+
 interface CodexState {
   doc: CodexDocument;
   activePlateId: string;
@@ -64,6 +78,13 @@ interface CodexState {
   updatePlate: (plateId: string, patch: Partial<CodexPlate>) => void;
 
   // objects
+  /**
+   * Finish applied to newly placed marks. An authoring preference, not document
+   * state, so it lives outside `doc` and persists on its own.
+   */
+  sigilFinishId: string;
+  setSigilFinish: (id: string) => void;
+
   addObject: (object: CodexObject, plateId?: string) => void;
   /** Places a group as one undo step, so a fragment is not 12 separate undos. */
   addObjects: (objects: CodexObject[], plateId?: string) => void;
@@ -112,6 +133,16 @@ export const useCodexStore = create<CodexState>((set, get) => {
     selectedIds: [],
     past: [],
     future: [],
+
+    sigilFinishId: readStoredFinish(),
+    setSigilFinish: (id) => {
+      set({ sigilFinishId: id });
+      try {
+        localStorage.setItem(FINISH_KEY, id);
+      } catch {
+        // A blocked storage quota must not stop the user changing finish.
+      }
+    },
 
     setActivePlate: (plateId) => set({ activePlateId: plateId, selectedIds: [] }),
     select: (ids) => set({ selectedIds: ids }),
@@ -273,9 +304,18 @@ export const useCodexStore = create<CodexState>((set, get) => {
 /** Factory helpers so callers don't hand-build object literals. */
 export function makeSigilObject(
   sigilId: string,
-  opts: { x: number; y: number; size?: number; tint?: string; name?: string },
+  opts: {
+    x: number;
+    y: number;
+    size?: number;
+    tint?: string;
+    name?: string;
+    /** Finish preset to paint the mark with; falls back to a flat tint. */
+    finishId?: string;
+  },
 ): CodexObject {
   const size = opts.size ?? 96;
+  const finish = opts.finishId ? getSigilFinish(opts.finishId) : undefined;
   return {
     id: uid('sigil'),
     kind: 'sigil',
@@ -290,6 +330,7 @@ export function makeSigilObject(
     opacity: 1,
     locked: false,
     visible: true,
+    ...(finish?.patch ?? {}),
   };
 }
 

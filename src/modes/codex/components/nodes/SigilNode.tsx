@@ -20,9 +20,19 @@ export function SigilNode({ object, onSelect, onChange, registerRef }: SigilNode
   const uri = useMemo(
     () =>
       sigil
-        ? sigilDataUri(sigil, object.tint, object.background ?? 'transparent', rasterSize)
+        ? sigilDataUri(
+            sigil,
+            {
+              tint: object.tint,
+              gradient: object.gradient,
+              bevel: object.bevel,
+              strokeScale: object.strokeScale,
+              background: object.background ?? 'transparent',
+            },
+            rasterSize,
+          )
         : '',
-    [sigil, object.tint, object.background, rasterSize],
+    [sigil, object.tint, object.gradient, object.bevel, object.strokeScale, object.background, rasterSize],
   );
   const [image] = useImage(uri);
 

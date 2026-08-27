@@ -54,6 +54,8 @@ export const FRAGMENT_CATEGORY_LABELS: Record<FragmentCategory, string> = {
 export interface PlatePatch {
   background?: string;
   backgroundGradient?: GradientSpec;
+  /** Id into the plate texture registry; `null` clears an existing texture. */
+  backgroundTexture?: string;
 }
 
 export interface FragmentDef {

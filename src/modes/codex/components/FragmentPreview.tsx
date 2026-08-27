@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { FragmentDef } from '../data/FragmentRegistry';
 import { getSigil } from '../data/SigilRegistry';
+import { plateTextureDataUri } from '../data/plateTextures';
 import { SigilGlyph } from './SigilGlyph';
 
 interface FragmentPreviewProps {
@@ -25,16 +26,29 @@ export function FragmentPreview({ fragment, width, height, tint }: FragmentPrevi
   // they apply to the plate instead of an empty box.
   if (fragment.plate) {
     const g = fragment.plate.backgroundGradient;
-    const background = g
+    const gradientCss = g
       ? g.type === 'radial'
         ? `radial-gradient(circle, ${g.stops.map((s) => s.color).join(', ')})`
         : `linear-gradient(${(g.angle ?? 90) + 90}deg, ${g.stops.map((s) => s.color).join(', ')})`
       : fragment.plate.background;
+    // Textured grounds preview the actual surface, not just the colour under it —
+    // a parchment tile that showed only the beige would misrepresent it.
+    const textureUri = fragment.plate.backgroundTexture
+      ? plateTextureDataUri(fragment.plate.backgroundTexture, width * 3, height * 3)
+      : null;
     return (
       <div
         aria-hidden="true"
         className="rounded-sm"
-        style={{ width, height, background }}
+        style={{
+          width,
+          height,
+          background: gradientCss,
+          backgroundImage: textureUri
+            ? `url("${textureUri}"), ${gradientCss}`
+            : gradientCss,
+          backgroundSize: 'cover',
+        }}
       />
     );
   }

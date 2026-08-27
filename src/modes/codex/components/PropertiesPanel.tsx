@@ -1,4 +1,6 @@
 import { useCodexStore } from '@/stores/codexStore';
+import { FinishPicker } from './FinishPicker';
+import { getSigilFinish, SIGIL_FINISHES } from '../data/sigilFinishes';
 import type {
   CodexChartObject,
   CodexFrameObject,
@@ -8,6 +10,16 @@ import type {
 } from '../types/codexObjects';
 
 const FONTS = ['Cinzel', 'EB Garamond', 'Georgia', 'Helvetica', 'Courier New'];
+
+/** Bevel light directions, named rather than left as a raw angle. */
+const BEVEL_ANGLES: Array<[string, number]> = [
+  ['↖', 305],
+  ['↑', 270],
+  ['↗', 235],
+  ['↘', 125],
+  ['↓', 90],
+  ['↙', 55],
+];
 
 /**
  * Inspector for the current selection. Typography and effects live here — the
@@ -147,11 +159,159 @@ function TextSection({ object }: { object: CodexTextObject }) {
 
 function SigilSection({ object }: { object: CodexSigilObject }) {
   const update = useCodexStore((s) => s.updateObject);
+  const set = (patch: Partial<CodexSigilObject>) => update(object.id, patch);
+
+  /** Which preset the mark currently matches, if any — else it reads as Custom. */
+  const currentFinish =
+    SIGIL_FINISHES.find(
+      (f) =>
+        f.patch.tint === object.tint &&
+        !!f.patch.gradient === !!object.gradient &&
+        !!f.patch.bevel === !!object.bevel,
+    )?.id ?? '';
+
+  const bevel = object.bevel;
+
   return (
     <Section title="Sigil">
+      <div className="px-1 pb-3">
+        <FinishPicker
+          label="Finish"
+          value={currentFinish}
+          onChange={(id) => {
+            const finish = getSigilFinish(id);
+            if (finish) set(finish.patch);
+          }}
+        />
+      </div>
+
       <Row label="Tint">
-        <ColorInput value={object.tint} onChange={(v) => update(object.id, { tint: v })} />
+        <ColorInput value={object.tint} onChange={(v) => set({ tint: v })} />
       </Row>
+
+      <Row label="Weight">
+        <Slider
+          min={0.25}
+          max={2.5}
+          step={0.05}
+          value={object.strokeScale ?? 1}
+          onChange={(v) => set({ strokeScale: v })}
+        />
+      </Row>
+
+      <Row label="Gradient">
+        <label className="flex items-center gap-2 text-[11px] text-white/60">
+          <input
+            type="checkbox"
+            checked={!!object.gradient}
+            onChange={(e) =>
+              set({
+                gradient: e.target.checked
+                  ? {
+                      type: 'linear',
+                      angle: 115,
+                      stops: [
+                        { offset: 0, color: '#fbeeb8' },
+                        { offset: 0.5, color: object.tint },
+                        { offset: 1, color: '#7d5a17' },
+                      ],
+                    }
+                  : undefined,
+              })
+            }
+          />
+          {object.gradient ? 'On' : 'Off'}
+        </label>
+      </Row>
+
+      {object.gradient && (
+        <>
+          <Row label="Angle">
+            <Slider
+              min={0}
+              max={360}
+              step={5}
+              value={object.gradient.angle ?? 115}
+              onChange={(v) => set({ gradient: { ...object.gradient!, angle: v } })}
+            />
+          </Row>
+          {object.gradient.stops.map((stop, i) => (
+            <Row key={i} label={i === 0 ? 'Highlight' : i === object.gradient!.stops.length - 1 ? 'Shadow' : 'Body'}>
+              <ColorInput
+                value={stop.color}
+                onChange={(v) =>
+                  set({
+                    gradient: {
+                      ...object.gradient!,
+                      stops: object.gradient!.stops.map((s, j) =>
+                        j === i ? { ...s, color: v } : s,
+                      ),
+                    },
+                  })
+                }
+              />
+            </Row>
+          ))}
+        </>
+      )}
+
+      <Row label="Relief">
+        <label className="flex items-center gap-2 text-[11px] text-white/60">
+          <input
+            type="checkbox"
+            checked={!!bevel}
+            onChange={(e) =>
+              set({
+                bevel: e.target.checked
+                  ? { depth: 0.4, angle: 125, light: '#fbeeb8', dark: '#4c3510' }
+                  : undefined,
+              })
+            }
+          />
+          {bevel ? 'On' : 'Off'}
+        </label>
+      </Row>
+
+      {bevel && (
+        <>
+          <Row label="Depth">
+            <Slider
+              min={0}
+              max={2}
+              step={0.05}
+              value={bevel.depth}
+              onChange={(v) => set({ bevel: { ...bevel, depth: v } })}
+            />
+          </Row>
+          <Row label="Light from">
+            <div className="flex gap-1">
+              {BEVEL_ANGLES.map(([glyph, angle]) => (
+                <button
+                  key={angle}
+                  type="button"
+                  aria-label={`Light from ${glyph}`}
+                  aria-pressed={bevel.angle === angle}
+                  onClick={() => set({ bevel: { ...bevel, angle } })}
+                  className={[
+                    'h-6 w-6 rounded border text-[11px] leading-none transition-colors focus:outline-none focus:ring-1 focus:ring-white/50',
+                    bevel.angle === angle
+                      ? 'border-white/60 bg-white/15 text-white'
+                      : 'border-white/15 text-white/45 hover:border-white/35',
+                  ].join(' ')}
+                >
+                  {glyph}
+                </button>
+              ))}
+            </div>
+          </Row>
+          <Row label="Lit edge">
+            <ColorInput value={bevel.light} onChange={(v) => set({ bevel: { ...bevel, light: v } })} />
+          </Row>
+          <Row label="Shadow edge">
+            <ColorInput value={bevel.dark} onChange={(v) => set({ bevel: { ...bevel, dark: v } })} />
+          </Row>
+        </>
+      )}
     </Section>
   );
 }

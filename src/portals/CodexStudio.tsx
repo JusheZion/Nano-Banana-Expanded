@@ -7,9 +7,11 @@ import {
 import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
+import { FinishPicker } from '@/modes/codex/components/FinishPicker';
 import { PropertiesPanel } from '@/modes/codex/components/PropertiesPanel';
 import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
+import { getSigilFinish } from '@/modes/codex/data/sigilFinishes';
 import {
   CODEX_INK, type CodexObject, type CodexPlate,
 } from '@/modes/codex/types/codexObjects';
@@ -34,6 +36,9 @@ export function CodexStudio() {
   const setActivePlate = useCodexStore((s) => s.setActivePlate);
   const addObject = useCodexStore((s) => s.addObject);
   const addObjects = useCodexStore((s) => s.addObjects);
+  const sigilFinishId = useCodexStore((s) => s.sigilFinishId);
+  const setSigilFinish = useCodexStore((s) => s.setSigilFinish);
+  const updateObjects = useCodexStore((s) => s.updateObjects);
   const addPlate = useCodexStore((s) => s.addPlate);
   const removePlate = useCodexStore((s) => s.removePlate);
   const updatePlate = useCodexStore((s) => s.updatePlate);
@@ -64,6 +69,10 @@ export function CodexStudio() {
   const selected: CodexObject[] = useMemo(
     () => (plate ? plate.objects.filter((o) => selectedIds.includes(o.id)) : []),
     [plate, selectedIds],
+  );
+  const selectedSigilIds = useMemo(
+    () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
+    [selected],
   );
 
   const flash = useCallback((message: string) => {
@@ -265,12 +274,45 @@ export function CodexStudio() {
                 </div>
                 <div className="min-h-0 flex-1">
                   {insertMode === 'marks' ? (
-                    <SigilPalette
-                      tint={CODEX_INK}
-                      onPlace={(sigil) =>
-                        addObject(makeSigilObject(sigil.id, { ...placeCentre(96), size: 96, name: sigil.name }))
-                      }
-                    />
+                    <div className="flex h-full flex-col">
+                      <div className="shrink-0 border-b border-white/10 p-3">
+                        <FinishPicker
+                          label="Finish for new marks"
+                          value={sigilFinishId}
+                          onChange={setSigilFinish}
+                          action={{
+                            label: 'Apply to selection',
+                            disabled: selectedSigilIds.length === 0,
+                            onClick: () => {
+                              const finish = getSigilFinish(sigilFinishId);
+                              if (!finish) return;
+                              updateObjects(selectedSigilIds, finish.patch);
+                              flash(`Applied ${finish.name} to ${selectedSigilIds.length} mark(s).`);
+                            },
+                          }}
+                        />
+                      </div>
+                      <div className="min-h-0 flex-1">
+                        <SigilPalette
+                          tint={CODEX_INK}
+                          appearance={{
+                            tint: getSigilFinish(sigilFinishId)?.patch.tint ?? CODEX_INK,
+                            gradient: getSigilFinish(sigilFinishId)?.patch.gradient,
+                            bevel: getSigilFinish(sigilFinishId)?.patch.bevel,
+                          }}
+                          onPlace={(sigil) =>
+                            addObject(
+                              makeSigilObject(sigil.id, {
+                                ...placeCentre(96),
+                                size: 96,
+                                name: sigil.name,
+                                finishId: sigilFinishId,
+                              }),
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <FragmentPalette
                       tint={CODEX_INK}

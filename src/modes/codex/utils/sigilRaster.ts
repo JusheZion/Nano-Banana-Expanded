@@ -1,4 +1,7 @@
 import type { SigilDef } from '../data/SigilRegistry';
+import type { GradientSpec } from '@/modes/comic/types/gradient';
+import { applyBrightnessAndAlpha } from '@/modes/comic/utils/gradientUtils';
+import type { CodexBevel } from '../types/codexObjects';
 
 /**
  * Sigils reach the canvas as SVG data-URIs rather than parsed Konva shapes.
@@ -43,7 +46,7 @@ export const SIGIL_STROKE_DIVISOR = 16;
  * is not drawn hairline-thin next to a 24-unit one. Uses the shorter axis:
  * wide rule marks (360x20) should weight against their height.
  */
-export function sigilStrokeWidth(viewBox: string): number {
+export function strokeWidthForViewBox(viewBox: string): number {
   const parts = viewBox.trim().split(/[\s,]+/).map(Number);
   const w = parts[2];
   const h = parts[3];
@@ -51,44 +54,183 @@ export function sigilStrokeWidth(viewBox: string): number {
   return Math.min(w, h) / SIGIL_STROKE_DIVISOR;
 }
 
+/**
+ * Dense marks need a finer line.
+ *
+ * The library runs from a single-stroke sparkle to the Flower of Life's twenty
+ * overlapping circles inside the same 24-unit box. At one weight for all of
+ * them the dense marks fill in: adjacent strokes touch and the lattice reads as
+ * a solid disc. Weight tapers with how many shapes share the box.
+ */
+export function densityFactor(markup: string): number {
+  const shapes = (markup.match(/<(path|circle|rect|ellipse|polygon|polyline|line)\b/g) ?? []).length;
+  if (shapes <= 6) return 1;
+  if (shapes <= 12) return 0.75;
+  return 0.55;
+}
+
+/**
+ * Final stroke weight: scaled to the mark's coordinate system, tapered by how
+ * crowded the mark is, then multiplied by the caller's own scale.
+ */
+export function sigilStrokeWidth(sigil: SigilDef, scale = 1): number {
+  const base = strokeWidthForViewBox(sigil.viewBox) * densityFactor(sigil.markup);
+  return Math.max(0.05, base * (Number.isFinite(scale) && scale > 0 ? scale : 1));
+}
+
 /** Root attributes shared by both render paths, as an attribute string. */
-export function sigilRootAttrs(sigil: SigilDef): string {
+export function sigilRootAttrs(sigil: SigilDef, scale = 1): string {
   return (
-    `fill="none" stroke="currentColor" stroke-width="${sigilStrokeWidth(sigil.viewBox)}" ` +
+    `fill="none" stroke="currentColor" stroke-width="${sigilStrokeWidth(sigil, scale).toFixed(3)}" ` +
     'stroke-linecap="round" stroke-linejoin="round"'
   );
 }
 
 /**
- * Resolve the mark's colour tokens and wrap it in a standalone SVG document.
- * `currentColor` becomes the tint; `var(--sigil-bg)` becomes the knockout
- * colour (transparent by default, which reads correctly over a plate).
+ * How a mark is painted. A flat `tint` is the floor; `gradient` and `bevel`
+ * are what make a mark read as metal or relief rather than as a coloured
+ * outline.
  */
-export function buildSigilSvg(
-  sigil: SigilDef,
-  tint: string,
-  background = 'transparent',
-  size = 256,
-): string {
-  const body = sigil.markup
-    .replace(/var\(--sigil-bg\)/g, background)
-    .replace(/currentColor/g, tint);
+export interface SigilAppearance {
+  tint: string;
+  gradient?: GradientSpec;
+  bevel?: CodexBevel;
+  background?: string;
+  /** Multiplier on the computed stroke weight; 1 is the default weight. */
+  strokeScale?: number;
+}
 
-  const root = sigilRootAttrs(sigil).replace(/currentColor/g, tint);
+interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
+function parseViewBox(viewBox: string): ViewBox {
+  const p = viewBox.trim().split(/[\s,]+/).map(Number);
+  const [x, y, w, h] = p;
+  if (![x, y, w, h].every((n) => Number.isFinite(n)) || w <= 0 || h <= 0) {
+    return { x: 0, y: 0, w: 24, h: 24 };
+  }
+  return { x, y, w, h };
+}
+
+/**
+ * Gradient ids must be unique per distinct paint.
+ *
+ * `SigilGlyph` inlines these SVGs into the page, and duplicate ids across
+ * inline SVG documents collapse: `url(#id)` resolves to whichever definition
+ * appears first in the document, so a palette of mixed finishes painted every
+ * mark with the first gradient on the page. Deriving the id from the gradient
+ * and the coordinate system keeps it deterministic — identical paints may share
+ * an id safely, because the definitions they resolve to are identical.
+ */
+function paintId(spec: GradientSpec, vb: ViewBox): string {
+  const key = `${vb.x},${vb.y},${vb.w},${vb.h}|${JSON.stringify(spec)}`;
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  }
+  return `sigil-paint-${(hash >>> 0).toString(36)}`;
+}
+
+/**
+ * Gradient defs in **user space**, not object bounding box.
+ *
+ * A mark is many separate paths. With `objectBoundingBox` each path resolves
+ * the gradient against its own bbox, so every stroke gets its own full run of
+ * the ramp and the mark reads as patchwork. User space runs one gradient across
+ * the whole mark, which is what makes gold look like gold.
+ */
+function gradientDefs(spec: GradientSpec, vb: ViewBox, id: string): string {
+  const stops = [...spec.stops]
+    .sort((a, b) => a.offset - b.offset)
+    .map((s) => {
+      const color = applyBrightnessAndAlpha(s.color, s.brightness ?? 100, 1);
+      const alpha = s.alpha ?? 1;
+      return `<stop offset="${s.offset}" stop-color="${color}" stop-opacity="${alpha}"/>`;
+    })
+    .join('');
+
+  if (spec.type === 'radial') {
+    const cx = vb.x + (spec.center?.x ?? 0.5) * vb.w;
+    const cy = vb.y + (spec.center?.y ?? 0.5) * vb.h;
+    const r = Math.max(0.001, (spec.radiusX ?? 0.5) * Math.max(vb.w, vb.h));
+    return (
+      `<defs><radialGradient id="${id}" gradientUnits="userSpaceOnUse" ` +
+      `cx="${cx}" cy="${cy}" r="${r}">${stops}</radialGradient></defs>`
+    );
+  }
+
+  const rad = ((spec.angle ?? 90) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const cx = vb.x + vb.w / 2;
+  const cy = vb.y + vb.h / 2;
+  const half = Math.max(vb.w, vb.h) / 2;
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${sigil.viewBox}" ` +
-    `width="${size}" height="${size}" ${root}>${body}</svg>`
+    `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" ` +
+    `x1="${cx - cos * half}" y1="${cy - sin * half}" ` +
+    `x2="${cx + cos * half}" y2="${cy + sin * half}">${stops}</linearGradient></defs>`
   );
 }
 
-/** Data-URI form, safe for `<img src>` and Konva.Image. */
-export function sigilDataUri(
+/** The mark's own markup with its colour tokens resolved to one paint. */
+function bodyPaintedWith(sigil: SigilDef, paint: string, background: string): string {
+  return sigil.markup
+    .replace(/var\(--sigil-bg\)/g, background)
+    .replace(/currentColor/g, paint);
+}
+
+/**
+ * Resolve the mark's colour tokens and wrap it in a standalone SVG document.
+ * `currentColor` becomes the paint — a flat tint, or a gradient reference when
+ * one is set. `var(--sigil-bg)` becomes the knockout colour.
+ */
+export function buildSigilSvg(
   sigil: SigilDef,
-  tint: string,
-  background = 'transparent',
+  appearance: SigilAppearance | string,
   size = 256,
 ): string {
-  const svg = buildSigilSvg(sigil, tint, background, size);
+  const app: SigilAppearance =
+    typeof appearance === 'string' ? { tint: appearance } : appearance;
+  const background = app.background ?? 'transparent';
+  const vb = parseViewBox(sigil.viewBox);
+
+  const useGradient = !!app.gradient && app.gradient.stops.length > 0;
+  const id = useGradient ? paintId(app.gradient!, vb) : '';
+  const paint = useGradient ? `url(#${id})` : app.tint;
+  const defs = useGradient ? gradientDefs(app.gradient!, vb, id) : '';
+
+  const root = sigilRootAttrs(sigil, app.strokeScale ?? 1).replace(/currentColor/g, paint);
+
+  let layers = '';
+  const bevel = app.bevel;
+  if (bevel && bevel.depth > 0) {
+    // Offsets are in mark units so a bevel reads the same at any raster size.
+    const rad = (bevel.angle * Math.PI) / 180;
+    const dx = Math.cos(rad) * bevel.depth;
+    const dy = Math.sin(rad) * bevel.depth;
+    layers +=
+      `<g transform="translate(${dx.toFixed(3)} ${dy.toFixed(3)})" stroke="${bevel.dark}">` +
+      `${bodyPaintedWith(sigil, bevel.dark, background)}</g>` +
+      `<g transform="translate(${(-dx).toFixed(3)} ${(-dy).toFixed(3)})" stroke="${bevel.light}">` +
+      `${bodyPaintedWith(sigil, bevel.light, background)}</g>`;
+  }
+  layers += bodyPaintedWith(sigil, paint, background);
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${sigil.viewBox}" ` +
+    `width="${size}" height="${size}" ${root}>${defs}${layers}</svg>`
+  );
+}
+
+export function sigilDataUri(
+  sigil: SigilDef,
+  appearance: SigilAppearance | string,
+  size = 256,
+): string {
+  const svg = buildSigilSvg(sigil, appearance, size);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

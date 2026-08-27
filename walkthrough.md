@@ -15639,3 +15639,119 @@ Modified:
 ### Next steps
 
 - P6 canon binding via the File System Access API.
+
+## Codex sigil finishes, relief and plate textures - 2026-08-25
+
+### What changed
+
+Operator feedback: marks read as "dark yellow, not gold"; wanted a setting to
+control how marks appear (glow, 3D, blur, transparency, colour, gradient); and
+the Parchment ground was "a beige block instead of the marbled, crumpled
+effect".
+
+Three things were missing, not one.
+
+**1. Sigils could only be painted a flat colour.** A single hex cannot read as
+metal — gold is a ramp from highlight through body to shadow. Sigils now carry
+an optional `gradient` and `bevel`, painted inside the generated SVG.
+
+**2. There was no appearance setting.** Ten named finishes (Flat, Polished Gold,
+Antique Gold, Silver, Copper, Etched, Neon Jade, Neon Violet, Ember, Ghost),
+picked in the Insert tab for new marks and in Properties for the selection, with
+`Apply to selection`. Glow, blur and opacity already existed per object; the
+finishes bundle them with the new gradient and relief so one click gets a look.
+
+**3. Plate grounds had colour but no surface.** Grounds can now carry a
+procedural texture. Parchment, Vellum and Slate are built from SVG filter
+primitives — `feTurbulence` for noise, `feDiffuseLighting` to make the noise
+read as relief rather than grain, plus a low-frequency stain layer for age
+blotching. No image assets, one raster, no network.
+
+### Files touched
+
+Added:
+- `src/modes/codex/data/sigilFinishes.ts`
+- `src/modes/codex/data/plateTextures.ts`
+- `src/modes/codex/components/FinishPicker.tsx`
+- `src/modes/codex/data/__tests__/{sigilFinishes,plateTextures}.test.ts`
+
+Modified:
+- `src/modes/codex/types/codexObjects.ts` — `CodexBevel`; sigil `gradient`,
+  `bevel`, `strokeScale`; plate `backgroundTexture`.
+- `src/modes/codex/utils/sigilRaster.ts` — `SigilAppearance`; gradient defs;
+  bevel layers; `densityFactor`; `strokeWidthForViewBox`; unique paint ids.
+- `src/modes/codex/components/SigilGlyph.tsx` — now renders through
+  `buildSigilSvg`, so palette and canvas paint identically.
+- `src/modes/codex/components/{SigilPalette,PropertiesPanel,FragmentPreview}.tsx`
+- `src/modes/codex/components/nodes/SigilNode.tsx`
+- `src/modes/codex/engine/CodexCanvas.tsx` — `PlateTextureLayer`.
+- `src/modes/codex/data/fragments/grounds.ts` — textured grounds; stronger ramps.
+- `src/modes/codex/data/fragmentTypes.ts` — `PlatePatch.backgroundTexture`.
+- `src/stores/codexStore.ts` — `sigilFinishId` (persisted separately from the
+  document, since it is an authoring preference), applied by `makeSigilObject`.
+
+### Implementation notes
+
+Three defects were found by looking at rendered output, not by tests:
+
+- **Every finish rendered gold.** The generated SVGs all used one gradient
+  element id. `SigilGlyph` inlines them into the page, and duplicate ids across
+  inline SVG documents collapse — `url(#id)` takes the first definition in the
+  document — so a palette of mixed finishes painted every mark with whichever
+  gradient rendered first. Silver, both neons and Ember all came out gold. Ids
+  are now derived from the gradient and the coordinate system: deterministic, so
+  rerenders are stable, and identical paints may share an id safely because the
+  definitions are identical. Konva was never affected (separate images), which
+  is exactly why only a DOM-side look caught it.
+- **Dense marks filled in solid.** The Flower of Life packs twenty overlapping
+  circles into the same 24-unit box as a single-stroke sparkle. At one weight
+  for both, its strokes touched and it read as a gold disc. `densityFactor`
+  tapers weight by how many shapes share the box, and `strokeScale` exposes a
+  manual override.
+- **Gradients must be `userSpaceOnUse`.** With `objectBoundingBox` each path
+  resolves the ramp against its own bbox, so every stroke gets a full run of the
+  gradient and the mark reads as patchwork.
+
+Textures needed two passes: the first parameters were too low-frequency and the
+vignette washed them out, so parchment still rendered as a smooth beige card.
+Comparing five parameter sets side by side settled it — higher frequency for the
+tooth, a stretched-axis fibre layer, and a separate colour-stain layer, since
+age discolours in patches rather than embossing.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS.
+- `npx vitest run` — PASS, 168 files / **1395 tests** (was 1386; +26 over the
+  session's start of this change).
+- `npm run build` — PASS in 6.83s. `CodexStudio` 145.44 → 158.77 kB (39.24 kB gzip).
+- **Visual check** through the real builder: a contact sheet of all ten finishes
+  across four marks, and all three textures. Confirmed each finish paints its
+  own colour, dense marks read as lattice, and parchment shows tooth and
+  blotching.
+- **Live browser QA** at `localhost:5173`: finish swatches render in the Insert
+  tab; palette previews paint in the selected finish; applying the Parchment
+  ground gives a textured plate with objects on top.
+
+### Outstanding issues
+
+- Gold-on-parchment is low contrast. `PARCHMENT_INK` exists in
+  `fragments/grounds.ts` but nothing applies it, so placing gold marks on a
+  light ground still needs manual retinting.
+- PNG/PDF export still unexercised.
+
+### Risks or caveats
+
+- Textures are one rasterised image per plate, capped at 1600px on the long
+  edge. On a plate printed larger than that the tooth will soften.
+- `feDiffuseLighting` and `mix-blend-mode` inside an SVG image are well
+  supported in Chromium; not verified in Safari or Firefox.
+
+### Operator follow-up
+
+- Visual sign-off on the finishes and textures.
+- Decide whether light grounds should auto-switch marks to a dark ink.
+
+### Next steps
+
+- P6 canon binding via the File System Access API.

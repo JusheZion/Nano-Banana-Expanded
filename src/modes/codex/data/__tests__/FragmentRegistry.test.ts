@@ -17,7 +17,10 @@ const PLATE_FRAGMENTS = ALL_FRAGMENTS.filter((f) => f.plate);
 
 describe('fragment registry', () => {
   it('carries the composed half of the library', () => {
-    expect(ALL_FRAGMENTS).toHaveLength(50);
+    // 50 ported from the original plates, plus the Vellum and Slate textured
+    // grounds added when parchment gained a real surface. Exact so a fragment
+    // cannot be dropped unnoticed.
+    expect(ALL_FRAGMENTS).toHaveLength(52);
   });
 
   it('has no duplicate ids', () => {

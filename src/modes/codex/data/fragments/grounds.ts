@@ -29,63 +29,84 @@ function ground(
   name: string,
   tags: string[],
   fillGradient: ReturnType<typeof grad>,
+  texture?: string,
 ): FragmentDef {
   return {
     id,
     name,
     category: 'ground',
-    section: 'Plate grounds',
+    section: texture ? 'Textured grounds' : 'Plate grounds',
     width: W,
     height: H,
     tags: ['ground', 'background', ...tags],
     build: () => [],
-    plate: { backgroundGradient: fillGradient },
+    plate: {
+      backgroundGradient: fillGradient,
+      // Explicitly cleared, so switching from a textured ground to a plain one
+      // does not leave the old surface behind.
+      backgroundTexture: texture ?? '',
+    },
   };
 }
 
 export const GROUND_FRAGMENTS: FragmentDef[] = [
-  ground('ground-void', 'Void', ['dark', 'flat'], grad(90, [0, VOID_FILL], [1, '#0e0b16'])),
+  ground('ground-void', 'Void', ['dark', 'flat'], grad(90, [0, '#171331'], [0.5, VOID_FILL], [1, '#050409'])),
   ground(
     'ground-vignette',
     'Vignette',
     ['radial', 'focus'],
-    radial(0.78, [0, PANEL_FILL], [1, VOID_FILL]),
+    radial(0.72, [0, '#2a2340'], [0.6, PANEL_FILL], [1, '#040309']),
   ),
   ground(
     'ground-gold-wash',
     'Gold Wash',
     ['gold', 'warm'],
-    grad(90, [0, '#2a2033'], [0.55, '#191325'], [1, VOID_FILL]),
+    grad(90, [0, '#5a4320'], [0.28, '#2e2338'], [0.7, '#191325'], [1, VOID_FILL]),
   ),
   ground(
     'ground-horizon',
     'Horizon',
     ['glow', 'bottom'],
-    grad(90, [0, VOID_FILL], [0.72, '#160f22'], [1, '#3a2a1c']),
+    grad(90, [0, '#04030a'], [0.62, '#1b1228'], [0.88, '#5c3f22'], [1, '#8a5f2c']),
   ),
   ground(
     'ground-twin-split',
     'Twin Split',
     ['opposition', 'diagonal', 'twoven'],
-    grad(35, [0, '#101a2b'], [0.5, VOID_FILL], [1, '#2b1a12']),
+    grad(35, [0, '#16375f'], [0.42, '#0b0a14'], [0.58, '#0b0a14'], [1, '#6b3a18']),
   ),
   ground(
     'ground-spectrum-band',
     'Spectrum Band',
     ['spectrum', 'band'],
-    grad(90, [0, VOID_FILL], [0.42, '#1b1430'], [0.5, '#3d2f56'], [0.58, '#1b1430'], [1, VOID_FILL]),
+    grad(90, [0, '#04030a'], [0.38, '#231a42'], [0.5, '#6a51a0'], [0.62, '#231a42'], [1, '#04030a']),
   ),
   ground(
     'ground-obsidian-sheen',
     'Obsidian Sheen',
     ['sheen', 'angled'],
-    grad(28, [0, '#0d0b14'], [0.46, '#191424'], [0.52, '#221b33'], [0.6, '#191424'], [1, '#0d0b14']),
+    grad(28, [0, '#08070e'], [0.44, '#1d1730'], [0.52, '#372d55'], [0.62, '#1d1730'], [1, '#08070e']),
   ),
   ground(
     'ground-parchment',
     'Parchment',
-    ['light', 'print', 'warm'],
-    radial(0.85, [0, '#efe3c8'], [1, '#d8c49b']),
+    ['light', 'print', 'warm', 'texture', 'aged'],
+    radial(0.85, [0, '#efe3c8'], [1, '#c9b184']),
+    'parchment',
+  ),
+  ground(
+    'ground-vellum',
+    'Vellum',
+    ['light', 'print', 'texture', 'soft'],
+    radial(0.9, [0, '#f6efdc'], [1, '#dfd0ab']),
+    'vellum',
+  ),
+  ground(
+    'ground-slate',
+    'Slate',
+    ['dark', 'stone', 'texture'],
+    radial(0.85, [0, '#2b2440'], [1, '#100d1c']),
+    'slate',
   ),
 ];
 

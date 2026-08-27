@@ -1,54 +1,48 @@
 import type { SigilDef } from '../data/SigilRegistry';
-import { sigilStrokeWidth } from '../utils/sigilRaster';
+import { buildSigilSvg, type SigilAppearance } from '../utils/sigilRaster';
 
 interface SigilGlyphProps {
   sigil: SigilDef;
   /** Rendered box in px (square). */
   size?: number;
-  /** Resolves `currentColor` in the mark's markup. */
+  /** Flat tint, used when no `appearance` is given. */
   color?: string;
   /**
    * Resolves `var(--sigil-bg)` for the two marks that punch background
    * knockouts. Defaults to transparent, which reads correctly on a plate.
    */
   background?: string;
+  /** Full paint description — gradient and relief as well as tint. */
+  appearance?: SigilAppearance;
   className?: string;
 }
 
 /**
- * DOM preview of a sigil — used by the palette and any HTML-side surface.
- * The canvas renders sigils through Konva instead; this is deliberately the
- * lightweight path, since `markup` is our own authored SVG, not user input.
+ * DOM preview of a sigil, for the palette and any HTML-side surface.
+ *
+ * Goes through `buildSigilSvg`, the same builder the canvas rasterises, so a
+ * mark in the palette is painted exactly as it will land on the plate. Keeping
+ * one builder is why the palette picked up gradients and relief for free.
  */
 export function SigilGlyph({
   sigil,
   size = 24,
-  color = 'currentColor',
+  color = '#d8b45a',
   background = 'transparent',
+  appearance,
   className,
 }: SigilGlyphProps) {
+  const app: SigilAppearance = appearance ?? { tint: color, background };
+  const svg = buildSigilSvg(sigil, app, size);
+
   return (
-    <svg
-      viewBox={sigil.viewBox}
-      width={size}
-      height={size}
+    <span
       className={className}
       role="img"
       aria-label={sigil.name}
-      // The marks are line art authored against a styled root; without these
-      // the attribute-less paths fall back to SVG's initial fill: black.
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={sigilStrokeWidth(sigil.viewBox)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={
-        {
-          color,
-          '--sigil-bg': background,
-        } as React.CSSProperties
-      }
-      dangerouslySetInnerHTML={{ __html: sigil.markup }}
+      style={{ display: 'inline-flex', width: size, height: size }}
+      // Authored SVG from our own registry, not user input.
+      dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
 }

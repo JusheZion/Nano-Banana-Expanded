@@ -49,12 +49,37 @@ export interface CodexBaseObject {
   blur?: number;
 }
 
+/**
+ * Fake bevel for line art: the mark is drawn three times — a dark copy offset
+ * one way, a light copy the other, then the mark itself on top. Cheap, and it
+ * reads as relief on strokes where a real lighting filter would not.
+ */
+export interface CodexBevel {
+  /** Offset in mark units; 0 disables. */
+  depth: number;
+  /** Light direction in degrees; 0 = right, 90 = down. */
+  angle: number;
+  light: string;
+  dark: string;
+}
+
 export interface CodexSigilObject extends CodexBaseObject {
   kind: 'sigil';
   /** Id into the sigil registry. */
   sigilId: string;
   /** Resolves `currentColor` in the mark's markup. */
   tint: string;
+  /**
+   * Painted instead of the flat tint when set. Gold, brass and the other metals
+   * only read as metal across a gradient — a single hex reads as dark yellow.
+   */
+  gradient?: GradientSpec;
+  bevel?: CodexBevel;
+  /**
+   * Multiplier on the mark's computed stroke weight. Weight is already scaled
+   * to the viewBox and tapered by density; this is the manual override.
+   */
+  strokeScale?: number;
   /** Resolves `var(--sigil-bg)` for knockout marks. */
   background?: string;
 }
@@ -141,6 +166,11 @@ export interface CodexPlate {
   /** Flat background colour behind `backgroundGradient`. */
   background: string;
   backgroundGradient?: GradientSpec;
+  /**
+   * Id into the plate texture registry. Drawn above the colour/gradient and
+   * below every object — the surface the plate is printed on.
+   */
+  backgroundTexture?: string;
   /** Ordered back-to-front. */
   objects: CodexObject[];
 }
