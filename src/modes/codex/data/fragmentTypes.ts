@@ -46,6 +46,16 @@ export const FRAGMENT_CATEGORY_LABELS: Record<FragmentCategory, string> = {
   divider: 'Dividers',
 };
 
+/**
+ * A fragment that dresses the plate itself rather than adding objects to it.
+ * Grounds use this: they are backgrounds, so they belong behind the artwork
+ * where they cannot bury it, not on top of it as another object.
+ */
+export interface PlatePatch {
+  background?: string;
+  backgroundGradient?: GradientSpec;
+}
+
 export interface FragmentDef {
   id: string;
   name: string;
@@ -56,8 +66,16 @@ export interface FragmentDef {
   width: number;
   height: number;
   tags: string[];
-  /** Builds the group at the given top-left origin. Ids are fresh on every call. */
+  /**
+   * Builds the group at the given top-left origin. Ids are fresh on every call.
+   * Empty for plate-target fragments, which carry `plate` instead.
+   */
   build: (x: number, y: number) => CodexObject[];
+  /**
+   * When present, placing this fragment patches the plate rather than adding
+   * objects. Mutually exclusive with a non-empty `build`.
+   */
+  plate?: PlatePatch;
 }
 
 /* ---------------------------------------------------------------- palette -- */

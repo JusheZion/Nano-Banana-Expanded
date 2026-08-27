@@ -15576,3 +15576,66 @@ Modified:
 ### Next steps
 
 - P6 canon binding via the File System Access API.
+
+## Codex grounds become plate backgrounds - 2026-08-25
+
+### What changed
+
+Grounds now patch the plate instead of adding an object. Placing one writes
+`plate.backgroundGradient`, so it sits behind the artwork and cannot bury it.
+Previously a ground was a plate-sized frame that landed on top of whatever was
+already laid out — flagged during QA, and the operator confirmed backgrounds
+were the intent all along.
+
+### Files touched
+
+Modified:
+- `src/modes/codex/data/fragmentTypes.ts` — `PlatePatch`; optional
+  `FragmentDef.plate`.
+- `src/modes/codex/data/fragments/grounds.ts` — grounds declare `plate` and
+  build nothing.
+- `src/modes/codex/components/FragmentPreview.tsx` — previews a plate-target
+  fragment from its patch, since it has no objects to draw.
+- `src/portals/CodexStudio.tsx` — placing a plate-target fragment calls
+  `updatePlate`.
+- `src/modes/codex/data/__tests__/FragmentRegistry.test.ts` — split the
+  assertions by target; +3 tests for the plate path.
+
+### Implementation notes
+
+- `FragmentDef` gained an optional `plate` patch rather than a `target`
+  discriminator, so the two kinds stay one list and one palette. `build` returns
+  `[]` for plate-target fragments; the registry tests assert the two are
+  mutually exclusive rather than leaving it to convention.
+- Object-level assertions (`fills its footprint`, `honours the origin`, `mints
+  fresh ids`) now run over the object fragments only. They were not relaxed —
+  `Math.max` of an empty array is `-Infinity`, so applying them to a
+  zero-object fragment would have been meaningless rather than strict.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx` — PASS.
+- `npx vitest run` — PASS, 166 files / **1369 tests** (+3).
+- **Live browser QA** at `localhost:5173`: placed a Bracketed Panel and a Mini
+  Radar, then applied the Twin Split ground. The gradient renders behind both;
+  the object count stayed at 2, confirming the ground added nothing. Toast reads
+  "Applied Twin Split ground." Zero console errors.
+
+### Outstanding issues
+
+- PNG/PDF export still unexercised (triggers downloads; operator's to run).
+
+### Risks or caveats
+
+- A ground now overwrites any existing `plate.backgroundGradient` rather than
+  stacking, which is the point, but means applying a second ground replaces the
+  first rather than layering. There is one background per plate by design.
+
+### Operator follow-up
+
+- Visual sign-off on the 50 fragments.
+
+### Next steps
+
+- P6 canon binding via the File System Access API.

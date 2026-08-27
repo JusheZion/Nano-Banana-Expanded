@@ -275,6 +275,13 @@ export function CodexStudio() {
                     <FragmentPalette
                       tint={CODEX_INK}
                       onPlace={(fragment) => {
+                        if (fragment.plate) {
+                          // Grounds dress the plate itself rather than landing
+                          // on top of whatever is already laid out.
+                          updatePlate(activePlateId, fragment.plate);
+                          flash(`Applied ${fragment.name} ground.`);
+                          return;
+                        }
                         const origin = placeFragment(fragment.width, fragment.height);
                         addObjects(fragment.build(origin.x, origin.y));
                         flash(`Placed ${fragment.name}.`);

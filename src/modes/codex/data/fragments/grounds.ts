@@ -3,12 +3,15 @@
  *
  * In the original library these were CSS `background-image` layers. Konva has
  * no repeating-gradient or noise primitive, so each is re-expressed as a single
- * plate-sized frame carrying one gradient. Drop one behind the artwork, or lift
- * its gradient onto the plate's own background.
+ * gradient.
+ *
+ * Grounds are the one plate-target fragment family: placing one writes
+ * `plate.backgroundGradient` rather than adding an object. They are
+ * backgrounds, so they belong behind the artwork where they cannot bury it —
+ * as objects they landed on top and covered whatever was already laid out.
  */
 import { DEFAULT_PLATE_HEIGHT, DEFAULT_PLATE_WIDTH } from '../../types/codexObjects';
 import {
-  fFrame,
   grad,
   INK,
   INK_DIM,
@@ -26,7 +29,6 @@ function ground(
   name: string,
   tags: string[],
   fillGradient: ReturnType<typeof grad>,
-  opacity = 1,
 ): FragmentDef {
   return {
     id,
@@ -36,20 +38,8 @@ function ground(
     width: W,
     height: H,
     tags: ['ground', 'background', ...tags],
-    build: (x, y) => [
-      fFrame({
-        x,
-        y,
-        width: W,
-        height: H,
-        variant: 'plain',
-        strokeWidth: 0,
-        stroke: 'transparent',
-        fillGradient,
-        opacity,
-        name,
-      }),
-    ],
+    build: () => [],
+    plate: { backgroundGradient: fillGradient },
   };
 }
 

@@ -21,6 +21,24 @@ interface FragmentPreviewProps {
 export function FragmentPreview({ fragment, width, height, tint }: FragmentPreviewProps) {
   const objects = useMemo(() => fragment.build(0, 0), [fragment]);
 
+  // Plate-target fragments (grounds) add no objects, so preview the treatment
+  // they apply to the plate instead of an empty box.
+  if (fragment.plate) {
+    const g = fragment.plate.backgroundGradient;
+    const background = g
+      ? g.type === 'radial'
+        ? `radial-gradient(circle, ${g.stops.map((s) => s.color).join(', ')})`
+        : `linear-gradient(${(g.angle ?? 90) + 90}deg, ${g.stops.map((s) => s.color).join(', ')})`
+      : fragment.plate.background;
+    return (
+      <div
+        aria-hidden="true"
+        className="rounded-sm"
+        style={{ width, height, background }}
+      />
+    );
+  }
+
   const scale = Math.min(width / fragment.width, height / fragment.height);
   const offsetX = (width - fragment.width * scale) / 2;
   const offsetY = (height - fragment.height * scale) / 2;
