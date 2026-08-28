@@ -184,6 +184,25 @@ export const SIGIL_FINISHES: SigilFinish[] = [
     },
   },
   {
+    id: 'ink',
+    name: 'Ink',
+    description: 'Iron-gall ink for light grounds — parchment, vellum, print.',
+    swatch: 'linear-gradient(115deg,#6b5327,#3a2a12 55%,#1d1407)',
+    patch: {
+      ...CLEARED,
+      tint: '#3a2a12',
+      gradient: {
+        type: 'linear',
+        angle: 115,
+        stops: [
+          { offset: 0, color: '#6b5327' },
+          { offset: 0.55, color: '#3a2a12' },
+          { offset: 1, color: '#1d1407' },
+        ],
+      },
+    },
+  },
+  {
     id: 'ghost',
     name: 'Ghost',
     description: 'Faint and softened — for watermarks and background furniture.',

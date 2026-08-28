@@ -12,6 +12,7 @@ import { PropertiesPanel } from '@/modes/codex/components/PropertiesPanel';
 import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
 import { getSigilFinish } from '@/modes/codex/data/sigilFinishes';
+import { inkForPlate, isLightPlate, reinkPatches } from '@/modes/codex/utils/plateInk';
 import {
   CODEX_INK, type CodexObject, type CodexPlate,
 } from '@/modes/codex/types/codexObjects';
@@ -39,6 +40,7 @@ export function CodexStudio() {
   const sigilFinishId = useCodexStore((s) => s.sigilFinishId);
   const setSigilFinish = useCodexStore((s) => s.setSigilFinish);
   const updateObjects = useCodexStore((s) => s.updateObjects);
+  const applyPatches = useCodexStore((s) => s.applyPatches);
   const addPlate = useCodexStore((s) => s.addPlate);
   const removePlate = useCodexStore((s) => s.removePlate);
   const updatePlate = useCodexStore((s) => s.updatePlate);
@@ -321,6 +323,29 @@ export function CodexStudio() {
                           // Grounds dress the plate itself rather than landing
                           // on top of whatever is already laid out.
                           updatePlate(activePlateId, fragment.plate);
+
+                          // Gold is illegible on parchment, so a light ground
+                          // re-inks what is already on the plate. Committed as
+                          // its own undo step, so the re-ink can be dropped
+                          // without losing the ground.
+                          const next = { ...plate, ...fragment.plate } as typeof plate;
+                          if (next && plate && isLightPlate(next) !== isLightPlate(plate)) {
+                            const palette = inkForPlate(next);
+                            const finish = getSigilFinish(palette.finishId);
+                            const patches = reinkPatches(
+                              plate.objects,
+                              palette,
+                              finish?.patch ?? { tint: palette.ink },
+                            );
+                            applyPatches(patches);
+                            setSigilFinish(palette.finishId);
+                            flash(
+                              patches.length
+                                ? `Applied ${fragment.name} ground and re-inked ${patches.length} object(s).`
+                                : `Applied ${fragment.name} ground.`,
+                            );
+                            return;
+                          }
                           flash(`Applied ${fragment.name} ground.`);
                           return;
                         }

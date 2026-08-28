@@ -90,6 +90,8 @@ interface CodexState {
   addObjects: (objects: CodexObject[], plateId?: string) => void;
   updateObject: (id: string, patch: Partial<CodexObject>) => void;
   updateObjects: (ids: string[], patch: Partial<CodexObject>) => void;
+  /** Per-object patches committed as one undo step. */
+  applyPatches: (entries: Array<{ id: string; patch: Partial<CodexObject> }>) => void;
   removeObjects: (ids: string[]) => void;
   duplicateObjects: (ids: string[]) => void;
   reorderObject: (id: string, direction: 'front' | 'back' | 'forward' | 'backward') => void;
@@ -223,6 +225,19 @@ export const useCodexStore = create<CodexState>((set, get) => {
           }
         }
       }),
+
+    applyPatches: (entries) => {
+      if (entries.length === 0) return;
+      const byId = new Map(entries.map((e) => [e.id, e.patch]));
+      commit((doc) => {
+        for (const plate of doc.plates) {
+          for (const obj of plate.objects) {
+            const patch = byId.get(obj.id);
+            if (patch) Object.assign(obj, patch);
+          }
+        }
+      });
+    },
 
     removeObjects: (ids) => {
       commit((doc) => {

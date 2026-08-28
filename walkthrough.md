@@ -15755,3 +15755,73 @@ age discolours in patches rather than embossing.
 ### Next steps
 
 - P6 canon binding via the File System Access API.
+
+## Codex light grounds re-ink the plate - 2026-08-25
+
+### What changed
+
+Applying a light ground now re-inks the plate. The library is drawn in gold
+against a near-black plate; on parchment that gold is barely legible, so the
+ground change has to carry an ink change with it. Operator decision.
+
+Adds an `Ink` finish (iron-gall, for light grounds) and switches the default
+finish for new marks when the plate changes lightness, so marks placed after the
+ground are inked correctly too. Works in both directions — going back to a dark
+ground restores gold.
+
+### Files touched
+
+Added:
+- `src/modes/codex/utils/plateInk.ts`
+- `src/modes/codex/utils/__tests__/plateInk.test.ts`
+
+Modified:
+- `src/modes/codex/data/sigilFinishes.ts` — the `Ink` finish.
+- `src/stores/codexStore.ts` — `applyPatches`, per-object patches as one undo step.
+- `src/portals/CodexStudio.tsx` — re-ink on a lightness change.
+
+### Implementation notes
+
+- **Lightness is measured, not declared.** `plateLuminance` reads WCAG relative
+  luminance from the texture's base colour, else the average of the gradient
+  stops, else the flat colour. A ground a user builds by hand from a gradient
+  gets the right ink without being added to any list. A test asserts the shipped
+  grounds classify correctly: only Parchment and Vellum come out light — Slate
+  is a dark stone and must keep gold.
+- **Re-inking is a separate undo step from the ground.** Applying a light ground
+  commits the plate patch, then commits the re-ink. One undo drops the re-ink
+  and keeps the ground, which is the useful thing to be able to do if the
+  automatic ink is not wanted.
+- **It only fires on a lightness *change*.** Swapping parchment for vellum does
+  not re-ink, so hand-tuned colours survive a change of light ground.
+- **Object fills are deliberately left alone.** Strokes, mark tints, text fills,
+  rule fills and chart colours are repainted; a panel's fill is not. A deep
+  panel fill on parchment may well be an intentional dark card, and flattening
+  it would destroy a choice rather than fix a legibility problem.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS.
+- `npx vitest run` — PASS, 169 files / **1408 tests** (+13).
+- **Live browser QA** at `localhost:5173`: placed a Bracketed Panel, Stacked
+  Meters and a Sigil Bullet in gold, then applied Parchment — every text fill
+  became `#3a2a12` and the plate stayed legible. Applying Void afterwards
+  returned every fill to `#d8b45a`. Zero console errors.
+
+### Outstanding issues
+
+- PNG/PDF export still unexercised.
+
+### Risks or caveats
+
+- Re-inking rewrites colours the user may have set by hand. It is bounded to a
+  lightness change and is undoable on its own, but it is still a bulk edit.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- P6 canon binding via the File System Access API.
