@@ -15825,3 +15825,86 @@ Modified:
 ### Next steps
 
 - P6 canon binding via the File System Access API.
+
+## Codex P6 vault binding - foundation - 2026-08-25
+
+### What changed
+
+First half of P6: persistent read access to the Obsidian vault, and the model
+for binding plate objects to note fields. **No UI yet** — these modules are not
+imported by the portal, so nothing in the running app changes.
+
+Operator decisions taken first: File System Access API (Chromium-only, accepted);
+bindings switchable per object between live and one-shot; **read-only** — Obsidian
+stays the only thing that writes to the vault.
+
+### Files touched
+
+Added:
+- `src/modes/codex/vault/vaultAccess.ts`
+- `src/modes/codex/vault/vaultBinding.ts`
+- `src/modes/codex/vault/__tests__/{vaultAccess,vaultBinding}.test.ts`
+
+Modified:
+- `src/modes/codex/types/codexObjects.ts` — `CodexBinding`; `binding` on text
+  and chart objects; `field` on chart axes.
+
+### Implementation notes
+
+- **The existing parser is reused, not forked.**
+  `portals/writer/obsidianLoreImport.ts` already turns Obsidian markdown into
+  title, category, summary, body, frontmatter, tags, wikilinks and images. It
+  takes `File[]`, and a directory handle yields `File` objects, so the only gap
+  was the vault path: files from a handle carry no `webkitRelativePath`, which
+  the importer reads to resolve embeds. `fileWithVaultPath` re-attaches it.
+- **The walk takes a minimal handle interface**, so it is tested against an
+  in-memory fake vault rather than needing a browser and a user grant. One test
+  asserts files inside `.obsidian` are never *opened*, not merely discarded.
+- **Handles go in IndexedDB**, not localStorage: they are structured-cloneable
+  but not JSON-serialisable. Permission is separate from persistence — a stored
+  handle commonly needs re-granting after a browser restart, and the re-grant
+  needs a user gesture, hence `ensureVaultPermission({ request })`.
+- **`maxFiles` guard**: a handle pointed at a home directory instead of a vault
+  must not read forever.
+- **An absent stat resolves to `null`, never `0`.** Plotting a missing value as
+  zero would quietly assert something false about the character; the axis keeps
+  its existing value and the miss is reported.
+- **Unresolvable bindings are reported, not applied.** A renamed note must not
+  silently blank a plate's title.
+- **Bindable fields are derived from the note**, not hardcoded, so a vault with
+  its own frontmatter conventions works without the app being taught them.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex` — PASS.
+- `npx vitest run` — PASS, 171 files / **1438 tests** (+30).
+- No browser QA: nothing is wired to the UI yet, and the vault itself has not
+  been connected.
+
+### Outstanding issues
+
+- No UI: connect/disconnect, note picker, field picker, and a "refresh from
+  vault" action are all still to build.
+- Not verified against a real vault. The operator has not yet supplied the vault
+  location or a sample note.
+
+### Risks or caveats
+
+- If the vault lives in iCloud Drive its files may be dataless placeholders that
+  macOS downloads on demand, and the in-app browser has previously hit TCC
+  restrictions reading iCloud. Worth pointing the picker at one note before
+  building further on the assumption.
+- Chromium only. Safari and Firefox run the app but cannot bind a vault.
+
+### Operator follow-up
+
+- Vault location.
+- A sample character note with frontmatter intact, ideally Kaleid's — which
+  would also settle the stat values still standing as placeholders.
+- Grant folder access once per origin (localhost and the deployed worker are
+  separate origins).
+
+### Next steps
+
+- Wire the vault UI and a refresh action, then verify against the real vault.

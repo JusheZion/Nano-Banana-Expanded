@@ -10,6 +10,24 @@ import type { GradientSpec } from '@/modes/comic/types/gradient';
 
 export type CodexObjectKind = 'sigil' | 'text' | 'frame' | 'chart' | 'image';
 
+/**
+ * Ties an object to a field in an Obsidian note.
+ *
+ * `live` re-resolves whenever the vault is read, so canon stays the single
+ * source of truth. `once` fills the value at bind time and then lets go, for
+ * the fields worth hand-tuning on the plate. Per object, because a dossier
+ * usually wants both: the name tracks canon, the caption does not.
+ */
+export interface CodexBinding {
+  /** Vault-rooted path of the note, as returned by the vault walk. */
+  notePath: string;
+  /** Dot path into the parsed entry: `title`, `summary`, `properties.age`. */
+  field: string;
+  mode: 'live' | 'once';
+  /** ISO timestamp of the last successful resolve, for staleness reporting. */
+  resolvedAt?: string;
+}
+
 /** Drop shadow. Offsets are in plate px. */
 export interface CodexShadow {
   color: string;
@@ -100,6 +118,7 @@ export interface CodexTextObject extends CodexBaseObject {
   letterSpacing: number;
   textTransform?: 'none' | 'uppercase';
   gradient?: GradientSpec;
+  binding?: CodexBinding;
 }
 
 export type CodexFrameVariant =
@@ -125,6 +144,11 @@ export type CodexChartKind = 'radial' | 'bars' | 'pips' | 'dial';
 export interface CodexChartAxis {
   label: string;
   value: number;
+  /**
+   * Frontmatter key this axis reads when the chart is bound. Per axis, because
+   * a stat block is many fields of one note rather than one field.
+   */
+  field?: string;
 }
 
 export interface CodexChartObject extends CodexBaseObject {
@@ -144,6 +168,8 @@ export interface CodexChartObject extends CodexBaseObject {
   segments?: number;
   showLabels: boolean;
   showValues: boolean;
+  /** Note the axes read from; each axis names its own field. */
+  binding?: CodexBinding;
 }
 
 export interface CodexImageObject extends CodexBaseObject {
