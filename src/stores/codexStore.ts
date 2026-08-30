@@ -16,6 +16,8 @@ import {
 } from '@/modes/codex/data/sigilFinishes';
 
 const HISTORY_LIMIT = 60;
+/** Offset applied to pasted copies so they do not land exactly on the original. */
+const PASTE_OFFSET = 24;
 
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -92,6 +94,16 @@ export interface CodexState {
   updateObjects: (ids: string[], patch: Partial<CodexObject>) => void;
   /** Per-object patches committed as one undo step. */
   applyPatches: (entries: Array<{ id: string; patch: Partial<CodexObject> }>) => void;
+
+  /** Objects held for paste. Not persisted: a clipboard is session state. */
+  clipboard: CodexObject[];
+  copyObjects: (ids: string[]) => void;
+  cutObjects: (ids: string[]) => void;
+  /** Pastes onto the active plate, offset so it does not hide the original. */
+  pasteClipboard: () => void;
+  selectAll: () => void;
+  /** Moves by a delta; arrow-key nudging goes through here so it is undoable. */
+  nudgeObjects: (ids: string[], dx: number, dy: number) => void;
   removeObjects: (ids: string[]) => void;
   duplicateObjects: (ids: string[]) => void;
   reorderObject: (id: string, direction: 'front' | 'back' | 'forward' | 'backward') => void;
@@ -242,6 +254,57 @@ export const useCodexStore = create<CodexState>((set, get) => {
         return true;
       });
       if (added) set({ selectedIds: objects.map((o) => o.id) });
+    },
+
+    clipboard: [],
+
+    copyObjects: (ids) => {
+      const plate = activePlate(get().doc, get().activePlateId);
+      if (!plate) return;
+      set({ clipboard: plate.objects.filter((o) => ids.includes(o.id)) });
+    },
+
+    cutObjects: (ids) => {
+      get().copyObjects(ids);
+      get().removeObjects(ids);
+    },
+
+    pasteClipboard: () => {
+      const clipboard = get().clipboard;
+      if (clipboard.length === 0) return;
+      const copies = clipboard.map((object) => ({
+        ...object,
+        id: uid(object.kind),
+        x: object.x + PASTE_OFFSET,
+        y: object.y + PASTE_OFFSET,
+      }));
+      get().addObjects(copies);
+      // Paste again and the next copy steps further, rather than restacking.
+      set({ clipboard: copies });
+    },
+
+    selectAll: () => {
+      const plate = activePlate(get().doc, get().activePlateId);
+      if (!plate) return;
+      set({ selectedIds: plate.objects.filter((o) => o.visible && !o.locked).map((o) => o.id) });
+    },
+
+    nudgeObjects: (ids, dx, dy) => {
+      if (ids.length === 0) return;
+      commit((doc) => {
+        let moved = false;
+        for (const plate of doc.plates) {
+          for (const obj of plate.objects) {
+            if (ids.includes(obj.id) && !obj.locked) {
+              obj.x += dx;
+              obj.y += dy;
+              moved = true;
+            }
+          }
+        }
+        // A nudge that moved nothing (all locked) must not push an undo entry.
+        return moved;
+      });
     },
 
     updateObject: (id, patch) => get().updateObjects([id], patch),

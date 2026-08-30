@@ -16003,3 +16003,112 @@ Modified:
 
 - Continue P6 by wiring the existing vault access and binding modules into the
   Codex UI.
+
+## Codex Studio interaction-surface pass - 2026-08-25
+
+### What changed
+
+Operator feedback: the functions worked but "the user-friendliness aspect is
+very minute" — no menu bar, no right-click, few shortcuts. A completeness
+standard was supplied and is now recorded as a standing expectation.
+
+Adds the interaction surfaces a canvas editor is expected to have.
+
+- **Menu bar** — File, Edit, Object, Plate, View, Help. Disabled states, shortcut
+  hints, hover-to-switch once open, arrow-key navigation between and within
+  menus, Escape to close, click-outside to dismiss.
+- **Right-click menu** on the plate, offering object actions when an object was
+  hit and canvas actions when it was not. Right-clicking an unselected object
+  selects it first, so the menu acts on what was clicked.
+- **Keyboard shortcuts** — 26 across every group, plus arrow-key nudging (1px,
+  10px with Shift).
+- **Shortcut help** dialog, generated from the command table.
+- **Clipboard** — cut, copy, paste, select all, deselect.
+- **Arrange** — bring to front/forward, send backward/to back, lock, hide.
+- **Empty-plate state** telling the user how to start.
+- **Session restore** — open panel and zoom level survive a reload.
+
+### Files touched
+
+Added:
+- `src/modes/codex/commands/codexCommands.ts`
+- `src/modes/codex/commands/__tests__/codexCommands.test.ts`
+- `src/modes/codex/components/CodexMenus.tsx`
+
+Modified:
+- `src/stores/codexStore.ts` — `clipboard`, `copyObjects`, `cutObjects`,
+  `pasteClipboard`, `selectAll`, `nudgeObjects`.
+- `src/modes/codex/engine/CodexCanvas.tsx` — `onContextMenu`.
+- `src/portals/CodexStudio.tsx` — command context, dispatch, menus, empty state,
+  session persistence; memoised the save/export handlers.
+
+### Implementation notes
+
+- **One command table drives every surface.** The menu bar, right-click menu,
+  keyboard dispatch and the shortcut help all read `CODEX_COMMANDS`. A menu item
+  that quietly does something different from its own shortcut is the classic
+  failure in this area, and it cannot happen when there is a single definition.
+  Commands are plain data taking an injected context, so the table is fully
+  testable without mounting the app.
+- **Shortcut matching is strict about unnamed modifiers**, so `Mod+Z` does not
+  fire on `Mod+Shift+Z` — otherwise undo swallows redo. A test asserts every
+  shortcut in the table resolves back to its own command, which catches
+  conflicts, and another asserts no two commands share a shortcut.
+- **`Mod` resolves per platform** (Cmd on macOS, Ctrl elsewhere) from one
+  definition, and the opposite modifier must not be held.
+- **Nudging goes through the store** so it lands on the undo stack, and its
+  mutator reports whether anything moved — nudging a fully locked selection must
+  not push an empty undo entry.
+- **Lock/hide on a mixed selection** takes the majority's opposite, so one press
+  is decisive rather than inverting each object independently.
+- **Paste offsets and re-holds the copies**, so pasting repeatedly steps rather
+  than restacking on one spot.
+- Memoising `handleSave`/`handleExportPng`/`handleExportPdf` was not cosmetic:
+  unmemoised they changed the command context every render, which re-attached
+  the global key listener continuously.
+
+### Deliberate omissions
+
+Per the standard, stated rather than silently skipped:
+
+- **No command palette.** The menu bar plus the shortcut dialog cover discovery
+  for a surface this size; a palette earns its place at a larger command count.
+- **No drag-and-drop from the palette onto the plate.** Click-to-place with
+  cascade is the current model and works; DnD is additive, not a gap.
+- **No long-press context menu on touch.** The canvas is desktop-shaped and the
+  mobile story is unresolved; a touch menu would imply an editing experience
+  that is not there yet.
+- **The clipboard is internal, not the system clipboard.** Copy/paste moves
+  codex objects within the app; it does not read or write OS clipboard data, so
+  pasting into another application does nothing.
+- **No focus trap in the shortcuts dialog.** It is a short read-only panel with
+  Escape and a close button; a full trap is warranted when it gains inputs.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS.
+- `npx vitest run` — PASS, 177 files / **1488 tests** (+50).
+- `npm run build` — PASS in 7.12s. `CodexStudio` 160.70 → 179.76 kB (46.17 kB gzip).
+- **Live browser QA is outstanding.** The preview pane came back with a fresh
+  profile, so its `localStorage` was empty and the Supabase session was gone;
+  Codex is behind the auth gate and the operator has to sign in again.
+
+### Outstanding issues
+
+- Live interaction QA of the menus, right-click and shortcuts.
+- PNG/PDF export still unexercised.
+
+### Risks or caveats
+
+- Saved codices live in `localStorage`. The preview pane losing its profile wiped
+  them, which is a reminder that document storage is per-browser and not durable.
+  Worth revisiting alongside the vault work.
+
+### Operator follow-up
+
+- Sign in so the interaction pass can be verified live.
+
+### Next steps
+
+- Live QA, then finish P6 (vault UI).

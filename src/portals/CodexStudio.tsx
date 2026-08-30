@@ -8,6 +8,17 @@ import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexSt
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
 import { FinishPicker } from '@/modes/codex/components/FinishPicker';
+import {
+  CodexContextMenu,
+  CodexMenuBar,
+  CodexShortcutsDialog,
+  type ContextMenuTarget,
+} from '@/modes/codex/components/CodexMenus';
+import {
+  commandForEvent,
+  type CommandActions,
+  type CommandState,
+} from '@/modes/codex/commands/codexCommands';
 import { PropertiesPanel } from '@/modes/codex/components/PropertiesPanel';
 import {
   CodexDocumentsPanel,
@@ -31,6 +42,38 @@ import { useTransientStatus } from '@/modes/codex/hooks/useTransientStatus';
 import { waitForStagePlate } from '@/modes/codex/utils/stageCapture';
 
 type DockTab = 'sigils' | 'properties' | 'layers' | 'documents';
+
+/**
+ * Workspace state a user expects to survive a reload — which panel was open and
+ * how far they were zoomed in. Kept out of the document: it is about the
+ * session, not the codex, and would otherwise travel between machines with a
+ * saved file.
+ */
+const SESSION_KEY = 'codex.session.v1';
+
+interface CodexSession {
+  tab?: DockTab;
+  zoom?: number;
+}
+
+function readSession(): CodexSession {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? (JSON.parse(raw) as CodexSession) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSession(session: CodexSession): void {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Blocked storage must not break the editor.
+  }
+}
+
+const ZOOM_STEPS = [0.25, 0.35, 0.45, 0.55, 0.7, 0.85, 1, 1.25, 1.5, 2];
 
 /** Cascade geometry for successive insertions. */
 const CASCADE_STEP = 28;
@@ -58,11 +101,23 @@ export function CodexStudio() {
   const newDoc = useCodexStore((s) => s.newDocument);
   const renameDoc = useCodexStore((s) => s.renameDocument);
   const select = useCodexStore((s) => s.select);
+  const clipboard = useCodexStore((s) => s.clipboard);
+  const copyObjects = useCodexStore((s) => s.copyObjects);
+  const cutObjects = useCodexStore((s) => s.cutObjects);
+  const pasteClipboard = useCodexStore((s) => s.pasteClipboard);
+  const selectAll = useCodexStore((s) => s.selectAll);
+  const nudgeObjects = useCodexStore((s) => s.nudgeObjects);
+  const clearSelection = useCodexStore((s) => s.clearSelection);
+  const reorderObject = useCodexStore((s) => s.reorderObject);
+  const canUndo = useCodexStore((s) => s.canUndo);
+  const canRedo = useCodexStore((s) => s.canRedo);
 
-  const [tab, setTab] = useState<DockTab>('sigils');
+  const [tab, setTab] = useState<DockTab>(() => readSession().tab ?? 'sigils');
   /** Which half of the library the Insert tab is showing. */
   const [insertMode, setInsertMode] = useState<'marks' | 'fragments'>('marks');
-  const [zoom, setZoom] = useState(0.55);
+  const [zoom, setZoom] = useState(() => readSession().zoom ?? 0.55);
+  const [contextTarget, setContextTarget] = useState<ContextMenuTarget | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [saved, setSaved] = useState<CodexDocumentSummary[]>([]);
   const { status, flash } = useTransientStatus(2600);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -85,28 +140,6 @@ export function CodexStudio() {
     () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
     [selected],
   );
-
-  // Keyboard: delete, duplicate, undo/redo.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      const mod = e.metaKey || e.ctrlKey;
-
-      if (mod && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) redo(); else undo();
-      } else if (mod && e.key.toLowerCase() === 'd' && selectedIds.length) {
-        e.preventDefault();
-        duplicateObjects(selectedIds);
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
-        e.preventDefault();
-        removeObjects(selectedIds);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, duplicateObjects, removeObjects, selectedIds]);
 
   /**
    * Successive placements step down and right instead of landing on the same
@@ -149,7 +182,7 @@ export function CodexStudio() {
     [plate, cascade],
   );
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     const next = saveDocument(doc);
     if (!next) {
       flash('Save failed — browser storage is unavailable or full.');
@@ -157,15 +190,15 @@ export function CodexStudio() {
     }
     setSaved(next);
     flash(`Saved “${doc.title}”.`);
-  };
+  }, [doc, flash]);
 
-  const handleExportPng = () => {
+  const handleExportPng = useCallback(() => {
     if (!stageRef.current || !plate) return;
     exportStagePng(stageRef.current, safeFilename(`${doc.title}-${plate.name}`, 'png'));
     flash('PNG exported.');
-  };
+  }, [doc.title, plate, flash]);
 
-  const handleExportPdf = async () => {
+  const handleExportPdf = useCallback(async () => {
     if (!stageRef.current) return;
     if (exportInProgressRef.current) {
       flash('A PDF export is already in progress.');
@@ -193,7 +226,7 @@ export function CodexStudio() {
       setActivePlate(original);
       exportInProgressRef.current = false;
     }
-  };
+  }, [doc.plates, doc.title, activePlateId, setActivePlate, flash]);
 
   const handleLayerSelect = useCallback((id: string) => select([id]), [select]);
   const handleNewDocument = useCallback(() => {
@@ -225,6 +258,154 @@ export function CodexStudio() {
     flash(`Applied “${template.name}”.`);
   }, [flash, plate, updatePlate]);
 
+  const mainRef = useRef<HTMLElement | null>(null);
+  const isMac = useMemo(
+    () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent),
+    [],
+  );
+
+  useEffect(() => { writeSession({ tab, zoom }); }, [tab, zoom]);
+
+  const stepZoom = useCallback((delta: number) => {
+    setZoom((current) => {
+      const i = ZOOM_STEPS.findIndex((z) => z >= current - 0.001);
+      const next = Math.min(Math.max((i < 0 ? ZOOM_STEPS.length - 1 : i) + delta, 0), ZOOM_STEPS.length - 1);
+      return ZOOM_STEPS[next];
+    });
+  }, []);
+
+  const zoomFit = useCallback(() => {
+    const box = mainRef.current;
+    if (!box || !plate) return;
+    const fit = Math.min(
+      (box.clientHeight - 48) / plate.height,
+      (box.clientWidth - 48) / plate.width,
+    );
+    setZoom(Math.max(0.1, Math.min(2, fit)));
+  }, [plate]);
+
+  const movePlate = useCallback(
+    (delta: number) => {
+      const i = doc.plates.findIndex((p) => p.id === activePlateId);
+      if (i < 0) return;
+      const next = doc.plates[(i + delta + doc.plates.length) % doc.plates.length];
+      setActivePlate(next.id);
+    },
+    [doc.plates, activePlateId, setActivePlate],
+  );
+
+  const toggleFlag = useCallback(
+    (flag: 'locked' | 'visible') => {
+      if (selected.length === 0) return;
+      // Mixed selections all take the majority's opposite, so one press is
+      // decisive rather than inverting each object independently.
+      const on = selected.filter((o) => o[flag]).length;
+      updateObjects(selectedIds, { [flag]: !(on > selected.length / 2) } as Partial<CodexObject>);
+    },
+    [selected, selectedIds, updateObjects],
+  );
+
+  const commandState: CommandState = useMemo(
+    () => ({
+      selectionCount: selectedIds.length,
+      clipboardCount: clipboard.length,
+      canUndo: canUndo(),
+      canRedo: canRedo(),
+      plateCount: doc.plates.length,
+      objectCount: plate?.objects.length ?? 0,
+    }),
+    [selectedIds.length, clipboard.length, canUndo, canRedo, doc.plates.length, plate],
+  );
+
+  const commandActions: CommandActions = useMemo(
+    () => ({
+      newDocument: () => handleNewDocument(),
+      save: () => handleSave(),
+      exportPng: () => handleExportPng(),
+      exportPdf: () => void handleExportPdf(),
+      undo,
+      redo,
+      cut: () => cutObjects(selectedIds),
+      copy: () => { copyObjects(selectedIds); flash(`Copied ${selectedIds.length} object(s).`); },
+      paste: pasteClipboard,
+      duplicate: () => duplicateObjects(selectedIds),
+      remove: () => removeObjects(selectedIds),
+      selectAll,
+      deselect: clearSelection,
+      bringToFront: () => selectedIds.forEach((id) => reorderObject(id, 'front')),
+      bringForward: () => selectedIds.forEach((id) => reorderObject(id, 'forward')),
+      sendBackward: () => selectedIds.forEach((id) => reorderObject(id, 'backward')),
+      sendToBack: () => selectedIds.forEach((id) => reorderObject(id, 'back')),
+      toggleLock: () => toggleFlag('locked'),
+      toggleVisible: () => toggleFlag('visible'),
+      addText: () => addObject(makeTextObject({ ...placeCentre(360), width: 360 })),
+      addChart: () => addObject(makeChart(placeCentre(420))),
+      addPlate,
+      removePlate: () => plate && removePlate(plate.id),
+      nextPlate: () => movePlate(1),
+      previousPlate: () => movePlate(-1),
+      zoomIn: () => stepZoom(1),
+      zoomOut: () => stepZoom(-1),
+      zoomFit,
+      zoomActual: () => setZoom(1),
+      openInsert: () => setTab('sigils'),
+      openProperties: () => setTab('properties'),
+      openLayers: () => setTab('layers'),
+      openFiles: () => setTab('documents'),
+      showShortcuts: () => setShortcutsOpen(true),
+    }),
+    [
+      handleNewDocument, handleSave, handleExportPng, handleExportPdf, undo, redo, cutObjects,
+      copyObjects, pasteClipboard, duplicateObjects, removeObjects, selectAll, clearSelection,
+      reorderObject, toggleFlag, addObject, placeCentre, addPlate, removePlate, plate, movePlate,
+      stepZoom, zoomFit, selectedIds, flash,
+    ],
+  );
+
+  const commandContext = useMemo(
+    () => ({ ...commandState, ...commandActions }),
+    [commandState, commandActions],
+  );
+
+  /**
+   * Shortcuts dispatch through the same command table the menus use, so a
+   * shortcut can never do something different from its menu item.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+
+      // Arrow nudging is a held-key interaction rather than a menu command, so
+      // it is handled here rather than in the table.
+      const nudges: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+      };
+      const nudge = nudges[e.key];
+      if (nudge && selectedIds.length && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const scale = e.shiftKey ? 10 : 1;
+        nudgeObjects(selectedIds, nudge[0] * scale, nudge[1] * scale);
+        return;
+      }
+
+      if (e.key === 'Escape' && (contextTarget || shortcutsOpen)) {
+        e.preventDefault();
+        setContextTarget(null);
+        setShortcutsOpen(false);
+        return;
+      }
+
+      const command = commandForEvent(e, commandState, isMac);
+      if (command) {
+        e.preventDefault();
+        command.run(commandContext);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [commandState, commandContext, isMac, selectedIds, nudgeObjects, contextTarget, shortcutsOpen]);
+
   if (!plate) return null;
 
   return (
@@ -237,6 +418,9 @@ export function CodexStudio() {
           aria-label="Codex title"
           className="min-w-[10rem] rounded border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-white hover:border-white/15 focus:border-white/30 focus:outline-none"
         />
+        <div className="mx-1 h-5 w-px bg-white/10" />
+
+        <CodexMenuBar state={commandState} ctx={commandContext} isMac={isMac} />
         <div className="mx-1 h-5 w-px bg-white/10" />
 
         <ToolButton icon={Undo2} label="Undo" onClick={undo} />
@@ -431,12 +615,50 @@ export function CodexStudio() {
         </aside>
 
         {/* stage */}
-        <main className="min-w-0 flex-1 overflow-auto bg-[#07060d] p-6">
+        <main ref={mainRef} className="relative min-w-0 flex-1 overflow-auto bg-[#07060d] p-6">
           <div className="mx-auto w-fit shadow-2xl ring-1 ring-white/10">
-            <CodexCanvas plate={plate} scale={zoom} stageRef={stageRef} />
+            <CodexCanvas
+              plate={plate}
+              scale={zoom}
+              stageRef={stageRef}
+              onContextMenu={setContextTarget}
+            />
           </div>
+
+          {plate.objects.length === 0 && (
+            <div
+              className="pointer-events-none absolute inset-0 flex items-center justify-center p-8"
+              aria-live="polite"
+            >
+              <div className="max-w-xs rounded-lg border border-white/10 bg-black/55 px-5 py-4 text-center backdrop-blur-sm">
+                <p className="text-[13px] text-white/70">This plate is empty.</p>
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-white/45">
+                  Pick a mark or fragment from the Insert panel, or right-click the plate for
+                  quick actions. Press{' '}
+                  <kbd className="rounded border border-white/20 px-1 font-mono text-[10px]">
+                    {isMac ? '⌘/' : 'Ctrl+/'}
+                  </kbd>{' '}
+                  for shortcuts.
+                </p>
+              </div>
+            </div>
+          )}
         </main>
       </div>
+
+      {contextTarget && (
+        <CodexContextMenu
+          target={contextTarget}
+          state={commandState}
+          ctx={commandContext}
+          isMac={isMac}
+          onClose={() => setContextTarget(null)}
+        />
+      )}
+
+      {shortcutsOpen && (
+        <CodexShortcutsDialog isMac={isMac} onClose={() => setShortcutsOpen(false)} />
+      )}
 
       {/* plate strip */}
       <footer className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 px-3 py-2">

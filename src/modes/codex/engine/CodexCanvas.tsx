@@ -21,9 +21,11 @@ interface CodexCanvasProps {
   /** Display scale, 1 = 100%. */
   scale: number;
   stageRef?: React.MutableRefObject<Konva.Stage | null>;
+  /** Right-click on the plate. `onObject` is false when the empty plate was hit. */
+  onContextMenu?: (info: { x: number; y: number; onObject: boolean }) => void;
 }
 
-export function CodexCanvas({ plate, scale, stageRef }: CodexCanvasProps) {
+export function CodexCanvas({ plate, scale, stageRef, onContextMenu }: CodexCanvasProps) {
   const selectedIds = useCodexStore((s) => s.selectedIds);
   const toggleSelect = useCodexStore((s) => s.toggleSelect);
   const clearSelection = useCodexStore((s) => s.clearSelection);
@@ -76,6 +78,18 @@ export function CodexCanvas({ plate, scale, stageRef }: CodexCanvasProps) {
       scaleY={scale}
       onMouseDown={(e) => {
         if (e.target === e.target.getStage()) clearSelection();
+      }}
+      onContextMenu={(e) => {
+        e.evt.preventDefault();
+        const stage = e.target.getStage();
+        // Konva reports the stage itself when the click misses every node, which
+        // is how the menu knows to offer canvas actions rather than object ones.
+        const onObject = e.target !== stage;
+        const id = onObject ? e.target.findAncestor('Group')?.id() ?? e.target.id() : '';
+        // Right-clicking an unselected object selects it first, so the menu acts
+        // on what was actually clicked rather than on a stale selection.
+        if (onObject && id && !selectedIds.includes(id)) toggleSelect(id, false);
+        onContextMenu?.({ x: e.evt.clientX, y: e.evt.clientY, onObject });
       }}
       style={{ background: plate.background }}
     >
