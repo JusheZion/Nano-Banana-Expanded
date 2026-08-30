@@ -107,6 +107,7 @@ function RadarBody({ object }: { object: CodexChartObject }) {
 function BarsBody({ object }: { object: CodexChartObject }) {
   const rowH = object.height / Math.max(object.axes.length, 1);
   const barH = Math.min(10, rowH * 0.3);
+  const max = Math.max(object.max, 1);
   return (
     <>
       {object.axes.map((axis, i) => {
@@ -149,7 +150,7 @@ function BarsBody({ object }: { object: CodexChartObject }) {
             <Rect
               x={0}
               y={barY}
-              width={(object.width * value) / object.max}
+              width={(object.width * value) / max}
               height={barH}
               cornerRadius={barH / 2}
               fill={object.stroke}
@@ -162,17 +163,18 @@ function BarsBody({ object }: { object: CodexChartObject }) {
 }
 
 function PipsBody({ object }: { object: CodexChartObject }) {
-  const segments = object.segments ?? 10;
+  const segments = Math.max(1, Math.round(object.segments ?? 10));
   const rowH = object.height / Math.max(object.axes.length, 1);
   const gap = 4;
   const pipW = (object.width - gap * (segments - 1)) / segments;
   const pipH = Math.min(10, rowH * 0.3);
+  const max = Math.max(object.max, 1);
 
   return (
     <>
       {object.axes.map((axis, i) => {
         const value = clampAxisValue(axis.value, object.max);
-        const filled = Math.round((value / object.max) * segments);
+        const filled = Math.round((value / max) * segments);
         const top = i * rowH;
         const pipY = top + rowH - pipH - 2;
         return (
@@ -213,6 +215,7 @@ function DialBody({ object }: { object: CodexChartObject }) {
   const cy = object.height / 2;
   const radius = size / 2 - 8;
   const thickness = Math.max(6, size * 0.09);
+  const max = Math.max(object.max, 1);
 
   return (
     <>
@@ -229,7 +232,7 @@ function DialBody({ object }: { object: CodexChartObject }) {
         y={cy}
         innerRadius={radius - thickness}
         outerRadius={radius}
-        angle={(value / object.max) * 360}
+        angle={(value / max) * 360}
         rotation={-90}
         fill={object.stroke}
       />

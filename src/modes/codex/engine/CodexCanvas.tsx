@@ -6,13 +6,9 @@ import { plateTextureDataUri } from '../data/plateTextures';
 import useImage from 'use-image';
 import { useCodexStore } from '@/stores/codexStore';
 import type {
-  CodexChartObject,
-  CodexFrameObject,
   CodexImageObject,
   CodexObject,
   CodexPlate,
-  CodexSigilObject,
-  CodexTextObject,
 } from '../types/codexObjects';
 import { SigilNode } from '../components/nodes/SigilNode';
 import { TextNode } from '../components/nodes/TextNode';
@@ -73,6 +69,7 @@ export function CodexCanvas({ plate, scale, stageRef }: CodexCanvasProps) {
   return (
     <Stage
       ref={stageRef as never}
+      id={`codex-stage-${plate.id}`}
       width={plate.width * scale}
       height={plate.height * scale}
       scaleX={scale}
@@ -134,7 +131,7 @@ function CodexObjectNode({ object, onSelect, onChange, registerRef }: NodeProps)
     case 'sigil':
       return (
         <SigilNode
-          object={object as CodexSigilObject}
+          object={object}
           onSelect={onSelect}
           onChange={onChange}
           registerRef={registerRef}
@@ -143,7 +140,7 @@ function CodexObjectNode({ object, onSelect, onChange, registerRef }: NodeProps)
     case 'text':
       return (
         <TextNode
-          object={object as CodexTextObject}
+          object={object}
           onSelect={onSelect}
           onChange={onChange}
           registerRef={registerRef}
@@ -152,7 +149,7 @@ function CodexObjectNode({ object, onSelect, onChange, registerRef }: NodeProps)
     case 'frame':
       return (
         <FrameNode
-          object={object as CodexFrameObject}
+          object={object}
           onSelect={onSelect}
           onChange={onChange}
           registerRef={registerRef}
@@ -161,7 +158,7 @@ function CodexObjectNode({ object, onSelect, onChange, registerRef }: NodeProps)
     case 'chart':
       return (
         <ChartNode
-          object={object as CodexChartObject}
+          object={object}
           onSelect={onSelect}
           onChange={onChange}
           registerRef={registerRef}
@@ -170,7 +167,7 @@ function CodexObjectNode({ object, onSelect, onChange, registerRef }: NodeProps)
     case 'image':
       return (
         <PlateImageNode
-          object={object as CodexImageObject}
+          object={object}
           onSelect={onSelect}
           onChange={onChange}
           registerRef={registerRef}

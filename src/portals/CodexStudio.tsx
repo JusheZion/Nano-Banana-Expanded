@@ -9,12 +9,16 @@ import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
 import { FinishPicker } from '@/modes/codex/components/FinishPicker';
 import { PropertiesPanel } from '@/modes/codex/components/PropertiesPanel';
+import {
+  CodexDocumentsPanel,
+  CodexLayersPanel,
+} from '@/modes/codex/components/CodexDockPanels';
 import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
 import { getSigilFinish } from '@/modes/codex/data/sigilFinishes';
 import { inkForPlate, isLightPlate, reinkPatches } from '@/modes/codex/utils/plateInk';
 import {
-  CODEX_INK, type CodexObject, type CodexPlate,
+  CODEX_INK, type CodexChartObject, type CodexObject, type CodexPlate,
 } from '@/modes/codex/types/codexObjects';
 import {
   listDocuments, saveDocument, loadDocument, deleteDocument,
@@ -23,6 +27,8 @@ import {
 import {
   buildPdf, exportStagePng, rasterisePlate, safeFilename,
 } from '@/modes/codex/utils/codexExport';
+import { useTransientStatus } from '@/modes/codex/hooks/useTransientStatus';
+import { waitForStagePlate } from '@/modes/codex/utils/stageCapture';
 
 type DockTab = 'sigils' | 'properties' | 'layers' | 'documents';
 
@@ -58,10 +64,13 @@ export function CodexStudio() {
   const [insertMode, setInsertMode] = useState<'marks' | 'fragments'>('marks');
   const [zoom, setZoom] = useState(0.55);
   const [saved, setSaved] = useState<CodexDocumentSummary[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const { status, flash } = useTransientStatus(2600);
   const stageRef = useRef<Konva.Stage | null>(null);
+  const exportControllerRef = useRef(new AbortController());
+  const exportInProgressRef = useRef(false);
 
   useEffect(() => { setSaved(listDocuments()); }, []);
+  useEffect(() => () => exportControllerRef.current.abort(), []);
 
   const plate: CodexPlate | undefined = useMemo(
     () => doc.plates.find((p) => p.id === activePlateId) ?? doc.plates[0],
@@ -76,11 +85,6 @@ export function CodexStudio() {
     () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
     [selected],
   );
-
-  const flash = useCallback((message: string) => {
-    setStatus(message);
-    window.setTimeout(() => setStatus(null), 2600);
-  }, []);
 
   // Keyboard: delete, duplicate, undo/redo.
   useEffect(() => {
@@ -146,7 +150,12 @@ export function CodexStudio() {
   );
 
   const handleSave = () => {
-    setSaved(saveDocument(doc));
+    const next = saveDocument(doc);
+    if (!next) {
+      flash('Save failed — browser storage is unavailable or full.');
+      return;
+    }
+    setSaved(next);
     flash(`Saved “${doc.title}”.`);
   };
 
@@ -158,18 +167,63 @@ export function CodexStudio() {
 
   const handleExportPdf = async () => {
     if (!stageRef.current) return;
+    if (exportInProgressRef.current) {
+      flash('A PDF export is already in progress.');
+      return;
+    }
+    exportInProgressRef.current = true;
     const original = activePlateId;
     const rasters = [];
-    for (const p of doc.plates) {
-      setActivePlate(p.id);
-      // Let React commit the plate switch before capturing the stage.
-      await new Promise((r) => window.setTimeout(r, 120));
-      if (stageRef.current) rasters.push(rasterisePlate(stageRef.current, p));
+    const signal = exportControllerRef.current.signal;
+    try {
+      for (const p of doc.plates) {
+        setActivePlate(p.id);
+        const ready = await waitForStagePlate(() => stageRef.current, p.id, { signal });
+        if (!ready) {
+          if (!signal.aborted) flash(`PDF export stopped — “${p.name}” did not finish rendering.`);
+          return;
+        }
+        const stage = stageRef.current;
+        if (!stage) return;
+        rasters.push(rasterisePlate(stage, p));
+      }
+      buildPdf(rasters, safeFilename(doc.title, 'pdf'));
+      flash(`PDF exported — ${rasters.length} page${rasters.length === 1 ? '' : 's'}.`);
+    } finally {
+      setActivePlate(original);
+      exportInProgressRef.current = false;
     }
-    setActivePlate(original);
-    buildPdf(rasters, safeFilename(doc.title, 'pdf'));
-    flash(`PDF exported — ${rasters.length} page${rasters.length === 1 ? '' : 's'}.`);
   };
+
+  const handleLayerSelect = useCallback((id: string) => select([id]), [select]);
+  const handleNewDocument = useCallback(() => {
+    newDoc();
+    flash('New codex started.');
+  }, [flash, newDoc]);
+  const handleOpenDocument = useCallback((id: string) => {
+    const loaded = loadDocument(id);
+    if (loaded) {
+      loadDoc(loaded);
+      flash(`Opened “${loaded.title}”.`);
+    } else {
+      flash('That codex could not be read.');
+    }
+  }, [flash, loadDoc]);
+  const handleDeleteDocument = useCallback((id: string) => {
+    const next = deleteDocument(id);
+    if (!next) {
+      flash('Delete failed — browser storage is unavailable.');
+      return;
+    }
+    setSaved(next);
+    flash('Deleted.');
+  }, [flash]);
+  const handleApplyTemplate = useCallback((templateId: string) => {
+    const template = PLATE_TEMPLATES.find((entry) => entry.id === templateId);
+    if (!template || !plate) return;
+    updatePlate(plate.id, template.build());
+    flash(`Applied “${template.name}”.`);
+  }, [flash, plate, updatePlate]);
 
   if (!plate) return null;
 
@@ -362,25 +416,15 @@ export function CodexStudio() {
               <div className="h-full overflow-y-auto"><PropertiesPanel selected={selected} /></div>
             )}
             {tab === 'layers' && (
-              <LayersPanel plate={plate} selectedIds={selectedIds} onSelect={(id) => select([id])} />
+              <CodexLayersPanel plate={plate} selectedIds={selectedIds} onSelect={handleLayerSelect} />
             )}
             {tab === 'documents' && (
-              <DocumentsPanel
+              <CodexDocumentsPanel
                 saved={saved}
-                onNew={() => { newDoc(); flash('New codex started.'); }}
-                onOpen={(id) => {
-                  const loaded = loadDocument(id);
-                  if (loaded) { loadDoc(loaded); flash(`Opened “${loaded.title}”.`); }
-                  else flash('That codex could not be read.');
-                }}
-                onDelete={(id) => { setSaved(deleteDocument(id)); flash('Deleted.'); }}
-                onApplyTemplate={(templateId) => {
-                  const template = PLATE_TEMPLATES.find((t) => t.id === templateId);
-                  if (!template) return;
-                  const built = template.build();
-                  updatePlate(plate.id, built);
-                  flash(`Applied “${template.name}”.`);
-                }}
+                onNew={handleNewDocument}
+                onOpen={handleOpenDocument}
+                onDelete={handleDeleteDocument}
+                onApplyTemplate={handleApplyTemplate}
               />
             )}
           </div>
@@ -429,7 +473,7 @@ export function CodexStudio() {
   );
 }
 
-function makeChart(pos: { x: number; y: number }): CodexObject {
+function makeChart(pos: { x: number; y: number }): CodexChartObject {
   return {
     id: `chart_${Math.random().toString(36).slice(2, 10)}`,
     kind: 'chart',
@@ -451,7 +495,7 @@ function makeChart(pos: { x: number; y: number }): CodexObject {
     showValues: true,
     x: pos.x, y: pos.y, width: 420, height: 380,
     rotation: 0, opacity: 1, locked: false, visible: true,
-  } as CodexObject;
+  };
 }
 
 function ToolButton({
@@ -468,113 +512,5 @@ function ToolButton({
     >
       <Icon size={15} aria-hidden="true" />
     </button>
-  );
-}
-
-function LayersPanel({
-  plate, selectedIds, onSelect,
-}: { plate: CodexPlate; selectedIds: string[]; onSelect: (id: string) => void }) {
-  const updateObject = useCodexStore((s) => s.updateObject);
-  const reorderObject = useCodexStore((s) => s.reorderObject);
-
-  return (
-    <div className="h-full overflow-y-auto p-2">
-      {plate.objects.length === 0 && (
-        <p className="p-3 text-xs text-white/40">This plate is empty.</p>
-      )}
-      {[...plate.objects].reverse().map((object) => (
-        <div
-          key={object.id}
-          className={[
-            'mb-1 flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs',
-            selectedIds.includes(object.id)
-              ? 'border-amber-300/50 bg-amber-300/10'
-              : 'border-white/10 hover:border-white/25',
-          ].join(' ')}
-        >
-          <button
-            onClick={() => onSelect(object.id)}
-            className="min-w-0 flex-1 truncate text-left text-white/75 hover:text-white focus:outline-none"
-          >
-            {object.name ?? object.kind}
-          </button>
-          <button
-            onClick={() => updateObject(object.id, { visible: !object.visible })}
-            aria-label={object.visible ? 'Hide' : 'Show'}
-            className="px-1 text-white/35 hover:text-white/80"
-          >
-            {object.visible ? '◉' : '○'}
-          </button>
-          <button
-            onClick={() => updateObject(object.id, { locked: !object.locked })}
-            aria-label={object.locked ? 'Unlock' : 'Lock'}
-            className="px-1 text-white/35 hover:text-white/80"
-          >
-            {object.locked ? '🔒' : '🔓'}
-          </button>
-          <button onClick={() => reorderObject(object.id, 'forward')} aria-label="Bring forward" className="px-1 text-white/35 hover:text-white/80">↑</button>
-          <button onClick={() => reorderObject(object.id, 'backward')} aria-label="Send backward" className="px-1 text-white/35 hover:text-white/80">↓</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DocumentsPanel({
-  saved, onNew, onOpen, onDelete, onApplyTemplate,
-}: {
-  saved: CodexDocumentSummary[];
-  onNew: () => void;
-  onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
-  onApplyTemplate: (id: string) => void;
-}) {
-  return (
-    <div className="h-full space-y-4 overflow-y-auto p-3">
-      <section className="space-y-2">
-        <h3 className="text-[10px] uppercase tracking-[0.14em] text-white/40">Plate templates</h3>
-        {PLATE_TEMPLATES.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => onApplyTemplate(t.id)}
-            className="w-full rounded border border-white/10 p-2 text-left hover:border-white/30 focus:outline-none focus:ring-1 focus:ring-white/40"
-          >
-            <div className="text-xs text-white/85">{t.name}</div>
-            <div className="text-[10px] leading-snug text-white/40">{t.description}</div>
-          </button>
-        ))}
-        <p className="text-[10px] leading-snug text-amber-300/60">
-          Applying a template replaces the current plate's contents.
-        </p>
-      </section>
-
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] uppercase tracking-[0.14em] text-white/40">Saved codices</h3>
-          <button onClick={onNew} className="text-[10px] text-white/50 hover:text-white">New</button>
-        </div>
-        {saved.length === 0 && <p className="text-[11px] text-white/35">Nothing saved yet.</p>}
-        {saved.map((entry) => (
-          <div key={entry.id} className="flex items-center gap-1.5 rounded border border-white/10 px-2 py-1.5">
-            <button
-              onClick={() => onOpen(entry.id)}
-              className="min-w-0 flex-1 text-left focus:outline-none"
-            >
-              <div className="truncate text-xs text-white/80">{entry.title}</div>
-              <div className="text-[10px] text-white/35">
-                {entry.plateCount} plate{entry.plateCount === 1 ? '' : 's'} · {new Date(entry.updatedAt).toLocaleDateString()}
-              </div>
-            </button>
-            <button
-              onClick={() => onDelete(entry.id)}
-              aria-label={`Delete ${entry.title}`}
-              className="px-1 text-white/30 hover:text-rose-300"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </section>
-    </div>
   );
 }

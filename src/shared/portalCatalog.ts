@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { Portal } from '@/shared/portals';
 import type { Theme } from '@/shared/context/ThemeContext';
+import { publicAssetUrl } from '@/shared/viteAssets';
 
 /** Gold glitter fill for nav + card icon wells (stakeholder intake). */
 export const PORTAL_ICON_GLITTER =
@@ -47,7 +48,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'AI Assistance from Arcs and Outlines to Beats and Dialogue',
     accentHex: '#81D8D0',
     Icon: PenLine,
-    cardImageUrl: '/assets/images/City%20of%20Capricorn.jpg',
+    cardImageUrl: publicAssetUrl('assets/images/City%20of%20Capricorn.jpg'),
   },
   {
     portal: 'studio',
@@ -57,7 +58,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Create Consistent Characters with Prompt Assistance',
     accentHex: '#10b981',
     Icon: User,
-    cardImageUrl: '/assets/images/City%20of%20Aquarius.jpg',
+    cardImageUrl: publicAssetUrl('assets/images/City%20of%20Aquarius.jpg'),
   },
   {
     portal: 'assets',
@@ -67,7 +68,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Generate Settings & Props for Stories',
     accentHex: '#a855f7',
     Icon: Building2,
-    cardImageUrl: '/assets/images/Anunnaki%20Sphinx.png',
+    cardImageUrl: publicAssetUrl('assets/images/Anunnaki%20Sphinx.png'),
   },
   {
     portal: 'reference',
@@ -77,7 +78,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'View and Organize your Images',
     accentHex: '#e11d48',
     Icon: ImageIcon,
-    cardImageUrl: '/assets/images/Aries%20Palace.jpg',
+    cardImageUrl: publicAssetUrl('assets/images/Aries%20Palace.jpg'),
   },
   {
     portal: 'prompts',
@@ -87,7 +88,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Curate prompts, versions, provenance, and cross-portal handoffs',
     accentHex: '#d4af37',
     Icon: Library,
-    cardImageUrl: '/assets/images/Aquarius%20Sphere.jpg',
+    cardImageUrl: publicAssetUrl('assets/images/Aquarius%20Sphere.jpg'),
   },
   {
     portal: 'lab',
@@ -97,7 +98,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Turn writer context into matched refs, quick refs, and studio-ready visuals',
     accentHex: '#991b1b',
     Icon: ScrollText,
-    cardImageUrl: '/assets/images/Aquarius%20Sphere.jpg',
+    cardImageUrl: publicAssetUrl('assets/images/Aquarius%20Sphere.jpg'),
   },
   {
     portal: 'comic',
@@ -107,7 +108,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Guided Comics: Issue Lightbox, Page Production, and cinematic Panel Focus',
     accentHex: '#2563eb',
     Icon: MessageCircle,
-    cardImageUrl: '/assets/images/Aries%20In%20the%20Observatory.jpeg',
+    cardImageUrl: publicAssetUrl('assets/images/Aries%20In%20the%20Observatory.jpeg'),
   },
   {
     portal: 'wiki',
@@ -136,7 +137,7 @@ export const CREATIVE_PORTALS_ORDERED: PortalCatalogEntry[] = [
     cardSubtitle: 'Compose lore plates and character dossiers from the sigil library',
     accentHex: '#d8b45a',
     Icon: Compass,
-    cardImageUrl: '/assets/images/Astral%20Flow%20Manipulating%20Spacetime%20&%20Multiverses.png',
+    cardImageUrl: publicAssetUrl('assets/images/Astral%20Flow%20Manipulating%20Spacetime%20&%20Multiverses.png'),
   },
 ];
 

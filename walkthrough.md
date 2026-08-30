@@ -15908,3 +15908,98 @@ Modified:
 ### Next steps
 
 - Wire the vault UI and a refresh action, then verify against the real vault.
+
+## Complete weekly bug and architecture refactor - 2026-08-30
+
+### What changed
+
+- Hardened the Codex persistence trust boundary. Saved JSON and summary indexes
+  are now validated at runtime instead of being asserted as TypeScript types;
+  empty documents, malformed objects, future schema versions, invalid canvas
+  geometry, and corrupt indexes fail closed.
+- Made blocked or full browser storage non-fatal. List, load, save, and delete
+  operations now return safe failure results, and the portal reports failure
+  instead of crashing or displaying a false success message.
+- Replaced the PDF exporter's fixed 120 ms plate-switch delay with an abortable
+  render-identity wait. Every raster is captured only after the Konva stage
+  identifies the requested plate; concurrent exports are rejected and pending
+  waits are cancelled when the workspace unmounts.
+- Replaced stacked status-dismissal timers with a single-owner transient-status
+  hook. A newer message cannot be cleared by an older timer, and unmount clears
+  the pending timeout.
+- Tightened Codex store mutation boundaries. Invalid targets and no-op edits no
+  longer create ghost selections, consume undo history, or change timestamps.
+  Immutable history entries are reused, removing one full document clone from
+  every committed edit.
+- Guarded bar, pip, and dial chart geometry against zero maxima and invalid
+  segment counts.
+- Extracted the saved-document and layer-tree dock panels from the portal into
+  memoized components with stable callbacks.
+- Routed JavaScript-owned public asset paths through Vite `BASE_URL`, so portal
+  card images survive subpath deployments.
+
+### Files touched
+
+- `src/modes/codex/components/CodexDockPanels.tsx`
+- `src/modes/codex/components/nodes/ChartNode.tsx`
+- `src/modes/codex/engine/CodexCanvas.tsx`
+- `src/modes/codex/hooks/useTransientStatus.ts`
+- `src/modes/codex/utils/codexPersistence.ts`
+- `src/modes/codex/utils/stageCapture.ts`
+- `src/portals/CodexStudio.tsx`
+- `src/shared/portalCatalog.ts`
+- `src/shared/viteAssets.ts`
+- `src/stores/codexStore.ts`
+- Focused regressions under `src/modes/codex/**/__tests__`,
+  `src/shared/__tests__`, and `src/stores/__tests__`.
+
+### Implementation notes
+
+- Persistence validation is intentionally at the localStorage boundary. The
+  in-memory model remains strongly typed while untrusted browser data must earn
+  that type before reaching the canvas or store.
+- Export readiness is based on the stage's plate ID rather than elapsed time,
+  making the synchronization contract observable and testable.
+- Store history keeps immutable document references. Every document mutation
+  still clones the current value before editing, so older snapshots cannot be
+  mutated by later commits.
+- `React.memo` is limited to the layer/document panels, where unrelated toolbar
+  and status renders were causing needless dock work. Their callbacks are
+  stable so memoization can actually take effect.
+
+### Verification
+
+- `npx tsc -b --pretty false` — PASS.
+- `npm run lint` — PASS, 0 errors / 0 ESLint warnings. Babel emitted only its
+  informational large-source formatting notes for Guided Comic and Writer.
+- Focused Codex/Vite regression run — PASS, 6 files / 29 tests.
+- `npm run test` — PASS, 176 files / **1457 tests**.
+- `npm run build` — PASS, 2,677 modules; no oversized or circular chunk warning.
+- Browser routing — PASS in the in-app browser and Chrome: the Codex card loads
+  the protected portal gate. Workspace interaction remained blocked because
+  neither browser session was signed in; a second local server with Supabase
+  variables explicitly blank correctly remained protected rather than exposing
+  the workspace.
+- Scoped `git diff --check` — PASS for all automation-owned files.
+
+### Outstanding issues
+
+- Authenticated live browser interaction with save, PNG export, and multi-page
+  PDF export remains unexercised. The deterministic export synchronization and
+  persistence failures are covered by focused regressions.
+
+### Risks or caveats
+
+- Documents from a future Codex schema now refuse to load rather than being
+  silently rewritten to the current schema. A real migration must be added
+  before increasing `CODEX_SCHEMA_VERSION`.
+
+### Operator follow-up
+
+- For a future live Codex browser pass, sign in to ARCS in the selected browser
+  before running the protected workspace QA.
+
+### Next steps
+
+- Continue P6 by wiring the existing vault access and binding modules into the
+  Codex UI.
