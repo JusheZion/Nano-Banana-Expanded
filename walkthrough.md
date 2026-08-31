@@ -16112,3 +16112,65 @@ Per the standard, stated rather than silently skipped:
 ### Next steps
 
 - Live QA, then finish P6 (vault UI).
+
+## Codex interaction pass - live QA and two fixes - 2026-08-25
+
+### What changed
+
+Live QA of the menu bar, right-click menu and shortcuts. Two defects found and
+fixed; neither was visible to the unit tests.
+
+**1. Menu keyboard navigation was dead.** `MenuList` focused the first enabled
+item in an effect keyed on `enabledIndexes`, which is rebuilt every render, so
+every arrow press was immediately undone by the effect snapping focus back to
+the top. Now guarded by a ref so it runs once per open.
+
+**2. Right-clicking bare plate offered object actions.** The hit test asked
+`e.target !== stage`, but the plate's background rect and its texture image are
+real Konva nodes — so a click on empty plate reported one of them and looked
+like an object hit. It now tests for a node tagged `codex-object`, or a
+descendant of one.
+
+### Files touched
+
+Modified:
+- `src/modes/codex/components/CodexMenus.tsx` — focus-once guard.
+- `src/modes/codex/engine/CodexCanvas.tsx` — object-aware context hit test.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx src/stores/codexStore.ts` — PASS.
+- `npx vitest run` — PASS, 177 files / 1488 tests.
+- `npm run build` — PASS.
+- **Live browser QA**, signed in, 1600x1000:
+  - Menu bar renders all six groups; Edit menu shows correct shortcut hints.
+  - **Disabled states are real**: with an empty plate every Edit item reports
+    `aria-disabled="true"`; after placing a mark, Undo/Cut/Copy/Duplicate/Delete/
+    Select All/Deselect enable and Redo/Paste correctly stay disabled.
+  - Arrow-key navigation moves focus (Undo → Select All, skipping disabled
+    items) with roving `tabIndex` correct; Escape closes the menu.
+  - Right-click on bare plate → Paste, Select All, Add Text, Add Chart.
+  - Right-click on an object → Cut, Copy, Paste, Duplicate, Delete, four arrange
+    commands, Lock, Hide — and it selects the object it was invoked on.
+  - `Cmd+D` duplicated with the paste offset; arrow nudge moved the selection
+    +1px and `Shift`+arrow +10px, leaving the unselected object untouched.
+  - `Cmd+1` set 100% zoom; `Cmd+/` opened the shortcut dialog; Escape closed it.
+  - Session restore: switched to Layers at 100%, reloaded the page, and both
+    came back.
+  - **Zero console errors.**
+
+### Risks or caveats
+
+- The in-app preview pane applies an offset to synthetic clicks over the Konva
+  canvas, so canvas hit-testing had to be driven by dispatching events at
+  computed page coordinates. This is a harness artifact, not app behaviour — the
+  same coordinates work correctly for DOM elements.
+
+### Operator follow-up
+
+- None.
+
+### Next steps
+
+- Finish P6 (vault UI).

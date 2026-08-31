@@ -99,8 +99,15 @@ function MenuList({
     [commands, state],
   );
 
+  // Focus the first enabled item once, on open. Re-running this whenever
+  // `enabledIndexes` changes identity — which is every render, since the command
+  // list is rebuilt each time — would snap focus back to the top and make arrow
+  // navigation impossible.
+  const didFocus = useRef(false);
   useEffect(() => {
-    if (autoFocus && enabledIndexes.length) setFocusIndex(enabledIndexes[0]);
+    if (didFocus.current || !autoFocus || enabledIndexes.length === 0) return;
+    didFocus.current = true;
+    setFocusIndex(enabledIndexes[0]);
   }, [autoFocus, enabledIndexes]);
 
   useEffect(() => {

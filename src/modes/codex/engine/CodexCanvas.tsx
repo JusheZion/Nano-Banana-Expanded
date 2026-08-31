@@ -81,15 +81,18 @@ export function CodexCanvas({ plate, scale, stageRef, onContextMenu }: CodexCanv
       }}
       onContextMenu={(e) => {
         e.evt.preventDefault();
-        const stage = e.target.getStage();
-        // Konva reports the stage itself when the click misses every node, which
-        // is how the menu knows to offer canvas actions rather than object ones.
-        const onObject = e.target !== stage;
-        const id = onObject ? e.target.findAncestor('Group')?.id() ?? e.target.id() : '';
+        // "Did this hit an object?" cannot be `target !== stage`: the plate's
+        // background rect and texture are real nodes, so clicking bare plate
+        // reports them and every right-click would look like an object hit.
+        // Only nodes tagged `codex-object` (or descendants of one) count.
+        const node = e.target;
+        const objectNode =
+          node.name() === 'codex-object' ? node : node.findAncestor('.codex-object', true);
+        const id = objectNode?.id() ?? '';
         // Right-clicking an unselected object selects it first, so the menu acts
         // on what was actually clicked rather than on a stale selection.
-        if (onObject && id && !selectedIds.includes(id)) toggleSelect(id, false);
-        onContextMenu?.({ x: e.evt.clientX, y: e.evt.clientY, onObject });
+        if (id && !selectedIds.includes(id)) toggleSelect(id, false);
+        onContextMenu?.({ x: e.evt.clientX, y: e.evt.clientY, onObject: !!id });
       }}
       style={{ background: plate.background }}
     >
