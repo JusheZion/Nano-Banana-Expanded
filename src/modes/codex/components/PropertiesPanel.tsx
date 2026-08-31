@@ -344,7 +344,18 @@ function SigilSection({ object }: { object: CodexSigilObject }) {
             />
           </Row>
           {object.gradient.stops.map((stop, i) => (
-            <Row key={i} label={i === 0 ? 'Highlight' : i === object.gradient!.stops.length - 1 ? 'Shadow' : 'Body'}>
+            <Row
+              key={i}
+              label={
+                i === 0
+                  ? 'Highlight'
+                  : i === object.gradient!.stops.length - 1
+                    ? 'Shadow'
+                    // Numbered: a metal ramp has several mid stops, and three
+                    // rows all labelled "Body" cannot be told apart.
+                    : `Body ${i}`
+              }
+            >
               <ColorInput
                 value={stop.color}
                 onChange={(v) =>

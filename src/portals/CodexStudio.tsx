@@ -39,6 +39,7 @@ import {
   buildPdf, exportStagePng, rasterisePlate, safeFilename,
 } from '@/modes/codex/utils/codexExport';
 import { useTransientStatus } from '@/modes/codex/hooks/useTransientStatus';
+import { useMediaQuery } from '@/modes/codex/hooks/useMediaQuery';
 import { waitForStagePlate } from '@/modes/codex/utils/stageCapture';
 
 type DockTab = 'sigils' | 'properties' | 'layers' | 'documents';
@@ -117,6 +118,13 @@ export function CodexStudio() {
   const [insertMode, setInsertMode] = useState<'marks' | 'fragments'>('marks');
   const [zoom, setZoom] = useState(() => readSession().zoom ?? 0.55);
   const [contextTarget, setContextTarget] = useState<ContextMenuTarget | null>(null);
+  /**
+   * Below this the dock cannot share the width with the plate, so it becomes an
+   * overlay the user opens rather than a column that squeezes the canvas to a
+   * sliver.
+   */
+  const isNarrow = useMediaQuery('(max-width: 899px)');
+  const [dockOpen, setDockOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [saved, setSaved] = useState<CodexDocumentSummary[]>([]);
   const { status, flash } = useTransientStatus(2600);
@@ -266,6 +274,16 @@ export function CodexStudio() {
 
   useEffect(() => { writeSession({ tab, zoom }); }, [tab, zoom]);
 
+  // Leaving narrow mode must not strand the overlay open over a wide layout.
+  useEffect(() => { if (!isNarrow) setDockOpen(false); }, [isNarrow]);
+
+  // On a narrow screen the dock covers the plate, so opening a panel from a
+  // command has to open the drawer too or the command looks like it did nothing.
+  const showPanel = useCallback((next: DockTab) => {
+    setTab(next);
+    setDockOpen(true);
+  }, []);
+
   const stepZoom = useCallback((delta: number) => {
     setZoom((current) => {
       const i = ZOOM_STEPS.findIndex((z) => z >= current - 0.001);
@@ -348,17 +366,17 @@ export function CodexStudio() {
       zoomOut: () => stepZoom(-1),
       zoomFit,
       zoomActual: () => setZoom(1),
-      openInsert: () => setTab('sigils'),
-      openProperties: () => setTab('properties'),
-      openLayers: () => setTab('layers'),
-      openFiles: () => setTab('documents'),
+      openInsert: () => showPanel('sigils'),
+      openProperties: () => showPanel('properties'),
+      openLayers: () => showPanel('layers'),
+      openFiles: () => showPanel('documents'),
       showShortcuts: () => setShortcutsOpen(true),
     }),
     [
       handleNewDocument, handleSave, handleExportPng, handleExportPdf, undo, redo, cutObjects,
       copyObjects, pasteClipboard, duplicateObjects, removeObjects, selectAll, clearSelection,
       reorderObject, toggleFlag, addObject, placeCentre, addPlate, removePlate, plate, movePlate,
-      stepZoom, zoomFit, selectedIds, flash,
+      stepZoom, zoomFit, selectedIds, flash, showPanel,
     ],
   );
 
@@ -420,12 +438,28 @@ export function CodexStudio() {
         />
         <div className="mx-1 h-5 w-px bg-white/10" />
 
+        {isNarrow && (
+          <button
+            type="button"
+            onClick={() => setDockOpen((open) => !open)}
+            aria-expanded={dockOpen}
+            aria-label={dockOpen ? 'Hide panels' : 'Show panels'}
+            className="rounded border border-white/20 px-2 py-1 text-[11px] text-white/75 transition-colors hover:border-white/40 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/50"
+          >
+            Panels
+          </button>
+        )}
+
         <CodexMenuBar state={commandState} ctx={commandContext} isMac={isMac} />
         <div className="mx-1 h-5 w-px bg-white/10" />
 
-        <ToolButton icon={Undo2} label="Undo" onClick={undo} />
-        <ToolButton icon={Redo2} label="Redo" onClick={redo} />
-        <div className="mx-1 h-5 w-px bg-white/10" />
+        {!isNarrow && (
+          <>
+            <ToolButton icon={Undo2} label="Undo" onClick={undo} />
+            <ToolButton icon={Redo2} label="Redo" onClick={redo} />
+            <div className="mx-1 h-5 w-px bg-white/10" />
+          </>
+        )}
 
         <ToolButton
           icon={Type}
@@ -445,27 +479,59 @@ export function CodexStudio() {
         />
         <div className="mx-1 h-5 w-px bg-white/10" />
 
-        <ToolButton icon={Save} label="Save" onClick={handleSave} />
-        <ToolButton icon={ImageDown} label="Export PNG" onClick={handleExportPng} />
-        <ToolButton icon={FileDown} label="Export PDF" onClick={() => void handleExportPdf()} />
+        {/* All three are in the File menu; on a narrow header they cost a whole
+            row of height for nothing. */}
+        {!isNarrow && (
+          <>
+            <ToolButton icon={Save} label="Save" onClick={handleSave} />
+            <ToolButton icon={ImageDown} label="Export PNG" onClick={handleExportPng} />
+            <ToolButton icon={FileDown} label="Export PDF" onClick={() => void handleExportPdf()} />
+          </>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {status && <span className="text-[11px] text-amber-300/80">{status}</span>}
-          <label className="flex items-center gap-1.5 text-[11px] text-white/45">
+          {/* The slider needs width the narrow header does not have; the
+              percentage still shows, and zoom stays on the View menu. */}
+          <label className="hidden items-center gap-1.5 text-[11px] text-white/45 md:flex">
             Zoom
             <input
               type="range" min={0.2} max={1.2} step={0.05} value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
               className="h-1 w-24 accent-amber-300"
+              aria-label="Zoom"
             />
             <span className="w-8 tabular-nums text-right">{Math.round(zoom * 100)}%</span>
           </label>
+          <span className="text-[11px] tabular-nums text-white/45 md:hidden">
+            {Math.round(zoom * 100)}%
+          </span>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {/* dock */}
-        <aside className="flex w-[310px] shrink-0 flex-col border-r border-white/10 bg-black/25">
+        {isNarrow && dockOpen && (
+          <div
+            className="absolute inset-0 z-30 bg-black/50"
+            onClick={() => setDockOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <aside
+          aria-label="Codex panels"
+          aria-hidden={isNarrow && !dockOpen}
+          className={[
+            'flex shrink-0 flex-col border-r border-white/10 bg-black/25',
+            isNarrow
+              ? [
+                  'absolute inset-y-0 left-0 z-40 w-[min(20rem,88vw)] shadow-2xl transition-transform duration-200',
+                  dockOpen ? 'translate-x-0' : '-translate-x-full',
+                ].join(' ')
+              : 'w-[310px]',
+          ].join(' ')}
+        >
           <nav className="flex shrink-0 border-b border-white/10" role="tablist">
             {([
               ['sigils', 'Insert', Sparkles],
@@ -632,7 +698,7 @@ export function CodexStudio() {
               scale={zoom}
               stageRef={stageRef}
               onContextMenu={setContextTarget}
-              onObjectActivate={() => setTab('properties')}
+              onObjectActivate={() => showPanel('properties')}
             />
           </div>
 

@@ -16258,3 +16258,80 @@ Modified:
 ### Next steps
 
 - Responsive pass.
+
+## Codex responsive pass - 2026-08-25
+
+### What changed
+
+Third item from the completeness standard. At 375px the header consumed roughly
+half the viewport and the dock left the plate a sliver — the portal was
+effectively unusable below tablet width.
+
+- **Dock becomes an overlay below 900px.** A `Panels` button in the header opens
+  it over the canvas, with a backdrop that dismisses it. Above 900px it stays
+  the static column it was.
+- **Header sheds duplication when narrow.** Undo/redo, save and both exports are
+  hidden — every one is already in the File and Edit menus, and each cost a row
+  of header height. The zoom slider collapses to its percentage readout; zoom
+  stays on the View menu and its shortcuts.
+- **Opening a panel by command opens the drawer**, so `Enter`, double-click and
+  the View menu do something visible on a narrow screen instead of silently
+  switching a hidden tab.
+- **Leaving narrow mode closes the drawer**, so it cannot strand itself open
+  over a wide layout.
+- Numbered the sigil gradient's middle stops (`Body 1`, `Body 2`) — a metal ramp
+  has three of them and they were all labelled `Body`.
+
+### Files touched
+
+Added:
+- `src/modes/codex/hooks/useMediaQuery.ts`
+
+Modified:
+- `src/portals/CodexStudio.tsx` — overlay dock, `Panels` toggle, narrow-mode
+  toolbar, `showPanel`.
+- `src/modes/codex/components/PropertiesPanel.tsx` — numbered gradient stops.
+
+### Implementation notes
+
+- The breakpoint drives *behaviour*, not just styling — a drawer is a different
+  interaction from a column — so it is a hook rather than CSS alone.
+- `useMediaQuery` listens on three signals: the media query's own `change`, a
+  window `resize`, and a `ResizeObserver` on the root element. That is
+  deliberate redundancy, not superstition: the in-app preview pane was verified
+  to fire **no** resize and **no** media-query change when its emulated viewport
+  is resized, which left the layout stuck in whichever mode it loaded in. The
+  observer catches those cases.
+
+### Deliberate omissions
+
+- **The canvas is still desktop-shaped on a phone.** The plate is 1040x1400 and
+  editing it on a 375px screen is viewing, not working. Making the canvas
+  genuinely touch-editable — gesture zoom, drag handles sized for fingers,
+  long-press menus — is its own piece of work, not a responsive tweak.
+- **The sidebar nav still overflows below ~1000px height**, hiding the last two
+  portals. That is app-shell behaviour affecting every portal, not Codex; fixing
+  it here would be a partial fix in the wrong place.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx` — PASS.
+- `npx vitest run` — PASS, 178 files / 1506 tests.
+- `npm run build` — PASS. `CodexStudio` 187.09 kB (48.46 kB gzip).
+- **Live browser QA**:
+  - 375x812: header now compact and the plate visible; `Panels` opens the drawer
+    over the canvas; the backdrop dismisses it and `aria-hidden` follows.
+  - 1024x800 and 1400x900: static 310px column, full toolbar, zoom slider, no
+    `Panels` button.
+  - 700x800: drawer mode with the `Panels` button.
+  - Live shrink 1200 → 700 switched to drawer mode.
+  - **Harness caveat**: growing the emulated viewport fires no size signal at
+    all in the preview pane, so 700 → 1400 needed a synthetic `resize` to
+    re-evaluate — which restored column mode instantly, confirming the logic.
+    A real browser fires both `change` and `resize`.
+  - Zero console errors.
+
+### Next steps
+
+- Finish P6 (vault UI).
