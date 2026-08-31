@@ -487,6 +487,16 @@ export function CodexStudio() {
               >
                 <Icon size={13} aria-hidden="true" />
                 {label}
+                {/* Selecting something on the plate has to show somewhere the
+                    user is already looking, or the panel stays undiscovered. */}
+                {id === 'properties' && selectedIds.length > 0 && (
+                  <span
+                    aria-label={`${selectedIds.length} selected`}
+                    className="ml-0.5 rounded-full bg-amber-300/25 px-1.5 py-px text-[9px] font-medium tabular-nums text-amber-100"
+                  >
+                    {selectedIds.length}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -622,6 +632,7 @@ export function CodexStudio() {
               scale={zoom}
               stageRef={stageRef}
               onContextMenu={setContextTarget}
+              onObjectActivate={() => setTab('properties')}
             />
           </div>
 

@@ -16174,3 +16174,87 @@ Modified:
 ### Next steps
 
 - Finish P6 (vault UI).
+
+## Codex Properties panel pass - 2026-08-25
+
+### What changed
+
+Second item from the completeness standard: the Properties panel existed but was
+barely reachable and barely useful on more than one object.
+
+**Discoverability**
+- Selection count badge on the Properties tab — selecting something now shows
+  where its settings are, in a place the user is already looking.
+- `Enter` opens Properties for the selection, and `Properties` is the first
+  entry in the object right-click menu.
+- Double-clicking an object on the plate opens Properties.
+
+**Multi-selection** (previously only Opacity was editable)
+- Position, size and rotation edit across the whole selection.
+- Values that differ render as an empty field placeheld `Mixed`, rather than
+  showing the first object's number — which misreports the rest, and would write
+  that value to all of them on the next keystroke.
+- Align: left / centre / right / top / middle / bottom, and distribute
+  horizontally or vertically, disabled with a `needs 3+` hint below three.
+
+**Ergonomics and state**
+- Sections collapse, and which are folded persists across reloads.
+- Header shows what is selected and its kind, with lock and hide toggles.
+- Locked selections show an explicit notice rather than silently refusing drags.
+- Empty state explains how to select instead of a bare sentence.
+
+### Files touched
+
+Added:
+- `src/modes/codex/utils/alignment.ts`
+- `src/modes/codex/utils/__tests__/alignment.test.ts`
+
+Modified:
+- `src/modes/codex/components/PropertiesPanel.tsx`
+- `src/modes/codex/commands/codexCommands.ts` — `object.properties`.
+- `src/modes/codex/engine/CodexCanvas.tsx` — `onObjectActivate` (double-click).
+- `src/portals/CodexStudio.tsx` — badge, double-click wiring.
+
+### Implementation notes
+
+- **Alignment is pure geometry in its own module**, tested without mounting
+  anything: the arithmetic is where alignment bugs live, not the buttons.
+- **Locked objects are anchors, not cargo** — align and distribute never move
+  them, so a locked object can be used to align others against.
+- **Operations skip objects already in place**, so an align that changes nothing
+  produces no patches and no empty undo entry. Patches are applied through
+  `applyPatches`, so aligning eight objects is one undo.
+- **`Row` no longer wraps its children in a `<label>`.** A label wrapping a group
+  of buttons is invalid and makes clicking the label text fire the first button —
+  which is exactly what the align and bevel-angle rows are. A single control now
+  gets the row label cloned onto it as `aria-label`; multiple controls become a
+  labelled `role="group"`.
+
+### Deliberate omissions
+
+- **No drag-scrub on number fields.** Type or use the native stepper; scrubbing
+  is a nicety, and the fields are already keyboard-complete.
+- **No per-property reset button.** Undo covers it, and a reset affordance on
+  every row would double the panel's control count.
+- **Rotation is ignored by alignment** — it aligns bounding boxes, which is what
+  every editor does and what makes the result predictable.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx` — PASS.
+- `npx vitest run` — PASS, 178 files / **1506 tests** (+18).
+- **Live browser QA**, signed in, 1600x1000:
+  - Placing one mark put a `1` badge on the Properties tab; selecting both made it `2`.
+  - `Enter` opened Properties with the selection intact.
+  - Multi-select panel showed `2 objects / sigils`, align and distribute rows,
+    `Mixed` for the differing X and Y, and the shared 96 width and height.
+  - `Align left` moved the second object from x=500 to x=472 and left Y alone.
+  - One `Cmd+Z` reverted the whole align.
+  - Collapsing Transform persisted across a full page reload while Sigil and
+    Effects stayed open.
+  - **Zero console errors.**
+
+### Next steps
+
+- Responsive pass.

@@ -113,6 +113,15 @@ export const CODEX_COMMANDS: CodexCommand[] = [
   { id: 'edit.deselect', label: 'Deselect', group: 'edit', shortcut: 'Escape', isEnabled: hasSelection, run: (c) => c.deselect() },
 
   // object
+  {
+    id: 'object.properties',
+    label: 'Properties',
+    group: 'object',
+    shortcut: 'Enter',
+    context: 'object',
+    isEnabled: hasSelection,
+    run: (c) => c.openProperties(),
+  },
   { id: 'object.addText', label: 'Add Text', group: 'object', shortcut: 'T', context: 'canvas', run: (c) => c.addText() },
   { id: 'object.addChart', label: 'Add Chart', group: 'object', shortcut: 'C', context: 'canvas', run: (c) => c.addChart() },
   { id: 'object.bringToFront', label: 'Bring to Front', group: 'object', shortcut: 'Mod+Shift+]', context: 'object', dividerBefore: true, isEnabled: hasSelection, run: (c) => c.bringToFront() },

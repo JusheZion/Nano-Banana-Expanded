@@ -1,4 +1,12 @@
+import React, { useId, useState } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
+import {
+  alignPatches,
+  distributePatches,
+  sharedValue,
+  type AlignMode,
+  type DistributeMode,
+} from '../utils/alignment';
 import { FinishPicker } from './FinishPicker';
 import { getSigilFinish, SIGIL_FINISHES } from '../data/sigilFinishes';
 import type {
@@ -26,14 +34,18 @@ const BEVEL_ANGLES: Array<[string, number]> = [
  * controls the codex plates depend on and that the comic text object never had.
  */
 export function PropertiesPanel({ selected }: { selected: CodexObject[] }) {
-  const updateObject = useCodexStore((s) => s.updateObject);
   const updateObjects = useCodexStore((s) => s.updateObjects);
+  const applyPatches = useCodexStore((s) => s.applyPatches);
 
   if (selected.length === 0) {
     return (
-      <p className="p-4 text-xs text-white/40">
-        Select something on the plate to edit it.
-      </p>
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="text-xs text-white/45">Nothing selected</p>
+        <p className="max-w-[15rem] text-[11px] leading-relaxed text-white/30">
+          Click an object on the plate to edit it, or drag a box around several.
+          Shift-click to add to the selection.
+        </p>
+      </div>
     );
   }
 
@@ -41,37 +53,133 @@ export function PropertiesPanel({ selected }: { selected: CodexObject[] }) {
   const ids = selected.map((o) => o.id);
   const patchAll = (patch: Partial<CodexObject>) => updateObjects(ids, patch);
 
+  const allLocked = selected.every((o) => o.locked);
+  const allHidden = selected.every((o) => !o.visible);
+  /** Every object the same kind? Then its own controls can edit them together. */
+  const sharedKind = selected.every((o) => o.kind === selected[0].kind) ? selected[0].kind : null;
+
+  const runAlign = (mode: AlignMode) => applyPatches(alignPatches(selected, mode));
+  const runDistribute = (mode: DistributeMode) => applyPatches(distributePatches(selected, mode));
+
   return (
     <div className="space-y-5 p-3 text-white/85">
-      <Section title={one ? one.name ?? one.kind : `${selected.length} selected`}>
+      <header className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] text-white">
+            {one ? one.name ?? one.kind : `${selected.length} objects`}
+          </p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-white/35">
+            {one ? one.kind : sharedKind ? `${sharedKind}s` : 'mixed types'}
+            {allLocked && ' · locked'}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <ToggleButton
+            label={allLocked ? 'Unlock' : 'Lock'}
+            active={allLocked}
+            onClick={() => patchAll({ locked: !allLocked })}
+          >
+            {allLocked ? '🔒' : '🔓'}
+          </ToggleButton>
+          <ToggleButton
+            label={allHidden ? 'Show' : 'Hide'}
+            active={allHidden}
+            onClick={() => patchAll({ visible: allHidden })}
+          >
+            {allHidden ? '🙈' : '👁'}
+          </ToggleButton>
+        </div>
+      </header>
+
+      {allLocked && (
+        <p className="rounded border border-amber-400/25 bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-amber-100/80">
+          Locked. Unlock to move or resize on the plate; the fields below still apply.
+        </p>
+      )}
+
+      {selected.length > 1 && (
+        <Section title="Align">
+          <Row label="Edges">
+            {(
+              [
+                ['left', 'Align left'],
+                ['centerX', 'Align centres horizontally'],
+                ['right', 'Align right'],
+                ['top', 'Align top'],
+                ['middleY', 'Align middles vertically'],
+                ['bottom', 'Align bottom'],
+              ] as Array<[AlignMode, string]>
+            ).map(([mode, title]) => (
+              <IconButton key={mode} label={title} onClick={() => runAlign(mode)}>
+                {ALIGN_GLYPH[mode]}
+              </IconButton>
+            ))}
+          </Row>
+          <Row label="Distribute">
+            <IconButton
+              label="Distribute horizontally"
+              disabled={selected.length < 3}
+              onClick={() => runDistribute('horizontal')}
+            >
+              ↔
+            </IconButton>
+            <IconButton
+              label="Distribute vertically"
+              disabled={selected.length < 3}
+              onClick={() => runDistribute('vertical')}
+            >
+              ↕
+            </IconButton>
+            {selected.length < 3 && (
+              <span className="pl-1 text-[10px] text-white/30">needs 3+</span>
+            )}
+          </Row>
+        </Section>
+      )}
+
+      <Section title="Transform">
         <Row label="Opacity">
           <Slider
             min={0}
             max={1}
             step={0.05}
-            value={one?.opacity ?? 1}
+            value={sharedValue(selected, 'opacity') ?? 1}
             onChange={(v) => patchAll({ opacity: v })}
           />
         </Row>
-        {one && (
-          <>
-            <Row label="X">
-              <NumberInput value={Math.round(one.x)} onChange={(v) => updateObject(one.id, { x: v })} />
-            </Row>
-            <Row label="Y">
-              <NumberInput value={Math.round(one.y)} onChange={(v) => updateObject(one.id, { y: v })} />
-            </Row>
-            <Row label="Width">
-              <NumberInput value={Math.round(one.width)} onChange={(v) => updateObject(one.id, { width: Math.max(8, v) })} />
-            </Row>
-            <Row label="Height">
-              <NumberInput value={Math.round(one.height)} onChange={(v) => updateObject(one.id, { height: Math.max(8, v) })} />
-            </Row>
-            <Row label="Rotation">
-              <NumberInput value={Math.round(one.rotation)} onChange={(v) => updateObject(one.id, { rotation: v })} />
-            </Row>
-          </>
-        )}
+        <Row label="X">
+          <NumberInput
+            value={sharedValue(selected, 'x')}
+            onChange={(v) => patchAll({ x: v })}
+          />
+        </Row>
+        <Row label="Y">
+          <NumberInput
+            value={sharedValue(selected, 'y')}
+            onChange={(v) => patchAll({ y: v })}
+          />
+        </Row>
+        <Row label="Width">
+          <NumberInput
+            value={sharedValue(selected, 'width')}
+            min={8}
+            onChange={(v) => patchAll({ width: Math.max(8, v) })}
+          />
+        </Row>
+        <Row label="Height">
+          <NumberInput
+            value={sharedValue(selected, 'height')}
+            min={8}
+            onChange={(v) => patchAll({ height: Math.max(8, v) })}
+          />
+        </Row>
+        <Row label="Rotation">
+          <NumberInput
+            value={sharedValue(selected, 'rotation')}
+            suffix="°"
+            onChange={(v) => patchAll({ rotation: v })}
+          />
+        </Row>
       </Section>
 
       {one?.kind === 'text' && <TextSection object={one as CodexTextObject} />}
@@ -469,32 +577,211 @@ function EffectsSection({ selected }: { selected: CodexObject[] }) {
 
 /* ---------- primitives ---------- */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const COLLAPSE_KEY = 'codex.panelSections.v1';
+
+function readCollapsed(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '{}') as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Collapsible group. Which sections are folded is a workspace preference, so it
+ * persists — a user who always collapses Effects should not refold it on every
+ * reload.
+ */
+function Section({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const headingId = useId();
+  const [open, setOpen] = useState(() => {
+    const stored = readCollapsed()[title];
+    return stored === undefined ? defaultOpen : !stored;
+  });
+
+  const toggle = () => {
+    setOpen((wasOpen) => {
+      const next = !wasOpen;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify({ ...readCollapsed(), [title]: !next }));
+      } catch {
+        // Blocked storage must not stop the section folding.
+      }
+      return next;
+    });
+  };
+
   return (
-    <section className="space-y-2">
-      <h3 className="text-[10px] uppercase tracking-[0.14em] text-white/40">{title}</h3>
-      <div className="space-y-2">{children}</div>
+    <section className="space-y-2" aria-labelledby={headingId}>
+      <button
+        type="button"
+        id={headingId}
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 text-left text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/70 focus:outline-none focus:ring-1 focus:ring-white/40"
+      >
+        <span aria-hidden="true" className={open ? '' : '-rotate-90'} style={{ transition: 'transform .12s' }}>
+          ▾
+        </span>
+        {title}
+      </button>
+      {open && <div className="space-y-2">{children}</div>}
     </section>
   );
 }
 
+/**
+ * One property row.
+ *
+ * A single control is given the row's label as its accessible name. Several
+ * controls become a labelled group instead: wrapping a set of buttons in one
+ * `<label>` is invalid and makes clicking the label fire the first button.
+ */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  const labelId = useId();
+  const count = React.Children.count(children);
+  const single = count === 1 && React.isValidElement(children);
+
   return (
-    <label className="flex items-center gap-2 text-xs">
-      <span className="w-20 shrink-0 text-white/45">{label}</span>
-      <span className="min-w-0 flex-1">{children}</span>
-    </label>
+    <div className="flex items-center gap-2 text-xs">
+      <span id={labelId} className="w-20 shrink-0 text-white/45">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1">
+        {single ? (
+          React.cloneElement(children as React.ReactElement<{ 'aria-label'?: string }>, {
+            'aria-label':
+              (children as React.ReactElement<{ 'aria-label'?: string }>).props['aria-label'] ?? label,
+          })
+        ) : (
+          <span role="group" aria-labelledby={labelId} className="flex min-w-0 flex-1 items-center gap-1">
+            {children}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }
 
-function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+/**
+ * Numeric field.
+ *
+ * `undefined` means the selected objects disagree, and it renders as an empty
+ * field placeheld "Mixed" rather than showing the first object's number — which
+ * would misreport the rest, and would write that value to all of them on the
+ * next keystroke.
+ */
+function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  suffix,
+  'aria-label': ariaLabel,
+}: {
+  value: number | undefined;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+  'aria-label'?: string;
+}) {
+  const mixed = value === undefined;
   return (
-    <input
-      type="number"
-      value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs tabular-nums text-white focus:border-white/35 focus:outline-none"
-    />
+    <span className="relative flex items-center">
+      <input
+        type="number"
+        inputMode="decimal"
+        aria-label={ariaLabel}
+        value={mixed ? '' : Math.round((value as number) * 100) / 100}
+        placeholder={mixed ? 'Mixed' : undefined}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          if (e.target.value !== '' && Number.isFinite(next)) onChange(next);
+        }}
+        className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs tabular-nums text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
+      />
+      {suffix && (
+        <span aria-hidden="true" className="pointer-events-none absolute right-2 text-[10px] text-white/30">
+          {suffix}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const ALIGN_GLYPH: Record<AlignMode, string> = {
+  left: '⇤',
+  centerX: '↔',
+  right: '⇥',
+  top: '⤒',
+  middleY: '↕',
+  bottom: '⤓',
+};
+
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="h-6 w-6 rounded border border-white/15 text-[11px] leading-none text-white/70 transition-colors hover:border-white/40 hover:text-white disabled:opacity-30 focus:outline-none focus:ring-1 focus:ring-white/50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ToggleButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      className={[
+        'h-7 w-7 rounded border text-[12px] leading-none transition-colors focus:outline-none focus:ring-1 focus:ring-white/50',
+        active ? 'border-amber-300/50 bg-amber-300/15' : 'border-white/15 hover:border-white/40',
+      ].join(' ')}
+    >
+      {children}
+    </button>
   );
 }
 

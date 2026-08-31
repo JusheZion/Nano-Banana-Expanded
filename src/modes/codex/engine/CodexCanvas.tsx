@@ -23,9 +23,11 @@ interface CodexCanvasProps {
   stageRef?: React.MutableRefObject<Konva.Stage | null>;
   /** Right-click on the plate. `onObject` is false when the empty plate was hit. */
   onContextMenu?: (info: { x: number; y: number; onObject: boolean }) => void;
+  /** Double-click on an object — the conventional "show me its properties". */
+  onObjectActivate?: () => void;
 }
 
-export function CodexCanvas({ plate, scale, stageRef, onContextMenu }: CodexCanvasProps) {
+export function CodexCanvas({ plate, scale, stageRef, onContextMenu, onObjectActivate }: CodexCanvasProps) {
   const selectedIds = useCodexStore((s) => s.selectedIds);
   const toggleSelect = useCodexStore((s) => s.toggleSelect);
   const clearSelection = useCodexStore((s) => s.clearSelection);
@@ -78,6 +80,11 @@ export function CodexCanvas({ plate, scale, stageRef, onContextMenu }: CodexCanv
       scaleY={scale}
       onMouseDown={(e) => {
         if (e.target === e.target.getStage()) clearSelection();
+      }}
+      onDblClick={(e) => {
+        const node = e.target;
+        const hit = node.name() === 'codex-object' ? node : node.findAncestor('.codex-object', true);
+        if (hit) onObjectActivate?.();
       }}
       onContextMenu={(e) => {
         e.evt.preventDefault();
