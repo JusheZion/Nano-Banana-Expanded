@@ -175,6 +175,30 @@ function parseFrontmatter(markdown: string): { properties: Record<string, unknow
   return { properties, body: match[2] };
 }
 
+/**
+ * Pulls the prose under a `## Summary` heading.
+ *
+ * Vaults commonly keep the summary as a body section rather than a frontmatter
+ * key — the Twovestellium wiki template does — and YAML is a poor home for
+ * paragraphs anyway. Reads to the next heading of any level, so a summary
+ * followed by `## Core Details` stops where it should.
+ */
+export function summaryFromBody(body: string): string {
+  // `$(?![\s\S])` is end-of-input; a bare `$` under /m would stop at the first
+  // line break, and `\Z` is not a JavaScript anchor at all — it matches a
+  // literal "Z", which silently truncated any summary containing that letter.
+  const match = body.match(
+    /^[ \t]*#{1,6}[ \t]*summary[ \t]*$\r?\n([\s\S]*?)(?=^[ \t]*#{1,6}[ \t]|$(?![\s\S]))/im,
+  );
+  if (!match) return '';
+  return match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
 function propertyString(properties: Record<string, unknown>, keys: string[]): string {
   const lowerKeyMap = new Map(Object.keys(properties).map((key) => [key.toLowerCase(), key]));
   for (const key of keys) {
@@ -403,7 +427,9 @@ export async function parseObsidianLoreImport(
     const title = propertyString(properties, TITLE_PROPERTIES) || removeExtension(file.name).trim() || 'Untitled lore';
     const category = (propertyString(properties, TYPE_PROPERTIES) || inferCategoryFromPath(sourcePath)).trim().toLowerCase();
     if (typeFilter && normalizeLookup(category) !== typeFilter) continue;
-    const summary = propertyString(properties, SUMMARY_PROPERTIES);
+    // Frontmatter wins; the body section is the fallback for vaults that keep
+    // their summary as prose under a heading.
+    const summary = propertyString(properties, SUMMARY_PROPERTIES) || summaryFromBody(body);
     const links = parseObsidianLinks(body);
     const imageResult = parseEmbeddedImages(body, sourcePath, imageIndex);
     warnings.push(...imageResult.warnings);

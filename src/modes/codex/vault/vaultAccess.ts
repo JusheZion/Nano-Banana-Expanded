@@ -34,8 +34,28 @@ const DB_NAME = 'codex-vault';
 const STORE = 'handles';
 const HANDLE_KEY = 'vault-root';
 
-/** Vault noise that is never canon. */
+/**
+ * Folders that are never canon.
+ *
+ * `.obsidian`/`.trash`/`.git` are machinery. The rest are this vault's own
+ * layers, per its Wiki Architecture note: `RAW` is the immutable source layer
+ * (clipped articles, drafts, transcripts) awaiting ingest, and `_System` and
+ * `Queries` are operational — ingest queues, lint, the source registry. Binding
+ * a plate to any of them would bind it to unprocessed or non-lore material.
+ *
+ * Hidden by default rather than excluded outright: `includeDrafts` brings them
+ * back for the occasional case where a raw source really is what you want.
+ */
 const SKIP_SEGMENTS = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.smart-env']);
+
+/**
+ * Vault layers that are real notes, but not canon to compose from.
+ *
+ * `Templates` is included so the walker agrees with the importer, which already
+ * discards template files at parse time — otherwise they list in the note
+ * picker and then resolve to nothing.
+ */
+const DRAFT_SEGMENTS = new Set(['RAW', '_System', 'Queries', 'Templates']);
 
 /** Extensions worth reading; everything else is skipped before it is opened. */
 const READ_EXTENSIONS = new Set(['md', 'png', 'jpg', 'jpeg', 'webp', 'gif']);
@@ -48,10 +68,12 @@ export function isVaultAccessSupported(): boolean {
  * True for paths inside a folder the vault uses for its own bookkeeping.
  * Matched per segment so a note legitimately called "git notes.md" is kept.
  */
-export function shouldSkipVaultPath(path: string): boolean {
-  return path
-    .split('/')
-    .some((segment) => SKIP_SEGMENTS.has(segment) || (segment.startsWith('.') && segment.length > 1));
+export function shouldSkipVaultPath(path: string, includeDrafts = false): boolean {
+  return path.split('/').some((segment) => {
+    if (SKIP_SEGMENTS.has(segment)) return true;
+    if (segment.startsWith('.') && segment.length > 1) return true;
+    return !includeDrafts && DRAFT_SEGMENTS.has(segment);
+  });
 }
 
 export function isReadableVaultFile(name: string): boolean {
@@ -88,7 +110,7 @@ export interface VaultReadResult {
  */
 export async function readVault(
   root: VaultDirectoryHandle,
-  { maxFiles = 5000 }: { maxFiles?: number } = {},
+  { maxFiles = 5000, includeDrafts = false }: { maxFiles?: number; includeDrafts?: boolean } = {},
 ): Promise<VaultReadResult> {
   const files: File[] = [];
   const notePaths: string[] = [];
@@ -98,7 +120,7 @@ export async function readVault(
     for await (const entry of dir.values()) {
       if (files.length >= maxFiles) return;
       const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (shouldSkipVaultPath(path)) {
+      if (shouldSkipVaultPath(path, includeDrafts)) {
         skipped += 1;
         continue;
       }

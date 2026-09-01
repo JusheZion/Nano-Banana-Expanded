@@ -16335,3 +16335,87 @@ Modified:
 ### Next steps
 
 - Finish P6 (vault UI).
+
+## Codex vault: hide non-canon layers, summary fallback - 2026-08-25
+
+### What changed
+
+Groundwork against the real vault at `/Users/apoaaron/Fabula Amares Geminae Vault`
+(190 markdown notes), now that its location is known. No UI yet — the operator
+asked to hold that.
+
+- **Non-canon vault layers are hidden from the note walker**: `RAW`, `_System`,
+  `Queries` and `Templates`. Behind an `includeDrafts` flag rather than excluded
+  outright, so a raw source can still be reached deliberately.
+- **`summary` falls back to a `## Summary` body section** when there is no
+  frontmatter key.
+
+### Files touched
+
+Added:
+- `src/portals/writer/__tests__/obsidianSummaryFallback.test.ts`
+
+Modified:
+- `src/modes/codex/vault/vaultAccess.ts` — `DRAFT_SEGMENTS`, `includeDrafts`.
+- `src/modes/codex/vault/__tests__/vaultAccess.test.ts` — +7 tests.
+- `src/portals/writer/obsidianLoreImport.ts` — `summaryFromBody`.
+
+### Implementation notes
+
+- **The layer list comes from the vault's own documentation**, not a guess. Its
+  `Wiki Architecture` note defines `RAW/` as "the immutable source-of-truth
+  layer… clipped articles, drafts, transcript exports", and `_System`/`Queries`
+  hold the ingest queue, lint and source registry. Binding a plate to any of
+  them would bind it to unprocessed or non-lore material.
+- **`Templates` was added so the walker agrees with the importer**, which
+  already discards template files at parse time. Without it, templates listed in
+  the picker and then resolved to nothing.
+- Matching is per **segment**, so a note legitimately called `RAW materials.md`
+  or `Queries of the Twelve.md` survives — asserted by test.
+- **Summary is a fallback, not a replacement.** Frontmatter still wins. The
+  operator is migrating summaries into frontmatter via their vault agent; the
+  fallback keeps notes resolving while that is partway through, and costs
+  nothing once the key exists.
+
+### A bug the lint caught
+
+The first version of the summary regex ended its stop-condition with `\Z`, which
+is **not a JavaScript anchor** — it matches a literal `Z`. Any summary containing
+that letter would have been silently truncated at it. Replaced with
+`$(?![\s\S])` (true end-of-input; a bare `$` under `/m` stops at the first line
+break). A test now covers the letter Z explicitly.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/writer/obsidianLoreImport.ts` — PASS.
+- `npx vitest run` — PASS, 179 files / **1519 tests** (+15).
+- **Run against the real vault** with the shipped predicate: 190 markdown files,
+  **139 visible as canon**, 180 with drafts included, 51 hidden — 21 `RAW`,
+  10 `_System`, 2 `Queries`, 8 `Templates`, 10 `.trash`. Visible set is Lore 43,
+  People 16, Factions 14, Species 13, Locations 11, Events 8, Timelines 7,
+  Source Summaries 6, Disciplines 5, Issues 5. 139 images remain reachable for
+  embeds.
+- `summaryFromBody` run against the real `Lore/Kaleid.md` returns its Summary
+  prose correctly.
+
+### Findings for the operator
+
+- **Numeric stats already exist in canon**, on Species notes: `Threat Level`,
+  `Reasoning`, `Adaptability` as quoted strings on an apparent 0–10 scale, and
+  `Mortality: N/A`. Chart binding works against those today; the quoted-string
+  and non-numeric cases were already handled.
+- **Character and Lore notes carry no numeric stats**, so Kaleid's radar has
+  nothing in canon to read yet. Text binding works now (`official_name`,
+  `primary_force`, `former_names`, title, type, status, tags).
+- Two frontmatter schemas coexist: lowercase wiki keys on ~44 maintained notes,
+  and a capitalised attribute set (`Type`, `Origin`, `Behavior`, `Threat Level`,
+  `Mortality`, `Reasoning`, `Adaptability`) on some Species notes. Both work,
+  because fields are read per note rather than from a fixed schema.
+- Loose notes at the vault root remain visible — `AGENTS.md`, `Welcome.md`,
+  daily notes, `Lore Builder Card.md`. Left alone: hiding them is a judgement
+  call for the operator, not an architectural one.
+
+### Next steps
+
+- Vault UI, once the operator is ready.

@@ -42,6 +42,35 @@ describe('shouldSkipVaultPath', () => {
   it('skips any dotfile segment', () => {
     expect(shouldSkipVaultPath('vault/.DS_Store')).toBe(true);
   });
+
+  it('hides the vault layers that are not canon', () => {
+    // Per the vault's own Wiki Architecture note: RAW is the immutable source
+    // layer awaiting ingest, _System and Queries are operational.
+    expect(shouldSkipVaultPath('Vault/RAW/Lore/Omnifundus (Kaleid).md')).toBe(true);
+    expect(shouldSkipVaultPath('Vault/_System/Operations/Wiki Lint.md')).toBe(true);
+    expect(shouldSkipVaultPath('Vault/Queries/Brainstorm Prompts.md')).toBe(true);
+    // Agrees with the importer, which already discards templates at parse time.
+    expect(shouldSkipVaultPath('Vault/Templates/Character Template.md')).toBe(true);
+  });
+
+  it('keeps the maintained copy of a note that also exists under RAW', () => {
+    expect(shouldSkipVaultPath('Vault/Lore/Omnifundus (Kaleid).md')).toBe(false);
+    expect(shouldSkipVaultPath('Vault/Species/Achroma.md')).toBe(false);
+  });
+
+  it('brings the draft layers back when asked', () => {
+    expect(shouldSkipVaultPath('Vault/RAW/Lore/Kaleid.md', true)).toBe(false);
+    expect(shouldSkipVaultPath('Vault/_System/Wiki Lint.md', true)).toBe(false);
+  });
+
+  it('still hides machinery even with drafts included', () => {
+    expect(shouldSkipVaultPath('Vault/.obsidian/app.json', true)).toBe(true);
+  });
+
+  it('matches whole segments, so a note named after a layer survives', () => {
+    expect(shouldSkipVaultPath('Vault/Lore/RAW materials.md')).toBe(false);
+    expect(shouldSkipVaultPath('Vault/Lore/Queries of the Twelve.md')).toBe(false);
+  });
 });
 
 describe('isReadableVaultFile', () => {
@@ -69,6 +98,7 @@ describe('readVault', () => {
   const vault = dir('Vault', [
     dir('Characters', [file('Kaleid.md'), file('Solfa.md'), file('portrait.png')]),
     dir('.obsidian', [file('app.json')]),
+    dir('RAW', [file('Kaleid.md')]),
     dir('Lore', [dir('Deep', [file('Twovestellium.md')])]),
     file('README.md'),
     file('archive.zip'),
