@@ -57,6 +57,15 @@ const SKIP_SEGMENTS = new Set(['.obsidian', '.trash', '.git', 'node_modules', '.
  */
 const DRAFT_SEGMENTS = new Set(['RAW', '_System', 'Queries', 'Templates']);
 
+/**
+ * Individual files that are not lore, matched by name anywhere in the vault.
+ * `AGENTS.md` is instructions for the vault's own agents; the Lore Builder Card
+ * is a scratch worksheet. Both would otherwise sit in the note picker looking
+ * bindable. Compared lower-case so a rename's capitalisation cannot leak them
+ * back in.
+ */
+const DRAFT_FILES = new Set(['agents.md', 'lore builder card.md']);
+
 /** Extensions worth reading; everything else is skipped before it is opened. */
 const READ_EXTENSIONS = new Set(['md', 'png', 'jpg', 'jpeg', 'webp', 'gif']);
 
@@ -69,7 +78,10 @@ export function isVaultAccessSupported(): boolean {
  * Matched per segment so a note legitimately called "git notes.md" is kept.
  */
 export function shouldSkipVaultPath(path: string, includeDrafts = false): boolean {
-  return path.split('/').some((segment) => {
+  const segments = path.split('/');
+  const name = segments[segments.length - 1]?.toLowerCase() ?? '';
+  if (!includeDrafts && DRAFT_FILES.has(name)) return true;
+  return segments.some((segment) => {
     if (SKIP_SEGMENTS.has(segment)) return true;
     if (segment.startsWith('.') && segment.length > 1) return true;
     return !includeDrafts && DRAFT_SEGMENTS.has(segment);

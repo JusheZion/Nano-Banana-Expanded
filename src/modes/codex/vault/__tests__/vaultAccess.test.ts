@@ -53,6 +53,22 @@ describe('shouldSkipVaultPath', () => {
     expect(shouldSkipVaultPath('Vault/Templates/Character Template.md')).toBe(true);
   });
 
+  it('hides the operational files that are not lore', () => {
+    expect(shouldSkipVaultPath('Vault/AGENTS.md')).toBe(true);
+    expect(shouldSkipVaultPath('Vault/Twovestellium Universe/Lore Builder Card.md')).toBe(true);
+    // Lower-cased before comparing, so a recapitalised rename stays hidden.
+    expect(shouldSkipVaultPath('Vault/agents.md')).toBe(true);
+    expect(shouldSkipVaultPath('Vault/Lore builder card.md')).toBe(true);
+  });
+
+  it('keeps a note whose name merely contains a hidden file name', () => {
+    expect(shouldSkipVaultPath('Vault/Lore/AGENTS.md draft notes.md')).toBe(false);
+  });
+
+  it('reveals the operational files when drafts are included', () => {
+    expect(shouldSkipVaultPath('Vault/AGENTS.md', true)).toBe(false);
+  });
+
   it('keeps the maintained copy of a note that also exists under RAW', () => {
     expect(shouldSkipVaultPath('Vault/Lore/Omnifundus (Kaleid).md')).toBe(false);
     expect(shouldSkipVaultPath('Vault/Species/Achroma.md')).toBe(false);

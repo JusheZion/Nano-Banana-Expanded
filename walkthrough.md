@@ -16419,3 +16419,48 @@ break). A test now covers the letter Z explicitly.
 ### Next steps
 
 - Vault UI, once the operator is ready.
+
+## Codex vault: remove dead summary fallback, hide operational files - 2026-08-25
+
+### What changed
+
+- **Removed `summaryFromBody` and its tests.** The operator migrated every
+  summary into frontmatter via their vault agent. Verified against the vault:
+  **zero** notes now carry a `## Summary` body section, so the fallback could
+  never fire. Unused code that cannot run is a liability, not insurance.
+- **`AGENTS.md` and `Lore Builder Card.md` are hidden**, matched by filename
+  anywhere in the vault and compared lower-case so a recapitalised rename cannot
+  leak them back in. Behind `includeDrafts` like the folder rules.
+
+### Files touched
+
+Removed:
+- `src/portals/writer/__tests__/obsidianSummaryFallback.test.ts`
+
+Modified:
+- `src/portals/writer/obsidianLoreImport.ts` — dropped `summaryFromBody`.
+- `src/modes/codex/vault/vaultAccess.ts` — `DRAFT_FILES`.
+- `src/modes/codex/vault/__tests__/vaultAccess.test.ts` — +3 tests.
+
+### Note on the `\Z` defect
+
+Clarified for the operator: that bug was **fixed** in `4807331`, not merely
+tested. The test existed to stop it returning, and the code has since been
+deleted entirely along with the function. No `\Z` remains outside explanatory
+comments.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/writer` — PASS.
+- `npx vitest run` — PASS, 178 files / **1514 tests**.
+- **Against the real vault**: 190 markdown files, **137 visible as canon**
+  (was 139), 53 hidden. `AGENTS.md` and `Lore Builder Card.md` confirmed absent
+  from the visible set.
+- Frontmatter audit of the vault: 94 of 134 canon notes carry `summary:`; the
+  other 40 (daily notes, source summaries, scratch files) have no summary at
+  all, in frontmatter or body.
+
+### Next steps
+
+- Vault UI and P6 canon binding — operator has given the go-ahead.
