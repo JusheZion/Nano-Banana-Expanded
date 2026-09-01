@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fileWithVaultPath,
+  shouldSkipVaultDirectory,
   isReadableVaultFile,
   readVault,
   shouldSkipVaultPath,
@@ -93,6 +94,7 @@ describe('isReadableVaultFile', () => {
   it('accepts markdown and images', () => {
     expect(isReadableVaultFile('Kaleid.md')).toBe(true);
     expect(isReadableVaultFile('portrait.PNG')).toBe(true);
+    expect(isReadableVaultFile('Kaleid - Adult Teen Onyx.svg')).toBe(true);
   });
 
   it('rejects everything else, so a big vault is not read wholesale', () => {
@@ -107,6 +109,16 @@ describe('fileWithVaultPath', () => {
     expect((f as File & { webkitRelativePath: string }).webkitRelativePath).toBe(
       'Vault/Characters/Kaleid.md',
     );
+  });
+});
+
+describe('shouldSkipVaultDirectory', () => {
+  it('blocks only machinery, so draft folders are still descended into', () => {
+    expect(shouldSkipVaultDirectory('Vault/.obsidian')).toBe(true);
+    expect(shouldSkipVaultDirectory('Vault/.trash')).toBe(true);
+    // RAW is walked for its images even though its notes are hidden.
+    expect(shouldSkipVaultDirectory('Vault/RAW')).toBe(false);
+    expect(shouldSkipVaultDirectory('Vault/_System')).toBe(false);
   });
 });
 

@@ -21,6 +21,7 @@ const state = (partial: Partial<CommandState> = {}): CommandState => ({
   canRedo: false,
   plateCount: 1,
   objectCount: 0,
+  vaultReady: false,
   ...partial,
 });
 
@@ -87,6 +88,15 @@ describe('enablement', () => {
   it('will not delete the last plate', () => {
     expect(isCommandEnabled(getCommand('plate.remove')!, state({ plateCount: 1 }))).toBe(false);
     expect(isCommandEnabled(getCommand('plate.remove')!, state({ plateCount: 2 }))).toBe(true);
+  });
+
+  it('gates the vault refresh on a connected vault', () => {
+    expect(isCommandEnabled(getCommand('file.refreshVault')!, state())).toBe(false);
+    expect(isCommandEnabled(getCommand('file.refreshVault')!, state({ vaultReady: true }))).toBe(true);
+  });
+
+  it('leaves Connect Vault always available, since that is how you connect', () => {
+    expect(isCommandEnabled(getCommand('file.connectVault')!, state())).toBe(true);
   });
 
   it('gates undo and redo on history', () => {
@@ -185,6 +195,7 @@ describe('commandForEvent', () => {
   it('every shortcut in the table resolves back to its own command', () => {
     const permissive = state({
       selectionCount: 1, clipboardCount: 1, canUndo: true, canRedo: true, plateCount: 2, objectCount: 1,
+      vaultReady: true,
     });
     for (const command of CODEX_COMMANDS) {
       if (!command.shortcut) continue;

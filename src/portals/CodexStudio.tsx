@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 import {
-  FileDown, FilePlus2, ImageDown, Layers, Plus, Redo2, Save,
+  BookMarked, FileDown, FilePlus2, ImageDown, Layers, Plus, Redo2, Save,
   Sparkles, Trash2, Type, Undo2,
 } from 'lucide-react';
 import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
@@ -27,6 +27,9 @@ import {
 import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
 import { getSigilFinish } from '@/modes/codex/data/sigilFinishes';
+import { VaultPanel } from '@/modes/codex/components/VaultPanel';
+import { useVaultStore } from '@/stores/vaultStore';
+import { indexEntries, resolveBindings } from '@/modes/codex/vault/vaultBinding';
 import { inkForPlate, isLightPlate, reinkPatches } from '@/modes/codex/utils/plateInk';
 import {
   CODEX_INK, type CodexChartObject, type CodexObject, type CodexPlate,
@@ -42,7 +45,7 @@ import { useTransientStatus } from '@/modes/codex/hooks/useTransientStatus';
 import { useMediaQuery } from '@/modes/codex/hooks/useMediaQuery';
 import { waitForStagePlate } from '@/modes/codex/utils/stageCapture';
 
-type DockTab = 'sigils' | 'properties' | 'layers' | 'documents';
+type DockTab = 'sigils' | 'properties' | 'layers' | 'documents' | 'vault';
 
 /**
  * Workspace state a user expects to survive a reload — which panel was open and
@@ -109,6 +112,9 @@ export function CodexStudio() {
   const selectAll = useCodexStore((s) => s.selectAll);
   const nudgeObjects = useCodexStore((s) => s.nudgeObjects);
   const clearSelection = useCodexStore((s) => s.clearSelection);
+  const vaultStatus = useVaultStore((s) => s.status);
+  const connectVault = useVaultStore((s) => s.connect);
+  const refreshVault = useVaultStore((s) => s.refresh);
   const reorderObject = useCodexStore((s) => s.reorderObject);
   const canUndo = useCodexStore((s) => s.canUndo);
   const canRedo = useCodexStore((s) => s.canRedo);
@@ -144,6 +150,14 @@ export function CodexStudio() {
     () => (plate ? plate.objects.filter((o) => selectedIds.includes(o.id)) : []),
     [plate, selectedIds],
   );
+  /** Highlights the note the selection is already bound to, if they agree on one. */
+  const boundNotePath = useMemo(() => {
+    const paths = selected
+      .map((o) => (o.kind === 'text' || o.kind === 'chart' ? o.binding?.notePath : undefined))
+      .filter(Boolean);
+    return paths.length && paths.every((p) => p === paths[0]) ? paths[0] : undefined;
+  }, [selected]);
+
   const selectedSigilIds = useMemo(
     () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
     [selected],
@@ -331,9 +345,30 @@ export function CodexStudio() {
       canRedo: canRedo(),
       plateCount: doc.plates.length,
       objectCount: plate?.objects.length ?? 0,
+      vaultReady: vaultStatus === 'ready',
     }),
-    [selectedIds.length, clipboard.length, canUndo, canRedo, doc.plates.length, plate],
+    [selectedIds.length, clipboard.length, canUndo, canRedo, doc.plates.length, plate, vaultStatus],
   );
+
+  /**
+   * Re-reads the vault, then pushes every live binding's current value onto the
+   * plates. Unresolvable bindings are reported rather than applied — a renamed
+   * note must not silently blank a title.
+   */
+  const applyVaultBindings = useCallback(() => {
+    const index = indexEntries(useVaultStore.getState().entries);
+    const objects = doc.plates.flatMap((p) => p.objects);
+    const report = resolveBindings(objects, index, new Date().toISOString());
+    if (report.patches.length) applyPatches(report.patches);
+
+    const problems = report.missingNotes.length + report.missingFields.length;
+    const updated = report.patches.length;
+    if (!updated && !problems) return 'Vault re-read — everything already matches canon.';
+    return [
+      updated ? `Updated ${updated} object${updated === 1 ? '' : 's'}` : 'Nothing to update',
+      problems ? `${problems} binding${problems === 1 ? '' : 's'} could not be resolved` : '',
+    ].filter(Boolean).join(' · ') + '.';
+  }, [doc.plates, applyPatches]);
 
   const commandActions: CommandActions = useMemo(
     () => ({
@@ -370,13 +405,21 @@ export function CodexStudio() {
       openProperties: () => showPanel('properties'),
       openLayers: () => showPanel('layers'),
       openFiles: () => showPanel('documents'),
+      openVault: () => showPanel('vault'),
+      connectVault: () => {
+        showPanel('vault');
+        void connectVault();
+      },
+      refreshVault: () => {
+        void refreshVault().then(() => flash(applyVaultBindings()));
+      },
       showShortcuts: () => setShortcutsOpen(true),
     }),
     [
       handleNewDocument, handleSave, handleExportPng, handleExportPdf, undo, redo, cutObjects,
       copyObjects, pasteClipboard, duplicateObjects, removeObjects, selectAll, clearSelection,
       reorderObject, toggleFlag, addObject, placeCentre, addPlate, removePlate, plate, movePlate,
-      stepZoom, zoomFit, selectedIds, flash, showPanel,
+      stepZoom, zoomFit, selectedIds, flash, showPanel, connectVault, refreshVault, applyVaultBindings,
     ],
   );
 
@@ -538,6 +581,7 @@ export function CodexStudio() {
               ['properties', 'Properties', Type],
               ['layers', 'Layers', Layers],
               ['documents', 'Files', FilePlus2],
+              ['vault', 'Vault', BookMarked],
             ] as const).map(([id, label, Icon]) => (
               <button
                 key={id}
@@ -677,6 +721,37 @@ export function CodexStudio() {
             )}
             {tab === 'layers' && (
               <CodexLayersPanel plate={plate} selectedIds={selectedIds} onSelect={handleLayerSelect} />
+            )}
+            {tab === 'vault' && (
+              <VaultPanel
+                boundNotePath={boundNotePath}
+                onRefreshed={() => flash(applyVaultBindings())}
+                onUseNote={(entry) => {
+                  if (selectedIds.length === 0) {
+                    flash('Select a text or chart object first, then pick a note.');
+                    return;
+                  }
+                  const bindable = selected.filter((o) => o.kind === 'text' || o.kind === 'chart');
+                  if (bindable.length === 0) {
+                    flash('Only text and charts can be bound to canon.');
+                    return;
+                  }
+                  applyPatches(
+                    bindable.map((o) => ({
+                      id: o.id,
+                      patch: {
+                        binding: {
+                          notePath: entry.sourcePath,
+                          field: o.kind === 'text' ? 'title' : '',
+                          mode: 'live' as const,
+                        },
+                      } as Partial<CodexObject>,
+                    })),
+                  );
+                  setTab('properties');
+                  flash(`Bound to “${entry.title}”. Choose a field in Properties.`);
+                }}
+              />
             )}
             {tab === 'documents' && (
               <CodexDocumentsPanel

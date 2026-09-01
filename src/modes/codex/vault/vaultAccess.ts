@@ -67,7 +67,7 @@ const DRAFT_SEGMENTS = new Set(['RAW', '_System', 'Queries', 'Templates']);
 const DRAFT_FILES = new Set(['agents.md', 'lore builder card.md']);
 
 /** Extensions worth reading; everything else is skipped before it is opened. */
-const READ_EXTENSIONS = new Set(['md', 'png', 'jpg', 'jpeg', 'webp', 'gif']);
+const READ_EXTENSIONS = new Set(['md', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']);
 
 export function isVaultAccessSupported(): boolean {
   return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
@@ -77,6 +77,18 @@ export function isVaultAccessSupported(): boolean {
  * True for paths inside a folder the vault uses for its own bookkeeping.
  * Matched per segment so a note legitimately called "git notes.md" is kept.
  */
+/**
+ * Directories that are never descended into. Machinery only — the draft layers
+ * are still walked, because canon notes embed images stored under `RAW/` and
+ * hiding those assets would break the embeds on notes that are canon.
+ */
+export function shouldSkipVaultDirectory(path: string): boolean {
+  return path
+    .split('/')
+    .some((segment) => SKIP_SEGMENTS.has(segment) || (segment.startsWith('.') && segment.length > 1));
+}
+
+/** Whether a *note* is hidden. Assets are governed by the directory rule above. */
 export function shouldSkipVaultPath(path: string, includeDrafts = false): boolean {
   const segments = path.split('/');
   const name = segments[segments.length - 1]?.toLowerCase() ?? '';
@@ -132,19 +144,32 @@ export async function readVault(
     for await (const entry of dir.values()) {
       if (files.length >= maxFiles) return;
       const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (shouldSkipVaultPath(path, includeDrafts)) {
+
+      if (entry.kind === 'directory') {
+        if (shouldSkipVaultDirectory(path)) {
+          skipped += 1;
+          continue;
+        }
+        await walk(entry, path);
+        continue;
+      }
+
+      if (!isReadableVaultFile(entry.name)) {
         skipped += 1;
         continue;
       }
-      if (entry.kind === 'directory') {
-        await walk(entry, path);
-      } else if (isReadableVaultFile(entry.name)) {
-        const file = await entry.getFile();
-        files.push(fileWithVaultPath(file, path));
-        if (path.toLowerCase().endsWith('.md')) notePaths.push(path);
-      } else {
+
+      const isNote = path.toLowerCase().endsWith('.md');
+      // Draft rules govern notes only. An image under `RAW/` is still the image
+      // a canon note embeds, and dropping it would break that note's artwork.
+      if (isNote && shouldSkipVaultPath(path, includeDrafts)) {
         skipped += 1;
+        continue;
       }
+
+      const file = await entry.getFile();
+      files.push(fileWithVaultPath(file, path));
+      if (isNote) notePaths.push(path);
     }
   }
 

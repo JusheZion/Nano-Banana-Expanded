@@ -35,6 +35,8 @@ export interface CommandState {
   canRedo: boolean;
   plateCount: number;
   objectCount: number;
+  /** Whether a vault is connected and read, gating the canon commands. */
+  vaultReady: boolean;
 }
 
 /** What commands can do. Supplied by the portal; none of it lives here. */
@@ -72,6 +74,9 @@ export interface CommandActions {
   openProperties: () => void;
   openLayers: () => void;
   openFiles: () => void;
+  openVault: () => void;
+  connectVault: () => void;
+  refreshVault: () => void;
   showShortcuts: () => void;
 }
 
@@ -100,6 +105,8 @@ export const CODEX_COMMANDS: CodexCommand[] = [
   { id: 'file.save', label: 'Save', group: 'file', shortcut: 'Mod+S', run: (c) => c.save() },
   { id: 'file.exportPng', label: 'Export Plate as PNG', group: 'file', shortcut: 'Mod+Shift+E', dividerBefore: true, run: (c) => c.exportPng() },
   { id: 'file.exportPdf', label: 'Export Codex as PDF', group: 'file', run: (c) => c.exportPdf() },
+  { id: 'file.connectVault', label: 'Connect Vault', group: 'file', dividerBefore: true, run: (c) => c.connectVault() },
+  { id: 'file.refreshVault', label: 'Refresh from Vault', group: 'file', shortcut: 'Mod+Alt+R', isEnabled: (s) => s.vaultReady, run: (c) => c.refreshVault() },
 
   // edit
   { id: 'edit.undo', label: 'Undo', group: 'edit', shortcut: 'Mod+Z', isEnabled: (s) => s.canUndo, run: (c) => c.undo() },
@@ -146,6 +153,7 @@ export const CODEX_COMMANDS: CodexCommand[] = [
   { id: 'view.properties', label: 'Properties Panel', group: 'view', shortcut: '2', run: (c) => c.openProperties() },
   { id: 'view.layers', label: 'Layers Panel', group: 'view', shortcut: '3', run: (c) => c.openLayers() },
   { id: 'view.files', label: 'Files Panel', group: 'view', shortcut: '4', run: (c) => c.openFiles() },
+  { id: 'view.vault', label: 'Vault Panel', group: 'view', shortcut: '5', run: (c) => c.openVault() },
 
   // help
   { id: 'help.shortcuts', label: 'Keyboard Shortcuts', group: 'help', shortcut: 'Mod+/', run: (c) => c.showShortcuts() },

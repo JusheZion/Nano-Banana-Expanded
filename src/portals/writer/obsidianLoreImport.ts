@@ -140,6 +140,37 @@ function parseYamlScalar(raw: string): unknown {
   return trimmed.replace(/^['"]|['"]$/g, '');
 }
 
+/**
+ * Folds a YAML block scalar into a string.
+ *
+ * `>` folds line breaks into spaces and blank lines into paragraph breaks;
+ * `|` keeps every break. The chomping suffix controls the trailing newline:
+ * `-` strips it, `+` keeps them all, bare clips to one.
+ */
+function foldBlockScalar(lines: string[], style: '>' | '|', chomp: '' | '-' | '+'): string {
+  // Indentation is set by the first non-blank line and stripped from all of them.
+  const indent = lines.find((l) => l.trim())?.match(/^\s*/)?.[0].length ?? 0;
+  const stripped = lines.map((l) => (l.trim() ? l.slice(indent) : ''));
+
+  let text: string;
+  if (style === '|') {
+    text = stripped.join('\n');
+  } else {
+    const paragraphs: string[] = [];
+    let current: string[] = [];
+    for (const line of stripped) {
+      if (line.trim()) current.push(line.trim());
+      else if (current.length) { paragraphs.push(current.join(' ')); current = []; }
+    }
+    if (current.length) paragraphs.push(current.join(' '));
+    text = paragraphs.join('\n\n');
+  }
+
+  if (chomp === '-') return text.replace(/\n+$/, '');
+  if (chomp === '+') return text;
+  return text.replace(/\n+$/, '\n').replace(/\n$/, '');
+}
+
 function parseFrontmatter(markdown: string): { properties: Record<string, unknown>; body: string } {
   const normalized = markdown.replace(/^\uFEFF/, '');
   if (!normalized.startsWith('---')) return { properties: {}, body: normalized };
@@ -150,9 +181,11 @@ function parseFrontmatter(markdown: string): { properties: Record<string, unknow
   const lines = match[1].split(/\r?\n/);
   let currentArrayKey: string | null = null;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
+
     if (currentArrayKey && trimmed.startsWith('- ')) {
       const arr = Array.isArray(properties[currentArrayKey]) ? [...(properties[currentArrayKey] as unknown[])] : [];
       arr.push(parseYamlScalar(trimmed.slice(2)));
@@ -160,10 +193,30 @@ function parseFrontmatter(markdown: string): { properties: Record<string, unknow
       continue;
     }
     currentArrayKey = null;
+
     const m = line.match(/^([^:]+):\s*(.*)$/);
     if (!m) continue;
     const key = m[1].trim();
     const value = m[2] ?? '';
+
+    // Block scalar: `summary: >-` and friends. Everything indented under the
+    // key belongs to it, so those lines are consumed here rather than being
+    // re-read as malformed keys.
+    const block = value.trim().match(/^([|>])([+-]?)\d*$/);
+    if (block) {
+      const keyIndent = line.match(/^\s*/)?.[0].length ?? 0;
+      const collected: string[] = [];
+      let j = i + 1;
+      for (; j < lines.length; j += 1) {
+        const next = lines[j];
+        if (next.trim() && (next.match(/^\s*/)?.[0].length ?? 0) <= keyIndent) break;
+        collected.push(next);
+      }
+      properties[key] = foldBlockScalar(collected, block[1] as '>' | '|', block[2] as '' | '-' | '+');
+      i = j - 1;
+      continue;
+    }
+
     if (!value.trim()) {
       properties[key] = [];
       currentArrayKey = key;

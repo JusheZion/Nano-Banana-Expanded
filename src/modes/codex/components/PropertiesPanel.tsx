@@ -1,5 +1,9 @@
 import React, { useId, useState } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
+import { useVaultStore } from '@/stores/vaultStore';
+import { bindableFields, resolveField, formatFieldValue, numericFieldValue } from '../vault/vaultBinding';
+import type { ObsidianLoreEntry } from '@/portals/writer/obsidianLoreImport';
+import type { CodexBinding } from '../types/codexObjects';
 import {
   alignPatches,
   distributePatches,
@@ -182,10 +186,24 @@ export function PropertiesPanel({ selected }: { selected: CodexObject[] }) {
         </Row>
       </Section>
 
-      {one?.kind === 'text' && <TextSection object={one as CodexTextObject} />}
+      {one?.kind === 'text' && (
+        <>
+          <TextSection object={one as CodexTextObject} />
+          <CanonSection
+            kindLabel="text"
+            binding={(one as CodexTextObject).binding}
+            onChange={(binding) => updateObjects([one.id], { binding } as Partial<CodexObject>)}
+          />
+        </>
+      )}
       {one?.kind === 'sigil' && <SigilSection object={one as CodexSigilObject} />}
       {one?.kind === 'frame' && <FrameSection object={one as CodexFrameObject} />}
-      {one?.kind === 'chart' && <ChartSection object={one as CodexChartObject} />}
+      {one?.kind === 'chart' && (
+        <>
+          <ChartSection object={one as CodexChartObject} />
+          <ChartCanonSection object={one as CodexChartObject} />
+        </>
+      )}
 
       <EffectsSection selected={selected} />
     </div>
@@ -263,6 +281,183 @@ function TextSection({ object }: { object: CodexTextObject }) {
       </Row>
     </Section>
   );
+}
+
+/**
+ * Ties an object to a field in a vault note.
+ *
+ * Only rendered when a vault is connected: offering a binding UI with nothing
+ * to bind to would be a dead end. `live` re-resolves on every refresh; `once`
+ * fills the value now and then lets go.
+ */
+function CanonSection({
+  binding,
+  onChange,
+  /** Field list for the bound note, plus a live preview of the current value. */
+  kindLabel,
+}: {
+  binding: CodexBinding | undefined;
+  onChange: (next: CodexBinding | undefined) => void;
+  kindLabel: string;
+}) {
+  const status = useVaultStore((s) => s.status);
+  const entries = useVaultStore((s) => s.entries);
+
+  if (status !== 'ready') return null;
+
+  const entry = binding ? entries.find((e) => e.sourcePath === binding.notePath) : undefined;
+  const fields = entry ? bindableFields(entry) : [];
+  const preview = entry && binding ? formatFieldValue(resolveField(entry, binding.field)) : '';
+
+  return (
+    <Section title="Canon">
+      {!binding && (
+        <p className="px-1 text-[11px] leading-relaxed text-white/35">
+          Pick a note in the Vault panel to bind this {kindLabel} to canon.
+        </p>
+      )}
+
+      {binding && (
+        <>
+          <Row label="Note">
+            <span className="block truncate text-[11px] text-white/70" title={binding.notePath}>
+              {binding.notePath.split('/').pop()}
+            </span>
+          </Row>
+
+          {!entry && (
+            <p className="rounded border border-rose-400/30 bg-rose-400/10 px-2 py-1.5 text-[11px] text-rose-100/80">
+              That note is no longer in the vault. The value on the plate is unchanged.
+            </p>
+          )}
+
+          {entry && (
+            <>
+              <Row label="Field">
+                <select
+                  value={binding.field}
+                  onChange={(e) => onChange({ ...binding, field: e.target.value })}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
+                >
+                  {!fields.includes(binding.field) && (
+                    <option value={binding.field}>{binding.field} (missing)</option>
+                  )}
+                  {fields.map((field) => (
+                    <option key={field} value={field}>{field}</option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Update">
+                <select
+                  value={binding.mode}
+                  onChange={(e) => onChange({ ...binding, mode: e.target.value as CodexBinding['mode'] })}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
+                >
+                  <option value="live">Live — follows canon</option>
+                  <option value="once">Once — filled, then mine</option>
+                </select>
+              </Row>
+
+              <Row label="Value">
+                <span className="block truncate text-[11px] text-white/50" title={preview}>
+                  {preview || <span className="text-white/25">empty in canon</span>}
+                </span>
+              </Row>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="mt-1 text-[10px] text-white/35 underline underline-offset-2 hover:text-white/70"
+          >
+            Unbind
+          </button>
+        </>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * Chart binding is per axis: a stat block is many fields of one note, not one
+ * field. The note is chosen once; each axis then names its own frontmatter key.
+ */
+function ChartCanonSection({ object }: { object: CodexChartObject }) {
+  const update = useCodexStore((s) => s.updateObject);
+  const status = useVaultStore((s) => s.status);
+  const entries = useVaultStore((s) => s.entries);
+
+  if (status !== 'ready') return null;
+
+  const entry = object.binding ? entries.find((e) => e.sourcePath === object.binding!.notePath) : undefined;
+  const fields = entry ? bindableFields(entry) : [];
+
+  return (
+    <Section title="Canon">
+      {!object.binding && (
+        <p className="px-1 text-[11px] leading-relaxed text-white/35">
+          Pick a note in the Vault panel to read these values from canon.
+        </p>
+      )}
+
+      {object.binding && (
+        <>
+          <Row label="Note">
+            <span className="block truncate text-[11px] text-white/70" title={object.binding.notePath}>
+              {object.binding.notePath.split('/').pop()}
+            </span>
+          </Row>
+
+          {!entry ? (
+            <p className="rounded border border-rose-400/30 bg-rose-400/10 px-2 py-1.5 text-[11px] text-rose-100/80">
+              That note is no longer in the vault. The plotted values are unchanged.
+            </p>
+          ) : (
+            object.axes.map((axis, i) => (
+              <Row key={i} label={axis.label || `Axis ${i + 1}`}>
+                <select
+                  value={axis.field ?? ''}
+                  onChange={(e) => {
+                    const field = e.target.value || undefined;
+                    update(object.id, {
+                      axes: object.axes.map((a, j) => (j === i ? { ...a, field } : a)),
+                    } as Partial<CodexObject>);
+                  }}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
+                >
+                  <option value="">— not bound —</option>
+                  {fields.map((field) => (
+                    <option key={field} value={field}>
+                      {field}
+                      {(() => {
+                        const n = numericPreview(entry, field);
+                        return n === null ? ' (not a number)' : ` (${n})`;
+                      })()}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+            ))
+          )}
+
+          <button
+            type="button"
+            onClick={() => update(object.id, { binding: undefined } as Partial<CodexObject>)}
+            className="mt-1 text-[10px] text-white/35 underline underline-offset-2 hover:text-white/70"
+          >
+            Unbind
+          </button>
+        </>
+      )}
+    </Section>
+  );
+}
+
+/** Shows what a field would plot as, so a non-numeric key is obvious up front. */
+function numericPreview(entry: ObsidianLoreEntry, field: string): number | null {
+  return numericFieldValue(resolveField(entry, field));
 }
 
 function SigilSection({ object }: { object: CodexSigilObject }) {

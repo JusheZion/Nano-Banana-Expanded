@@ -16464,3 +16464,96 @@ comments.
 ### Next steps
 
 - Vault UI and P6 canon binding — operator has given the go-ahead.
+
+## Codex P6 vault UI - 2026-08-25
+
+### What changed
+
+The vault UI, wired to the groundwork from `6231c21`. Codex Studio can now
+connect to the Obsidian vault, list its notes, and bind plate objects to note
+fields. Read-only throughout.
+
+- **Vault panel**, a fifth dock tab, with a state for every way this goes:
+  unsupported browser, disconnected, permission-needed, reading, ready, error.
+  Searchable note list, refresh, a drafts toggle, disconnect.
+- **Binding controls in Properties.** Text objects bind one field; charts bind a
+  note and then a frontmatter key per axis, with each option previewing the
+  value it would plot so a non-numeric key is obvious before it is chosen.
+- **Commands**: `Connect Vault`, `Refresh from Vault` (`Mod+Alt+R`), `Vault
+  Panel` (`5`).
+- **Refresh applies live bindings** and reports what it could not resolve.
+
+### Files touched
+
+Added:
+- `src/stores/vaultStore.ts`
+- `src/modes/codex/components/VaultPanel.tsx`
+- `src/portals/writer/__tests__/obsidianBlockScalars.test.ts`
+
+Modified:
+- `src/modes/codex/vault/vaultAccess.ts` — `shouldSkipVaultDirectory`, svg.
+- `src/portals/writer/obsidianLoreImport.ts` — YAML block scalars.
+- `src/modes/codex/components/PropertiesPanel.tsx` — canon sections.
+- `src/modes/codex/commands/codexCommands.ts` — three commands, `vaultReady`.
+- `src/portals/CodexStudio.tsx` — tab, wiring, `applyVaultBindings`.
+
+### Two defects found by running against the real vault
+
+Neither would have surfaced against test fixtures.
+
+**1. Every summary parsed as the literal string `">-"`.** The operator's vault
+agent migrated summaries into frontmatter as YAML *folded block scalars* —
+`summary: >-` followed by indented prose, which is what Obsidian writes for
+multi-line properties. The frontmatter parser took the text after the colon
+literally, so the marker became the value and the prose was dropped. 103 of 137
+notes are affected. `parseFrontmatter` now handles `>`/`|` with `-`/`+`
+chomping, consuming the indented block so the keys after it still parse. This
+also fixes the Writers' Portal importer, which shares the parser.
+
+**2. Hiding `RAW/` broke image embeds on canon notes.** 89 parse warnings, all
+unresolved images, because canon notes embed artwork stored under `RAW/` and the
+walker was skipping the whole folder. Draft rules now govern **notes only**;
+directories are descended for their assets regardless. Warnings dropped 89 → 43.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals src/stores` — PASS.
+- `npx vitest run` — PASS, 179 files / **1525 tests** (+11).
+- `npm run build` — PASS. `CodexStudio` 204.63 kB (53.34 kB gzip).
+- **End-to-end against the real vault**, driving the shipped `readVault` through
+  a node-backed directory handle: 441 files walked, **137 notes**, 122 skipped;
+  137 entries parsed.
+  - `Lore/Kaleid.md` summary now reads its actual prose.
+  - Bindable fields listed correctly, including `properties.official_name`.
+  - A live text binding to `properties.official_name` resolved to
+    **"Kaleidoscope"**, 0 unresolved.
+  - `Species/Angels.md` stats coerce as designed: `"4"`→4, `"9"`→9, `"8"`→8,
+    and `Mortality: "N/A"`→**null**, not 0.
+- **Live browser QA**: Vault tab renders; disconnected state shows the connect
+  affordance and the read-only reassurance. Zero console errors.
+
+### Outstanding issues
+
+- **The folder grant itself is unverified.** `showDirectoryPicker` needs a user
+  gesture and an OS dialog, so connecting must be done by the operator. Every
+  stage after the grant is verified against real vault data.
+- **43 broken image embeds in the vault**, e.g. `Assets/Images/Onyx's
+  Shadow.png`, which does not exist. A vault data issue, not a code one — the
+  vault's own Wiki Lint would likely flag them.
+
+### Risks or caveats
+
+- Binding a chart axis to a non-numeric field leaves the axis at its current
+  value and reports it. The field picker labels such options `(not a number)`.
+- Kaleid's note still carries no numeric stats, so his radar has nothing to bind
+  to; Species notes do.
+
+### Operator follow-up
+
+- Connect the vault (Vault panel → Connect vault…) so the grant path can be
+  confirmed.
+
+### Next steps
+
+- Operator sign-off on binding a real plate.
