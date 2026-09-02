@@ -16614,3 +16614,39 @@ generated for the operator's vault agent.
 ### Next steps
 
 - Operator connects the vault so the grant path can be confirmed.
+
+## Codex P6 confirmed and shipped - 2026-08-25
+
+### What changed
+
+Operator connected the vault in their own Chrome: **137 notes listed**. That was
+the one path that could not be verified from here — `showDirectoryPicker`
+requires a user gesture and an OS dialog — so with it confirmed, P6 merged to
+`main` and deployed.
+
+The count matches exactly what the shipped walker reported when run against the
+vault from node (137 canon notes after hiding `RAW`, `_System`, `Queries`,
+`Templates`, the operational files and `.trash`), which is good evidence the
+browser path and the headless path agree.
+
+### Verification
+
+- `npx vitest run` — PASS, 180 files / **1529 tests**.
+- `npm run build` — PASS. `CodexStudio` 204.63 kB (53.34 kB gzip).
+- Merged fast-forward to `main` at `d6c045e`; deployed as version
+  `93ae7058-39c8-480b-a7b7-1b54a8ed3d87`.
+
+### Outstanding issues
+
+- **Binding a plate end-to-end is not yet exercised in the running app.** The
+  pipeline is verified against real vault data from node (walk → parse → resolve,
+  including a live text binding resolving to "Kaleidoscope" and Species stats
+  coercing correctly), and the vault now connects in the browser — but selecting
+  an object, clicking a note, choosing a field and refreshing has not been done
+  by a person yet. The preview pane cannot inherit the operator's folder grant,
+  so this one belongs to them.
+- 16 genuinely broken image embeds remain in the vault; report handed over.
+
+### Next steps
+
+- Operator binds a real plate and reports what breaks.
