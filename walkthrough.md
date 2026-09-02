@@ -16557,3 +16557,60 @@ directories are descended for their assets regardless. Warnings dropped 89 → 4
 ### Next steps
 
 - Operator sign-off on binding a real plate.
+
+## Codex vault: nested-vault image resolution - 2026-08-25
+
+### What changed
+
+Chasing the "broken embeds" finding produced a report full of false positives,
+which turned out to be a resolver limitation rather than vault breakage.
+
+**The vault contains a nested vault.** `Fabula Amares Geminae Vault/` and
+`Fabula Amares Geminae Vault/Twovestellium Universe/` each hold a `.obsidian`
+folder, so both are Obsidian vault roots. Obsidian resolves a root-relative
+reference like `Assets/Images/x.png` from the root of whichever vault the *note*
+belongs to — the inner one — but `resolveImageFile` only tried note-relative and
+outer-root-relative paths, plus a bare basename that was skipped whenever the
+filename was not unique.
+
+`resolveImageFile` now also matches the reference as a **path suffix**, and only
+when exactly one indexed file matches. An ambiguous suffix stays unresolved:
+silently picking one of two same-named images would put the wrong artwork on a
+plate, which is worse than reporting it.
+
+Reported missing images across the real vault: **38 → 16**. The other 22 were
+present all along.
+
+### Files touched
+
+Added:
+- `src/portals/writer/__tests__/obsidianNestedVaultImages.test.ts`
+
+Modified:
+- `src/portals/writer/obsidianLoreImport.ts` — suffix resolution.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/portals/writer` — PASS.
+- `npx vitest run` — PASS, 180 files / **1529 tests** (+4).
+- Against the real vault: unresolved embeds fell from 38 to 16, and the 16 were
+  spot-checked as genuinely absent.
+
+### Findings for the operator
+
+Of the 16 that remain, three are worth naming:
+
+- `Assets/Images/Masqueraided Aspiria 2 .png` is referenced, but the file on
+  disk is `Masqueraided Aspiria .png` — no "2".
+- `Ominiaspiria - Celestial Flare Form.png` is referenced with `Omni` spelled
+  `Omini`.
+- Neither `Onyx's Shadow.png` **nor** `Kaleid's Shadow.png` exists in the vault,
+  so the rename the operator described has not landed under that name.
+
+A full report with per-note references and filename-similarity suggestions was
+generated for the operator's vault agent.
+
+### Next steps
+
+- Operator connects the vault so the grant path can be confirmed.

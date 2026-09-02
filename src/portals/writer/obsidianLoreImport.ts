@@ -335,7 +335,22 @@ function resolveImageFile(ref: string, notePath: string, imageIndex: Map<string,
     const file = imageIndex.get(candidate);
     if (file) return file;
   }
-  return undefined;
+
+  // Vault-root-relative reference under a *nested* vault.
+  //
+  // Obsidian resolves `Assets/Images/x.png` from the root of whichever vault
+  // the note belongs to, and vaults can be nested — this one has an inner vault
+  // inside the outer folder. Rather than guess where the root is, match the
+  // reference as a path suffix, and only when exactly one file matches: an
+  // ambiguous suffix must stay unresolved rather than silently pick a file.
+  const suffix = `/${normalizedRef.toLowerCase()}`;
+  let match: File | undefined;
+  for (const [key, file] of imageIndex) {
+    if (!key.endsWith(suffix)) continue;
+    if (match && match !== file) return undefined;
+    match = file;
+  }
+  return match;
 }
 
 function parseEmbeddedImages(body: string, notePath: string, imageIndex: Map<string, File>): { images: ObsidianLoreImage[]; warnings: string[] } {
