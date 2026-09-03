@@ -80,7 +80,14 @@ export function SigilPalette({ onPlace, tint = '#d8b45a', appearance }: SigilPal
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        {/* One scrolling row rather than a wrapped block: seven categories wrap
+            to three lines and cost ~90px of the panel, which is height the mark
+            grid needs far more than the filters do. */}
+        <div
+          role="tablist"
+          aria-label="Mark category"
+          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
+        >
           <CategoryChip
             label="All"
             count={ALL_SIGILS.length}
@@ -173,8 +180,10 @@ function CategoryChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      role="tab"
+      aria-selected={active}
       className={[
-        'rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.08em] transition-colors focus:outline-none focus:ring-1 focus:ring-white/50',
+        'shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.08em] transition-colors focus:outline-none focus:ring-1 focus:ring-white/50',
         active
           ? 'border-white/40 bg-white/15 text-white'
           : 'border-white/10 bg-transparent text-white/50 hover:border-white/25 hover:text-white/80',

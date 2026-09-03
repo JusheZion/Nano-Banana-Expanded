@@ -28,6 +28,7 @@ import { CodexCanvas } from '@/modes/codex/engine/CodexCanvas';
 import { PLATE_TEMPLATES } from '@/modes/codex/data/plateTemplates';
 import { getSigilFinish } from '@/modes/codex/data/sigilFinishes';
 import { VaultPanel } from '@/modes/codex/components/VaultPanel';
+import { TextEditorOverlay } from '@/modes/codex/components/TextEditorOverlay';
 import { useVaultStore } from '@/stores/vaultStore';
 import { indexEntries, resolveBindings } from '@/modes/codex/vault/vaultBinding';
 import { inkForPlate, isLightPlate, reinkPatches } from '@/modes/codex/utils/plateInk';
@@ -132,6 +133,8 @@ export function CodexStudio() {
   const isNarrow = useMediaQuery('(max-width: 899px)');
   const [dockOpen, setDockOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /** Id of the text object being edited in place on the canvas. */
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [saved, setSaved] = useState<CodexDocumentSummary[]>([]);
   const { status, flash } = useTransientStatus(2600);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -157,6 +160,13 @@ export function CodexStudio() {
       .filter(Boolean);
     return paths.length && paths.every((p) => p === paths[0]) ? paths[0] : undefined;
   }, [selected]);
+
+  /** The text object currently being edited on the canvas, if any. */
+  const editingText = useMemo(() => {
+    if (!editingTextId || !plate) return null;
+    const found = plate.objects.find((o) => o.id === editingTextId);
+    return found?.kind === 'text' ? found : null;
+  }, [editingTextId, plate]);
 
   const selectedSigilIds = useMemo(
     () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
@@ -391,7 +401,13 @@ export function CodexStudio() {
       sendToBack: () => selectedIds.forEach((id) => reorderObject(id, 'back')),
       toggleLock: () => toggleFlag('locked'),
       toggleVisible: () => toggleFlag('visible'),
-      addText: () => addObject(makeTextObject({ ...placeCentre(360), width: 360 })),
+      addText: () => {
+        const object = makeTextObject({ ...placeCentre(360), width: 360 });
+        addObject(object);
+        // Straight into editing: adding text and getting no caret is what made
+        // this feel broken.
+        setEditingTextId(object.id);
+      },
       addChart: () => addObject(makeChart(placeCentre(420))),
       addPlate,
       removePlate: () => plate && removePlate(plate.id),
@@ -434,6 +450,7 @@ export function CodexStudio() {
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (editingTextId) return;
       const target = e.target as HTMLElement | null;
       if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
 
@@ -465,7 +482,7 @@ export function CodexStudio() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [commandState, commandContext, isMac, selectedIds, nudgeObjects, contextTarget, shortcutsOpen]);
+  }, [commandState, commandContext, isMac, selectedIds, nudgeObjects, contextTarget, shortcutsOpen, editingTextId]);
 
   if (!plate) return null;
 
@@ -635,9 +652,15 @@ export function CodexStudio() {
                 <div className="min-h-0 flex-1">
                   {insertMode === 'marks' ? (
                     <div className="flex h-full flex-col">
-                      <div className="shrink-0 border-b border-white/10 p-3">
+                      {/* Collapsed by default: ten swatches plus their label and
+                          action cost ~150px, and the finish is set once and then
+                          left alone, whereas the mark grid is used constantly. */}
+                      <details className="shrink-0 border-b border-white/10">
+                        <summary className="cursor-pointer list-none px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-white/70">
+                          Finish · {getSigilFinish(sigilFinishId)?.name ?? 'Custom'}
+                        </summary>
+                        <div className="px-3 pb-3">
                         <FinishPicker
-                          label="Finish for new marks"
                           value={sigilFinishId}
                           onChange={setSigilFinish}
                           action={{
@@ -651,7 +674,8 @@ export function CodexStudio() {
                             },
                           }}
                         />
-                      </div>
+                        </div>
+                      </details>
                       <div className="min-h-0 flex-1">
                         <SigilPalette
                           tint={CODEX_INK}
@@ -773,7 +797,11 @@ export function CodexStudio() {
               scale={zoom}
               stageRef={stageRef}
               onContextMenu={setContextTarget}
-              onObjectActivate={() => showPanel('properties')}
+              onObjectActivate={() => {
+                const one = selected.length === 1 ? selected[0] : null;
+                if (one?.kind === 'text') setEditingTextId(one.id);
+                else showPanel('properties');
+              }}
             />
           </div>
 
@@ -810,6 +838,19 @@ export function CodexStudio() {
 
       {shortcutsOpen && (
         <CodexShortcutsDialog isMac={isMac} onClose={() => setShortcutsOpen(false)} />
+      )}
+
+      {editingText && stageRef.current && (
+        <TextEditorOverlay
+          object={editingText}
+          stage={stageRef.current}
+          scale={zoom}
+          onCommit={(text) => {
+            updateObjects([editingText.id], { text } as Partial<CodexObject>);
+            setEditingTextId(null);
+          }}
+          onCancel={() => setEditingTextId(null)}
+        />
       )}
 
       {/* plate strip */}

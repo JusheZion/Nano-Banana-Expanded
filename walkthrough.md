@@ -16650,3 +16650,87 @@ browser path and the headless path agree.
 ### Next steps
 
 - Operator binds a real plate and reports what breaks.
+
+## Codex first-use friction fixes - 2026-08-25
+
+### What changed
+
+Operator's first real session surfaced four problems. Three were defects or
+clear gaps; the fourth was a layout request, partly addressed.
+
+**1. Adding text gave no caret and typing did nothing.** There was no in-place
+editing at all — the only way to set text was a field in the Properties panel,
+which had to be discovered. Konva has no editable text node, so a real
+`<textarea>` now floats over the shape while editing, mirroring the object's
+typography so nothing jumps on commit. Enter commits, Shift+Enter breaks the
+line, Escape cancels, blur commits. Adding text drops straight into edit mode,
+and double-clicking a text object reopens it.
+
+**2. The selection never cleared.** Clicking bare plate did nothing, so objects
+stayed selected until another was clicked — the *same* defect already fixed for
+the right-click menu, in a second call site.
+
+**3. The mark grid scrolled through a 333px window inside an 856px dock.** The
+finish swatches and the wrapped category chips were consuming ~500px above it.
+Finish is now a collapsed `<details>` summarising the current finish, and the
+category filters are a single horizontal scrolling strip instead of three
+wrapped rows. Scroll window **333px → 589px**, measured.
+
+**4. "I wished these were tabbed horizontal menus."** Category filters are now
+exactly that. The dock's own panel tabs were already horizontal. Not a full
+answer — see below.
+
+### Files touched
+
+Added:
+- `src/modes/codex/components/TextEditorOverlay.tsx`
+- `src/modes/codex/engine/hitTest.ts`
+- `src/modes/codex/engine/__tests__/hitTest.test.ts`
+
+Modified:
+- `src/portals/CodexStudio.tsx` — edit state, overlay, collapsed finish picker.
+- `src/modes/codex/engine/CodexCanvas.tsx` — uses the shared hit test.
+- `src/modes/codex/components/{SigilPalette,FragmentPalette}.tsx` — chip strip.
+
+### The hit test, extracted
+
+The `target === stage` mistake has now shipped twice — right-click, then
+deselect — because the check was written inline at each call site. It is now one
+tested helper, `findCodexObject`, used by all three handlers. The tempting test
+reads as "nothing was hit", but the plate's background rect and texture image
+are real Konva nodes, so it is always false on bare plate.
+
+### A bug found while verifying
+
+The overlay appeared but was **not focused**, so it would still have offered no
+caret. Rendering is gated on a position measured in a layout effect, so the
+mount-only focus effect ran against a null ref and silently did nothing. Now
+keyed on the measurement.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex src/portals/CodexStudio.tsx` — PASS.
+- `npx vitest run` — PASS, 181 files / **1536 tests** (+7).
+- `npm run build` — PASS.
+- **Live browser QA** at `localhost:5173`, 1500x950:
+  - Pressed `T`: overlay appeared, focused, contents selected; typed
+    "OMNIFUNDUS", pressed Enter — overlay closed and the canvas text read
+    `OMNIFUNDUS`.
+  - Selected a mark, clicked bare plate: transformer nodes **1 → 0**.
+  - Mark grid scroll window measured at **589px**, up from 333px.
+
+### Deliberate omissions
+
+- **The dock is still a vertical column, not horizontal panels.** Moving
+  Properties/Layers/Vault to a horizontal arrangement would take width from the
+  plate, which is the thing being edited. The category filters were the part
+  that genuinely wanted to be horizontal.
+
+### Operator follow-up
+
+- Confirm whether "tabbed horizontal menus" meant more than the category strip.
+
+### Next steps
+
+- Continue first-use feedback.

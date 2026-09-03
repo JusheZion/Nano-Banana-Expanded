@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type Konva from 'konva';
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from 'react-konva';
 import { gradientProps } from '../utils/codexGradient';
+import { findCodexObject, hitObjectId, type HitNode } from './hitTest';
 import { plateTextureDataUri } from '../data/plateTextures';
 import useImage from 'use-image';
 import { useCodexStore } from '@/stores/codexStore';
@@ -79,23 +80,14 @@ export function CodexCanvas({ plate, scale, stageRef, onContextMenu, onObjectAct
       scaleX={scale}
       scaleY={scale}
       onMouseDown={(e) => {
-        if (e.target === e.target.getStage()) clearSelection();
+        if (!findCodexObject(e.target as unknown as HitNode)) clearSelection();
       }}
       onDblClick={(e) => {
-        const node = e.target;
-        const hit = node.name() === 'codex-object' ? node : node.findAncestor('.codex-object', true);
-        if (hit) onObjectActivate?.();
+        if (findCodexObject(e.target as unknown as HitNode)) onObjectActivate?.();
       }}
       onContextMenu={(e) => {
         e.evt.preventDefault();
-        // "Did this hit an object?" cannot be `target !== stage`: the plate's
-        // background rect and texture are real nodes, so clicking bare plate
-        // reports them and every right-click would look like an object hit.
-        // Only nodes tagged `codex-object` (or descendants of one) count.
-        const node = e.target;
-        const objectNode =
-          node.name() === 'codex-object' ? node : node.findAncestor('.codex-object', true);
-        const id = objectNode?.id() ?? '';
+        const id = hitObjectId(e.target as unknown as HitNode);
         // Right-clicking an unselected object selects it first, so the menu acts
         // on what was actually clicked rather than on a stale selection.
         if (id && !selectedIds.includes(id)) toggleSelect(id, false);
