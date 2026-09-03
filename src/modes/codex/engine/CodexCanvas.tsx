@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type Konva from 'konva';
 import { Image as KonvaImage, Layer, Rect, Stage, Transformer } from 'react-konva';
 import { gradientProps } from '../utils/codexGradient';
-import { findCodexObject, hitObjectId, type HitNode } from './hitTest';
+import { findCodexObject, hitObjectId, shouldClearSelection, type HitNode } from './hitTest';
 import { plateTextureDataUri } from '../data/plateTextures';
 import useImage from 'use-image';
 import { useCodexStore } from '@/stores/codexStore';
@@ -80,7 +80,7 @@ export function CodexCanvas({ plate, scale, stageRef, onContextMenu, onObjectAct
       scaleX={scale}
       scaleY={scale}
       onMouseDown={(e) => {
-        if (!findCodexObject(e.target as unknown as HitNode)) clearSelection();
+        if (shouldClearSelection(e.target as unknown as HitNode)) clearSelection();
       }}
       onDblClick={(e) => {
         if (findCodexObject(e.target as unknown as HitNode)) onObjectActivate?.();

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { findCodexObject, hitObjectId, type HitNode } from '../hitTest';
+import {
+  findCodexObject,
+  hitObjectId,
+  isTransformerPart,
+  shouldClearSelection,
+  type HitNode,
+} from '../hitTest';
 
 /** Minimal stand-in for a Konva node, with an optional ancestor chain. */
 function node(name: string, id = '', ancestor: HitNode | null = null): HitNode {
@@ -12,6 +18,16 @@ function node(name: string, id = '', ancestor: HitNode | null = null): HitNode {
     },
   };
   return self;
+}
+
+/** A Transformer anchor: a node whose ancestor chain reaches the Transformer. */
+function anchorNode(): HitNode {
+  const transformer = node('Transformer');
+  return {
+    name: () => '',
+    id: () => '',
+    findAncestor: (selector) => (selector === 'Transformer' ? transformer : null),
+  };
 }
 
 describe('findCodexObject', () => {
@@ -48,5 +64,38 @@ describe('hitObjectId', () => {
   it('returns an empty string for bare plate, not undefined', () => {
     expect(hitObjectId(node(''))).toBe('');
     expect(hitObjectId(null)).toBe('');
+  });
+});
+
+describe('isTransformerPart', () => {
+  it('recognises the selection’s own transform handles', () => {
+    expect(isTransformerPart(anchorNode())).toBe(true);
+  });
+
+  it('is false for objects and for bare plate', () => {
+    expect(isTransformerPart(node('codex-object', 'o1'))).toBe(false);
+    expect(isTransformerPart(node(''))).toBe(false);
+    expect(isTransformerPart(null)).toBe(false);
+  });
+});
+
+describe('shouldClearSelection', () => {
+  it('clears on bare plate', () => {
+    expect(shouldClearSelection(node(''))).toBe(true);
+  });
+
+  it('keeps the selection when an object is clicked', () => {
+    expect(shouldClearSelection(node('codex-object', 'o1'))).toBe(false);
+  });
+
+  it('keeps the selection when a transform handle is grabbed', () => {
+    // Clearing here detaches the Transformer mid-gesture, so resizing and
+    // rotating by mouse silently stop working.
+    expect(shouldClearSelection(anchorNode())).toBe(false);
+  });
+
+  it('keeps the selection when a child of an object is clicked', () => {
+    const parent = node('codex-object', 'o1');
+    expect(shouldClearSelection(node('', '', parent))).toBe(false);
   });
 });

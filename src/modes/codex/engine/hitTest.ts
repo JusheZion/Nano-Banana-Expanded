@@ -30,3 +30,30 @@ export function hitObjectId(target: HitNode | null | undefined): string {
   const node = findCodexObject(target);
   return node?.id?.() ?? '';
 }
+
+/**
+ * True when the event landed on the selection's own transform handles.
+ *
+ * The Transformer's anchors are separate nodes that are not tagged
+ * `codex-object`, so a naive "did this hit an object?" reports false for them —
+ * and grabbing a resize or rotate handle would clear the selection, detaching
+ * the Transformer and killing the gesture before it began.
+ */
+export function isTransformerPart(target: HitNode | null | undefined): boolean {
+  if (!target) return false;
+  // Node-type selector: no leading dot, unlike the `.codex-object` name match.
+  return !!target.findAncestor('Transformer', true);
+}
+
+/**
+ * Whether a pointer event on the stage means "deselect".
+ *
+ * Only bare plate counts. Objects keep their selection, and so do the transform
+ * handles — this is the third place the over-broad version of this test has
+ * caused a bug, so it lives here once rather than at each call site.
+ */
+export function shouldClearSelection(target: HitNode | null | undefined): boolean {
+  if (findCodexObject(target)) return false;
+  if (isTransformerPart(target)) return false;
+  return true;
+}

@@ -16786,3 +16786,56 @@ their edge.
 ### Next steps
 
 - Continue first-use feedback.
+
+## Codex transform handles - 2026-08-25
+
+### What changed
+
+Operator: text could be moved but not resized or rotated by mouse, though the
+Properties fields worked.
+
+**The deselect handler was eating the gesture.** A Transformer's resize and
+rotate handles are anchor nodes belonging to the Transformer, not tagged
+`codex-object`. `shouldClearSelection` saw "not an object" and cleared the
+selection on mouse-down, which detached the Transformer before the drag could
+begin. Moving worked because that gesture starts on the object itself.
+
+This is the third bug from the same over-broad "nothing was hit" test, so the
+Transformer case now lives in the shared helper alongside the others rather than
+being handled at a call site.
+
+### Files touched
+
+Modified:
+- `src/modes/codex/engine/hitTest.ts` — `isTransformerPart`, `shouldClearSelection`.
+- `src/modes/codex/engine/CodexCanvas.tsx` — uses `shouldClearSelection`.
+- `src/modes/codex/engine/__tests__/hitTest.test.ts` — +6 tests.
+
+### Verification, and its limits
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex` — PASS.
+- `npx vitest run` — PASS, 181 files / **1542 tests** (+6), including a test
+  asserting a transform handle does not clear the selection.
+- `npm run build` — PASS.
+- **Resize verified in the browser**: pressing the bottom-right anchor kept the
+  Transformer attached and set `isTransforming` true — where previously it
+  detached — and completing the drag changed width 360 → 480.
+- **Rotation could not be verified here.** The in-app preview pane applies an
+  offset to real pointer events over the Konva canvas: a real drag on the
+  *resize* anchor also failed to resize, while the same gesture dispatched at
+  computed coordinates succeeded. That is a harness artifact, already recorded
+  for canvas clicks. Rotation shares the anchor code path that resize now
+  exercises, and the unit test covers the handler, but the gesture itself is
+  unconfirmed and needs a real mouse.
+
+### Outstanding issues
+
+- Operator to confirm rotation by mouse.
+- A text box does not widen when its font grows, so a long word can break. Once
+  handles work this is a drag; whether text should auto-fit is a separate
+  question and was not assumed.
+
+### Next steps
+
+- Operator confirmation on rotation.
