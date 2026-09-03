@@ -51,6 +51,20 @@ export function TextNode({ object, onSelect, onChange, registerRef }: TextNodePr
       lineHeight={object.lineHeight}
       letterSpacing={object.letterSpacing}
       wrap="word"
+      /**
+       * Konva's default hit region for text is the glyphs themselves, so only
+       * the letters were clickable and the space around them was not. That was
+       * survivable while a missed click did nothing; once clicking bare plate
+       * correctly deselected, every near-miss dropped the selection and the box
+       * became hard to grab, drag or transform. The hit region is now the text
+       * box, which is what a user is aiming at.
+       */
+      hitFunc={(context, shape) => {
+        context.beginPath();
+        context.rect(0, 0, shape.width(), shape.height());
+        context.closePath();
+        context.fillStrokeShape(shape);
+      }}
       onMouseDown={onSelect as never}
       onTap={onSelect as never}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}

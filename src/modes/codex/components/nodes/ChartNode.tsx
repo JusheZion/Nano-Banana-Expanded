@@ -49,6 +49,11 @@ export function ChartNode({ object, onSelect, onChange, registerRef }: ChartNode
       }}
       {...nodeEffectProps(object)}
     >
+      {/* A chart is mostly empty space between its lines, so without a hit
+          surface only the strokes themselves could be clicked. Transparent so it
+          changes nothing visually; it exists purely to be grabbable. */}
+      <Rect width={object.width} height={object.height} fill="transparent" />
+
       {object.chartKind === 'radial' && <RadarBody object={object} />}
       {object.chartKind === 'bars' && <BarsBody object={object} />}
       {object.chartKind === 'pips' && <PipsBody object={object} />}

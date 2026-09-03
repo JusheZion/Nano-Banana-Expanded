@@ -16734,3 +16734,55 @@ keyed on the measurement.
 ### Next steps
 
 - Continue first-use feedback.
+
+## Codex text hit area - 2026-08-25
+
+### What changed
+
+Operator: after the deselect fix, text boxes became hard to select, drag and
+transform — "the UI responded better to the mouse than it does now."
+
+Correct, and caused by the previous change interacting with a latent defect.
+
+**Konva's default hit region for a text node is the glyphs themselves**, not the
+text box. `KonvaText` had no `hitFunc`, so only the letters were ever clickable
+and the space around them was dead. That was survivable while a missed click did
+nothing and the selection simply persisted. Once clicking bare plate correctly
+deselected, every near-miss dropped the selection — so the latent problem became
+the dominant experience.
+
+Text nodes now take a `hitFunc` covering their box. Charts had the same gap for
+the same reason — a radar is mostly empty space between strokes — and now carry
+a transparent hit rect.
+
+### Files touched
+
+Modified:
+- `src/modes/codex/components/nodes/TextNode.tsx` — `hitFunc` over the box.
+- `src/modes/codex/components/nodes/ChartNode.tsx` — transparent hit rect.
+
+### Implementation notes
+
+The fix is the hit area, not a revert of the deselect behaviour. Reverting would
+have restored the *feel* by reinstating a bug — sloppy clicks being harmless
+only because nothing responded to them.
+
+Frames were deliberately left edge-only. An unfilled frame is a container, and
+filling its interior would make it swallow clicks aimed at the objects inside
+it — which is why design tools generally keep unfilled frames selectable by
+their edge.
+
+### Verification
+
+- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
+- `npx eslint src/modes/codex` — PASS.
+- `npx vitest run` — PASS, 181 files / 1536 tests.
+- `npm run build` — PASS.
+- **Live browser QA**: added text at x=340 w=360 containing "Text", whose glyphs
+  occupy roughly the first 50px. Clicking at x=660 — 320px from the nearest
+  letter, previously dead space — selected it (**0 → 1**). Clicking bare plate
+  still deselects (**1 → 0**), so the earlier fix is intact. Zero console errors.
+
+### Next steps
+
+- Continue first-use feedback.
