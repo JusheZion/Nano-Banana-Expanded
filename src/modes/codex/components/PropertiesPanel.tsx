@@ -13,6 +13,7 @@ import {
 } from '../utils/alignment';
 import { FinishPicker } from './FinishPicker';
 import { getSigilFinish, SIGIL_FINISHES } from '../data/sigilFinishes';
+import { readCollapsedSections, writeCollapsedSection } from '../utils/codexSession';
 import type {
   CodexChartObject,
   CodexFrameObject,
@@ -783,16 +784,6 @@ function EffectsSection({ selected }: { selected: CodexObject[] }) {
 
 /* ---------- primitives ---------- */
 
-const COLLAPSE_KEY = 'codex.panelSections.v1';
-
-function readCollapsed(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '{}') as Record<string, boolean>;
-  } catch {
-    return {};
-  }
-}
-
 /**
  * Collapsible group. Which sections are folded is a workspace preference, so it
  * persists — a user who always collapses Effects should not refold it on every
@@ -809,18 +800,14 @@ function Section({
 }) {
   const headingId = useId();
   const [open, setOpen] = useState(() => {
-    const stored = readCollapsed()[title];
+    const stored = readCollapsedSections()[title];
     return stored === undefined ? defaultOpen : !stored;
   });
 
   const toggle = () => {
     setOpen((wasOpen) => {
       const next = !wasOpen;
-      try {
-        localStorage.setItem(COLLAPSE_KEY, JSON.stringify({ ...readCollapsed(), [title]: !next }));
-      } catch {
-        // Blocked storage must not stop the section folding.
-      }
+      writeCollapsedSection(title, !next);
       return next;
     });
   };

@@ -48,7 +48,8 @@ interface VaultState {
   connect: () => Promise<void>;
   /** Re-requests permission on the stored handle. Needs a user gesture. */
   reconnect: () => Promise<void>;
-  refresh: () => Promise<void>;
+  /** Returns true only when a fresh vault read completed successfully. */
+  refresh: () => Promise<boolean>;
   disconnect: () => Promise<void>;
   setIncludeDrafts: (value: boolean) => Promise<void>;
 }
@@ -73,7 +74,7 @@ export const useVaultStore = create<VaultState>((set, get) => {
    * Walks the vault and parses it. Shared by connect, reconnect and refresh so
    * all three land in exactly the same state.
    */
-  const readInto = async (handle: VaultDirectoryHandle) => {
+  const readInto = async (handle: VaultDirectoryHandle): Promise<boolean> => {
     set({ status: 'reading', error: null });
     try {
       const { files, notePaths } = await readVault(handle, {
@@ -90,8 +91,10 @@ export const useVaultStore = create<VaultState>((set, get) => {
         error: null,
         lastReadAt: new Date().toISOString(),
       });
+      return true;
     } catch (error) {
       set({ status: 'error', error: describe(error) });
+      return false;
     }
   };
 
@@ -140,23 +143,32 @@ export const useVaultStore = create<VaultState>((set, get) => {
     reconnect: async () => {
       const handle = get().handle;
       if (!handle) return;
-      const granted = await ensureVaultPermission(handle, { request: true });
-      if (!granted) {
-        set({ status: 'needs-permission' });
-        return;
+      try {
+        const granted = await ensureVaultPermission(handle, { request: true });
+        if (!granted) {
+          set({ status: 'needs-permission' });
+          return;
+        }
+        await readInto(handle);
+      } catch (error) {
+        set({ status: 'error', error: describe(error) });
       }
-      await readInto(handle);
     },
 
     refresh: async () => {
       const handle = get().handle;
-      if (!handle) return;
-      const granted = await ensureVaultPermission(handle, { request: false });
-      if (!granted) {
-        set({ status: 'needs-permission' });
-        return;
+      if (!handle) return false;
+      try {
+        const granted = await ensureVaultPermission(handle, { request: false });
+        if (!granted) {
+          set({ status: 'needs-permission' });
+          return false;
+        }
+        return readInto(handle);
+      } catch (error) {
+        set({ status: 'error', error: describe(error) });
+        return false;
       }
-      await readInto(handle);
     },
 
     disconnect: async () => {

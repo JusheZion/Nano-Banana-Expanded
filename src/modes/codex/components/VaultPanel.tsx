@@ -137,7 +137,9 @@ export function VaultPanel({ onUseNote, boundNotePath, onRefreshed }: VaultPanel
           <button
             type="button"
             onClick={() => {
-              void refresh().then(() => onRefreshed?.('Vault re-read.'));
+              void refresh().then((refreshed) => {
+                if (refreshed) onRefreshed?.('Vault re-read.');
+              });
             }}
             className="shrink-0 rounded border border-white/20 px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-white/70 hover:border-white/40 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/50"
           >

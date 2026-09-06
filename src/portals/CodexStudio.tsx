@@ -45,38 +45,11 @@ import {
 import { useTransientStatus } from '@/modes/codex/hooks/useTransientStatus';
 import { useMediaQuery } from '@/modes/codex/hooks/useMediaQuery';
 import { waitForStagePlate } from '@/modes/codex/utils/stageCapture';
-
-type DockTab = 'sigils' | 'properties' | 'layers' | 'documents' | 'vault';
-
-/**
- * Workspace state a user expects to survive a reload — which panel was open and
- * how far they were zoomed in. Kept out of the document: it is about the
- * session, not the codex, and would otherwise travel between machines with a
- * saved file.
- */
-const SESSION_KEY = 'codex.session.v1';
-
-interface CodexSession {
-  tab?: DockTab;
-  zoom?: number;
-}
-
-function readSession(): CodexSession {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as CodexSession) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeSession(session: CodexSession): void {
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  } catch {
-    // Blocked storage must not break the editor.
-  }
-}
+import {
+  readCodexSession,
+  writeCodexSession,
+  type CodexDockTab,
+} from '@/modes/codex/utils/codexSession';
 
 const ZOOM_STEPS = [0.25, 0.35, 0.45, 0.55, 0.7, 0.85, 1, 1.25, 1.5, 2];
 
@@ -85,6 +58,7 @@ const CASCADE_STEP = 28;
 const CASCADE_WRAP = 8;
 
 export function CodexStudio() {
+  const initialSession = useMemo(readCodexSession, []);
   const doc = useCodexStore((s) => s.doc);
   const activePlateId = useCodexStore((s) => s.activePlateId);
   const selectedIds = useCodexStore((s) => s.selectedIds);
@@ -120,10 +94,10 @@ export function CodexStudio() {
   const canUndo = useCodexStore((s) => s.canUndo);
   const canRedo = useCodexStore((s) => s.canRedo);
 
-  const [tab, setTab] = useState<DockTab>(() => readSession().tab ?? 'sigils');
+  const [tab, setTab] = useState<CodexDockTab>(initialSession.tab);
   /** Which half of the library the Insert tab is showing. */
   const [insertMode, setInsertMode] = useState<'marks' | 'fragments'>('marks');
-  const [zoom, setZoom] = useState(() => readSession().zoom ?? 0.55);
+  const [zoom, setZoom] = useState(initialSession.zoom);
   const [contextTarget, setContextTarget] = useState<ContextMenuTarget | null>(null);
   /**
    * Below this the dock cannot share the width with the plate, so it becomes an
@@ -167,6 +141,13 @@ export function CodexStudio() {
     const found = plate.objects.find((o) => o.id === editingTextId);
     return found?.kind === 'text' ? found : null;
   }, [editingTextId, plate]);
+
+  // A plate change, deletion, or document load can remove the object while its
+  // editor is open. Clear the orphaned id so global shortcuts do not remain
+  // disabled for the rest of the session.
+  useEffect(() => {
+    if (editingTextId && !editingText) setEditingTextId(null);
+  }, [editingTextId, editingText]);
 
   const selectedSigilIds = useMemo(
     () => selected.filter((o) => o.kind === 'sigil').map((o) => o.id),
@@ -296,14 +277,14 @@ export function CodexStudio() {
     [],
   );
 
-  useEffect(() => { writeSession({ tab, zoom }); }, [tab, zoom]);
+  useEffect(() => { writeCodexSession({ tab, zoom }); }, [tab, zoom]);
 
   // Leaving narrow mode must not strand the overlay open over a wide layout.
   useEffect(() => { if (!isNarrow) setDockOpen(false); }, [isNarrow]);
 
   // On a narrow screen the dock covers the plate, so opening a panel from a
   // command has to open the drawer too or the command looks like it did nothing.
-  const showPanel = useCallback((next: DockTab) => {
+  const showPanel = useCallback((next: CodexDockTab) => {
     setTab(next);
     setDockOpen(true);
   }, []);
@@ -427,7 +408,9 @@ export function CodexStudio() {
         void connectVault();
       },
       refreshVault: () => {
-        void refreshVault().then(() => flash(applyVaultBindings()));
+        void refreshVault().then((refreshed) => {
+          if (refreshed) flash(applyVaultBindings());
+        });
       },
       showShortcuts: () => setShortcutsOpen(true),
     }),
@@ -450,7 +433,7 @@ export function CodexStudio() {
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (editingTextId) return;
+      if (editingText) return;
       const target = e.target as HTMLElement | null;
       if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
 
@@ -482,7 +465,7 @@ export function CodexStudio() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [commandState, commandContext, isMac, selectedIds, nudgeObjects, contextTarget, shortcutsOpen, editingTextId]);
+  }, [commandState, commandContext, isMac, selectedIds, nudgeObjects, contextTarget, shortcutsOpen, editingText]);
 
   if (!plate) return null;
 
@@ -524,7 +507,7 @@ export function CodexStudio() {
         <ToolButton
           icon={Type}
           label="Add text"
-          onClick={() => addObject(makeTextObject({ ...placeCentre(360), width: 360 }))}
+          onClick={commandActions.addText}
         />
         <ToolButton
           icon={Plus}

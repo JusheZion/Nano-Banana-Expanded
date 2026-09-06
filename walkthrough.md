@@ -16839,3 +16839,75 @@ Modified:
 ### Next steps
 
 - Operator confirmation on rotation.
+
+## Weekly ARCS bug and refactor check - 2026-09-06
+
+### What changed
+
+- Validated Codex Studio session and panel-collapse data before restoring it from
+  local storage. Unknown tabs, malformed JSON, non-finite or out-of-range zooms,
+  and non-boolean collapse values now fall back safely instead of entering UI
+  state through unchecked casts.
+- Cleared orphaned inline-text editing state after plate changes, object
+  deletion, or document replacement so keyboard shortcuts cannot remain
+  disabled by an object that no longer exists.
+- Routed the toolbar's Add text action through the same command action as the
+  menu and keyboard shortcut. All three entry points now create the object and
+  immediately open the in-place editor.
+- Made vault refresh return an explicit success result. Canon bindings and
+  success notices now run only after a fresh read succeeds; read failures,
+  permission loss, and permission API failures remain visible error states.
+
+### Files touched
+
+- `src/modes/codex/utils/codexSession.ts`
+- `src/modes/codex/utils/__tests__/codexSession.test.ts`
+- `src/portals/CodexStudio.tsx`
+- `src/modes/codex/components/PropertiesPanel.tsx`
+- `src/modes/codex/components/VaultPanel.tsx`
+- `src/stores/vaultStore.ts`
+- `src/stores/__tests__/vaultStore.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+
+- Session persistence is now a small typed boundary module shared by the portal
+  and properties inspector. This keeps JSON parsing, validation, defaults, and
+  storage-failure handling out of both large UI components.
+- Vault reads use a boolean result rather than inferring success from promise
+  settlement. The store intentionally owns permission/read error translation;
+  callers only decide whether to apply bindings or show a success notice.
+- The existing root `AGENTS.md` and source ownership remain accurate. The DOX
+  pass found no durable contract or child index change requiring an AGENTS edit.
+
+### Verification
+
+- `npm run test -- --run src/stores/__tests__/vaultStore.test.ts src/modes/codex/utils/__tests__/codexSession.test.ts` — PASS, 2 files / 9 tests.
+- `npx tsc --noEmit -p tsconfig.app.json --pretty false` — PASS.
+- `npm run lint` — PASS, 0 errors and 0 warnings.
+- `npm run test` — PASS, 183 files / 1,551 tests.
+- `npm run build` — PASS, 2,688 modules transformed.
+- In-app browser reached the local ARCS build and confirmed the Codex route is
+  protected by the sign-in gate. Interactive Add text and vault checks could
+  not proceed without an authenticated test session.
+
+### Outstanding issues
+
+- Authenticated browser QA remains required for the Add text toolbar path and a
+  real connected-vault refresh failure. The automated regression suite covers
+  the state and result contracts beneath both interactions.
+
+### Risks or caveats
+
+- Browserslist reported that `caniuse-lite` is six months old; this did not fail
+  lint, tests, or build and was not changed during the feature-focused audit.
+
+### Operator follow-up
+
+- Sign in with the dedicated test account in the local preview, then verify Add
+  text opens a focused editor and a denied vault refresh shows its error without
+  claiming that canon was updated.
+
+### Next steps
+
+- None beyond the authenticated browser verification above.
