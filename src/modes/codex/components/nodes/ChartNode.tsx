@@ -6,7 +6,6 @@ import { radarGeometry, clampAxisValue } from '../../utils/chartGeometry';
 interface ChartNodeProps {
   object: CodexChartObject;
   onSelect: (e: { evt: MouseEvent }) => void;
-  onChange: (patch: Partial<CodexChartObject>) => void;
   registerRef: (node: unknown | null) => void;
 }
 
@@ -15,7 +14,7 @@ interface ChartNodeProps {
  * Four kinds cover what the codex plates use — radar, bar meters, segmented
  * pips and a single radial dial.
  */
-export function ChartNode({ object, onSelect, onChange, registerRef }: ChartNodeProps) {
+export function ChartNode({ object, onSelect, registerRef }: ChartNodeProps) {
   return (
     <Group
       ref={registerRef as never}
@@ -32,21 +31,10 @@ export function ChartNode({ object, onSelect, onChange, registerRef }: ChartNode
       draggable={!object.locked}
       onMouseDown={onSelect as never}
       onTap={onSelect as never}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformEnd={(e) => {
-        const node = e.target;
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        node.scaleX(1);
-        node.scaleY(1);
-        onChange({
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(60, object.width * scaleX),
-          height: Math.max(60, object.height * scaleY),
-          rotation: node.rotation(),
-        });
-      }}
+      // No onDragEnd: the canvas commits the whole drag, because a drag can
+      // move a group and one gesture must be one undo step.
+      // No onTransformEnd: the canvas commits the whole transform, because a
+      // transform can resize a group and one gesture must be one undo step.
       {...nodeEffectProps(object)}
     >
       {/* A chart is mostly empty space between its lines, so without a hit

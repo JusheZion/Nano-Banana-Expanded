@@ -7,32 +7,58 @@ import { useCodexStore } from '@/stores/codexStore';
 interface LayersPanelProps {
   plate: CodexPlate;
   selectedIds: string[];
+  /** Selects the single object. The layer tree is the way inside a group. */
   onSelect: (id: string) => void;
+  /** Selects every member of a group, as clicking one on the canvas does. */
+  onSelectGroup: (groupId: string) => void;
 }
 
 export const CodexLayersPanel = memo(function CodexLayersPanel({
   plate,
   selectedIds,
   onSelect,
+  onSelectGroup,
 }: LayersPanelProps) {
   const updateObject = useCodexStore((state) => state.updateObject);
   const reorderObject = useCodexStore((state) => state.reorderObject);
+
+  // Number the groups on this plate so members can be labelled, and so the
+  // rail colour tells two adjacent groups apart.
+  const groupNumbers = new Map<string, number>();
+  for (const object of plate.objects) {
+    if (object.groupId && !groupNumbers.has(object.groupId)) {
+      groupNumbers.set(object.groupId, groupNumbers.size + 1);
+    }
+  }
 
   return (
     <div className="h-full overflow-y-auto p-2">
       {plate.objects.length === 0 && (
         <p className="p-3 text-xs text-white/40">This plate is empty.</p>
       )}
-      {[...plate.objects].reverse().map((object) => (
+      {[...plate.objects].reverse().map((object) => {
+        const groupNumber = object.groupId ? groupNumbers.get(object.groupId) : undefined;
+        return (
         <div
           key={object.id}
           className={[
             'mb-1 flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs',
+            groupNumber ? 'border-l-2 border-l-sky-300/60 pl-1.5' : '',
             selectedIds.includes(object.id)
               ? 'border-amber-300/50 bg-amber-300/10'
               : 'border-white/10 hover:border-white/25',
           ].join(' ')}
         >
+          {groupNumber !== undefined && (
+            <button
+              onClick={() => onSelectGroup(object.groupId!)}
+              title={`Select group ${groupNumber}`}
+              aria-label={`Select group ${groupNumber}`}
+              className="shrink-0 rounded bg-sky-300/15 px-1 text-[9px] leading-4 text-sky-200/80 hover:bg-sky-300/30 focus:outline-none focus:ring-1 focus:ring-sky-300/60"
+            >
+              G{groupNumber}
+            </button>
+          )}
           <button
             onClick={() => onSelect(object.id)}
             className="min-w-0 flex-1 truncate text-left text-white/75 hover:text-white focus:outline-none"
@@ -56,7 +82,8 @@ export const CodexLayersPanel = memo(function CodexLayersPanel({
           <button onClick={() => reorderObject(object.id, 'forward')} aria-label="Bring forward" className="px-1 text-white/35 hover:text-white/80">↑</button>
           <button onClick={() => reorderObject(object.id, 'backward')} aria-label="Send backward" className="px-1 text-white/35 hover:text-white/80">↓</button>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 });

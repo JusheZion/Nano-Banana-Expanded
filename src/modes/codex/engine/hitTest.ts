@@ -57,3 +57,30 @@ export function shouldClearSelection(target: HitNode | null | undefined): boolea
   if (isTransformerPart(target)) return false;
   return true;
 }
+
+/* ---------------------------------------------------------- hit padding -- */
+
+/**
+ * Smallest grabbable extent, in plate units.
+ *
+ * Konva's hit region is the shape as drawn, which is right for artwork and
+ * wrong for furniture: a hairline rule is one pixel tall, so it is a one-pixel
+ * target on screen at 100% and a sub-pixel one at any smaller zoom. Placing a
+ * Diamond Rule and finding only the mark selectable is this, not a missing
+ * object.
+ */
+export const MIN_HIT_EXTENT = 12;
+
+/**
+ * Padding that brings a shape's hit region up to `MIN_HIT_EXTENT`, per axis.
+ *
+ * Grows outwards from the centre so the padded region stays centred on what is
+ * actually drawn, and is zero on any axis already big enough — a normal frame
+ * keeps Konva's own hit region untouched.
+ */
+export function hitPadding(width: number, height: number): { x: number; y: number } {
+  return {
+    x: Math.max(0, (MIN_HIT_EXTENT - width) / 2),
+    y: Math.max(0, (MIN_HIT_EXTENT - height) / 2),
+  };
+}

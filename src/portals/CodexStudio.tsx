@@ -7,6 +7,8 @@ import {
 import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
+import { buildFragment } from '@/modes/codex/data/FragmentRegistry';
+import { groupMembers } from '@/modes/codex/utils/grouping';
 import { FinishPicker } from '@/modes/codex/components/FinishPicker';
 import {
   CodexContextMenu,
@@ -74,6 +76,8 @@ export function CodexStudio() {
   const updatePlate = useCodexStore((s) => s.updatePlate);
   const removeObjects = useCodexStore((s) => s.removeObjects);
   const duplicateObjects = useCodexStore((s) => s.duplicateObjects);
+  const groupObjects = useCodexStore((s) => s.groupObjects);
+  const ungroupObjects = useCodexStore((s) => s.ungroupObjects);
   const undo = useCodexStore((s) => s.undo);
   const redo = useCodexStore((s) => s.redo);
   const loadDoc = useCodexStore((s) => s.loadDocument);
@@ -241,7 +245,13 @@ export function CodexStudio() {
     }
   }, [doc.plates, doc.title, activePlateId, setActivePlate, flash]);
 
+  // The layer tree selects the one object clicked, which is how you reach a
+  // single part of a group; its G-badge selects the whole group instead.
   const handleLayerSelect = useCallback((id: string) => select([id]), [select]);
+  const handleLayerSelectGroup = useCallback(
+    (groupId: string) => select(groupMembers(plate?.objects ?? [], groupId)),
+    [select, plate],
+  );
   const handleNewDocument = useCallback(() => {
     newDoc();
     flash('New codex started.');
@@ -336,9 +346,10 @@ export function CodexStudio() {
       canRedo: canRedo(),
       plateCount: doc.plates.length,
       objectCount: plate?.objects.length ?? 0,
+      hasGroup: selected.some((o) => Boolean(o.groupId)),
       vaultReady: vaultStatus === 'ready',
     }),
-    [selectedIds.length, clipboard.length, canUndo, canRedo, doc.plates.length, plate, vaultStatus],
+    [selectedIds.length, selected, clipboard.length, canUndo, canRedo, doc.plates.length, plate, vaultStatus],
   );
 
   /**
@@ -382,6 +393,14 @@ export function CodexStudio() {
       sendToBack: () => selectedIds.forEach((id) => reorderObject(id, 'back')),
       toggleLock: () => toggleFlag('locked'),
       toggleVisible: () => toggleFlag('visible'),
+      group: () => {
+        groupObjects(selectedIds);
+        flash(`Grouped ${selectedIds.length} objects.`);
+      },
+      ungroup: () => {
+        ungroupObjects(selectedIds);
+        flash('Ungrouped.');
+      },
       addText: () => {
         const object = makeTextObject({ ...placeCentre(360), width: 360 });
         addObject(object);
@@ -419,6 +438,7 @@ export function CodexStudio() {
       copyObjects, pasteClipboard, duplicateObjects, removeObjects, selectAll, clearSelection,
       reorderObject, toggleFlag, addObject, placeCentre, addPlate, removePlate, plate, movePlate,
       stepZoom, zoomFit, selectedIds, flash, showPanel, connectVault, refreshVault, applyVaultBindings,
+      groupObjects, ungroupObjects,
     ],
   );
 
@@ -715,7 +735,7 @@ export function CodexStudio() {
                           return;
                         }
                         const origin = placeFragment(fragment.width, fragment.height);
-                        addObjects(fragment.build(origin.x, origin.y));
+                        addObjects(buildFragment(fragment, origin.x, origin.y));
                         flash(`Placed ${fragment.name}.`);
                       }}
                     />
@@ -727,7 +747,12 @@ export function CodexStudio() {
               <div className="h-full overflow-y-auto"><PropertiesPanel selected={selected} /></div>
             )}
             {tab === 'layers' && (
-              <CodexLayersPanel plate={plate} selectedIds={selectedIds} onSelect={handleLayerSelect} />
+              <CodexLayersPanel
+                plate={plate}
+                selectedIds={selectedIds}
+                onSelect={handleLayerSelect}
+                onSelectGroup={handleLayerSelectGroup}
+              />
             )}
             {tab === 'vault' && (
               <VaultPanel

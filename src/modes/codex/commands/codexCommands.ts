@@ -35,6 +35,8 @@ export interface CommandState {
   canRedo: boolean;
   plateCount: number;
   objectCount: number;
+  /** Whether the selection contains at least one grouped object. */
+  hasGroup: boolean;
   /** Whether a vault is connected and read, gating the canon commands. */
   vaultReady: boolean;
 }
@@ -60,6 +62,8 @@ export interface CommandActions {
   sendToBack: () => void;
   toggleLock: () => void;
   toggleVisible: () => void;
+  group: () => void;
+  ungroup: () => void;
   addText: () => void;
   addChart: () => void;
   addPlate: () => void;
@@ -135,6 +139,26 @@ export const CODEX_COMMANDS: CodexCommand[] = [
   { id: 'object.bringForward', label: 'Bring Forward', group: 'object', shortcut: 'Mod+]', context: 'object', isEnabled: hasSelection, run: (c) => c.bringForward() },
   { id: 'object.sendBackward', label: 'Send Backward', group: 'object', shortcut: 'Mod+[', context: 'object', isEnabled: hasSelection, run: (c) => c.sendBackward() },
   { id: 'object.sendToBack', label: 'Send to Back', group: 'object', shortcut: 'Mod+Shift+[', context: 'object', isEnabled: hasSelection, run: (c) => c.sendToBack() },
+  {
+    id: 'object.group',
+    label: 'Group',
+    group: 'object',
+    shortcut: 'Mod+G',
+    context: 'object',
+    dividerBefore: true,
+    // Two is the smallest thing that can be a group; one object is itself.
+    isEnabled: (s) => s.selectionCount > 1,
+    run: (c) => c.group(),
+  },
+  {
+    id: 'object.ungroup',
+    label: 'Ungroup',
+    group: 'object',
+    shortcut: 'Mod+Shift+G',
+    context: 'object',
+    isEnabled: (s) => s.hasGroup,
+    run: (c) => c.ungroup(),
+  },
   { id: 'object.toggleLock', label: 'Lock / Unlock', group: 'object', shortcut: 'Mod+L', context: 'object', dividerBefore: true, isEnabled: hasSelection, run: (c) => c.toggleLock() },
   { id: 'object.toggleVisible', label: 'Hide / Show', group: 'object', shortcut: 'Mod+Shift+H', context: 'object', isEnabled: hasSelection, run: (c) => c.toggleVisible() },
 

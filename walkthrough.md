@@ -1,5 +1,93 @@
 # ARCS: Walkthrough & Roadmap
 
+## Codex Studio - fragments behave as one piece - 2026-09-06
+
+### What changed
+Placing a **Diamond Rule** or **Chapter Break** put loose objects on the plate.
+Only the middle mark could be selected, and dragging it left the lines behind.
+Three separate defects were behind that, and fixing them turned up three more.
+
+- **Fragments are groups.** A multi-part fragment lands bound together, and
+  clicking any part selects the whole piece. Alt-click reaches inside for one
+  part; Group / Ungroup (`Mod+G` / `Mod+Shift+G`) are on the Object menu, the
+  right-click menu and the shortcut sheet. The layer tree marks members with a
+  rail and a `G1` badge that selects the whole group.
+- **Hairline rules can be grabbed.** A rule is a frame one pixel tall and
+  Konva's hit region is the shape as drawn, so the line was a one-pixel target -
+  sub-pixel at any zoom below 100%. Thin frames now carry a 12px hit band,
+  centred, with nothing drawn differently.
+- **A drag moves the whole selection, as one undo step.** Dragging is owned by
+  the canvas rather than by each node, because a gesture can move a group.
+- **Pressing an object no longer collapses the selection.** It held the
+  selection back until release, so a multi-selection could never be dragged -
+  the press reduced it to one object first. Narrowing is what a *click* means,
+  so it happens on release, and only if no drag intervened.
+- **A locked object stays put.** Konva's Transformer drives every node attached
+  to it and never consults a node's own `draggable`, so a locked object was
+  carried along by its group. Locked objects are now kept off the Transformer.
+- **Resizing no longer thickens rules.** Frames floored at 16px on transform, so
+  resizing any divider turned its hairline into a solid bar. Floors are now one
+  stated policy per kind, and the frame floor is 1. The same audit found the
+  chart floor (60) sat above shipped meters (30), which would have snapped them
+  taller.
+- **A group transform is one undo step**, like the drag. Transform commits moved
+  to the canvas too. They sit on the Transformer, not the Stage: Konva fires
+  transform events without bubbling.
+
+### Files touched
+- `src/modes/codex/utils/grouping.ts` (new), `transformLimits.ts` (new)
+- `src/modes/codex/engine/CodexCanvas.tsx`, `engine/hitTest.ts`
+- `src/modes/codex/components/nodes/{Frame,Sigil,Text,Chart}Node.tsx`
+- `src/modes/codex/components/CodexDockPanels.tsx`
+- `src/modes/codex/data/FragmentRegistry.ts`
+- `src/modes/codex/commands/codexCommands.ts`
+- `src/modes/codex/types/codexObjects.ts`
+- `src/stores/codexStore.ts`, `src/portals/CodexStudio.tsx`
+- tests: `utils/__tests__/{grouping,transformLimits}.test.ts`,
+  `stores/__tests__/codexGrouping.test.ts`, `engine/__tests__/hitTest.test.ts`,
+  `commands/__tests__/codexCommands.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- A group is a shared `groupId`, not a container node. Members stay flat in
+  `plate.objects` with their own coordinates, so ordering, layering, the
+  Transformer and every node component are untouched - only selection changes.
+  The cost is that a group has no transform frame of its own, which is all the
+  plates ask for.
+- Duplicating or pasting a group re-keys it. Without that the copy would share
+  the original's id and the two would merge, with no way to separate them.
+- Node components no longer mutate anything: they render and report selection,
+  and the canvas owns every gesture. That is what makes one gesture one undo
+  step regardless of how many objects it touched.
+- The layer tree deliberately selects the single object clicked - it is the way
+  inside a group. The `G` badge is the whole-group path.
+
+### Verification
+- `npx vitest run` - 1609 passing, 186 files
+- `npx tsc --noEmit`, `npx eslint src`, `npm run build` - all clean
+- The grouping tests were confirmed to fail against the old code before the fix
+  (11 of 18 failed), so they catch the reported bug rather than describe it.
+- Live in the running app, on real placed fragments:
+  - Diamond Rule places 2 objects in one group; Chapter Break places 3.
+  - Clicking the mark selects the whole divider; clicking the line 4px off its
+    axis does too (impossible before - it was a 1px target).
+  - Dragging by the mark moves every part by the same delta; one `Mod+Z`
+    restores all of them.
+  - Alt-click isolates one part, and it then drags alone.
+  - A mixed selection (text box + divider group) drags as one, one undo.
+  - Locking the mark then dragging the group leaves the mark behind.
+  - Resizing the group by a corner: rule 460x1 -> 580x1.5 (a hairline stays a
+    hairline), mark scales with it, one undo restores both.
+  - **Rotation by mouse works** - the rotate handle swings the whole group to
+    90 degrees and one undo returns it. This closes the item left unconfirmed in
+    the previous entry; last time the handle could not be reached, not that it
+    was broken.
+- Harness note: the in-app browser pane runs hidden, which freezes
+  `requestAnimationFrame`, so Konva's batched hit-canvas redraw never runs and
+  synthetic clicks read a stale hit graph. The checks above force `drawHit()`
+  first. A real window redraws on its own; this is a test-harness compensation,
+  not app behaviour.
+
 ## Guided Comic Flow - page navigation and intent-aware layout previews - 2026-05-05
 
 ### What changed

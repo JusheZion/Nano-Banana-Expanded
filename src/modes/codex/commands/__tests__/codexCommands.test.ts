@@ -21,6 +21,7 @@ const state = (partial: Partial<CommandState> = {}): CommandState => ({
   canRedo: false,
   plateCount: 1,
   objectCount: 0,
+  hasGroup: false,
   vaultReady: false,
   ...partial,
 });
@@ -193,9 +194,11 @@ describe('commandForEvent', () => {
   });
 
   it('every shortcut in the table resolves back to its own command', () => {
+    // Genuinely permissive: two objects selected, because Group is only
+    // offered on more than one, and a group present so Ungroup is live.
     const permissive = state({
-      selectionCount: 1, clipboardCount: 1, canUndo: true, canRedo: true, plateCount: 2, objectCount: 1,
-      vaultReady: true,
+      selectionCount: 2, clipboardCount: 1, canUndo: true, canRedo: true, plateCount: 2, objectCount: 2,
+      hasGroup: true, vaultReady: true,
     });
     for (const command of CODEX_COMMANDS) {
       if (!command.shortcut) continue;

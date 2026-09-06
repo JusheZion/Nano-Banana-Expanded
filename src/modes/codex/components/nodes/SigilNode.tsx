@@ -9,11 +9,10 @@ import { nodeEffectProps } from '../../utils/nodeEffects';
 interface SigilNodeProps {
   object: CodexSigilObject;
   onSelect: (e: { evt: MouseEvent }) => void;
-  onChange: (patch: Partial<CodexSigilObject>) => void;
   registerRef: (node: unknown | null) => void;
 }
 
-export function SigilNode({ object, onSelect, onChange, registerRef }: SigilNodeProps) {
+export function SigilNode({ object, onSelect, registerRef }: SigilNodeProps) {
   const sigil = getSigil(object.sigilId);
 
   const rasterSize = rasterSizeFor(Math.max(object.width, object.height));
@@ -55,21 +54,10 @@ export function SigilNode({ object, onSelect, onChange, registerRef }: SigilNode
       draggable={!object.locked}
       onMouseDown={onSelect as never}
       onTap={onSelect as never}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformEnd={(e) => {
-        const node = e.target;
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        node.scaleX(1);
-        node.scaleY(1);
-        onChange({
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(8, object.width * scaleX),
-          height: Math.max(8, object.height * scaleY),
-          rotation: node.rotation(),
-        });
-      }}
+      // No onDragEnd: the canvas commits the whole drag, because a drag can
+      // move a group and one gesture must be one undo step.
+      // No onTransformEnd: the canvas commits the whole transform, because a
+      // transform can resize a group and one gesture must be one undo step.
       {...nodeEffectProps(object)}
     />
   );

@@ -7,6 +7,8 @@
  * `./fragments/`; this file is the lookup surface, and mirrors the sigil
  * registry's shape so the palette can treat both the same way.
  */
+import type { CodexObject } from '../types/codexObjects';
+import { asGroup } from '../utils/grouping';
 import type { FragmentCategory, FragmentDef } from './fragmentTypes';
 import { GROUND_FRAGMENTS } from './fragments/grounds';
 import { PANEL_FRAGMENTS } from './fragments/panels';
@@ -35,6 +37,18 @@ export const FRAGMENTS: Record<string, FragmentDef> = Object.fromEntries(
 
 export function getFragment(id: string): FragmentDef | undefined {
   return FRAGMENTS[id];
+}
+
+/**
+ * Builds a fragment for placement on a plate.
+ *
+ * The difference from calling `build` directly is the group: a fragment is one
+ * piece of furniture to the person placing it, so its parts are bound together
+ * and select as a unit. `build` stays ungrouped for the palette previews, which
+ * render objects without any notion of selection.
+ */
+export function buildFragment(fragment: FragmentDef, x: number, y: number): CodexObject[] {
+  return asGroup(fragment.build(x, y));
 }
 
 export function fragmentsByCategory(category: FragmentCategory): FragmentDef[] {

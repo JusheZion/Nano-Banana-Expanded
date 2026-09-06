@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   findCodexObject,
   hitObjectId,
+  hitPadding,
   isTransformerPart,
+  MIN_HIT_EXTENT,
   shouldClearSelection,
   type HitNode,
 } from '../hitTest';
@@ -97,5 +99,50 @@ describe('shouldClearSelection', () => {
   it('keeps the selection when a child of an object is clicked', () => {
     const parent = node('codex-object', 'o1');
     expect(shouldClearSelection(node('', '', parent))).toBe(false);
+  });
+});
+
+describe('hitPadding', () => {
+  // The rules a divider is built from are frames one pixel tall. Konva's hit
+  // region is the shape as drawn, so without padding the line is a one-pixel
+  // target — which is what made a placed Diamond Rule look like it had no line
+  // at all, only a mark.
+  it('gives a hairline rule a grabbable band', () => {
+    const pad = hitPadding(460, 1);
+    expect(pad.y).toBeGreaterThan(0);
+    expect(1 + pad.y * 2).toBeGreaterThanOrEqual(MIN_HIT_EXTENT);
+  });
+
+  it('leaves a normal frame alone, so nothing already working changes', () => {
+    expect(hitPadding(200, 120)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('pads only the axis that is too small', () => {
+    expect(hitPadding(460, 1).x).toBe(0);
+    expect(hitPadding(1, 460).y).toBe(0);
+  });
+
+  it('pads a tick mark on both axes', () => {
+    const pad = hitPadding(1.5, 12);
+    expect(pad.x).toBeGreaterThan(0);
+    expect(pad.y).toBe(0);
+  });
+
+  it('grows from the centre, so the region stays over what is drawn', () => {
+    const pad = hitPadding(460, 2);
+    // Equal padding above and below is what centring means here.
+    expect(2 + pad.y * 2).toBe(MIN_HIT_EXTENT);
+  });
+
+  it('never returns negative padding for an oversized shape', () => {
+    const pad = hitPadding(1040, 1400);
+    expect(pad.x).toBe(0);
+    expect(pad.y).toBe(0);
+  });
+
+  it('handles a zero-extent shape without going backwards', () => {
+    const pad = hitPadding(0, 0);
+    expect(pad.x).toBe(MIN_HIT_EXTENT / 2);
+    expect(pad.y).toBe(MIN_HIT_EXTENT / 2);
   });
 });

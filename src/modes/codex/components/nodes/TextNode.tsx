@@ -6,7 +6,6 @@ import { gradientProps } from '../../utils/codexGradient';
 interface TextNodeProps {
   object: CodexTextObject;
   onSelect: (e: { evt: MouseEvent }) => void;
-  onChange: (patch: Partial<CodexTextObject>) => void;
   registerRef: (node: unknown | null) => void;
 }
 
@@ -15,7 +14,7 @@ interface TextNodeProps {
  * plates actually depend on — letter-spacing for tracked uppercase labels, and
  * line-height for body copy.
  */
-export function TextNode({ object, onSelect, onChange, registerRef }: TextNodeProps) {
+export function TextNode({ object, onSelect, registerRef }: TextNodeProps) {
   const value =
     object.textTransform === 'uppercase' ? object.text.toUpperCase() : object.text;
 
@@ -67,19 +66,10 @@ export function TextNode({ object, onSelect, onChange, registerRef }: TextNodePr
       }}
       onMouseDown={onSelect as never}
       onTap={onSelect as never}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformEnd={(e) => {
-        const node = e.target;
-        const scaleX = node.scaleX();
-        node.scaleX(1);
-        node.scaleY(1);
-        onChange({
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(24, object.width * scaleX),
-          rotation: node.rotation(),
-        });
-      }}
+      // No onDragEnd: the canvas commits the whole drag, because a drag can
+      // move a group and one gesture must be one undo step.
+      // No onTransformEnd: the canvas commits the whole transform, because a
+      // transform can resize a group and one gesture must be one undo step.
       {...nodeEffectProps(object)}
     />
   );

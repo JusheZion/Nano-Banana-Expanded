@@ -14,6 +14,11 @@ import {
   DEFAULT_SIGIL_FINISH_ID,
   getSigilFinish,
 } from '@/modes/codex/data/sigilFinishes';
+import {
+  expandGroups,
+  newGroupId,
+  regroupCopies,
+} from '@/modes/codex/utils/grouping';
 
 const HISTORY_LIMIT = 60;
 /** Offset applied to pasted copies so they do not land exactly on the original. */
@@ -66,7 +71,11 @@ export interface CodexState {
   // selection + navigation
   setActivePlate: (plateId: string) => void;
   select: (ids: string[]) => void;
-  toggleSelect: (id: string, additive: boolean) => void;
+  /**
+   * Selects an object from the canvas. `isolate` reaches inside a group to take
+   * the single member that was clicked, which is what Alt-click does.
+   */
+  toggleSelect: (id: string, additive: boolean, isolate?: boolean) => void;
   clearSelection: () => void;
 
   // document
@@ -106,6 +115,10 @@ export interface CodexState {
   nudgeObjects: (ids: string[], dx: number, dy: number) => void;
   removeObjects: (ids: string[]) => void;
   duplicateObjects: (ids: string[]) => void;
+  /** Binds the selection into one group, replacing any groups it spanned. */
+  groupObjects: (ids: string[]) => void;
+  /** Releases the selection from its groups. */
+  ungroupObjects: (ids: string[]) => void;
   reorderObject: (id: string, direction: 'front' | 'back' | 'forward' | 'backward') => void;
 
   // history
@@ -174,12 +187,21 @@ export const useCodexStore = create<CodexState>((set, get) => {
         ? { activePlateId: plateId, selectedIds: [] }
         : state),
     select: (ids) => set({ selectedIds: ids }),
-    toggleSelect: (id, additive) =>
+    toggleSelect: (id, additive, isolate = false) =>
       set((state) => {
-        if (!additive) return { selectedIds: [id] };
-        return state.selectedIds.includes(id)
-          ? { selectedIds: state.selectedIds.filter((s) => s !== id) }
-          : { selectedIds: [...state.selectedIds, id] };
+        const plate = activePlate(state.doc, state.activePlateId);
+        // Clicking one member of a group takes the whole group, so a placed
+        // fragment behaves as the single piece it looks like.
+        const ids = isolate ? [id] : expandGroups(plate?.objects ?? [], [id]);
+        if (ids.length === 0) return state;
+        if (!additive) return { selectedIds: ids };
+        // Shift-clicking a group that is already fully selected removes it.
+        const whole = ids.every((i) => state.selectedIds.includes(i));
+        if (whole) {
+          return { selectedIds: state.selectedIds.filter((s) => !ids.includes(s)) };
+        }
+        const added = ids.filter((i) => !state.selectedIds.includes(i));
+        return { selectedIds: [...state.selectedIds, ...added] };
       }),
     clearSelection: () => set({ selectedIds: [] }),
 
@@ -272,12 +294,16 @@ export const useCodexStore = create<CodexState>((set, get) => {
     pasteClipboard: () => {
       const clipboard = get().clipboard;
       if (clipboard.length === 0) return;
-      const copies = clipboard.map((object) => ({
-        ...object,
-        id: uid(object.kind),
-        x: object.x + PASTE_OFFSET,
-        y: object.y + PASTE_OFFSET,
-      }));
+      // Fresh group ids: a pasted divider must be its own group, or it would
+      // merge with the one it was copied from and neither could be moved alone.
+      const copies = regroupCopies(
+        clipboard.map((object) => ({
+          ...object,
+          id: uid(object.kind),
+          x: object.x + PASTE_OFFSET,
+          y: object.y + PASTE_OFFSET,
+        })),
+      );
       get().addObjects(copies);
       // Paste again and the next copy steps further, rather than restacking.
       set({ clipboard: copies });
@@ -369,13 +395,47 @@ export const useCodexStore = create<CodexState>((set, get) => {
               y: obj.y + 16,
             };
             copies.push(copy);
-            newIds.push(copy.id);
           }
-          plate.objects.push(...copies);
+          // Re-key before pushing, so the duplicate is its own group.
+          const regrouped = regroupCopies(copies);
+          newIds.push(...regrouped.map((c) => c.id));
+          plate.objects.push(...regrouped);
         }
         return newIds.length > 0;
       });
       if (newIds.length) set({ selectedIds: newIds });
+    },
+
+    groupObjects: (ids) => {
+      if (ids.length < 2) return;
+      const targets = new Set(ids);
+      const groupId = newGroupId();
+      commit((doc) => {
+        let changed = false;
+        for (const plate of doc.plates) {
+          for (const obj of plate.objects) {
+            if (targets.has(obj.id)) changed = assignChanged(obj, { groupId }) || changed;
+          }
+        }
+        return changed;
+      });
+    },
+
+    ungroupObjects: (ids) => {
+      if (ids.length === 0) return;
+      const targets = new Set(ids);
+      commit((doc) => {
+        let changed = false;
+        for (const plate of doc.plates) {
+          for (const obj of plate.objects) {
+            if (targets.has(obj.id) && obj.groupId !== undefined) {
+              delete obj.groupId;
+              changed = true;
+            }
+          }
+        }
+        return changed;
+      });
     },
 
     reorderObject: (id, direction) =>

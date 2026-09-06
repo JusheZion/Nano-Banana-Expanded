@@ -1,12 +1,13 @@
+import type Konva from 'konva';
 import { Group, Line, Rect } from 'react-konva';
 import type { CodexFrameObject } from '../../types/codexObjects';
 import { nodeEffectProps } from '../../utils/nodeEffects';
 import { gradientProps } from '../../utils/codexGradient';
+import { hitPadding } from '../../engine/hitTest';
 
 interface FrameNodeProps {
   object: CodexFrameObject;
   onSelect: (e: { evt: MouseEvent }) => void;
-  onChange: (patch: Partial<CodexFrameObject>) => void;
   registerRef: (node: unknown | null) => void;
 }
 
@@ -16,13 +17,19 @@ const TICK = 16;
  * Plate furniture: the frame treatments the codex plates are built from.
  * Variants mirror the Ornament library rather than inventing new ones.
  */
-export function FrameNode({ object, onSelect, onChange, registerRef }: FrameNodeProps) {
+export function FrameNode({ object, onSelect, registerRef }: FrameNodeProps) {
   const { width: w, height: h, stroke, strokeWidth, cornerRadius, variant } = object;
 
   // Gradients win over the flat colour when present; `null` means "no gradient",
   // so the flat fill/stroke below still applies.
   const fillGrad = gradientProps(object.fillGradient, w, h, 'fill');
   const strokeGrad = gradientProps(object.strokeGradient, w, h, 'stroke');
+
+  // Rules are frames one pixel tall, and Konva's hit region is the drawn shape,
+  // so without this a hairline is an unclickable target and a divider looks
+  // like it has no line. Only thin frames are padded; the rest are untouched.
+  const { x: padX, y: padY } = hitPadding(w, h);
+  const needsHitPad = padX > 0 || padY > 0;
 
   return (
     <Group
@@ -40,21 +47,10 @@ export function FrameNode({ object, onSelect, onChange, registerRef }: FrameNode
       draggable={!object.locked}
       onMouseDown={onSelect as never}
       onTap={onSelect as never}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
-      onTransformEnd={(e) => {
-        const node = e.target;
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        node.scaleX(1);
-        node.scaleY(1);
-        onChange({
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(16, w * scaleX),
-          height: Math.max(16, h * scaleY),
-          rotation: node.rotation(),
-        });
-      }}
+      // No onDragEnd: the canvas commits the whole drag, because a drag can
+      // move a group and one gesture must be one undo step.
+      // No onTransformEnd: the canvas commits the whole transform, because a
+      // transform can resize a group and one gesture must be one undo step.
       {...nodeEffectProps(object)}
     >
       <Rect
@@ -65,6 +61,16 @@ export function FrameNode({ object, onSelect, onChange, registerRef }: FrameNode
         stroke={variant === 'bracketed' || strokeGrad ? undefined : stroke}
         strokeWidth={variant === 'bracketed' ? 0 : strokeWidth}
         dash={variant === 'dashed' ? [8, 6] : undefined}
+        {...(needsHitPad
+          ? {
+              hitFunc: (context: Konva.Context, shape: Konva.Shape) => {
+                context.beginPath();
+                context.rect(-padX, -padY, w + padX * 2, h + padY * 2);
+                context.closePath();
+                context.fillStrokeShape(shape);
+              },
+            }
+          : {})}
         {...fillGrad}
         {...(variant === 'bracketed' ? {} : strokeGrad)}
       />

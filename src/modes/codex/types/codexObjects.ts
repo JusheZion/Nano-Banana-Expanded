@@ -49,6 +49,16 @@ export interface CodexBaseObject {
   kind: CodexObjectKind;
   /** Layer-tree label; falls back to a kind-derived default. */
   name?: string;
+  /**
+   * Members of one group share this id and select together.
+   *
+   * A group is a tag, not a container: the objects stay flat in `plate.objects`
+   * and keep their own coordinates. That is deliberate — a nested transform
+   * tree would have meant rewriting every node, the Transformer binding and the
+   * layer panel, to buy nothing the plates need. What the plates do need is for
+   * a divider placed as one piece to behave as one piece.
+   */
+  groupId?: string;
   x: number;
   y: number;
   width: number;
