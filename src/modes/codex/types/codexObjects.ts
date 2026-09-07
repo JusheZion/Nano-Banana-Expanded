@@ -185,6 +185,15 @@ export interface CodexChartObject extends CodexBaseObject {
 export interface CodexImageObject extends CodexBaseObject {
   kind: 'image';
   src: string;
+  /**
+   * Note and embed this picture comes from. `field` is the embed reference as
+   * written in the note, e.g. `Kron portrait.png`.
+   *
+   * The binding is stored, never the resolved URL: a vault image is drawn from
+   * an object URL that lives only as long as the tab, so the plate re-resolves
+   * it on each vault read the way a bound title does.
+   */
+  binding?: CodexBinding;
 }
 
 export type CodexObject =

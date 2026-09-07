@@ -1,5 +1,71 @@
 # ARCS: Walkthrough & Roadmap
 
+## Codex Studio - a binding now puts the value on the plate - 2026-09-07
+
+### What changed
+Binding a text box to a note wrote the binding and nothing else. The Properties
+panel showed the canon value while the plate still said "TEXT", because the
+value only ever landed when someone pressed **Refresh** in the Vault panel.
+
+- **Binding resolves as it binds.** Choosing a note, changing the field, or
+  changing the mode writes the value onto the object immediately. `once` fills
+  too - it means "stop following", not "stay empty".
+- **Chart axes had the same defect.** Pointing an axis at a frontmatter key
+  stored the key and left the placeholder plotted until a refresh.
+- **Live bindings are live.** They re-resolve on every vault read and on opening
+  a saved codex, not only on the Refresh button.
+- **`body` is bindable.** The note's prose was parsed all along and never
+  offered. It is rendered as plain text - headings, wikilinks, emphasis, list
+  bullets and embeds stripped, words kept - because a plate has no markdown
+  renderer and would otherwise print `## Origins` and `[[Kaleid]]`.
+- **Pictures can come from canon.** A note's resolved embeds are listed in the
+  Vault panel behind a count; picking one places it on the plate, sized to its
+  own proportions, bound to the note. Properties gains a Canon section to switch
+  which embed, set live/once, or unbind. This was more missing than reported:
+  the plate model had an image object but nothing in the app created one, so
+  vault art could not reach a plate at all.
+
+### Files touched
+- `src/modes/codex/vault/vaultImages.ts` (new), `vault/vaultBinding.ts`
+- `src/modes/codex/components/{PropertiesPanel,VaultPanel}.tsx`
+- `src/modes/codex/types/codexObjects.ts`
+- `src/stores/codexStore.ts`, `src/stores/vaultStore.ts`
+- `src/portals/CodexStudio.tsx`
+- tests: `vault/__tests__/{bindingResolution,vaultBinding}.test.ts`
+- `walkthrough.md`
+
+### Implementation notes
+- `bindingPatch(object, entry, binding, now)` is the one place that says what
+  binding an object means. The panel and the vault list both go through it, so
+  they cannot drift.
+- An unresolvable field yields the binding alone. A plate must not lose its
+  title because a note was renamed or a key was removed.
+- A bound picture stores the note path and the embed reference, never the URL.
+  Konva needs a URL and the only one that does not copy the bytes is an object
+  URL, which dies with the tab - so it is re-minted on each vault read, the same
+  way a bound title is re-resolved. A data URI would have put megabytes of
+  base64 into every saved document and would not survive localStorage.
+- Object URLs are cached per note and reference and revoked when the file behind
+  them changes, or a refresh would leak one blob per bound picture per read.
+  `releaseImageUrls()` runs on disconnect.
+
+### Verification
+- `npx vitest run` - 1639 passing, 187 files; `tsc`, `eslint`, `build` clean.
+- 30 new tests cover resolution on bind, both modes, missing notes and fields,
+  the markdown-to-prose rendering, embed lookup, URL reuse and re-minting.
+- Live in the running app, driving the real UI: adding a text box, opening the
+  Vault panel and clicking the note put **"Kron"** on the canvas at once -
+  the reported failure. Switching the field updated the canvas each time
+  (`summary`, `body`, `properties.epithet`, `tags`, `title`), with `body`
+  arriving as clean prose. Expanding the note listed its picture, clicking it
+  placed a 420x210 image object matching the file's 2:1 aspect, drawn from a
+  live blob and bound to the note. Simulating a vault re-read re-minted the
+  picture URL and pulled an edited title through to the plate.
+- Scope of that check: the vault store was populated directly, because
+  connecting a real vault needs the folder picker and a user gesture. Everything
+  from the store outwards - panel, binding, resolution, canvas - is the real
+  code path; the File System Access read itself was not re-exercised.
+
 ## Codex Studio - fragments behave as one piece - 2026-09-06
 
 ### What changed

@@ -1,9 +1,16 @@
 import React, { useId, useState } from 'react';
 import { useCodexStore } from '@/stores/codexStore';
 import { useVaultStore } from '@/stores/vaultStore';
-import { bindableFields, resolveField, formatFieldValue, numericFieldValue } from '../vault/vaultBinding';
+import {
+  bindableFields,
+  bindingPatch,
+  formatFieldValue,
+  numericFieldValue,
+  resolveField,
+  resolveImageSrc,
+} from '../vault/vaultBinding';
+import { boundableImages } from '../vault/vaultImages';
 import type { ObsidianLoreEntry } from '@/portals/writer/obsidianLoreImport';
-import type { CodexBinding } from '../types/codexObjects';
 import {
   alignPatches,
   distributePatches,
@@ -15,8 +22,10 @@ import { FinishPicker } from './FinishPicker';
 import { getSigilFinish, SIGIL_FINISHES } from '../data/sigilFinishes';
 import { readCollapsedSections, writeCollapsedSection } from '../utils/codexSession';
 import type {
+  CodexBinding,
   CodexChartObject,
   CodexFrameObject,
+  CodexImageObject,
   CodexObject,
   CodexSigilObject,
   CodexTextObject,
@@ -192,11 +201,12 @@ export function PropertiesPanel({ selected }: { selected: CodexObject[] }) {
           <TextSection object={one as CodexTextObject} />
           <CanonSection
             kindLabel="text"
+            object={one as CodexTextObject}
             binding={(one as CodexTextObject).binding}
-            onChange={(binding) => updateObjects([one.id], { binding } as Partial<CodexObject>)}
           />
         </>
       )}
+      {one?.kind === 'image' && <ImageCanonSection object={one as CodexImageObject} />}
       {one?.kind === 'sigil' && <SigilSection object={one as CodexSigilObject} />}
       {one?.kind === 'frame' && <FrameSection object={one as CodexFrameObject} />}
       {one?.kind === 'chart' && (
@@ -292,23 +302,37 @@ function TextSection({ object }: { object: CodexTextObject }) {
  * fills the value now and then lets go.
  */
 function CanonSection({
+  object,
   binding,
-  onChange,
   /** Field list for the bound note, plus a live preview of the current value. */
   kindLabel,
 }: {
+  object: CodexObject;
   binding: CodexBinding | undefined;
-  onChange: (next: CodexBinding | undefined) => void;
   kindLabel: string;
 }) {
   const status = useVaultStore((s) => s.status);
   const entries = useVaultStore((s) => s.entries);
+  const applyPatches = useCodexStore((s) => s.applyPatches);
 
   if (status !== 'ready') return null;
 
   const entry = binding ? entries.find((e) => e.sourcePath === binding.notePath) : undefined;
   const fields = entry ? bindableFields(entry) : [];
   const preview = entry && binding ? formatFieldValue(resolveField(entry, binding.field)) : '';
+
+  // Changing a binding re-resolves it. Writing the binding on its own is what
+  // left the plate showing "TEXT" while this panel showed the canon value.
+  const onChange = (next: CodexBinding | undefined) => {
+    if (!next) {
+      applyPatches([{ id: object.id, patch: { binding: undefined } as Partial<CodexObject> }]);
+      return;
+    }
+    const target = entries.find((e) => e.sourcePath === next.notePath);
+    applyPatches([
+      { id: object.id, patch: bindingPatch(object, target, next, new Date().toISOString()) },
+    ]);
+  };
 
   return (
     <Section title="Canon">
@@ -382,6 +406,128 @@ function CanonSection({
 }
 
 /**
+ * A picture bound to an embed in a note.
+ *
+ * The choice is which picture in the note, not which field — an embed is
+ * addressed by the reference the note writes, so a note holding a portrait and
+ * a sigil can feed two different objects on the plate.
+ */
+function ImageCanonSection({ object }: { object: CodexImageObject }) {
+  const applyPatches = useCodexStore((s) => s.applyPatches);
+  const status = useVaultStore((s) => s.status);
+  const entries = useVaultStore((s) => s.entries);
+
+  if (status !== 'ready') return null;
+
+  const entry = object.binding
+    ? entries.find((e) => e.sourcePath === object.binding!.notePath)
+    : undefined;
+  const pictures = entry ? boundableImages(entry) : [];
+
+  const rebind = (reference: string) => {
+    if (!entry || !object.binding) return;
+    const src = resolveImageSrc(entry, reference);
+    if (!src) return;
+    applyPatches([
+      {
+        id: object.id,
+        patch: {
+          src,
+          binding: { ...object.binding, field: reference, resolvedAt: new Date().toISOString() },
+        } as Partial<CodexObject>,
+      },
+    ]);
+  };
+
+  return (
+    <Section title="Canon">
+      {!object.binding && (
+        <p className="px-1 text-[11px] leading-relaxed text-white/35">
+          Open a note in the Vault panel and pick one of its pictures.
+        </p>
+      )}
+
+      {object.binding && (
+        <>
+          <Row label="Note">
+            <span className="block truncate text-[11px] text-white/70" title={object.binding.notePath}>
+              {object.binding.notePath.split('/').pop()}
+            </span>
+          </Row>
+
+          {!entry ? (
+            <p className="rounded border border-rose-400/30 bg-rose-400/10 px-2 py-1.5 text-[11px] text-rose-100/80">
+              That note is no longer in the vault. The picture on the plate is unchanged.
+            </p>
+          ) : (
+            <>
+              <Row label="Picture">
+                <select
+                  value={object.binding.field}
+                  onChange={(e) => rebind(e.target.value)}
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
+                >
+                  {!pictures.some((p) => p.reference === object.binding!.field) && (
+                    <option value={object.binding.field}>
+                      {object.binding.field} (missing)
+                    </option>
+                  )}
+                  {pictures.map((picture) => (
+                    <option key={picture.reference} value={picture.reference}>
+                      {picture.fileName || picture.reference}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+
+              <Row label="Update">
+                <select
+                  value={object.binding.mode}
+                  onChange={(e) =>
+                    applyPatches([
+                      {
+                        id: object.id,
+                        patch: {
+                          binding: {
+                            ...object.binding!,
+                            mode: e.target.value as CodexBinding['mode'],
+                          },
+                        } as Partial<CodexObject>,
+                      },
+                    ])
+                  }
+                  className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"
+                >
+                  <option value="live">Live — follows canon</option>
+                  <option value="once">Once — placed, then mine</option>
+                </select>
+              </Row>
+
+              <p className="px-1 text-[10px] leading-relaxed text-white/30">
+                The picture itself is not saved into the codex — the note it
+                comes from is. Reconnect the vault and it returns.
+              </p>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              applyPatches([
+                { id: object.id, patch: { binding: undefined } as Partial<CodexObject> },
+              ])
+            }
+            className="mt-1 text-[10px] text-white/35 underline underline-offset-2 hover:text-white/70"
+          >
+            Unbind
+          </button>
+        </>
+      )}
+    </Section>
+  );
+}
+
+/**
  * Chart binding is per axis: a stat block is many fields of one note, not one
  * field. The note is chosen once; each axis then names its own frontmatter key.
  */
@@ -422,8 +568,14 @@ function ChartCanonSection({ object }: { object: CodexChartObject }) {
                   value={axis.field ?? ''}
                   onChange={(e) => {
                     const field = e.target.value || undefined;
+                    // Plot it now. Storing the field alone left the chart
+                    // showing its placeholder until someone refreshed the
+                    // vault — the same defect the text binding had.
+                    const value = field ? numericPreview(entry, field) : null;
                     update(object.id, {
-                      axes: object.axes.map((a, j) => (j === i ? { ...a, field } : a)),
+                      axes: object.axes.map((a, j) =>
+                        j === i ? { ...a, field, ...(value === null ? {} : { value }) } : a,
+                      ),
                     } as Partial<CodexObject>);
                   }}
                   className="w-full rounded border border-white/15 bg-black/30 px-2 py-1 text-xs text-white focus:border-white/35 focus:outline-none"

@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Image as ImageIcon, Search, X } from 'lucide-react';
 import { useVaultStore } from '@/stores/vaultStore';
-import type { ObsidianLoreEntry } from '@/portals/writer/obsidianLoreImport';
+import type { ObsidianLoreEntry, ObsidianLoreImage } from '@/portals/writer/obsidianLoreImport';
+import { boundableImages } from '../vault/vaultImages';
 
 interface VaultPanelProps {
   /** Fired when a note is chosen, so the portal can bind the selection to it. */
   onUseNote?: (entry: ObsidianLoreEntry) => void;
   /** Path of the note the current selection is bound to, for highlighting. */
   boundNotePath?: string;
+  /**
+   * Fired when one of a note's embedded pictures is chosen. Places it on the
+   * plate, or rebinds the selected picture to it.
+   */
+  onUseImage?: (entry: ObsidianLoreEntry, image: ObsidianLoreImage) => void;
   onRefreshed?: (summary: string) => void;
 }
 
@@ -16,7 +22,7 @@ interface VaultPanelProps {
  *
  * Read-only throughout: Obsidian stays the only thing that writes to the vault.
  */
-export function VaultPanel({ onUseNote, boundNotePath, onRefreshed }: VaultPanelProps) {
+export function VaultPanel({ onUseNote, onUseImage, boundNotePath, onRefreshed }: VaultPanelProps) {
   const status = useVaultStore((s) => s.status);
   const vaultName = useVaultStore((s) => s.vaultName);
   const entries = useVaultStore((s) => s.entries);
@@ -31,6 +37,8 @@ export function VaultPanel({ onUseNote, boundNotePath, onRefreshed }: VaultPanel
   const setIncludeDrafts = useVaultStore((s) => s.setIncludeDrafts);
 
   const [query, setQuery] = useState('');
+  /** Note whose pictures are showing. One at a time; the list is long enough. */
+  const [openImages, setOpenImages] = useState<string | null>(null);
 
   useEffect(() => { void restore(); }, [restore]);
 
@@ -193,23 +201,62 @@ export function VaultPanel({ onUseNote, boundNotePath, onRefreshed }: VaultPanel
         <ul className="space-y-0.5">
           {results.map((entry) => {
             const bound = entry.sourcePath === boundNotePath;
+            const pictures = boundableImages(entry);
+            const open = openImages === entry.sourcePath;
             return (
               <li key={entry.sourcePath}>
-                <button
-                  type="button"
-                  onClick={() => onUseNote?.(entry)}
-                  aria-current={bound ? 'true' : undefined}
+                <div
                   className={[
-                    'w-full rounded px-2 py-1.5 text-left transition-colors focus:outline-none focus:ring-1 focus:ring-white/40',
+                    'flex items-stretch rounded transition-colors',
                     bound ? 'bg-amber-300/15 ring-1 ring-amber-300/40' : 'hover:bg-white/[0.07]',
                   ].join(' ')}
                 >
-                  <span className="block truncate text-[12px] text-white/85">{entry.title}</span>
-                  <span className="block truncate text-[10px] text-white/35">
-                    {entry.category || 'note'} ·{' '}
-                    {entry.sourcePath.split('/').slice(0, -1).join('/')}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onUseNote?.(entry)}
+                    aria-current={bound ? 'true' : undefined}
+                    className="min-w-0 flex-1 rounded px-2 py-1.5 text-left focus:outline-none focus:ring-1 focus:ring-white/40"
+                  >
+                    <span className="block truncate text-[12px] text-white/85">{entry.title}</span>
+                    <span className="block truncate text-[10px] text-white/35">
+                      {entry.category || 'note'} ·{' '}
+                      {entry.sourcePath.split('/').slice(0, -1).join('/')}
+                    </span>
+                  </button>
+
+                  {/* A note's pictures are only worth a row when it has some. */}
+                  {pictures.length > 0 && onUseImage && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenImages(open ? null : entry.sourcePath)}
+                      aria-expanded={open}
+                      aria-label={`${pictures.length} picture${pictures.length === 1 ? '' : 's'} in ${entry.title}`}
+                      title={`${pictures.length} picture${pictures.length === 1 ? '' : 's'}`}
+                      className="flex shrink-0 items-center gap-0.5 rounded px-1.5 text-[10px] text-white/40 hover:text-white/80 focus:outline-none focus:ring-1 focus:ring-white/40"
+                    >
+                      {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      <ImageIcon size={11} aria-hidden="true" />
+                      {pictures.length}
+                    </button>
+                  )}
+                </div>
+
+                {open && onUseImage && (
+                  <ul className="mb-1 ml-3 space-y-0.5 border-l border-white/10 pl-2">
+                    {pictures.map((image) => (
+                      <li key={image.reference}>
+                        <button
+                          type="button"
+                          onClick={() => onUseImage(entry, image)}
+                          className="w-full truncate rounded px-2 py-1 text-left text-[11px] text-white/60 hover:bg-white/[0.07] hover:text-white focus:outline-none focus:ring-1 focus:ring-white/40"
+                          title={image.reference}
+                        >
+                          {image.fileName || image.reference}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             );
           })}

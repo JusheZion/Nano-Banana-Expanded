@@ -50,13 +50,15 @@ function chart(axes: CodexChartObject['axes'], binding?: CodexChartObject['bindi
 describe('bindableFields', () => {
   it('offers the core fields plus whatever frontmatter the note carries', () => {
     expect(bindableFields(entry())).toEqual([
-      'title', 'category', 'summary', 'tags',
+      'title', 'category', 'summary', 'body', 'tags',
       'properties.compression', 'properties.epithet', 'properties.wave', 'properties.zodiac',
     ]);
   });
 
   it('works on a note with no frontmatter at all', () => {
-    expect(bindableFields(entry({ properties: {} }))).toEqual(['title', 'category', 'summary', 'tags']);
+    expect(bindableFields(entry({ properties: {} }))).toEqual([
+      'title', 'category', 'summary', 'body', 'tags',
+    ]);
   });
 });
 

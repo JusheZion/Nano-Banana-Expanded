@@ -6,6 +6,7 @@ import {
   DEFAULT_PLATE_HEIGHT,
   DEFAULT_PLATE_WIDTH,
   defaultObjectName,
+  type CodexBinding,
   type CodexDocument,
   type CodexObject,
   type CodexPlate,
@@ -519,6 +520,39 @@ export function makeSigilObject(
     visible: true,
     ...(finish?.patch ?? {}),
   };
+}
+
+/**
+ * A picture on the plate.
+ *
+ * `src` is not stored in a saved document for a vault image: the object URL
+ * behind it dies with the tab, so the binding is what persists and the URL is
+ * minted again on the next vault read.
+ */
+export function makeImageObject(opts: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  src: string;
+  name?: string;
+  binding?: CodexBinding;
+}): CodexObject {
+  return {
+    id: uid('image'),
+    kind: 'image',
+    name: opts.name ?? defaultObjectName('image'),
+    src: opts.src,
+    binding: opts.binding,
+    x: opts.x,
+    y: opts.y,
+    width: opts.width,
+    height: opts.height,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+    visible: true,
+  } as CodexObject;
 }
 
 export function makeTextObject(opts: {

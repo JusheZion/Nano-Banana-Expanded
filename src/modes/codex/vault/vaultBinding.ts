@@ -7,9 +7,49 @@
  */
 import type { ObsidianLoreEntry } from '@/portals/writer/obsidianLoreImport';
 import type { CodexBinding, CodexObject } from '../types/codexObjects';
+import { findImage, imageUrl } from './vaultImages';
 
 /** Fields every note exposes, before its own frontmatter. */
-export const CORE_FIELDS = ['title', 'category', 'summary', 'tags'] as const;
+export const CORE_FIELDS = ['title', 'category', 'summary', 'body', 'tags'] as const;
+
+/**
+ * Renders a note's markdown body as prose for a plate.
+ *
+ * The body is the one field that is authored as markdown rather than as a
+ * value, and a codex plate has no markdown renderer — dropping it in raw would
+ * print `## Origins` and `[[Kaleid]]` on the page. This strips the syntax and
+ * keeps the words, which is what someone binding a body to a text box means.
+ */
+export function plainTextFromMarkdown(markdown: string): string {
+  return markdown
+    // Embedded images and files carry no prose.
+    .replace(/!\[\[[^\]]*\]\]/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    // Wikilinks: keep the display text after a pipe, else the target.
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    // Markdown links: keep the label.
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // Block syntax at the start of a line.
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s{0,3}[-*+]\s+/gm, '')
+    .replace(/^\s{0,3}\d+\.\s+/gm, '')
+    // Horizontal rules leave a stray line behind.
+    .replace(/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/gm, '')
+    // Fences and inline code markers; the code itself stays.
+    .replace(/^\s*```.*$/gm, '')
+    .replace(/`([^`]*)`/g, '$1')
+    // Emphasis, innermost first so ***both*** unwraps cleanly.
+    .replace(/(\*\*\*|___)(.+?)\1/g, '$2')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(\*|_)(.+?)\1/g, '$2')
+    .replace(/~~(.+?)~~/g, '$1')
+    // Collapse the blank lines the stripping leaves behind.
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 /**
  * Every field this note can be bound to. Derived from the note rather than
@@ -37,6 +77,8 @@ export function resolveField(entry: ObsidianLoreEntry, field: string): unknown {
       return entry.category;
     case 'summary':
       return entry.summary;
+    case 'body':
+      return plainTextFromMarkdown(entry.markdownBody ?? '');
     case 'tags':
       return entry.tags;
     default:
@@ -71,9 +113,69 @@ export function numericFieldValue(value: unknown): number | null {
   return null;
 }
 
+/**
+ * The drawable URL for an image binding's embed, or null when the note no
+ * longer carries it.
+ */
+export function resolveImageSrc(entry: ObsidianLoreEntry, reference: string): string | null {
+  const image = findImage(entry, reference);
+  return image ? imageUrl(entry.sourcePath, image) : null;
+}
+
 export interface BindingResolution {
   id: string;
   patch: Partial<CodexObject>;
+}
+
+/**
+ * The patch that binding one object to one field means, right now.
+ *
+ * Binding without resolving was the original defect: choosing a note and a
+ * field wrote the binding and nothing else, so the Properties panel showed the
+ * canon value while the plate still said "TEXT". A binding that does not put
+ * the value on the plate is not a binding, it is a note to self — so creating
+ * or changing one resolves it immediately, in both modes. `once` means "stop
+ * following", not "do not fill".
+ *
+ * An unresolvable field yields the binding alone: a plate must not lose its
+ * title because a note was renamed or a key is missing.
+ */
+export function bindingPatch(
+  object: CodexObject,
+  entry: ObsidianLoreEntry | undefined,
+  binding: CodexBinding,
+  now = '',
+): Partial<CodexObject> {
+  const bound = { ...binding, resolvedAt: now } as CodexBinding;
+
+  if (object.kind === 'text') {
+    if (!entry) return { binding } as Partial<CodexObject>;
+    const value = resolveField(entry, binding.field);
+    if (value === undefined) return { binding } as Partial<CodexObject>;
+    return { binding: bound, text: formatFieldValue(value) } as Partial<CodexObject>;
+  }
+
+  if (object.kind === 'image') {
+    if (!entry) return { binding } as Partial<CodexObject>;
+    const src = resolveImageSrc(entry, binding.field);
+    // No src means the embed is gone from the note; keep the picture that is
+    // on the plate rather than blanking it.
+    return (src ? { binding: bound, src } : { binding }) as Partial<CodexObject>;
+  }
+
+  if (object.kind === 'chart') {
+    if (!entry) return { binding } as Partial<CodexObject>;
+    // Chart axes name their own fields, so binding the note is all this does;
+    // the axes fill as each one is pointed at a key.
+    const axes = object.axes.map((axis) => {
+      if (!axis.field) return axis;
+      const n = numericFieldValue(resolveField(entry, axis.field));
+      return n === null ? axis : { ...axis, value: n };
+    });
+    return { binding: bound, axes } as Partial<CodexObject>;
+  }
+
+  return { binding } as Partial<CodexObject>;
 }
 
 export interface BindingReport {
@@ -126,6 +228,31 @@ export function resolveBindings(
         id: object.id,
         patch: {
           text: formatFieldValue(value),
+          binding: { ...object.binding, resolvedAt: now },
+        } as Partial<CodexObject>,
+      });
+    } else if (object.kind === 'image') {
+      if (!isLive(object.binding)) continue;
+      const entry = entriesByPath.get(object.binding.notePath);
+      if (!entry) {
+        missingNotes.push({ id: object.id, notePath: object.binding.notePath });
+        continue;
+      }
+      // Always re-minted: the previous session's object URL is dead, so an
+      // unchanged `src` here would leave a broken picture on the plate.
+      const src = resolveImageSrc(entry, object.binding.field);
+      if (!src) {
+        missingFields.push({
+          id: object.id,
+          notePath: object.binding.notePath,
+          field: object.binding.field,
+        });
+        continue;
+      }
+      patches.push({
+        id: object.id,
+        patch: {
+          src,
           binding: { ...object.binding, resolvedAt: now },
         } as Partial<CodexObject>,
       });

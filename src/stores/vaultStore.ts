@@ -11,6 +11,7 @@ import {
   saveVaultHandle,
   type VaultDirectoryHandle,
 } from '@/modes/codex/vault/vaultAccess';
+import { releaseImageUrls } from '@/modes/codex/vault/vaultImages';
 
 /**
  * Vault connection state.
@@ -173,6 +174,9 @@ export const useVaultStore = create<VaultState>((set, get) => {
 
     disconnect: async () => {
       await forgetVaultHandle().catch(() => {});
+      // Object URLs minted for bound pictures outlive the vault otherwise, and
+      // they hold the file bytes for the life of the tab.
+      releaseImageUrls();
       set({
         status: isVaultAccessSupported() ? 'disconnected' : 'unsupported',
         handle: null,

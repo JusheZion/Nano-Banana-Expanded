@@ -4,11 +4,13 @@ import {
   BookMarked, FileDown, FilePlus2, ImageDown, Layers, Plus, Redo2, Save,
   Sparkles, Trash2, Type, Undo2,
 } from 'lucide-react';
-import { useCodexStore, makeSigilObject, makeTextObject } from '@/stores/codexStore';
+import { useCodexStore, makeImageObject, makeSigilObject, makeTextObject } from '@/stores/codexStore';
 import { SigilPalette } from '@/modes/codex/components/SigilPalette';
 import { FragmentPalette } from '@/modes/codex/components/FragmentPalette';
 import { buildFragment } from '@/modes/codex/data/FragmentRegistry';
 import { groupMembers } from '@/modes/codex/utils/grouping';
+import { bindingPatch, resolveImageSrc } from '@/modes/codex/vault/vaultBinding';
+import type { ObsidianLoreEntry, ObsidianLoreImage } from '@/portals/writer/obsidianLoreImport';
 import { FinishPicker } from '@/modes/codex/components/FinishPicker';
 import {
   CodexContextMenu,
@@ -134,7 +136,11 @@ export function CodexStudio() {
   /** Highlights the note the selection is already bound to, if they agree on one. */
   const boundNotePath = useMemo(() => {
     const paths = selected
-      .map((o) => (o.kind === 'text' || o.kind === 'chart' ? o.binding?.notePath : undefined))
+      .map((o) =>
+        o.kind === 'text' || o.kind === 'chart' || o.kind === 'image'
+          ? o.binding?.notePath
+          : undefined,
+      )
       .filter(Boolean);
     return paths.length && paths.every((p) => p === paths[0]) ? paths[0] : undefined;
   }, [selected]);
@@ -353,6 +359,60 @@ export function CodexStudio() {
   );
 
   /**
+   * Puts a vault picture on the plate, or points the selected picture at it.
+   *
+   * This is the only way to add a picture: the plate model has always had an
+   * image object but nothing created one, so canon art could not reach a plate
+   * at all. Placing from the vault rather than from a file picker is also what
+   * makes it a binding — the plate keeps following the note.
+   */
+  const handleUseVaultImage = useCallback(
+    (entry: ObsidianLoreEntry, image: ObsidianLoreImage) => {
+      const src = resolveImageSrc(entry, image.reference);
+      if (!src) {
+        flash('That picture could not be read from the vault.');
+        return;
+      }
+      const binding = {
+        notePath: entry.sourcePath,
+        field: image.reference,
+        mode: 'live' as const,
+        resolvedAt: new Date().toISOString(),
+      };
+
+      const existing = selected.find((o) => o.kind === 'image');
+      if (existing) {
+        applyPatches([{ id: existing.id, patch: { src, binding } as Partial<CodexObject> }]);
+        flash(`Picture bound to “${image.fileName || image.reference}”.`);
+        return;
+      }
+
+      // Size to the picture's own proportions, scaled to sit comfortably on
+      // the plate rather than landing at whatever the file happens to be.
+      const probe = new Image();
+      probe.onload = () => {
+        const ratio = probe.naturalHeight / Math.max(1, probe.naturalWidth);
+        const width = Math.min(420, plate?.width ? plate.width * 0.5 : 420);
+        const height = Math.round(width * ratio);
+        addObject(
+          makeImageObject({
+            ...placeCentre(width),
+            width,
+            height,
+            src,
+            name: image.fileName || image.reference,
+            binding,
+          }),
+        );
+        flash(`Placed “${image.fileName || image.reference}”.`);
+      };
+      probe.onerror = () => flash('That picture could not be read from the vault.');
+      probe.src = src;
+    },
+    [selected, applyPatches, addObject, placeCentre, plate, flash],
+  );
+
+  /**
    * Re-reads the vault, then pushes every live binding's current value onto the
    * plates. Unresolvable bindings are reported rather than applied — a renamed
    * note must not silently blank a title.
@@ -371,6 +431,26 @@ export function CodexStudio() {
       problems ? `${problems} binding${problems === 1 ? '' : 's'} could not be resolved` : '',
     ].filter(Boolean).join(' · ') + '.';
   }, [doc.plates, applyPatches]);
+
+  /**
+   * Re-resolves live bindings whenever the vault is read, not only when the
+   * Refresh button is pressed.
+   *
+   * "Live — follows canon" has to mean it. Two cases needed this and neither
+   * was covered: opening a saved codex with a vault already connected left
+   * every bound value as it was written, and a bound picture is drawn from an
+   * object URL that dies with the tab, so on reload it was a blank frame until
+   * someone thought to refresh.
+   */
+  const vaultLastReadAt = useVaultStore((s) => s.lastReadAt);
+  const resolvedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (vaultStatus !== 'ready' || !vaultLastReadAt) return;
+    const stamp = `${vaultLastReadAt}|${doc.id}`;
+    if (resolvedFor.current === stamp) return;
+    resolvedFor.current = stamp;
+    applyVaultBindings();
+  }, [vaultStatus, vaultLastReadAt, doc.id, applyVaultBindings]);
 
   const commandActions: CommandActions = useMemo(
     () => ({
@@ -757,6 +837,7 @@ export function CodexStudio() {
             {tab === 'vault' && (
               <VaultPanel
                 boundNotePath={boundNotePath}
+                onUseImage={handleUseVaultImage}
                 onRefreshed={() => flash(applyVaultBindings())}
                 onUseNote={(entry) => {
                   if (selectedIds.length === 0) {
@@ -765,23 +846,39 @@ export function CodexStudio() {
                   }
                   const bindable = selected.filter((o) => o.kind === 'text' || o.kind === 'chart');
                   if (bindable.length === 0) {
-                    flash('Only text and charts can be bound to canon.');
+                    flash(
+                      selected.some((o) => o.kind === 'image')
+                        ? 'Open the note and pick one of its pictures.'
+                        : 'Only text, charts and pictures can be bound to canon.',
+                    );
                     return;
                   }
+                  // Resolve as we bind. Writing the binding alone left the
+                  // panel showing the canon value while the plate still said
+                  // "TEXT" — the value has to land on the object.
+                  const now = new Date().toISOString();
                   applyPatches(
                     bindable.map((o) => ({
                       id: o.id,
-                      patch: {
-                        binding: {
+                      patch: bindingPatch(
+                        o,
+                        entry,
+                        {
                           notePath: entry.sourcePath,
                           field: o.kind === 'text' ? 'title' : '',
                           mode: 'live' as const,
                         },
-                      } as Partial<CodexObject>,
+                        now,
+                      ),
                     })),
                   );
                   setTab('properties');
-                  flash(`Bound to “${entry.title}”. Choose a field in Properties.`);
+                  const texts = bindable.filter((o) => o.kind === 'text').length;
+                  flash(
+                    texts
+                      ? `Bound to “${entry.title}”. Showing its title — change the field in Properties.`
+                      : `Bound to “${entry.title}”. Point each axis at a field in Properties.`,
+                  );
                 }}
               />
             )}
